@@ -1,5 +1,5 @@
 This is a clean-slate [Next.js](https://nextjs.org) + TypeScript project intended for deployment on [Vercel](https://vercel.com).
-It is pre-wired with Panda CSS, Zod, Supabase auth/client helpers, and Prisma.
+It is pre-wired with Panda CSS, Zod, Neon (DB + Auth), Cloudflare R2, and Prisma.
 
 ## Getting Started
 
@@ -9,7 +9,7 @@ It is pre-wired with Panda CSS, Zod, Supabase auth/client helpers, and Prisma.
 cp .env.example .env
 ```
 
-2) Update `.env` with your Supabase project values and database URL.
+2) Update `.env` with your Neon database URL, Neon Auth (**Auth URL** + **cookie secret**), and Cloudflare R2 values.
 
 3) Generate Prisma client and run dev server:
 
@@ -25,20 +25,29 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - Next.js App Router + TypeScript
 - Panda CSS (`panda codegen` runs automatically in `npm run dev` and `npm run build`)
 - Zod env validation (`src/lib/env.ts`)
-- Supabase SSR helpers and GitHub OAuth route scaffolding (`src/app/auth/*`)
+- Neon Auth (`@neondatabase/auth`): `src/lib/auth/server.ts`, `src/app/api/auth/[...path]/route.ts`, `GET /auth/sign-in`
+- Cloudflare R2 signed upload helper (`src/lib/storage/r2.ts`)
 - Prisma schema/client (`prisma/schema.prisma`)
 
-## GitHub OAuth via Supabase
+## Admin login trigger (no visible button)
 
-In Supabase Auth settings:
-- Enable GitHub provider
-- Set callback URL to:
-  - `http://localhost:3000/auth/callback` (local)
-  - `https://your-domain.com/auth/callback` (production)
+Authentication is intentionally console-triggered.
+
+```js
+window.adminLogin()
+```
+
+This immediately redirects to the GitHub OAuth handshake via Neon Auth.
+
+## GitHub OAuth via Neon Auth
+
+In Neon Auth settings:
+- Enable GitHub as a connection/provider and add your **GitHub OAuth App** credentials there
+- In the Neon Auth / app settings, allow your site URL and the Better Auth API routes (follow Neon’s prompts; callbacks are handled under `/api/auth/*`, not `/auth/callback`)
 
 The app exposes:
-- `GET /auth/sign-in` to start OAuth
-- `GET /auth/callback` to exchange the auth code for a session
+- `GET /auth/sign-in` — starts GitHub sign-in via Neon Auth (`window.adminLogin()` navigates here)
+- `GET`/`POST` `/api/auth/[...path]` — Neon Auth proxy (sessions, OAuth callbacks, etc.)
 
 ## Prisma commands
 

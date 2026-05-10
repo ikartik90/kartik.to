@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "panda codegen --silent && next dev",
-    "build": "panda codegen --silent && next build",
+    "build": "prisma generate && panda codegen --silent && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
@@ -12,13 +12,17 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
+    "@aws-sdk/s3-request-presigner": "^3.1045.0",
+    "@neondatabase/auth": "^0.4.0-beta",
+    "@neondatabase/serverless": "^1.1.0",
     "@prisma/client": "^7.8.0",
-    "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.105.3",
+    "jose": "^6.2.3",
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@pandacss/dev": "^1.11.0",

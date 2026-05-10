@@ -1,5 +1,6 @@
 @layer reset, base, tokens, recipes, utilities;
 
+/* Structural globals — outside layers so they are always in effect */
 html {
   height: 100%;
 }
@@ -12,20 +13,66 @@ body {
 
 body {
   min-height: 100%;
-  color: #171717;
-  background: #ffffff;
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  color: var(--colors-text-default);
+  background: var(--colors-bg-canvas);
+  font-family: var(--fonts-switzer);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+/*
+  Reset rules live inside @layer reset so that Panda's @layer utilities
+  can override them. Unlayered styles beat all named layers, so putting
+  * { margin: 0; padding: 0 } outside a layer would silently cancel
+  every margin/padding utility class Panda generates.
+*/
+@layer reset {
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+@layer base {
+  main {
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: var(--spacing-xxl);
+    padding-block: var(--spacing-3xl);
+  }
+
+  article {
+    width: min(100%, 960px);
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-3xl);
+  }
+
+  article > * {
+    width: min(100%, var(--sizes-content-column));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

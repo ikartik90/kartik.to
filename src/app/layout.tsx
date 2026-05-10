@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import "@/lib/env";
+import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
+import { ThemeProvider } from "@/components/theme-provider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const switzer = localFont({
+  src: "../../public/fonts/Switzer-Variable.woff2",
+  variable: "--font-switzer",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "kartik.to",
-  description: "Next.js app with Panda CSS, Supabase, and Prisma",
+  description: "Design engineering portfolio and blog.",
 };
+
+// Runs synchronously before hydration to prevent flash of incorrect theme.
+// Reads the Zustand-persisted mode from localStorage and sets data-theme on <html>.
+const themeScript = `(function(){try{var s=localStorage.getItem('theme');var m=s?JSON.parse(s).state?.mode:'system';var t=m==='dark'?'dark':m==='light'?'light':window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`;
 
 export default function RootLayout({
   children,
@@ -24,8 +26,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+    <html lang="en" className={switzer.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body>
+        <ThemeProvider />
+        <AdminLoginBootstrap />
+        {children}
+      </body>
     </html>
   );
 }

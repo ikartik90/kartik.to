@@ -13,7 +13,7 @@ datasource db {
 
 model UserProfile {
   id              String   @id @default(cuid())
-  supabaseUserId  String   @unique
+  neonUserId      String   @unique
   githubLogin     String?  @unique
   email           String?  @unique
   displayName     String?
