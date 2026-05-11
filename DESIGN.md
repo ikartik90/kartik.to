@@ -17,6 +17,7 @@ tokens:
     xl: 16px
     xxl: 20px
     3xl: 40px
+    4xl: 100px
     full: 100%
 
   palette:
@@ -85,7 +86,7 @@ tokens:
       letterSpacing: -1%
 
     caption:
-      fontSize: 0.5rem
+      fontSize: 0.75rem
       lineHeight: 1.75
       letterSpacing: 0.5%
 

@@ -1,4 +1,10 @@
 // Tests for the Typography component.
-// TODO: add a test runner (vitest or jest) + @testing-library/react to execute these.
+// TODO: add @testing-library/react and implement rendering tests.
 
-export {};
+import { describe, it } from "vitest";
+
+describe("Typography", () => {
+  it.todo("renders paragraph variant");
+  it.todo("renders heading variant");
+  it.todo("renders caption variant");
+});

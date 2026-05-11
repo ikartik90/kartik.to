@@ -67,6 +67,7 @@ export default defineConfig({
           xl: { value: "16px" },
           xxl: { value: "20px" },
           "3xl": { value: "40px" },
+          "4xl": { value: "100px" },
           full: { value: "100%" },
         },
       },
@@ -171,7 +172,7 @@ export default defineConfig({
           value: {
             fontFamily: "{fonts.switzer}",
             fontWeight: "{fontWeights.base}",
-            fontSize: "0.5rem",
+            fontSize: "0.75rem",
             lineHeight: "1.75",
             letterSpacing: "0.5%",
           },

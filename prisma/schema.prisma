@@ -11,6 +11,25 @@ datasource db {
   provider = "postgresql"
 }
 
+enum PostCategory {
+  BLOG
+  PROJECT
+  CASE_STUDY
+  PAGE
+}
+
+model Post {
+  id            String       @id @default(cuid())
+  title         String?
+  slug          String       @unique
+  category      PostCategory @default(BLOG)
+  content       Json
+  coverImageKey String?
+  publishedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
 model UserProfile {
   id              String   @id @default(cuid())
   neonUserId      String   @unique

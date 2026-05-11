@@ -48,6 +48,7 @@ body {
   main {
     max-width: 1200px;
     margin-inline: auto;
+    margin-top: var(--spacing-4xl);
     padding-inline: var(--spacing-xxl);
     padding-block: var(--spacing-3xl);
   }

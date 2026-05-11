@@ -2,9 +2,24 @@
 
 This is a _Design Engineering Portfolio and Blog_ built with **Next.js (App Router)**, **TypeScript**, **Panda CSS**, and **Zustand**. Persistence is managed via **Neon (Database/Auth)**, **Prisma (ORM)**, and **Cloudflare R2 (Object Storage)**. Security is managed via **Console-Triggered Auth (Neon Auth + GitHub OAuth)** and **Prisma (Neon/Vercel)**. The project is deployed on **Vercel**. The architecture enforces a strict "Global vs. Local" component boundary to prevent redundancy and ensure an object-oriented, modular codebase.
 
-## NOTE: This is NOT the Next.js you know
+## CRITICAL: Always consult official docs before implementing
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+Every library in this stack ships breaking changes frequently. Training data is stale by definition. Before writing any code that touches the following, fetch and read the current official documentation first — no exceptions:
+
+| Library           | Docs Source                               |
+| ----------------- | ----------------------------------------- |
+| **Next.js**       | `node_modules/next/dist/docs/`            |
+| **Prisma**        | `https://www.prisma.io/docs/`             |
+| **Neon (DB)**     | `https://neon.tech/docs/guides/prisma`    |
+| **Neon Auth**     | `https://neon.tech/docs/guides/neon-auth` |
+| **Panda CSS**     | `https://panda-css.com/docs/`             |
+| **Cloudflare R2** | `https://developers.cloudflare.com/r2/`   |
+| **Zustand**       | `https://zustand.docs.pmnd.rs/`           |
+| **Zod**           | `https://zod.dev/`                        |
+
+If a pattern from memory conflicts with fetched docs, **the docs win**.
+
+## CRITICAL: You're not allowed to read or write into `.env`. If you want to offer examples of the environment variables to add use `.env.example`
 
 ---
 
