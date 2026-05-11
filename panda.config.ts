@@ -67,7 +67,7 @@ export default defineConfig({
           xl: { value: "16px" },
           xxl: { value: "20px" },
           "3xl": { value: "40px" },
-          "4xl": { value: "100px" },
+          "4xl": { value: "80px" },
           full: { value: "100%" },
         },
       },

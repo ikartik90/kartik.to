@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { authClient } from "@/lib/auth/client";
 
 declare global {
   interface Window {
@@ -8,10 +9,31 @@ declare global {
   }
 }
 
+const LOGIN_PENDING_KEY = "adminLoginPending";
+
 export function AdminLoginBootstrap() {
   useEffect(() => {
+    const pending = sessionStorage.getItem(LOGIN_PENDING_KEY);
+    if (pending) {
+      sessionStorage.removeItem(LOGIN_PENDING_KEY);
+      authClient
+        .getSession()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("[adminLogin] getSession error:", error);
+            return;
+          }
+          console.log("[adminLogin] session:", JSON.stringify(data));
+          if (data?.user) console.log("Login successful!");
+        })
+        .catch((err: unknown) => {
+          console.error("[adminLogin] getSession threw:", err);
+        });
+    }
+
     window.adminLogin = () => {
-      window.location.assign("/auth/sign-in");
+      sessionStorage.setItem(LOGIN_PENDING_KEY, "1");
+      authClient.signIn.social({ provider: "github", callbackURL: "/" });
     };
 
     return () => {

@@ -5,11 +5,11 @@ export default function Home() {
     <main>
       <article>
         <Typography tag="h1" type="title">
-          The quick brown fox jumps over the lazy dog — title
+          Kartik Iyer
         </Typography>
 
         <Typography tag="h2" type="subheading">
-          The quick brown fox jumps over the lazy dog — subheading
+          Designer. Engineer. Builder.
         </Typography>
 
         <Typography tag="p" type="paragraph">

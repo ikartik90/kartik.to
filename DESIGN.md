@@ -17,7 +17,7 @@ tokens:
     xl: 16px
     xxl: 20px
     3xl: 40px
-    4xl: 100px
+    4xl: 80px
     full: 100%
 
   palette:

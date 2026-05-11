@@ -1,1 +1,0 @@
-export { neonAuth } from "./server";

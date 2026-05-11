@@ -1,7 +1,9 @@
 import { jwtVerify } from "jose";
 import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/env";
 
-// Cookie name used by @neondatabase/auth to cache the session client-side.
+// Cookie Neon Auth mints after a successful session exchange.
+// It's a signed JWT containing the user's session data (including email).
 const SESSION_DATA_COOKIE = "__Secure-neon-auth.local.session_data";
 
 // Admin route prefix — matches the (admin) route group once it exists.
@@ -11,13 +13,10 @@ async function getSessionEmail(request: NextRequest): Promise<string | null> {
   const cookie = request.cookies.get(SESSION_DATA_COOKIE)?.value;
   if (!cookie) return null;
 
-  const secret = process.env.NEON_AUTH_COOKIE_SECRET;
-  if (!secret) return null;
-
   try {
     const { payload } = await jwtVerify(
       cookie,
-      new TextEncoder().encode(secret),
+      new TextEncoder().encode(env.NEON_AUTH_COOKIE_SECRET),
       { algorithms: ["HS256"] },
     );
     const user = (payload as Record<string, unknown>).user as
@@ -33,12 +32,10 @@ async function getSessionEmail(request: NextRequest): Promise<string | null> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Admin routes: 404 (not 401) to mask their existence.
   if (ADMIN_PATTERN.test(pathname)) {
-    const adminId = process.env.ADMIN_GITHUB_ID;
     const email = await getSessionEmail(request);
-
-    // Return 404 (not 401) to mask the existence of admin routes.
-    if (!adminId || !email || email !== adminId) {
+    if (!email || email !== env.ADMIN_GITHUB_ID) {
       return new NextResponse(null, { status: 404 });
     }
   }
