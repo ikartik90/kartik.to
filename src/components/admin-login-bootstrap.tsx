@@ -18,16 +18,11 @@ export function AdminLoginBootstrap() {
       sessionStorage.removeItem(LOGIN_PENDING_KEY);
       authClient
         .getSession()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("[adminLogin] getSession error:", error);
-            return;
-          }
-          console.log("[adminLogin] session:", JSON.stringify(data));
+        .then(({ data }) => {
           if (data?.user) console.log("Login successful!");
         })
         .catch((err: unknown) => {
-          console.error("[adminLogin] getSession threw:", err);
+          console.error("[adminLogin] getSession error:", err);
         });
     }
 
