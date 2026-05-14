@@ -1,6 +1,7 @@
 import { defineConfig } from "@pandacss/dev";
 
 export default defineConfig({
+  presets: [],
   preflight: true,
 
   include: ["./src/**/*.{js,jsx,ts,tsx}", "./pages/**/*.{js,jsx,ts,tsx}"],
@@ -66,9 +67,16 @@ export default defineConfig({
           lg: { value: "12px" },
           xl: { value: "16px" },
           xxl: { value: "20px" },
-          "3xl": { value: "40px" },
-          "4xl": { value: "80px" },
+          "3xl": { value: "32px" },
+          "4xl": { value: "40px" },
+          "5xl": { value: "80px" },
           full: { value: "100%" },
+        },
+
+        // Border-radius scale — values mirror spacing for concentric radius compliance
+        radii: {
+          sm: { value: "{spacing.sm}" },
+          md: { value: "{spacing.md}" },
         },
       },
 
@@ -79,6 +87,13 @@ export default defineConfig({
               value: {
                 base: "{colors.neutral.100}",
                 _dark: "{colors.neutral.900}",
+              },
+            },
+            // One step elevated from canvas — used for dialog/surface backgrounds
+            surface: {
+              value: {
+                base: "{colors.neutral.200}",
+                _dark: "{colors.neutral.800}",
               },
             },
             selection: {
@@ -120,14 +135,19 @@ export default defineConfig({
             selection: {
               value: "{colors.neutral.900}",
             },
+            // Command palette item labels — lighter than text.default in dark mode
+            commandItem: {
+              value: {
+                base: "{colors.neutral.700}",
+                _dark: "{colors.neutral.300}",
+              },
+            },
           },
 
           border: {
             divider: {
-              value: {
-                base: "{colors.neutral.200}",
-                _dark: "{colors.neutral.800}",
-              },
+              value:
+                "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
             },
           },
         },
@@ -183,6 +203,23 @@ export default defineConfig({
             fontWeight: "{fontWeights.base}",
             fontSize: "0.75rem",
             lineHeight: "1.67",
+            letterSpacing: "0.5%",
+          },
+        },
+        commandItem: {
+          value: {
+            fontFamily: "{fonts.switzer}",
+            fontWeight: "{fontWeights.base}",
+            fontSize: "0.875rem",
+            lineHeight: "1.5rem",
+          },
+        },
+        commandLabel: {
+          value: {
+            fontFamily: "{fonts.switzer}",
+            fontWeight: "{fontWeights.base}",
+            fontSize: "0.75rem",
+            lineHeight: "1.25rem",
           },
         },
       },

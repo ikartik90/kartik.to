@@ -1,10 +1,8 @@
 ---
 tokens:
   breakpoint:
-    lg:
-      min-width: 1200px
-    md:
-      min-width: 820px
+    md: 820px
+    lg: 1200px
 
   spacing:
     none: 0px
@@ -16,52 +14,60 @@ tokens:
     lg: 12px
     xl: 16px
     xxl: 20px
-    3xl: 40px
-    4xl: 80px
+    3xl: 32px
+    4xl: 40px
+    5xl: 80px
     full: 100%
 
-  palette:
-    neutral-100: "#EEF2F6"
-    neutral-200: "#CFD9E2"
-    neutral-300: "#A9BFD6"
-    neutral-600: "#576675"
-    neutral-700: "#414244"
-    neutral-800: "#2E3338"
-    neutral-900: "#1F2123"
+  sizes:
+    contentColumn: 640px
 
+  palette:
     brand-orange: "#FFAB6F"
     brand-pink: "#FF4D97"
+
+    neutral:
+      100: "#EEF2F6"
+      200: "#CFD9E2"
+      300: "#A9BFD6"
+      600: "#576675"
+      700: "#414244"
+      800: "#2E3338"
+      900: "#1F2123"
 
     brand-gradient: "linear-gradient(135deg, {palette.brand-pink} 0%, {palette.brand-orange} 100%)"
 
   colors:
+    border:
+      divider: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
+
     light:
-      background:
-        canvas: "{palette.neutral-100}"
-        branded-emphasis: "{palette.brand-gradient}"
+      bg:
+        canvas: "{palette.neutral.100}"
+        surface: "{palette.neutral.200}"
+        brandedEmphasis: "{palette.brand-gradient}"
         selection: "{palette.brand-orange}"
       text:
-        default: "{palette.neutral-700}"
-        title: "{palette.neutral-900}"
-        paragraph: "{palette.neutral-600}"
-        branded-emphasis: "{palette.neutral-900}"
-        selection: "{palette.neutral-900}"
-      border:
-        divider: "{palette.neutral-200}"
+        default: "{palette.neutral.700}"
+        title: "{palette.neutral.900}"
+        paragraph: "{palette.neutral.600}"
+        brandedEmphasis: "{palette.neutral.900}"
+        selection: "{palette.neutral.900}"
+        commandItem: "{palette.neutral.700}"
 
     dark:
-      background:
-        canvas: "{palette.neutral-900}"
-        branded-emphasis: "{palette.brand-gradient}"
+      bg:
+        canvas: "{palette.neutral.900}"
+        surface: "{palette.neutral.800}"
+        brandedEmphasis: "{palette.brand-gradient}"
         selection: "{palette.brand-pink}"
       text:
-        default: "{palette.neutral-200}"
-        title: "{palette.neutral-100}"
-        paragraph: "{palette.neutral-300}"
-        branded-emphasis: "{palette.neutral-900}"
-        selection: "{palette.neutral-900}"
-      border:
-        divider: "{palette.neutral-800}"
+        default: "{palette.neutral.200}"
+        title: "{palette.neutral.100}"
+        paragraph: "{palette.neutral.300}"
+        brandedEmphasis: "{palette.neutral.900}"
+        selection: "{palette.neutral.900}"
+        commandItem: "{palette.neutral.300}"
 
   typography:
     fontFamily: switzer
@@ -93,18 +99,31 @@ tokens:
     sidenote:
       fontSize: 0.75rem
       lineHeight: 1.67
+      letterSpacing: 0.5%
 
-  border:
+    commandItem:
+      fontSize: 0.875rem
+      lineHeight: 1.5rem
+
+    commandLabel:
+      fontSize: 0.75rem
+      lineHeight: 1.25rem
+
+  radii:
+    sm: "{spacing.sm}"
+    md: "{spacing.md}"
+
+  borders:
     divider:
-      border-width: "{spacing.xxs}"
-      border-style: "solid"
-      border-color: "{colors.{theme}.border.divider}"
+      border-width: "{spacing.3xs}"
+      border-style: solid
+      border-color: "{colors.border.divider}"
 ---
 
 ## Colors
 
 - **text.default** Everything that is not a designated article or section paragraph, such as caption, sidenote, quote, subheading, etc. should use `text.default` color.
-- use the tokens under **colors.light** if the user has `prefers-color-scheme: light`, and **colors.dark** when they have `prefers-color-scheme: dark` set on their client. If no preferences are set, default to light.
+- Semantic colors automatically resolve to their `base` (light) or `dark` value based on the `[data-theme="dark"]` attribute on `<html>`. Default is light.
 
 ## Typography
 
@@ -116,7 +135,7 @@ tokens:
 
 ## Border
 
-- Use `divider` for horizontal rule.
+- Use `border.divider` color for horizontal rules and separators. It is theme-invariant — a 25% opacity neutral-600 via `color-mix()`.
 
 ## Sections
 

@@ -12,9 +12,8 @@ datasource db {
 }
 
 enum PostCategory {
-  BLOG
-  PROJECT
-  CASE_STUDY
+  ARTICLE
+  WORK
   PAGE
 }
 
@@ -22,7 +21,7 @@ model Post {
   id            String       @id @default(cuid())
   title         String?
   slug          String       @unique
-  category      PostCategory @default(BLOG)
+  category      PostCategory @default(ARTICLE)
   content       Json
   coverImageKey String?
   publishedAt   DateTime?

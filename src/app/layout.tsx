@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import "@/lib/env";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
+import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const switzer = localFont({
@@ -28,11 +29,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={switzer.variable} suppressHydrationWarning>
       <head>
+        {/* Raw synchronous inline script — must run before first paint to
+            avoid FOUC. next/script beforeInteractive queues via __next_s and
+            fires after the client runtime loads, too late. */}
+        {/* eslint-disable-next-line @next/next/no-before-interactive-script-outside-document */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         <ThemeProvider />
         <AdminLoginBootstrap />
+        <CommandPalette />
         {children}
       </body>
     </html>

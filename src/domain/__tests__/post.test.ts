@@ -207,7 +207,7 @@ describe("DocumentSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("PostCategorySchema", () => {
-  it.each(["BLOG", "PROJECT", "CASE_STUDY", "PAGE"])(
+  it.each(["ARTICLE", "WORK", "PAGE"])(
     "accepts %s",
     (category) => {
       expect(PostCategorySchema.safeParse(category).success).toBe(true);
@@ -226,7 +226,7 @@ describe("PostCategorySchema", () => {
 const validPost = {
   id: "clxyz123",
   slug: "my-first-post",
-  category: "BLOG",
+  category: "ARTICLE",
   content: { type: "doc", content: [] },
   createdAt: new Date(),
   updatedAt: new Date(),

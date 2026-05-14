@@ -17,9 +17,8 @@ export type Document = z.infer<typeof DocumentSchema>;
 // ---------------------------------------------------------------------------
 
 export const PostCategorySchema = z.enum([
-  "BLOG",
-  "PROJECT",
-  "CASE_STUDY",
+  "ARTICLE",
+  "WORK",
   "PAGE",
 ]);
 
@@ -29,7 +28,7 @@ export const PostSchema = z.object({
   id: z.string(),
   title: z.string().optional(),
   slug: z.string().min(1),
-  category: PostCategorySchema.default("BLOG"),
+  category: PostCategorySchema.default("ARTICLE"),
   content: DocumentSchema,
   coverImageKey: z.string().optional(),
   publishedAt: z.date().nullable().optional(),

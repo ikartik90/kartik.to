@@ -45,6 +45,23 @@ body {
 }
 
 @layer base {
+  /* Reset UA defaults (padding, border, background) and fix sizing for modal dialogs */
+  dialog {
+    padding: 0;
+    border: none;
+    background: transparent;
+    overflow: visible;
+    width: fit-content;
+    height: fit-content;
+    max-width: calc(100% - var(--spacing-xl) * 2);
+    max-height: calc(100dvh - var(--spacing-xl) * 2);
+  }
+
+  dialog::backdrop {
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
   main {
     max-width: 1200px;
     margin-inline: auto;
