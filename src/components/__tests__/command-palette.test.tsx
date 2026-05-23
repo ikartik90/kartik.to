@@ -20,6 +20,27 @@ vi.mock("@/store/theme", () => ({
   useThemeStore: () => ({ mode: "light", setMode: mockSetMode }),
 }));
 
+// Stub next/navigation
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+// Stub server actions so they never hit the network
+vi.mock("@/app/actions/post", () => ({
+  getDrafts: vi.fn().mockResolvedValue([]),
+  createDraft: vi.fn(),
+  saveDraft: vi.fn(),
+  publishPost: vi.fn(),
+  deleteDraft: vi.fn(),
+}));
+
+// jsdom does not implement matchMedia
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: vi.fn().mockReturnValue({ matches: false }),
+});
+
 // ---------------------------------------------------------------------------
 // JSDOM dialog polyfill
 // ---------------------------------------------------------------------------
@@ -83,7 +104,7 @@ describe("CommandPalette", () => {
     });
   });
 
-  describe("when logged in (admin)", () => {
+  describe("when logged in (admin) — default route /", () => {
     beforeEach(() => {
       mockUseSession.mockReturnValue({
         data: {
@@ -108,9 +129,14 @@ describe("CommandPalette", () => {
       });
     });
 
-    it("renders the This Page group", () => {
+    it("renders the This Page group (not edit mode)", () => {
       render(<CommandPalette />);
       expect(screen.getByText("This Page")).toBeDefined();
+    });
+
+    it("does not render the This Article group on non-edit routes", () => {
+      render(<CommandPalette />);
+      expect(screen.queryByText("This Article")).toBeNull();
     });
 
     it("renders the Publish group", () => {
@@ -141,6 +167,29 @@ describe("CommandPalette", () => {
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: false });
       expect(dialog.showModal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("⌘K toggle — close when open", () => {
+    it("closes the dialog when ⌘K is pressed while it is already open", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(dialog.close).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("closing on item select", () => {
+    it("closes the dialog when the theme toggle item is selected", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      const item = screen.getByText("Switch to dark theme");
+      fireEvent.click(item);
+
+      expect(dialog.close).toHaveBeenCalledOnce();
     });
   });
 });

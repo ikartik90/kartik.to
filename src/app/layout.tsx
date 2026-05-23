@@ -4,6 +4,7 @@ import "./globals.css";
 import "@/lib/env";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
+import { Header } from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const switzer = localFont({
@@ -33,12 +34,13 @@ export default function RootLayout({
             avoid FOUC. next/script beforeInteractive queues via __next_s and
             fires after the client runtime loads, too late. */}
         {/* eslint-disable-next-line @next/next/no-before-interactive-script-outside-document */}
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         <ThemeProvider />
         <AdminLoginBootstrap />
         <CommandPalette />
+        <Header />
         {children}
       </body>
     </html>

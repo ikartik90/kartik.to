@@ -26,12 +26,13 @@ export type PostCategory = z.infer<typeof PostCategorySchema>;
 
 export const PostSchema = z.object({
   id: z.string(),
-  title: z.string().optional(),
+  title: z.string().nullable().optional(),
   slug: z.string().min(1),
   category: PostCategorySchema.default("ARTICLE"),
   content: DocumentSchema,
-  coverImageKey: z.string().optional(),
+  coverImageKey: z.string().nullable().optional(),
   publishedAt: z.date().nullable().optional(),
+  untitledIndex: z.number().int().nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

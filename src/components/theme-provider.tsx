@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useThemeStore, resolveTheme } from "@/store/theme";
 
 export function ThemeProvider() {
   const mode = useThemeStore((s) => s.mode);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const apply = () => {
       const resolved = resolveTheme(mode);
       document.documentElement.setAttribute("data-theme", resolved);

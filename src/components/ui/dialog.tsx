@@ -32,6 +32,7 @@ const dialogRecipe = cva({
   base: {
     // Closed state — exit target
     opacity: 0,
+    display: "none",
     transform: "scale(0.95)",
     transitionProperty: "opacity, transform, display, overlay",
     transitionDuration: "80ms",
@@ -43,6 +44,7 @@ const dialogRecipe = cva({
     "&[open]": {
       opacity: 1,
       transform: "scale(1)",
+      display: "block",
     },
 
     // Backdrop — closed/exit state

@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { css } from "../../styled-system/css";
-import { authClient } from "@/lib/auth/client";
-import { useThemeStore } from "@/store/theme";
+import { menuIcon, menuItem } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
+import { useCommandPalette } from "@/hooks/use-command-palette";
 import SearchIcon from "@/assets/icons/search.svg";
 import DarkIcon from "@/assets/icons/dark.svg";
 import LightIcon from "@/assets/icons/light.svg";
@@ -14,6 +14,9 @@ import MetadataIcon from "@/assets/icons/metadata.svg";
 import WriteIcon from "@/assets/icons/write.svg";
 import WorkIcon from "@/assets/icons/work.svg";
 import PageIcon from "@/assets/icons/page.svg";
+import PublishIcon from "@/assets/icons/publish.svg";
+import SaveIcon from "@/assets/icons/save.svg";
+import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -53,7 +56,7 @@ const inputStyle = css({
   },
 });
 
-const iconStyle = css({ flexShrink: 0 });
+const iconStyle = menuIcon();
 
 const hotkeyHintStyle = css({
   display: "flex",
@@ -109,20 +112,7 @@ const groupHeadingStyle = css({
   color: "text.commandItem/50",
 });
 
-const itemStyle = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "md",
-  height: "token(spacing.3xl)",
-  paddingInline: "md",
-  borderRadius: "sm",
-  cursor: "default",
-  textStyle: "commandItem",
-  color: "text.commandItem",
-  "&[data-selected='true']": {
-    backgroundColor: "border.divider",
-  },
-});
+const itemStyle = menuItem();
 
 // ---------------------------------------------------------------------------
 // Component
@@ -133,27 +123,31 @@ export function CommandPalette() {
   // Incrementing key forces Command to remount on each open, clearing search
   const [openKey, setOpenKey] = useState(0);
 
-  const { data: session } = authClient.useSession();
-  const isAdmin = !!session?.user;
+  const close = () => dialogRef.current?.close();
 
-  const { mode, setMode } = useThemeStore();
-  // Defer until after mount so SSR and initial client render both see false,
-  // preventing a hydration mismatch with the Zustand-persisted mode.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const isDark =
-    mounted &&
-    (mode === "dark" ||
-      (mode === "system" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches));
+  const {
+    isAdmin,
+    isDark,
+    isEditMode,
+    drafts,
+    handleThemeToggle,
+    handleEditPage,
+    handleNewBlogArticle,
+    handlePublish,
+    handleSaveDraft,
+    handleDiscardDraft,
+  } = useCommandPalette(close);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.metaKey && e.key === "k") {
         e.preventDefault();
-        dialogRef.current?.showModal();
-        setOpenKey((k) => k + 1);
+        if (dialogRef.current?.open) {
+          dialogRef.current.close();
+        } else {
+          dialogRef.current?.showModal();
+          setOpenKey((k) => k + 1);
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -170,7 +164,7 @@ export function CommandPalette() {
       <Command key={openKey} className={css({ display: "contents" })}>
         {/* Input row */}
         <div className={inputRowStyle}>
-          <SearchIcon width={20} height={20} className={iconStyle} />
+          <SearchIcon className={iconStyle} />
           <Command.Input
             autoFocus
             placeholder="Search…"
@@ -178,7 +172,7 @@ export function CommandPalette() {
           />
           <div className={hotkeyHintStyle}>
             <div className={hotkeyBadgeStyle}>
-              <span className={hotkeyKeyStyle}>Esc</span>
+              <kbd className={hotkeyKeyStyle}>Esc</kbd>
             </div>
             <span className={hotkeyLabelStyle}>to exit</span>
           </div>
@@ -189,14 +183,11 @@ export function CommandPalette() {
           {/* Settings — always visible */}
           <Command.Group className={groupStyle}>
             <div className={groupHeadingStyle}>Settings</div>
-            <Command.Item
-              className={itemStyle}
-              onSelect={() => setMode(isDark ? "light" : "dark")}
-            >
+            <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
               {isDark ? (
-                <LightIcon width={20} height={20} className={iconStyle} />
+                <LightIcon className={iconStyle} />
               ) : (
-                <DarkIcon width={20} height={20} className={iconStyle} />
+                <DarkIcon className={iconStyle} />
               )}
               {isDark ? "Switch to light theme" : "Switch to dark theme"}
             </Command.Item>
@@ -205,48 +196,100 @@ export function CommandPalette() {
           {/* Admin-only groups */}
           {isAdmin && (
             <>
-              <Command.Group className={groupStyle}>
-                <div className={groupHeadingStyle}>This Page</div>
-                <Command.Item
-                  className={itemStyle}
-                  onSelect={() => console.log("edit page")}
-                >
-                  <EditIcon width={20} height={20} className={iconStyle} />
-                  Edit page
-                </Command.Item>
-                <Command.Item
-                  className={itemStyle}
-                  onSelect={() => console.log("edit metadata")}
-                >
-                  <MetadataIcon width={20} height={20} className={iconStyle} />
-                  Edit metadata
-                </Command.Item>
-              </Command.Group>
+              {/* This Article — only in edit mode */}
+              {isEditMode ? (
+                <Command.Group className={groupStyle}>
+                  <div className={groupHeadingStyle}>This Article</div>
+                  <Command.Item className={itemStyle} onSelect={handlePublish}>
+                    <PublishIcon className={iconStyle} />
+                    Publish article
+                  </Command.Item>
+                  <Command.Item
+                    className={itemStyle}
+                    onSelect={handleSaveDraft}
+                  >
+                    <SaveIcon className={iconStyle} />
+                    Save draft
+                  </Command.Item>
+                  <Command.Item
+                    className={itemStyle}
+                    onSelect={handleDiscardDraft}
+                  >
+                    <TrashIcon className={iconStyle} />
+                    Discard draft
+                  </Command.Item>
+                </Command.Group>
+              ) : (
+                <Command.Group className={groupStyle}>
+                  <div className={groupHeadingStyle}>This Page</div>
+                  <Command.Item className={itemStyle} onSelect={handleEditPage}>
+                    <EditIcon className={iconStyle} />
+                    Edit page
+                  </Command.Item>
+                  <Command.Item
+                    className={itemStyle}
+                    onSelect={() => {
+                      console.log("edit metadata");
+                      close();
+                    }}
+                  >
+                    <MetadataIcon className={iconStyle} />
+                    Edit metadata
+                  </Command.Item>
+                </Command.Group>
+              )}
 
+              {/* Publish */}
               <Command.Group className={groupStyle}>
                 <div className={groupHeadingStyle}>Publish</div>
                 <Command.Item
                   className={itemStyle}
-                  onSelect={() => console.log("new blog article")}
+                  onSelect={handleNewBlogArticle}
                 >
-                  <WriteIcon width={20} height={20} className={iconStyle} />
+                  <WriteIcon className={iconStyle} />
                   New blog article…
                 </Command.Item>
                 <Command.Item
                   className={itemStyle}
-                  onSelect={() => console.log("new work article")}
+                  onSelect={() => {
+                    console.log("new work article");
+                    close();
+                  }}
                 >
-                  <WorkIcon width={20} height={20} className={iconStyle} />
+                  <WorkIcon className={iconStyle} />
                   New work article…
                 </Command.Item>
                 <Command.Item
                   className={itemStyle}
-                  onSelect={() => console.log("new page")}
+                  onSelect={() => {
+                    console.log("new page");
+                    close();
+                  }}
                 >
-                  <PageIcon width={20} height={20} className={iconStyle} />
+                  <PageIcon className={iconStyle} />
                   New page…
                 </Command.Item>
               </Command.Group>
+
+              {/* Drafts — shown when any drafts exist */}
+              {drafts.length > 0 && (
+                <Command.Group className={groupStyle}>
+                  <div className={groupHeadingStyle}>Drafts</div>
+                  {drafts.map((draft) => (
+                    <Command.Item
+                      key={draft.id}
+                      className={itemStyle}
+                      onSelect={() => {
+                        close();
+                        window.open(`/writing/${draft.slug}/edit`, "_blank");
+                      }}
+                    >
+                      <WriteIcon className={iconStyle} />
+                      {draft.title ?? `Untitled ${draft.untitledIndex ?? ""}`}
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
             </>
           )}
         </Command.List>

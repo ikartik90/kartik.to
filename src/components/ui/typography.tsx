@@ -25,7 +25,7 @@ export type TypographyTag =
 
 // Single home for all typography styles. All variant values are static string
 // literals so Panda's extractor generates the CSS at build time.
-const typographyStyles = cva({
+export const typographyStyles = cva({
   base: {
     color: "text.default",
     textWrap: "pretty",
@@ -40,6 +40,7 @@ const typographyStyles = cva({
       subheading: {
         textStyle: "subheading",
         textWrap: "balance",
+        marginTop: "token(spacing.xl)",
       },
       paragraph: {
         textStyle: "paragraph",

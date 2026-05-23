@@ -1,4 +1,4 @@
-import { defineConfig } from "@pandacss/dev";
+import { defineConfig, defineRecipe } from "@pandacss/dev";
 
 export default defineConfig({
   presets: [],
@@ -89,6 +89,10 @@ export default defineConfig({
                 _dark: "{colors.neutral.900}",
               },
             },
+            itemHover: {
+              value:
+                "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
+            },
             // One step elevated from canvas — used for dialog/surface backgrounds
             surface: {
               value: {
@@ -149,8 +153,133 @@ export default defineConfig({
               value:
                 "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
             },
+            // 10% opacity inset outline for images (interface-design rule 11)
+            imageOutline: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-neutral-900) 10%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-neutral-100) 10%, transparent)",
+              },
+            },
+          },
+
+          logo: {
+            default: {
+              value: {
+                base: "{colors.neutral.600}",
+                _dark: "{colors.neutral.300}",
+              },
+            },
           },
         },
+      },
+
+      recipes: {
+        inlineCode: defineRecipe({
+          className: "inline-code",
+          description: "Inline code mark inside article prose.",
+          base: {
+            textStyle: "inlineCode",
+            background: "bg.surface",
+            paddingInline: "sm",
+            paddingBlock: "xs",
+            borderRadius: "sm",
+          },
+        }),
+
+        articleLink: defineRecipe({
+          className: "article-link",
+          description: "Hyperlink inside article prose.",
+          base: {
+            textStyle: "link",
+            color: "text.default",
+            transition: "color 150ms ease",
+            _hover: { color: "text.title" },
+          },
+        }),
+
+        codeBlock: defineRecipe({
+          className: "code-block",
+          description: "Code block container for article content. Inherited text styles cascade to <code> children; focus ring suppressed for contentEditable use.",
+          base: {
+            textStyle: "code",
+            background: "bg.surface",
+            borderRadius: "md",
+            padding: "3xl",
+            overflowX: "auto",
+            color: "text.default",
+            whiteSpace: "pre",
+            _focusVisible: { outline: "none" },
+          },
+        }),
+
+        articleFigure: defineRecipe({
+          className: "article-figure",
+          description: "Figure container for images inside article content.",
+          base: {
+            width: "token(spacing.full)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "md",
+            alignItems: "center",
+          },
+        }),
+
+        articleImg: defineRecipe({
+          className: "article-img",
+          description: "Image inside article content with inset outline (interface-design rule 11).",
+          base: {
+            width: "token(spacing.full)",
+            borderRadius: "md",
+            display: "block",
+            outlineWidth: "xxs",
+            outlineStyle: "solid",
+            outlineColor: "border.imageOutline",
+            outlineOffset: "calc(-1 * token(spacing.xxs))",
+          },
+        }),
+
+        horizontalRule: defineRecipe({
+          className: "horizontal-rule",
+          description: "Horizontal rule rendered identically on both read-only and edit article surfaces.",
+          base: {
+            border: "none",
+            height: "token(spacing.xxs)",
+            backgroundColor: "border.divider",
+            marginBlock: "3xl",
+          },
+        }),
+
+        menuIcon: defineRecipe({
+          className: "menu-icon",
+          description: "Shared icon style for menu items — fixed 20px size, never shrinks.",
+          base: {
+            flexShrink: 0,
+            width: "token(spacing.xxl)",
+            height: "token(spacing.xxl)",
+          },
+        }),
+
+        menuItem: defineRecipe({
+          className: "menu-item",
+          description: "Shared item row for the command palette (cmdk) and the slash menu.",
+          base: {
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
+            gap: "md",
+            height: "token(spacing.3xl)",
+            paddingInline: "md",
+            borderRadius: "sm",
+            cursor: "default",
+            textStyle: "commandItem",
+            color: "text.commandItem",
+            // cmdk sets data-selected; slash-menu uses aria-selected on native buttons
+            "&[data-selected='true'], &[aria-selected='true']": {
+              backgroundColor: "bg.itemHover",
+            },
+          },
+        }),
       },
 
       textStyles: {
@@ -220,6 +349,25 @@ export default defineConfig({
             fontWeight: "{fontWeights.base}",
             fontSize: "0.75rem",
             lineHeight: "1.25rem",
+          },
+        },
+        inlineCode: {
+          value: {
+            fontFamily: "ui-monospace, monospace",
+            fontSize: "0.875em",
+          },
+        },
+        link: {
+          value: {
+            textDecoration: "underline",
+            textUnderlineOffset: "3px",
+          },
+        },
+        code: {
+          value: {
+            fontFamily: "ui-monospace, monospace",
+            fontSize: "0.875rem",
+            lineHeight: "1.7",
           },
         },
       },
