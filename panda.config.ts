@@ -28,6 +28,8 @@ export default defineConfig({
         sizes: {
           // Content column width — text elements inside <article> are capped here
           contentColumn: { value: "640px" },
+          listingCardWidth: { value: "304px" },
+          articleWidth: { value: "960px" },
         },
 
         colors: {
@@ -200,7 +202,8 @@ export default defineConfig({
 
         codeBlock: defineRecipe({
           className: "code-block",
-          description: "Code block container for article content. Inherited text styles cascade to <code> children; focus ring suppressed for contentEditable use.",
+          description:
+            "Code block container for article content. Inherited text styles cascade to <code> children; focus ring suppressed for contentEditable use.",
           base: {
             textStyle: "code",
             background: "bg.surface",
@@ -227,24 +230,22 @@ export default defineConfig({
 
         articleImg: defineRecipe({
           className: "article-img",
-          description: "Image inside article content with inset outline (interface-design rule 11).",
+          description:
+            "Image inside article content with inset outline (interface-design rule 11).",
           base: {
             width: "token(spacing.full)",
             borderRadius: "md",
             display: "block",
-            outlineWidth: "xxs",
-            outlineStyle: "solid",
-            outlineColor: "border.imageOutline",
-            outlineOffset: "calc(-1 * token(spacing.xxs))",
           },
         }),
 
         horizontalRule: defineRecipe({
           className: "horizontal-rule",
-          description: "Horizontal rule rendered identically on both read-only and edit article surfaces.",
+          description:
+            "Horizontal rule rendered identically on both read-only and edit article surfaces.",
           base: {
             border: "none",
-            height: "token(spacing.xxs)",
+            height: "token(spacing.3xs)",
             backgroundColor: "border.divider",
             marginBlock: "3xl",
           },
@@ -252,7 +253,8 @@ export default defineConfig({
 
         menuIcon: defineRecipe({
           className: "menu-icon",
-          description: "Shared icon style for menu items — fixed 20px size, never shrinks.",
+          description:
+            "Shared icon style for menu items — fixed 20px size, never shrinks.",
           base: {
             flexShrink: 0,
             width: "token(spacing.xxl)",
@@ -262,7 +264,8 @@ export default defineConfig({
 
         menuItem: defineRecipe({
           className: "menu-item",
-          description: "Shared item row for the command palette (cmdk) and the slash menu.",
+          description:
+            "Shared item row for the command palette (cmdk) and the slash menu.",
           base: {
             display: "flex",
             alignItems: "center",

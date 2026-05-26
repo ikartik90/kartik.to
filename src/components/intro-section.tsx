@@ -33,11 +33,9 @@ export function IntroSection() {
   return (
     <section className={sectionStyle}>
       <Typography tag="p" type="paragraph">
-        I'm a design engineer who builds interfaces that close the gap between
-        design intent and code reality. I care about the details that make
-        software feel considered: the right typography scale, the transition
-        that doesn't overstay its welcome, the component that works the same way
-        every time.
+        Hi, I'm Kartik, an AI-native designer building digital experiences for
+        hypergrowth businesses. I invest care into the details that make
+        software feel considered.
       </Typography>
       <nav aria-label="Social links">
         <ul className={socialListStyle}>

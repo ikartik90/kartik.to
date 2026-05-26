@@ -70,4 +70,119 @@ export const projects: Post[] = [
       ],
     },
   },
+  {
+    id: "project-4",
+    title: "Density",
+    slug: "density",
+    category: "WORK",
+    publishedAt: new Date("2025-04-20"),
+    createdAt: new Date("2025-03-15"),
+    updatedAt: new Date("2025-04-20"),
+    content: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          children: [
+            {
+              type: "text",
+              text: "A spacing scale explorer that shows how token relationships break down at extreme sizes. Drag a base unit and watch concentric radius compliance propagate across all derived values in real time.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "project-5",
+    title: "Typeface",
+    slug: "typeface",
+    category: "WORK",
+    publishedAt: new Date("2025-02-14"),
+    createdAt: new Date("2025-01-10"),
+    updatedAt: new Date("2025-02-14"),
+    content: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          children: [
+            {
+              type: "text",
+              text: "A variable font test rig for evaluating axis ranges under real editorial conditions. Paste any body copy and the tool renders it across the full weight and optical-size axes side by side.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "project-6",
+    title: "Cascade",
+    slug: "cascade",
+    category: "WORK",
+    publishedAt: new Date("2024-11-30"),
+    createdAt: new Date("2024-10-05"),
+    updatedAt: new Date("2024-11-30"),
+    content: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          children: [
+            {
+              type: "text",
+              text: "A CSS specificity visualizer that ranks every selector on a page and highlights conflicts. Paste a stylesheet and see exactly which rules win and why.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "project-7",
+    title: "Grid",
+    slug: "grid",
+    category: "WORK",
+    publishedAt: new Date("2024-09-18"),
+    createdAt: new Date("2024-08-01"),
+    updatedAt: new Date("2024-09-18"),
+    content: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          children: [
+            {
+              type: "text",
+              text: "A layout audit tool that overlays any live webpage with a configurable column grid. Toggle breakpoints, adjust gutter widths, and check alignment without leaving the browser.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "project-8",
+    title: "Motion",
+    slug: "motion",
+    category: "WORK",
+    publishedAt: new Date("2024-07-04"),
+    createdAt: new Date("2024-05-20"),
+    updatedAt: new Date("2024-07-04"),
+    content: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          children: [
+            {
+              type: "text",
+              text: "An easing curve editor with a live preview panel. Build custom cubic-bezier curves, compare them against system presets, and export as CSS custom properties or Framer Motion values.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

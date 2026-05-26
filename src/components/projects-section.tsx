@@ -2,21 +2,52 @@ import { css } from "../../styled-system/css";
 import { ProjectCard } from "./project-card";
 import type { Post } from "@/domain/post";
 
+const CARDS_CONTAINER_ALIGNMENT =
+  "calc(token(spacing.xxl) + max(0px, calc((100% - token(sizes.contentColumn)) / 2)))";
+// scroll-padding % is relative to the container's own width (2×xxl wider than the containing block).
+const SCROLL_PADDING =
+  "calc(token(spacing.xxl) + max(0px, calc((100% - 2 * token(spacing.xxl) - token(sizes.contentColumn)) / 2)))";
+
+const projectsWrapperStyle = css({
+  maxWidth: "contentColumn",
+  marginInline: "auto",
+  width: "token(spacing.full)",
+});
+
 const sectionLabelStyle = css({
   textStyle: "caption",
   color: "text.default",
   marginBottom: "3xl",
 });
 
+const scrollContainerStyle = css({
+  display: "flex",
+  alignItems: "flex-start",
+  overflowX: "auto",
+  overscrollBehaviorInline: "contain",
+  scrollbarWidth: "none",
+  scrollSnapType: "inline mandatory",
+  scrollPaddingInline: SCROLL_PADDING,
+  // Negates main's padding-inline-start; width spans full viewport.
+  marginInlineStart: "calc(-1 * token(spacing.xxl))",
+  width: "calc(100% + 2 * token(spacing.xxl))",
+  paddingInline: CARDS_CONTAINER_ALIGNMENT,
+});
+
 const gridStyle = css({
   display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "xl",
-  md: {
-    gridTemplateColumns: "repeat(2, 1fr)",
+  gridAutoFlow: "column",
+  gridAutoColumns: "token(sizes.listingCardWidth)",
+  gap: "3xl",
+  // Odd cards snap in pairs; even cards join on ≤md for per-card snapping.
+  "& > *:nth-child(odd)": {
+    scrollSnapAlign: "start",
   },
-  lg: {
-    gridTemplateColumns: "repeat(3, 1fr)",
+  "& > *:nth-child(even)": {
+    scrollSnapAlign: { base: "start", md: "none" },
+  },
+  "& > *:last-child": {
+    scrollSnapAlign: "end",
   },
 });
 
@@ -27,11 +58,15 @@ interface ProjectsSectionProps {
 export function ProjectsSection({ projects }: ProjectsSectionProps) {
   return (
     <section>
-      <p className={sectionLabelStyle}>Projects</p>
-      <div className={gridStyle}>
-        {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
-        ))}
+      <div className={projectsWrapperStyle}>
+        <p className={sectionLabelStyle}>Projects</p>
+      </div>
+      <div className={scrollContainerStyle}>
+        <div className={gridStyle}>
+          {projects.map((project) => (
+            <ProjectCard key={project.id} project={project} />
+          ))}
+        </div>
       </div>
     </section>
   );
