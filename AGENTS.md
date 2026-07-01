@@ -137,6 +137,7 @@ Project Root
 
 ## Dos
 
+- **DO** follow YAGNI principles, and one-liner solutions.
 - **DO** verify current Next.js documentation in `node_modules/next/dist/docs/` before implementing new patterns.
 - **DO** promote local components to the global library upon second use.
 - **DO** use Server Actions for all content mutations.

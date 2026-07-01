@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { css } from "../../styled-system/css";
-import { menuIcon, menuItem } from "../../styled-system/recipes";
+import { dialogPanel, menuIcon, menuItem } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
 import SearchIcon from "@/assets/icons/search.svg";
@@ -21,15 +21,6 @@ import TrashIcon from "@/assets/icons/trash.svg";
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
-
-const panelStyle = css({
-  backgroundColor: "bg.surface",
-  borderRadius: "md",
-  overflow: "hidden",
-  width: "min(480px, calc(100vw - token(spacing.xl) * 2))",
-  display: "flex",
-  flexDirection: "column",
-});
 
 const inputRowStyle = css({
   display: "flex",
@@ -129,10 +120,13 @@ export function CommandPalette() {
     isAdmin,
     isDark,
     isEditMode,
+    editCategory,
     drafts,
     handleThemeToggle,
     handleEditPage,
     handleNewBlogArticle,
+    handleNewWorkArticle,
+    handleOpenDraft,
     handlePublish,
     handleSaveDraft,
     handleDiscardDraft,
@@ -159,7 +153,7 @@ export function CommandPalette() {
       ref={dialogRef}
       align="top-center"
       aria-label="Command palette"
-      className={panelStyle}
+      className={dialogPanel({ size: "sm" })}
     >
       <Command key={openKey} className={css({ display: "contents" })}>
         {/* Input row */}
@@ -199,10 +193,14 @@ export function CommandPalette() {
               {/* This Article — only in edit mode */}
               {isEditMode ? (
                 <Command.Group className={groupStyle}>
-                  <div className={groupHeadingStyle}>This Article</div>
+                  <div className={groupHeadingStyle}>
+                    {editCategory === "WORK" ? "This Project" : "This Article"}
+                  </div>
                   <Command.Item className={itemStyle} onSelect={handlePublish}>
                     <PublishIcon className={iconStyle} />
-                    Publish article
+                    {editCategory === "WORK"
+                      ? "Publish project"
+                      : "Publish article"}
                   </Command.Item>
                   <Command.Item
                     className={itemStyle}
@@ -251,10 +249,7 @@ export function CommandPalette() {
                 </Command.Item>
                 <Command.Item
                   className={itemStyle}
-                  onSelect={() => {
-                    console.log("new work article");
-                    close();
-                  }}
+                  onSelect={handleNewWorkArticle}
                 >
                   <WorkIcon className={iconStyle} />
                   New work article…
@@ -279,12 +274,13 @@ export function CommandPalette() {
                     <Command.Item
                       key={draft.id}
                       className={itemStyle}
-                      onSelect={() => {
-                        close();
-                        window.open(`/writing/${draft.slug}/edit`, "_blank");
-                      }}
+                      onSelect={() => handleOpenDraft(draft)}
                     >
-                      <WriteIcon className={iconStyle} />
+                      {draft.category === "WORK" ? (
+                        <WorkIcon className={iconStyle} />
+                      ) : (
+                        <WriteIcon className={iconStyle} />
+                      )}
                       {draft.title ?? `Untitled ${draft.untitledIndex ?? ""}`}
                     </Command.Item>
                   ))}

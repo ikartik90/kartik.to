@@ -118,14 +118,14 @@ describe("useCommandPalette", () => {
       expect(result.current.isEditMode).toBe(false);
     });
 
-    it("is true on /writing/new", () => {
-      mockPathname.mockReturnValue("/writing/new");
+    it("is true on /edit/new", () => {
+      mockPathname.mockReturnValue("/edit/new");
       const { result } = renderHook(() => useCommandPalette(close));
       expect(result.current.isEditMode).toBe(true);
     });
 
-    it("is true on /writing/my-slug/edit", () => {
-      mockPathname.mockReturnValue("/writing/my-slug/edit");
+    it("is true on /edit/my-slug", () => {
+      mockPathname.mockReturnValue("/edit/my-slug");
       const { result } = renderHook(() => useCommandPalette(close));
       expect(result.current.isEditMode).toBe(true);
     });
@@ -188,6 +188,23 @@ describe("useCommandPalette", () => {
       expect(close).toHaveBeenCalledOnce();
     });
 
+    it("navigates to the article editor on a published writing route", () => {
+      mockPathname.mockReturnValue("/writing/my-article");
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleEditPage());
+      expect(mockPush).toHaveBeenCalledWith(
+        "/edit/my-article?category=ARTICLE",
+      );
+      expect(main.contentEditable).not.toBe("true");
+    });
+
+    it("navigates to the project editor on a published work route", () => {
+      mockPathname.mockReturnValue("/work/my-project");
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleEditPage());
+      expect(mockPush).toHaveBeenCalledWith("/edit/my-project?category=WORK");
+    });
+
     it("sets contentEditable on <main>", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleEditPage());
@@ -224,12 +241,125 @@ describe("useCommandPalette", () => {
   // -------------------------------------------------------------------------
 
   describe("handleNewBlogArticle", () => {
-    it("calls close and opens /writing/new in a new tab", () => {
+    it("calls close and opens /edit/new?category=ARTICLE in a new tab", () => {
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleNewBlogArticle());
       expect(close).toHaveBeenCalledOnce();
-      expect(openSpy).toHaveBeenCalledWith("/writing/new", "_blank");
+      expect(openSpy).toHaveBeenCalledWith(
+        "/edit/new?category=ARTICLE",
+        "_blank",
+      );
+    });
+  });
+
+  describe("handleNewWorkArticle", () => {
+    it("calls close and opens /edit/new?category=WORK in a new tab", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewWorkArticle());
+      expect(close).toHaveBeenCalledOnce();
+      expect(openSpy).toHaveBeenCalledWith("/edit/new?category=WORK", "_blank");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // handleOpenDraft
+  // -------------------------------------------------------------------------
+
+  describe("handleOpenDraft", () => {
+    it("calls close and navigates to the draft preview", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() =>
+        result.current.handleOpenDraft({
+          id: "draft-1",
+          slug: "my-draft",
+          category: "ARTICLE",
+          title: "Draft",
+          content: { type: "doc", content: [] },
+          publishedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      expect(close).toHaveBeenCalledOnce();
+      expect(mockPush).toHaveBeenCalledWith("/writing/my-draft");
+    });
+
+    it("navigates to /work for WORK drafts", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() =>
+        result.current.handleOpenDraft({
+          id: "draft-2",
+          slug: "my-project",
+          category: "WORK",
+          title: "Project",
+          content: { type: "doc", content: [] },
+          publishedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      expect(mockPush).toHaveBeenCalledWith("/work/my-project");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // handleSaveDraft
+  // -------------------------------------------------------------------------
+
+  describe("handleSaveDraft", () => {
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+    });
+
+    it("creates a new draft and navigates to its preview", async () => {
+      const { useEditorStore } = await import("@/store/editor");
+      useEditorStore.setState({
+        title: "New Draft",
+        draftId: null,
+        category: "ARTICLE",
+        document: { type: "doc", content: [] },
+        isDirty: true,
+        history: [],
+        historyIndex: -1,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {
+        await result.current.handleSaveDraft();
+      });
+
+      expect(close).toHaveBeenCalledOnce();
+      expect(mockReplace).toHaveBeenCalledWith("/writing/my-draft");
+      expect(useEditorStore.getState().draftId).toBeNull();
+    });
+
+    it("updates an existing draft and navigates to its preview", async () => {
+      const { saveDraft } = await import("@/app/actions/post");
+      const { useEditorStore } = await import("@/store/editor");
+      useEditorStore.setState({
+        title: "Existing",
+        draftId: "existing-id",
+        category: "ARTICLE",
+        document: { type: "doc", content: [] },
+        isDirty: true,
+        history: [],
+        historyIndex: -1,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {
+        await result.current.handleSaveDraft();
+      });
+
+      expect(saveDraft).toHaveBeenCalledWith({
+        id: "existing-id",
+        title: "Existing",
+        document: { type: "doc", content: [] },
+      });
+      expect(mockPush).toHaveBeenCalledWith("/writing/existing-draft");
+      expect(useEditorStore.getState().draftId).toBeNull();
     });
   });
 });

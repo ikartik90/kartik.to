@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     svgr({
       include: "**/*.svg",
-      svgrOptions: { replaceAttrValues: { "#fff": "currentColor" } },
+      svgrOptions: {
+        replaceAttrValues: { "#fff": "currentColor", "#ffffff": "currentColor" },
+      },
     }),
   ],
   test: {

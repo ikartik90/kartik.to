@@ -13,9 +13,15 @@ const switzer = localFont({
   display: "swap",
 });
 
+const jetbrainsMono = localFont({
+  src: "../../public/fonts/JetBrainsMono-Regular.woff2",
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "kartik.to",
-  description: "Design engineering portfolio and blog.",
+  description: "Kartik Iyer's digital design portfolio and blog.",
 };
 
 // Runs synchronously before hydration to prevent flash of incorrect theme.
@@ -28,13 +34,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={switzer.variable} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${switzer.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Raw synchronous inline script — must run before first paint to
             avoid FOUC. next/script beforeInteractive queues via __next_s and
             fires after the client runtime loads, too late. */}
         {/* eslint-disable-next-line @next/next/no-before-interactive-script-outside-document */}
-        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
       </head>
       <body>
         <ThemeProvider />

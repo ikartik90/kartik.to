@@ -1,6 +1,8 @@
 import React from "react";
 import { Typography, type TypographyTag, type TypographyType } from "./ui/typography";
-import { inlineCode, articleLink, codeBlock, articleFigure, articleImg, horizontalRule } from "../../styled-system/recipes";
+import { HighlightedCode } from "@/components/highlighted-code";
+import { inlineCode, articleLink, codeBlock, articleShowcase, articleImg, horizontalRule } from "../../styled-system/recipes";
+import { ArticleComponentBlock } from "@/components/article-component-block";
 import type { Document } from "@/domain/post";
 import type { BlockNode, InlineNode } from "@/domain/nodes";
 
@@ -88,7 +90,10 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
     case "code_block":
       return (
         <pre key={index} className={codeBlock()}>
-          <code>{node.children.map((child) => child.text).join("")}</code>
+          <HighlightedCode
+            code={node.children.map((child) => child.text).join("")}
+            language={node.language}
+          />
         </pre>
       );
 
@@ -97,7 +102,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
 
     case "image":
       return (
-        <figure key={index} className={articleFigure()}>
+        <figure key={index} className={articleShowcase()}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={node.src}
@@ -111,6 +116,15 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
             </Typography>
           )}
         </figure>
+      );
+
+    case "component":
+      return (
+        <ArticleComponentBlock
+          key={index}
+          componentId={node.componentId}
+          caption={node.caption}
+        />
       );
 
     default:

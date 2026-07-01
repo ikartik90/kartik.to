@@ -3,13 +3,13 @@ import { ProjectCard } from "./project-card";
 import type { Post } from "@/domain/post";
 
 const CARDS_CONTAINER_ALIGNMENT =
-  "calc(token(spacing.xxl) + max(0px, calc((100% - token(sizes.contentColumn)) / 2)))";
+  "calc(token(spacing.xxl) + max(0px, calc((100% - token(sizes.articleContent)) / 2)))";
 // scroll-padding % is relative to the container's own width (2×xxl wider than the containing block).
 const SCROLL_PADDING =
-  "calc(token(spacing.xxl) + max(0px, calc((100% - 2 * token(spacing.xxl) - token(sizes.contentColumn)) / 2)))";
+  "calc(token(spacing.xxl) + max(0px, calc((100% - 2 * token(spacing.xxl) - token(sizes.articleContent)) / 2)))";
 
 const projectsWrapperStyle = css({
-  maxWidth: "contentColumn",
+  maxWidth: "articleContent",
   marginInline: "auto",
   width: "token(spacing.full)",
 });

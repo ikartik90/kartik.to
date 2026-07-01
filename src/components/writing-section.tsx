@@ -3,7 +3,7 @@ import { Typography } from "./ui/typography";
 import type { Post } from "@/domain/post";
 
 const sectionStyle = css({
-  maxWidth: "contentColumn",
+  maxWidth: "articleContent",
   marginInline: "auto",
   width: "token(spacing.full)",
 });

@@ -13,6 +13,7 @@ import {
   getDrafts,
 } from "@/app/actions/post";
 import type { Post } from "@/domain/post";
+import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,10 +23,13 @@ export interface CommandPaletteHandlers {
   isAdmin: boolean;
   isDark: boolean;
   isEditMode: boolean;
+  editCategory: Post["category"];
   drafts: Post[];
   handleThemeToggle: () => void;
   handleEditPage: () => void;
   handleNewBlogArticle: () => void;
+  handleNewWorkArticle: () => void;
+  handleOpenDraft: (draft: Post) => void;
   handlePublish: () => Promise<void>;
   handleSaveDraft: () => Promise<void>;
   handleDiscardDraft: () => Promise<void>;
@@ -47,9 +51,10 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Edit mode: any writing/new or writing/*/edit route
   const isEditMode =
-    pathname === "/writing/new" || /^\/writing\/[^/]+\/edit$/.test(pathname);
+    pathname === "/edit/new" || /^\/edit\/[^/]+$/.test(pathname);
+
+  const editCategory = useEditorStore((state) => state.category);
 
   const { mode, setMode } = useThemeStore();
   const [mounted, setMounted] = useState(false);
@@ -86,7 +91,17 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
   };
 
   const handleEditPage = () => {
+    const articleSlug = pathname.match(/^\/writing\/([^/]+)$/)?.[1];
+    const workSlug = pathname.match(/^\/work\/([^/]+)$/)?.[1];
     close();
+    if (articleSlug) {
+      router.push(getEditUrl("ARTICLE", articleSlug));
+      return;
+    }
+    if (workSlug) {
+      router.push(getEditUrl("WORK", workSlug));
+      return;
+    }
     requestAnimationFrame(() => {
       const target =
         (document.querySelector("main") as HTMLElement | null) ??
@@ -117,23 +132,36 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
 
   const handleNewBlogArticle = () => {
     close();
-    window.open("/writing/new", "_blank");
+    window.open(getEditUrl("ARTICLE"), "_blank");
+  };
+
+  const handleNewWorkArticle = () => {
+    close();
+    window.open(getEditUrl("WORK"), "_blank");
+  };
+
+  const handleOpenDraft = (draft: Post) => {
+    close();
+    router.push(getPostReadUrl(draft.category, draft.slug));
   };
 
   const handlePublish = async () => {
-    const { draftId, title, document } = useEditorStore.getState();
+    const { draftId, title, document, category } = useEditorStore.getState();
     close();
     try {
       let id = draftId;
       if (!id) {
-        // Auto-save first if this is a new unsaved article
-        const created = await createDraft({ title: title || undefined, document });
+        const created = await createDraft({
+          title: title || undefined,
+          document,
+          category,
+        });
         id = created.id;
         useEditorStore.getState().setDraftId(id);
       }
       const published = await publishPost(id);
       useEditorStore.getState().reset();
-      router.push(`/writing/${published.slug}`);
+      router.push(getPostReadUrl(published.category, published.slug));
       setDrafts((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
       console.error("Failed to publish:", err);
@@ -141,14 +169,17 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
   };
 
   const handleSaveDraft = async () => {
-    const { draftId, title, document } = useEditorStore.getState();
+    const { draftId, title, document, category } = useEditorStore.getState();
     close();
     try {
       if (!draftId) {
-        const created = await createDraft({ title: title || undefined, document });
-        useEditorStore.getState().setDraftId(created.id);
-        useEditorStore.getState().setDirty(false);
-        router.replace(`/writing/${created.slug}/edit`);
+        const created = await createDraft({
+          title: title || undefined,
+          document,
+          category,
+        });
+        useEditorStore.getState().reset();
+        router.replace(getPostReadUrl(created.category, created.slug));
         setDrafts((prev) => [...prev, created]);
       } else {
         const updated = await saveDraft({
@@ -156,7 +187,8 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
           title: title || undefined,
           document,
         });
-        useEditorStore.getState().setDirty(false);
+        useEditorStore.getState().reset();
+        router.push(getPostReadUrl(updated.category, updated.slug));
         setDrafts((prev) =>
           prev.map((d) => (d.id === updated.id ? updated : d)),
         );
@@ -185,10 +217,13 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
     isAdmin,
     isDark,
     isEditMode,
+    editCategory,
     drafts,
     handleThemeToggle,
     handleEditPage,
     handleNewBlogArticle,
+    handleNewWorkArticle,
+    handleOpenDraft,
     handlePublish,
     handleSaveDraft,
     handleDiscardDraft,

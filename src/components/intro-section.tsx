@@ -24,7 +24,7 @@ const socialListStyle = css({
 });
 
 const sectionStyle = css({
-  maxWidth: "contentColumn",
+  maxWidth: "articleContent",
   marginInline: "auto",
   width: "token(spacing.full)",
 });

@@ -2,12 +2,34 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { css, cx } from "../../styled-system/css";
-import { horizontalRule, inlineCode, articleLink, codeBlock } from "../../styled-system/recipes";
+import {
+  horizontalRule,
+  inlineCode,
+  articleLink,
+  codeBlock,
+  articleShowcase,
+  articleImg,
+  menuIcon,
+} from "../../styled-system/recipes";
 import { useEditorStore } from "@/store/editor";
-import { SlashMenu, getFilteredSlashItems, type SlashMenuBlockType } from "@/components/slash-menu";
+import {
+  SlashMenu,
+  slashMenuHasResults,
+  type SlashMenuBlockType,
+} from "@/components/slash-menu";
+import { DemoFrame } from "@/components/demo-frame";
+import { getDemoComponent } from "@/components/demo/registry";
+import {
+  ImageInsertDialog,
+  type ImageDialogMode,
+} from "@/components/image-insert-dialog";
+import { Button } from "@/components/ui/button";
 import { typographyStyles } from "@/components/ui/typography";
-import type { Post, Document } from "@/domain/post";
-import type { BlockNode, InlineNode, Mark } from "@/domain/nodes";
+import TrashIcon from "@/assets/icons/trash.svg";
+import type { Post, Document, PostCategory } from "@/domain/post";
+import type { BlockNode, InlineNode, Mark, CodeLanguage } from "@/domain/nodes";
+import { CodeLanguageSchema } from "@/domain/nodes";
+import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
 
 // ---------------------------------------------------------------------------
 // DOM ↔ AST serialisation helpers
@@ -294,7 +316,9 @@ function isFocusAtLastLine(el: HTMLElement): boolean {
   r.collapse(true);
   const rect = r.getBoundingClientRect();
   const elRect = el.getBoundingClientRect();
-  const result = rect.height ? rect.bottom > elRect.bottom - rect.height : false;
+  const result = rect.height
+    ? rect.bottom > elRect.bottom - rect.height
+    : false;
   return result;
 }
 
@@ -316,7 +340,9 @@ function isCaretAtStart(el: HTMLElement): boolean {
   if (!range.collapsed) return false;
   if (range.startContainer === el && range.startOffset === 0) return true;
   const first = firstTextNode(el);
-  return first !== null && range.startContainer === first && range.startOffset === 0;
+  return (
+    first !== null && range.startContainer === first && range.startOffset === 0
+  );
 }
 
 /**
@@ -328,9 +354,14 @@ function isCaretAtEnd(el: HTMLElement): boolean {
   if (!sel || sel.rangeCount === 0) return false;
   const range = sel.getRangeAt(0);
   if (!range.collapsed) return false;
-  if (range.startContainer === el && range.startOffset === el.childNodes.length) return true;
+  if (range.startContainer === el && range.startOffset === el.childNodes.length)
+    return true;
   const last = lastTextNode(el);
-  return last !== null && range.startContainer === last && range.startOffset === last.length;
+  return (
+    last !== null &&
+    range.startContainer === last &&
+    range.startOffset === last.length
+  );
 }
 
 /**
@@ -377,6 +408,7 @@ function setCursorAtTextOffset(el: HTMLElement, offset: number) {
 function isBlockEmpty(block: BlockNode): boolean {
   if (block.type === "horizontal_rule") return false;
   if (block.type === "image") return false;
+  if (block.type === "component") return false;
   if (block.type === "code_block") {
     return block.children.every((c) => !c.text.trim());
   }
@@ -412,23 +444,44 @@ const blockquoteBorderStyle = css({
 
 const editorCodeBlockStyle = codeBlock();
 
+const editorCodeBlockWrapperStyle = css({
+  position: "relative",
+});
+
+const editorCodeLanguageSelectStyle = css({
+  position: "absolute",
+  top: "md",
+  right: "md",
+  zIndex: 1,
+  textStyle: "caption",
+  color: "text.commandItem",
+  backgroundColor: "bg.surface",
+  borderWidth: "token(spacing.3xs)",
+  borderStyle: "solid",
+  borderColor: "border.divider",
+  borderRadius: "sm",
+  paddingInline: "sm",
+  paddingBlock: "xs",
+  opacity: 0,
+  pointerEvents: "none",
+  transition: "opacity 150ms ease",
+  _focusVisible: { outline: "none" },
+  ".code-block-wrapper:focus-within &": {
+    opacity: 1,
+    pointerEvents: "auto",
+  },
+});
+
+const CODE_LANGUAGE_OPTIONS: Array<{ value: CodeLanguage | ""; label: string }> =
+  [
+    { value: "", label: "Plain text" },
+    ...CodeLanguageSchema.options.map((language) => ({
+      value: language,
+      label: CODE_LANGUAGE_LABELS[language],
+    })),
+  ];
+
 const editorHrStyle = horizontalRule();
-
-const editorFigureStyle = css({
-  position: "relative",
-  display: "flex",
-  alignItems: "center",
-  paddingBlock: "md",
-  outline: "none",
-  cursor: "default",
-});
-
-// Wrapper for <hr> so it can receive keyboard focus (void elements can't).
-const editorHrWrapperStyle = css({
-  position: "relative",
-  outline: "none",
-  cursor: "default",
-});
 
 // Diagonal-line overlay rendered over a non-text block that has keyboard focus.
 const nonTextFocusOverlayStyle = css({
@@ -438,6 +491,97 @@ const nonTextFocusOverlayStyle = css({
     "repeating-linear-gradient(45deg, var(--colors-brand-pink) 0px, var(--colors-brand-pink) 1px, transparent 1px, transparent 8px)",
   pointerEvents: "none",
   opacity: "0.35",
+});
+
+const editorShowcaseStyle = cx(
+  articleShowcase(),
+  css({
+    display: "grid",
+    gridTemplateRows: "auto auto",
+    justifyItems: "center",
+    width: "full",
+    paddingBlock: "md",
+  }),
+);
+
+const editorShowcaseMediaStyle = css({
+  gridRow: "1",
+  gridColumn: "1",
+  outline: "none",
+  cursor: "default",
+});
+
+const editorDemoPreviewStyle = css({
+  width: "full",
+  height: "full",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  pointerEvents: "none",
+  userSelect: "none",
+});
+
+const editorImgStyle = cx(
+  articleImg(),
+  editorShowcaseMediaStyle,
+);
+
+const editorImagePlaceholderStyle = cx(
+  editorShowcaseMediaStyle,
+  css({
+    width: "full",
+  }),
+);
+
+const editorImageOverlayStyle = css({
+  gridRow: "1",
+  gridColumn: "1",
+  width: "full",
+  height: "full",
+  alignSelf: "stretch",
+  justifySelf: "stretch",
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  pointerEvents: "auto",
+});
+
+const editorImageOverlayTintStyle = css({
+  position: "absolute",
+  inset: "0",
+  backgroundColor: "bg.canvas",
+  pointerEvents: "none",
+  opacity: "0.85",
+});
+
+const editorImageOverlayActionsStyle = css({
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "md",
+});
+
+const editorOverlayIconStyle = menuIcon();
+
+const editorCaptionStyle = cx(
+  editableBaseStyle,
+  typographyStyles({ type: "caption" }),
+  css({
+    gridRow: "2",
+    gridColumn: "1",
+    width: "full",
+    textAlign: "center",
+  }),
+);
+
+// Wrapper for <hr> so it can receive keyboard focus (void elements can't).
+const editorHrWrapperStyle = css({
+  position: "relative",
+  outline: "none",
+  cursor: "default",
 });
 
 // ---------------------------------------------------------------------------
@@ -488,6 +632,12 @@ interface EditableBlockProps {
   onShiftArrowUp?: () => void;
   /** Shift+ArrowDown when the selection focus is on the last visual line. */
   onShiftArrowDown?: () => void;
+  /** Open the image library to replace the current image. */
+  onChangeImage?: () => void;
+  /** Insert an empty paragraph immediately before this block. */
+  onInsertParagraphBefore?: () => void;
+  /** Insert an empty paragraph after this block, or focus the trailing one. */
+  onInsertParagraphAfter?: () => void;
   elRef: (el: HTMLElement | null) => void;
 }
 
@@ -512,6 +662,9 @@ function EditableBlock({
   onConvertedToParagraph,
   onShiftArrowUp,
   onShiftArrowDown,
+  onChangeImage,
+  onInsertParagraphBefore,
+  onInsertParagraphAfter,
   elRef,
 }: EditableBlockProps) {
   const placeholder =
@@ -519,8 +672,12 @@ function EditableBlock({
       ? "Tell your story..."
       : undefined;
 
+  const slashAnchorProps = isSlashActive ? { "data-slash-anchor": "" } : {};
+
   // Local ref to the DOM element — needed for the imperative innerHTML update.
   const contentRef = useRef<HTMLElement | null>(null);
+  const captionRef = useRef<HTMLElement | null>(null);
+  const showcaseMediaRef = useRef<HTMLElement | null>(null);
 
   // Stable combined ref: forwards to both contentRef and the parent's elRef
   // callback without recreating on every render.
@@ -530,9 +687,13 @@ function EditableBlock({
     contentRef.current = el;
     elRefRef.current(el);
   }, []);
+  const showcaseMediaCallbackRef = useCallback((el: HTMLElement | null) => {
+    showcaseMediaRef.current = el;
+  }, []);
 
   // Whether this non-text block currently has keyboard focus (drives overlay).
   const [isFocused, setIsFocused] = useState(false);
+  const [isShowcaseMediaFocused, setIsShowcaseMediaFocused] = useState(false);
 
   // Keyboard handler for non-text (horizontal_rule, image) blocks.
   // These elements have no caret — arrow keys navigate between blocks and
@@ -575,6 +736,69 @@ function EditableBlock({
     [onArrowUp, onArrowDown, onArrowLeft, onArrowRight, onDelete],
   );
 
+  const focusCaption = useCallback((position: "start" | "end") => {
+    const caption = captionRef.current;
+    if (!caption) return;
+    caption.focus();
+    if (!caption.isContentEditable) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    const node =
+      position === "end" ? lastTextNode(caption) : firstTextNode(caption);
+    if (node) {
+      range.setStart(node, position === "end" ? node.length : 0);
+    } else {
+      range.setStart(caption, 0);
+    }
+    range.collapse(position === "end" ? false : true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, []);
+
+  const handleShowcaseMediaKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      switch (e.key) {
+        case "ArrowUp":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            onArrowUp?.();
+          }
+          break;
+        case "ArrowDown":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            focusCaption("start");
+          }
+          break;
+        case "Enter":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            onInsertParagraphBefore?.();
+          }
+          break;
+        case "ArrowLeft":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            onArrowLeft?.();
+          }
+          break;
+        case "ArrowRight":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            focusCaption("start");
+          }
+          break;
+        case "Backspace":
+        case "Delete":
+          e.preventDefault();
+          onDelete();
+          break;
+      }
+    },
+    [onArrowUp, onArrowLeft, onDelete, focusCaption, onInsertParagraphBefore],
+  );
+
   // Update innerHTML when block content changes externally (e.g. initial load
   // after store init, or a slash-menu type conversion that causes remount).
   // While the user is actively typing the element has focus — skip the update
@@ -582,7 +806,7 @@ function EditableBlock({
   // Non-editable blocks (horizontal_rule, image) have no editable children —
   // skip innerHTML sync to avoid wiping their rendered content.
   useEffect(() => {
-    if (block.type === "horizontal_rule" || block.type === "image") return;
+    if (block.type === "horizontal_rule" || block.type === "image" || block.type === "component") return;
     const el = contentRef.current;
     if (!el || document.activeElement === el) return;
     const html =
@@ -592,6 +816,13 @@ function EditableBlock({
           ? inlineNodesToHtml(block.children as InlineNode[])
           : "";
     el.innerHTML = html;
+  }, [block]);
+
+  useEffect(() => {
+    if (block.type !== "image" && block.type !== "component") return;
+    const el = captionRef.current;
+    if (!el || document.activeElement === el) return;
+    el.innerText = block.caption ?? "";
   }, [block]);
 
   // ---------------------------------------------------------------------------
@@ -621,7 +852,9 @@ function EditableBlock({
       if (e.key === "ArrowUp" && e.shiftKey) {
         const _sel = window.getSelection();
         const _focusInBlock = e.currentTarget.contains(_sel?.focusNode ?? null);
-        const _atFirst = _focusInBlock ? isFocusAtFirstLine(e.currentTarget) : false;
+        const _atFirst = _focusInBlock
+          ? isFocusAtFirstLine(e.currentTarget)
+          : false;
         if (!_focusInBlock && _sel?.focusNode) {
           // Focus is in a different block. Use caretRangeFromPoint to compute the
           // position one visual line above the current focus — this is independent
@@ -634,8 +867,17 @@ function EditableBlock({
           // Jump a full line-height upward (never just 1px — that stays in the
           // same line's hit-area and caretRangeFromPoint returns the same position).
           const _lineH = Math.max(_rect.height, 20);
-          const _target = document.caretRangeFromPoint(_rect.left, _rect.top - _lineH);
-          if (_target && !(_target.startContainer === _sel.focusNode && _target.startOffset === _sel.focusOffset)) {
+          const _target = document.caretRangeFromPoint(
+            _rect.left,
+            _rect.top - _lineH,
+          );
+          if (
+            _target &&
+            !(
+              _target.startContainer === _sel.focusNode &&
+              _target.startOffset === _sel.focusOffset
+            )
+          ) {
             _sel.extend(_target.startContainer, _target.startOffset);
           }
           return;
@@ -651,7 +893,9 @@ function EditableBlock({
       if (e.key === "ArrowDown" && e.shiftKey) {
         const _sel = window.getSelection();
         const _focusInBlock = e.currentTarget.contains(_sel?.focusNode ?? null);
-        const _atLast = _focusInBlock ? isFocusAtLastLine(e.currentTarget) : false;
+        const _atLast = _focusInBlock
+          ? isFocusAtLastLine(e.currentTarget)
+          : false;
         if (!_focusInBlock && _sel?.focusNode) {
           e.preventDefault();
           const _r = document.createRange();
@@ -659,8 +903,17 @@ function EditableBlock({
           _r.collapse(true);
           const _rect = _r.getBoundingClientRect();
           const _lineH = Math.max(_rect.height, 20);
-          const _target = document.caretRangeFromPoint(_rect.left, _rect.bottom + _lineH);
-          if (_target && !(_target.startContainer === _sel.focusNode && _target.startOffset === _sel.focusOffset)) {
+          const _target = document.caretRangeFromPoint(
+            _rect.left,
+            _rect.bottom + _lineH,
+          );
+          if (
+            _target &&
+            !(
+              _target.startContainer === _sel.focusNode &&
+              _target.startOffset === _sel.focusOffset
+            )
+          ) {
             _sel.extend(_target.startContainer, _target.startOffset);
           }
           return;
@@ -745,12 +998,15 @@ function EditableBlock({
       if (
         e.key === "Backspace" &&
         isCaretAtStart(e.currentTarget) &&
-        (block.type === "heading" || block.type === "blockquote" || block.type === "code_block")
+        (block.type === "heading" ||
+          block.type === "blockquote" ||
+          block.type === "code_block")
       ) {
         e.preventDefault();
-        const children = "children" in block
-          ? (block.children as InlineNode[])
-          : [{ type: "text" as const, text: "" }];
+        const children =
+          "children" in block
+            ? (block.children as InlineNode[])
+            : [{ type: "text" as const, text: "" }];
         onChange({ type: "paragraph", children });
         onConvertedToParagraph?.();
         return;
@@ -792,7 +1048,20 @@ function EditableBlock({
         return;
       }
     },
-    [block, onChange, onEnter, onDelete, isSlashActive, onArrowUp, onArrowDown, onMergeWithPrev, onMergeWithNext, onConvertedToParagraph, onShiftArrowUp, onShiftArrowDown],
+    [
+      block,
+      onChange,
+      onEnter,
+      onDelete,
+      isSlashActive,
+      onArrowUp,
+      onArrowDown,
+      onMergeWithPrev,
+      onMergeWithNext,
+      onConvertedToParagraph,
+      onShiftArrowUp,
+      onShiftArrowDown,
+    ],
   );
 
   // ---------------------------------------------------------------------------
@@ -800,7 +1069,7 @@ function EditableBlock({
   // ---------------------------------------------------------------------------
 
   const handleInput = useCallback(
-    (e: React.FormEvent<HTMLElement>) => {
+    (e: React.InputEvent<HTMLElement>) => {
       const el = e.currentTarget;
 
       // Detect backtick wrapping for inline code: `text`
@@ -881,9 +1150,74 @@ function EditableBlock({
     [block, onChange, onSlashInput],
   );
 
-  // ---------------------------------------------------------------------------
-  // Paste — preserve semantic marks, strip visual styling, split on hard returns
-  // ---------------------------------------------------------------------------
+  const handleCaptionInput = useCallback(
+    (e: React.FormEvent<HTMLElement>) => {
+      if (block.type !== "image" && block.type !== "component") return;
+      const el = e.currentTarget;
+      const text = (el.innerText || el.textContent || "").replace(/\n$/, "");
+      onChange({
+        ...block,
+        caption: text.length > 0 ? text : undefined,
+      });
+    },
+    [block, onChange],
+  );
+
+  const handleCaptionKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.stopPropagation();
+        return;
+      }
+      if (e.key === "Enter" && e.shiftKey) {
+        e.preventDefault();
+        document.execCommand("insertLineBreak");
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        onInsertParagraphAfter?.();
+        return;
+      }
+      if (
+        e.key === "ArrowUp" &&
+        !e.shiftKey &&
+        isCaretAtStart(e.currentTarget)
+      ) {
+        e.preventDefault();
+        showcaseMediaRef.current?.focus();
+        return;
+      }
+      if (
+        e.key === "ArrowDown" &&
+        !e.shiftKey &&
+        isCaretAtEnd(e.currentTarget)
+      ) {
+        e.preventDefault();
+        onArrowDown?.();
+        return;
+      }
+      if (
+        e.key === "ArrowLeft" &&
+        !e.shiftKey &&
+        isCaretAtStart(e.currentTarget)
+      ) {
+        e.preventDefault();
+        showcaseMediaRef.current?.focus();
+        return;
+      }
+      if (
+        e.key === "ArrowRight" &&
+        !e.shiftKey &&
+        isCaretAtEnd(e.currentTarget)
+      ) {
+        e.preventDefault();
+        onArrowRight?.();
+        return;
+      }
+    },
+    [onArrowDown, onArrowLeft, onArrowRight, onInsertParagraphAfter],
+  );
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLElement>) => {
@@ -991,17 +1325,45 @@ function EditableBlock({
 
   if (block.type === "code_block") {
     return (
-      <pre
-        ref={combinedRef as React.RefCallback<HTMLPreElement>}
-        className={editorCodeBlockStyle}
-        contentEditable
-        suppressContentEditableWarning
-        onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
-        onInput={handleInput}
-        onPaste={handlePaste}
-        data-block-index={blockIndex}
-      />
+      <div className={cx(editorCodeBlockWrapperStyle, "code-block-wrapper")}>
+        <label className={css({ srOnly: true })} htmlFor={`code-language-${blockIndex}`}>
+          Code language
+        </label>
+        <select
+          id={`code-language-${blockIndex}`}
+          className={editorCodeLanguageSelectStyle}
+          value={block.language ?? ""}
+          onChange={(e) => {
+            const value = e.target.value;
+            onChange({
+              ...block,
+              language:
+                value === ""
+                  ? undefined
+                  : CodeLanguageSchema.parse(value),
+            });
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {CODE_LANGUAGE_OPTIONS.map((option) => (
+            <option key={option.value || "plain"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <pre
+          ref={combinedRef as React.RefCallback<HTMLPreElement>}
+          className={editorCodeBlockStyle}
+          contentEditable
+          suppressContentEditableWarning
+          onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
+          onInput={handleInput}
+          onPaste={handlePaste}
+          data-block-index={blockIndex}
+          {...slashAnchorProps}
+        />
+      </div>
     );
   }
 
@@ -1025,6 +1387,7 @@ function EditableBlock({
         onPaste={handlePaste}
         data-placeholder={placeholder}
         data-block-index={blockIndex}
+        {...slashAnchorProps}
       />
     );
   }
@@ -1050,32 +1413,153 @@ function EditableBlock({
         onPaste={handlePaste}
         data-placeholder={placeholder}
         data-block-index={blockIndex}
+        {...slashAnchorProps}
       />
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Image (non-editable placeholder — R2 upload wired in a follow-up)
+  // Image block — img with editable caption
   // ---------------------------------------------------------------------------
 
   if (block.type === "image") {
+    const showcaseMediaProps = {
+      tabIndex: 0 as const,
+      "data-showcase-media": "",
+      ref: showcaseMediaCallbackRef,
+      onFocus: () => setIsShowcaseMediaFocused(true),
+      onBlur: () => setIsShowcaseMediaFocused(false),
+      onKeyDown: handleShowcaseMediaKeyDown,
+    };
+
     return (
       <figure
-        tabIndex={0}
         ref={combinedRef as React.RefCallback<HTMLElement>}
-        className={editorFigureStyle}
+        className={editorShowcaseStyle}
         data-block-index={blockIndex}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        onKeyDown={handleNonTextKeyDown}
+        data-showcase-block=""
       >
         {block.src ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={block.src} alt={block.alt ?? ""} />
+          <img
+            src={block.src}
+            alt={block.alt ?? ""}
+            className={editorImgStyle}
+            {...showcaseMediaProps}
+          />
         ) : (
-          <span aria-label="Image placeholder">📷</span>
+          <span
+            aria-label="Image placeholder"
+            className={editorImagePlaceholderStyle}
+            {...showcaseMediaProps}
+          >
+            📷
+          </span>
         )}
-        {isFocused && <div className={nonTextFocusOverlayStyle} aria-hidden />}
+        {isShowcaseMediaFocused && (
+          <div
+            className={editorImageOverlayStyle}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <div className={editorImageOverlayTintStyle} aria-hidden />
+            <div className={editorImageOverlayActionsStyle}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onChangeImage?.()}
+              >
+                Change Image...
+              </Button>
+              <Button
+                type="button"
+                variant="icon"
+                aria-label="Delete image"
+                onClick={onDelete}
+              >
+                <TrashIcon className={editorOverlayIconStyle} />
+              </Button>
+            </div>
+          </div>
+        )}
+        <figcaption
+          ref={captionRef}
+          className={editorCaptionStyle}
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Caption media..."
+          data-block-index={blockIndex}
+          onInput={handleCaptionInput}
+          onKeyDown={handleCaptionKeyDown}
+        />
+      </figure>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Component block
+  // ---------------------------------------------------------------------------
+
+  if (block.type === "component") {
+    const demo = getDemoComponent(block.componentId);
+    const Demo = demo?.Component;
+    const showcaseMediaProps = {
+      tabIndex: 0 as const,
+      "data-showcase-media": "",
+      ref: showcaseMediaCallbackRef,
+      onFocus: () => setIsShowcaseMediaFocused(true),
+      onBlur: () => setIsShowcaseMediaFocused(false),
+      onKeyDown: handleShowcaseMediaKeyDown,
+    };
+
+    return (
+      <figure
+        ref={combinedRef as React.RefCallback<HTMLElement>}
+        className={editorShowcaseStyle}
+        data-block-index={blockIndex}
+        data-showcase-block=""
+      >
+        <DemoFrame
+          aspectRatio={demo?.aspectRatio}
+          logger={demo?.logger}
+          className={editorShowcaseMediaStyle}
+          {...showcaseMediaProps}
+        >
+          <div inert className={editorDemoPreviewStyle}>
+            {Demo ? (
+              <Demo />
+            ) : (
+              <span>Unknown component: {block.componentId}</span>
+            )}
+          </div>
+        </DemoFrame>
+        {isShowcaseMediaFocused && (
+          <div
+            className={editorImageOverlayStyle}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <div className={editorImageOverlayTintStyle} aria-hidden />
+            <div className={editorImageOverlayActionsStyle}>
+              <Button
+                type="button"
+                variant="icon"
+                aria-label="Delete component"
+                onClick={onDelete}
+              >
+                <TrashIcon className={editorOverlayIconStyle} />
+              </Button>
+            </div>
+          </div>
+        )}
+        <figcaption
+          ref={captionRef}
+          className={editorCaptionStyle}
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Caption component..."
+          data-block-index={blockIndex}
+          onInput={handleCaptionInput}
+          onKeyDown={handleCaptionKeyDown}
+        />
       </figure>
     );
   }
@@ -1096,6 +1580,7 @@ function EditableBlock({
       onPaste={handlePaste}
       data-placeholder={placeholder}
       data-block-index={blockIndex}
+      {...slashAnchorProps}
     />
   );
 }
@@ -1113,7 +1598,7 @@ function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
     return [{ type: "paragraph", children: [{ type: "text", text: "" }] }];
   }
   const last = blocks[blocks.length - 1];
-  if (last.type === "horizontal_rule" || last.type === "image") {
+  if (last.type === "horizontal_rule" || last.type === "image" || last.type === "component") {
     return [
       ...blocks,
       { type: "paragraph", children: [{ type: "text", text: "" }] },
@@ -1127,15 +1612,31 @@ function ensureBlocks(doc: Document): BlockNode[] {
   return [{ type: "paragraph", children: [{ type: "text", text: "" }] }];
 }
 
+function emptyParagraphBlock(): BlockNode {
+  return { type: "paragraph", children: [{ type: "text", text: "" }] };
+}
+
+/** True when the figure is second-to-last and followed by a synthetic trailing paragraph. */
+function hasSyntheticTrailingParagraph(
+  blocks: BlockNode[],
+  index: number,
+): boolean {
+  const block = blocks[index];
+  if (block.type !== "image" && block.type !== "component") return false;
+  if (index !== blocks.length - 2) return false;
+  return isBlockEmpty(blocks[index + 1]);
+}
+
 // ---------------------------------------------------------------------------
 // ArticleEditor
 // ---------------------------------------------------------------------------
 
 interface ArticleEditorProps {
   initialPost?: Post;
+  category?: PostCategory;
 }
 
-export function ArticleEditor({ initialPost }: ArticleEditorProps) {
+export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   const {
     title,
     setTitle,
@@ -1152,6 +1653,7 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
       useEditorStore.setState({
         title: initialPost.title ?? "",
         draftId: initialPost.id,
+        category: initialPost.category,
         document: {
           ...initialPost.content,
           content: withTrailingParagraph(initialPost.content.content),
@@ -1162,6 +1664,9 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
       });
     } else {
       useEditorStore.getState().reset();
+      if (category) {
+        useEditorStore.setState({ category });
+      }
     }
     // Seed history with the initial state so Cmd+Z can undo back to it.
     const s = useEditorStore.getState();
@@ -1212,9 +1717,10 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
   useEffect(() => {
     function blockIdxForNode(node: Node | null): number | null {
       if (!node) return null;
-      const el = node.nodeType === Node.ELEMENT_NODE
-        ? (node as Element)
-        : node.parentElement;
+      const el =
+        node.nodeType === Node.ELEMENT_NODE
+          ? (node as Element)
+          : node.parentElement;
       if (!el) return null;
       if (titleRef.current?.contains(el)) return -1;
       for (let i = 0; i < blockRefs.current.length; i++) {
@@ -1242,8 +1748,10 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
       const range = document.caretRangeFromPoint(e.clientX, e.clientY);
       if (
         range &&
-        !(range.startContainer === sel.focusNode &&
-          range.startOffset === sel.focusOffset)
+        !(
+          range.startContainer === sel.focusNode &&
+          range.startOffset === sel.focusOffset
+        )
       ) {
         sel.extend(range.startContainer, range.startOffset);
       }
@@ -1298,7 +1806,8 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     }
 
     document.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => document.removeEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, []);
 
   // Delete / Backspace across editing hosts — dispatches to crossBlockDeleteRef
@@ -1308,7 +1817,8 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
       crossBlockDeleteRef.current(e);
     }
     document.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => document.removeEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, []);
 
   // Cmd+Z (undo) and Cmd+Shift+Z (redo) while focus is in the editor.
@@ -1364,7 +1874,8 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
         // Use the same block index, capped to whatever blocks still exist.
         const currentBlocks = blockRefs.current.filter(Boolean);
         const idx = Math.min(targetIdx, Math.max(0, currentBlocks.length - 1));
-        const el = blockRefs.current.find((e, i) => e != null && i === idx) ??
+        const el =
+          blockRefs.current.find((e, i) => e != null && i === idx) ??
           blockRefs.current.find((e) => e != null);
         if (el) {
           el.focus();
@@ -1380,7 +1891,8 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     }
 
     document.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => document.removeEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, []);
 
   // Update the title DOM imperatively when the store title changes, but skip
@@ -1400,12 +1912,44 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     hasExistingContent: boolean;
   } | null>(null);
   const [slashQuery, setSlashQuery] = useState("");
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [imageDialogMode, setImageDialogMode] =
+    useState<ImageDialogMode>("insert");
+  const [imageDialogBlockIndex, setImageDialogBlockIndex] = useState<
+    number | null
+  >(null);
 
   // -------------------------------------------------------------------------
   // Focus helpers
   // -------------------------------------------------------------------------
 
+  function isShowcaseFigure(el: HTMLElement): boolean {
+    return el.hasAttribute("data-showcase-block");
+  }
+
   function focusBlockAtEnd(el: HTMLElement) {
+    if (isShowcaseFigure(el)) {
+      const caption = el.querySelector(
+        "figcaption[contenteditable]",
+      ) as HTMLElement | null;
+      if (!caption) return;
+      caption.focus();
+      if (!caption.isContentEditable) return;
+      const sel = window.getSelection();
+      if (!sel) return;
+      const range = document.createRange();
+      const node = lastTextNode(caption);
+      if (node) {
+        range.setStart(node, node.length);
+      } else {
+        range.selectNodeContents(caption);
+      }
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+
     el.focus();
     // Non-text blocks (HR wrapper, image figure) are not contentEditable —
     // just calling focus() is enough; no caret range is needed.
@@ -1425,6 +1969,12 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
   }
 
   function focusBlockAtStart(el: HTMLElement) {
+    if (isShowcaseFigure(el)) {
+      const host = el.querySelector("[data-showcase-media]") as HTMLElement | null;
+      host?.focus();
+      return;
+    }
+
     el.focus();
     // Non-text blocks (HR wrapper, image figure) are not contentEditable —
     // just calling focus() is enough; no caret range is needed.
@@ -1456,7 +2006,8 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
       const el = titleRef.current;
       if (!el) return;
       const focus = lastTextNode(el) ?? el;
-      const offset = focus.nodeType === Node.TEXT_NODE ? (focus as Text).length : 0;
+      const offset =
+        focus.nodeType === Node.TEXT_NODE ? (focus as Text).length : 0;
       // Use extend() — does NOT change document.activeElement, avoids Chrome's
       // "refocus to anchor element" behaviour that setBaseAndExtent triggers.
       sel.extend(focus, offset);
@@ -1466,7 +2017,8 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     const prevEl = blockRefs.current[blockIndex - 1];
     if (!prevEl) return;
     const focus = lastTextNode(prevEl) ?? prevEl;
-    const offset = focus.nodeType === Node.TEXT_NODE ? (focus as Text).length : 0;
+    const offset =
+      focus.nodeType === Node.TEXT_NODE ? (focus as Text).length : 0;
     sel.extend(focus, offset);
   }
 
@@ -1537,6 +2089,44 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     }, 0);
   }
 
+  function insertParagraphBefore(index: number) {
+    updateBlocks([
+      ...blocks.slice(0, index),
+      emptyParagraphBlock(),
+      ...blocks.slice(index),
+    ]);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    setTimeout(() => {
+      const el = blockRefs.current[index];
+      if (el) focusBlockAtStart(el);
+    }, 0);
+  }
+
+  function insertParagraphAfter(index: number) {
+    if (hasSyntheticTrailingParagraph(blocks, index)) {
+      setTimeout(() => {
+        const el = blockRefs.current[index + 1];
+        if (el) focusBlockAtStart(el);
+      }, 0);
+      return;
+    }
+
+    updateBlocks([
+      ...blocks.slice(0, index + 1),
+      emptyParagraphBlock(),
+      ...blocks.slice(index + 1),
+    ]);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    setTimeout(() => {
+      const el = blockRefs.current[index + 1];
+      if (el) focusBlockAtStart(el);
+    }, 0);
+  }
+
   /** Shared: parse an HTML string into InlineNode[], with a non-empty fallback. */
   function htmlToNodes(html: string): InlineNode[] {
     const div = document.createElement("div");
@@ -1560,7 +2150,7 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     const prevBlock = blocks[index - 1];
 
     // Non-text predecessor (HR, image) — just delete it, keep current block
-    if (prevBlock.type === "horizontal_rule" || prevBlock.type === "image") {
+    if (prevBlock.type === "horizontal_rule" || prevBlock.type === "image" || prevBlock.type === "component") {
       updateBlocks([...blocks.slice(0, index - 1), ...blocks.slice(index)]);
       cancelHistoryDebounce();
       pushHistoryNow();
@@ -1605,7 +2195,7 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     const nextBlock = blocks[index + 1];
 
     // Non-text successor (HR, image) — just delete it, keep current block
-    if (nextBlock.type === "horizontal_rule" || nextBlock.type === "image") {
+    if (nextBlock.type === "horizontal_rule" || nextBlock.type === "image" || nextBlock.type === "component") {
       updateBlocks([...blocks.slice(0, index + 1), ...blocks.slice(index + 2)]);
       cancelHistoryDebounce();
       pushHistoryNow();
@@ -1746,40 +2336,86 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     const excludeType = slashAnchor
       ? (blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined)
       : undefined;
-    if (getFilteredSlashItems(newQuery, undefined, excludeType).length === 0) {
+    if (!slashMenuHasResults(newQuery, undefined, excludeType)) {
       handleSlashDismiss();
       return;
     }
     setSlashQuery(newQuery);
   }
 
-  function handleSlashSelect(type: SlashMenuBlockType) {
+  /** Remove the slash-menu trigger "/" from inline children. */
+  function stripSlashTrigger(children: InlineNode[]): InlineNode[] {
+    const stripped: InlineNode[] =
+      children.length > 0 &&
+      children[0].type === "text" &&
+      children[0].text.startsWith("/")
+        ? [
+            { ...children[0], text: children[0].text.slice(1) },
+            ...children.slice(1),
+          ]
+        : children;
+    const hasContent = stripped.some((n) => n.text.trim() !== "");
+    return hasContent ? stripped : [{ type: "text" as const, text: "" }];
+  }
+
+  /**
+   * Write stripped inline content back into a focused block. EditableBlock's
+   * innerHTML sync useEffect skips updates while the element has focus.
+   */
+  function syncFocusedBlockDom(
+    el: HTMLElement,
+    children: InlineNode[],
+    blockType: SlashMenuBlockType,
+  ) {
+    if (blockType === "horizontal_rule") return;
+    if (blockType === "code_block") {
+      el.innerHTML = children.map((n) => n.text).join("");
+      return;
+    }
+    el.innerHTML = inlineNodesToHtml(children);
+  }
+
+  function handleSlashSelectComponent(componentId: string) {
     if (!slashAnchor) return;
-    const { index } = slashAnchor;
+    const { index, el } = slashAnchor;
     setSlashAnchor(null);
     setSlashQuery("");
 
+    const keptChildren = stripSlashTrigger(domToInlineNodes(el));
+    syncFocusedBlockDom(el, keptChildren, "paragraph");
+
+    const next = [...blocks];
+    next[index] = { type: "component", componentId };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    setTimeout(() => {
+      const trailing = blockRefs.current[index + 1];
+      if (trailing) focusBlockAtStart(trailing);
+    }, 0);
+  }
+
+  function handleSlashSelect(type: SlashMenuBlockType) {
+    if (!slashAnchor) return;
+    const { index, el } = slashAnchor;
+    setSlashAnchor(null);
+    setSlashQuery("");
+
+    // Read from the DOM — it is authoritative while the block is focused.
+    const keptChildren = stripSlashTrigger(domToInlineNodes(el));
+    syncFocusedBlockDom(el, keptChildren, type);
+
     if (type === "media") {
-      console.log("media selected");
+      const next = [...blocks];
+      next[index] = { type: "paragraph", children: keptChildren };
+      updateBlocks(next);
+
+      setImageDialogMode("insert");
+      setImageDialogBlockIndex(index);
+      setImageDialogOpen(true);
       return;
     }
-
-    // Derive the children to carry into the new block. If the source block had
-    // existing content the current AST has a leading "/" in the first text node
-    // (from the slash the user typed). Strip it so the converted block is clean.
-    const sourceBlock = blocks[index];
-    const sourceChildren =
-      "children" in sourceBlock && Array.isArray(sourceBlock.children)
-        ? (sourceBlock.children as InlineNode[])
-        : [];
-
-    const strippedChildren: InlineNode[] =
-      sourceChildren.length > 0 && sourceChildren[0].type === "text" && sourceChildren[0].text.startsWith("/")
-        ? [{ ...sourceChildren[0], text: sourceChildren[0].text.slice(1) }, ...sourceChildren.slice(1)]
-        : sourceChildren;
-
-    const hasContent = strippedChildren.some((n) => n.text.trim() !== "");
-    const keptChildren = hasContent ? strippedChildren : [{ type: "text" as const, text: "" }];
 
     let newBlock: BlockNode;
     if (type === "heading") {
@@ -1791,7 +2427,10 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
     } else if (type === "code_block") {
       // Code blocks store plain text only — flatten marks away.
       const plainText = keptChildren.map((n) => n.text).join("");
-      newBlock = { type: "code_block", children: [{ type: "text", text: plainText }] };
+      newBlock = {
+        type: "code_block",
+        children: [{ type: "text", text: plainText }],
+      };
     } else {
       newBlock = { type: "horizontal_rule" };
     }
@@ -1813,6 +2452,55 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
         blockRefs.current[index]?.focus();
       }
     }, 0);
+  }
+
+  function handleChangeImage(blockIndex: number) {
+    setImageDialogMode("change");
+    setImageDialogBlockIndex(blockIndex);
+    setImageDialogOpen(true);
+  }
+
+  function handleImageInsert(payload: { src: string; alt?: string }) {
+    if (imageDialogBlockIndex === null) return;
+
+    const existing = blocks[imageDialogBlockIndex];
+    const next = [...blocks];
+    next[imageDialogBlockIndex] = {
+      type: "image",
+      src: payload.src,
+      ...(payload.alt ? { alt: payload.alt } : {}),
+      ...(existing.type === "image" && existing.caption
+        ? { caption: existing.caption }
+        : {}),
+    };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    const changedBlockIndex = imageDialogBlockIndex;
+    const wasChange = imageDialogMode === "change";
+    setImageDialogOpen(false);
+    setImageDialogBlockIndex(null);
+    setImageDialogMode("insert");
+
+    setTimeout(() => {
+      if (wasChange) {
+        const figure = blockRefs.current[changedBlockIndex];
+        const media = figure?.querySelector(
+          "[data-showcase-media]",
+        ) as HTMLElement | null;
+        media?.focus();
+        return;
+      }
+      const el = blockRefs.current[changedBlockIndex + 1];
+      if (el) focusBlockAtStart(el);
+    }, 0);
+  }
+
+  function handleImageDialogClose() {
+    setImageDialogOpen(false);
+    setImageDialogBlockIndex(null);
+    setImageDialogMode("insert");
   }
 
   function handleSlashDismiss() {
@@ -1936,9 +2624,7 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
 
       // Place caret at the junction between before and after content.
       let charCount = 0;
-      function findCaretPos(
-        node: Node,
-      ): { node: Node; offset: number } | null {
+      function findCaretPos(node: Node): { node: Node; offset: number } | null {
         if (node.nodeType === Node.TEXT_NODE) {
           const len = (node.textContent ?? "").length;
           if (charCount + len >= targetCaretLength) {
@@ -2045,7 +2731,7 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
           isFirst={i === 0}
           isOnly={blocks.length === 1}
           onChange={(updated) => updateBlock(i, updated)}
-            onEnter={(before, after) => splitBlock(i, before, after)}
+          onEnter={(before, after) => splitBlock(i, before, after)}
           onDelete={() => deleteBlock(i)}
           onSlash={(el) => handleSlash(el, i)}
           isSlashActive={slashAnchor?.index === i}
@@ -2076,19 +2762,32 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
             const el = blockRefs.current[i + 1];
             if (el) focusBlockAtStart(el);
           }}
-            onPasteBlocks={(firstHtml, restHtmls) =>
-              pasteBlocks(i, firstHtml, restHtmls)
-            }
-            onMergeWithPrev={(html) => mergeWithPrev(i, html)}
-            onMergeWithNext={(html) => mergeWithNext(i, html)}
-            onConvertedToParagraph={() => {
-              setTimeout(() => {
-                const el = blockRefs.current[i];
-                if (el) focusBlockAtStart(el);
-              }, 0);
-            }}
-            onShiftArrowUp={() => shiftArrowUp(i)}
-            onShiftArrowDown={() => shiftArrowDown(i)}
+          onPasteBlocks={(firstHtml, restHtmls) =>
+            pasteBlocks(i, firstHtml, restHtmls)
+          }
+          onMergeWithPrev={(html) => mergeWithPrev(i, html)}
+          onMergeWithNext={(html) => mergeWithNext(i, html)}
+          onConvertedToParagraph={() => {
+            setTimeout(() => {
+              const el = blockRefs.current[i];
+              if (el) focusBlockAtStart(el);
+            }, 0);
+          }}
+          onShiftArrowUp={() => shiftArrowUp(i)}
+          onShiftArrowDown={() => shiftArrowDown(i)}
+          onChangeImage={
+            block.type === "image" ? () => handleChangeImage(i) : undefined
+          }
+          onInsertParagraphBefore={
+            block.type === "image" || block.type === "component"
+              ? () => insertParagraphBefore(i)
+              : undefined
+          }
+          onInsertParagraphAfter={
+            block.type === "image" || block.type === "component"
+              ? () => insertParagraphAfter(i)
+              : undefined
+          }
           elRef={(el) => {
             blockRefs.current[i] = el;
           }}
@@ -2097,18 +2796,28 @@ export function ArticleEditor({ initialPost }: ArticleEditorProps) {
 
       {slashAnchor && (
         <SlashMenu
-          anchor={slashAnchor.el}
           query={slashQuery}
           allowedTypes={
             slashAnchor.hasExistingContent
               ? ["heading", "paragraph", "blockquote", "code_block"]
               : undefined
           }
-          excludeType={blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined}
+          excludeType={
+            blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined
+          }
           onSelect={handleSlashSelect}
+          onSelectComponent={handleSlashSelectComponent}
           onDismiss={handleSlashDismiss}
         />
       )}
+
+      <ImageInsertDialog
+        open={imageDialogOpen}
+        mode={imageDialogMode}
+        initialPhase={imageDialogMode === "change" ? "library" : "upload"}
+        onClose={handleImageDialogClose}
+        onInsert={handleImageInsert}
+      />
     </>
   );
 }

@@ -3,10 +3,14 @@ import type { NextConfig } from "next";
 const svgrOptions = {
   // SVGO normalises colour names to hex before replaceAttrValues runs, so
   // match the post-SVGO hex value rather than the original keyword.
-  replaceAttrValues: { "#fff": "currentColor" },
+  replaceAttrValues: { "#fff": "currentColor", "#ffffff": "currentColor" },
 };
 
 const nextConfig: NextConfig = {
+  images: {
+    qualities: [100],
+  },
+
   // Turbopack (default in Next.js 16)
   turbopack: {
     rules: {
@@ -31,7 +35,9 @@ const nextConfig: NextConfig = {
       {
         test: /\.svg$/i,
         issuer: fileLoaderRule?.issuer,
-        resourceQuery: { not: [...(fileLoaderRule?.resourceQuery?.not ?? []), /url/] },
+        resourceQuery: {
+          not: [...(fileLoaderRule?.resourceQuery?.not ?? []), /url/],
+        },
         use: [{ loader: "@svgr/webpack", options: svgrOptions }],
       },
     );

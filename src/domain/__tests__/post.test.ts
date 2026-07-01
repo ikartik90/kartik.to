@@ -130,6 +130,16 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
+  it("rejects an unsupported code_block language", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "code_block",
+        language: "python",
+        children: [{ type: "text", text: "print('hi')" }],
+      }).success
+    ).toBe(false);
+  });
+
   it("accepts a horizontal_rule node", () => {
     expect(
       BlockNodeSchema.safeParse({ type: "horizontal_rule" }).success
@@ -146,13 +156,31 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  it("rejects a generic component node (no longer a valid type)", () => {
+  it("accepts a component block node with caption", () => {
     expect(
       BlockNodeSchema.safeParse({
         type: "component",
-        name: "Chart",
-        props: {},
-      }).success
+        componentId: "placeholder",
+        caption: "Demo caption",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a component block node", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "component",
+        componentId: "placeholder",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a component node with an empty componentId", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "component",
+        componentId: "",
+      }).success,
     ).toBe(false);
   });
 

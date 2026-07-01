@@ -67,9 +67,21 @@ export const BlockquoteNodeSchema = z.object({
   children: z.array(InlineNodeSchema),
 });
 
+export const CodeLanguageSchema = z.enum([
+  "html",
+  "css",
+  "json",
+  "javascript",
+  "jsx",
+  "typescript",
+  "tsx",
+]);
+
+export type CodeLanguage = z.infer<typeof CodeLanguageSchema>;
+
 export const CodeBlockNodeSchema = z.object({
   type: z.literal("code_block"),
-  language: z.string().optional(),
+  language: CodeLanguageSchema.optional(),
   children: z.array(TextNodeSchema),
 });
 
@@ -84,6 +96,12 @@ export const ImageNodeSchema = z.object({
   caption: z.string().optional(),
 });
 
+export const ComponentNodeSchema = z.object({
+  type: z.literal("component"),
+  componentId: z.string().min(1),
+  caption: z.string().optional(),
+});
+
 // ---------------------------------------------------------------------------
 // BlockNode union — the single source of truth for all valid block types.
 // Add new node schemas to both the type union and the z.union() array below.
@@ -95,7 +113,8 @@ export type BlockNode =
   | z.infer<typeof BlockquoteNodeSchema>
   | z.infer<typeof CodeBlockNodeSchema>
   | z.infer<typeof HorizontalRuleNodeSchema>
-  | z.infer<typeof ImageNodeSchema>;
+  | z.infer<typeof ImageNodeSchema>
+  | z.infer<typeof ComponentNodeSchema>;
 
 export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   ParagraphNodeSchema,
@@ -104,4 +123,5 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   CodeBlockNodeSchema,
   HorizontalRuleNodeSchema,
   ImageNodeSchema,
+  ComponentNodeSchema,
 ]);

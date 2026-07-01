@@ -10,7 +10,7 @@ const logoStyle = css({
 
 export function Header() {
   return (
-    <header>
+    <header data-site-header>
       <a href="/" aria-label="Home" className={logoStyle}>
         <KartikIyerSvg aria-label="Kartik Iyer" role="img" />
         <Typography tag="p" type="caption">

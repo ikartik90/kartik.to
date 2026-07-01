@@ -5,6 +5,14 @@ import type { Document } from "@/domain/post";
 // Module mocks — must be declared before dynamic imports of the module
 // ---------------------------------------------------------------------------
 
+const { mockGetSession } = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/server", () => ({
+  auth: { getSession: () => mockGetSession() },
+}));
+
 const mockPrismaCreate = vi.fn();
 const mockPrismaUpdate = vi.fn();
 const mockPrismaDelete = vi.fn();
@@ -77,6 +85,9 @@ const { createDraft, saveDraft, publishPost, deleteDraft, getDrafts } =
 describe("post server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSession.mockResolvedValue({
+      data: { user: { email: "admin@example.com" } },
+    });
     mockCookiesGet.mockReturnValue({ value: "fake-jwt-token" });
     mockPrismaCreate.mockResolvedValue(RAW_POST);
     mockPrismaUpdate.mockResolvedValue({ ...RAW_POST, publishedAt: NOW });
@@ -90,11 +101,24 @@ describe("post server actions", () => {
   // -------------------------------------------------------------------------
 
   describe("createDraft", () => {
+    it("persists the provided category", async () => {
+      await createDraft({
+        title: "Project",
+        document: EMPTY_DOC,
+        category: "WORK",
+      });
+      expect(mockPrismaCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ category: "WORK" }),
+        }),
+      );
+    });
+
     it("calls prisma.post.create with the correct data", async () => {
       await createDraft({ title: "Hello", document: EMPTY_DOC });
       expect(mockPrismaCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ title: "Hello" }),
+          data: expect.objectContaining({ title: "Hello", category: "ARTICLE" }),
         }),
       );
     });

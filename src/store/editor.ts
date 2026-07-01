@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Document } from "@/domain/post";
+import type { Document, PostCategory } from "@/domain/post";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -26,6 +26,7 @@ export interface HistorySnapshot {
 interface EditorStore {
   title: string;
   draftId: string | null;
+  category: PostCategory;
   document: Document;
   isDirty: boolean;
   /** Ordered list of snapshots from oldest to newest. */
@@ -52,6 +53,7 @@ interface EditorStore {
 const INITIAL_STATE = {
   title: "",
   draftId: null as string | null,
+  category: "ARTICLE" as PostCategory,
   document: EMPTY_DOCUMENT,
   isDirty: false,
   history: [] as HistorySnapshot[],

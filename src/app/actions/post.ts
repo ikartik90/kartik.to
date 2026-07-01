@@ -3,7 +3,13 @@
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { auth } from "@/lib/auth/server";
-import { DocumentSchema, PostSchema, type Document, type Post } from "@/domain/post";
+import {
+  PostCategorySchema,
+  type Document,
+  type Post,
+  type PostCategory,
+} from "@/domain/post";
+import { parsePost } from "@/lib/posts";
 import { generateSlug } from "@/utils/slug";
 
 // ---------------------------------------------------------------------------
@@ -19,30 +25,21 @@ async function requireAdmin(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function parsePost(raw: unknown): Post {
-  const record = raw as Record<string, unknown>;
-  return PostSchema.parse({
-    ...record,
-    content: DocumentSchema.parse(record.content),
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
 
 export async function createDraft({
   title,
   document,
+  category = "ARTICLE",
 }: {
   title?: string;
   document: Document;
+  category?: PostCategory;
 }): Promise<Post> {
   await requireAdmin();
 
+  const parsedCategory = PostCategorySchema.parse(category);
   const slug = generateSlug(title);
 
   let untitledIndex: number | null = null;
@@ -55,7 +52,7 @@ export async function createDraft({
     data: {
       title: title?.trim() || null,
       slug,
-      category: "ARTICLE",
+      category: parsedCategory,
       content: document as object,
       untitledIndex,
       publishedAt: null,

@@ -21,6 +21,11 @@ tokens:
 
   sizes:
     contentColumn: 640px
+    listingCardWidth: 304px
+    articleWidth: 960px
+    librarySidebar: 200px
+    imagePreviewMax: 280px
+    dialogFooter: 56px
 
   palette:
     brand-orange: "#FFAB6F"
@@ -40,11 +45,15 @@ tokens:
   colors:
     border:
       divider: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
+      imageOutline:
+        light: "color-mix(in srgb, {palette.neutral.900} 10%, transparent)"
+        dark: "color-mix(in srgb, {palette.neutral.100} 10%, transparent)"
 
     light:
       bg:
         canvas: "{palette.neutral.100}"
         surface: "{palette.neutral.200}"
+        itemHover: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
         brandedEmphasis: "{palette.brand-gradient}"
         selection: "{palette.brand-orange}"
       text:
@@ -54,11 +63,14 @@ tokens:
         brandedEmphasis: "{palette.neutral.900}"
         selection: "{palette.neutral.900}"
         commandItem: "{palette.neutral.700}"
+      logo:
+        default: "{palette.neutral.600}"
 
     dark:
       bg:
         canvas: "{palette.neutral.900}"
         surface: "{palette.neutral.800}"
+        itemHover: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
         brandedEmphasis: "{palette.brand-gradient}"
         selection: "{palette.brand-pink}"
       text:
@@ -68,6 +80,15 @@ tokens:
         brandedEmphasis: "{palette.neutral.900}"
         selection: "{palette.neutral.900}"
         commandItem: "{palette.neutral.300}"
+      logo:
+        default: "{palette.neutral.300}"
+
+  fonts:
+    switzer: "var(--font-switzer), Helvetica, sans-serif"
+    jetbrainsMono: "var(--font-jetbrains-mono), ui-monospace, monospace"
+
+  fontWeights:
+    base: 400
 
   typography:
     fontFamily: switzer
@@ -109,6 +130,19 @@ tokens:
       fontSize: 0.75rem
       lineHeight: 1.25rem
 
+    inlineCode:
+      fontFamily: jetbrainsMono
+      fontSize: 0.875em
+
+    link:
+      textDecoration: underline
+      textUnderlineOffset: 3px
+
+    code:
+      fontFamily: jetbrainsMono
+      fontSize: 0.875rem
+      lineHeight: 1.7
+
   radii:
     sm: "{spacing.sm}"
     md: "{spacing.md}"
@@ -124,6 +158,8 @@ tokens:
 
 - **text.default** Everything that is not a designated article or section paragraph, such as caption, sidenote, quote, subheading, etc. should use `text.default` color.
 - Semantic colors automatically resolve to their `base` (light) or `dark` value based on the `[data-theme="dark"]` attribute on `<html>`. Default is light.
+- **bg.itemHover** — hover/selected row background for menus and library lists.
+- **border.imageOutline** — inset outline on images (interface-design rule 11).
 
 ## Typography
 
@@ -139,6 +175,6 @@ tokens:
 
 ## Sections
 
-- The `main` section should have `max-width: 1200px` with `inline-padding: 20px` and `margin: 0 auto` set on it.
-- `article` inside the main section would have `width: min(100%, 960px)` set on it.
-- Text content inside `article` such as `paragraph`s should have `width: min(100%, 640px)`
+- The `main` section should have `max-width: {breakpoints.lg}` with `padding-inline: {spacing.xxl}` and `margin: 0 auto` set on it.
+- `article` inside the main section would have `width: min(100%, {sizes.articleWidth})` set on it.
+- Text content inside `article` such as `paragraph`s should have `width: min(100%, {sizes.contentColumn})`

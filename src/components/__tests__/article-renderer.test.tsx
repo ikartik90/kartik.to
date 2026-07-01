@@ -1,8 +1,23 @@
 // @vitest-environment jsdom
+import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ArticleRenderer } from "../article-renderer";
 import type { Document } from "@/domain/post";
+
+vi.mock("@/components/demo-frame", () => ({
+  DemoFrame: ({ children }: { children: ReactNode }) => (
+    <div data-testid="demo-frame">{children}</div>
+  ),
+}));
+
+vi.mock("@/components/demo/registry", () => ({
+  getDemoComponent: () => ({
+    id: "calchemy-demo",
+    label: "Calchemy Demo",
+    Component: () => <div data-testid="demo">Demo</div>,
+  }),
+}));
 
 function doc(nodes: Document["content"]): Document {
   return { type: "doc", content: nodes };
@@ -84,7 +99,26 @@ describe("ArticleRenderer", () => {
         />,
       );
       expect(container.querySelector("pre")).toBeDefined();
-      expect(screen.getByText(".foo { color: red; }")).toBeDefined();
+      expect(container.querySelector('[data-syntax-role="primary"], [data-syntax-role="secondary"]')).toBeDefined();
+      expect(
+        container.querySelector("code")?.textContent,
+      ).toBe(".foo { color: red; }");
+    });
+
+    it("renders a code block without highlighting when language is unset", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "code_block",
+              children: [{ type: "text", text: "plain code" }],
+            },
+          ])}
+        />,
+      );
+
+      expect(container.querySelector('[data-syntax-role]')).toBeNull();
+      expect(screen.getByText("plain code")).toBeDefined();
     });
 
     it("renders a horizontal rule", () => {
@@ -115,7 +149,7 @@ describe("ArticleRenderer", () => {
     });
 
     it("renders an image without caption", () => {
-      render(
+      const { container } = render(
         <ArticleRenderer
           content={doc([
             {
@@ -127,6 +161,42 @@ describe("ArticleRenderer", () => {
         />,
       );
       expect(screen.getByRole("img", { name: "Alt only" })).toBeDefined();
+      expect(container.querySelector("figcaption")).toBeNull();
+    });
+
+    it("renders a component inside a figure with caption", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "component",
+              componentId: "calchemy-demo",
+              caption: "Component caption text",
+            },
+          ])}
+        />,
+      );
+      const figure = container.querySelector("figure");
+      expect(figure).not.toBeNull();
+      expect(figure?.querySelector("[data-testid='demo']")).not.toBeNull();
+      expect(screen.getByText("Component caption text")).toBeDefined();
+    });
+
+    it("omits figcaption for a component without caption", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "component",
+              componentId: "calchemy-demo",
+            },
+          ])}
+        />,
+      );
+      const figure = container.querySelector("figure");
+      expect(figure).not.toBeNull();
+      expect(figure?.querySelector("[data-testid='demo']")).not.toBeNull();
+      expect(figure?.querySelector("figcaption")).toBeNull();
     });
   });
 

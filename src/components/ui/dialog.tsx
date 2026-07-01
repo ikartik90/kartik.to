@@ -40,11 +40,12 @@ const dialogRecipe = cva({
     transitionDelay: "0s",
     transitionBehavior: "allow-discrete",
 
-    // Open/steady state
+    // Open/steady state — flex column so panel recipes (footer marginTop: auto, body flex: 1) work
     "&[open]": {
       opacity: 1,
       transform: "scale(1)",
-      display: "block",
+      display: "flex",
+      flexDirection: "column",
     },
 
     // Backdrop — closed/exit state

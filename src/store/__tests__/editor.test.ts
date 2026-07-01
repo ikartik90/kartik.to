@@ -34,6 +34,10 @@ describe("useEditorStore", () => {
       expect(useEditorStore.getState().isDirty).toBe(false);
     });
 
+    it("starts with category ARTICLE", () => {
+      expect(useEditorStore.getState().category).toBe("ARTICLE");
+    });
+
     it("starts with an empty history", () => {
       expect(useEditorStore.getState().history).toEqual([]);
       expect(useEditorStore.getState().historyIndex).toBe(-1);
@@ -99,10 +103,11 @@ describe("useEditorStore", () => {
 
       useEditorStore.getState().reset();
 
-      const { title, draftId, document, isDirty, history, historyIndex } =
+      const { title, draftId, document, category, isDirty, history, historyIndex } =
         useEditorStore.getState();
       expect(title).toBe("");
       expect(draftId).toBeNull();
+      expect(category).toBe("ARTICLE");
       expect(document).toEqual(EMPTY_DOCUMENT);
       expect(isDirty).toBe(false);
       expect(history).toEqual([]);
