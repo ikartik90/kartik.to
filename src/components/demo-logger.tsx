@@ -80,7 +80,7 @@ const illustrationStyle = css({
 
 const illustrationImageStyle = css({
   objectFit: "contain",
-  outline: "none",
+  outline: "[none]",
   outlineWidth: "0",
 });
 

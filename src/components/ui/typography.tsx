@@ -40,7 +40,6 @@ export const typographyStyles = cva({
       subheading: {
         textStyle: "subheading",
         textWrap: "balance",
-        marginTop: "token(spacing.xl)",
       },
       paragraph: {
         textStyle: "paragraph",

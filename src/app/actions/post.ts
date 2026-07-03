@@ -10,6 +10,7 @@ import {
   type PostCategory,
 } from "@/domain/post";
 import { parsePost } from "@/lib/posts";
+import { revalidatePostPaths } from "@/lib/revalidate-post";
 import { generateSlug } from "@/utils/slug";
 
 // ---------------------------------------------------------------------------
@@ -59,7 +60,9 @@ export async function createDraft({
     },
   });
 
-  return parsePost(raw);
+  const post = parsePost(raw);
+  revalidatePostPaths(post);
+  return post;
 }
 
 export async function saveDraft({
@@ -81,7 +84,9 @@ export async function saveDraft({
     },
   });
 
-  return parsePost(raw);
+  const post = parsePost(raw);
+  revalidatePostPaths(post);
+  return post;
 }
 
 export async function publishPost(id: string): Promise<Post> {
@@ -92,12 +97,20 @@ export async function publishPost(id: string): Promise<Post> {
     data: { publishedAt: new Date() },
   });
 
-  return parsePost(raw);
+  const post = parsePost(raw);
+  revalidatePostPaths(post);
+  return post;
 }
 
 export async function deleteDraft(id: string): Promise<void> {
   await requireAdmin();
+
+  const existing = await prisma.post.findUnique({ where: { id } });
   await prisma.post.delete({ where: { id } });
+
+  if (existing) {
+    revalidatePostPaths(parsePost(existing));
+  }
 }
 
 export async function getDrafts(): Promise<Post[]> {

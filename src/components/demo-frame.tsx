@@ -23,6 +23,7 @@ import {
 } from "@/components/demo-logger";
 import { DemoLoggerProvider } from "@/hooks/use-demo-logger";
 import {
+  getAspectRatioHeight,
   getDemoFrameMinHeight,
   shouldOverrideDemoFrameAspectRatio,
   type DemoFrameAspectRatio,
@@ -31,10 +32,12 @@ import {
 export type { DemoFrameAspectRatio, DemoLoggerConfig };
 
 interface DemoFrameProps
-  extends DemoFrameDemoAreaVariantProps,
+  extends Omit<DemoFrameDemoAreaVariantProps, "logger">,
     ComponentPropsWithoutRef<"div"> {
   children: ReactNode;
   logger?: boolean | DemoLoggerConfig;
+  /** When false, logger controls are inert (e.g. article edit preview). */
+  interactive?: boolean;
 }
 
 function resolveLoggerConfig(
@@ -57,6 +60,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       children,
       aspectRatio = "sm",
       logger,
+      interactive = true,
       className,
       style,
       ...props
@@ -69,7 +73,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
     const contentRef = useRef<HTMLDivElement>(null);
     const measureRef = useRef<HTMLDivElement>(null);
     const [demoAreaStyle, setDemoAreaStyle] = useState<CSSProperties>({});
-    const [loggerExpanded, setLoggerExpanded] = useState(true);
+    const [loggerExpanded, setLoggerExpanded] = useState(false);
     const resolvedAspectRatio = (aspectRatio ?? "sm") as DemoFrameAspectRatio;
 
     const mergedRef = useCallback(
@@ -84,6 +88,27 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       },
       [ref],
     );
+
+    useLayoutEffect(() => {
+      if (!loggerEnabled) return;
+
+      const frame = frameRef.current;
+      if (!frame) return;
+
+      const updateAspectFloor = () => {
+        const aspectMin = getAspectRatioHeight(
+          frame.clientWidth,
+          resolvedAspectRatio,
+        );
+        setDemoAreaStyle({ minHeight: aspectMin });
+      };
+
+      const observer = new ResizeObserver(updateAspectFloor);
+      observer.observe(frame);
+      updateAspectFloor();
+
+      return () => observer.disconnect();
+    }, [loggerEnabled, resolvedAspectRatio, children]);
 
     useLayoutEffect(() => {
       if (loggerEnabled) return;
@@ -131,19 +156,36 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       >
         <div
           ref={contentRef}
-          className={demoFrameDemoArea({ aspectRatio })}
+          className={demoFrameDemoArea({
+            aspectRatio,
+            logger: loggerEnabled ? true : undefined,
+          })}
           style={demoAreaStyle}
         >
-          <div ref={measureRef} className={demoFrameDemoMeasure()}>
-            {children}
-          </div>
+          {loggerEnabled ? (
+            children
+          ) : (
+            <div ref={measureRef} className={demoFrameDemoMeasure()}>
+              {children}
+            </div>
+          )}
         </div>
         {loggerEnabled ? (
-          <DemoLogger
-            expanded={loggerExpanded}
-            onExpandedChange={setLoggerExpanded}
-            {...loggerConfig}
-          />
+          interactive ? (
+            <DemoLogger
+              expanded={loggerExpanded}
+              onExpandedChange={setLoggerExpanded}
+              {...loggerConfig}
+            />
+          ) : (
+            <div inert>
+              <DemoLogger
+                expanded={loggerExpanded}
+                onExpandedChange={setLoggerExpanded}
+                {...loggerConfig}
+              />
+            </div>
+          )
         ) : null}
       </div>
     );

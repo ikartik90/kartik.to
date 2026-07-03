@@ -88,7 +88,7 @@ const calchemyDemoStyle = css({
     width: "full",
     minWidth: 0,
     border: "none",
-    outline: "none",
+    focusVisibleRing: "none",
     background: "transparent",
     padding: 0,
     margin: 0,
@@ -96,6 +96,10 @@ const calchemyDemoStyle = css({
     color: "text.commandItem",
     caretColor: "text.commandItem",
     textWrap: "pretty",
+    _focusVisible: {
+      boxShadow: "none",
+      borderRadius: "unset",
+    },
   },
 
   "& [calchemy-field] input::placeholder": {
@@ -417,7 +421,9 @@ function useCalchemyDemoLayout(
       return;
     }
 
-    const lastWidthRef = { current: Math.round(frame.getBoundingClientRect().width) };
+    const lastWidthRef = {
+      current: Math.round(frame.getBoundingClientRect().width),
+    };
 
     const updateLayout = () => {
       const rect = frame.getBoundingClientRect();
@@ -573,7 +579,7 @@ export function CalchemyDemo() {
     >
       <CalchemyParseLogger />
       <div ref={demoRootRef} className={calchemyDemoStyle}>
-        <div className={inputRowStyle}>
+        <div className={inputRowStyle} data-calchemy-input-row>
           <CalendarIcon className={iconStyle} aria-hidden />
           <CalchemyUI.Field placeholder={placeholder} />
         </div>

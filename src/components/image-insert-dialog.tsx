@@ -45,7 +45,7 @@ const illustrationStyle = css({
 
 const illustrationImageStyle = css({
   objectFit: "contain",
-  outline: "none",
+  outline: "[none]",
   outlineWidth: "0",
 });
 
@@ -111,7 +111,6 @@ const altFieldStyle = css({
   minWidth: 0,
   background: "none",
   border: "none",
-  outline: "none",
   padding: "none",
   textStyle: "commandLabel",
   color: "text.commandItem",

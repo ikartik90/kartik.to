@@ -379,6 +379,30 @@ describe("ArticleEditor", () => {
     expect(screen.getByRole("button", { name: "Delete component" })).toBeDefined();
   });
 
+  it("shows delete action when the horizontal rule is focused", () => {
+    const post = {
+      id: "hr1",
+      slug: "hr1",
+      title: "HR Post",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "horizontal_rule" as const },
+          { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const hr = document.querySelector("[role='separator']") as HTMLElement;
+    fireEvent.focus(hr);
+
+    expect(screen.getByRole("button", { name: "Delete horizontal rule" })).toBeDefined();
+  });
+
   it("updates the image caption in the store when typing in figcaption", () => {
     const post = {
       id: "img2",
@@ -531,6 +555,35 @@ describe("ArticleEditor", () => {
     const caption = document.querySelector("figcaption") as HTMLElement;
     img.focus();
     fireEvent.keyDown(img, { key: "ArrowDown" });
+
+    expect(document.activeElement).toBe(caption);
+  });
+
+  it("moves focus from image to caption on Tab", () => {
+    const post = {
+      id: "img5b",
+      slug: "img5b",
+      title: "Image Post",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "image" as const,
+            src: "https://example.com/photo.png",
+          },
+          { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const img = document.querySelector("[data-showcase-media]") as HTMLElement;
+    const caption = document.querySelector("figcaption") as HTMLElement;
+    img.focus();
+    fireEvent.keyDown(img, { key: "Tab" });
 
     expect(document.activeElement).toBe(caption);
   });
@@ -980,7 +1033,7 @@ describe("ArticleEditor", () => {
     expect((blocks[1] as { level: number }).level).toBe(2);
   });
 
-  it("Enter on a blockquote splits into two blockquotes", () => {
+  it("Enter on a blockquote splits into a blockquote and a paragraph", () => {
     const post = {
       id: "bq2",
       slug: "bq2",
@@ -1009,6 +1062,98 @@ describe("ArticleEditor", () => {
 
     const blocks = useEditorStore.getState().document.content;
     expect(blocks[0].type).toBe("blockquote");
-    expect(blocks[1].type).toBe("blockquote");
+    expect(blocks[1].type).toBe("paragraph");
+  });
+
+  it("inserts a paragraph above when Enter is pressed at the start of a paragraph", () => {
+    const post = {
+      id: "p-enter-start",
+      slug: "p-enter-start",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text: "Hello World" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    block.focus();
+    const textNode = block.firstChild!;
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].type).toBe("paragraph");
+    expect(blocks[1].type).toBe("paragraph");
+    if (blocks[0].type === "paragraph") {
+      expect(blocks[0].children.every((c) => c.type === "text" && !c.text)).toBe(
+        true,
+      );
+    }
+    if (blocks[1].type === "paragraph") {
+      expect(blocks[1].children[0]?.type === "text" && blocks[1].children[0].text).toBe(
+        "Hello World",
+      );
+    }
+  });
+
+  it("inserts a paragraph above when Enter is pressed at the start of a heading", () => {
+    const post = {
+      id: "h-enter-start",
+      slug: "h-enter-start",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "heading" as const,
+            level: 2 as const,
+            children: [{ type: "text" as const, text: "Title" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    block.focus();
+    const textNode = block.firstChild!;
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].type).toBe("paragraph");
+    expect(blocks[1].type).toBe("heading");
+    if (blocks[1].type === "heading") {
+      expect(blocks[1].children[0]?.type === "text" && blocks[1].children[0].text).toBe(
+        "Title",
+      );
+    }
   });
 });

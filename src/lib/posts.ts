@@ -61,12 +61,13 @@ export async function resolvePost(
   const published = await getPublishedPostBySlug(slug, category);
   if (published) return published;
 
+  if (options.allowDraft) {
+    const draft = await getDraftPostBySlug(slug, category);
+    if (draft) return draft;
+  }
+
   const staticPost = options.staticFallback.find((p) => p.slug === slug);
   if (staticPost) return staticPost;
-
-  if (options.allowDraft) {
-    return getDraftPostBySlug(slug, category);
-  }
 
   return null;
 }

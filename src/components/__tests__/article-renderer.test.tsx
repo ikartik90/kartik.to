@@ -71,7 +71,7 @@ describe("ArticleRenderer", () => {
       expect(heading.tagName).toBe("H1");
     });
 
-    it("renders a blockquote", () => {
+    it("renders a blockquote with decorative quote mark styling", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
@@ -82,7 +82,12 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      expect(container.querySelector("blockquote")).toBeDefined();
+      const blockquote = container.querySelector("blockquote");
+      expect(blockquote).toBeDefined();
+      expect(blockquote?.className).toContain("article-blockquote");
+      expect(
+        container.querySelector(".article-blockquote-shell"),
+      ).toBeDefined();
       expect(screen.getByText("A quoted thought")).toBeDefined();
     });
 

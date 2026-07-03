@@ -18,6 +18,7 @@ const cardStyle = css({
   flexDirection: "column",
   gap: "md",
   textDecoration: "none",
+  borderRadius: "token(spacing.lg)",
   _active: {
     transform: "scale(0.98)",
   },

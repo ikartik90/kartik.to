@@ -1,7 +1,8 @@
 import React from "react";
+import Image from "next/image";
 import { Typography, type TypographyTag, type TypographyType } from "./ui/typography";
 import { HighlightedCode } from "@/components/highlighted-code";
-import { inlineCode, articleLink, codeBlock, articleShowcase, articleImg, horizontalRule } from "../../styled-system/recipes";
+import { inlineCode, articleLink, articleBlockquote, articleBlockquoteMark, articleBlockquoteShell, codeBlock, articleShowcase, articleImg, horizontalRule } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
 import type { Document } from "@/domain/post";
 import type { BlockNode, InlineNode } from "@/domain/nodes";
@@ -82,9 +83,27 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
 
     case "blockquote":
       return (
-        <Typography key={index} tag="blockquote" type="quote">
-          {node.children.map(renderInlineNode)}
-        </Typography>
+        <div key={index} className={articleBlockquoteShell()}>
+          <Image
+            src="/assets/quote-light.png"
+            alt=""
+            width={52}
+            height={52}
+            className={articleBlockquoteMark({ theme: "light" })}
+            aria-hidden
+          />
+          <Image
+            src="/assets/quote-dark.png"
+            alt=""
+            width={52}
+            height={52}
+            className={articleBlockquoteMark({ theme: "dark" })}
+            aria-hidden
+          />
+          <blockquote className={articleBlockquote()}>
+            {node.children.map(renderInlineNode)}
+          </blockquote>
+        </div>
       );
 
     case "code_block":

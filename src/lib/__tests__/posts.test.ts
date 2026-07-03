@@ -108,4 +108,23 @@ describe("resolvePost", () => {
     });
     expect(post?.slug).toBe("static");
   });
+
+  it("prefers DB draft over static fallback when allowDraft is true", async () => {
+    const draftPost = {
+      ...RAW_POST,
+      id: "draft-1",
+      title: "Draft version",
+      publishedAt: null,
+    };
+    mockFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(draftPost);
+
+    const post = await resolvePost("static", "WORK", {
+      staticFallback: [STATIC_PROJECT],
+      allowDraft: true,
+    });
+
+    expect(post?.title).toBe("Draft version");
+  });
 });

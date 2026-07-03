@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import "@/lib/env";
+import { ContentSyncProvider } from "@/components/content-sync-provider";
+import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { Header } from "@/components/header";
@@ -51,6 +53,8 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider />
+        <ContentSyncProvider />
+        <KeyboardFocusProvider />
         <AdminLoginBootstrap />
         <CommandPalette />
         <Header />

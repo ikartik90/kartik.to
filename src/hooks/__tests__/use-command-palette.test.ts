@@ -21,9 +21,15 @@ vi.mock("@/store/theme", () => ({
 const mockPathname = vi.fn<() => string>().mockReturnValue("/");
 const mockPush = vi.fn<() => void>();
 const mockReplace = vi.fn<() => void>();
+const mockRefresh = vi.fn<() => void>();
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
-  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, refresh: mockRefresh }),
+}));
+
+const mockNotifyContentUpdated = vi.fn();
+vi.mock("@/utils/content-sync", () => ({
+  notifyContentUpdated: () => mockNotifyContentUpdated(),
 }));
 
 vi.mock("@/app/actions/post", () => ({
@@ -76,6 +82,8 @@ describe("useCommandPalette", () => {
     mockSetMode.mockClear();
     mockPush.mockClear();
     mockReplace.mockClear();
+    mockRefresh.mockClear();
+    mockNotifyContentUpdated.mockClear();
     mockPathname.mockReturnValue("/");
     mockUseSession.mockReturnValue({ data: null });
 
@@ -331,7 +339,12 @@ describe("useCommandPalette", () => {
       });
 
       expect(close).toHaveBeenCalledOnce();
+      expect(mockNotifyContentUpdated).toHaveBeenCalledOnce();
+      expect(mockRefresh).not.toHaveBeenCalled();
       expect(mockReplace).toHaveBeenCalledWith("/writing/my-draft");
+      expect(mockReplace.mock.invocationCallOrder[0]).toBeLessThan(
+        mockNotifyContentUpdated.mock.invocationCallOrder[0],
+      );
       expect(useEditorStore.getState().draftId).toBeNull();
     });
 
@@ -358,8 +371,14 @@ describe("useCommandPalette", () => {
         title: "Existing",
         document: { type: "doc", content: [] },
       });
+      expect(mockRefresh).not.toHaveBeenCalled();
+      expect(mockNotifyContentUpdated).toHaveBeenCalledOnce();
       expect(mockPush).toHaveBeenCalledWith("/writing/existing-draft");
-      expect(useEditorStore.getState().draftId).toBeNull();
+      expect(mockPush.mock.invocationCallOrder[0]).toBeLessThan(
+        mockNotifyContentUpdated.mock.invocationCallOrder[0],
+      );
+      // Reset is deferred until ArticleEditor unmounts after navigation.
+      expect(useEditorStore.getState().draftId).toBe("existing-id");
     });
   });
 });

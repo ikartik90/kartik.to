@@ -14,7 +14,7 @@ export const DEMO_FRAME_LOGGER_SECTION_PX = DEMO_FRAME_LOGGER_SECTION_EXPANDED_P
 
 export function getDemoFrameLoggerOffset(
   logger: boolean,
-  loggerExpanded = true,
+  loggerExpanded = false,
 ): number {
   if (!logger) return 0;
   return loggerExpanded
@@ -41,7 +41,7 @@ export function getAspectRatioHeight(
 export function getDemoFrameMinHeight(
   contentHeight: number,
   logger = false,
-  loggerExpanded = true,
+  loggerExpanded = false,
 ): number {
   return (
     contentHeight +
@@ -55,7 +55,7 @@ export function shouldOverrideDemoFrameAspectRatio(
   frameWidth: number,
   aspectRatio: DemoFrameAspectRatio,
   logger = false,
-  loggerExpanded = true,
+  loggerExpanded = false,
 ): boolean {
   return (
     getDemoFrameMinHeight(contentHeight, logger, loggerExpanded) >
@@ -68,7 +68,7 @@ export function getDemoFrameAspectMinHeight(
   frameWidth: number,
   aspectRatio: DemoFrameAspectRatio,
   logger = false,
-  loggerExpanded = true,
+  loggerExpanded = false,
 ): number {
   return (
     getAspectRatioHeight(frameWidth, aspectRatio) +

@@ -39,9 +39,13 @@ const inputStyle = css({
   flex: "1 0 0",
   background: "none",
   border: "none",
-  outline: "none",
   textStyle: "commandItem",
   color: "text.commandItem",
+  focusVisibleRing: "none",
+  _focusVisible: {
+    boxShadow: "none",
+    borderRadius: "unset",
+  },
   _placeholder: {
     color: "text.commandItem/25",
   },
@@ -130,7 +134,7 @@ export function CommandPalette() {
     handlePublish,
     handleSaveDraft,
     handleDiscardDraft,
-  } = useCommandPalette(close);
+  } = useCommandPalette(close, openKey);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -157,7 +161,7 @@ export function CommandPalette() {
     >
       <Command key={openKey} className={css({ display: "contents" })}>
         {/* Input row */}
-        <div className={inputRowStyle}>
+        <div className={inputRowStyle} data-command-input-row>
           <SearchIcon className={iconStyle} />
           <Command.Input
             autoFocus

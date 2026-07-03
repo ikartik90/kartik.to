@@ -38,6 +38,7 @@ export default defineConfig({
           imagePreviewMax: { value: "280px" },
           insertDialogHeight: { value: "480px" },
           dialogFooter: { value: "44px" },
+          quoteMark: { value: "52px" },
         },
 
         colors: {
@@ -93,6 +94,10 @@ export default defineConfig({
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
           xl: { value: "{spacing.xl}" },
+          // dialogPanel content-box top corners: outer radii.md − border 3xs
+          dialogInner: {
+            value: "calc(var(--radii-md) - var(--spacing-3xs))",
+          },
         },
       },
 
@@ -197,6 +202,12 @@ export default defineConfig({
                   "color-mix(in srgb, var(--colors-neutral-100) 10%, transparent)",
               },
             },
+            focusRing: {
+              value: {
+                base: "{colors.brand.pink}",
+                _dark: "{colors.brand.orange}",
+              },
+            },
           },
 
           logo: {
@@ -246,7 +257,7 @@ export default defineConfig({
             overflowX: "auto",
             color: "text.default",
             whiteSpace: "pre",
-            _focusVisible: { outline: "none" },
+            _focusVisible: { focusVisibleRing: "none" },
           },
         }),
 
@@ -309,13 +320,24 @@ export default defineConfig({
             width: "token(spacing.full)",
             maxWidth: "token(spacing.full)",
             flexShrink: 0,
-            paddingBlock: "4xl",
+            paddingBlockStart: "xxl",
+            paddingBlockEnd: "lg",
           },
           variants: {
             aspectRatio: {
               sm: { aspectRatio: "2 / 1" },
               md: { aspectRatio: "3 / 2" },
               lg: { aspectRatio: "5 / 6" },
+            },
+            logger: {
+              true: {
+                height: "auto",
+                aspectRatio: "unset",
+                "& > *": {
+                  width: "token(spacing.full)",
+                  maxWidth: "token(spacing.full)",
+                },
+              },
             },
           },
           defaultVariants: {
@@ -700,7 +722,7 @@ export default defineConfig({
               objectFit: "contain",
               display: "block",
               borderRadius: "sm",
-              outline: "none",
+              outline: "[none]",
             },
           },
         }),
@@ -786,6 +808,55 @@ export default defineConfig({
           },
         }),
 
+        articleBlockquoteShell: defineRecipe({
+          className: "article-blockquote-shell",
+          description:
+            "Blockquote layout shell — quote mark and text in normal flow (Figma 358:20 light, 358:26 dark).",
+          base: {
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: "sm",
+          },
+        }),
+
+        articleBlockquoteMark: defineRecipe({
+          className: "article-blockquote-mark",
+          description:
+            "Theme-aware quote mark at native PNG resolution (52×52 @1x).",
+          base: {
+            width: "token(sizes.quoteMark)",
+            height: "token(sizes.quoteMark)",
+            flexShrink: 0,
+            pointerEvents: "none",
+          },
+          variants: {
+            theme: {
+              light: {
+                display: "block",
+                _dark: { display: "none" },
+              },
+              dark: {
+                display: "none",
+                _dark: { display: "block" },
+              },
+            },
+          },
+        }),
+
+        articleBlockquote: defineRecipe({
+          className: "article-blockquote",
+          description: "Blockquote typography inside article prose.",
+          base: {
+            flex: "1 1 auto",
+            minWidth: 0,
+            textStyle: "quote",
+            color: "text.default",
+            wordBreak: "break-word",
+            paddingBlockStart: "xl",
+          },
+        }),
+
         horizontalRule: defineRecipe({
           className: "horizontal-rule",
           description:
@@ -843,6 +914,9 @@ export default defineConfig({
             width: "200px",
             backgroundColor: "bg.surface",
             borderRadius: "md",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -869,6 +943,9 @@ export default defineConfig({
             positionTryFallbacks: "flip-block",
             backgroundColor: "bg.surface",
             borderRadius: "md",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
             display: "flex",
             flexDirection: "column",
             overflow: "visible",
@@ -929,7 +1006,7 @@ export default defineConfig({
             fontFamily: "{fonts.switzer}",
             fontWeight: "{fontWeights.base}",
             fontSize: "1.25rem",
-            lineHeight: "1.4",
+            lineHeight: "1.8",
           },
         },
         paragraph: {
@@ -945,7 +1022,7 @@ export default defineConfig({
             fontFamily: "{fonts.switzer}",
             fontWeight: "{fontWeights.base}",
             fontSize: "1.25rem",
-            lineHeight: "1.4",
+            lineHeight: "1.8",
             letterSpacing: "-1%",
           },
         },

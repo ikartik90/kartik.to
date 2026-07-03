@@ -20,19 +20,17 @@ const listStyle = css({
   flexDirection: "column",
 });
 
-const listItemStyle = css({
+const rowLinkStyle = css({
   display: "flex",
   alignItems: "baseline",
   justifyContent: "space-between",
   gap: "xl",
+  width: "full",
   paddingBlock: "xl",
-  borderBottom: "none",
   borderTopWidth: "token(spacing.3xs)",
   borderTopStyle: "solid",
   borderTopColor: "border.divider",
-});
-
-const articleLinkStyle = css({
+  textDecoration: "none",
   textStyle: "paragraph",
   color: "text.default",
   transition: "color 150ms ease",
@@ -41,7 +39,7 @@ const articleLinkStyle = css({
 
 const dateStyle = css({
   textStyle: "caption",
-  color: "text.default",
+  color: "inherit",
   whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
   flexShrink: 0,
@@ -65,20 +63,20 @@ export function WritingSection({ articles }: WritingSectionProps) {
       <p className={sectionLabelStyle}>Writing</p>
       <ul className={listStyle}>
         {articles.map((article) => (
-          <li key={article.id} className={listItemStyle}>
-            <a href={`/writing/${article.slug}`} className={articleLinkStyle}>
+          <li key={article.id}>
+            <a href={`/writing/${article.slug}`} className={rowLinkStyle}>
               <Typography tag="span" type="paragraph">
                 {article.title}
               </Typography>
+              {article.publishedAt && (
+                <time
+                  dateTime={article.publishedAt.toISOString()}
+                  className={dateStyle}
+                >
+                  {formatDate(article.publishedAt)}
+                </time>
+              )}
             </a>
-            {article.publishedAt && (
-              <time
-                dateTime={article.publishedAt.toISOString()}
-                className={dateStyle}
-              >
-                {formatDate(article.publishedAt)}
-              </time>
-            )}
           </li>
         ))}
       </ul>

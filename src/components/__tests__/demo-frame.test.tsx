@@ -64,7 +64,20 @@ describe("DemoFrame", () => {
     expect(screen.getByText("Custom hint text")).toBeDefined();
   });
 
-  it("collapses the logger without inline frame min-height", () => {
+  it("keeps logger controls inert when interactive is false", () => {
+    const { container } = render(
+      <DemoFrame logger interactive={false}>
+        <p>Demo content</p>
+      </DemoFrame>,
+    );
+
+    const inertLogger = container.querySelector(
+      ".demo-logger-section",
+    )?.parentElement;
+    expect(inertLogger?.hasAttribute("inert")).toBe(true);
+  });
+
+  it("starts with logger collapsed and toggles expand state", () => {
     const { container } = render(
       <DemoFrame logger>
         <p>Demo content</p>
@@ -72,7 +85,12 @@ describe("DemoFrame", () => {
     );
 
     const frame = container.querySelector(".demo-frame") as HTMLElement;
+    const panel = container.querySelector(
+      ".demo-logger-panel",
+    ) as HTMLElement | null;
+
     expect(frame.style.minHeight).toBe("");
+    expect(panel?.className).toContain("demo-logger-panel--expanded_false");
 
     fireEvent.click(
       container.querySelector(
@@ -80,10 +98,7 @@ describe("DemoFrame", () => {
       ) as HTMLButtonElement,
     );
 
-    const panel = container.querySelector(
-      ".demo-logger-panel",
-    ) as HTMLElement | null;
-    expect(panel?.className).toContain("demo-logger-panel--expanded_false");
+    expect(panel?.className).toContain("demo-logger-panel--expanded_true");
     expect(frame.style.minHeight).toBe("");
   });
 

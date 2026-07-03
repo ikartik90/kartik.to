@@ -16,6 +16,7 @@ vi.mock("@/lib/auth/server", () => ({
 const mockPrismaCreate = vi.fn();
 const mockPrismaUpdate = vi.fn();
 const mockPrismaDelete = vi.fn();
+const mockPrismaFindUnique = vi.fn();
 const mockPrismaAggregate = vi.fn();
 const mockPrismaFindMany = vi.fn();
 
@@ -25,10 +26,16 @@ vi.mock("@/lib/prisma", () => ({
       create: (...args: unknown[]) => mockPrismaCreate(...args),
       update: (...args: unknown[]) => mockPrismaUpdate(...args),
       delete: (...args: unknown[]) => mockPrismaDelete(...args),
+      findUnique: (...args: unknown[]) => mockPrismaFindUnique(...args),
       aggregate: (...args: unknown[]) => mockPrismaAggregate(...args),
       findMany: (...args: unknown[]) => mockPrismaFindMany(...args),
     },
   },
+}));
+
+const mockRevalidatePath = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
 
 const mockCookiesGet = vi.fn();
@@ -92,6 +99,7 @@ describe("post server actions", () => {
     mockPrismaCreate.mockResolvedValue(RAW_POST);
     mockPrismaUpdate.mockResolvedValue({ ...RAW_POST, publishedAt: NOW });
     mockPrismaDelete.mockResolvedValue(RAW_POST);
+    mockPrismaFindUnique.mockResolvedValue(RAW_POST);
     mockPrismaAggregate.mockResolvedValue({ _max: { untitledIndex: null } });
     mockPrismaFindMany.mockResolvedValue([RAW_POST]);
   });
@@ -155,6 +163,12 @@ describe("post server actions", () => {
     it("returns a parsed Post", async () => {
       const post = await createDraft({ title: "Hello", document: EMPTY_DOC });
       expect(post.id).toBe("post-1");
+    });
+
+    it("revalidates affected routes", async () => {
+      await createDraft({ title: "Hello", document: EMPTY_DOC });
+      expect(mockRevalidatePath).toHaveBeenCalledWith("/");
+      expect(mockRevalidatePath).toHaveBeenCalledWith("/writing/hello");
     });
   });
 

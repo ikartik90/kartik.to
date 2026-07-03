@@ -45,6 +45,52 @@ body {
 }
 
 @layer base {
+  :where(
+      a,
+      button,
+      input,
+      select,
+      textarea,
+      summary,
+      [tabindex]:not([tabindex="-1"])
+    ):focus {
+    outline: none;
+  }
+
+  html[data-keyboard-focus]
+    :where(
+      a,
+      button,
+      input,
+      select,
+      textarea,
+      summary,
+      [tabindex]:not([tabindex="-1"])
+    ):focus-visible {
+    /* box-shadow follows border-radius; outline does not reliably match rounded controls */
+    box-shadow: 0 0 0 1.5px var(--colors-border-focus-ring);
+    /* 2px floor — recipes/utilities layers override with larger radii on styled controls */
+    border-radius: var(--spacing-xs);
+  }
+
+  /* Command palette input row — concentric top radii + inset focus ring (globals.css: valid calc) */
+  [data-command-input-row] {
+    border-top-left-radius: var(--radii-dialog-inner);
+    border-top-right-radius: var(--radii-dialog-inner);
+  }
+
+  [data-calchemy-input-row] {
+    border-top-left-radius: var(--radii-md);
+    border-top-right-radius: var(--radii-md);
+  }
+
+  html[data-keyboard-focus]
+    :is([data-command-input-row], [data-calchemy-input-row]):has(
+      input:focus-visible
+    ) {
+    box-shadow: inset 0 0 0 1.5px var(--colors-border-focus-ring);
+  }
+
   /* Reset UA defaults (padding, border, background) and fix sizing for modal dialogs */
   dialog {
     padding: 0;

@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { css, cx } from "../../styled-system/css";
 import {
   horizontalRule,
   inlineCode,
   articleLink,
+  articleBlockquote,
+  articleBlockquoteMark,
+  articleBlockquoteShell,
   codeBlock,
   articleShowcase,
   articleImg,
@@ -421,25 +425,24 @@ function isBlockEmpty(block: BlockNode): boolean {
 
 // Editor-specific base — contentEditable mechanics only.
 // Typography styles (size, color, weight) come from typographyStyles() below.
+// Collapse empty unfocused blocks to match ArticleRenderer layout; expand on focus for caret room.
 const editableBaseStyle = css({
-  outline: "none",
-  minHeight: "1.5em",
+  focusVisibleRing: "none",
+  minHeight: 0,
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
+  "&:focus": {
+    minHeight: "1.5em",
+  },
+  "&[data-empty]:not(:focus)": {
+    height: 0,
+    overflow: "hidden",
+  },
   "&:empty::before": {
     content: "attr(data-placeholder)",
     color: "text.default/40",
     pointerEvents: "none",
   },
-});
-
-// Editor-only affordance: left border visually marks blockquote blocks.
-// The read-only renderer does not show this — it's intentionally editor-only.
-const blockquoteBorderStyle = css({
-  borderLeftWidth: "2px",
-  borderLeftStyle: "solid",
-  borderLeftColor: "border.divider",
-  paddingInlineStart: "spacing.lg",
 });
 
 const editorCodeBlockStyle = codeBlock();
@@ -465,7 +468,6 @@ const editorCodeLanguageSelectStyle = css({
   opacity: 0,
   pointerEvents: "none",
   transition: "opacity 150ms ease",
-  _focusVisible: { outline: "none" },
   ".code-block-wrapper:focus-within &": {
     opacity: 1,
     pointerEvents: "auto",
@@ -481,33 +483,33 @@ const CODE_LANGUAGE_OPTIONS: Array<{ value: CodeLanguage | ""; label: string }> 
     })),
   ];
 
-const editorHrStyle = horizontalRule();
-
-// Diagonal-line overlay rendered over a non-text block that has keyboard focus.
-const nonTextFocusOverlayStyle = css({
-  position: "absolute",
-  inset: "0",
-  backgroundImage:
-    "repeating-linear-gradient(45deg, var(--colors-brand-pink) 0px, var(--colors-brand-pink) 1px, transparent 1px, transparent 8px)",
-  pointerEvents: "none",
-  opacity: "0.35",
-});
-
-const editorShowcaseStyle = cx(
-  articleShowcase(),
-  css({
-    display: "grid",
-    gridTemplateRows: "auto auto",
-    justifyItems: "center",
-    width: "full",
-    paddingBlock: "md",
-  }),
+const editorHrStyle = cx(
+  horizontalRule(),
+  css({ marginBlock: "0" }),
 );
 
+const editorShowcaseStyle = articleShowcase();
+
+const editorShowcaseMediaShellStyle = css({
+  position: "relative",
+  alignSelf: "stretch",
+  width: "full",
+  display: "grid",
+  "& > *": {
+    gridArea: "1 / 1",
+  },
+});
+
+const editorHrShellStyle = css({
+  position: "relative",
+  width: "full",
+  paddingBlock: "3xl",
+});
+
 const editorShowcaseMediaStyle = css({
-  gridRow: "1",
-  gridColumn: "1",
-  outline: "none",
+  alignSelf: "stretch",
+  width: "full",
+  focusVisibleRing: "none",
   cursor: "default",
 });
 
@@ -534,13 +536,8 @@ const editorImagePlaceholderStyle = cx(
 );
 
 const editorImageOverlayStyle = css({
-  gridRow: "1",
-  gridColumn: "1",
-  width: "full",
-  height: "full",
-  alignSelf: "stretch",
-  justifySelf: "stretch",
-  position: "relative",
+  position: "absolute",
+  inset: "0",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -551,6 +548,10 @@ const editorImageOverlayTintStyle = css({
   position: "absolute",
   inset: "0",
   backgroundColor: "bg.canvas",
+  borderWidth: "token(spacing.3xs)",
+  borderStyle: "solid",
+  borderColor: "border.divider",
+  borderRadius: "xl",
   pointerEvents: "none",
   opacity: "0.85",
 });
@@ -570,17 +571,24 @@ const editorCaptionStyle = cx(
   editableBaseStyle,
   typographyStyles({ type: "caption" }),
   css({
-    gridRow: "2",
-    gridColumn: "1",
     width: "full",
     textAlign: "center",
+    minHeight: "1.5em",
+    "&[data-empty]:not(:focus)": {
+      height: "auto",
+      overflow: "visible",
+    },
+    "&:empty::before, &[data-empty]::before": {
+      content: "attr(data-placeholder)",
+      color: "text.default/40",
+      pointerEvents: "none",
+    },
   }),
 );
 
 // Wrapper for <hr> so it can receive keyboard focus (void elements can't).
 const editorHrWrapperStyle = css({
-  position: "relative",
-  outline: "none",
+  focusVisibleRing: "none",
   cursor: "default",
 });
 
@@ -789,6 +797,12 @@ function EditableBlock({
             focusCaption("start");
           }
           break;
+        case "Tab":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            focusCaption("start");
+          }
+          break;
         case "Backspace":
         case "Delete":
           e.preventDefault();
@@ -973,9 +987,14 @@ function EditableBlock({
         return;
       }
 
-      // Enter → insert new paragraph (not in code blocks where Enter is literal)
+      // Enter → insert paragraph above at caret start; otherwise split at caret.
+      // Code blocks keep Enter as a literal newline.
       if (e.key === "Enter" && !e.shiftKey && block.type !== "code_block") {
         e.preventDefault();
+        if (isCaretAtStart(e.currentTarget) && onInsertParagraphBefore) {
+          onInsertParagraphBefore();
+          return;
+        }
         const { before, after } = getCaretSplitHtml(e.currentTarget);
         // Trim the current block's DOM to the "before" portion immediately so
         // the useEffect won't fight us while the element still has focus.
@@ -1061,6 +1080,7 @@ function EditableBlock({
       onConvertedToParagraph,
       onShiftArrowUp,
       onShiftArrowDown,
+      onInsertParagraphBefore,
     ],
   );
 
@@ -1155,9 +1175,12 @@ function EditableBlock({
       if (block.type !== "image" && block.type !== "component") return;
       const el = e.currentTarget;
       const text = (el.innerText || el.textContent || "").replace(/\n$/, "");
+      if (text.trim().length === 0) {
+        el.innerHTML = "";
+      }
       onChange({
         ...block,
-        caption: text.length > 0 ? text : undefined,
+        caption: text.trim().length > 0 ? text : undefined,
       });
     },
     [block, onChange],
@@ -1313,8 +1336,28 @@ function EditableBlock({
         onBlur={() => setIsFocused(false)}
         onKeyDown={handleNonTextKeyDown}
       >
-        <hr className={editorHrStyle} />
-        {isFocused && <div className={nonTextFocusOverlayStyle} aria-hidden />}
+        <div className={editorHrShellStyle}>
+          <hr className={editorHrStyle} />
+          {isFocused && (
+            <div
+              className={editorImageOverlayStyle}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <div className={editorImageOverlayTintStyle} aria-hidden />
+              <div className={editorImageOverlayActionsStyle}>
+                <Button
+                  type="button"
+                  variant="icon"
+                  tabIndex={-1}
+                  aria-label="Delete horizontal rule"
+                  onClick={onDelete}
+                >
+                  <TrashIcon className={editorOverlayIconStyle} />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -1387,6 +1430,7 @@ function EditableBlock({
         onPaste={handlePaste}
         data-placeholder={placeholder}
         data-block-index={blockIndex}
+        data-empty={isBlockEmpty(block) ? "" : undefined}
         {...slashAnchorProps}
       />
     );
@@ -1398,23 +1442,38 @@ function EditableBlock({
 
   if (block.type === "blockquote") {
     return (
-      <blockquote
-        ref={combinedRef as React.RefCallback<HTMLElement>}
-        className={cx(
-          editableBaseStyle,
-          typographyStyles({ type: "quote" }),
-          blockquoteBorderStyle,
-        )}
-        contentEditable
-        suppressContentEditableWarning
-        onKeyDown={handleKeyDown}
-        onInput={handleInput}
-        onKeyUp={handleKeyUp}
-        onPaste={handlePaste}
-        data-placeholder={placeholder}
-        data-block-index={blockIndex}
-        {...slashAnchorProps}
-      />
+      <div className={articleBlockquoteShell()}>
+        <Image
+          src="/assets/quote-light.png"
+          alt=""
+          width={52}
+          height={52}
+          className={articleBlockquoteMark({ theme: "light" })}
+          aria-hidden
+        />
+        <Image
+          src="/assets/quote-dark.png"
+          alt=""
+          width={52}
+          height={52}
+          className={articleBlockquoteMark({ theme: "dark" })}
+          aria-hidden
+        />
+        <blockquote
+          ref={combinedRef as React.RefCallback<HTMLElement>}
+          className={cx(editableBaseStyle, articleBlockquote())}
+          contentEditable
+          suppressContentEditableWarning
+          onKeyDown={handleKeyDown}
+          onInput={handleInput}
+          onKeyUp={handleKeyUp}
+          onPaste={handlePaste}
+          data-placeholder={placeholder}
+          data-block-index={blockIndex}
+          data-empty={isBlockEmpty(block) ? "" : undefined}
+          {...slashAnchorProps}
+        />
+      </div>
     );
   }
 
@@ -1439,48 +1498,52 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        {block.src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={block.src}
-            alt={block.alt ?? ""}
-            className={editorImgStyle}
-            {...showcaseMediaProps}
-          />
-        ) : (
-          <span
-            aria-label="Image placeholder"
-            className={editorImagePlaceholderStyle}
-            {...showcaseMediaProps}
-          >
-            📷
-          </span>
-        )}
-        {isShowcaseMediaFocused && (
-          <div
-            className={editorImageOverlayStyle}
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            <div className={editorImageOverlayTintStyle} aria-hidden />
-            <div className={editorImageOverlayActionsStyle}>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => onChangeImage?.()}
-              >
-                Change Image...
-              </Button>
-              <Button
-                type="button"
-                variant="icon"
-                aria-label="Delete image"
-                onClick={onDelete}
-              >
-                <TrashIcon className={editorOverlayIconStyle} />
-              </Button>
+        <div className={editorShowcaseMediaShellStyle}>
+          {block.src ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={block.src}
+              alt={block.alt ?? ""}
+              className={editorImgStyle}
+              {...showcaseMediaProps}
+            />
+          ) : (
+            <span
+              aria-label="Image placeholder"
+              className={editorImagePlaceholderStyle}
+              {...showcaseMediaProps}
+            >
+              📷
+            </span>
+          )}
+          {isShowcaseMediaFocused && (
+            <div
+              className={editorImageOverlayStyle}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <div className={editorImageOverlayTintStyle} aria-hidden />
+              <div className={editorImageOverlayActionsStyle}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  tabIndex={-1}
+                  onClick={() => onChangeImage?.()}
+                >
+                  Change Image...
+                </Button>
+                <Button
+                  type="button"
+                  variant="icon"
+                  tabIndex={-1}
+                  aria-label="Delete image"
+                  onClick={onDelete}
+                >
+                  <TrashIcon className={editorOverlayIconStyle} />
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
         <figcaption
           ref={captionRef}
           className={editorCaptionStyle}
@@ -1488,6 +1551,7 @@ function EditableBlock({
           suppressContentEditableWarning
           data-placeholder="Caption media..."
           data-block-index={blockIndex}
+          data-empty={!block.caption?.trim() ? "" : undefined}
           onInput={handleCaptionInput}
           onKeyDown={handleCaptionKeyDown}
         />
@@ -1518,38 +1582,42 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        <DemoFrame
-          aspectRatio={demo?.aspectRatio}
-          logger={demo?.logger}
-          className={editorShowcaseMediaStyle}
-          {...showcaseMediaProps}
-        >
-          <div inert className={editorDemoPreviewStyle}>
-            {Demo ? (
-              <Demo />
-            ) : (
-              <span>Unknown component: {block.componentId}</span>
-            )}
-          </div>
-        </DemoFrame>
-        {isShowcaseMediaFocused && (
-          <div
-            className={editorImageOverlayStyle}
-            onMouseDown={(e) => e.preventDefault()}
+        <div className={editorShowcaseMediaShellStyle}>
+          <DemoFrame
+            aspectRatio={demo?.aspectRatio}
+            logger={demo?.logger}
+            interactive={false}
+            className={editorShowcaseMediaStyle}
+            {...showcaseMediaProps}
           >
-            <div className={editorImageOverlayTintStyle} aria-hidden />
-            <div className={editorImageOverlayActionsStyle}>
-              <Button
-                type="button"
-                variant="icon"
-                aria-label="Delete component"
-                onClick={onDelete}
-              >
-                <TrashIcon className={editorOverlayIconStyle} />
-              </Button>
+            <div inert className={editorDemoPreviewStyle}>
+              {Demo ? (
+                <Demo />
+              ) : (
+                <span>Unknown component: {block.componentId}</span>
+              )}
             </div>
-          </div>
-        )}
+          </DemoFrame>
+          {isShowcaseMediaFocused && (
+            <div
+              className={editorImageOverlayStyle}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <div className={editorImageOverlayTintStyle} aria-hidden />
+              <div className={editorImageOverlayActionsStyle}>
+                <Button
+                  type="button"
+                  variant="icon"
+                  tabIndex={-1}
+                  aria-label="Delete component"
+                  onClick={onDelete}
+                >
+                  <TrashIcon className={editorOverlayIconStyle} />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
         <figcaption
           ref={captionRef}
           className={editorCaptionStyle}
@@ -1557,6 +1625,7 @@ function EditableBlock({
           suppressContentEditableWarning
           data-placeholder="Caption component..."
           data-block-index={blockIndex}
+          data-empty={!block.caption?.trim() ? "" : undefined}
           onInput={handleCaptionInput}
           onKeyDown={handleCaptionKeyDown}
         />
@@ -1580,6 +1649,7 @@ function EditableBlock({
       onPaste={handlePaste}
       data-placeholder={placeholder}
       data-block-index={blockIndex}
+      data-empty={isBlockEmpty(block) ? "" : undefined}
       {...slashAnchorProps}
     />
   );
@@ -1672,8 +1742,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const s = useEditorStore.getState();
     s.pushHistory({ title: s.title, document: s.document });
     return () => useEditorStore.getState().reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialPost?.id, category]);
 
   const blocks = ensureBlocks(doc);
   const blockRefs = useRef<(HTMLElement | null)[]>([]);
@@ -2061,15 +2130,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         ? ({ ...current, children: htmlToNodes(beforeHtml) } as BlockNode)
         : current;
 
-    // The new block inherits the current block's type so Enter mid-heading
-    // stays a heading, Enter mid-blockquote stays a blockquote, etc.
+    // The new block inherits the current block's type for headings only.
+    // All other block types (including blockquote) split into a paragraph.
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
       if (current.type === "heading") {
         return { type: "heading", level: current.level, children: afterNodes };
-      }
-      if (current.type === "blockquote") {
-        return { type: "blockquote", children: afterNodes };
       }
       return { type: "paragraph", children: afterNodes };
     })();
@@ -2778,11 +2844,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           onChangeImage={
             block.type === "image" ? () => handleChangeImage(i) : undefined
           }
-          onInsertParagraphBefore={
-            block.type === "image" || block.type === "component"
-              ? () => insertParagraphBefore(i)
-              : undefined
-          }
+          onInsertParagraphBefore={() => insertParagraphBefore(i)}
           onInsertParagraphAfter={
             block.type === "image" || block.type === "component"
               ? () => insertParagraphAfter(i)

@@ -39,6 +39,8 @@ const gridStyle = css({
   gridAutoFlow: "column",
   gridAutoColumns: "token(sizes.listingCardWidth)",
   gap: "3xl",
+  /* Room for the 1.5px focus ring — overflow-x: auto clips overflow on both axes */
+  padding: "xs",
   // Odd cards snap in pairs; even cards join on ≤md for per-card snapping.
   "& > *:nth-child(odd)": {
     scrollSnapAlign: "start",

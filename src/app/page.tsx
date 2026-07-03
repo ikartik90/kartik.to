@@ -9,11 +9,14 @@ export default async function Home() {
   const dbProjects = await getPublishedPostsByCategory("WORK");
   const mergedProjects = mergePosts(dbProjects, projects);
 
+  const dbArticles = await getPublishedPostsByCategory("ARTICLE");
+  const mergedArticles = mergePosts(dbArticles, articles);
+
   return (
     <main>
       <IntroSection />
       <ProjectsSection projects={mergedProjects} />
-      <WritingSection articles={articles} />
+      <WritingSection articles={mergedArticles} />
     </main>
   );
 }

@@ -7,7 +7,6 @@ const buttonRecipe = cva({
   base: {
     cursor: "pointer",
     border: "none",
-    outline: "none",
     transition: "transform 100ms ease",
     _active: { transform: "scale(0.97)" },
     _disabled: {

@@ -7,6 +7,8 @@ import { env } from "@/lib/env";
 import { auth } from "@/lib/auth/server";
 import { resolvePost } from "@/lib/posts";
 
+export const dynamic = "force-dynamic";
+
 interface Props {
   params: Promise<{ slug: string }>;
 }

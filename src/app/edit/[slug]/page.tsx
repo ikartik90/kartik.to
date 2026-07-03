@@ -38,7 +38,7 @@ export default async function EditPostPage({ params, searchParams }: Props) {
   return (
     <main>
       <article>
-        <ArticleEditor initialPost={post} />
+        <ArticleEditor key={post.id} initialPost={post} />
       </article>
     </main>
   );

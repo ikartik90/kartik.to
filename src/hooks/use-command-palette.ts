@@ -14,6 +14,7 @@ import {
 } from "@/app/actions/post";
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
+import { notifyContentUpdated } from "@/utils/content-sync";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +45,10 @@ export interface CommandPaletteHandlers {
  * Accepts `close` as a parameter so the hook stays decoupled from the dialog
  * DOM ref, which belongs to the component that renders the <Dialog>.
  */
-export function useCommandPalette(close: () => void): CommandPaletteHandlers {
+export function useCommandPalette(
+  close: () => void,
+  openKey = 0,
+): CommandPaletteHandlers {
   const { data: session } = authClient.useSession();
   const isAdmin = !!session?.user;
 
@@ -66,7 +70,7 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
       (mode === "system" &&
         window.matchMedia("(prefers-color-scheme: dark)").matches));
 
-  // Drafts list — loaded when admin is logged in, refreshed on every close
+  // Drafts list — loaded when admin is logged in, refreshed on palette open
   const [drafts, setDrafts] = useState<Post[]>([]);
 
   useEffect(() => {
@@ -79,7 +83,11 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
       .then((data) => { if (!ignore) setDrafts(data); })
       .catch(() => { if (!ignore) setDrafts([]); });
     return () => { ignore = true; };
-  }, [isAdmin]);
+  }, [isAdmin, openKey]);
+
+  const syncOtherTabs = () => {
+    notifyContentUpdated();
+  };
 
   // -------------------------------------------------------------------------
   // Handlers
@@ -160,8 +168,8 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
         useEditorStore.getState().setDraftId(id);
       }
       const published = await publishPost(id);
-      useEditorStore.getState().reset();
       router.push(getPostReadUrl(published.category, published.slug));
+      syncOtherTabs();
       setDrafts((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
       console.error("Failed to publish:", err);
@@ -178,8 +186,8 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
           document,
           category,
         });
-        useEditorStore.getState().reset();
         router.replace(getPostReadUrl(created.category, created.slug));
+        syncOtherTabs();
         setDrafts((prev) => [...prev, created]);
       } else {
         const updated = await saveDraft({
@@ -187,8 +195,8 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
           title: title || undefined,
           document,
         });
-        useEditorStore.getState().reset();
         router.push(getPostReadUrl(updated.category, updated.slug));
+        syncOtherTabs();
         setDrafts((prev) =>
           prev.map((d) => (d.id === updated.id ? updated : d)),
         );
@@ -206,8 +214,8 @@ export function useCommandPalette(close: () => void): CommandPaletteHandlers {
         await deleteDraft(draftId);
         setDrafts((prev) => prev.filter((d) => d.id !== draftId));
       }
-      useEditorStore.getState().reset();
       router.push("/");
+      syncOtherTabs();
     } catch (err) {
       console.error("Failed to discard draft:", err);
     }
