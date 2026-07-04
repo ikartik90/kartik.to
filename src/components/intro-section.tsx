@@ -8,8 +8,12 @@ const SOCIAL_LINKS = [
   { href: "mailto:hello@kartik.to", label: "Email" },
 ];
 
-const socialLinkStyle = css({
+const socialListItemStyle = css({
   textStyle: "caption",
+});
+
+const socialLinkStyle = css({
+  display: "inline-block",
   color: "text.default",
   transition: "color 150ms ease",
   _hover: { color: "text.title" },
@@ -40,7 +44,7 @@ export function IntroSection() {
       <nav aria-label="Social links">
         <ul className={socialListStyle}>
           {SOCIAL_LINKS.map(({ href, label }) => (
-            <li key={href}>
+            <li key={href} className={socialListItemStyle}>
               <a
                 href={href}
                 className={socialLinkStyle}

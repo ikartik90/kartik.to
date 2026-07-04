@@ -13,10 +13,12 @@ export default async function Home() {
   const mergedArticles = mergePosts(dbArticles, articles);
 
   return (
-    <main>
-      <IntroSection />
+    <>
+      <main>
+        <IntroSection />
       <ProjectsSection projects={mergedProjects} />
-      <WritingSection articles={mergedArticles} />
-    </main>
+        <WritingSection articles={mergedArticles} />
+      </main>
+    </>
   );
 }

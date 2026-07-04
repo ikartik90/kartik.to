@@ -1031,7 +1031,7 @@ export default defineConfig({
             fontFamily: "{fonts.switzer}",
             fontWeight: "{fontWeights.base}",
             fontSize: "0.75rem",
-            lineHeight: "1.75",
+            lineHeight: "2",
             letterSpacing: "0.5%",
           },
         },

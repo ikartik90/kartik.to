@@ -1,8 +1,22 @@
 import React from "react";
 import Image from "next/image";
-import { Typography, type TypographyTag, type TypographyType } from "./ui/typography";
+import {
+  Typography,
+  type TypographyTag,
+  type TypographyType,
+} from "./ui/typography";
 import { HighlightedCode } from "@/components/highlighted-code";
-import { inlineCode, articleLink, articleBlockquote, articleBlockquoteMark, articleBlockquoteShell, codeBlock, articleShowcase, articleImg, horizontalRule } from "../../styled-system/recipes";
+import {
+  inlineCode,
+  articleLink,
+  articleBlockquote,
+  articleBlockquoteMark,
+  articleBlockquoteShell,
+  codeBlock,
+  articleShowcase,
+  articleImg,
+  horizontalRule,
+} from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
 import type { Document } from "@/domain/post";
 import type { BlockNode, InlineNode } from "@/domain/nodes";
@@ -11,7 +25,10 @@ import type { BlockNode, InlineNode } from "@/domain/nodes";
 // Heading level → Typography tag + type
 // ---------------------------------------------------------------------------
 
-const HEADING_MAP: Record<number, { tag: TypographyTag; type: TypographyType }> = {
+const HEADING_MAP: Record<
+  number,
+  { tag: TypographyTag; type: TypographyType }
+> = {
   1: { tag: "h1", type: "title" },
   2: { tag: "h2", type: "subheading" },
   3: { tag: "h3", type: "caption" },
@@ -19,7 +36,6 @@ const HEADING_MAP: Record<number, { tag: TypographyTag; type: TypographyType }> 
   5: { tag: "h5", type: "caption" },
   6: { tag: "h6", type: "caption" },
 };
-
 
 // ---------------------------------------------------------------------------
 // Inline node renderer — applies marks as nested elements
@@ -40,11 +56,7 @@ function renderInlineNode(node: InlineNode, index: number): React.ReactNode {
         content = <em>{content}</em>;
         break;
       case "code":
-        content = (
-          <code className={inlineCode()}>
-            {content}
-          </code>
-        );
+        content = <code className={inlineCode()}>{content}</code>;
         break;
       case "link":
         content = (

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { ArticleIntro } from "@/components/article-intro";
 import { ArticleRenderer } from "@/components/article-renderer";
-import { Typography } from "@/components/ui/typography";
 import { projects } from "@/data/projects";
 import { env } from "@/lib/env";
 import { auth } from "@/lib/auth/server";
@@ -43,11 +43,7 @@ export default async function ProjectPage({ params }: Props) {
   return (
     <main>
       <article>
-        {project.title && (
-          <Typography tag="h1" type="title">
-            {project.title}
-          </Typography>
-        )}
+        {project.title && <ArticleIntro title={project.title} />}
         <ArticleRenderer content={project.content} />
       </article>
     </main>

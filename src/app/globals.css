@@ -108,10 +108,53 @@ body {
   }
 
   [data-site-header] {
-    max-width: calc(var(--sizes-article-content) + var(--spacing-xxl) * 2);
     margin-inline: auto;
     margin-top: var(--spacing-5xl);
-    padding-inline: var(--spacing-xxl);
+    width: min(100%, var(--sizes-article-content));
+    max-width: min(
+      var(--sizes-article-content),
+      calc(100% - 2 * var(--spacing-xxl))
+    );
+  }
+
+  [data-article-intro] {
+    position: relative;
+    width: min(100%, var(--sizes-article-showcase));
+    container-type: inline-size;
+    container-name: article-intro;
+  }
+
+  [data-article-intro] h1 {
+    width: min(100%, var(--sizes-article-content));
+    margin-inline: auto;
+  }
+
+  [data-article-back-anchor] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* Match title textStyle first line (2rem × 1.5) — centers control on line 1 */
+    height: calc(2rem * 1.5);
+    display: flex;
+    align-items: center;
+  }
+
+  /*
+    Side-by-side needs ~80px left gutter: (showcase − content) / 2.
+    Below 820px intro width, stack the back control above the title.
+  */
+  @container article-intro (max-width: 819px) {
+    [data-article-back-anchor] {
+      position: static;
+      height: auto;
+      width: min(100%, var(--sizes-article-content));
+      margin-inline: auto;
+      margin-bottom: var(--spacing-xl);
+    }
+  }
+
+  [data-article-back] {
+    position: relative;
   }
 
   main {
@@ -135,6 +178,12 @@ body {
     width: min(100%, var(--sizes-article-content));
   }
 
+  article > [data-article-intro] {
+    width: min(100%, var(--sizes-article-showcase));
+    /* main padding-block already adds 3xl — net top offset matches homepage header (5xl) */
+    margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
+  }
+
   article > img {
     object-fit: cover;
     outline-width: var(--spacing-3xs);
@@ -146,6 +195,21 @@ body {
   /* Slash menu anchor — see slashMenuPopover recipe in panda.config.ts */
   [data-slash-anchor] {
     anchor-name: --slash-menu;
+  }
+
+  [data-brand-avatar] {
+    display: block;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  [data-brand-orbit] text {
+    fill: var(--colors-text-default);
+    font-family: var(--fonts-jetbrains-mono);
+    font-size: 0.5rem;
+    letter-spacing: 0.08em;
   }
 }
 
