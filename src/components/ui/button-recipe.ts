@@ -31,9 +31,12 @@ export const buttonRecipe = cva({
         justifyContent: "center",
         borderRadius: "sm",
         color: "text.commandItem",
-        _hover: { backgroundColor: "bg.button.tertiary.hover" },
+        backgroundColor: "transparent",
         "& svg path[stroke]": {
           stroke: "currentColor",
+        },
+        "& svg path[fill]": {
+          fill: "currentColor",
         },
         _after: {
           content: '""',

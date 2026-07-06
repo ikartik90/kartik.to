@@ -1,31 +1,6 @@
 import { css } from "../../styled-system/css";
+import { SocialLinks } from "./social-links";
 import { Typography } from "./ui/typography";
-
-const SOCIAL_LINKS = [
-  { href: "https://github.com/ikartik90", label: "GitHub" },
-  { href: "https://twitter.com/ikartik90", label: "Twitter" },
-  { href: "https://linkedin.com/in/ikartik90", label: "LinkedIn" },
-  { href: "mailto:hello@kartik.to", label: "Email" },
-];
-
-const socialListItemStyle = css({
-  textStyle: "caption",
-});
-
-const socialLinkStyle = css({
-  display: "inline-block",
-  color: "text.default",
-  transition: "color 150ms ease",
-  _hover: { color: "text.title" },
-});
-
-const socialListStyle = css({
-  display: "flex",
-  gap: "xl",
-  listStyle: "none",
-  marginTop: "3xl",
-  flexWrap: "wrap",
-});
 
 const sectionStyle = css({
   maxWidth: "articleContent",
@@ -42,22 +17,7 @@ export function IntroSection() {
         software feel considered.
       </Typography>
       <nav aria-label="Social links">
-        <ul className={socialListStyle}>
-          {SOCIAL_LINKS.map(({ href, label }) => (
-            <li key={href} className={socialListItemStyle}>
-              <a
-                href={href}
-                className={socialLinkStyle}
-                target={href.startsWith("mailto:") ? undefined : "_blank"}
-                rel={
-                  href.startsWith("mailto:") ? undefined : "noopener noreferrer"
-                }
-              >
-                {label}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <SocialLinks />
       </nav>
     </section>
   );

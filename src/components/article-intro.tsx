@@ -9,6 +9,7 @@ const backIconStyle = menuIcon();
 
 const backButtonStyle = css({
   gap: "sm",
+  _hover: { backgroundColor: "bg.button.tertiary.hover" },
 });
 
 const backLabelStyle = css({

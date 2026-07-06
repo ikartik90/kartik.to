@@ -4,6 +4,18 @@ const svgrOptions = {
   // SVGO normalises colour names to hex before replaceAttrValues runs, so
   // match the post-SVGO hex value rather than the original keyword.
   replaceAttrValues: { "#fff": "currentColor", "#ffffff": "currentColor" },
+  svgoConfig: {
+    plugins: [
+      {
+        name: "preset-default",
+        params: {
+          overrides: {
+            removeViewBox: false,
+          },
+        },
+      },
+    ],
+  },
 };
 
 const nextConfig: NextConfig = {

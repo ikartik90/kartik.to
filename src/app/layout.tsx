@@ -7,6 +7,7 @@ import { Header } from "@/components/header";
 import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
+import { CustomCursorProvider } from "@/components/custom-cursor-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const switzer = localFont({
@@ -53,6 +54,7 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider />
+        <CustomCursorProvider />
         <ContentSyncProvider />
         <KeyboardFocusProvider />
         <AdminLoginBootstrap />

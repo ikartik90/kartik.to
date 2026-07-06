@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useState } from "react";
 import { usePathname } from "next/navigation";
 import { css } from "../../styled-system/css";
 import { Typography } from "./ui/typography";
 
-const TAGLINE = "DESIGNER • ENGINEER • BUILDER •";
+const TAGLINE = "DESIGNER • BUILDER • ENGINEER •";
 
 const LOGO_SIZE = 48;
 const ORBIT_RADIUS = 28;
@@ -13,7 +13,8 @@ const STAGE_WIDTH = 60;
 const STAGE_HEIGHT = 60;
 const ORBIT_CENTER_X = STAGE_WIDTH / 2;
 const ORBIT_CENTER_Y = STAGE_HEIGHT / 2;
-const ORBIT_DURATION_MS = 50_000;
+/** Clockwise offset in degrees before/at orbit start. Tweak to align tagline copy. */
+const ORBIT_INITIAL_ANGLE_DEG = -132;
 
 const brandStyle = css({
   display: "flex",
@@ -68,33 +69,28 @@ export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const pathId = `brand-tagline-path-${useId().replace(/:/g, "")}`;
-  const orbitTextGroupRef = useRef<SVGGElement>(null);
+  const [orbitReady, setOrbitReady] = useState(false);
 
   useEffect(() => {
-    if (!isHome) return;
-    const orbitTextGroup = orbitTextGroupRef.current;
-    if (!orbitTextGroup) return;
+    if (!isHome) {
+      setOrbitReady(false);
+      return;
+    }
 
     const reducedMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      orbitTextGroup.setAttribute("transform", "rotate(0)");
+    if (reducedMotion) return;
+
+    const enableOrbit = () => setOrbitReady(true);
+
+    if (document.readyState === "complete") {
+      enableOrbit();
       return;
     }
 
-    const start = performance.now();
-    let raf = 0;
-
-    const tick = (now: number) => {
-      const progress = ((now - start) % ORBIT_DURATION_MS) / ORBIT_DURATION_MS;
-      const angle = progress * 360;
-      orbitTextGroup.setAttribute("transform", `rotate(${angle})`);
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    window.addEventListener("load", enableOrbit, { once: true });
+    return () => window.removeEventListener("load", enableOrbit);
   }, [isHome]);
 
   if (!isHome) return null;
@@ -105,25 +101,27 @@ export function Header() {
         <div className={orbitStageStyle} aria-label={TAGLINE}>
           <svg
             data-brand-orbit=""
+            data-brand-orbit-ready={orbitReady ? "" : undefined}
             className={orbitSvgStyle}
+            style={
+              {
+                "--brand-orbit-initial-angle": `${ORBIT_INITIAL_ANGLE_DEG}deg`,
+              } as React.CSSProperties
+            }
             viewBox={`0 0 ${STAGE_WIDTH} ${STAGE_HEIGHT}`}
             aria-hidden="true"
           >
             <defs>
               <path
                 id={pathId}
-                d={buildOrbitPath(
-                  ORBIT_CENTER_X,
-                  ORBIT_CENTER_Y,
-                  ORBIT_RADIUS,
-                )}
+                d={buildOrbitPath(ORBIT_CENTER_X, ORBIT_CENTER_Y, ORBIT_RADIUS)}
               />
             </defs>
             <g
               data-brand-orbit-pivot=""
               transform={`translate(${ORBIT_CENTER_X} ${ORBIT_CENTER_Y})`}
             >
-              <g ref={orbitTextGroupRef} data-brand-orbit-text-group="">
+              <g data-brand-orbit-text-group="">
                 <g
                   transform={`translate(${-ORBIT_CENTER_X} ${-ORBIT_CENTER_Y})`}
                 >

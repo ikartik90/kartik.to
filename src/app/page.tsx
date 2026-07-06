@@ -16,7 +16,7 @@ export default async function Home() {
     <>
       <main>
         <IntroSection />
-      <ProjectsSection projects={mergedProjects} />
+        <ProjectsSection projects={mergedProjects} />
         <WritingSection articles={mergedArticles} />
       </main>
     </>

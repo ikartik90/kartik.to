@@ -23,6 +23,13 @@ body {
     color 150ms ease;
 }
 
+@media (pointer: fine) and (hover: hover) {
+  html,
+  html * {
+    cursor: none !important;
+  }
+}
+
 /*
   Reset rules live inside @layer reset so that Panda's @layer utilities
   can override them. Unlayered styles beat all named layers, so putting
@@ -211,6 +218,34 @@ body {
     font-size: 0.5rem;
     letter-spacing: 0.08em;
   }
+
+  [data-brand-orbit-text-group] {
+    transform: rotate(var(--brand-orbit-initial-angle, 0deg));
+  }
+
+  [data-brand-orbit-ready] [data-brand-orbit-text-group] {
+    animation: brand-orbit-spin 50s linear infinite;
+  }
+}
+
+@keyframes brand-orbit-spin {
+  from {
+    transform: rotate(var(--brand-orbit-initial-angle, 0deg));
+  }
+  to {
+    transform: rotate(calc(var(--brand-orbit-initial-angle, 0deg) + 360deg));
+  }
+}
+
+/* Unlayered — must beat @layer recipes .social-tooltip { opacity: 0 } */
+[data-social-link-item][data-tooltip-visible]:not([data-tooltip-dismissed])
+  [data-social-tooltip],
+[data-social-link-item][data-copy-success]:not([data-tooltip-dismissed])
+  [data-social-tooltip] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  filter: blur(0);
 }
 
 @media (prefers-reduced-motion: reduce) {

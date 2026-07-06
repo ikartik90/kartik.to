@@ -39,6 +39,7 @@ export default defineConfig({
           insertDialogHeight: { value: "480px" },
           dialogFooter: { value: "44px" },
           quoteMark: { value: "52px" },
+          tooltipIcon: { value: "14px" },
         },
 
         colors: {
@@ -954,6 +955,58 @@ export default defineConfig({
             gap: "xs",
             boxShadow:
               "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+          },
+        }),
+
+        socialTooltip: defineRecipe({
+          className: "social-tooltip",
+          description:
+            "Social link hover tooltip — Figma node 389:318 (20px tall, 4px padding/gap).",
+          base: {
+            position: "fixed",
+            zIndex: 50,
+            top: 0,
+            left: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "sm",
+            height: "token(spacing.xxl)",
+            paddingInline: "sm",
+            paddingBlock: "none",
+            overflow: "hidden",
+            borderRadius: "sm",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
+            backgroundColor: "bg.button.tertiary.hover",
+            color: "text.commandItem",
+            textStyle: "commandLabel",
+            whiteSpace: "nowrap",
+            opacity: 0,
+            visibility: "hidden",
+            pointerEvents: "none",
+            filter: "blur(1px)",
+            transitionProperty: "opacity, filter, visibility",
+            transitionDuration: "150ms",
+            transitionTimingFunction: "ease-out",
+            transitionBehavior: "allow-discrete",
+            _starting: {
+              opacity: 0,
+              filter: "blur(1px)",
+            },
+          },
+        }),
+
+        socialTooltipIcon: defineRecipe({
+          className: "social-tooltip-icon",
+          description:
+            "Icons inside social link tooltips — fixed 14px size, never shrinks.",
+          base: {
+            flexShrink: 0,
+            width: "token(sizes.tooltipIcon)",
+            height: "token(sizes.tooltipIcon)",
+            "& path[stroke]": { stroke: "currentColor" },
+            "& path[fill]": { fill: "currentColor" },
           },
         }),
 
