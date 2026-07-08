@@ -191,6 +191,12 @@ body {
     margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
   }
 
+  /* Editor has no intro wrapper — give its title the same top offset as the
+     renderer's intro so both surfaces start at the homepage header offset (5xl). */
+  article > #article-title {
+    margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
+  }
+
   article > img {
     object-fit: cover;
     outline-width: var(--spacing-3xs);
@@ -199,9 +205,21 @@ body {
     outline-color: var(--colors-border-image-outline);
   }
 
+  /* Bold prose mark — styled via descendant selector (not a class) so the
+     editor's execCommand-generated <strong>/<b> is styled live while typing. */
+  article :is(strong, b) {
+    font-weight: var(--font-weights-bold);
+    color: var(--colors-text-default);
+  }
+
   /* Slash menu anchor — see slashMenuPopover recipe in panda.config.ts */
   [data-slash-anchor] {
     anchor-name: --slash-menu;
+  }
+
+  /* Selection toolbar anchor — see selectionToolbar recipe in panda.config.ts */
+  [data-selection-anchor] {
+    anchor-name: --selection-menu;
   }
 
   [data-brand-avatar] {
@@ -219,21 +237,30 @@ body {
     letter-spacing: 0.08em;
   }
 
+  /* Static starting offset only — sets which tagline copy sits at top. */
   [data-brand-orbit-text-group] {
     transform: rotate(var(--brand-orbit-initial-angle, 0deg));
   }
 
-  [data-brand-orbit-ready] [data-brand-orbit-text-group] {
+  /* Spin a plain HTML wrapper, not an SVG node. Blink does not composite
+     transform animations on SVG elements, so rotating the <svg>/<g> repaints
+     text-on-path glyphs on the main thread every frame and freezes during
+     load. An HTML element with will-change: transform is promoted to the
+     compositor thread and keeps spinning smoothly through main-thread work.
+     The animation is always-on (no JS load gate) so it starts at first paint
+     already at the correct angle; reduced-motion is handled globally below. */
+  [data-brand-orbit-spinner] {
     animation: brand-orbit-spin 50s linear infinite;
+    will-change: transform;
   }
 }
 
 @keyframes brand-orbit-spin {
   from {
-    transform: rotate(var(--brand-orbit-initial-angle, 0deg));
+    transform: rotate(0deg);
   }
   to {
-    transform: rotate(calc(var(--brand-orbit-initial-angle, 0deg) + 360deg));
+    transform: rotate(360deg);
   }
 }
 

@@ -24,6 +24,18 @@ describe("MarkSchema", () => {
     expect(MarkSchema.safeParse({ type: "code" }).success).toBe(true);
   });
 
+  it("accepts underline", () => {
+    expect(MarkSchema.safeParse({ type: "underline" }).success).toBe(true);
+  });
+
+  it("accepts wavy_underline", () => {
+    expect(MarkSchema.safeParse({ type: "wavy_underline" }).success).toBe(true);
+  });
+
+  it("accepts strikethrough", () => {
+    expect(MarkSchema.safeParse({ type: "strikethrough" }).success).toBe(true);
+  });
+
   it("accepts link with a valid href", () => {
     expect(
       MarkSchema.safeParse({ type: "link", href: "https://example.com" }).success
@@ -41,7 +53,7 @@ describe("MarkSchema", () => {
   });
 
   it("rejects an unknown mark type", () => {
-    expect(MarkSchema.safeParse({ type: "underline" }).success).toBe(false);
+    expect(MarkSchema.safeParse({ type: "highlight" }).success).toBe(false);
   });
 });
 
@@ -111,6 +123,17 @@ describe("BlockNodeSchema", () => {
     ).toBe(false);
   });
 
+  it("accepts a heading node with a caption", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", text: "Title" }],
+        caption: "Section",
+      }).success
+    ).toBe(true);
+  });
+
   it("accepts a blockquote node", () => {
     expect(
       BlockNodeSchema.safeParse({
@@ -118,6 +141,31 @@ describe("BlockNodeSchema", () => {
         children: [{ type: "text", text: "A quote" }],
       }).success
     ).toBe(true);
+  });
+
+  it("accepts a blockquote node with a caption", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "blockquote",
+        children: [{ type: "text", text: "A quote" }],
+        caption: "Some Author",
+      }).success
+    ).toBe(true);
+  });
+
+  it("accepts a list_item node", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "list_item",
+        children: [{ type: "text", text: "First item" }],
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects a list_item node missing children", () => {
+    expect(
+      BlockNodeSchema.safeParse({ type: "list_item" }).success
+    ).toBe(false);
   });
 
   it("accepts a code_block node", () => {

@@ -2,8 +2,16 @@
 import React, { type ReactNode } from "react";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { inlineNodesToHtml, domToInlineNodes, ArticleEditor } from "../article-editor";
-import type { InlineNode } from "@/domain/nodes";
+import {
+  inlineNodesToHtml,
+  domToInlineNodes,
+  ArticleEditor,
+  transformMarksInRange,
+  rangeHasMark,
+  findLinkRangeAt,
+  mergeAdjacentInlineNodes,
+} from "../article-editor";
+import type { InlineNode, Mark } from "@/domain/nodes";
 import { useEditorStore } from "@/store/editor";
 
 // ---------------------------------------------------------------------------
@@ -30,6 +38,7 @@ vi.mock("@/components/slash-menu", () => ({
       <button onClick={() => onSelect("heading")}>heading</button>
       <button onClick={() => onSelect("paragraph")}>paragraph</button>
       <button onClick={() => onSelect("media")}>media</button>
+      <button onClick={() => onSelect("list_item")}>list_item</button>
       <button onClick={onDismiss}>dismiss</button>
     </div>
   ),
@@ -285,7 +294,7 @@ describe("ArticleEditor", () => {
     render(<ArticleEditor initialPost={post} />);
 
     const caption = document.querySelector(
-      "figcaption[data-placeholder='Caption media...']",
+      "figcaption[data-placeholder='Add caption...']",
     );
     expect(caption).not.toBeNull();
     expect(document.querySelector("figure img")?.getAttribute("src")).toBe(
@@ -315,7 +324,7 @@ describe("ArticleEditor", () => {
     render(<ArticleEditor initialPost={post} />);
 
     const caption = document.querySelector(
-      "figcaption[data-placeholder='Caption component...']",
+      "figcaption[data-placeholder='Add caption...']",
     );
     expect(caption).not.toBeNull();
     expect(screen.getByTestId("demo-interact")).toBeDefined();
@@ -425,7 +434,7 @@ describe("ArticleEditor", () => {
     render(<ArticleEditor initialPost={post} />);
 
     const caption = document.querySelector(
-      "figcaption[data-placeholder='Caption media...']",
+      "figcaption[data-placeholder='Add caption...']",
     ) as HTMLElement;
     caption.textContent = "A sunny day";
     fireEvent.input(caption);
@@ -1065,6 +1074,185 @@ describe("ArticleEditor", () => {
     expect(blocks[1].type).toBe("paragraph");
   });
 
+  it("renders a subheading eyebrow caption with an 'Add caption...' placeholder", () => {
+    const post = {
+      id: "h-cap1",
+      slug: "h-cap1",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      ".article-subheading-caption[data-placeholder='Add caption...']",
+    );
+    expect(caption).not.toBeNull();
+  });
+
+  it("updates the heading caption in the store when typing in the eyebrow", () => {
+    const post = {
+      id: "h-cap2",
+      slug: "h-cap2",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      ".article-subheading-caption[data-placeholder='Add caption...']",
+    ) as HTMLElement;
+    caption.textContent = "Chapter One";
+    fireEvent.input(caption);
+
+    const block = useEditorStore.getState().document.content[0];
+    expect(block.type).toBe("heading");
+    if (block.type === "heading") {
+      expect(block.caption).toBe("Chapter One");
+    }
+  });
+
+  it("clears the heading caption from the store when the eyebrow is emptied", () => {
+    const post = {
+      id: "h-cap3",
+      slug: "h-cap3",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "heading" as const,
+            level: 2 as const,
+            children: [{ type: "text" as const, text: "Section" }],
+            caption: "Chapter One",
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      ".article-subheading-caption[data-placeholder='Add caption...']",
+    ) as HTMLElement;
+    // Clear both innerText and textContent — jsdom stores innerText separately.
+    caption.innerText = "";
+    caption.textContent = "";
+    fireEvent.input(caption);
+
+    const block = useEditorStore.getState().document.content[0];
+    expect(block.type).toBe("heading");
+    if (block.type === "heading") {
+      expect(block.caption).toBeUndefined();
+    }
+  });
+
+  it("renders a blockquote citation caption with an 'Add citation...' placeholder", () => {
+    const post = {
+      id: "bq-cap1",
+      slug: "bq-cap1",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "blockquote" as const, children: [{ type: "text" as const, text: "A quote" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      "cite[data-placeholder='Add citation...']",
+    );
+    expect(caption).not.toBeNull();
+  });
+
+  it("updates the blockquote caption in the store when typing in the citation", () => {
+    const post = {
+      id: "bq-cap2",
+      slug: "bq-cap2",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "blockquote" as const, children: [{ type: "text" as const, text: "A quote" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      "cite[data-placeholder='Add citation...']",
+    ) as HTMLElement;
+    caption.textContent = "Ada Lovelace";
+    fireEvent.input(caption);
+
+    const block = useEditorStore.getState().document.content[0];
+    expect(block.type).toBe("blockquote");
+    if (block.type === "blockquote") {
+      expect(block.caption).toBe("Ada Lovelace");
+    }
+  });
+
+  it("clears the blockquote caption from the store when the citation is emptied", () => {
+    const post = {
+      id: "bq-cap3",
+      slug: "bq-cap3",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "blockquote" as const,
+            children: [{ type: "text" as const, text: "A quote" }],
+            caption: "Ada Lovelace",
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      "cite[data-placeholder='Add citation...']",
+    ) as HTMLElement;
+    // Clear both innerText and textContent — jsdom stores innerText separately.
+    caption.innerText = "";
+    caption.textContent = "";
+    fireEvent.input(caption);
+
+    const block = useEditorStore.getState().document.content[0];
+    expect(block.type).toBe("blockquote");
+    if (block.type === "blockquote") {
+      expect(block.caption).toBeUndefined();
+    }
+  });
+
   it("inserts a paragraph above when Enter is pressed at the start of a paragraph", () => {
     const post = {
       id: "p-enter-start",
@@ -1113,6 +1301,141 @@ describe("ArticleEditor", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Numbered list
+  // -------------------------------------------------------------------------
+
+  function listPost(text: string) {
+    return {
+      id: "li",
+      slug: "li",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "list_item" as const, children: [{ type: "text" as const, text }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  function placeCaret(block: HTMLElement, offset: number) {
+    block.focus();
+    const textNode = block.firstChild ?? block;
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(textNode, offset);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  it("converts the block to a paragraph via the slash menu list_item selection", () => {
+    render(<ArticleEditor />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    block.focus();
+    block.textContent = "/";
+    placeCaret(block, 1);
+    fireEvent.keyUp(block, { key: "/" });
+    fireEvent.click(screen.getByText("list_item"));
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks[0].type).toBe("list_item");
+  });
+
+  it("Enter at the end of a list item appends a new empty item after it", () => {
+    render(<ArticleEditor initialPost={listPost("Hello")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, "Hello".length);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    // A trailing empty paragraph always follows the list.
+    expect(blocks.map((b) => b.type)).toEqual([
+      "list_item",
+      "list_item",
+      "paragraph",
+    ]);
+    if (blocks[0].type === "list_item")
+      expect(blocks[0].children[0]).toMatchObject({ text: "Hello" });
+    if (blocks[1].type === "list_item")
+      expect(blocks[1].children.every((c) => !c.text)).toBe(true);
+  });
+
+  it("Enter at the start of a list item prepends an empty item before it", () => {
+    render(<ArticleEditor initialPost={listPost("Hello")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 0);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks.map((b) => b.type)).toEqual([
+      "list_item",
+      "list_item",
+      "paragraph",
+    ]);
+    if (blocks[0].type === "list_item")
+      expect(blocks[0].children.every((c) => !c.text)).toBe(true);
+    if (blocks[1].type === "list_item")
+      expect(blocks[1].children[0]).toMatchObject({ text: "Hello" });
+  });
+
+  it("does not leave stale text in the reused element when prepending a list item", () => {
+    // Regression: the index-based key reuses the focused element as the new
+    // empty item; without clearing its DOM the text is duplicated into it.
+    render(<ArticleEditor initialPost={listPost("Hello")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 0);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const top = document.querySelector("[data-block-index='0']") as HTMLElement;
+    const content = document.querySelector("[data-block-index='1']") as HTMLElement;
+    expect(top.textContent).toBe("");
+    expect(content.textContent).toBe("Hello");
+  });
+
+  it("Enter in the middle of a list item splits it into two items", () => {
+    render(<ArticleEditor initialPost={listPost("HelloWorld")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 5);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks.map((b) => b.type)).toEqual([
+      "list_item",
+      "list_item",
+      "paragraph",
+    ]);
+    if (blocks[0].type === "list_item")
+      expect(blocks[0].children[0]).toMatchObject({ text: "Hello" });
+    if (blocks[1].type === "list_item")
+      expect(blocks[1].children[0]).toMatchObject({ text: "World" });
+  });
+
+  it("keeps a trailing empty paragraph when the last block is a list item", () => {
+    render(<ArticleEditor initialPost={listPost("Hello")} />);
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks.map((b) => b.type)).toEqual(["list_item", "paragraph"]);
+    const last = blocks[blocks.length - 1];
+    expect(last.type).toBe("paragraph");
+    if (last.type === "paragraph")
+      expect(last.children.every((c) => !c.text)).toBe(true);
+    expect(document.querySelector("p[data-block-index='1']")).not.toBeNull();
+  });
+
+  it("Enter on an empty list item converts it into a paragraph", () => {
+    render(<ArticleEditor initialPost={listPost("")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 0);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks[0].type).toBe("paragraph");
+  });
+
   it("inserts a paragraph above when Enter is pressed at the start of a heading", () => {
     const post = {
       id: "h-enter-start",
@@ -1155,5 +1478,221 @@ describe("ArticleEditor", () => {
         "Title",
       );
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Selection toolbar — mark manipulation helpers (pure)
+// ---------------------------------------------------------------------------
+
+describe("mergeAdjacentInlineNodes", () => {
+  it("merges consecutive nodes with identical marks", () => {
+    const out = mergeAdjacentInlineNodes([
+      { type: "text", text: "foo", marks: [{ type: "bold" }] },
+      { type: "text", text: "bar", marks: [{ type: "bold" }] },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].text).toBe("foobar");
+  });
+
+  it("keeps nodes with different marks separate and drops empties", () => {
+    const out = mergeAdjacentInlineNodes([
+      { type: "text", text: "a", marks: [{ type: "bold" }] },
+      { type: "text", text: "" },
+      { type: "text", text: "b" },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out.map((n) => n.text)).toEqual(["a", "b"]);
+  });
+});
+
+describe("rangeHasMark", () => {
+  const nodes: InlineNode[] = [
+    { type: "text", text: "Hello ", marks: [{ type: "bold" }] },
+    { type: "text", text: "world", marks: [{ type: "bold" }, { type: "italic" }] },
+  ];
+
+  it("is true when every covered char carries the mark", () => {
+    expect(rangeHasMark(nodes, 0, 11, "bold")).toBe(true);
+  });
+
+  it("is false when part of the range lacks the mark", () => {
+    expect(rangeHasMark(nodes, 0, 11, "italic")).toBe(false);
+  });
+
+  it("is false for an empty (collapsed) range", () => {
+    expect(rangeHasMark(nodes, 3, 3, "bold")).toBe(false);
+  });
+});
+
+describe("transformMarksInRange", () => {
+  it("adds a mark across the range, splitting at boundaries", () => {
+    const nodes: InlineNode[] = [{ type: "text", text: "abcdef" }];
+    const out = transformMarksInRange(nodes, 2, 4, (marks) => [
+      ...marks,
+      { type: "bold" },
+    ]);
+    // "ab" | "cd"(bold) | "ef"
+    expect(out).toHaveLength(3);
+    expect(out[0].text).toBe("ab");
+    expect(out[1].text).toBe("cd");
+    expect(out[1].marks).toEqual([{ type: "bold" }]);
+    expect(out[2].text).toBe("ef");
+  });
+
+  it("removes a mark and re-merges neighbouring plain text", () => {
+    const nodes: InlineNode[] = [
+      { type: "text", text: "ab" },
+      { type: "text", text: "cd", marks: [{ type: "bold" }] },
+      { type: "text", text: "ef" },
+    ];
+    const out = transformMarksInRange(nodes, 2, 4, (marks) =>
+      marks.filter((m) => m.type !== "bold"),
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].text).toBe("abcdef");
+    expect(out[0].marks).toBeUndefined();
+  });
+
+  it("returns nodes unchanged for a collapsed range", () => {
+    const nodes: InlineNode[] = [{ type: "text", text: "abc" }];
+    expect(transformMarksInRange(nodes, 1, 1, (m) => m)).toBe(nodes);
+  });
+});
+
+describe("findLinkRangeAt", () => {
+  const nodes: InlineNode[] = [
+    { type: "text", text: "see " },
+    {
+      type: "text",
+      text: "this link",
+      marks: [{ type: "link", href: "https://example.com" }],
+    },
+    { type: "text", text: " now" },
+  ];
+
+  it("returns the link's bounds and href when the caret is inside it", () => {
+    const link = findLinkRangeAt(nodes, 7);
+    expect(link).toEqual({ start: 4, end: 13, href: "https://example.com" });
+  });
+
+  it("returns null when the caret is outside any link", () => {
+    expect(findLinkRangeAt(nodes, 1)).toBeNull();
+  });
+
+  it("expands across adjacent nodes sharing the same href", () => {
+    const split: InlineNode[] = [
+      { type: "text", text: "ab", marks: [{ type: "link", href: "https://x.io" }] },
+      {
+        type: "text",
+        text: "cd",
+        marks: [{ type: "bold" }, { type: "link", href: "https://x.io" }],
+      },
+    ];
+    expect(findLinkRangeAt(split, 3)).toEqual({
+      start: 0,
+      end: 4,
+      href: "https://x.io",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Selection toolbar — component integration
+// ---------------------------------------------------------------------------
+
+describe("ArticleEditor selection toolbar", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  function seedParagraph(text: string) {
+    const post = {
+      id: "p1",
+      slug: "s",
+      title: "T",
+      status: "DRAFT" as const,
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+    return document.querySelector(
+      "[data-block-index='0']",
+    ) as HTMLElement;
+  }
+
+  function selectRange(el: HTMLElement, start: number, end: number) {
+    const textNode = el.firstChild!;
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(textNode, start);
+    range.setEnd(textNode, end);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    act(() => {
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+  }
+
+  it("shows the format toolbar on a non-collapsed selection and toggles bold", () => {
+    const block = seedParagraph("hello world");
+    block.focus();
+    selectRange(block, 0, 5);
+
+    const toolbar = screen.getByRole("toolbar", { name: "Format selection" });
+    expect(toolbar).toBeDefined();
+
+    fireEvent.click(screen.getByLabelText("Bold"));
+
+    const nodes = (
+      useEditorStore.getState().document.content[0] as {
+        children: InlineNode[];
+      }
+    ).children;
+    const bolded = nodes.find((n) =>
+      (n.marks ?? []).some((m: Mark) => m.type === "bold"),
+    );
+    expect(bolded?.text).toBe("hello");
+  });
+
+  it("applies a link through the link editor", () => {
+    const block = seedParagraph("click me");
+    block.focus();
+    selectRange(block, 0, 5);
+
+    fireEvent.click(screen.getByLabelText("Add link"));
+
+    const input = screen.getByLabelText("Link URL") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "https://example.com" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const nodes = (
+      useEditorStore.getState().document.content[0] as {
+        children: InlineNode[];
+      }
+    ).children;
+    const linked = nodes.find((n) =>
+      (n.marks ?? []).some((m: Mark) => m.type === "link"),
+    );
+    expect(linked?.text).toBe("click");
+    const linkMark = linked?.marks?.find((m: Mark) => m.type === "link");
+    expect(linkMark && linkMark.type === "link" && linkMark.href).toBe(
+      "https://example.com",
+    );
   });
 });

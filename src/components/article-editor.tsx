@@ -7,9 +7,19 @@ import {
   horizontalRule,
   inlineCode,
   articleLink,
+  articleUnderline,
+  articleWavyUnderline,
+  articleStrikethrough,
   articleBlockquote,
+  articleBlockquoteBody,
+  articleBlockquoteCite,
   articleBlockquoteMark,
   articleBlockquoteShell,
+  articleHeadingShell,
+  articleSubheadingCaption,
+  articleListItemShell,
+  listMarker,
+  articleListItemContent,
   codeBlock,
   articleShowcase,
   articleImg,
@@ -21,6 +31,11 @@ import {
   slashMenuHasResults,
   type SlashMenuBlockType,
 } from "@/components/slash-menu";
+import {
+  SelectionToolbar,
+  type SelectionToolbarMode,
+  type ToggleableMark,
+} from "@/components/selection-toolbar";
 import { DemoFrame } from "@/components/demo-frame";
 import { getDemoComponent } from "@/components/demo/registry";
 import {
@@ -44,6 +59,9 @@ import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
 // identical without re-invoking the CVA on every keystroke.
 const inlineCodeClass = inlineCode();
 const linkClass = articleLink();
+const underlineClass = articleUnderline();
+const wavyUnderlineClass = articleWavyUnderline();
+const strikethroughClass = articleStrikethrough();
 
 /** Serialise an inline-nodes array to an HTML string for contentEditable. */
 export function inlineNodesToHtml(nodes: InlineNode[]): string {
@@ -64,6 +82,15 @@ export function inlineNodesToHtml(nodes: InlineNode[]): string {
             break;
           case "code":
             html = `<code class="${inlineCodeClass}">${html}</code>`;
+            break;
+          case "underline":
+            html = `<u class="${underlineClass}">${html}</u>`;
+            break;
+          case "wavy_underline":
+            html = `<u data-wavy class="${wavyUnderlineClass}">${html}</u>`;
+            break;
+          case "strikethrough":
+            html = `<s class="${strikethroughClass}">${html}</s>`;
             break;
           case "link":
             html = `<a href="${mark.href}" class="${linkClass}">${html}</a>`;
@@ -101,6 +128,18 @@ export function domToInlineNodes(el: Node): InlineNode[] {
       else if (el.tagName === "EM" || el.tagName === "I")
         nextMarks.push({ type: "italic" });
       else if (el.tagName === "CODE") nextMarks.push({ type: "code" });
+      else if (el.tagName === "U")
+        nextMarks.push(
+          el.hasAttribute("data-wavy")
+            ? { type: "wavy_underline" }
+            : { type: "underline" },
+        );
+      else if (
+        el.tagName === "S" ||
+        el.tagName === "STRIKE" ||
+        el.tagName === "DEL"
+      )
+        nextMarks.push({ type: "strikethrough" });
       else if (el.tagName === "A") {
         const href = (el as HTMLAnchorElement).href;
         if (href) nextMarks.push({ type: "link", href });
@@ -238,6 +277,12 @@ function sanitiseClipboardHtml(html: string): string {
       case "em":
       case "i":
         return `<em>${inner}</em>`;
+      case "u":
+        return `<u class="${underlineClass}">${inner}</u>`;
+      case "s":
+      case "strike":
+      case "del":
+        return `<s class="${strikethroughClass}">${inner}</s>`;
       case "code":
         return `<code class="${inlineCodeClass}">${inner}</code>`;
       // Links — strip the anchor entirely, keep only the visible text.
@@ -407,6 +452,225 @@ function setCursorAtTextOffset(el: HTMLElement, offset: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Selection ↔ character-offset helpers (used by the selection toolbar)
+// ---------------------------------------------------------------------------
+
+/** Walk Text nodes in DOM order and resolve a character offset to a DOM position. */
+function findTextPositionAtOffset(
+  root: Node,
+  offset: number,
+): { node: Text; offset: number } | null {
+  let remaining = offset;
+  function find(node: Node): { node: Text; offset: number } | null {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node as Text;
+      if (remaining <= t.length) return { node: t, offset: remaining };
+      remaining -= t.length;
+      return null;
+    }
+    for (let i = 0; i < node.childNodes.length; i++) {
+      const found = find(node.childNodes[i]);
+      if (found) return found;
+    }
+    return null;
+  }
+  return find(root);
+}
+
+/**
+ * Return the current selection as character offsets within `el`, or null when
+ * there is no selection anchored inside `el`.
+ */
+function getSelectionOffsets(
+  el: HTMLElement,
+): { start: number; end: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) {
+    return null;
+  }
+  // Boundary nodes can be orphaned mid-edit; a stale range throws here.
+  try {
+    const pre = document.createRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const start = pre.toString().length;
+    const end = start + range.toString().length;
+    return { start, end };
+  } catch {
+    return null;
+  }
+}
+
+/** Focus `el` and set the DOM selection to the given character-offset range. */
+function setSelectionRange(el: HTMLElement, start: number, end: number) {
+  el.focus();
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  try {
+    const startPos = findTextPositionAtOffset(el, start);
+    const endPos = findTextPositionAtOffset(el, end);
+    if (startPos && endPos) {
+      range.setStart(startPos.node, startPos.offset);
+      range.setEnd(endPos.node, endPos.offset);
+    } else {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {
+    // Offsets can fall out of bounds if the DOM changed underneath us.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mark manipulation over an inline-node array (pure — exported for tests)
+// ---------------------------------------------------------------------------
+
+/** Order-independent structural equality for two mark arrays. */
+function marksEqual(a: Mark[] | undefined, b: Mark[] | undefined): boolean {
+  const aa = a ?? [];
+  const bb = b ?? [];
+  if (aa.length !== bb.length) return false;
+  const key = (m: Mark) => JSON.stringify(m);
+  const sa = aa.map(key).sort();
+  const sb = bb.map(key).sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+
+/** Merge consecutive text nodes that carry identical marks. */
+export function mergeAdjacentInlineNodes(nodes: InlineNode[]): InlineNode[] {
+  const out: InlineNode[] = [];
+  for (const node of nodes) {
+    if (node.text.length === 0) continue;
+    const prev = out[out.length - 1];
+    if (prev && marksEqual(prev.marks, node.marks)) {
+      out[out.length - 1] = { ...prev, text: prev.text + node.text };
+    } else {
+      out.push(node);
+    }
+  }
+  return out;
+}
+
+/**
+ * True when every character in [start, end) already carries a mark of `type`.
+ * Returns false for an empty range or when no covered text exists.
+ */
+export function rangeHasMark(
+  nodes: InlineNode[],
+  start: number,
+  end: number,
+  type: Mark["type"],
+): boolean {
+  if (start >= end) return false;
+  let offset = 0;
+  let sawCovered = false;
+  for (const node of nodes) {
+    const len = node.text.length;
+    const nodeStart = offset;
+    const nodeEnd = offset + len;
+    offset = nodeEnd;
+    if (len === 0 || nodeEnd <= start || nodeStart >= end) continue;
+    sawCovered = true;
+    if (!(node.marks ?? []).some((m) => m.type === type)) return false;
+  }
+  return sawCovered;
+}
+
+/**
+ * Apply `transform` to the marks of every character in [start, end), splitting
+ * nodes at the range boundaries. Returns a normalised inline-node array.
+ */
+export function transformMarksInRange(
+  nodes: InlineNode[],
+  start: number,
+  end: number,
+  transform: (marks: Mark[]) => Mark[],
+): InlineNode[] {
+  if (start >= end) return nodes;
+  const result: InlineNode[] = [];
+  let offset = 0;
+  for (const node of nodes) {
+    const len = node.text.length;
+    const nodeStart = offset;
+    const nodeEnd = offset + len;
+    offset = nodeEnd;
+    if (len === 0) continue;
+    if (nodeEnd <= start || nodeStart >= end) {
+      result.push(node);
+      continue;
+    }
+    const marks = node.marks ?? [];
+    const covStart = Math.max(start, nodeStart) - nodeStart;
+    const covEnd = Math.min(end, nodeEnd) - nodeStart;
+    if (covStart > 0) {
+      result.push({
+        type: "text",
+        text: node.text.slice(0, covStart),
+        ...(marks.length ? { marks } : {}),
+      });
+    }
+    const nextMarks = transform(marks);
+    result.push({
+      type: "text",
+      text: node.text.slice(covStart, covEnd),
+      ...(nextMarks.length ? { marks: nextMarks } : {}),
+    });
+    if (covEnd < len) {
+      result.push({
+        type: "text",
+        text: node.text.slice(covEnd),
+        ...(marks.length ? { marks } : {}),
+      });
+    }
+  }
+  return mergeAdjacentInlineNodes(result);
+}
+
+/**
+ * Locate the contiguous run of link-marked text surrounding character `offset`.
+ * Returns the run's [start, end) bounds and href, or null when `offset` is not
+ * inside a link.
+ */
+export function findLinkRangeAt(
+  nodes: InlineNode[],
+  offset: number,
+): { start: number; end: number; href: string } | null {
+  // Precompute each node's [start, end) bounds and link href (if any).
+  const spans = nodes.map((node) => {
+    const link = (node.marks ?? []).find((m) => m.type === "link");
+    return { len: node.text.length, href: link?.type === "link" ? link.href : null };
+  });
+  let pos = 0;
+  const bounds = spans.map((s) => {
+    const start = pos;
+    pos += s.len;
+    return { start, end: pos, href: s.href };
+  });
+
+  // Locate the link-bearing node the caret sits in (endpoints count as inside).
+  const hitIndex = bounds.findIndex(
+    (b) => b.href !== null && offset >= b.start && offset <= b.end,
+  );
+  if (hitIndex === -1) return null;
+
+  const href = bounds[hitIndex].href as string;
+  let start = bounds[hitIndex].start;
+  let end = bounds[hitIndex].end;
+  for (let i = hitIndex - 1; i >= 0 && bounds[i].href === href; i--) {
+    start = bounds[i].start;
+  }
+  for (let i = hitIndex + 1; i < bounds.length && bounds[i].href === href; i++) {
+    end = bounds[i].end;
+  }
+  return { start, end, href };
+}
+
+// ---------------------------------------------------------------------------
 
 /** Return true if a block carries no text content. */
 function isBlockEmpty(block: BlockNode): boolean {
@@ -425,7 +689,8 @@ function isBlockEmpty(block: BlockNode): boolean {
 
 // Editor-specific base — contentEditable mechanics only.
 // Typography styles (size, color, weight) come from typographyStyles() below.
-// Collapse empty unfocused blocks to match ArticleRenderer layout; expand on focus for caret room.
+// Empty blocks keep their natural single-line height (via the :empty::before
+// line box) so they stay clickable to focus; only reserve caret room on focus.
 const editableBaseStyle = css({
   focusVisibleRing: "none",
   minHeight: 0,
@@ -433,10 +698,6 @@ const editableBaseStyle = css({
   wordBreak: "break-word",
   "&:focus": {
     minHeight: "1.5em",
-  },
-  "&[data-empty]:not(:focus)": {
-    height: 0,
-    overflow: "hidden",
   },
   "&:empty::before": {
     content: "attr(data-placeholder)",
@@ -574,10 +835,36 @@ const editorCaptionStyle = cx(
     width: "full",
     textAlign: "center",
     minHeight: "1.5em",
-    "&[data-empty]:not(:focus)": {
-      height: "auto",
-      overflow: "visible",
+    "&:empty::before, &[data-empty]::before": {
+      content: "attr(data-placeholder)",
+      color: "text.default/40",
+      pointerEvents: "none",
     },
+  }),
+);
+
+// Blockquote citation — left-aligned beneath the quote text (unlike the
+// centered media/component captions).
+const editorBlockquoteCaptionStyle = cx(
+  editableBaseStyle,
+  articleBlockquoteCite(),
+  css({
+    minHeight: "1.5em",
+    "&:empty::before, &[data-empty]::before": {
+      content: "attr(data-placeholder)",
+      color: "text.default/40",
+      pointerEvents: "none",
+    },
+  }),
+);
+
+// Subheading eyebrow — above the heading. The recipe reveals the brand gradient
+// once populated; while empty it falls back to the placeholder colour.
+const editorSubheadingCaptionStyle = cx(
+  editableBaseStyle,
+  articleSubheadingCaption(),
+  css({
+    minHeight: "1.5em",
     "&:empty::before, &[data-empty]::before": {
       content: "attr(data-placeholder)",
       color: "text.default/40",
@@ -591,6 +878,11 @@ const editorHrWrapperStyle = css({
   focusVisibleRing: "none",
   cursor: "default",
 });
+
+// Numbered-list item content — contentEditable mechanics + shared prose recipe.
+const editorListItemContentStyle = cx(editableBaseStyle, articleListItemContent());
+const editorListMarkerStyle = listMarker();
+const editorListItemShellStyle = articleListItemShell();
 
 // ---------------------------------------------------------------------------
 // EditableBlock
@@ -646,6 +938,14 @@ interface EditableBlockProps {
   onInsertParagraphBefore?: () => void;
   /** Insert an empty paragraph after this block, or focus the trailing one. */
   onInsertParagraphAfter?: () => void;
+  /** Insert an empty numbered-list item immediately before this list item. */
+  onInsertListItemBefore?: () => void;
+  /** Insert an empty numbered-list item immediately after this list item. */
+  onInsertListItemAfter?: () => void;
+  /** 1-based position of this block within its contiguous numbered-list run. */
+  listOrdinal?: number;
+  /** Total number of items in this block's numbered-list run (for zero-padding). */
+  listCount?: number;
   elRef: (el: HTMLElement | null) => void;
 }
 
@@ -673,6 +973,10 @@ function EditableBlock({
   onChangeImage,
   onInsertParagraphBefore,
   onInsertParagraphAfter,
+  onInsertListItemBefore,
+  onInsertListItemAfter,
+  listOrdinal,
+  listCount,
   elRef,
 }: EditableBlockProps) {
   const placeholder =
@@ -764,6 +1068,32 @@ function EditableBlock({
     sel.addRange(range);
   }, []);
 
+  // From a caption, move focus back to the element it captions: the showcase
+  // media (image/component) when present, otherwise the blockquote text.
+  const focusCaptionOrigin = useCallback(() => {
+    const media = showcaseMediaRef.current;
+    if (media) {
+      media.focus();
+      return;
+    }
+    const content = contentRef.current;
+    if (!content) return;
+    content.focus();
+    if (!content.isContentEditable) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    const node = lastTextNode(content);
+    if (node) {
+      range.setStart(node, node.length);
+    } else {
+      range.selectNodeContents(content);
+    }
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, []);
+
   const handleShowcaseMediaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
       switch (e.key) {
@@ -833,7 +1163,13 @@ function EditableBlock({
   }, [block]);
 
   useEffect(() => {
-    if (block.type !== "image" && block.type !== "component") return;
+    if (
+      block.type !== "image" &&
+      block.type !== "component" &&
+      block.type !== "blockquote" &&
+      block.type !== "heading"
+    )
+      return;
     const el = captionRef.current;
     if (!el || document.activeElement === el) return;
     el.innerText = block.caption ?? "";
@@ -939,6 +1275,18 @@ function EditableBlock({
         }
       }
 
+      // ArrowUp from a subheading's first line → its eyebrow caption.
+      if (
+        e.key === "ArrowUp" &&
+        !e.shiftKey &&
+        block.type === "heading" &&
+        isCaretAtFirstLine(e.currentTarget)
+      ) {
+        e.preventDefault();
+        focusCaption("end");
+        return;
+      }
+
       // ArrowUp at the first visual line → move to previous block.
       if (
         e.key === "ArrowUp" &&
@@ -948,6 +1296,18 @@ function EditableBlock({
       ) {
         e.preventDefault();
         onArrowUp();
+        return;
+      }
+
+      // ArrowDown from a blockquote's last line → its citation caption.
+      if (
+        e.key === "ArrowDown" &&
+        !e.shiftKey &&
+        block.type === "blockquote" &&
+        isCaretAtLastLine(e.currentTarget)
+      ) {
+        e.preventDefault();
+        focusCaption("start");
         return;
       }
 
@@ -963,6 +1323,18 @@ function EditableBlock({
         return;
       }
 
+      // ArrowLeft at the start of a subheading → its eyebrow caption.
+      if (
+        e.key === "ArrowLeft" &&
+        !e.shiftKey &&
+        block.type === "heading" &&
+        isCaretAtStart(e.currentTarget)
+      ) {
+        e.preventDefault();
+        focusCaption("end");
+        return;
+      }
+
       // ArrowLeft at the very start of a block → move to end of previous block.
       if (
         e.key === "ArrowLeft" &&
@@ -972,6 +1344,18 @@ function EditableBlock({
       ) {
         e.preventDefault();
         onArrowLeft();
+        return;
+      }
+
+      // ArrowRight at the end of a blockquote → its citation caption.
+      if (
+        e.key === "ArrowRight" &&
+        !e.shiftKey &&
+        block.type === "blockquote" &&
+        isCaretAtEnd(e.currentTarget)
+      ) {
+        e.preventDefault();
+        focusCaption("start");
         return;
       }
 
@@ -987,11 +1371,46 @@ function EditableBlock({
         return;
       }
 
+      // Numbered-list Enter behaviour (caret-position dependent).
+      if (e.key === "Enter" && !e.shiftKey && block.type === "list_item") {
+        e.preventDefault();
+        // Empty item → exit the list, converting to a paragraph.
+        if (isBlockEmpty(block)) {
+          onChange({ type: "paragraph", children: [{ type: "text", text: "" }] });
+          onConvertedToParagraph?.();
+          return;
+        }
+        // Caret at start → add an empty item before; keep editing this one.
+        if (isCaretAtStart(e.currentTarget) && onInsertListItemBefore) {
+          // This element is reused (index-based key) as the new empty item;
+          // its text lives on in the store on the block that shifts down, so
+          // clear the DOM now — the focus guard would otherwise skip the sync.
+          e.currentTarget.innerHTML = "";
+          onInsertListItemBefore();
+          return;
+        }
+        // Caret at end → add a fresh empty item after.
+        if (isCaretAtEnd(e.currentTarget) && onInsertListItemAfter) {
+          onInsertListItemAfter();
+          return;
+        }
+        // Caret in the middle → split into two items at the caret.
+        const { before, after } = getCaretSplitHtml(e.currentTarget);
+        e.currentTarget.innerHTML = before;
+        onEnter(before, after);
+        return;
+      }
+
       // Enter → insert paragraph above at caret start; otherwise split at caret.
       // Code blocks keep Enter as a literal newline.
       if (e.key === "Enter" && !e.shiftKey && block.type !== "code_block") {
         e.preventDefault();
         if (isCaretAtStart(e.currentTarget) && onInsertParagraphBefore) {
+          // For a same-type block (paragraph) the index-based key reuses this
+          // element as the new empty block; its content survives in the store
+          // on the block that shifts down. Clear the DOM now so the reused
+          // element doesn't keep stale text the focus-guarded sync won't wipe.
+          e.currentTarget.innerHTML = "";
           onInsertParagraphBefore();
           return;
         }
@@ -1019,6 +1438,7 @@ function EditableBlock({
         isCaretAtStart(e.currentTarget) &&
         (block.type === "heading" ||
           block.type === "blockquote" ||
+          block.type === "list_item" ||
           block.type === "code_block")
       ) {
         e.preventDefault();
@@ -1075,12 +1495,17 @@ function EditableBlock({
       isSlashActive,
       onArrowUp,
       onArrowDown,
+      onArrowLeft,
+      onArrowRight,
       onMergeWithPrev,
       onMergeWithNext,
       onConvertedToParagraph,
       onShiftArrowUp,
       onShiftArrowDown,
       onInsertParagraphBefore,
+      onInsertListItemBefore,
+      onInsertListItemAfter,
+      focusCaption,
     ],
   );
 
@@ -1172,7 +1597,13 @@ function EditableBlock({
 
   const handleCaptionInput = useCallback(
     (e: React.FormEvent<HTMLElement>) => {
-      if (block.type !== "image" && block.type !== "component") return;
+      if (
+        block.type !== "image" &&
+        block.type !== "component" &&
+        block.type !== "blockquote" &&
+        block.type !== "heading"
+      )
+        return;
       const el = e.currentTarget;
       const text = (el.innerText || el.textContent || "").replace(/\n$/, "");
       if (text.trim().length === 0) {
@@ -1208,7 +1639,7 @@ function EditableBlock({
         isCaretAtStart(e.currentTarget)
       ) {
         e.preventDefault();
-        showcaseMediaRef.current?.focus();
+        focusCaptionOrigin();
         return;
       }
       if (
@@ -1226,7 +1657,7 @@ function EditableBlock({
         isCaretAtStart(e.currentTarget)
       ) {
         e.preventDefault();
-        showcaseMediaRef.current?.focus();
+        focusCaptionOrigin();
         return;
       }
       if (
@@ -1239,7 +1670,74 @@ function EditableBlock({
         return;
       }
     },
-    [onArrowDown, onArrowLeft, onArrowRight, onInsertParagraphAfter],
+    [onArrowDown, onArrowRight, onInsertParagraphAfter, focusCaptionOrigin],
+  );
+
+  // Move the caret to the start of the block's own editable content (used by
+  // the subheading eyebrow, which sits *above* the heading text).
+  const focusContentStart = useCallback(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    content.focus();
+    if (!content.isContentEditable) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    const node = firstTextNode(content);
+    if (node) {
+      range.setStart(node, 0);
+    } else {
+      range.setStart(content, 0);
+    }
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, []);
+
+  // Keydown handler for a caption that sits *above* its block (the subheading
+  // eyebrow). Down/Right/Enter descend into the heading; Up/Left at the start
+  // leave for the previous block.
+  const handleHeadingCaptionKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.stopPropagation();
+        return;
+      }
+      if (e.key === "Enter" && e.shiftKey) {
+        e.preventDefault();
+        document.execCommand("insertLineBreak");
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        focusContentStart();
+        return;
+      }
+      if (
+        (e.key === "ArrowDown" || e.key === "ArrowRight") &&
+        !e.shiftKey &&
+        isCaretAtEnd(e.currentTarget)
+      ) {
+        e.preventDefault();
+        focusContentStart();
+        return;
+      }
+      if (e.key === "ArrowUp" && !e.shiftKey && isCaretAtStart(e.currentTarget)) {
+        e.preventDefault();
+        onArrowUp?.();
+        return;
+      }
+      if (
+        e.key === "ArrowLeft" &&
+        !e.shiftKey &&
+        isCaretAtStart(e.currentTarget)
+      ) {
+        e.preventDefault();
+        onArrowUp?.();
+        return;
+      }
+    },
+    [onArrowUp, focusContentStart],
   );
 
   const handlePaste = useCallback(
@@ -1307,6 +1805,7 @@ function EditableBlock({
         block.type === "paragraph" ||
         block.type === "heading" ||
         block.type === "blockquote" ||
+        block.type === "list_item" ||
         block.type === "code_block";
       if (e.key === "/" && isTextBlock) {
         // Open the slash menu whenever "/" is the first character typed —
@@ -1416,23 +1915,35 @@ function EditableBlock({
 
   if (block.type === "heading") {
     return (
-      <h2
-        ref={combinedRef as React.RefCallback<HTMLHeadingElement>}
-        className={cx(
-          editableBaseStyle,
-          typographyStyles({ type: "subheading" }),
-        )}
-        contentEditable
-        suppressContentEditableWarning
-        onKeyDown={handleKeyDown}
-        onInput={handleInput}
-        onKeyUp={handleKeyUp}
-        onPaste={handlePaste}
-        data-placeholder={placeholder}
-        data-block-index={blockIndex}
-        data-empty={isBlockEmpty(block) ? "" : undefined}
-        {...slashAnchorProps}
-      />
+      <div className={articleHeadingShell()}>
+        <span
+          ref={captionRef}
+          className={editorSubheadingCaptionStyle}
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Add caption..."
+          data-empty={!block.caption?.trim() ? "" : undefined}
+          onInput={handleCaptionInput}
+          onKeyDown={handleHeadingCaptionKeyDown}
+        />
+        <h2
+          ref={combinedRef as React.RefCallback<HTMLHeadingElement>}
+          className={cx(
+            editableBaseStyle,
+            typographyStyles({ type: "subheading" }),
+          )}
+          contentEditable
+          suppressContentEditableWarning
+          onKeyDown={handleKeyDown}
+          onInput={handleInput}
+          onKeyUp={handleKeyUp}
+          onPaste={handlePaste}
+          data-placeholder={placeholder}
+          data-block-index={blockIndex}
+          data-empty={isBlockEmpty(block) ? "" : undefined}
+          {...slashAnchorProps}
+        />
+      </div>
     );
   }
 
@@ -1459,20 +1970,33 @@ function EditableBlock({
           className={articleBlockquoteMark({ theme: "dark" })}
           aria-hidden
         />
-        <blockquote
-          ref={combinedRef as React.RefCallback<HTMLElement>}
-          className={cx(editableBaseStyle, articleBlockquote())}
-          contentEditable
-          suppressContentEditableWarning
-          onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          onKeyUp={handleKeyUp}
-          onPaste={handlePaste}
-          data-placeholder={placeholder}
-          data-block-index={blockIndex}
-          data-empty={isBlockEmpty(block) ? "" : undefined}
-          {...slashAnchorProps}
-        />
+        <div className={articleBlockquoteBody()}>
+          <blockquote
+            ref={combinedRef as React.RefCallback<HTMLElement>}
+            className={cx(editableBaseStyle, articleBlockquote())}
+            contentEditable
+            suppressContentEditableWarning
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            onKeyUp={handleKeyUp}
+            onPaste={handlePaste}
+            data-placeholder={placeholder}
+            data-block-index={blockIndex}
+            data-empty={isBlockEmpty(block) ? "" : undefined}
+            {...slashAnchorProps}
+          />
+          <cite
+            ref={captionRef}
+            className={editorBlockquoteCaptionStyle}
+            contentEditable
+            suppressContentEditableWarning
+            data-placeholder="Add citation..."
+            data-block-index={blockIndex}
+            data-empty={!block.caption?.trim() ? "" : undefined}
+            onInput={handleCaptionInput}
+            onKeyDown={handleCaptionKeyDown}
+          />
+        </div>
       </div>
     );
   }
@@ -1549,7 +2073,7 @@ function EditableBlock({
           className={editorCaptionStyle}
           contentEditable
           suppressContentEditableWarning
-          data-placeholder="Caption media..."
+          data-placeholder="Add caption..."
           data-block-index={blockIndex}
           data-empty={!block.caption?.trim() ? "" : undefined}
           onInput={handleCaptionInput}
@@ -1623,13 +2147,47 @@ function EditableBlock({
           className={editorCaptionStyle}
           contentEditable
           suppressContentEditableWarning
-          data-placeholder="Caption component..."
+          data-placeholder="Add caption..."
           data-block-index={blockIndex}
           data-empty={!block.caption?.trim() ? "" : undefined}
           onInput={handleCaptionInput}
           onKeyDown={handleCaptionKeyDown}
         />
       </figure>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Numbered-list item
+  // ---------------------------------------------------------------------------
+
+  if (block.type === "list_item") {
+    // Zero-pad each ordinal to the digit width of the run's largest number so
+    // "1".."9" render as "01".."09" once the list reaches double digits.
+    const markerLabel =
+      listOrdinal && listCount
+        ? String(listOrdinal).padStart(String(listCount).length, "0")
+        : String(listOrdinal ?? 1);
+
+    return (
+      <div className={editorListItemShellStyle} data-list-item="">
+        <span className={editorListMarkerStyle} aria-hidden>
+          {markerLabel}
+        </span>
+        <p
+          ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
+          className={editorListItemContentStyle}
+          contentEditable
+          suppressContentEditableWarning
+          onKeyDown={handleKeyDown}
+          onInput={handleInput}
+          onKeyUp={handleKeyUp}
+          onPaste={handlePaste}
+          data-block-index={blockIndex}
+          data-empty={isBlockEmpty(block) ? "" : undefined}
+          {...slashAnchorProps}
+        />
+      </div>
     );
   }
 
@@ -1660,15 +2218,23 @@ function EditableBlock({
 // ---------------------------------------------------------------------------
 
 /**
- * Non-editable block types have no caret — always ensure an editable paragraph
- * follows them so the author can continue typing after inserting one.
+ * Ensure an editable paragraph trails certain terminal blocks so the author can
+ * always continue typing after them. This covers caret-less blocks
+ * (horizontal_rule, image, component) as well as numbered lists — a list_item
+ * last block would otherwise trap the author in the list with no plain block to
+ * click into below it.
  */
 function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
   if (blocks.length === 0) {
     return [{ type: "paragraph", children: [{ type: "text", text: "" }] }];
   }
   const last = blocks[blocks.length - 1];
-  if (last.type === "horizontal_rule" || last.type === "image" || last.type === "component") {
+  if (
+    last.type === "horizontal_rule" ||
+    last.type === "image" ||
+    last.type === "component" ||
+    last.type === "list_item"
+  ) {
     return [
       ...blocks,
       { type: "paragraph", children: [{ type: "text", text: "" }] },
@@ -1705,6 +2271,38 @@ interface ArticleEditorProps {
   initialPost?: Post;
   category?: PostCategory;
 }
+
+/** Viewport-relative rect used to anchor the floating selection toolbar. */
+interface ToolbarRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface ToolbarState {
+  mode: SelectionToolbarMode;
+  /** Index of the block the toolbar operates on. */
+  index: number;
+  /** Anchor rect in viewport coordinates. */
+  rect: ToolbarRect;
+  /** Character range within the block the toolbar targets. */
+  range: { start: number; end: number };
+  /** Existing link href (link-view / link-edit). */
+  href?: string;
+  /** Mark types the selection fully carries (drives active button state). */
+  activeMarks: Set<Mark["type"]>;
+}
+
+const TOOLBAR_MARK_TYPES: Mark["type"][] = [
+  "bold",
+  "italic",
+  "code",
+  "underline",
+  "wavy_underline",
+  "strikethrough",
+  "link",
+];
 
 export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   const {
@@ -1988,6 +2586,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     number | null
   >(null);
 
+  // Floating selection toolbar (formatting / link editing / link actions).
+  const [toolbar, setToolbar] = useState<ToolbarState | null>(null);
+  // Latest selection tracker — assigned every render so the once-registered
+  // document listener always calls the current closure (needs live blocks).
+  const trackSelectionRef = useRef<() => void>(() => {});
+
   // -------------------------------------------------------------------------
   // Focus helpers
   // -------------------------------------------------------------------------
@@ -2130,12 +2734,16 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         ? ({ ...current, children: htmlToNodes(beforeHtml) } as BlockNode)
         : current;
 
-    // The new block inherits the current block's type for headings only.
-    // All other block types (including blockquote) split into a paragraph.
+    // The new block inherits the current block's type for headings and list
+    // items only. All other block types (including blockquote) split into a
+    // paragraph.
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
       if (current.type === "heading") {
         return { type: "heading", level: current.level, children: afterNodes };
+      }
+      if (current.type === "list_item") {
+        return { type: "list_item", children: afterNodes };
       }
       return { type: "paragraph", children: afterNodes };
     })();
@@ -2182,6 +2790,43 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     updateBlocks([
       ...blocks.slice(0, index + 1),
       emptyParagraphBlock(),
+      ...blocks.slice(index + 1),
+    ]);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    setTimeout(() => {
+      const el = blockRefs.current[index + 1];
+      if (el) focusBlockAtStart(el);
+    }, 0);
+  }
+
+  function emptyListItemBlock(): BlockNode {
+    return { type: "list_item", children: [{ type: "text", text: "" }] };
+  }
+
+  /** Enter at the start of a list item: prepend an empty item, keep editing this one. */
+  function insertListItemBefore(index: number) {
+    updateBlocks([
+      ...blocks.slice(0, index),
+      emptyListItemBlock(),
+      ...blocks.slice(index),
+    ]);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    setTimeout(() => {
+      // The original (content) item shifted down to index + 1.
+      const el = blockRefs.current[index + 1];
+      if (el) focusBlockAtStart(el);
+    }, 0);
+  }
+
+  /** Enter at the end of a list item: append a fresh empty item and focus it. */
+  function insertListItemAfter(index: number) {
+    updateBlocks([
+      ...blocks.slice(0, index + 1),
+      emptyListItemBlock(),
       ...blocks.slice(index + 1),
     ]);
     cancelHistoryDebounce();
@@ -2490,6 +3135,8 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       newBlock = { type: "paragraph", children: keptChildren };
     } else if (type === "blockquote") {
       newBlock = { type: "blockquote", children: keptChildren };
+    } else if (type === "list_item") {
+      newBlock = { type: "list_item", children: keptChildren };
     } else if (type === "code_block") {
       // Code blocks store plain text only — flatten marks away.
       const plainText = keptChildren.map((n) => n.text).join("");
@@ -2574,6 +3221,232 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     setSlashQuery("");
   }
 
+  // -------------------------------------------------------------------------
+  // Selection toolbar
+  // -------------------------------------------------------------------------
+
+  /** Resolve the block index (>= 0) whose element contains `node`, else null. */
+  function toolbarBlockIndex(node: Node | null): number | null {
+    if (!node) return null;
+    const el =
+      node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : node.parentElement;
+    if (!el) return null;
+    for (let i = 0; i < blockRefs.current.length; i++) {
+      if (blockRefs.current[i]?.contains(el)) return i;
+    }
+    return null;
+  }
+
+  function rectFromRange(range: Range): ToolbarRect {
+    // jsdom's Range has no getBoundingClientRect; degrade to a zero rect.
+    const r =
+      typeof range.getBoundingClientRect === "function"
+        ? range.getBoundingClientRect()
+        : { left: 0, top: 0, width: 0, height: 0 };
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }
+
+  function domRangeForOffsets(
+    el: HTMLElement,
+    start: number,
+    end: number,
+  ): Range | null {
+    const s = findTextPositionAtOffset(el, start);
+    const e = findTextPositionAtOffset(el, end);
+    if (!s || !e) return null;
+    const range = document.createRange();
+    range.setStart(s.node, s.offset);
+    range.setEnd(e.node, e.offset);
+    return range;
+  }
+
+  // Recomputes the toolbar from the live selection. Called on selectionchange,
+  // scroll and resize. Skipped while the slash menu or the link editor is open.
+  function trackSelection() {
+    if (slashAnchor) {
+      setToolbar(null);
+      return;
+    }
+    // Keep the link editor open — its input holds focus, so the editor
+    // selection is momentarily gone.
+    if (toolbar?.mode === "link-edit") return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      setToolbar(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const index = toolbarBlockIndex(range.startContainer);
+    if (index === null) {
+      setToolbar(null);
+      return;
+    }
+    const el = blockRefs.current[index];
+    const block = blocks[index];
+    if (
+      !el ||
+      !block ||
+      !("children" in block) ||
+      block.type === "code_block" ||
+      !el.contains(range.endContainer)
+    ) {
+      setToolbar(null);
+      return;
+    }
+    const offsets = getSelectionOffsets(el);
+    if (!offsets) {
+      setToolbar(null);
+      return;
+    }
+    const nodes = domToInlineNodes(el);
+
+    if (offsets.start !== offsets.end) {
+      const activeMarks = new Set(
+        TOOLBAR_MARK_TYPES.filter((m) =>
+          rangeHasMark(nodes, offsets.start, offsets.end, m),
+        ),
+      );
+      setToolbar({
+        mode: "format",
+        index,
+        rect: rectFromRange(range),
+        range: offsets,
+        activeMarks,
+      });
+      return;
+    }
+
+    // Collapsed caret — show the link actions popover when inside a link.
+    const link = findLinkRangeAt(nodes, offsets.start);
+    if (link) {
+      const linkRange = domRangeForOffsets(el, link.start, link.end);
+      setToolbar({
+        mode: "link-view",
+        index,
+        rect: rectFromRange(linkRange ?? range),
+        range: { start: link.start, end: link.end },
+        href: link.href,
+        activeMarks: new Set(),
+      });
+      return;
+    }
+    setToolbar(null);
+  }
+  trackSelectionRef.current = trackSelection;
+
+  function handleToggleMark(type: ToggleableMark) {
+    if (!toolbar) return;
+    const { index } = toolbar;
+    const el = blockRefs.current[index];
+    const block = blocks[index];
+    if (!el || !block || !("children" in block)) return;
+    const off = getSelectionOffsets(el) ?? toolbar.range;
+    if (off.start === off.end) return;
+    const nodes = domToInlineNodes(el);
+    const has = rangeHasMark(nodes, off.start, off.end, type);
+    const next = transformMarksInRange(nodes, off.start, off.end, (marks) =>
+      has
+        ? marks.filter((m) => m.type !== type)
+        : [...marks.filter((m) => m.type !== type), { type } as Mark],
+    );
+    el.innerHTML = inlineNodesToHtml(next);
+    updateBlock(index, { ...block, children: next });
+    setSelectionRange(el, off.start, off.end);
+  }
+
+  function handleStartLink() {
+    if (!toolbar) return;
+    const { index } = toolbar;
+    const el = blockRefs.current[index];
+    if (!el) return;
+    const off = getSelectionOffsets(el) ?? toolbar.range;
+    if (off.start === off.end) return;
+    const linkRange = domRangeForOffsets(el, off.start, off.end);
+    const nodes = domToInlineNodes(el);
+    const existing = findLinkRangeAt(nodes, off.start);
+    setToolbar({
+      mode: "link-edit",
+      index,
+      rect: linkRange ? rectFromRange(linkRange) : toolbar.rect,
+      range: off,
+      href: existing?.href,
+      activeMarks: new Set(),
+    });
+  }
+
+  function handleApplyLink(href: string) {
+    if (!toolbar) return;
+    const { index, range } = toolbar;
+    const el = blockRefs.current[index];
+    const block = blocks[index];
+    if (!el || !block || !("children" in block) || range.start === range.end) {
+      setToolbar(null);
+      return;
+    }
+    const nodes = domToInlineNodes(el);
+    const next = transformMarksInRange(nodes, range.start, range.end, (marks) => [
+      ...marks.filter((m) => m.type !== "link"),
+      { type: "link", href } as Mark,
+    ]);
+    el.innerHTML = inlineNodesToHtml(next);
+    updateBlock(index, { ...block, children: next });
+    // Collapse into the link so the link-view popover surfaces next.
+    setSelectionRange(el, range.end, range.end);
+  }
+
+  function handleRemoveLink() {
+    if (!toolbar) return;
+    const { index, range } = toolbar;
+    const el = blockRefs.current[index];
+    const block = blocks[index];
+    if (!el || !block || !("children" in block)) {
+      setToolbar(null);
+      return;
+    }
+    const nodes = domToInlineNodes(el);
+    const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
+      marks.filter((m) => m.type !== "link"),
+    );
+    el.innerHTML = inlineNodesToHtml(next);
+    updateBlock(index, { ...block, children: next });
+    setSelectionRange(el, range.end, range.end);
+    setToolbar(null);
+  }
+
+  function handleGotoLink() {
+    if (!toolbar?.href) return;
+    window.open(toolbar.href, "_blank", "noopener,noreferrer");
+  }
+
+  function handleEditLink() {
+    if (!toolbar) return;
+    setToolbar({ ...toolbar, mode: "link-edit" });
+  }
+
+  function handleToolbarDismiss() {
+    // Escape fires no selectionchange, so simply clearing keeps it hidden;
+    // an outside pointerdown moves the caret and the tracker recomputes.
+    setToolbar(null);
+  }
+
+  // Register selection tracking once — the ref always holds the latest closure.
+  useEffect(() => {
+    function run() {
+      trackSelectionRef.current();
+    }
+    document.addEventListener("selectionchange", run);
+    window.addEventListener("scroll", run, true);
+    window.addEventListener("resize", run);
+    return () => {
+      document.removeEventListener("selectionchange", run);
+      window.removeEventListener("scroll", run, true);
+      window.removeEventListener("resize", run);
+    };
+  }, []);
+
   // ── Cross-block Delete / Backspace handler (assigned every render via ref) ──
   //
   // Handles Delete / Backspace when the selection spans multiple editing hosts.
@@ -2657,6 +3530,40 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       }, 0);
     } else {
       // ── Selection starts inside a block ──────────────────────────────────────
+
+      // A non-text start block (horizontal_rule / image / component) has no
+      // editable host — the selection boundary merely landed on it. Preserve it
+      // untouched and rebuild only the trailing (after-selection) content.
+      // Writing to startEl.innerHTML here would wipe the rendered <hr>/figure,
+      // which never re-syncs (its useEffect skips non-text blocks), so the block
+      // would visually vanish even though it stays in the model.
+      if (!("children" in blocks[startIdx])) {
+        tempDiv.appendChild(afterRange.cloneContents());
+        const afterNodes = htmlToNodes(tempDiv.innerHTML);
+        const hasTail = afterNodes.some((n) => n.text.trim() !== "");
+        const endBlock = blocks[endIdx];
+        const tail: BlockNode[] = hasTail
+          ? [
+              "children" in endBlock
+                ? ({ ...endBlock, children: afterNodes } as BlockNode)
+                : { type: "paragraph", children: afterNodes },
+            ]
+          : [];
+        const newBlocks = [
+          ...blocks.slice(0, startIdx + 1),
+          ...tail,
+          ...blocks.slice(endIdx + 1),
+        ];
+        updateBlocks(newBlocks);
+        cancelHistoryDebounce();
+        pushHistoryNow();
+        setTimeout(() => {
+          const el = blockRefs.current[startIdx + 1];
+          if (el) focusBlockAtStart(el);
+        }, 0);
+        return;
+      }
+
       tempDiv.appendChild(beforeRange.cloneContents());
       const beforeHtml = tempDiv.innerHTML;
 
@@ -2726,6 +3633,28 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
+
+  // Ordinal + run length for each block that belongs to a numbered list. Each
+  // contiguous run of list_item blocks is one list; the run length is its
+  // largest number, which drives zero-padding width in the marker.
+  const listInfo: Array<{ ordinal: number; count: number } | null> = (() => {
+    const info: Array<{ ordinal: number; count: number } | null> = new Array(
+      blocks.length,
+    ).fill(null);
+    let i = 0;
+    while (i < blocks.length) {
+      if (blocks[i].type === "list_item") {
+        let j = i;
+        while (j < blocks.length && blocks[j].type === "list_item") j++;
+        const count = j - i;
+        for (let k = i; k < j; k++) info[k] = { ordinal: k - i + 1, count };
+        i = j;
+      } else {
+        i++;
+      }
+    }
+    return info;
+  })();
 
   return (
     <>
@@ -2850,6 +3779,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
               ? () => insertParagraphAfter(i)
               : undefined
           }
+          onInsertListItemBefore={() => insertListItemBefore(i)}
+          onInsertListItemAfter={() => insertListItemAfter(i)}
+          listOrdinal={listInfo[i]?.ordinal}
+          listCount={listInfo[i]?.count}
           elRef={(el) => {
             blockRefs.current[i] = el;
           }}
@@ -2861,7 +3794,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           query={slashQuery}
           allowedTypes={
             slashAnchor.hasExistingContent
-              ? ["heading", "paragraph", "blockquote", "code_block"]
+              ? ["heading", "paragraph", "blockquote", "list_item", "code_block"]
               : undefined
           }
           excludeType={
@@ -2871,6 +3804,35 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           onSelectComponent={handleSlashSelectComponent}
           onDismiss={handleSlashDismiss}
         />
+      )}
+
+      {toolbar && (
+        <>
+          <div
+            data-selection-anchor=""
+            aria-hidden
+            style={{
+              position: "fixed",
+              left: toolbar.rect.left,
+              top: toolbar.rect.top,
+              width: toolbar.rect.width,
+              height: toolbar.rect.height,
+              pointerEvents: "none",
+            }}
+          />
+          <SelectionToolbar
+            mode={toolbar.mode}
+            activeMarks={toolbar.activeMarks}
+            linkHref={toolbar.href}
+            onToggleMark={handleToggleMark}
+            onStartLink={handleStartLink}
+            onApplyLink={handleApplyLink}
+            onRemoveLink={handleRemoveLink}
+            onGotoLink={handleGotoLink}
+            onEditLink={handleEditLink}
+            onDismiss={handleToolbarDismiss}
+          />
+        </>
       )}
 
       <ImageInsertDialog

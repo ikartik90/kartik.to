@@ -9,9 +9,20 @@ import { HighlightedCode } from "@/components/highlighted-code";
 import {
   inlineCode,
   articleLink,
+  articleUnderline,
+  articleWavyUnderline,
+  articleStrikethrough,
   articleBlockquote,
+  articleBlockquoteBody,
+  articleBlockquoteCite,
   articleBlockquoteMark,
   articleBlockquoteShell,
+  articleHeadingShell,
+  articleSubheadingCaption,
+  articleList,
+  articleListItemShell,
+  listMarker,
+  articleListItemContent,
   codeBlock,
   articleShowcase,
   articleImg,
@@ -58,6 +69,15 @@ function renderInlineNode(node: InlineNode, index: number): React.ReactNode {
       case "code":
         content = <code className={inlineCode()}>{content}</code>;
         break;
+      case "underline":
+        content = <u className={articleUnderline()}>{content}</u>;
+        break;
+      case "wavy_underline":
+        content = <u className={articleWavyUnderline()}>{content}</u>;
+        break;
+      case "strikethrough":
+        content = <s className={articleStrikethrough()}>{content}</s>;
+        break;
       case "link":
         content = (
           <a href={mark.href} className={articleLink()}>
@@ -86,10 +106,17 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
 
     case "heading": {
       const { tag, type } = HEADING_MAP[node.level] ?? HEADING_MAP[2];
-      return (
-        <Typography key={index} tag={tag} type={type}>
+      const heading = (
+        <Typography tag={tag} type={type}>
           {node.children.map(renderInlineNode)}
         </Typography>
+      );
+      if (!node.caption) return <React.Fragment key={index}>{heading}</React.Fragment>;
+      return (
+        <div key={index} className={articleHeadingShell()}>
+          <span className={articleSubheadingCaption()}>{node.caption}</span>
+          {heading}
+        </div>
       );
     }
 
@@ -112,9 +139,14 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
             className={articleBlockquoteMark({ theme: "dark" })}
             aria-hidden
           />
-          <blockquote className={articleBlockquote()}>
-            {node.children.map(renderInlineNode)}
-          </blockquote>
+          <div className={articleBlockquoteBody()}>
+            <blockquote className={articleBlockquote()}>
+              {node.children.map(renderInlineNode)}
+            </blockquote>
+            {node.caption && (
+              <cite className={articleBlockquoteCite()}>{node.caption}</cite>
+            )}
+          </div>
         </div>
       );
 
@@ -164,6 +196,34 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
 }
 
 // ---------------------------------------------------------------------------
+// Numbered list — consecutive list_item blocks render as one <ol>
+// ---------------------------------------------------------------------------
+
+type ListItemNode = Extract<BlockNode, { type: "list_item" }>;
+
+function renderNumberedList(
+  items: ListItemNode[],
+  key: React.Key,
+): React.ReactNode {
+  // Zero-pad each ordinal to the digit width of the largest number in the list.
+  const width = String(items.length).length;
+  return (
+    <ol key={key} className={articleList()}>
+      {items.map((item, i) => (
+        <li key={i} className={articleListItemShell()}>
+          <span className={listMarker()} aria-hidden>
+            {String(i + 1).padStart(width, "0")}
+          </span>
+          <span className={articleListItemContent()}>
+            {item.children.map(renderInlineNode)}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ArticleRenderer
 // ---------------------------------------------------------------------------
 
@@ -172,5 +232,24 @@ interface ArticleRendererProps {
 }
 
 export function ArticleRenderer({ content }: ArticleRendererProps) {
-  return <>{content.content.map(renderBlockNode)}</>;
+  const nodes = content.content;
+  const output: React.ReactNode[] = [];
+
+  let i = 0;
+  while (i < nodes.length) {
+    const node = nodes[i];
+    if (node.type === "list_item") {
+      let j = i;
+      while (j < nodes.length && nodes[j].type === "list_item") j++;
+      output.push(
+        renderNumberedList(nodes.slice(i, j) as ListItemNode[], `list-${i}`),
+      );
+      i = j;
+    } else {
+      output.push(renderBlockNode(node, i));
+      i++;
+    }
+  }
+
+  return <>{output}</>;
 }

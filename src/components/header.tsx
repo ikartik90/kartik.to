@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import { usePathname } from "next/navigation";
 import { css } from "../../styled-system/css";
 import { Typography } from "./ui/typography";
@@ -30,7 +30,10 @@ const orbitStageStyle = css({
   overflow: "visible",
 });
 
-const orbitSvgStyle = css({
+/** Plain HTML box that carries the spin. Blink composites transform
+ *  animations on HTML elements (unlike inner-SVG <g>/<svg>), so the rotation
+ *  runs on the compositor thread and stays smooth during load. */
+const orbitSpinnerStyle = css({
   position: "absolute",
   top: "-6px",
   left: "-6px",
@@ -38,6 +41,14 @@ const orbitSvgStyle = css({
   height: "60px",
   overflow: "visible",
   pointerEvents: "none",
+  transformOrigin: "center",
+});
+
+const orbitSvgStyle = css({
+  display: "block",
+  width: "60px",
+  height: "60px",
+  overflow: "visible",
 });
 
 const avatarWrapStyle = css({
@@ -69,29 +80,6 @@ export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const pathId = `brand-tagline-path-${useId().replace(/:/g, "")}`;
-  const [orbitReady, setOrbitReady] = useState(false);
-
-  useEffect(() => {
-    if (!isHome) {
-      setOrbitReady(false);
-      return;
-    }
-
-    const reducedMotion =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) return;
-
-    const enableOrbit = () => setOrbitReady(true);
-
-    if (document.readyState === "complete") {
-      enableOrbit();
-      return;
-    }
-
-    window.addEventListener("load", enableOrbit, { once: true });
-    return () => window.removeEventListener("load", enableOrbit);
-  }, [isHome]);
 
   if (!isHome) return null;
 
@@ -99,45 +87,53 @@ export function Header() {
     <header data-site-header>
       <div className={brandStyle}>
         <div className={orbitStageStyle} aria-label={TAGLINE}>
-          <svg
-            data-brand-orbit=""
-            data-brand-orbit-ready={orbitReady ? "" : undefined}
-            className={orbitSvgStyle}
+          <div
+            data-brand-orbit-spinner=""
+            className={orbitSpinnerStyle}
             style={
               {
                 "--brand-orbit-initial-angle": `${ORBIT_INITIAL_ANGLE_DEG}deg`,
               } as React.CSSProperties
             }
-            viewBox={`0 0 ${STAGE_WIDTH} ${STAGE_HEIGHT}`}
-            aria-hidden="true"
           >
-            <defs>
-              <path
-                id={pathId}
-                d={buildOrbitPath(ORBIT_CENTER_X, ORBIT_CENTER_Y, ORBIT_RADIUS)}
-              />
-            </defs>
-            <g
-              data-brand-orbit-pivot=""
-              transform={`translate(${ORBIT_CENTER_X} ${ORBIT_CENTER_Y})`}
+            <svg
+              data-brand-orbit=""
+              className={orbitSvgStyle}
+              viewBox={`0 0 ${STAGE_WIDTH} ${STAGE_HEIGHT}`}
+              aria-hidden="true"
             >
-              <g data-brand-orbit-text-group="">
-                <g
-                  transform={`translate(${-ORBIT_CENTER_X} ${-ORBIT_CENTER_Y})`}
-                >
-                  <text>
-                    <textPath
-                      href={`#${pathId}`}
-                      startOffset="0"
-                      data-brand-orbit-text=""
-                    >
-                      {TAGLINE}
-                    </textPath>
-                  </text>
+              <defs>
+                <path
+                  id={pathId}
+                  d={buildOrbitPath(
+                    ORBIT_CENTER_X,
+                    ORBIT_CENTER_Y,
+                    ORBIT_RADIUS,
+                  )}
+                />
+              </defs>
+              <g
+                data-brand-orbit-pivot=""
+                transform={`translate(${ORBIT_CENTER_X} ${ORBIT_CENTER_Y})`}
+              >
+                <g data-brand-orbit-text-group="">
+                  <g
+                    transform={`translate(${-ORBIT_CENTER_X} ${-ORBIT_CENTER_Y})`}
+                  >
+                    <text>
+                      <textPath
+                        href={`#${pathId}`}
+                        startOffset="0"
+                        data-brand-orbit-text=""
+                      >
+                        {TAGLINE}
+                      </textPath>
+                    </text>
+                  </g>
                 </g>
               </g>
-            </g>
-          </svg>
+            </svg>
+          </div>
           <span className={avatarWrapStyle}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

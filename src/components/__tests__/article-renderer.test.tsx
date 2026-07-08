@@ -71,6 +71,39 @@ describe("ArticleRenderer", () => {
       expect(heading.tagName).toBe("H1");
     });
 
+    it("renders an eyebrow caption above a subheading when present", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "heading",
+              level: 2,
+              children: [{ type: "text", text: "Section title" }],
+              caption: "Chapter One",
+            },
+          ])}
+        />,
+      );
+      const eyebrow = container.querySelector(".article-subheading-caption");
+      expect(eyebrow).not.toBeNull();
+      expect(eyebrow?.textContent).toBe("Chapter One");
+    });
+
+    it("omits the eyebrow caption when a heading has no caption", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "heading",
+              level: 2,
+              children: [{ type: "text", text: "Section title" }],
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector(".article-subheading-caption")).toBeNull();
+    });
+
     it("renders a blockquote with decorative quote mark styling", () => {
       const { container } = render(
         <ArticleRenderer
@@ -89,6 +122,37 @@ describe("ArticleRenderer", () => {
         container.querySelector(".article-blockquote-shell"),
       ).toBeDefined();
       expect(screen.getByText("A quoted thought")).toBeDefined();
+    });
+
+    it("renders a blockquote citation when a caption is present", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "blockquote",
+              children: [{ type: "text", text: "A quoted thought" }],
+              caption: "Ada Lovelace",
+            },
+          ])}
+        />,
+      );
+      const cite = container.querySelector("cite");
+      expect(cite).not.toBeNull();
+      expect(cite?.textContent).toBe("Ada Lovelace");
+    });
+
+    it("omits the blockquote citation when no caption is present", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "blockquote",
+              children: [{ type: "text", text: "A quoted thought" }],
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector("cite")).toBeNull();
     });
 
     it("renders a code block", () => {
@@ -124,6 +188,69 @@ describe("ArticleRenderer", () => {
 
       expect(container.querySelector('[data-syntax-role]')).toBeNull();
       expect(screen.getByText("plain code")).toBeDefined();
+    });
+
+    it("groups consecutive list_item blocks into a single ordered list", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "list_item", children: [{ type: "text", text: "ListItemAlpha" }] },
+            { type: "list_item", children: [{ type: "text", text: "ListItemBeta" }] },
+            { type: "list_item", children: [{ type: "text", text: "ListItemGamma" }] },
+          ])}
+        />,
+      );
+      const lists = container.querySelectorAll("ol");
+      expect(lists).toHaveLength(1);
+      expect(lists[0].querySelectorAll("li")).toHaveLength(3);
+      expect(container.textContent).toContain("ListItemAlpha");
+    });
+
+    it("does not zero-pad single-digit lists", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc(
+            Array.from({ length: 9 }, (_, i) => ({
+              type: "list_item" as const,
+              children: [{ type: "text" as const, text: `Item ${i + 1}` }],
+            })),
+          )}
+        />,
+      );
+      const markers = container.querySelectorAll(".list-marker");
+      expect(markers[0].textContent).toBe("1");
+      expect(markers[8].textContent).toBe("9");
+    });
+
+    it("zero-pads ordinals to the width of the largest number", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc(
+            Array.from({ length: 12 }, (_, i) => ({
+              type: "list_item" as const,
+              children: [{ type: "text" as const, text: `Item ${i + 1}` }],
+            })),
+          )}
+        />,
+      );
+      const markers = container.querySelectorAll(".list-marker");
+      expect(markers[0].textContent).toBe("01");
+      expect(markers[8].textContent).toBe("09");
+      expect(markers[9].textContent).toBe("10");
+      expect(markers[11].textContent).toBe("12");
+    });
+
+    it("starts a new ordered list after a non-list block interrupts the run", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "list_item", children: [{ type: "text", text: "A" }] },
+            { type: "paragraph", children: [{ type: "text", text: "break" }] },
+            { type: "list_item", children: [{ type: "text", text: "B" }] },
+          ])}
+        />,
+      );
+      expect(container.querySelectorAll("ol")).toHaveLength(2);
     });
 
     it("renders a horizontal rule", () => {
@@ -265,6 +392,71 @@ describe("ArticleRenderer", () => {
       const codes = container.querySelectorAll("p code");
       expect(codes.length).toBeGreaterThan(0);
       expect(screen.getByText("someFunction()")).toBeDefined();
+    });
+
+    it("renders underlined text", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "paragraph",
+              children: [
+                {
+                  type: "text",
+                  text: "underlined",
+                  marks: [{ type: "underline" }],
+                },
+              ],
+            },
+          ])}
+        />,
+      );
+      const u = container.querySelector("u");
+      expect(u).not.toBeNull();
+      expect(u?.hasAttribute("data-wavy")).toBe(false);
+      expect(screen.getByText("underlined")).toBeDefined();
+    });
+
+    it("renders wavy-underlined text", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "paragraph",
+              children: [
+                {
+                  type: "text",
+                  text: "wavy",
+                  marks: [{ type: "wavy_underline" }],
+                },
+              ],
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector("u")).not.toBeNull();
+      expect(screen.getByText("wavy")).toBeDefined();
+    });
+
+    it("renders strikethrough text", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "paragraph",
+              children: [
+                {
+                  type: "text",
+                  text: "struck",
+                  marks: [{ type: "strikethrough" }],
+                },
+              ],
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector("s")).not.toBeNull();
+      expect(screen.getByText("struck")).toBeDefined();
     });
 
     it("renders a link", () => {

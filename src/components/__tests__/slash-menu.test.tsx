@@ -44,6 +44,11 @@ vi.mock("@/assets/icons/border.svg", () => ({
     <svg data-testid="icon-border" {...props} />
   ),
 }));
+vi.mock("@/assets/icons/numbered-list.svg", () => ({
+  default: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg data-testid="icon-numbered-list" {...props} />
+  ),
+}));
 vi.mock("@/assets/icons/component.svg", () => ({
   default: (props: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="icon-component" {...props} />
@@ -121,13 +126,14 @@ describe("SlashMenu", () => {
   // Rendering
   // -------------------------------------------------------------------------
 
-  it("renders all seven menu items when query is empty", () => {
+  it("renders all eight menu items when query is empty", () => {
     renderMenu();
     expect(screen.getByText("Sub-heading")).toBeDefined();
     expect(screen.getByText("Paragraph")).toBeDefined();
     expect(screen.getByText("Media")).toBeDefined();
     expect(screen.getByText("Component")).toBeDefined();
     expect(screen.getByText("Quote")).toBeDefined();
+    expect(screen.getByText("Numbered List")).toBeDefined();
     expect(screen.getByText("Code Block")).toBeDefined();
     expect(screen.getByText("Horizontal Rule")).toBeDefined();
   });
@@ -209,6 +215,12 @@ describe("SlashMenu", () => {
     expect(onSelect).toHaveBeenCalledWith("blockquote");
   });
 
+  it("calls onSelect with 'list_item' when Numbered List is clicked", () => {
+    renderMenu();
+    fireEvent.click(screen.getByText("Numbered List"));
+    expect(onSelect).toHaveBeenCalledWith("list_item");
+  });
+
   it("calls onSelect with 'code_block' when Code Block is clicked", () => {
     renderMenu();
     fireEvent.click(screen.getByText("Code Block"));
@@ -245,8 +257,8 @@ describe("SlashMenu", () => {
 
   it("wraps from last item to first when pressing ArrowDown", () => {
     renderMenu();
-    // Move down past the last item (7 items total → 7 presses wraps back to 0).
-    for (let i = 0; i < 7; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
+    // Move down past the last item (8 items total → 8 presses wraps back to 0).
+    for (let i = 0; i < 8; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
     const items = screen.getAllByRole("menuitem");
     expect(items[0].getAttribute("aria-selected")).toBe("true");
     expect(items[items.length - 1].getAttribute("aria-selected")).toBe("false");

@@ -40,14 +40,62 @@ export function useCustomCursor() {
     canvas.dataset.customCursor = "";
     Object.assign(canvas.style, {
       position: "fixed",
+      margin: "0",
+      inset: "auto",
       top: "0",
       left: "0",
+      // Reset popover UA styles (Canvas background, border, padding, overflow)
+      background: "transparent",
+      border: "0",
+      padding: "0",
+      overflow: "visible",
       zIndex: "2147483647",
       pointerEvents: "none",
       visibility: "hidden",
       willChange: "transform",
     } satisfies Partial<CSSStyleDeclaration>);
+
+    // Native <dialog> (showModal) renders in the top layer, above any z-index.
+    // Promote the cursor into the top layer via the popover API so it stays
+    // visible above modal overlays; z-index above is the pre-popover fallback.
+    const supportsPopover =
+      typeof canvas.showPopover === "function" &&
+      typeof canvas.hidePopover === "function";
+    if (supportsPopover) canvas.setAttribute("popover", "manual");
+
     document.body.appendChild(canvas);
+
+    function promoteToTopLayer() {
+      if (!supportsPopover || !canvas.isConnected) return;
+      try {
+        if (canvas.matches(":popover-open")) canvas.hidePopover();
+        canvas.showPopover();
+      } catch {
+        // Popover promotion is best-effort; ignore transient state errors.
+      }
+    }
+
+    promoteToTopLayer();
+
+    // Top-layer order follows promotion order — when a modal <dialog> opens it
+    // jumps above the cursor, so re-promote the cursor to the top on each open.
+    const dialogObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const target = mutation.target as HTMLElement;
+        if (
+          target.tagName === "DIALOG" &&
+          (target as HTMLDialogElement).open
+        ) {
+          promoteToTopLayer();
+          break;
+        }
+      }
+    });
+    dialogObserver.observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["open"],
+    });
 
     let rafId = 0;
     let x = 0;
@@ -100,6 +148,7 @@ export function useCustomCursor() {
       document.documentElement.removeEventListener("mouseleave", hideCursor);
       window.removeEventListener("blur", hideCursor);
       window.removeEventListener("resize", redrawForDpr);
+      dialogObserver.disconnect();
       if (rafId) cancelAnimationFrame(rafId);
       canvas.remove();
     };

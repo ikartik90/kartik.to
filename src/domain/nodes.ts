@@ -8,6 +8,9 @@ export const MarkSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("bold") }),
   z.object({ type: z.literal("italic") }),
   z.object({ type: z.literal("code") }),
+  z.object({ type: z.literal("underline") }),
+  z.object({ type: z.literal("wavy_underline") }),
+  z.object({ type: z.literal("strikethrough") }),
   z.object({ type: z.literal("link"), href: z.url() }),
 ]);
 
@@ -60,10 +63,20 @@ export const HeadingNodeSchema = z.object({
     z.literal(6),
   ]),
   children: z.array(InlineNodeSchema),
+  caption: z.string().optional(),
 });
 
 export const BlockquoteNodeSchema = z.object({
   type: z.literal("blockquote"),
+  children: z.array(InlineNodeSchema),
+  caption: z.string().optional(),
+});
+
+// A single ordered-list entry. Numbered lists are modelled as runs of
+// consecutive `list_item` blocks — the renderer groups them into one <ol> and
+// computes each ordinal (plus zero-padding width) from the run's length.
+export const ListItemNodeSchema = z.object({
+  type: z.literal("list_item"),
   children: z.array(InlineNodeSchema),
 });
 
@@ -111,6 +124,7 @@ export type BlockNode =
   | z.infer<typeof ParagraphNodeSchema>
   | z.infer<typeof HeadingNodeSchema>
   | z.infer<typeof BlockquoteNodeSchema>
+  | z.infer<typeof ListItemNodeSchema>
   | z.infer<typeof CodeBlockNodeSchema>
   | z.infer<typeof HorizontalRuleNodeSchema>
   | z.infer<typeof ImageNodeSchema>
@@ -120,6 +134,7 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   ParagraphNodeSchema,
   HeadingNodeSchema,
   BlockquoteNodeSchema,
+  ListItemNodeSchema,
   CodeBlockNodeSchema,
   HorizontalRuleNodeSchema,
   ImageNodeSchema,

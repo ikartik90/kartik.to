@@ -40,6 +40,10 @@ export default defineConfig({
           dialogFooter: { value: "44px" },
           quoteMark: { value: "52px" },
           tooltipIcon: { value: "14px" },
+          // Numbered-list ordinal badge — square at single digit, pill beyond (Figma 413:684/688)
+          listMarker: { value: "24px" },
+          // Selection toolbar icon button (Figma 422:834 — 28px square)
+          toolbarButton: { value: "28px" },
         },
 
         colors: {
@@ -69,6 +73,7 @@ export default defineConfig({
 
         fontWeights: {
           base: { value: "400" },
+          bold: { value: "550" },
         },
 
         // Named spacing scale — used for padding, margin, gap, border-radius, border-width
@@ -153,6 +158,15 @@ export default defineConfig({
               value:
                 "linear-gradient(135deg, {colors.brand.pink} 0%, {colors.brand.orange} 100%)",
             },
+            // Numbered-list ordinal badge gradient — theme-directional per Figma
+            // (413:684 light: orange→pink; 413:688 dark: pink→orange).
+            listMarker: {
+              value: {
+                base: "linear-gradient(142.66deg, {colors.brand.orange} 0%, {colors.brand.pink} 78.36%)",
+                _dark:
+                  "linear-gradient(107.32deg, {colors.brand.pink} 38.11%, {colors.brand.orange} 100%)",
+              },
+            },
           },
 
           text: {
@@ -177,6 +191,14 @@ export default defineConfig({
             // Only readable over bg.brandedEmphasis (the gradient) — same in both themes
             brandedEmphasis: {
               value: "{colors.neutral.900}",
+            },
+            // Numbered-list ordinal digits over the gradient badge — inverted per
+            // theme (light digits in light UI, dark digits in dark UI) per Figma.
+            listMarker: {
+              value: {
+                base: "{colors.neutral.100}",
+                _dark: "{colors.neutral.900}",
+              },
             },
             selection: {
               value: "{colors.neutral.900}",
@@ -243,6 +265,34 @@ export default defineConfig({
             color: "text.default",
             transition: "color 150ms ease",
             _hover: { color: "text.title" },
+          },
+        }),
+
+        articleUnderline: defineRecipe({
+          className: "article-underline",
+          description: "Solid underline mark inside article prose.",
+          base: {
+            textDecorationLine: "underline",
+            textDecorationStyle: "solid",
+            textUnderlineOffset: "0.15em",
+          },
+        }),
+
+        articleWavyUnderline: defineRecipe({
+          className: "article-wavy-underline",
+          description: "Wavy (squiggle) underline mark inside article prose.",
+          base: {
+            textDecorationLine: "underline",
+            textDecorationStyle: "wavy",
+            textUnderlineOffset: "0.15em",
+          },
+        }),
+
+        articleStrikethrough: defineRecipe({
+          className: "article-strikethrough",
+          description: "Strikethrough mark inside article prose.",
+          base: {
+            textDecorationLine: "line-through",
           },
         }),
 
@@ -849,12 +899,129 @@ export default defineConfig({
           className: "article-blockquote",
           description: "Blockquote typography inside article prose.",
           base: {
-            flex: "1 1 auto",
-            minWidth: 0,
             textStyle: "quote",
             color: "text.default",
             wordBreak: "break-word",
             paddingBlockStart: "xl",
+          },
+        }),
+
+        articleHeadingShell: defineRecipe({
+          className: "article-heading-shell",
+          description:
+            "Column that stacks an optional eyebrow caption above a subheading.",
+          base: {
+            display: "flex",
+            flexDirection: "column",
+            gap: "sm",
+          },
+        }),
+
+        articleSubheadingCaption: defineRecipe({
+          className: "article-subheading-caption",
+          description:
+            "Eyebrow caption above a subheading — brand gradient text (same gradient as numbered-list ordinals) revealed via background-clip once populated.",
+          base: {
+            textStyle: "caption",
+            width: "fit-content",
+            wordBreak: "break-word",
+            // Only clip the gradient into the glyphs once there is text — an
+            // empty editor field keeps its normal placeholder colour instead of
+            // turning the placeholder transparent.
+            "&:not(:empty):not([data-empty])": {
+              background: "bg.listMarker",
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            },
+          },
+        }),
+
+        articleBlockquoteBody: defineRecipe({
+          className: "article-blockquote-body",
+          description:
+            "Column beside the quote mark that stacks the quote text and an optional citation.",
+          base: {
+            flex: "1 1 auto",
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: "sm",
+          },
+        }),
+
+        articleBlockquoteCite: defineRecipe({
+          className: "article-blockquote-cite",
+          description:
+            "Citation line beneath a blockquote — caption typography, upright (not italic).",
+          base: {
+            textStyle: "caption",
+            fontStyle: "normal",
+            color: "text.paragraph/50",
+            wordBreak: "break-word",
+          },
+        }),
+
+        articleList: defineRecipe({
+          className: "article-list",
+          description:
+            "Ordered-list wrapper for read-only article prose — resets native list styling and stacks items with the same rhythm as sibling blocks. No width: inherits the `article > *` content-column width so the list aligns with prose, not showcase blocks.",
+          base: {
+            listStyle: "none",
+            margin: "none",
+            padding: "none",
+            display: "flex",
+            flexDirection: "column",
+            gap: "xl",
+          },
+        }),
+
+        articleListItemShell: defineRecipe({
+          className: "article-list-item-shell",
+          description:
+            "Numbered-list item row — ordinal badge and text content in a flex row (Figma 413:684 light, 413:688 dark). No width: inherits the `article > *` content-column width (a recipe-layer width would beat the base-layer rule and align the marker with showcase blocks).",
+          base: {
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: "md",
+          },
+        }),
+
+        listMarker: defineRecipe({
+          className: "list-marker",
+          description:
+            "Numbered-list ordinal badge — gradient pill with theme-flipped digits; square at single digit, widens for zero-padded multi-digit ordinals.",
+          base: {
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "token(sizes.listMarker)",
+            minWidth: "token(sizes.listMarker)",
+            marginBlockStart: "xs",
+            paddingInline: "sm",
+            borderRadius: "lg",
+            background: "bg.listMarker",
+            color: "text.listMarker",
+            textStyle: "paragraph",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+            userSelect: "none",
+            pointerEvents: "none",
+          },
+        }),
+
+        articleListItemContent: defineRecipe({
+          className: "article-list-item-content",
+          description:
+            "Numbered-list item text column beside the ordinal badge.",
+          base: {
+            flex: "1 1 auto",
+            minWidth: 0,
+            textStyle: "paragraph",
+            color: "text.paragraph",
+            wordBreak: "break-word",
           },
         }),
 
@@ -955,6 +1122,69 @@ export default defineConfig({
             gap: "xs",
             boxShadow:
               "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+          },
+        }),
+
+        selectionToolbar: defineRecipe({
+          className: "selection-toolbar",
+          description:
+            "Floating text-selection toolbar — anchored above/below the selection via CSS anchor() (Figma 422:833).",
+          base: {
+            position: "fixed",
+            zIndex: 50,
+            positionAnchor: "--selection-menu",
+            // Default above the selection; flip below when there is no room.
+            bottom: "anchor(top)",
+            left: "anchor(center)",
+            translate: "-50% 0",
+            marginBottom: "sm",
+            positionTryFallbacks: "flip-block",
+            display: "flex",
+            alignItems: "center",
+            gap: "sm",
+            // Hug the options — also overrides the `article > *` width rule
+            // (@layer base) that would otherwise stretch it to the text column.
+            width: "max-content",
+            maxWidth: "min(100vw, token(sizes.articleContent))",
+            height: "token(spacing.4xl)",
+            paddingInline: "md",
+            backgroundColor: "bg.surface",
+            borderRadius: "md",
+            overflow: "hidden",
+            boxShadow:
+              "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+          },
+        }),
+
+        selectionToolbarItem: defineRecipe({
+          className: "selection-toolbar-item",
+          description:
+            "Icon button inside the selection toolbar — 28px square, active/hover tint (Figma 422:834).",
+          base: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            width: "toolbarButton",
+            height: "toolbarButton",
+            borderRadius: "sm",
+            cursor: "default",
+            color: "text.commandItem",
+            transition: "background-color 150ms ease",
+            _hover: { backgroundColor: "bg.itemHover" },
+            "&[data-active='true']": { backgroundColor: "bg.itemHover" },
+          },
+        }),
+
+        selectionToolbarDivider: defineRecipe({
+          className: "selection-toolbar-divider",
+          description: "Vertical divider between selection toolbar groups.",
+          base: {
+            flexShrink: 0,
+            // `width` resolves against `sizes`; use token(spacing) for the scale.
+            width: "token(spacing.xxs)",
+            height: "toolbarButton",
+            backgroundColor: "border.divider",
           },
         }),
 

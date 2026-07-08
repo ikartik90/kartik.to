@@ -159,7 +159,7 @@ export function CommandPalette() {
       aria-label="Command palette"
       className={dialogPanel({ size: "sm" })}
     >
-      <Command key={openKey} className={css({ display: "contents" })}>
+      <Command key={openKey} loop className={css({ display: "contents" })}>
         {/* Input row */}
         <div className={inputRowStyle} data-command-input-row>
           <SearchIcon className={iconStyle} />

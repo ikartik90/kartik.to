@@ -17,6 +17,7 @@ import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import CodeIcon from "@/assets/icons/code.svg";
 import BorderIcon from "@/assets/icons/border.svg";
+import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 
 // ---------------------------------------------------------------------------
 // Module-level mouse position tracker — updated before any menu mounts so the
@@ -44,6 +45,7 @@ export type SlashMenuBlockType =
   | "paragraph"
   | "media"
   | "blockquote"
+  | "list_item"
   | "code_block"
   | "horizontal_rule";
 
@@ -87,6 +89,12 @@ const BLOCK_ITEMS: SlashMenuBlockItem[] = [
   { kind: "block", type: "paragraph", label: "Paragraph", Icon: ParagraphIcon },
   { kind: "block", type: "media", label: "Media", Icon: MediaIcon },
   { kind: "block", type: "blockquote", label: "Quote", Icon: QuoteIcon },
+  {
+    kind: "block",
+    type: "list_item",
+    label: "Numbered List",
+    Icon: NumberedListIcon,
+  },
   { kind: "block", type: "code_block", label: "Code Block", Icon: CodeIcon },
   {
     kind: "block",
