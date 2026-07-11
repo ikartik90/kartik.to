@@ -22,7 +22,11 @@ import {
   articleList,
   articleListItemShell,
   listMarker,
+  listBullet,
   articleListItemContent,
+  articleMetric,
+  articleMetricValue,
+  articleMetricLabel,
   codeBlock,
   articleShowcase,
   articleImg,
@@ -190,16 +194,29 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
         />
       );
 
+    case "metric":
+      return (
+        <div key={index} className={articleMetric()}>
+          <span className={articleMetricValue()}>
+            {node.children.map(renderInlineNode)}
+          </span>
+          {node.caption && (
+            <span className={articleMetricLabel()}>{node.caption}</span>
+          )}
+        </div>
+      );
+
     default:
       return null;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Numbered list — consecutive list_item blocks render as one <ol>
+// Lists — consecutive list items render as one <ol> (numbered) or <ul> (bulleted)
 // ---------------------------------------------------------------------------
 
 type ListItemNode = Extract<BlockNode, { type: "list_item" }>;
+type BulletListItemNode = Extract<BlockNode, { type: "bullet_list_item" }>;
 
 function renderNumberedList(
   items: ListItemNode[],
@@ -223,6 +240,24 @@ function renderNumberedList(
   );
 }
 
+function renderBulletList(
+  items: BulletListItemNode[],
+  key: React.Key,
+): React.ReactNode {
+  return (
+    <ul key={key} className={articleList()}>
+      {items.map((item, i) => (
+        <li key={i} className={articleListItemShell()}>
+          <span className={listBullet()} aria-hidden />
+          <span className={articleListItemContent()}>
+            {item.children.map(renderInlineNode)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ArticleRenderer
 // ---------------------------------------------------------------------------
@@ -243,6 +278,16 @@ export function ArticleRenderer({ content }: ArticleRendererProps) {
       while (j < nodes.length && nodes[j].type === "list_item") j++;
       output.push(
         renderNumberedList(nodes.slice(i, j) as ListItemNode[], `list-${i}`),
+      );
+      i = j;
+    } else if (node.type === "bullet_list_item") {
+      let j = i;
+      while (j < nodes.length && nodes[j].type === "bullet_list_item") j++;
+      output.push(
+        renderBulletList(
+          nodes.slice(i, j) as BulletListItemNode[],
+          `bullet-${i}`,
+        ),
       );
       i = j;
     } else {

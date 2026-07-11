@@ -43,7 +43,7 @@ export default async function ProjectPage({ params }: Props) {
   return (
     <main>
       <article>
-        {project.title && <ArticleIntro title={project.title} />}
+        <ArticleIntro title={project.title} />
         <ArticleRenderer content={project.content} />
       </article>
     </main>

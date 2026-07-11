@@ -8,23 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@paper-design/shaders", () => ({
-  toProcessedGemSmoke: vi.fn(() => Promise.resolve({ pngBlob: new Blob() })),
-}));
-
+// GemSmoke is WebGL; jsdom can't run it. Stand in with a marker element.
 vi.mock("@paper-design/shaders-react", () => ({
-  GemSmoke: ({
-    image,
-    "data-shader-active": shaderActive,
-  }: {
-    image: string;
-    "data-shader-active"?: string;
-  }) => (
-    <div
-      data-social-icon-shader
-      data-mask-src={image}
-      data-shader-active={shaderActive}
-    />
+  GemSmoke: ({ image }: { image: string }) => (
+    <div data-social-icon-shader data-mask-src={image} data-shader-active="" />
   ),
 }));
 
@@ -135,33 +122,29 @@ describe("SocialLinks", () => {
     expect(emailItem?.getAttribute("data-tooltip-dismissed")).toBe("");
   });
 
-  it("renders crisp SVG icons by default and shader only when hover mask is ready", async () => {
+  it("mounts the WebGL shader only for the hovered icon (one context at a time)", () => {
     render(<SocialLinks />);
 
-    await act(async () => {
-      await Promise.resolve();
-    });
-
+    // No shader (and no WebGL context) at rest — only the crisp SVG icons show.
     expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
-      4,
+      0,
     );
-    expect(document.querySelectorAll("[data-shader-active]").length).toBe(0);
-
-    await act(async () => {
-      fireEvent.mouseEnter(
-        screen.getByRole("link", { name: "GitHub Profile" }),
-      );
-      await Promise.resolve();
-    });
 
     const githubLink = screen.getByRole("link", { name: "GitHub Profile" });
-    expect(
-      githubLink.querySelector("[data-social-icon-shader][data-shader-active]"),
-    ).toBeTruthy();
-    expect(
-      githubLink
-        .querySelector("[data-social-icon-shader]")
-        ?.getAttribute("data-mask-src"),
-    ).toBe("/social-shader-masks/octocat.svg");
+    fireEvent.mouseEnter(githubLink);
+
+    const shader = githubLink.querySelector("[data-social-icon-shader]");
+    expect(shader?.getAttribute("data-mask-src")).toBe(
+      "/social-shader-masks/octocat.svg",
+    );
+    // Exactly one shader mounted across the whole list.
+    expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
+      1,
+    );
+
+    fireEvent.mouseLeave(githubLink);
+    expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
+      0,
+    );
   });
 });

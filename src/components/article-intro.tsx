@@ -17,7 +17,8 @@ const backLabelStyle = css({
 });
 
 interface ArticleIntroProps {
-  title: string;
+  /** Optional — a titleless draft still renders the back navigation. */
+  title?: string | null;
 }
 
 export function ArticleIntro({ title }: ArticleIntroProps) {
@@ -34,9 +35,11 @@ export function ArticleIntro({ title }: ArticleIntroProps) {
           <span className={backLabelStyle}>Home</span>
         </Link>
       </div>
-      <Typography tag="h1" type="title">
-        {title}
-      </Typography>
+      {title && (
+        <Typography tag="h1" type="title">
+          {title}
+        </Typography>
+      )}
     </div>
   );
 }

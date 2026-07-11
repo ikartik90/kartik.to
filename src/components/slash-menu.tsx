@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { css, cx } from "../../styled-system/css";
-import {
-  menuIcon,
-  menuItem,
-  slashMenuPopover,
-  slashMenuSubmenu,
-} from "../../styled-system/recipes";
-import { demoComponents } from "@/components/demo/registry";
+import { useEffect, useRef, useState } from "react";
+import { css } from "../../styled-system/css";
+import { menuIcon, menuItem, slashMenuPopover } from "../../styled-system/recipes";
 import SubheadingIcon from "@/assets/icons/subheading.svg";
 import ParagraphIcon from "@/assets/icons/paragraph.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import ComponentIcon from "@/assets/icons/component.svg";
-import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import CodeIcon from "@/assets/icons/code.svg";
 import BorderIcon from "@/assets/icons/border.svg";
 import NumberedListIcon from "@/assets/icons/numbered-list.svg";
+import BulletedListIcon from "@/assets/icons/bulleted-list.svg";
+import MetricIcon from "@/assets/icons/metric.svg";
 
 // ---------------------------------------------------------------------------
 // Module-level mouse position tracker — updated before any menu mounts so the
@@ -46,6 +41,8 @@ export type SlashMenuBlockType =
   | "media"
   | "blockquote"
   | "list_item"
+  | "bullet_list_item"
+  | "metric"
   | "code_block"
   | "horizontal_rule";
 
@@ -76,7 +73,13 @@ interface SlashMenuProps {
   /** The type of the block currently being edited — hidden from the list. */
   excludeType?: SlashMenuBlockType;
   onSelect: (type: SlashMenuBlockType) => void;
-  onSelectComponent: (componentId: string) => void;
+  /**
+   * Invoked when the Component item is chosen. The picker (Insert Component
+   * overlay) is responsible for choosing which component to insert, so no id
+   * is passed here — this simply opens it, mirroring how Media opens the image
+   * dialog.
+   */
+  onOpenComponentPicker: () => void;
   onDismiss: () => void;
 }
 
@@ -95,6 +98,13 @@ const BLOCK_ITEMS: SlashMenuBlockItem[] = [
     label: "Numbered List",
     Icon: NumberedListIcon,
   },
+  {
+    kind: "block",
+    type: "bullet_list_item",
+    label: "Bulleted List",
+    Icon: BulletedListIcon,
+  },
+  { kind: "block", type: "metric", label: "Metric", Icon: MetricIcon },
   { kind: "block", type: "code_block", label: "Code Block", Icon: CodeIcon },
   {
     kind: "block",
@@ -110,26 +120,22 @@ const COMPONENT_ITEM: SlashMenuComponentItem = {
   Icon: ComponentIcon,
 };
 
-function filterDemoComponents(query: string) {
-  const q = query.toLowerCase();
-  if (!q) return demoComponents;
-  return demoComponents.filter((demo) => demo.label.toLowerCase().includes(q));
-}
-
+/**
+ * The Component item behaves like any other menu item: the query only decides
+ * whether it appears in the list (matched against its own label), never which
+ * components are available — that lives entirely in the Insert Component
+ * overlay.
+ */
 function shouldShowComponent(
   query: string,
   allowedTypes?: ReadonlyArray<SlashMenuBlockType>,
 ) {
   if (allowedTypes) return false;
-  const q = query.toLowerCase();
-  if (!q) return true;
-  if (COMPONENT_ITEM.label.toLowerCase().includes(q)) return true;
-  return filterDemoComponents(query).length > 0;
+  return COMPONENT_ITEM.label.toLowerCase().includes(query.toLowerCase());
 }
 
 export interface SlashMenuFilterResult {
   entries: SlashMenuEntry[];
-  filteredDemos: ReturnType<typeof filterDemoComponents>;
   showComponent: boolean;
 }
 
@@ -151,16 +157,11 @@ export function getFilteredSlashMenu(
   );
 
   const showComponent = shouldShowComponent(query, allowedTypes);
-  const filteredDemos = showComponent ? filterDemoComponents(query) : [];
   const entries: SlashMenuEntry[] = showComponent
-    ? [
-        ...blocks.slice(0, 3),
-        COMPONENT_ITEM,
-        ...blocks.slice(3),
-      ]
+    ? [...blocks.slice(0, 3), COMPONENT_ITEM, ...blocks.slice(3)]
     : blocks;
 
-  return { entries, filteredDemos, showComponent };
+  return { entries, showComponent };
 }
 
 /** @deprecated Use getFilteredSlashMenu — kept for call-site compatibility. */
@@ -179,13 +180,9 @@ export function slashMenuHasResults(
   allowedTypes?: ReadonlyArray<SlashMenuBlockType>,
   excludeType?: SlashMenuBlockType,
 ) {
-  const { entries, showComponent, filteredDemos } = getFilteredSlashMenu(
-    query,
-    allowedTypes,
-    excludeType,
+  return (
+    getFilteredSlashMenu(query, allowedTypes, excludeType).entries.length > 0
   );
-  if (entries.length > 0) return true;
-  return showComponent && filteredDemos.length > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,33 +190,14 @@ export function slashMenuHasResults(
 // ---------------------------------------------------------------------------
 
 const popoverStyle = slashMenuPopover();
-const submenuStyle = slashMenuSubmenu();
 const itemStyle = menuItem();
 const iconStyle = menuIcon();
-
-const componentRowWrapperStyle = css({ position: "relative", width: "100%" });
-
-const componentRowStyle = cx(
-  itemStyle,
-  css({ justifyContent: "space-between" }),
-);
 
 const componentLabelStyle = css({
   flex: "1 0 0",
   minWidth: 0,
   textAlign: "left",
 });
-
-const submenuEmptyStyle = css({
-  color: "text.commandItem/50",
-  cursor: "default",
-});
-
-const positionedSubmenuStyle = css({
-  left: "calc(100% + token(spacing.xxs))",
-});
-
-const SUBMENU_CLOSE_DELAY_MS = 120;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -230,97 +208,25 @@ export function SlashMenu({
   allowedTypes,
   excludeType,
   onSelect,
-  onSelectComponent,
+  onOpenComponentPicker,
   onDismiss,
 }: SlashMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const componentRowRef = useRef<HTMLDivElement>(null);
-  const submenuRef = useRef<HTMLDivElement>(null);
-  const submenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
 
-  const { entries, filteredDemos } = getFilteredSlashMenu(
-    query,
-    allowedTypes,
-    excludeType,
-  );
+  const { entries } = getFilteredSlashMenu(query, allowedTypes, excludeType);
 
   const [activeIndex, setActiveIndex] = useState(0);
-  const [submenuOpen, setSubmenuOpen] = useState(false);
-  const [submenuActiveIndex, setSubmenuActiveIndex] = useState(0);
-  const [submenuTop, setSubmenuTop] = useState(0);
-
-  const componentEntryIndex = entries.findIndex(
-    (entry) => entry.kind === "component",
-  );
 
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
-  const filteredDemosRef = useRef(filteredDemos);
-  filteredDemosRef.current = filteredDemos;
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
-  const submenuOpenRef = useRef(submenuOpen);
-  submenuOpenRef.current = submenuOpen;
-  const submenuActiveIndexRef = useRef(submenuActiveIndex);
-  submenuActiveIndexRef.current = submenuActiveIndex;
-  const componentEntryIndexRef = useRef(componentEntryIndex);
-  componentEntryIndexRef.current = componentEntryIndex;
 
   const [prevQuery, setPrevQuery] = useState(query);
   if (query !== prevQuery) {
     setPrevQuery(query);
     setActiveIndex(0);
-    setSubmenuOpen(false);
-    setSubmenuActiveIndex(0);
   }
-
-  function clearSubmenuCloseTimer() {
-    if (submenuCloseTimerRef.current) {
-      clearTimeout(submenuCloseTimerRef.current);
-      submenuCloseTimerRef.current = null;
-    }
-  }
-
-  function openSubmenu() {
-    clearSubmenuCloseTimer();
-    setSubmenuOpen(true);
-    setSubmenuActiveIndex(0);
-  }
-
-  function scheduleSubmenuClose(relatedTarget: EventTarget | null = null) {
-    if (
-      relatedTarget instanceof Node &&
-      (componentRowRef.current?.contains(relatedTarget) ||
-        submenuRef.current?.contains(relatedTarget))
-    ) {
-      return;
-    }
-    clearSubmenuCloseTimer();
-    submenuCloseTimerRef.current = setTimeout(() => {
-      setSubmenuOpen(false);
-    }, SUBMENU_CLOSE_DELAY_MS);
-  }
-
-  // Open the submenu whenever the Component row is highlighted.
-  useEffect(() => {
-    if (activeIndex === componentEntryIndex && componentEntryIndex !== -1) {
-      openSubmenu();
-    } else if (submenuOpen) {
-      setSubmenuOpen(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to highlight changes
-  }, [activeIndex, componentEntryIndex]);
-
-  useLayoutEffect(() => {
-    if (!submenuOpen || !componentRowRef.current || !submenuRef.current) return;
-    const rowTop = componentRowRef.current.offsetTop;
-    const paddingTop = parseFloat(
-      getComputedStyle(submenuRef.current).paddingTop,
-    );
-    setSubmenuTop(rowTop - paddingTop);
-  }, [submenuOpen, entries, componentEntryIndex]);
 
   useEffect(() => {
     const menu = menuRef.current;
@@ -341,10 +247,6 @@ export function SlashMenu({
   }, []);
 
   useEffect(() => {
-    return () => clearSubmenuCloseTimer();
-  }, []);
-
-  useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onDismiss();
@@ -355,131 +257,70 @@ export function SlashMenu({
   }, [onDismiss]);
 
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      const demos = filteredDemosRef.current;
-      const inSubmenu = submenuOpenRef.current && demos.length > 0;
-      const componentIdx = componentEntryIndexRef.current;
+    function selectEntry(entry: SlashMenuEntry | undefined) {
+      if (!entry) return;
+      if (entry.kind === "component") {
+        onOpenComponentPicker();
+      } else {
+        onSelect(entry.type);
+      }
+    }
 
+    function handleKeyDown(e: KeyboardEvent) {
       switch (e.key) {
         case "Escape":
-          if (inSubmenu) {
-            e.preventDefault();
-            e.stopPropagation();
-            setSubmenuOpen(false);
-            return;
-          }
           e.stopPropagation();
           onDismiss();
           break;
-        case "ArrowRight":
-          if (
-            !inSubmenu &&
-            activeIndexRef.current === componentIdx &&
-            componentIdx !== -1
-          ) {
-            e.preventDefault();
-            openSubmenu();
-          }
-          break;
-        case "ArrowLeft":
-          if (inSubmenu) {
-            e.preventDefault();
-            setSubmenuOpen(false);
-          }
-          break;
         case "ArrowDown":
           e.preventDefault();
-          if (inSubmenu) {
-            if (demos.length === 0) return;
-            setSubmenuActiveIndex(
-              (i) => (i + 1) % demos.length,
-            );
-          } else {
-            setActiveIndex(
-              (i) => (i + 1) % Math.max(entriesRef.current.length, 1),
-            );
-          }
+          setActiveIndex(
+            (i) => (i + 1) % Math.max(entriesRef.current.length, 1),
+          );
           break;
         case "ArrowUp":
           e.preventDefault();
-          if (inSubmenu) {
-            if (demos.length === 0) return;
-            setSubmenuActiveIndex(
-              (i) => (i - 1 + demos.length) % demos.length,
-            );
-          } else {
-            setActiveIndex(
-              (i) =>
-                (i - 1 + entriesRef.current.length) %
-                Math.max(entriesRef.current.length, 1),
-            );
-          }
+          setActiveIndex(
+            (i) =>
+              (i - 1 + entriesRef.current.length) %
+              Math.max(entriesRef.current.length, 1),
+          );
           break;
-        case "Enter": {
+        case "Enter":
           e.preventDefault();
           e.stopPropagation();
-          if (inSubmenu) {
-            const demo = demos[submenuActiveIndexRef.current];
-            if (demo) onSelectComponent(demo.id);
-            return;
-          }
-          const entry = entriesRef.current[activeIndexRef.current];
-          if (!entry) return;
-          if (entry.kind === "component") {
-            if (demos.length === 1) {
-              onSelectComponent(demos[0].id);
-            } else {
-              openSubmenu();
-            }
-            return;
-          }
-          onSelect(entry.type);
+          selectEntry(entriesRef.current[activeIndexRef.current]);
           break;
-        }
       }
     }
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () =>
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [onDismiss, onSelect, onSelectComponent]);
+  }, [onDismiss, onSelect, onOpenComponentPicker]);
 
   return (
-    <div ref={menuRef} className={popoverStyle} role="menu" aria-label="Insert block">
+    <div
+      ref={menuRef}
+      className={popoverStyle}
+      role="menu"
+      aria-label="Insert block"
+    >
       {entries.map((entry, idx) => {
         if (entry.kind === "component") {
-          const isActive = idx === activeIndex;
           return (
-            <div
+            <button
               key="component"
-              ref={componentRowRef}
-              className={componentRowWrapperStyle}
-              onPointerEnter={() => {
-                clearSubmenuCloseTimer();
-                setActiveIndex(idx);
-              }}
-              onPointerLeave={(e) => scheduleSubmenuClose(e.relatedTarget)}
+              type="button"
+              role="menuitem"
+              aria-selected={idx === activeIndex}
+              className={itemStyle}
+              onPointerEnter={() => setActiveIndex(idx)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onOpenComponentPicker()}
             >
-              <button
-                type="button"
-                role="menuitem"
-                aria-haspopup="true"
-                aria-expanded={submenuOpen}
-                aria-selected={isActive}
-                className={componentRowStyle}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  if (filteredDemos.length === 1) {
-                    onSelectComponent(filteredDemos[0].id);
-                  } else {
-                    openSubmenu();
-                  }
-                }}
-              >
-                <entry.Icon className={iconStyle} aria-hidden />
-                <span className={componentLabelStyle}>{entry.label}</span>
-                <ChevronRightIcon className={iconStyle} aria-hidden />
-              </button>
-            </div>
+              <entry.Icon className={iconStyle} aria-hidden />
+              <span className={componentLabelStyle}>{entry.label}</span>
+            </button>
           );
         }
 
@@ -501,36 +342,6 @@ export function SlashMenu({
           </button>
         );
       })}
-      {submenuOpen && componentEntryIndex !== -1 && (
-        <div
-          ref={submenuRef}
-          className={cx(submenuStyle, positionedSubmenuStyle)}
-          style={{ top: submenuTop }}
-          role="menu"
-          aria-label="Insert component"
-          onPointerEnter={clearSubmenuCloseTimer}
-          onPointerLeave={(e) => scheduleSubmenuClose(e.relatedTarget)}
-        >
-          {filteredDemos.length > 0 ? (
-            filteredDemos.map((demo, demoIdx) => (
-              <button
-                key={demo.id}
-                type="button"
-                role="menuitem"
-                aria-selected={demoIdx === submenuActiveIndex}
-                className={itemStyle}
-                onPointerEnter={() => setSubmenuActiveIndex(demoIdx)}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onSelectComponent(demo.id)}
-              >
-                {demo.label}
-              </button>
-            ))
-          ) : (
-            <div className={cx(itemStyle, submenuEmptyStyle)}>No components</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

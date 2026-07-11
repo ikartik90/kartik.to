@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FC, type SVGProps } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FC, type RefObject, type SVGProps } from "react";
 import CheckIcon from "@/assets/icons/check.svg";
 import CopyIcon from "@/assets/icons/copy.svg";
 import EmailIcon from "@/assets/icons/email.svg";
@@ -15,8 +15,13 @@ import {
   socialTooltip,
   socialTooltipIcon,
 } from "../../styled-system/recipes";
+import { SocialIconGlow } from "./social-icon-glow";
 import { SocialIconShader } from "./social-icon-shader";
 import { buttonRecipe } from "./ui/button-recipe";
+
+// A/B: "shader" = tuned GemSmoke WebGL (hover-only, DPR-capped); "glow" = the
+// compositor-only CSS gradient. Flip to compare the two hover treatments.
+const HOVER_EFFECT: "shader" | "glow" = "shader";
 
 const COPY_SUCCESS_MS = 2000;
 const EMAIL_COPY_TEXT = "ikartik90@gmail.com";
@@ -230,7 +235,7 @@ function SocialTooltip({
   copySuccess,
   onDismiss,
   onEmailCopy,
-  position,
+  tooltipRef,
   onPointerEnter,
   onPointerLeave,
 }: {
@@ -238,7 +243,7 @@ function SocialTooltip({
   copySuccess: boolean;
   onDismiss: () => void;
   onEmailCopy: () => void;
-  position: CSSProperties;
+  tooltipRef: RefObject<HTMLElement | null>;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
 }) {
@@ -280,15 +285,17 @@ function SocialTooltip({
   const tooltipProps = {
     "data-social-tooltip": true,
     className: socialTooltip(),
-    style: position,
     "aria-hidden": true as const,
     onMouseEnter: onPointerEnter,
     onMouseLeave: onPointerLeave,
   };
 
+  // Position is written imperatively via tooltipRef (ref + rAF) so tracking the
+  // cursor never triggers a React re-render on every pointermove.
   if (item.action === "copy") {
     return (
       <button
+        ref={tooltipRef as RefObject<HTMLButtonElement | null>}
         type="button"
         {...tooltipProps}
         tabIndex={-1}
@@ -299,7 +306,11 @@ function SocialTooltip({
     );
   }
 
-  return <div {...tooltipProps}>{content}</div>;
+  return (
+    <div ref={tooltipRef as RefObject<HTMLDivElement | null>} {...tooltipProps}>
+      {content}
+    </div>
+  );
 }
 
 export function SocialLinks() {
@@ -387,36 +398,59 @@ function SocialLinkItem({
   onEmailTriggerClick: () => void;
   onEmailCopy: () => void;
 }) {
-  const [shaderActive, setShaderActive] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
   const [tooltipHovered, setTooltipHovered] = useState(false);
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const tooltipRef = useRef<HTMLElement | null>(null);
+  const pointerRef = useRef({ x: 0, y: 0 });
+  const positionRafRef = useRef(0);
   const tooltipVisible =
     (triggerHovered || tooltipHovered || copySuccess) && !tooltipDismissed;
+
+  const positionTooltip = useCallback(() => {
+    positionRafRef.current = 0;
+    const el = tooltipRef.current;
+    if (!el) return;
+    const { left, top } = getCursorTooltipPosition(
+      pointerRef.current.x,
+      pointerRef.current.y,
+    );
+    el.style.left = left;
+    el.style.top = top;
+  }, []);
+
+  const scheduleTooltipPosition = useCallback(() => {
+    if (!positionRafRef.current) {
+      positionRafRef.current = requestAnimationFrame(positionTooltip);
+    }
+  }, [positionTooltip]);
 
   useEffect(() => {
     if (!tooltipVisible) return;
 
     function onPointerMove(event: PointerEvent) {
-      setPointer({ x: event.clientX, y: event.clientY });
+      pointerRef.current = { x: event.clientX, y: event.clientY };
+      scheduleTooltipPosition();
     }
 
     window.addEventListener("pointermove", onPointerMove);
-    return () => window.removeEventListener("pointermove", onPointerMove);
-  }, [tooltipVisible]);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      if (positionRafRef.current) cancelAnimationFrame(positionRafRef.current);
+      positionRafRef.current = 0;
+    };
+  }, [tooltipVisible, scheduleTooltipPosition]);
 
   const triggerLabel =
     item.action === "copy" && copySuccess ? EMAIL_COPIED_LABEL : item.label;
 
   function handleTriggerMouseEnter(event: React.MouseEvent) {
-    setPointer({ x: event.clientX, y: event.clientY });
-    setShaderActive(true);
+    pointerRef.current = { x: event.clientX, y: event.clientY };
+    positionTooltip();
     setTriggerHovered(true);
     onMouseEnter();
   }
 
   function handleTriggerMouseLeave() {
-    setShaderActive(false);
     setTriggerHovered(false);
     onMouseLeave();
   }
@@ -429,10 +463,11 @@ function SocialLinkItem({
     setTooltipHovered(false);
   }
 
+  const HoverEffect = HOVER_EFFECT === "shader" ? SocialIconShader : SocialIconGlow;
   const icon = (
-    <SocialIconShader maskSrc={item.maskSrc} active={shaderActive}>
+    <HoverEffect maskSrc={item.maskSrc} active={triggerHovered}>
       <item.Icon className={triggerIconStyle} aria-hidden />
-    </SocialIconShader>
+    </HoverEffect>
   );
 
   return (
@@ -475,7 +510,7 @@ function SocialLinkItem({
         copySuccess={copySuccess}
         onDismiss={onDismiss}
         onEmailCopy={onEmailCopy}
-        position={getCursorTooltipPosition(pointer.x, pointer.y)}
+        tooltipRef={tooltipRef}
         onPointerEnter={handleTooltipMouseEnter}
         onPointerLeave={handleTooltipMouseLeave}
       />

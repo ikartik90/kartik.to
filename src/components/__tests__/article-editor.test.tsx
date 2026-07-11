@@ -12,7 +12,10 @@ import {
   mergeAdjacentInlineNodes,
 } from "../article-editor";
 import type { InlineNode, Mark } from "@/domain/nodes";
+import type { Document } from "@/domain/post";
 import { useEditorStore } from "@/store/editor";
+import { notifyContentUpdated } from "@/utils/content-sync";
+import { createDraft, saveDraft } from "@/app/actions/post";
 
 // ---------------------------------------------------------------------------
 // Mock SVG icons and slash menu for component tests
@@ -39,6 +42,7 @@ vi.mock("@/components/slash-menu", () => ({
       <button onClick={() => onSelect("paragraph")}>paragraph</button>
       <button onClick={() => onSelect("media")}>media</button>
       <button onClick={() => onSelect("list_item")}>list_item</button>
+      <button onClick={() => onSelect("bullet_list_item")}>bullet_list_item</button>
       <button onClick={onDismiss}>dismiss</button>
     </div>
   ),
@@ -76,16 +80,45 @@ vi.mock("@/components/demo-frame", () => ({
   ),
 }));
 
+const demoRegistryEntry = vi.hoisted(() => ({
+  id: "calchemy-demo",
+  label: "Calchemy Demo",
+  Component: () => (
+    <button type="button" data-testid="demo-interact" onClick={() => undefined}>
+      Demo
+    </button>
+  ),
+}));
+
 vi.mock("@/components/demo/registry", () => ({
-  getDemoComponent: () => ({
-    id: "calchemy-demo",
-    label: "Calchemy Demo",
-    Component: () => (
-      <button type="button" data-testid="demo-interact" onClick={() => undefined}>
-        Demo
-      </button>
-    ),
-  }),
+  getDemoComponent: () => demoRegistryEntry,
+  demoComponents: [demoRegistryEntry],
+}));
+
+// The editor imports server actions (⌘S save) and the router — stub both so the
+// component renders under jsdom without pulling in Prisma / the app router.
+const mockRouter = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+  prefetch: vi.fn(),
+  back: vi.fn(),
+  forward: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => mockRouter,
+  usePathname: () => "/edit/new",
+}));
+
+const postActions = vi.hoisted(() => ({
+  createDraft: vi.fn(),
+  saveDraft: vi.fn(),
+}));
+vi.mock("@/app/actions/post", () => postActions);
+
+vi.mock("@/utils/content-sync", () => ({
+  notifyContentUpdated: vi.fn(),
+  subscribeContentUpdated: () => () => {},
 }));
 
 // ---------------------------------------------------------------------------
@@ -271,6 +304,139 @@ describe("ArticleEditor", () => {
     expect(select.value).toBe("typescript");
   });
 
+  it("appends a trailing paragraph after a terminal code block", () => {
+    const post = {
+      id: "code2",
+      slug: "code2",
+      title: "Code Post",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "code_block" as const,
+            children: [{ type: "text" as const, text: "const x = 1;" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    // A code block is the last authored block; Enter inside it inserts a literal
+    // newline, so the editor must synthesise an empty paragraph to escape into.
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].type).toBe("code_block");
+    expect(blocks[1].type).toBe("paragraph");
+    expect((blocks[1] as { children: InlineNode[] }).children[0].text).toBe("");
+  });
+
+  // Regression: code blocks carry 32px (3xl) vertical padding — larger than the
+  // ~24px code line height. Line detection used to measure the caret against the
+  // element's border-box edge with a one-line tolerance, so the boundary line
+  // fell outside the band and ArrowUp/ArrowDown could never leave the block.
+  // Detection now measures against the content box (padding subtracted).
+  describe("padded code block caret escape", () => {
+    const rect = (top: number, bottom: number): DOMRect =>
+      ({
+        top,
+        bottom,
+        height: bottom - top,
+        left: 0,
+        right: 200,
+        width: 200,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // Border box 0..100 with 32px vertical padding → content box 32..68.
+    const mockGeometry = (pre: HTMLElement, caret: DOMRect) => {
+      pre.getBoundingClientRect = () => rect(0, 100);
+      const realGetComputedStyle = window.getComputedStyle.bind(window);
+      vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) =>
+        el === pre
+          ? ({ paddingTop: "32px", paddingBottom: "32px" } as CSSStyleDeclaration)
+          : realGetComputedStyle(el as Element, pseudo),
+      );
+      vi.spyOn(window, "getSelection").mockReturnValue({
+        rangeCount: 1,
+        getRangeAt: () => ({ getBoundingClientRect: () => caret }),
+        removeAllRanges: () => {},
+        addRange: () => {},
+      } as unknown as Selection);
+    };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it("ArrowDown on the last visual line escapes to the block below", () => {
+      const post = {
+        id: "cbnav1",
+        slug: "cbnav1",
+        title: "Code Nav",
+        category: "ARTICLE" as const,
+        content: {
+          type: "doc" as const,
+          content: [
+            {
+              type: "code_block" as const,
+              children: [{ type: "text" as const, text: "const x = 1;" }],
+            },
+            { type: "paragraph" as const, children: [{ type: "text" as const, text: "after" }] },
+          ],
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      render(<ArticleEditor initialPost={post} />);
+
+      const pre = document.querySelector("[data-block-index='0']") as HTMLElement;
+      const next = document.querySelector("[data-block-index='1']") as HTMLElement;
+      // Caret bottom (68) sits at the content-box bottom, 32px above the border
+      // edge — the geometry the old border-box check misread as "not last line".
+      mockGeometry(pre, rect(44, 68));
+
+      pre.focus();
+      fireEvent.keyDown(pre, { key: "ArrowDown" });
+
+      expect(document.activeElement).toBe(next);
+    });
+
+    it("ArrowUp on the first visual line escapes to the block above", () => {
+      const post = {
+        id: "cbnav2",
+        slug: "cbnav2",
+        title: "Code Nav",
+        category: "ARTICLE" as const,
+        content: {
+          type: "doc" as const,
+          content: [
+            { type: "paragraph" as const, children: [{ type: "text" as const, text: "before" }] },
+            {
+              type: "code_block" as const,
+              children: [{ type: "text" as const, text: "const x = 1;" }],
+            },
+          ],
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      render(<ArticleEditor initialPost={post} />);
+
+      const prev = document.querySelector("[data-block-index='0']") as HTMLElement;
+      const pre = document.querySelector("[data-block-index='1']") as HTMLElement;
+      // Caret top (32) sits at the content-box top, 32px below the border edge.
+      mockGeometry(pre, rect(32, 56));
+
+      pre.focus();
+      fireEvent.keyDown(pre, { key: "ArrowUp" });
+
+      expect(document.activeElement).toBe(prev);
+    });
+  });
+
   it("renders a figcaption with placeholder on image blocks", () => {
     const post = {
       id: "img1",
@@ -410,6 +576,35 @@ describe("ArticleEditor", () => {
     fireEvent.focus(hr);
 
     expect(screen.getByRole("button", { name: "Delete horizontal rule" })).toBeDefined();
+  });
+
+  it("inserts a paragraph before the horizontal rule when Enter is pressed", () => {
+    const post = {
+      id: "hr-enter-before",
+      slug: "hr-enter-before",
+      title: "HR Post",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "horizontal_rule" as const },
+          { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const hr = document.querySelector("[role='separator']") as HTMLElement;
+    hr.focus();
+    fireEvent.keyDown(hr, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks).toHaveLength(3);
+    expect(blocks[0].type).toBe("paragraph");
+    expect(blocks[1].type).toBe("horizontal_rule");
+    expect(blocks[2].type).toBe("paragraph");
   });
 
   it("updates the image caption in the store when typing in figcaption", () => {
@@ -1005,7 +1200,7 @@ describe("ArticleEditor", () => {
     expect(blocks[0].type).toBe("paragraph");
   });
 
-  it("Enter on a heading splits into two headings of the same level", () => {
+  it("Enter on a heading splits into a heading and a paragraph", () => {
     const post = {
       id: "h2",
       slug: "h2",
@@ -1037,9 +1232,119 @@ describe("ArticleEditor", () => {
     // Original block keeps its type
     expect(blocks[0].type).toBe("heading");
     expect((blocks[0] as { level: number }).level).toBe(2);
-    // New block inherits the heading type and level
-    expect(blocks[1].type).toBe("heading");
-    expect((blocks[1] as { level: number }).level).toBe(2);
+    // New block is a default paragraph, not another heading
+    expect(blocks[1].type).toBe("paragraph");
+  });
+
+  it("⌘B toggles bold on and off over the selection", () => {
+    const post = {
+      id: "cb",
+      slug: "cb",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text: "Hello World" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    const firstText = (root: Node): Text => {
+      if (root.nodeType === Node.TEXT_NODE) return root as Text;
+      return firstText(root.firstChild!);
+    };
+    const selectHello = () => {
+      block.focus();
+      // The first text node holds "Hello" in both the plain and bolded states
+      // (bolded: <strong>Hello</strong> World; plain: "Hello World").
+      const textNode = firstText(block);
+      const sel = window.getSelection()!;
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, 5); // "Hello"
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+
+    // First ⌘B applies bold to "Hello".
+    selectHello();
+    fireEvent.keyDown(block, { key: "b", metaKey: true });
+    let children = (
+      useEditorStore.getState().document.content[0] as {
+        children: InlineNode[];
+      }
+    ).children;
+    expect(children[0]).toEqual({
+      type: "text",
+      text: "Hello",
+      marks: [{ type: "bold" }],
+    });
+
+    // Second ⌘B over the same selection removes it (toggle off).
+    selectHello();
+    fireEvent.keyDown(block, { key: "b", metaKey: true });
+    children = (
+      useEditorStore.getState().document.content[0] as {
+        children: InlineNode[];
+      }
+    ).children;
+    expect(children[0].marks).toBeUndefined();
+    expect(children[0].text).toBe("Hello World");
+  });
+
+  it("Backspace on an empty paragraph keeps the following paragraph intact", () => {
+    const post = {
+      id: "del",
+      slug: "del",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "heading" as const,
+            level: 2 as const,
+            children: [{ type: "text" as const, text: "Sub" }],
+          },
+          { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text: "Following" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    // Focus the empty paragraph (index 1) and delete it with Backspace.
+    const empty = document.querySelector("[data-block-index='1']") as HTMLElement;
+    empty.focus();
+    fireEvent.keyDown(empty, { key: "Backspace" });
+
+    const blocks = useEditorStore.getState().document.content;
+    // Only the empty paragraph is removed — heading + following paragraph remain.
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].type).toBe("heading");
+    expect(blocks[1].type).toBe("paragraph");
+    expect((blocks[1] as { children: InlineNode[] }).children[0].text).toBe(
+      "Following",
+    );
+    // The reused DOM node must show the following paragraph's text, not the
+    // deleted paragraph's stale empty content.
+    const followingEl = document.querySelector(
+      "[data-block-index='1']",
+    ) as HTMLElement;
+    expect(followingEl.textContent).toBe("Following");
   });
 
   it("Enter on a blockquote splits into a blockquote and a paragraph", () => {
@@ -1436,6 +1741,66 @@ describe("ArticleEditor", () => {
     expect(blocks[0].type).toBe("paragraph");
   });
 
+  // -------------------------------------------------------------------------
+  // Bulleted list (shares list behaviour; only the marker differs)
+  // -------------------------------------------------------------------------
+
+  function bulletPost(text: string) {
+    return {
+      id: "bl",
+      slug: "bl",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "bullet_list_item" as const,
+            children: [{ type: "text" as const, text }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  it("creates a bullet_list_item via the slash menu", () => {
+    render(<ArticleEditor />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    block.focus();
+    block.textContent = "/";
+    placeCaret(block, 1);
+    fireEvent.keyUp(block, { key: "/" });
+    fireEvent.click(screen.getByText("bullet_list_item"));
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks[0].type).toBe("bullet_list_item");
+  });
+
+  it("Enter at the end of a bullet item appends a new bullet item (same type)", () => {
+    render(<ArticleEditor initialPost={bulletPost("Hello")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, "Hello".length);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks.map((b) => b.type)).toEqual([
+      "bullet_list_item",
+      "bullet_list_item",
+      "paragraph",
+    ]);
+  });
+
+  it("Enter on an empty bullet item converts it into a paragraph", () => {
+    render(<ArticleEditor initialPost={bulletPost("")} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 0);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    expect(useEditorStore.getState().document.content[0].type).toBe("paragraph");
+  });
+
   it("inserts a paragraph above when Enter is pressed at the start of a heading", () => {
     const post = {
       id: "h-enter-start",
@@ -1694,5 +2059,124 @@ describe("ArticleEditor selection toolbar", () => {
     expect(linkMark && linkMark.type === "link" && linkMark.href).toBe(
       "https://example.com",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ⌘S / Ctrl+S in-place save
+// ---------------------------------------------------------------------------
+
+describe("ArticleEditor ⌘S save", () => {
+  const DIRTY_DOC: Document = {
+    type: "doc",
+    content: [
+      { type: "paragraph", children: [{ type: "text", text: "edited" }] },
+    ],
+  };
+
+  function pressSave() {
+    return act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "s",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      // Flush the async save (createDraft/saveDraft → setDirty → clearAutosave).
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  it("saves an existing draft in place without navigating", async () => {
+    const post = {
+      id: "post-1",
+      slug: "post-1",
+      title: "Existing",
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content: [] },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    vi.mocked(saveDraft).mockResolvedValue({ ...post, content: DIRTY_DOC });
+    render(<ArticleEditor initialPost={post} />);
+
+    // Make an unsaved edit.
+    act(() => useEditorStore.getState().setDocument(DIRTY_DOC));
+    expect(useEditorStore.getState().isDirty).toBe(true);
+
+    await pressSave();
+
+    expect(saveDraft).toHaveBeenCalledWith({
+      id: "post-1",
+      title: "Existing",
+      document: DIRTY_DOC,
+    });
+    expect(createDraft).not.toHaveBeenCalled();
+    // Stays in the editor — no route change for an already-persisted draft.
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().isDirty).toBe(false);
+    expect(notifyContentUpdated).toHaveBeenCalled();
+  });
+
+  it("creates a first-time draft and swaps to its edit URL", async () => {
+    vi.mocked(createDraft).mockResolvedValue({
+      id: "new-id",
+      slug: "new-slug",
+      title: null,
+      category: "ARTICLE",
+      content: DIRTY_DOC,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    render(<ArticleEditor />);
+
+    act(() => useEditorStore.getState().setDocument(DIRTY_DOC));
+
+    await pressSave();
+
+    expect(createDraft).toHaveBeenCalledWith({
+      title: undefined,
+      document: DIRTY_DOC,
+      category: "ARTICLE",
+    });
+    expect(useEditorStore.getState().draftId).toBe("new-id");
+    expect(mockRouter.replace).toHaveBeenCalledWith(
+      "/edit/new-slug?category=ARTICLE",
+    );
+    expect(useEditorStore.getState().isDirty).toBe(false);
+  });
+
+  it("is a no-op when there are no unsaved changes", async () => {
+    const post = {
+      id: "post-2",
+      slug: "post-2",
+      title: "Clean",
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content: [] },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+    // initialPost load leaves isDirty false.
+    expect(useEditorStore.getState().isDirty).toBe(false);
+
+    await pressSave();
+
+    expect(saveDraft).not.toHaveBeenCalled();
+    expect(createDraft).not.toHaveBeenCalled();
   });
 });

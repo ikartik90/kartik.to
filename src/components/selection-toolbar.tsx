@@ -58,7 +58,6 @@ const FORMAT_GROUPS: FormatButton[][] = [
   [
     { mark: "bold", label: "Bold", Icon: BoldIcon },
     { mark: "italic", label: "Italic", Icon: ItalicIcon },
-    { mark: "code", label: "Code", Icon: CodeIcon },
     { mark: "underline", label: "Underline", Icon: UnderlineSolidIcon },
   ],
   [
@@ -68,6 +67,7 @@ const FORMAT_GROUPS: FormatButton[][] = [
       Icon: UnderlineSquiggleIcon,
     },
     { mark: "strikethrough", label: "Strikethrough", Icon: StrikethroughIcon },
+    { mark: "code", label: "Code", Icon: CodeIcon },
   ],
 ];
 

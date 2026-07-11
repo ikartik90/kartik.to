@@ -6,14 +6,6 @@ import type { Mock } from "vitest";
 import { SlashMenu } from "../slash-menu";
 import type { SlashMenuBlockType } from "../slash-menu";
 
-const mockDemoComponents = vi.hoisted(() =>
-  [] as Array<{
-    id: string;
-    label: string;
-    Component: () => null;
-  }>,
-);
-
 vi.mock("@/assets/icons/subheading.svg", () => ({
   default: (props: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="icon-subheading" {...props} />
@@ -49,20 +41,15 @@ vi.mock("@/assets/icons/numbered-list.svg", () => ({
     <svg data-testid="icon-numbered-list" {...props} />
   ),
 }));
+vi.mock("@/assets/icons/bulleted-list.svg", () => ({
+  default: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg data-testid="icon-bulleted-list" {...props} />
+  ),
+}));
 vi.mock("@/assets/icons/component.svg", () => ({
   default: (props: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="icon-component" {...props} />
   ),
-}));
-vi.mock("@/assets/icons/chevron-right.svg", () => ({
-  default: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg data-testid="icon-chevron-right" {...props} />
-  ),
-}));
-vi.mock("@/components/demo/registry", () => ({
-  get demoComponents() {
-    return mockDemoComponents;
-  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -82,15 +69,14 @@ function setSlashAnchorOnBody() {
 
 describe("SlashMenu", () => {
   let onSelect: Mock<(type: SlashMenuBlockType) => void>;
-  let onSelectComponent: Mock<(componentId: string) => void>;
+  let onOpenComponentPicker: Mock<() => void>;
   let onDismiss: Mock<() => void>;
   let anchorEl: HTMLElement;
 
   beforeEach(() => {
     onSelect = vi.fn<(type: SlashMenuBlockType) => void>();
-    onSelectComponent = vi.fn<(componentId: string) => void>();
+    onOpenComponentPicker = vi.fn<() => void>();
     onDismiss = vi.fn<() => void>();
-    mockDemoComponents.length = 0;
     anchorEl = setSlashAnchorOnBody();
   });
 
@@ -103,7 +89,7 @@ describe("SlashMenu", () => {
     return render(
       <SlashMenu
         onSelect={onSelect}
-        onSelectComponent={onSelectComponent}
+        onOpenComponentPicker={onOpenComponentPicker}
         onDismiss={onDismiss}
         {...props}
       />,
@@ -126,7 +112,7 @@ describe("SlashMenu", () => {
   // Rendering
   // -------------------------------------------------------------------------
 
-  it("renders all eight menu items when query is empty", () => {
+  it("renders all ten menu items when query is empty", () => {
     renderMenu();
     expect(screen.getByText("Sub-heading")).toBeDefined();
     expect(screen.getByText("Paragraph")).toBeDefined();
@@ -134,6 +120,8 @@ describe("SlashMenu", () => {
     expect(screen.getByText("Component")).toBeDefined();
     expect(screen.getByText("Quote")).toBeDefined();
     expect(screen.getByText("Numbered List")).toBeDefined();
+    expect(screen.getByText("Bulleted List")).toBeDefined();
+    expect(screen.getByText("Metric")).toBeDefined();
     expect(screen.getByText("Code Block")).toBeDefined();
     expect(screen.getByText("Horizontal Rule")).toBeDefined();
   });
@@ -145,30 +133,26 @@ describe("SlashMenu", () => {
     expect(items[1].getAttribute("aria-selected")).toBe("false");
   });
 
-  it("opens the component submenu on hover and shows an empty state", () => {
+  it("renders the Component item as a plain menuitem without a submenu", () => {
     renderMenu();
+    // No chevron / submenu — hovering the row does not open anything.
     fireEvent.pointerEnter(screen.getByText("Component"));
-    expect(screen.getByText("No components")).toBeDefined();
-    expect(onSelectComponent).not.toHaveBeenCalled();
+    expect(screen.queryByRole("menu", { name: "Insert component" })).toBeNull();
+    expect(onOpenComponentPicker).not.toHaveBeenCalled();
   });
 
-  it("opens the component submenu when keyboard-navigated to the row", () => {
+  it("opens the component picker when the Component item is clicked", () => {
     renderMenu();
+    fireEvent.click(screen.getByText("Component"));
+    expect(onOpenComponentPicker).toHaveBeenCalledOnce();
+  });
+
+  it("opens the component picker on Enter when the Component item is active", () => {
+    renderMenu();
+    // Component sits at index 3 (after the first three block items).
     for (let i = 0; i < 3; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
-    expect(screen.getByText("No components")).toBeDefined();
-  });
-
-  it("selects a demo from the submenu when demos are available", () => {
-    mockDemoComponents.push({
-      id: "placeholder",
-      label: "Placeholder",
-      Component: () => null,
-    });
-
-    renderMenu();
-    fireEvent.pointerEnter(screen.getByText("Component"));
-    fireEvent.click(screen.getByText("Placeholder"));
-    expect(onSelectComponent).toHaveBeenCalledWith("placeholder");
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(onOpenComponentPicker).toHaveBeenCalledOnce();
   });
 
   // -------------------------------------------------------------------------
@@ -221,6 +205,18 @@ describe("SlashMenu", () => {
     expect(onSelect).toHaveBeenCalledWith("list_item");
   });
 
+  it("calls onSelect with 'bullet_list_item' when Bulleted List is clicked", () => {
+    renderMenu();
+    fireEvent.click(screen.getByText("Bulleted List"));
+    expect(onSelect).toHaveBeenCalledWith("bullet_list_item");
+  });
+
+  it("calls onSelect with 'metric' when Metric is clicked", () => {
+    renderMenu();
+    fireEvent.click(screen.getByText("Metric"));
+    expect(onSelect).toHaveBeenCalledWith("metric");
+  });
+
   it("calls onSelect with 'code_block' when Code Block is clicked", () => {
     renderMenu();
     fireEvent.click(screen.getByText("Code Block"));
@@ -257,8 +253,8 @@ describe("SlashMenu", () => {
 
   it("wraps from last item to first when pressing ArrowDown", () => {
     renderMenu();
-    // Move down past the last item (8 items total → 8 presses wraps back to 0).
-    for (let i = 0; i < 8; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
+    // Move down past the last item (10 items total → 10 presses wraps back to 0).
+    for (let i = 0; i < 10; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
     const items = screen.getAllByRole("menuitem");
     expect(items[0].getAttribute("aria-selected")).toBe("true");
     expect(items[items.length - 1].getAttribute("aria-selected")).toBe("false");
@@ -313,7 +309,7 @@ describe("SlashMenu", () => {
         <SlashMenu
           query="p"
           onSelect={onSelect}
-          onSelectComponent={onSelectComponent}
+          onOpenComponentPicker={onOpenComponentPicker}
           onDismiss={onDismiss}
         />,
       );

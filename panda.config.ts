@@ -42,6 +42,8 @@ export default defineConfig({
           tooltipIcon: { value: "14px" },
           // Numbered-list ordinal badge — square at single digit, pill beyond (Figma 413:684/688)
           listMarker: { value: "24px" },
+          // Bulleted-list dot diameter
+          listBullet: { value: "8px" },
           // Selection toolbar icon button (Figma 422:834 — 28px square)
           toolbarButton: { value: "28px" },
         },
@@ -73,6 +75,7 @@ export default defineConfig({
 
         fontWeights: {
           base: { value: "400" },
+          medium: { value: "500" },
           bold: { value: "550" },
         },
 
@@ -165,6 +168,15 @@ export default defineConfig({
                 base: "linear-gradient(142.66deg, {colors.brand.orange} 0%, {colors.brand.pink} 78.36%)",
                 _dark:
                   "linear-gradient(107.32deg, {colors.brand.pink} 38.11%, {colors.brand.orange} 100%)",
+              },
+            },
+            // Metric value display gradient — theme-directional per Figma
+            // (456:979 light: orange→pink; 456:968 dark: pink→orange).
+            metricValue: {
+              value: {
+                base: "linear-gradient(160.811deg, {colors.brand.orange} 0%, {colors.brand.pink} 78.361%)",
+                _dark:
+                  "linear-gradient(124.361deg, {colors.brand.pink} 38.114%, {colors.brand.orange} 100%)",
               },
             },
           },
@@ -1005,6 +1017,7 @@ export default defineConfig({
             background: "bg.listMarker",
             color: "text.listMarker",
             textStyle: "paragraph",
+            fontWeight: "medium",
             textAlign: "center",
             whiteSpace: "nowrap",
             userSelect: "none",
@@ -1012,15 +1025,84 @@ export default defineConfig({
           },
         }),
 
+        listBullet: defineRecipe({
+          className: "list-bullet",
+          description:
+            "Bulleted-list marker — 10px circular gradient dot centered on the first text line, within the same footprint as the numbered ordinal badge.",
+          base: {
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "token(sizes.listMarker)",
+            minWidth: "token(sizes.listMarker)",
+            marginBlockStart: "xs",
+            userSelect: "none",
+            pointerEvents: "none",
+            "&::before": {
+              content: '""',
+              display: "block",
+              width: "token(sizes.listBullet)",
+              height: "token(sizes.listBullet)",
+              borderRadius: "token(spacing.half)",
+              background: "bg.listMarker",
+            },
+          },
+        }),
+
         articleListItemContent: defineRecipe({
           className: "article-list-item-content",
           description:
-            "Numbered-list item text column beside the ordinal badge.",
+            "List item text column beside the ordinal badge or bullet dot.",
           base: {
             flex: "1 1 auto",
             minWidth: 0,
             textStyle: "paragraph",
             color: "text.paragraph",
+            wordBreak: "break-word",
+          },
+        }),
+
+        articleMetric: defineRecipe({
+          className: "article-metric",
+          description:
+            "Metric callout — a large brand-gradient value stacked over a descriptive label (Figma 456:979 light / 456:968 dark). No width: inherits the `article > *` content-column width so it aligns with prose.",
+          base: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: "sm",
+            wordBreak: "break-word",
+          },
+        }),
+
+        articleMetricValue: defineRecipe({
+          className: "article-metric-value",
+          description:
+            "Metric value — brand gradient display text (theme-directional gradient) revealed via background-clip once populated, mirroring the subheading eyebrow.",
+          base: {
+            textStyle: "title",
+            width: "fit-content",
+            maxWidth: "full",
+            wordBreak: "break-word",
+            // Clip the gradient into the glyphs only once there is text — an empty
+            // editor field keeps its normal placeholder colour.
+            "&:not(:empty):not([data-empty])": {
+              background: "bg.metricValue",
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            },
+          },
+        }),
+
+        articleMetricLabel: defineRecipe({
+          className: "article-metric-label",
+          description:
+            "Metric label — descriptive line beneath the value; standard text colour (neutral.700 light / neutral.200 dark per Figma).",
+          base: {
+            textStyle: "metricLabel",
+            color: "text.default",
             wordBreak: "break-word",
           },
         }),
@@ -1069,30 +1151,6 @@ export default defineConfig({
           },
           defaultVariants: {
             state: "collapsed",
-          },
-        }),
-
-        slashMenuSubmenu: defineRecipe({
-          className: "slash-menu-submenu",
-          description:
-            "Slash menu submenu — positioned beside the parent popover via slash-menu.tsx.",
-          base: {
-            position: "absolute",
-            zIndex: 51,
-            width: "200px",
-            backgroundColor: "bg.surface",
-            borderRadius: "md",
-            borderWidth: "token(spacing.3xs)",
-            borderStyle: "solid",
-            borderColor: "border.divider",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            paddingBlock: "md",
-            paddingInline: "sm",
-            gap: "xs",
-            boxShadow:
-              "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
           },
         }),
 
@@ -1150,6 +1208,9 @@ export default defineConfig({
             paddingInline: "md",
             backgroundColor: "bg.surface",
             borderRadius: "md",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
             overflow: "hidden",
             boxShadow:
               "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
@@ -1290,6 +1351,15 @@ export default defineConfig({
             fontWeight: "{fontWeights.base}",
             fontSize: "1.25rem",
             lineHeight: "1.8",
+          },
+        },
+        // Metric label — 20px/28px descriptive line beneath the value (Figma 456:981).
+        metricLabel: {
+          value: {
+            fontFamily: "{fonts.switzer}",
+            fontWeight: "{fontWeights.base}",
+            fontSize: "1.25rem",
+            lineHeight: "1.4",
           },
         },
         paragraph: {

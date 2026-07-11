@@ -46,3 +46,5 @@ styled-system-studio
 
 # cursor
 .cursor/
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
