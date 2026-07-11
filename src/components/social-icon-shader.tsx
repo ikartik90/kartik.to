@@ -1,18 +1,16 @@
 "use client";
 
-import { toProcessedGemSmoke } from "@paper-design/shaders";
 import { GemSmoke } from "@paper-design/shaders-react";
-import {
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { css, cx } from "../../styled-system/css";
 
 const BRAND_PINK = "#FF4D97";
 const BRAND_ORANGE = "#FFAB6F";
 const TRANSPARENT = "#00000000";
+
+// Cap the render buffer so retina screens don't quadruple the fragment work on
+// a 20px icon. 40×40 ≈ 2×; smoke is soft, so it reads fine well below native DPR.
+const SHADER_MAX_PIXELS = 40 * 40;
 
 const FLUORESCENT = {
   innerDistortion: 0.5,
@@ -23,35 +21,6 @@ const FLUORESCENT = {
   angle: 0,
   size: 0.8,
 } as const;
-
-const maskPromises = new Map<string, Promise<void>>();
-
-function preloadMask(src: string) {
-  const cached = maskPromises.get(src);
-  if (cached) return cached;
-
-  const promise = toProcessedGemSmoke(src)
-    .then(() => undefined)
-    .catch(() => undefined);
-  maskPromises.set(src, promise);
-  return promise;
-}
-
-function useMaskReady(src: string) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    preloadMask(src).then(() => {
-      if (alive) setReady(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [src]);
-
-  return ready;
-}
 
 function subscribeTheme(onStoreChange: () => void) {
   const observer = new MutationObserver(onStoreChange);
@@ -70,7 +39,6 @@ function getTheme() {
 
 function subscribeReducedMotion(onStoreChange: () => void) {
   if (typeof window.matchMedia !== "function") return () => undefined;
-
   const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   mediaQuery.addEventListener("change", onStoreChange);
   return () => mediaQuery.removeEventListener("change", onStoreChange);
@@ -81,6 +49,43 @@ function getReducedMotion() {
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
+}
+
+// Create the WebGL context + compile the program + fetch the mask texture BEFORE
+// the hover, so hovering only resumes an already-live shader (speed 0 → 1). Two
+// triggers, whichever comes first:
+//   • first pointer movement — fires before any hover, and works even if the tab
+//     was hidden at load (rAF is paused in background tabs; pointer events aren't);
+//   • post-paint (double rAF) — covers a foreground page the user just settles on.
+// Measured: this removes the ~90ms "mask still loading" pop-in on the first hover;
+// a warm hover is a pure speed toggle with no context/compile/fetch on the path.
+function useShaderWarmup(enabled: boolean) {
+  const [warm, setWarm] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || warm) return;
+    let done = false;
+    const warmNow = () => {
+      if (done) return;
+      done = true;
+      setWarm(true);
+    };
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(warmNow);
+    });
+    window.addEventListener("pointermove", warmNow, {
+      once: true,
+      passive: true,
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      window.removeEventListener("pointermove", warmNow);
+    };
+  }, [enabled, warm]);
+
+  return warm;
 }
 
 const slotStyle = css({
@@ -100,9 +105,25 @@ const layerStyle = css({
   justifyContent: "center",
 });
 
-const flatIconHiddenStyle = css({ opacity: 0 });
+// The line icon crossfades out as the shader takes over, so only the shader
+// shows on hover (its fade-in covers the swap — no blank frame).
+const iconLayerStyle = css({
+  transitionProperty: "opacity",
+  transitionDuration: "180ms",
+  transitionTimingFunction: "ease-out",
+});
 
-const shaderHiddenStyle = css({ opacity: 0, pointerEvents: "none" });
+const iconHiddenStyle = css({ opacity: 0 });
+
+const shaderLayerStyle = css({
+  opacity: 0,
+  transitionProperty: "opacity",
+  transitionDuration: "180ms",
+  transitionTimingFunction: "ease-out",
+  pointerEvents: "none",
+});
+
+const shaderVisibleStyle = css({ opacity: 1, _starting: { opacity: 0 } });
 
 export function SocialIconShader({
   maskSrc,
@@ -119,8 +140,16 @@ export function SocialIconShader({
     getReducedMotion,
     () => false,
   );
-  const maskReady = useMaskReady(maskSrc);
-  const showShader = active && !reducedMotion && maskReady;
+
+  const enabled = !reducedMotion;
+  const warm = useShaderWarmup(enabled);
+  // Warm before any real hover and `warm` never flips back, so the context stays
+  // mounted (parked at speed 0) — moving between icons just toggles speed, never
+  // remounts. A hover in the first frame mounts on demand once (the only path
+  // that can still feel a compile).
+  const mounted = enabled && (warm || active);
+  const showShader = enabled && active;
+
   const colors =
     theme === "light"
       ? [BRAND_ORANGE, BRAND_PINK, "#ffffff"]
@@ -129,27 +158,34 @@ export function SocialIconShader({
   return (
     <span className={slotStyle}>
       <span
-        className={cx(layerStyle, showShader && flatIconHiddenStyle)}
+        className={cx(layerStyle, iconLayerStyle, showShader && iconHiddenStyle)}
         aria-hidden
       >
         {children}
       </span>
-      <GemSmoke
-        aria-hidden
-        data-social-icon-shader
-        data-shader-active={showShader ? "" : undefined}
-        className={cx(layerStyle, !showShader && shaderHiddenStyle)}
-        image={maskSrc}
-        width={20}
-        height={20}
-        fit="contain"
-        scale={1}
-        speed={showShader ? 1 : 0}
-        colors={colors}
-        colorBack={TRANSPARENT}
-        colorInner={TRANSPARENT}
-        {...FLUORESCENT}
-      />
+      {mounted && (
+        <GemSmoke
+          aria-hidden
+          data-social-icon-shader
+          data-shader-active={showShader ? "" : undefined}
+          className={cx(
+            layerStyle,
+            shaderLayerStyle,
+            showShader && shaderVisibleStyle,
+          )}
+          image={maskSrc}
+          width={20}
+          height={20}
+          fit="contain"
+          scale={1}
+          speed={showShader ? 1 : 0}
+          maxPixelCount={SHADER_MAX_PIXELS}
+          colors={colors}
+          colorBack={TRANSPARENT}
+          colorInner={TRANSPARENT}
+          {...FLUORESCENT}
+        />
+      )}
     </span>
   );
 }
