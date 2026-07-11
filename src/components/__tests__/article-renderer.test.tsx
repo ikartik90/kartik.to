@@ -240,6 +240,36 @@ describe("ArticleRenderer", () => {
       expect(markers[11].textContent).toBe("12");
     });
 
+    it("groups consecutive bullet_list_item blocks into a single unordered list", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "bullet_list_item", children: [{ type: "text", text: "BulletAlpha" }] },
+            { type: "bullet_list_item", children: [{ type: "text", text: "BulletBeta" }] },
+          ])}
+        />,
+      );
+      const lists = container.querySelectorAll("ul");
+      expect(lists).toHaveLength(1);
+      expect(container.querySelectorAll("ol")).toHaveLength(0);
+      expect(lists[0].querySelectorAll("li")).toHaveLength(2);
+      expect(lists[0].querySelectorAll(".list-bullet")).toHaveLength(2);
+      expect(container.textContent).toContain("BulletAlpha");
+    });
+
+    it("renders adjacent numbered and bulleted runs as separate ol and ul", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "list_item", children: [{ type: "text", text: "N1" }] },
+            { type: "bullet_list_item", children: [{ type: "text", text: "B1" }] },
+          ])}
+        />,
+      );
+      expect(container.querySelectorAll("ol")).toHaveLength(1);
+      expect(container.querySelectorAll("ul")).toHaveLength(1);
+    });
+
     it("starts a new ordered list after a non-list block interrupts the run", () => {
       const { container } = render(
         <ArticleRenderer
@@ -329,6 +359,45 @@ describe("ArticleRenderer", () => {
       expect(figure).not.toBeNull();
       expect(figure?.querySelector("[data-testid='demo']")).not.toBeNull();
       expect(figure?.querySelector("figcaption")).toBeNull();
+    });
+  });
+
+  describe("metric", () => {
+    it("renders the value and label", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "metric",
+              children: [{ type: "text", text: "$377k" }],
+              caption: "Additional GMV contributed since launch (Mar–Sep)",
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector(".article-metric-value")?.textContent).toBe(
+        "$377k",
+      );
+      expect(container.querySelector(".article-metric-label")?.textContent).toBe(
+        "Additional GMV contributed since launch (Mar–Sep)",
+      );
+    });
+
+    it("omits the label when there is no caption", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "metric",
+              children: [{ type: "text", text: "88%" }],
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector(".article-metric-value")?.textContent).toBe(
+        "88%",
+      );
+      expect(container.querySelector(".article-metric-label")).toBeNull();
     });
   });
 
