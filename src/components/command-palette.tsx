@@ -126,6 +126,7 @@ export function CommandPalette() {
     isEditMode,
     editCategory,
     drafts,
+    currentDraft,
     handleThemeToggle,
     handleEditPage,
     handleNewBlogArticle,
@@ -133,6 +134,7 @@ export function CommandPalette() {
     handleOpenDraft,
     handlePublish,
     handleSaveDraft,
+    handleDiscardChanges,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
 
@@ -211,84 +213,95 @@ export function CommandPalette() {
                     onSelect={handleSaveDraft}
                   >
                     <SaveIcon className={iconStyle} />
-                    Save draft
+                    Save changes and exit
                   </Command.Item>
                   <Command.Item
                     className={itemStyle}
-                    onSelect={handleDiscardDraft}
+                    onSelect={handleDiscardChanges}
                   >
                     <TrashIcon className={iconStyle} />
-                    Discard draft
+                    Discard changes and exit
                   </Command.Item>
                 </Command.Group>
               ) : (
-                <Command.Group className={groupStyle}>
-                  <div className={groupHeadingStyle}>This Page</div>
-                  <Command.Item className={itemStyle} onSelect={handleEditPage}>
-                    <EditIcon className={iconStyle} />
-                    Edit page
-                  </Command.Item>
-                  <Command.Item
-                    className={itemStyle}
-                    onSelect={() => {
-                      console.log("edit metadata");
-                      close();
-                    }}
-                  >
-                    <MetadataIcon className={iconStyle} />
-                    Edit metadata
-                  </Command.Item>
-                </Command.Group>
-              )}
-
-              {/* Publish */}
-              <Command.Group className={groupStyle}>
-                <div className={groupHeadingStyle}>Publish</div>
-                <Command.Item
-                  className={itemStyle}
-                  onSelect={handleNewBlogArticle}
-                >
-                  <WriteIcon className={iconStyle} />
-                  New blog article…
-                </Command.Item>
-                <Command.Item
-                  className={itemStyle}
-                  onSelect={handleNewWorkArticle}
-                >
-                  <WorkIcon className={iconStyle} />
-                  New work article…
-                </Command.Item>
-                <Command.Item
-                  className={itemStyle}
-                  onSelect={() => {
-                    console.log("new page");
-                    close();
-                  }}
-                >
-                  <PageIcon className={iconStyle} />
-                  New page…
-                </Command.Item>
-              </Command.Group>
-
-              {/* Drafts — shown when any drafts exist */}
-              {drafts.length > 0 && (
-                <Command.Group className={groupStyle}>
-                  <div className={groupHeadingStyle}>Drafts</div>
-                  {drafts.map((draft) => (
-                    <Command.Item
-                      key={draft.id}
-                      className={itemStyle}
-                      onSelect={() => handleOpenDraft(draft)}
-                    >
-                      {draft.category === "WORK" ? (
-                        <WorkIcon className={iconStyle} />
-                      ) : (
-                        <WriteIcon className={iconStyle} />
-                      )}
-                      {draft.title ?? `Untitled ${draft.untitledIndex ?? ""}`}
+                <>
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>This Page</div>
+                    <Command.Item className={itemStyle} onSelect={handleEditPage}>
+                      <EditIcon className={iconStyle} />
+                      Edit page
                     </Command.Item>
-                  ))}
-                </Command.Group>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={() => {
+                        console.log("edit metadata");
+                        close();
+                      }}
+                    >
+                      <MetadataIcon className={iconStyle} />
+                      Edit metadata
+                    </Command.Item>
+                    {currentDraft && (
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleDiscardDraft}
+                      >
+                        <TrashIcon className={iconStyle} />
+                        Discard draft
+                      </Command.Item>
+                    )}
+                  </Command.Group>
+
+                  {/* Publish */}
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Publish</div>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handleNewBlogArticle}
+                    >
+                      <WriteIcon className={iconStyle} />
+                      New blog article…
+                    </Command.Item>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handleNewWorkArticle}
+                    >
+                      <WorkIcon className={iconStyle} />
+                      New work article…
+                    </Command.Item>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={() => {
+                        console.log("new page");
+                        close();
+                      }}
+                    >
+                      <PageIcon className={iconStyle} />
+                      New page…
+                    </Command.Item>
+                  </Command.Group>
+
+                  {/* Drafts — shown when any drafts exist */}
+                  {drafts.length > 0 && (
+                    <Command.Group className={groupStyle}>
+                      <div className={groupHeadingStyle}>Drafts</div>
+                      {drafts.map((draft) => (
+                        <Command.Item
+                          key={draft.id}
+                          className={itemStyle}
+                          onSelect={() => handleOpenDraft(draft)}
+                        >
+                          {draft.category === "WORK" ? (
+                            <WorkIcon className={iconStyle} />
+                          ) : (
+                            <WriteIcon className={iconStyle} />
+                          )}
+                          {draft.title ?? `Untitled ${draft.untitledIndex ?? ""}`}
+                        </Command.Item>
+                      ))}
+                    </Command.Group>
+                  )}
+                </>
               )}
             </>
           )}

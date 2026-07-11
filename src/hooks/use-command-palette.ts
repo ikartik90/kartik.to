@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
 import { useThemeStore } from "@/store/theme";
@@ -15,6 +15,7 @@ import {
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 import { notifyContentUpdated } from "@/utils/content-sync";
+import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +27,8 @@ export interface CommandPaletteHandlers {
   isEditMode: boolean;
   editCategory: Post["category"];
   drafts: Post[];
+  /** The draft currently being viewed in renderer mode, or null. */
+  currentDraft: Post | null;
   handleThemeToggle: () => void;
   handleEditPage: () => void;
   handleNewBlogArticle: () => void;
@@ -33,6 +36,9 @@ export interface CommandPaletteHandlers {
   handleOpenDraft: (draft: Post) => void;
   handlePublish: () => Promise<void>;
   handleSaveDraft: () => Promise<void>;
+  /** Revert unsaved edits to the last saved state and exit edit mode. */
+  handleDiscardChanges: () => void;
+  /** Permanently delete the draft currently being viewed. */
   handleDiscardDraft: () => Promise<void>;
 }
 
@@ -84,6 +90,28 @@ export function useCommandPalette(
       .catch(() => { if (!ignore) setDrafts([]); });
     return () => { ignore = true; };
   }, [isAdmin, openKey]);
+
+  // The draft (unpublished post) currently being viewed in renderer mode, if
+  // the pathname matches a known draft's read URL. null in edit mode or when
+  // the viewed post is published.
+  const currentDraft = useMemo(() => {
+    if (isEditMode) return null;
+    const articleSlug = pathname.match(/^\/writing\/([^/]+)$/)?.[1];
+    if (articleSlug) {
+      return (
+        drafts.find(
+          (d) => d.category === "ARTICLE" && d.slug === articleSlug,
+        ) ?? null
+      );
+    }
+    const workSlug = pathname.match(/^\/work\/([^/]+)$/)?.[1];
+    if (workSlug) {
+      return (
+        drafts.find((d) => d.category === "WORK" && d.slug === workSlug) ?? null
+      );
+    }
+    return null;
+  }, [isEditMode, pathname, drafts]);
 
   const syncOtherTabs = () => {
     notifyContentUpdated();
@@ -156,6 +184,9 @@ export function useCommandPalette(
   const handlePublish = async () => {
     const { draftId, title, document, category } = useEditorStore.getState();
     close();
+    // The in-progress work is about to be persisted server-side — drop the
+    // local autosave so it can't later override the saved copy on refresh.
+    clearAutosave(autosaveKey(draftId, category));
     try {
       let id = draftId;
       if (!id) {
@@ -179,6 +210,7 @@ export function useCommandPalette(
   const handleSaveDraft = async () => {
     const { draftId, title, document, category } = useEditorStore.getState();
     close();
+    clearAutosave(autosaveKey(draftId, category));
     try {
       if (!draftId) {
         const created = await createDraft({
@@ -206,14 +238,31 @@ export function useCommandPalette(
     }
   };
 
-  const handleDiscardDraft = async () => {
-    const { draftId } = useEditorStore.getState();
+  // Edit mode: throw away unsaved edits and leave the editor. Nothing is
+  // persisted, so the last saved version remains in the DB; navigating to the
+  // read page (or home for an unsaved new draft) reveals that saved state.
+  const handleDiscardChanges = () => {
+    const slug = pathname.match(/^\/edit\/([^/?]+)/)?.[1];
+    const { draftId, category } = useEditorStore.getState();
     close();
+    clearAutosave(autosaveKey(draftId, category));
+    useEditorStore.getState().reset();
+    if (slug && slug !== "new") {
+      router.push(getPostReadUrl(editCategory, slug));
+    } else {
+      router.push("/");
+    }
+  };
+
+  // Renderer mode: permanently delete the draft being viewed, then go home.
+  const handleDiscardDraft = async () => {
+    if (!currentDraft) return;
+    const { id, category } = currentDraft;
+    close();
+    clearAutosave(autosaveKey(id, category));
     try {
-      if (draftId) {
-        await deleteDraft(draftId);
-        setDrafts((prev) => prev.filter((d) => d.id !== draftId));
-      }
+      await deleteDraft(id);
+      setDrafts((prev) => prev.filter((d) => d.id !== id));
       router.push("/");
       syncOtherTabs();
     } catch (err) {
@@ -227,6 +276,7 @@ export function useCommandPalette(
     isEditMode,
     editCategory,
     drafts,
+    currentDraft,
     handleThemeToggle,
     handleEditPage,
     handleNewBlogArticle,
@@ -234,6 +284,7 @@ export function useCommandPalette(
     handleOpenDraft,
     handlePublish,
     handleSaveDraft,
+    handleDiscardChanges,
     handleDiscardDraft,
   };
 }

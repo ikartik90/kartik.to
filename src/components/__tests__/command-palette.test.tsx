@@ -20,9 +20,10 @@ vi.mock("@/store/theme", () => ({
   useThemeStore: () => ({ mode: "light", setMode: mockSetMode }),
 }));
 
-// Stub next/navigation
+// Stub next/navigation — pathname is controllable per test
+const mockPathname = vi.fn().mockReturnValue("/");
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
+  usePathname: () => mockPathname(),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
@@ -51,6 +52,7 @@ afterEach(() => {
 
 beforeEach(() => {
   mockUseSession.mockReturnValue({ data: null });
+  mockPathname.mockReturnValue("/");
   mockSetMode.mockClear();
 
   HTMLDialogElement.prototype.showModal = vi.fn(function (
@@ -151,6 +153,87 @@ describe("CommandPalette", () => {
       expect(screen.getByText("New blog article…")).toBeDefined();
       expect(screen.getByText("New work article…")).toBeDefined();
       expect(screen.getByText("New page…")).toBeDefined();
+    });
+  });
+
+  describe("when logged in (admin) — edit route", () => {
+    beforeEach(() => {
+      mockPathname.mockReturnValue("/edit/new");
+      mockUseSession.mockReturnValue({
+        data: {
+          user: {
+            id: "admin-id",
+            email: "admin@example.com",
+            name: "Admin",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          session: {
+            id: "session-id",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            userId: "admin-id",
+            expiresAt: new Date(Date.now() + 86400000),
+            token: "token",
+          },
+        },
+      });
+    });
+
+    it("renders only the This Article actions relevant to editing", () => {
+      render(<CommandPalette />);
+      expect(screen.getByText("This Article")).toBeDefined();
+      expect(screen.getByText("Switch to dark theme")).toBeDefined();
+      expect(screen.getByText("Publish article")).toBeDefined();
+      expect(screen.getByText("Save changes and exit")).toBeDefined();
+      expect(screen.getByText("Discard changes and exit")).toBeDefined();
+    });
+
+    it("hides the Publish, This Page, and Drafts groups while editing", () => {
+      render(<CommandPalette />);
+      expect(screen.queryByText("This Page")).toBeNull();
+      expect(screen.queryByText("Publish")).toBeNull();
+      expect(screen.queryByText("New blog article…")).toBeNull();
+      expect(screen.queryByText("New page…")).toBeNull();
+      expect(screen.queryByText("Edit metadata")).toBeNull();
+    });
+
+    it("does not offer 'Discard draft' (delete) while editing", () => {
+      render(<CommandPalette />);
+      expect(screen.queryByText("Discard draft")).toBeNull();
+    });
+  });
+
+  describe("when logged in (admin) — viewing a draft in renderer mode", () => {
+    const draftPost = {
+      id: "draft-1",
+      slug: "my-draft",
+      title: "My Draft",
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content: [] },
+      publishedAt: null,
+      untitledIndex: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    beforeEach(async () => {
+      mockPathname.mockReturnValue("/writing/my-draft");
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      const { getDrafts } = await import("@/app/actions/post");
+      (getDrafts as ReturnType<typeof vi.fn>).mockResolvedValue([draftPost]);
+    });
+
+    afterEach(async () => {
+      const { getDrafts } = await import("@/app/actions/post");
+      (getDrafts as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    });
+
+    it("offers 'Discard draft' when the viewed post is an unpublished draft", async () => {
+      render(<CommandPalette />);
+      expect(await screen.findByText("Discard draft")).toBeDefined();
     });
   });
 

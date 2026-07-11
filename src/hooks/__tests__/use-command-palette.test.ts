@@ -381,4 +381,111 @@ describe("useCommandPalette", () => {
       expect(useEditorStore.getState().draftId).toBe("existing-id");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // handleDiscardChanges (edit mode: revert + exit)
+  // -------------------------------------------------------------------------
+
+  describe("handleDiscardChanges", () => {
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+    });
+
+    it("resets the store and navigates to the read page when editing an existing post", async () => {
+      const { useEditorStore } = await import("@/store/editor");
+      useEditorStore.setState({
+        title: "Existing",
+        draftId: "existing-id",
+        category: "ARTICLE",
+        document: { type: "doc", content: [] },
+        isDirty: true,
+      });
+      mockPathname.mockReturnValue("/edit/existing-draft");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => {
+        result.current.handleDiscardChanges();
+      });
+
+      expect(close).toHaveBeenCalledOnce();
+      expect(mockPush).toHaveBeenCalledWith("/writing/existing-draft");
+      // Store is reverted so no unsaved edits leak into the next session.
+      expect(useEditorStore.getState().draftId).toBeNull();
+      expect(useEditorStore.getState().isDirty).toBe(false);
+    });
+
+    it("navigates home when discarding an unsaved new draft", async () => {
+      const { deleteDraft } = await import("@/app/actions/post");
+      mockPathname.mockReturnValue("/edit/new");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => {
+        result.current.handleDiscardChanges();
+      });
+
+      expect(mockPush).toHaveBeenCalledWith("/");
+      // Discarding changes never deletes anything from the database.
+      expect(deleteDraft).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // currentDraft + handleDiscardDraft (renderer mode: delete)
+  // -------------------------------------------------------------------------
+
+  describe("currentDraft", () => {
+    const draftPost = {
+      id: "draft-1",
+      slug: "my-draft",
+      title: "My Draft",
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content: [] },
+      publishedAt: null,
+      untitledIndex: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    beforeEach(async () => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      const { getDrafts } = await import("@/app/actions/post");
+      (getDrafts as Mock).mockResolvedValue([draftPost]);
+    });
+
+    it("is the matching draft when viewing its read page", async () => {
+      mockPathname.mockReturnValue("/writing/my-draft");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.currentDraft?.id).toBe("draft-1");
+    });
+
+    it("is null when the viewed article is not a draft", async () => {
+      mockPathname.mockReturnValue("/writing/some-published-post");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.currentDraft).toBeNull();
+    });
+
+    it("is null in edit mode", async () => {
+      mockPathname.mockReturnValue("/edit/my-draft");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.currentDraft).toBeNull();
+    });
+
+    it("handleDiscardDraft deletes the viewed draft and navigates home", async () => {
+      const { deleteDraft } = await import("@/app/actions/post");
+      mockPathname.mockReturnValue("/writing/my-draft");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+
+      await act(async () => {
+        await result.current.handleDiscardDraft();
+      });
+
+      expect(deleteDraft).toHaveBeenCalledWith("draft-1");
+      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(mockNotifyContentUpdated).toHaveBeenCalledOnce();
+    });
+  });
 });
