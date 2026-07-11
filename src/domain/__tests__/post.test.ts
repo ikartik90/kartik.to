@@ -168,6 +168,15 @@ describe("BlockNodeSchema", () => {
     ).toBe(false);
   });
 
+  it("accepts a bullet_list_item node", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "bullet_list_item",
+        children: [{ type: "text", text: "First bullet" }],
+      }).success
+    ).toBe(true);
+  });
+
   it("accepts a code_block node", () => {
     expect(
       BlockNodeSchema.safeParse({
@@ -230,6 +239,25 @@ describe("BlockNodeSchema", () => {
         componentId: "",
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts a metric node with a value and label", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "metric",
+        children: [{ type: "text", text: "$377k" }],
+        caption: "Additional GMV contributed since launch (Mar–Sep)",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a metric node without a label", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "metric",
+        children: [{ type: "text", text: "$377k" }],
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects an unknown block type", () => {

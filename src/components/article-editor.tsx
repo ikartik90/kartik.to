@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { css, cx } from "../../styled-system/css";
 import {
   horizontalRule,
@@ -19,13 +20,26 @@ import {
   articleSubheadingCaption,
   articleListItemShell,
   listMarker,
+  listBullet,
   articleListItemContent,
+  articleMetric,
+  articleMetricValue,
+  articleMetricLabel,
   codeBlock,
   articleShowcase,
   articleImg,
   menuIcon,
 } from "../../styled-system/recipes";
 import { useEditorStore } from "@/store/editor";
+import {
+  autosaveKey,
+  clearAutosave,
+  readAutosave,
+  writeAutosave,
+} from "@/utils/editor-autosave";
+import { createDraft, saveDraft } from "@/app/actions/post";
+import { getEditUrl } from "@/utils/post-urls";
+import { notifyContentUpdated } from "@/utils/content-sync";
 import {
   SlashMenu,
   slashMenuHasResults,
@@ -42,6 +56,7 @@ import {
   ImageInsertDialog,
   type ImageDialogMode,
 } from "@/components/image-insert-dialog";
+import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { Button } from "@/components/ui/button";
 import { typographyStyles } from "@/components/ui/typography";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -304,6 +319,24 @@ function sanitiseClipboardHtml(html: string): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Top of an element's content box (border-box top plus top padding). Line
+ * detection must measure against this, not getBoundingClientRect().top: blocks
+ * with vertical padding larger than a line height (e.g. code blocks, padded
+ * 3xl) would otherwise never register their first/last line as a boundary,
+ * trapping the caret inside the block during ArrowUp/ArrowDown navigation.
+ */
+function contentBoxTop(el: HTMLElement): number {
+  const paddingTop = parseFloat(getComputedStyle(el).paddingTop) || 0;
+  return el.getBoundingClientRect().top + paddingTop;
+}
+
+/** Bottom of an element's content box (border-box bottom minus bottom padding). */
+function contentBoxBottom(el: HTMLElement): number {
+  const paddingBottom = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+  return el.getBoundingClientRect().bottom - paddingBottom;
+}
+
+/**
  * Returns true when the caret is on (or above) the first visual line of a
  * contentEditable element — i.e. pressing ArrowUp should leave the block.
  */
@@ -313,7 +346,7 @@ function isCaretAtFirstLine(el: HTMLElement): boolean {
   if (!sel || sel.rangeCount === 0) return true;
   const caretRect = sel.getRangeAt(0).getBoundingClientRect();
   if (!caretRect.height) return true; // degenerate rect (empty block)
-  return caretRect.top < el.getBoundingClientRect().top + caretRect.height;
+  return caretRect.top < contentBoxTop(el) + caretRect.height;
 }
 
 /**
@@ -328,9 +361,7 @@ function isCaretAtLastLine(el: HTMLElement): boolean {
   // A zero-height rect means the caret is at an element boundary, not a text
   // node — don't treat this as the last line; let the browser handle it.
   if (!caretRect.height) return false;
-  return (
-    caretRect.bottom > el.getBoundingClientRect().bottom - caretRect.height
-  );
+  return caretRect.bottom > contentBoxBottom(el) - caretRect.height;
 }
 
 /**
@@ -348,7 +379,7 @@ function isFocusAtFirstLine(el: HTMLElement): boolean {
   r.collapse(true);
   const rect = r.getBoundingClientRect();
   if (!rect.height) return true;
-  return rect.top < el.getBoundingClientRect().top + rect.height;
+  return rect.top < contentBoxTop(el) + rect.height;
 }
 
 /** Like isCaretAtLastLine but inspects the selection FOCUS position. */
@@ -364,9 +395,8 @@ function isFocusAtLastLine(el: HTMLElement): boolean {
   r.setStart(focusNode, sel.focusOffset);
   r.collapse(true);
   const rect = r.getBoundingClientRect();
-  const elRect = el.getBoundingClientRect();
   const result = rect.height
-    ? rect.bottom > elRect.bottom - rect.height
+    ? rect.bottom > contentBoxBottom(el) - rect.height
     : false;
   return result;
 }
@@ -873,16 +903,52 @@ const editorSubheadingCaptionStyle = cx(
   }),
 );
 
+// Metric value — the gradient display line. The recipe clips the brand gradient
+// into the glyphs once populated; while empty it shows the placeholder colour.
+const editorMetricValueStyle = cx(
+  editableBaseStyle,
+  articleMetricValue(),
+  css({
+    minHeight: "1.5em",
+    // The value hugs its text (width: fit-content) so the gradient clips
+    // tightly — but an empty value would then collapse to 0 width, leaving
+    // the caret no room to render. Reserve a caret's width while empty.
+    minWidth: "token(spacing.xxs)",
+  }),
+);
+
+// Metric label — the descriptive line beneath the value.
+const editorMetricLabelStyle = cx(
+  editableBaseStyle,
+  articleMetricLabel(),
+  css({
+    minHeight: "1.5em",
+    "&:empty::before, &[data-empty]::before": {
+      content: "attr(data-placeholder)",
+      color: "text.default/40",
+      pointerEvents: "none",
+    },
+  }),
+);
+
 // Wrapper for <hr> so it can receive keyboard focus (void elements can't).
 const editorHrWrapperStyle = css({
   focusVisibleRing: "none",
   cursor: "default",
 });
 
-// Numbered-list item content — contentEditable mechanics + shared prose recipe.
+// List item content — contentEditable mechanics + shared prose recipe.
 const editorListItemContentStyle = cx(editableBaseStyle, articleListItemContent());
 const editorListMarkerStyle = listMarker();
+const editorListBulletStyle = listBullet();
 const editorListItemShellStyle = articleListItemShell();
+
+/** Numbered (`list_item`) and bulleted (`bullet_list_item`) list entries share
+ *  identical editing behaviour — only their marker differs. */
+type ListItemType = "list_item" | "bullet_list_item";
+function isListItemType(type: BlockNode["type"]): type is ListItemType {
+  return type === "list_item" || type === "bullet_list_item";
+}
 
 // ---------------------------------------------------------------------------
 // EditableBlock
@@ -928,6 +994,8 @@ interface EditableBlockProps {
   /** Called after a non-paragraph block is downgraded to paragraph so the
    *  parent can restore caret focus once the new element is mounted. */
   onConvertedToParagraph?: () => void;
+  /** Toggle an inline mark over the current selection (⌘B / ⌘I / ⌘U). */
+  onToggleMark?: (type: ToggleableMark) => void;
   /** Shift+ArrowUp when the selection focus is on the first visual line. */
   onShiftArrowUp?: () => void;
   /** Shift+ArrowDown when the selection focus is on the last visual line. */
@@ -968,6 +1036,7 @@ function EditableBlock({
   onMergeWithPrev,
   onMergeWithNext,
   onConvertedToParagraph,
+  onToggleMark,
   onShiftArrowUp,
   onShiftArrowDown,
   onChangeImage,
@@ -1007,9 +1076,9 @@ function EditableBlock({
   const [isFocused, setIsFocused] = useState(false);
   const [isShowcaseMediaFocused, setIsShowcaseMediaFocused] = useState(false);
 
-  // Keyboard handler for non-text (horizontal_rule, image) blocks.
-  // These elements have no caret — arrow keys navigate between blocks and
-  // Backspace/Delete deletes the block.
+  // Keyboard handler for the horizontal rule block (no caret): arrow keys
+  // navigate between blocks, Backspace/Delete removes the rule, and Enter
+  // inserts an empty paragraph above it (matching showcase media).
   const handleNonTextKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
       switch (e.key) {
@@ -1020,10 +1089,15 @@ function EditableBlock({
           }
           break;
         case "ArrowDown":
-        case "Enter":
           if (!e.shiftKey) {
             e.preventDefault();
             onArrowDown?.();
+          }
+          break;
+        case "Enter":
+          if (!e.shiftKey) {
+            e.preventDefault();
+            onInsertParagraphBefore?.();
           }
           break;
         case "ArrowLeft":
@@ -1045,7 +1119,7 @@ function EditableBlock({
           break;
       }
     },
-    [onArrowUp, onArrowDown, onArrowLeft, onArrowRight, onDelete],
+    [onArrowUp, onArrowDown, onArrowLeft, onArrowRight, onDelete, onInsertParagraphBefore],
   );
 
   const focusCaption = useCallback((position: "start" | "end") => {
@@ -1167,7 +1241,8 @@ function EditableBlock({
       block.type !== "image" &&
       block.type !== "component" &&
       block.type !== "blockquote" &&
-      block.type !== "heading"
+      block.type !== "heading" &&
+      block.type !== "metric"
     )
       return;
     const el = captionRef.current;
@@ -1299,11 +1374,11 @@ function EditableBlock({
         return;
       }
 
-      // ArrowDown from a blockquote's last line → its citation caption.
+      // ArrowDown from a blockquote's / metric's last line → its caption line.
       if (
         e.key === "ArrowDown" &&
         !e.shiftKey &&
-        block.type === "blockquote" &&
+        (block.type === "blockquote" || block.type === "metric") &&
         isCaretAtLastLine(e.currentTarget)
       ) {
         e.preventDefault();
@@ -1347,11 +1422,11 @@ function EditableBlock({
         return;
       }
 
-      // ArrowRight at the end of a blockquote → its citation caption.
+      // ArrowRight at the end of a blockquote / metric value → its caption line.
       if (
         e.key === "ArrowRight" &&
         !e.shiftKey &&
-        block.type === "blockquote" &&
+        (block.type === "blockquote" || block.type === "metric") &&
         isCaretAtEnd(e.currentTarget)
       ) {
         e.preventDefault();
@@ -1371,8 +1446,8 @@ function EditableBlock({
         return;
       }
 
-      // Numbered-list Enter behaviour (caret-position dependent).
-      if (e.key === "Enter" && !e.shiftKey && block.type === "list_item") {
+      // List Enter behaviour (numbered + bulleted; caret-position dependent).
+      if (e.key === "Enter" && !e.shiftKey && isListItemType(block.type)) {
         e.preventDefault();
         // Empty item → exit the list, converting to a paragraph.
         if (isBlockEmpty(block)) {
@@ -1438,7 +1513,8 @@ function EditableBlock({
         isCaretAtStart(e.currentTarget) &&
         (block.type === "heading" ||
           block.type === "blockquote" ||
-          block.type === "list_item" ||
+          block.type === "metric" ||
+          isListItemType(block.type) ||
           block.type === "code_block")
       ) {
         e.preventDefault();
@@ -1473,17 +1549,19 @@ function EditableBlock({
         return;
       }
 
-      // ⌘B → bold
-      if (e.metaKey && e.key === "b") {
+      // ⌘B / ⌘I / ⌘U → toggle bold / italic / underline over the selection.
+      // Routed through the AST-based toggle (same path as the selection toolbar)
+      // so a second press reliably removes the mark, unlike execCommand.
+      if (
+        e.metaKey &&
+        !e.shiftKey &&
+        (e.key === "b" || e.key === "i" || e.key === "u")
+      ) {
         e.preventDefault();
-        document.execCommand("bold");
-        return;
-      }
-
-      // ⌘I → italic
-      if (e.metaKey && e.key === "i") {
-        e.preventDefault();
-        document.execCommand("italic");
+        if (onToggleMark && block.type !== "code_block") {
+          const markForKey = { b: "bold", i: "italic", u: "underline" } as const;
+          onToggleMark(markForKey[e.key as "b" | "i" | "u"]);
+        }
         return;
       }
     },
@@ -1500,6 +1578,7 @@ function EditableBlock({
       onMergeWithPrev,
       onMergeWithNext,
       onConvertedToParagraph,
+      onToggleMark,
       onShiftArrowUp,
       onShiftArrowDown,
       onInsertParagraphBefore,
@@ -1601,7 +1680,8 @@ function EditableBlock({
         block.type !== "image" &&
         block.type !== "component" &&
         block.type !== "blockquote" &&
-        block.type !== "heading"
+        block.type !== "heading" &&
+        block.type !== "metric"
       )
         return;
       const el = e.currentTarget;
@@ -1805,7 +1885,8 @@ function EditableBlock({
         block.type === "paragraph" ||
         block.type === "heading" ||
         block.type === "blockquote" ||
-        block.type === "list_item" ||
+        block.type === "metric" ||
+        isListItemType(block.type) ||
         block.type === "code_block";
       if (e.key === "/" && isTextBlock) {
         // Open the slash menu whenever "/" is the first character typed —
@@ -2158,12 +2239,12 @@ function EditableBlock({
   }
 
   // ---------------------------------------------------------------------------
-  // Numbered-list item
+  // List item (numbered or bulleted)
   // ---------------------------------------------------------------------------
 
-  if (block.type === "list_item") {
-    // Zero-pad each ordinal to the digit width of the run's largest number so
-    // "1".."9" render as "01".."09" once the list reaches double digits.
+  if (isListItemType(block.type)) {
+    // Numbered: zero-pad each ordinal to the digit width of the run's largest
+    // number so "1".."9" render as "01".."09" once the list hits double digits.
     const markerLabel =
       listOrdinal && listCount
         ? String(listOrdinal).padStart(String(listCount).length, "0")
@@ -2171,9 +2252,13 @@ function EditableBlock({
 
     return (
       <div className={editorListItemShellStyle} data-list-item="">
-        <span className={editorListMarkerStyle} aria-hidden>
-          {markerLabel}
-        </span>
+        {block.type === "list_item" ? (
+          <span className={editorListMarkerStyle} aria-hidden>
+            {markerLabel}
+          </span>
+        ) : (
+          <span className={editorListBulletStyle} aria-hidden />
+        )}
         <p
           ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
           className={editorListItemContentStyle}
@@ -2186,6 +2271,41 @@ function EditableBlock({
           data-block-index={blockIndex}
           data-empty={isBlockEmpty(block) ? "" : undefined}
           {...slashAnchorProps}
+        />
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Metric — gradient value with an editable label beneath it
+  // ---------------------------------------------------------------------------
+
+  if (block.type === "metric") {
+    return (
+      <div className={articleMetric()}>
+        <div
+          ref={combinedRef as React.RefCallback<HTMLDivElement>}
+          className={editorMetricValueStyle}
+          contentEditable
+          suppressContentEditableWarning
+          onKeyDown={handleKeyDown}
+          onInput={handleInput}
+          onKeyUp={handleKeyUp}
+          onPaste={handlePaste}
+          data-block-index={blockIndex}
+          data-empty={isBlockEmpty(block) ? "" : undefined}
+          {...slashAnchorProps}
+        />
+        <span
+          ref={captionRef}
+          className={editorMetricLabelStyle}
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Add label..."
+          data-block-index={blockIndex}
+          data-empty={!block.caption?.trim() ? "" : undefined}
+          onInput={handleCaptionInput}
+          onKeyDown={handleCaptionKeyDown}
         />
       </div>
     );
@@ -2220,9 +2340,10 @@ function EditableBlock({
 /**
  * Ensure an editable paragraph trails certain terminal blocks so the author can
  * always continue typing after them. This covers caret-less blocks
- * (horizontal_rule, image, component) as well as numbered lists — a list_item
- * last block would otherwise trap the author in the list with no plain block to
- * click into below it.
+ * (horizontal_rule, image, component), lists — a list item last block would
+ * otherwise trap the author in the list with no plain block to click into below
+ * it — and code blocks, where Enter inserts a literal newline rather than a new
+ * block, leaving no way to escape downward.
  */
 function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
   if (blocks.length === 0) {
@@ -2233,7 +2354,8 @@ function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
     last.type === "horizontal_rule" ||
     last.type === "image" ||
     last.type === "component" ||
-    last.type === "list_item"
+    last.type === "code_block" ||
+    isListItemType(last.type)
   ) {
     return [
       ...blocks,
@@ -2315,9 +2437,33 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     pushHistory,
   } = useEditorStore();
 
+  const router = useRouter();
+  // Guards against overlapping saves while a ⌘S request is in flight.
+  const savingRef = useRef(false);
+
   // Populate store from initialPost on mount; reset on unmount.
   useEffect(() => {
-    if (initialPost) {
+    const sessionCategory = category ?? initialPost?.category ?? "ARTICLE";
+    // Prefer a local autosave over the DB copy — it holds edits made after the
+    // last save that a refresh / tab-close would otherwise have lost.
+    const restored = readAutosave(
+      autosaveKey(initialPost?.id ?? null, sessionCategory),
+    );
+
+    if (restored) {
+      useEditorStore.setState({
+        title: restored.title,
+        draftId: restored.draftId,
+        category: restored.category,
+        document: {
+          ...restored.document,
+          content: withTrailingParagraph(restored.document.content),
+        },
+        isDirty: true,
+        history: [],
+        historyIndex: -1,
+      });
+    } else if (initialPost) {
       useEditorStore.setState({
         title: initialPost.title ?? "",
         draftId: initialPost.id,
@@ -2341,6 +2487,87 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     s.pushHistory({ title: s.title, document: s.document });
     return () => useEditorStore.getState().reset();
   }, [initialPost?.id, category]);
+
+  // Autosave to localStorage (debounced) so an accidental refresh or tab close
+  // never loses unsaved edits. Only dirty state is persisted; an explicit
+  // save / publish / discard clears the entry (see use-command-palette.ts).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = useEditorStore.subscribe((state) => {
+      if (!state.isDirty) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        // Re-read at fire time: a save between scheduling and firing clears the
+        // dirty flag, and this pending write must not resurrect the autosave.
+        const s = useEditorStore.getState();
+        if (!s.isDirty) return;
+        writeAutosave(autosaveKey(s.draftId, s.category), {
+          title: s.title,
+          draftId: s.draftId,
+          category: s.category,
+          document: s.document,
+          savedAt: Date.now(),
+        });
+      }, 500);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, []);
+
+  // ⌘S / Ctrl+S → persist the draft to the DB without leaving the editor.
+  // Creating a first-time draft swaps the URL to /edit/<slug> (via replace, so
+  // the editor stays mounted for existing drafts and only remounts for the
+  // brand-new case) so a later refresh reloads the saved draft, not a blank
+  // /edit/new. On success the local autosave is dropped and the dirty flag
+  // cleared; other tabs refresh via the content-sync broadcast.
+  useEffect(() => {
+    async function saveInPlace() {
+      if (savingRef.current) return;
+      const { draftId, title, document, category, isDirty } =
+        useEditorStore.getState();
+      // Nothing unsaved — every edit sets isDirty, so this is a true no-op.
+      if (!isDirty) return;
+
+      savingRef.current = true;
+      try {
+        if (!draftId) {
+          const created = await createDraft({
+            title: title || undefined,
+            document,
+            category,
+          });
+          useEditorStore.getState().setDraftId(created.id);
+          router.replace(getEditUrl(created.category, created.slug));
+        } else {
+          await saveDraft({ id: draftId, title: title || undefined, document });
+        }
+        useEditorStore.getState().setDirty(false);
+        // Clear both the pre-save "new:<category>" key and any post-createDraft
+        // id key so a refresh reloads the DB copy rather than a stale autosave.
+        clearAutosave(autosaveKey(draftId, category));
+        const after = useEditorStore.getState();
+        clearAutosave(autosaveKey(after.draftId, after.category));
+        notifyContentUpdated();
+      } catch (err) {
+        console.error("Failed to save draft:", err);
+      } finally {
+        savingRef.current = false;
+      }
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key !== "s" && e.key !== "S") return;
+      e.preventDefault();
+      void saveInPlace();
+    }
+
+    document.addEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [router]);
 
   const blocks = ensureBlocks(doc);
   const blockRefs = useRef<(HTMLElement | null)[]>([]);
@@ -2585,6 +2812,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   const [imageDialogBlockIndex, setImageDialogBlockIndex] = useState<
     number | null
   >(null);
+  const [componentDialogOpen, setComponentDialogOpen] = useState(false);
+  const [componentDialogBlockIndex, setComponentDialogBlockIndex] = useState<
+    number | null
+  >(null);
 
   // Floating selection toolbar (formatting / link editing / link actions).
   const [toolbar, setToolbar] = useState<ToolbarState | null>(null);
@@ -2734,16 +2965,13 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         ? ({ ...current, children: htmlToNodes(beforeHtml) } as BlockNode)
         : current;
 
-    // The new block inherits the current block's type for headings and list
-    // items only. All other block types (including blockquote) split into a
-    // paragraph.
+    // The new block inherits the current block's type for list items only, so
+    // pressing Enter continues the list. Every other block type (headings,
+    // blockquotes, metrics, …) splits into a default paragraph.
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
-      if (current.type === "heading") {
-        return { type: "heading", level: current.level, children: afterNodes };
-      }
-      if (current.type === "list_item") {
-        return { type: "list_item", children: afterNodes };
+      if (isListItemType(current.type)) {
+        return { type: current.type, children: afterNodes };
       }
       return { type: "paragraph", children: afterNodes };
     })();
@@ -2801,15 +3029,17 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     }, 0);
   }
 
-  function emptyListItemBlock(): BlockNode {
-    return { type: "list_item", children: [{ type: "text", text: "" }] };
+  function emptyListItemBlock(type: ListItemType): BlockNode {
+    return { type, children: [{ type: "text", text: "" }] };
   }
 
-  /** Enter at the start of a list item: prepend an empty item, keep editing this one. */
+  /** Enter at the start of a list item: prepend an empty item of the same list
+   *  type (numbered or bulleted), keeping the caret on the current item. */
   function insertListItemBefore(index: number) {
+    const type = blocks[index].type as ListItemType;
     updateBlocks([
       ...blocks.slice(0, index),
-      emptyListItemBlock(),
+      emptyListItemBlock(type),
       ...blocks.slice(index),
     ]);
     cancelHistoryDebounce();
@@ -2822,11 +3052,13 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     }, 0);
   }
 
-  /** Enter at the end of a list item: append a fresh empty item and focus it. */
+  /** Enter at the end of a list item: append a fresh empty item of the same
+   *  list type and focus it. */
   function insertListItemAfter(index: number) {
+    const type = blocks[index].type as ListItemType;
     updateBlocks([
       ...blocks.slice(0, index + 1),
-      emptyListItemBlock(),
+      emptyListItemBlock(type),
       ...blocks.slice(index + 1),
     ]);
     cancelHistoryDebounce();
@@ -2947,6 +3179,11 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       titleRef.current?.focus();
       return;
     }
+    // The block being deleted is focused. With index-based keys React reuses its
+    // DOM node for the block that shifts up into this slot, and EditableBlock's
+    // innerHTML-sync useEffect skips focused nodes — leaving the following block
+    // visually empty. Blur first so that sync runs (mirrors the undo/redo path).
+    (document.activeElement as HTMLElement | null)?.blur();
     const next = [...blocks.slice(0, index), ...blocks.slice(index + 1)];
     updateBlocks(next);
     cancelHistoryDebounce();
@@ -3086,7 +3323,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     el.innerHTML = inlineNodesToHtml(children);
   }
 
-  function handleSlashSelectComponent(componentId: string) {
+  /**
+   * The slash menu no longer picks a component itself — it opens the Insert
+   * Component overlay. Strip the trigger, leave a paragraph in place, and defer
+   * the actual component insertion until the overlay confirms (mirrors Media).
+   */
+  function handleSlashOpenComponentPicker() {
     if (!slashAnchor) return;
     const { index, el } = slashAnchor;
     setSlashAnchor(null);
@@ -3096,15 +3338,35 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     syncFocusedBlockDom(el, keptChildren, "paragraph");
 
     const next = [...blocks];
+    next[index] = { type: "paragraph", children: keptChildren };
+    updateBlocks(next);
+
+    setComponentDialogBlockIndex(index);
+    setComponentDialogOpen(true);
+  }
+
+  function handleComponentInsert(componentId: string) {
+    if (componentDialogBlockIndex === null) return;
+    const index = componentDialogBlockIndex;
+
+    const next = [...blocks];
     next[index] = { type: "component", componentId };
     updateBlocks(next);
     cancelHistoryDebounce();
     pushHistoryNow();
 
+    setComponentDialogOpen(false);
+    setComponentDialogBlockIndex(null);
+
     setTimeout(() => {
       const trailing = blockRefs.current[index + 1];
       if (trailing) focusBlockAtStart(trailing);
     }, 0);
+  }
+
+  function handleComponentDialogClose() {
+    setComponentDialogOpen(false);
+    setComponentDialogBlockIndex(null);
   }
 
   function handleSlashSelect(type: SlashMenuBlockType) {
@@ -3137,6 +3399,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       newBlock = { type: "blockquote", children: keptChildren };
     } else if (type === "list_item") {
       newBlock = { type: "list_item", children: keptChildren };
+    } else if (type === "bullet_list_item") {
+      newBlock = { type: "bullet_list_item", children: keptChildren };
+    } else if (type === "metric") {
+      newBlock = { type: "metric", children: keptChildren };
     } else if (type === "code_block") {
       // Code blocks store plain text only — flatten marks away.
       const plainText = keptChildren.map((n) => n.text).join("");
@@ -3337,24 +3603,45 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   }
   trackSelectionRef.current = trackSelection;
 
-  function handleToggleMark(type: ToggleableMark) {
-    if (!toolbar) return;
-    const { index } = toolbar;
+  // Toggle an inline mark over a character range within block `index`. Shared
+  // by the selection toolbar and the ⌘B/⌘I/⌘U keyboard shortcuts.
+  function toggleMarkInRange(
+    index: number,
+    type: ToggleableMark,
+    range: { start: number; end: number },
+  ) {
     const el = blockRefs.current[index];
     const block = blocks[index];
     if (!el || !block || !("children" in block)) return;
-    const off = getSelectionOffsets(el) ?? toolbar.range;
-    if (off.start === off.end) return;
+    if (range.start === range.end) return;
     const nodes = domToInlineNodes(el);
-    const has = rangeHasMark(nodes, off.start, off.end, type);
-    const next = transformMarksInRange(nodes, off.start, off.end, (marks) =>
+    const has = rangeHasMark(nodes, range.start, range.end, type);
+    const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
       has
         ? marks.filter((m) => m.type !== type)
         : [...marks.filter((m) => m.type !== type), { type } as Mark],
     );
     el.innerHTML = inlineNodesToHtml(next);
     updateBlock(index, { ...block, children: next });
-    setSelectionRange(el, off.start, off.end);
+    setSelectionRange(el, range.start, range.end);
+  }
+
+  function handleToggleMark(type: ToggleableMark) {
+    if (!toolbar) return;
+    const { index } = toolbar;
+    const el = blockRefs.current[index];
+    if (!el) return;
+    const off = getSelectionOffsets(el) ?? toolbar.range;
+    toggleMarkInRange(index, type, off);
+  }
+
+  // ⌘B / ⌘I / ⌘U from within a block: toggle the mark over the live selection.
+  function toggleMarkFromKeyboard(index: number, type: ToggleableMark) {
+    const el = blockRefs.current[index];
+    if (!el) return;
+    const off = getSelectionOffsets(el);
+    if (!off) return;
+    toggleMarkInRange(index, type, off);
   }
 
   function handleStartLink() {
@@ -3768,6 +4055,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
               if (el) focusBlockAtStart(el);
             }, 0);
           }}
+          onToggleMark={(type) => toggleMarkFromKeyboard(i, type)}
           onShiftArrowUp={() => shiftArrowUp(i)}
           onShiftArrowDown={() => shiftArrowDown(i)}
           onChangeImage={
@@ -3775,7 +4063,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           }
           onInsertParagraphBefore={() => insertParagraphBefore(i)}
           onInsertParagraphAfter={
-            block.type === "image" || block.type === "component"
+            block.type === "image" ||
+            block.type === "component" ||
+            block.type === "metric"
               ? () => insertParagraphAfter(i)
               : undefined
           }
@@ -3794,14 +4084,22 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           query={slashQuery}
           allowedTypes={
             slashAnchor.hasExistingContent
-              ? ["heading", "paragraph", "blockquote", "list_item", "code_block"]
+              ? [
+                  "heading",
+                  "paragraph",
+                  "blockquote",
+                  "list_item",
+                  "bullet_list_item",
+                  "metric",
+                  "code_block",
+                ]
               : undefined
           }
           excludeType={
             blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined
           }
           onSelect={handleSlashSelect}
-          onSelectComponent={handleSlashSelectComponent}
+          onOpenComponentPicker={handleSlashOpenComponentPicker}
           onDismiss={handleSlashDismiss}
         />
       )}
@@ -3841,6 +4139,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         initialPhase={imageDialogMode === "change" ? "library" : "upload"}
         onClose={handleImageDialogClose}
         onInsert={handleImageInsert}
+      />
+
+      <ComponentInsertDialog
+        open={componentDialogOpen}
+        onClose={handleComponentDialogClose}
+        onInsert={handleComponentInsert}
       />
     </>
   );

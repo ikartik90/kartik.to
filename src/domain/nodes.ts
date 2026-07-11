@@ -80,6 +80,13 @@ export const ListItemNodeSchema = z.object({
   children: z.array(InlineNodeSchema),
 });
 
+// A single unordered-list entry. Bulleted lists are runs of consecutive
+// `bullet_list_item` blocks — the renderer groups them into one <ul>.
+export const BulletListItemNodeSchema = z.object({
+  type: z.literal("bullet_list_item"),
+  children: z.array(InlineNodeSchema),
+});
+
 export const CodeLanguageSchema = z.enum([
   "html",
   "css",
@@ -115,6 +122,15 @@ export const ComponentNodeSchema = z.object({
   caption: z.string().optional(),
 });
 
+// A metric callout — a large brand-gradient `value` (e.g. "$377k") stacked over
+// a descriptive `label`. Modelled like a blockquote: the value is the primary
+// inline-node `children` array and the label reuses the shared `caption` field.
+export const MetricNodeSchema = z.object({
+  type: z.literal("metric"),
+  children: z.array(InlineNodeSchema),
+  caption: z.string().optional(),
+});
+
 // ---------------------------------------------------------------------------
 // BlockNode union — the single source of truth for all valid block types.
 // Add new node schemas to both the type union and the z.union() array below.
@@ -125,18 +141,22 @@ export type BlockNode =
   | z.infer<typeof HeadingNodeSchema>
   | z.infer<typeof BlockquoteNodeSchema>
   | z.infer<typeof ListItemNodeSchema>
+  | z.infer<typeof BulletListItemNodeSchema>
   | z.infer<typeof CodeBlockNodeSchema>
   | z.infer<typeof HorizontalRuleNodeSchema>
   | z.infer<typeof ImageNodeSchema>
-  | z.infer<typeof ComponentNodeSchema>;
+  | z.infer<typeof ComponentNodeSchema>
+  | z.infer<typeof MetricNodeSchema>;
 
 export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   ParagraphNodeSchema,
   HeadingNodeSchema,
   BlockquoteNodeSchema,
   ListItemNodeSchema,
+  BulletListItemNodeSchema,
   CodeBlockNodeSchema,
   HorizontalRuleNodeSchema,
   ImageNodeSchema,
   ComponentNodeSchema,
+  MetricNodeSchema,
 ]);
