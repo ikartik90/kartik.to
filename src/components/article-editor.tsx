@@ -9,8 +9,8 @@ import {
   inlineCode,
   articleLink,
   articleUnderline,
-  articleWavyUnderline,
   articleStrikethrough,
+  articleHighlight,
   articleBlockquote,
   articleBlockquoteBody,
   articleBlockquoteCite,
@@ -85,46 +85,67 @@ import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
 const inlineCodeClass = inlineCode();
 const linkClass = articleLink();
 const underlineClass = articleUnderline();
-const wavyUnderlineClass = articleWavyUnderline();
 const strikethroughClass = articleStrikethrough();
+const highlightClass = articleHighlight();
 
-/** Serialise an inline-nodes array to an HTML string for contentEditable. */
+function isHighlighted(node: InlineNode): boolean {
+  return (node.marks ?? []).some((m) => m.type === "highlight");
+}
+
+/** Serialise a node's marks to nested HTML; `highlight` is applied at the run level. */
+function styledTextToHtml(node: InlineNode): string {
+  let html = node.text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  for (const mark of node.marks ?? []) {
+    switch (mark.type) {
+      case "bold":
+        html = `<strong>${html}</strong>`;
+        break;
+      case "italic":
+        html = `<em>${html}</em>`;
+        break;
+      case "code":
+        html = `<code class="${inlineCodeClass}">${html}</code>`;
+        break;
+      case "underline":
+        html = `<u class="${underlineClass}">${html}</u>`;
+        break;
+      case "strikethrough":
+        html = `<s class="${strikethroughClass}">${html}</s>`;
+        break;
+      case "link":
+        html = `<a href="${mark.href}" class="${linkClass}">${html}</a>`;
+        break;
+    }
+  }
+  return html;
+}
+
+/**
+ * Serialise an inline-nodes array to an HTML string for contentEditable.
+ * Consecutive highlighted nodes coalesce into one <mark> so the gradient stays
+ * continuous across a run (see self-improvement.md).
+ */
 export function inlineNodesToHtml(nodes: InlineNode[]): string {
-  return nodes
-    .map((node) => {
-      let html = node.text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-      for (const mark of node.marks ?? []) {
-        switch (mark.type) {
-          case "bold":
-            html = `<strong>${html}</strong>`;
-            break;
-          case "italic":
-            html = `<em>${html}</em>`;
-            break;
-          case "code":
-            html = `<code class="${inlineCodeClass}">${html}</code>`;
-            break;
-          case "underline":
-            html = `<u class="${underlineClass}">${html}</u>`;
-            break;
-          case "wavy_underline":
-            html = `<u data-wavy class="${wavyUnderlineClass}">${html}</u>`;
-            break;
-          case "strikethrough":
-            html = `<s class="${strikethroughClass}">${html}</s>`;
-            break;
-          case "link":
-            html = `<a href="${mark.href}" class="${linkClass}">${html}</a>`;
-            break;
-        }
+  let out = "";
+  let i = 0;
+  while (i < nodes.length) {
+    if (isHighlighted(nodes[i])) {
+      let inner = "";
+      while (i < nodes.length && isHighlighted(nodes[i])) {
+        inner += styledTextToHtml(nodes[i]);
+        i++;
       }
-      return html;
-    })
-    .join("");
+      out += `<mark class="${highlightClass}">${inner}</mark>`;
+    } else {
+      out += styledTextToHtml(nodes[i]);
+      i++;
+    }
+  }
+  return out;
 }
 
 /** Walk a contentEditable DOM node and extract inline nodes. */
@@ -153,18 +174,14 @@ export function domToInlineNodes(el: Node): InlineNode[] {
       else if (el.tagName === "EM" || el.tagName === "I")
         nextMarks.push({ type: "italic" });
       else if (el.tagName === "CODE") nextMarks.push({ type: "code" });
-      else if (el.tagName === "U")
-        nextMarks.push(
-          el.hasAttribute("data-wavy")
-            ? { type: "wavy_underline" }
-            : { type: "underline" },
-        );
+      else if (el.tagName === "U") nextMarks.push({ type: "underline" });
       else if (
         el.tagName === "S" ||
         el.tagName === "STRIKE" ||
         el.tagName === "DEL"
       )
         nextMarks.push({ type: "strikethrough" });
+      else if (el.tagName === "MARK") nextMarks.push({ type: "highlight" });
       else if (el.tagName === "A") {
         const href = (el as HTMLAnchorElement).href;
         if (href) nextMarks.push({ type: "link", href });
@@ -308,6 +325,8 @@ function sanitiseClipboardHtml(html: string): string {
       case "strike":
       case "del":
         return `<s class="${strikethroughClass}">${inner}</s>`;
+      case "mark":
+        return `<mark class="${highlightClass}">${inner}</mark>`;
       case "code":
         return `<code class="${inlineCodeClass}">${inner}</code>`;
       // Links — strip the anchor entirely, keep only the visible text.
@@ -1148,6 +1167,10 @@ function EditableBlock({
             onArrowRight?.();
           }
           break;
+        case "Tab":
+          // Tab has no navigation role in the editor — swallow it.
+          e.preventDefault();
+          break;
         case "Backspace":
         case "Delete":
           e.preventDefault();
@@ -1238,10 +1261,9 @@ function EditableBlock({
           }
           break;
         case "Tab":
-          if (!e.shiftKey) {
-            e.preventDefault();
-            focusCaption("start");
-          }
+          // Tab never navigates in the editor — swallow it (ArrowDown/Right
+          // still move into the caption).
+          e.preventDefault();
           break;
         case "Backspace":
         case "Delete":
@@ -1309,22 +1331,24 @@ function EditableBlock({
         }
       }
 
-      // Tab / Shift+Tab anywhere in an indentable block toggles a one-step
-      // indent (aligns with list-item text). No-op when already in the target
-      // state; always preventDefault so focus never leaves the editor.
-      if (
-        e.key === "Tab" &&
-        (block.type === "paragraph" ||
+      // Tab never navigates between blocks in the editor — its only role is
+      // one-step indentation. For indentable blocks it toggles the indent
+      // (anywhere in the block); for every other block type it's a deliberate
+      // no-op. Either way preventDefault so the caret never jumps.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        if (
+          block.type === "paragraph" ||
           block.type === "heading" ||
           block.type === "blockquote" ||
-          block.type === "metric")
-      ) {
-        e.preventDefault();
-        const isIndented = (block as { indent?: boolean }).indent === true;
-        if (!e.shiftKey && !isIndented) {
-          onChange({ ...block, indent: true });
-        } else if (e.shiftKey && isIndented) {
-          onChange({ ...block, indent: undefined });
+          block.type === "metric"
+        ) {
+          const isIndented = (block as { indent?: boolean }).indent === true;
+          if (!e.shiftKey && !isIndented) {
+            onChange({ ...block, indent: true });
+          } else if (e.shiftKey && isIndented) {
+            onChange({ ...block, indent: undefined });
+          }
         }
         return;
       }
@@ -1759,6 +1783,12 @@ function EditableBlock({
         e.stopPropagation();
         return;
       }
+      // Tab has no navigation role in the editor — swallow it so the caret
+      // never jumps out of the caption.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        return;
+      }
       if (e.key === "Enter" && e.shiftKey) {
         e.preventDefault();
         document.execCommand("insertLineBreak");
@@ -1837,6 +1867,11 @@ function EditableBlock({
     (e: React.KeyboardEvent<HTMLElement>) => {
       if (e.key === "Backspace" || e.key === "Delete") {
         e.stopPropagation();
+        return;
+      }
+      // Tab has no navigation role in the editor — swallow it.
+      if (e.key === "Tab") {
+        e.preventDefault();
         return;
       }
       if (e.key === "Enter" && e.shiftKey) {
@@ -2519,8 +2554,8 @@ const TOOLBAR_MARK_TYPES: Mark["type"][] = [
   "italic",
   "code",
   "underline",
-  "wavy_underline",
   "strikethrough",
+  "highlight",
   "link",
 ];
 
@@ -4182,6 +4217,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           if (text) document.execCommand("insertText", false, text);
         }}
         onKeyDown={(e) => {
+          // Tab has no navigation role in the editor — swallow it so the caret
+          // never jumps from the title into the body.
+          if (e.key === "Tab") {
+            e.preventDefault();
+            return;
+          }
           if (e.key === "Enter") {
             e.preventDefault();
             const el = blockRefs.current[0];

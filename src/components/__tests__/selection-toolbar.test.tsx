@@ -32,8 +32,8 @@ describe("SelectionToolbar — format mode", () => {
       "Bold",
       "Italic",
       "Underline",
-      "Wavy underline",
       "Strikethrough",
+      "Highlight",
       "Code",
     ]) {
       expect(screen.getByLabelText(label)).toBeDefined();

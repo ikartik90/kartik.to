@@ -152,6 +152,53 @@ describe("inlineNodesToHtml", () => {
     expect(inlineNodesToHtml(nodes)).toBe("<code>fn()</code>");
   });
 
+  it("wraps highlighted text in <mark>", () => {
+    const nodes: InlineNode[] = [
+      { type: "text", text: "note", marks: [{ type: "highlight" }] },
+    ];
+    expect(inlineNodesToHtml(nodes)).toBe(
+      '<mark class="article-highlight">note</mark>',
+    );
+  });
+
+  it("coalesces a styled sub-span within a highlight into a single <mark>", () => {
+    const nodes: InlineNode[] = [
+      { type: "text", text: "hello ", marks: [{ type: "highlight" }] },
+      {
+        type: "text",
+        text: "world",
+        marks: [{ type: "highlight" }, { type: "italic" }],
+      },
+    ];
+    expect(inlineNodesToHtml(nodes)).toBe(
+      '<mark class="article-highlight">hello <em>world</em></mark>',
+    );
+  });
+
+  it("extracts highlight as the outer wrapper regardless of mark order", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "x",
+        marks: [{ type: "italic" }, { type: "highlight" }],
+      },
+    ];
+    expect(inlineNodesToHtml(nodes)).toBe(
+      '<mark class="article-highlight"><em>x</em></mark>',
+    );
+  });
+
+  it("keeps non-adjacent highlights in separate marks", () => {
+    const nodes: InlineNode[] = [
+      { type: "text", text: "a", marks: [{ type: "highlight" }] },
+      { type: "text", text: "b" },
+      { type: "text", text: "c", marks: [{ type: "highlight" }] },
+    ];
+    expect(inlineNodesToHtml(nodes)).toBe(
+      '<mark class="article-highlight">a</mark>b<mark class="article-highlight">c</mark>',
+    );
+  });
+
   it("escapes HTML entities in text", () => {
     const nodes: InlineNode[] = [{ type: "text", text: "<script>&" }];
     expect(inlineNodesToHtml(nodes)).toBe("&lt;script&gt;&amp;");
@@ -206,6 +253,12 @@ describe("domToInlineNodes", () => {
   it("extracts code from <code>", () => {
     expect(parse("<code>fn()</code>")).toEqual([
       { type: "text", text: "fn()", marks: [{ type: "code" }] },
+    ]);
+  });
+
+  it("extracts highlight from <mark>", () => {
+    expect(parse("<mark>note</mark>")).toEqual([
+      { type: "text", text: "note", marks: [{ type: "highlight" }] },
     ]);
   });
 
@@ -763,7 +816,7 @@ describe("ArticleEditor", () => {
     expect(document.activeElement).toBe(caption);
   });
 
-  it("moves focus from image to caption on Tab", () => {
+  it("moves focus from image to caption on ArrowDown, but swallows Tab", () => {
     const post = {
       id: "img5b",
       slug: "img5b",
@@ -786,9 +839,15 @@ describe("ArticleEditor", () => {
 
     const img = document.querySelector("[data-showcase-media]") as HTMLElement;
     const caption = document.querySelector("figcaption") as HTMLElement;
-    img.focus();
-    fireEvent.keyDown(img, { key: "Tab" });
 
+    // Tab is swallowed — it must not move the caret into the caption.
+    img.focus();
+    const notPrevented = fireEvent.keyDown(img, { key: "Tab" });
+    expect(notPrevented).toBe(false);
+    expect(document.activeElement).toBe(img);
+
+    // ArrowDown still descends into the caption.
+    fireEvent.keyDown(img, { key: "ArrowDown" });
     expect(document.activeElement).toBe(caption);
   });
 
@@ -2540,6 +2599,52 @@ describe("ArticleEditor block indent", () => {
     fireEvent.keyDown(el, { key: "Tab" });
 
     expect(indentOf()).toBe(true);
+  });
+
+  // fireEvent.keyDown returns false when a handler called preventDefault — i.e.
+  // Tab was swallowed and won't move the caret to the next node.
+  it("swallows Tab on a list item without indenting", () => {
+    const el = seed({
+      type: "list_item",
+      children: [{ type: "text", text: "item" }],
+    });
+    el.focus();
+    caretAtStart(el);
+
+    const notPrevented = fireEvent.keyDown(el, { key: "Tab" });
+
+    expect(notPrevented).toBe(false);
+    expect(indentOf()).toBeUndefined();
+  });
+
+  it("swallows Tab in a code block", () => {
+    const el = seed({
+      type: "code_block",
+      children: [{ type: "text", text: "const x = 1" }],
+    });
+    el.focus();
+    caretAtStart(el);
+
+    expect(fireEvent.keyDown(el, { key: "Tab" })).toBe(false);
+  });
+
+  it("swallows Tab in the title", () => {
+    seed(para("body"));
+    const title = document.querySelector("#article-title") as HTMLElement;
+    title.focus();
+
+    expect(fireEvent.keyDown(title, { key: "Tab" })).toBe(false);
+  });
+
+  it("swallows Shift+Tab on a list item (no outdent jump)", () => {
+    const el = seed({
+      type: "list_item",
+      children: [{ type: "text", text: "item" }],
+    });
+    el.focus();
+    caretAtStart(el);
+
+    expect(fireEvent.keyDown(el, { key: "Tab", shiftKey: true })).toBe(false);
   });
 });
 

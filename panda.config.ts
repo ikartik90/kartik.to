@@ -290,21 +290,29 @@ export default defineConfig({
           },
         }),
 
-        articleWavyUnderline: defineRecipe({
-          className: "article-wavy-underline",
-          description: "Wavy (squiggle) underline mark inside article prose.",
-          base: {
-            textDecorationLine: "underline",
-            textDecorationStyle: "wavy",
-            textUnderlineOffset: "0.15em",
-          },
-        }),
-
         articleStrikethrough: defineRecipe({
           className: "article-strikethrough",
           description: "Strikethrough mark inside article prose.",
           base: {
             textDecorationLine: "line-through",
+          },
+        }),
+
+        articleHighlight: defineRecipe({
+          className: "article-highlight",
+          description:
+            "Highlight mark (<mark>) inside article prose — brand gradient behind fixed neutral.700 text.",
+          base: {
+            background: "bg.listMarker",
+            color: "bg.canvas",
+            paddingInline: "xxs",
+            paddingBlock: "xxs",
+            boxDecorationBreak: "clone",
+            WebkitBoxDecorationBreak: "clone",
+            // Keep nested marks on the highlight's own colour (see self-improvement.md).
+            "& :is(strong, b, em, i, u, s, code, a)": {
+              color: "inherit",
+            },
           },
         }),
 

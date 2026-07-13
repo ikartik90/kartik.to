@@ -10,8 +10,8 @@ import {
   inlineCode,
   articleLink,
   articleUnderline,
-  articleWavyUnderline,
   articleStrikethrough,
+  articleHighlight,
   articleBlockquote,
   articleBlockquoteBody,
   articleBlockquoteCite,
@@ -65,9 +65,12 @@ const HEADING_MAP: Record<
 // Inline node renderer — applies marks as nested elements
 // ---------------------------------------------------------------------------
 
-function renderInlineNode(node: InlineNode, index: number): React.ReactNode {
+/** Apply a node's marks as nested elements; `highlight` is applied at the run level. */
+function renderStyledNode(node: InlineNode, index: number): React.ReactNode {
   const { text, marks } = node;
-  if (!marks || marks.length === 0) return text;
+  if (!marks || marks.length === 0) {
+    return <React.Fragment key={index}>{text}</React.Fragment>;
+  }
 
   let content: React.ReactNode = text;
 
@@ -85,9 +88,6 @@ function renderInlineNode(node: InlineNode, index: number): React.ReactNode {
       case "underline":
         content = <u className={articleUnderline()}>{content}</u>;
         break;
-      case "wavy_underline":
-        content = <u className={articleWavyUnderline()}>{content}</u>;
-        break;
       case "strikethrough":
         content = <s className={articleStrikethrough()}>{content}</s>;
         break;
@@ -104,6 +104,34 @@ function renderInlineNode(node: InlineNode, index: number): React.ReactNode {
   return <React.Fragment key={index}>{content}</React.Fragment>;
 }
 
+/** Render a children array, coalescing consecutive highlighted nodes into one <mark>. */
+function renderInlineNodes(nodes: InlineNode[]): React.ReactNode[] {
+  const isHighlighted = (n: InlineNode) =>
+    (n.marks ?? []).some((m) => m.type === "highlight");
+
+  const out: React.ReactNode[] = [];
+  let i = 0;
+  while (i < nodes.length) {
+    if (isHighlighted(nodes[i])) {
+      const start = i;
+      const run: React.ReactNode[] = [];
+      while (i < nodes.length && isHighlighted(nodes[i])) {
+        run.push(renderStyledNode(nodes[i], i));
+        i++;
+      }
+      out.push(
+        <mark key={`hl-${start}`} className={articleHighlight()}>
+          {run}
+        </mark>,
+      );
+    } else {
+      out.push(renderStyledNode(nodes[i], i));
+      i++;
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Block node renderer
 // ---------------------------------------------------------------------------
@@ -118,7 +146,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           type="paragraph"
           data-indented={node.indent ? "" : undefined}
         >
-          {node.children.map(renderInlineNode)}
+          {renderInlineNodes(node.children)}
         </Typography>
       );
 
@@ -134,7 +162,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
             type={type}
             data-indented={node.indent ? "" : undefined}
           >
-            {node.children.map(renderInlineNode)}
+            {renderInlineNodes(node.children)}
           </Typography>
         );
       return (
@@ -145,7 +173,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
         >
           <span className={articleSubheadingCaption()}>{node.caption}</span>
           <Typography tag={tag} type={type}>
-            {node.children.map(renderInlineNode)}
+            {renderInlineNodes(node.children)}
           </Typography>
         </div>
       );
@@ -176,7 +204,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           />
           <div className={articleBlockquoteBody()}>
             <blockquote className={articleBlockquote()}>
-              {node.children.map(renderInlineNode)}
+              {renderInlineNodes(node.children)}
             </blockquote>
             {node.caption && (
               <cite className={articleBlockquoteCite()}>{node.caption}</cite>
@@ -233,7 +261,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           data-indented={node.indent ? "" : undefined}
         >
           <span className={articleMetricValue()}>
-            {node.children.map(renderInlineNode)}
+            {renderInlineNodes(node.children)}
           </span>
           {node.caption && (
             <span className={articleMetricLabel()}>{node.caption}</span>
@@ -274,7 +302,7 @@ function renderNumberedList(
             {numbering[i]?.label ?? String(i + 1)}
           </span>
           <span className={articleListItemContent()}>
-            {item.children.map(renderInlineNode)}
+            {renderInlineNodes(item.children)}
           </span>
         </li>
       ))}
@@ -304,7 +332,7 @@ function renderBulletList(
             <span className={listBullet()} aria-hidden />
           )}
           <span className={articleListItemContent()}>
-            {item.children.map(renderInlineNode)}
+            {renderInlineNodes(item.children)}
           </span>
         </li>
       ))}

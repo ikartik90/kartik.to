@@ -571,29 +571,7 @@ describe("ArticleRenderer", () => {
       );
       const u = container.querySelector("u");
       expect(u).not.toBeNull();
-      expect(u?.hasAttribute("data-wavy")).toBe(false);
       expect(screen.getByText("underlined")).toBeDefined();
-    });
-
-    it("renders wavy-underlined text", () => {
-      const { container } = render(
-        <ArticleRenderer
-          content={doc([
-            {
-              type: "paragraph",
-              children: [
-                {
-                  type: "text",
-                  text: "wavy",
-                  marks: [{ type: "wavy_underline" }],
-                },
-              ],
-            },
-          ])}
-        />,
-      );
-      expect(container.querySelector("u")).not.toBeNull();
-      expect(screen.getByText("wavy")).toBeDefined();
     });
 
     it("renders strikethrough text", () => {

@@ -9,8 +9,8 @@ export const MarkSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("italic") }),
   z.object({ type: z.literal("code") }),
   z.object({ type: z.literal("underline") }),
-  z.object({ type: z.literal("wavy_underline") }),
   z.object({ type: z.literal("strikethrough") }),
+  z.object({ type: z.literal("highlight") }),
   z.object({ type: z.literal("link"), href: z.url() }),
 ]);
 
