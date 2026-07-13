@@ -1050,6 +1050,40 @@ export default defineConfig({
           },
         }),
 
+        listBulletIcon: defineRecipe({
+          className: "list-bullet-icon",
+          description:
+            "Check/cross bulleted-list marker — the 24px alignment box (matching the dot and the numbered ordinal, so content stays aligned across list styles) centring a `listBulletCircle` glyph.",
+          base: {
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "token(sizes.listMarker)",
+            minWidth: "token(sizes.listMarker)",
+            marginBlockStart: "xs",
+            userSelect: "none",
+            pointerEvents: "none",
+          },
+        }),
+
+        listBulletCircle: defineRecipe({
+          className: "list-bullet-circle",
+          description:
+            "The 16×16 gradient circle inside a check/cross bullet marker (Figma 476:278 check, 474:38 cross) — holds the 20px glyph, which overflows slightly and inherits `text.listMarker` via currentColor so it theme-flips like the ordinal digits.",
+          base: {
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "token(spacing.xl)",
+            height: "token(spacing.xl)",
+            borderRadius: "token(spacing.half)",
+            background: "bg.listMarker",
+            color: "text.listMarker",
+          },
+        }),
+
         articleListItemContent: defineRecipe({
           className: "article-list-item-content",
           description:
@@ -1183,18 +1217,16 @@ export default defineConfig({
           },
         }),
 
-        selectionToolbar: defineRecipe({
-          className: "selection-toolbar",
+        selectionPopover: defineRecipe({
+          className: "selection-popover",
           description:
-            "Floating text-selection toolbar — anchored above/below the selection via CSS anchor() (Figma 422:833).",
+            "Shared floating popover for the text-selection / link / numbering / bullet menus — anchored above the target via CSS anchor() and flipped below when there's no room (Figma 422:833 selection, 474:74 numbering, 475:204 bullet). `align=center` centres on the target (text selection / link); `align=start` left-aligns to it (list-marker menus).",
           base: {
             position: "fixed",
             zIndex: 50,
-            positionAnchor: "--selection-menu",
-            // Default above the selection; flip below when there is no room.
+            positionAnchor: "--selection-popover",
+            // Default above the target; flip below when there is no room.
             bottom: "anchor(top)",
-            left: "anchor(center)",
-            translate: "-50% 0",
             marginBottom: "sm",
             positionTryFallbacks: "flip-block",
             display: "flex",
@@ -1215,12 +1247,19 @@ export default defineConfig({
             boxShadow:
               "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
           },
+          variants: {
+            align: {
+              center: { left: "anchor(center)", translate: "-50% 0" },
+              start: { left: "anchor(left)" },
+            },
+          },
+          defaultVariants: { align: "center" },
         }),
 
-        selectionToolbarItem: defineRecipe({
-          className: "selection-toolbar-item",
+        selectionPopoverItem: defineRecipe({
+          className: "selection-popover-item",
           description:
-            "Icon button inside the selection toolbar — 28px square, active/hover tint (Figma 422:834).",
+            "Icon button inside a selection popover — 28px square, active/hover tint (Figma 422:834).",
           base: {
             display: "flex",
             alignItems: "center",
@@ -1237,9 +1276,9 @@ export default defineConfig({
           },
         }),
 
-        selectionToolbarDivider: defineRecipe({
-          className: "selection-toolbar-divider",
-          description: "Vertical divider between selection toolbar groups.",
+        selectionPopoverDivider: defineRecipe({
+          className: "selection-popover-divider",
+          description: "Vertical divider between selection popover groups.",
           base: {
             flexShrink: 0,
             // `width` resolves against `sizes`; use token(spacing) for the scale.

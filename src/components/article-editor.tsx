@@ -21,6 +21,8 @@ import {
   articleListItemShell,
   listMarker,
   listBullet,
+  listBulletIcon,
+  listBulletCircle,
   articleListItemContent,
   articleMetric,
   articleMetricValue,
@@ -57,6 +59,14 @@ import {
   type ImageDialogMode,
 } from "@/components/image-insert-dialog";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
+import { NumberingPopover } from "@/components/numbering-popover";
+import { BulletPopover, type BulletStyle } from "@/components/bullet-popover";
+import {
+  computeListNumbering,
+  type ListMarkerStyle,
+} from "@/utils/list-numbering";
+import CheckSmallIcon from "@/assets/icons/check-small.svg";
+import CrossSmallIcon from "@/assets/icons/cross-small.svg";
 import { Button } from "@/components/ui/button";
 import { typographyStyles } from "@/components/ui/typography";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -939,8 +949,34 @@ const editorHrWrapperStyle = css({
 
 // List item content — contentEditable mechanics + shared prose recipe.
 const editorListItemContentStyle = cx(editableBaseStyle, articleListItemContent());
-const editorListMarkerStyle = listMarker();
-const editorListBulletStyle = listBullet();
+// The ordinal badge is a real button in the editor so it can open the numbering
+// popover — reset the native button chrome and re-enable pointer events (the
+// read-only `listMarker` recipe disables them).
+const editorListMarkerButtonStyle = cx(
+  listMarker(),
+  css({
+    appearance: "none",
+    border: "none",
+    pointerEvents: "auto",
+    cursor: "pointer",
+  }),
+);
+// The bullet marker is also a button (opens the bullet-style popover). The dot
+// variant reuses `listBullet`; the check/cross variants reuse `listBulletIcon`
+// (the 24px alignment box). Both are transparent buttons — the gradient lives
+// on the inner `listBulletCircle`, not the button.
+const bulletButtonReset = css({
+  appearance: "none",
+  border: "none",
+  background: "transparent",
+  padding: 0,
+  pointerEvents: "auto",
+  cursor: "pointer",
+});
+const editorListBulletButtonStyle = cx(listBullet(), bulletButtonReset);
+const editorListBulletIconButtonStyle = cx(listBulletIcon(), bulletButtonReset);
+const editorListBulletCircleStyle = listBulletCircle();
+const editorBulletGlyphStyle = menuIcon();
 const editorListItemShellStyle = articleListItemShell();
 
 /** Numbered (`list_item`) and bulleted (`bullet_list_item`) list entries share
@@ -1010,10 +1046,10 @@ interface EditableBlockProps {
   onInsertListItemBefore?: () => void;
   /** Insert an empty numbered-list item immediately after this list item. */
   onInsertListItemAfter?: () => void;
-  /** 1-based position of this block within its contiguous numbered-list run. */
-  listOrdinal?: number;
-  /** Total number of items in this block's numbered-list run (for zero-padding). */
-  listCount?: number;
+  /** Precomputed marker text for this numbered-list item (zero-padded or a→z). */
+  listLabel?: string;
+  /** Open the numbering popover anchored to this item's marker badge. */
+  onMarkerClick?: (rect: DOMRect) => void;
   elRef: (el: HTMLElement | null) => void;
 }
 
@@ -1044,8 +1080,8 @@ function EditableBlock({
   onInsertParagraphAfter,
   onInsertListItemBefore,
   onInsertListItemAfter,
-  listOrdinal,
-  listCount,
+  listLabel,
+  onMarkerClick,
   elRef,
 }: EditableBlockProps) {
   const placeholder =
@@ -1271,6 +1307,26 @@ function EditableBlock({
           e.preventDefault();
           return;
         }
+      }
+
+      // Tab / Shift+Tab anywhere in an indentable block toggles a one-step
+      // indent (aligns with list-item text). No-op when already in the target
+      // state; always preventDefault so focus never leaves the editor.
+      if (
+        e.key === "Tab" &&
+        (block.type === "paragraph" ||
+          block.type === "heading" ||
+          block.type === "blockquote" ||
+          block.type === "metric")
+      ) {
+        e.preventDefault();
+        const isIndented = (block as { indent?: boolean }).indent === true;
+        if (!e.shiftKey && !isIndented) {
+          onChange({ ...block, indent: true });
+        } else if (e.shiftKey && isIndented) {
+          onChange({ ...block, indent: undefined });
+        }
+        return;
       }
 
       // Shift+ArrowUp: extend selection upward across blocks.
@@ -1996,7 +2052,10 @@ function EditableBlock({
 
   if (block.type === "heading") {
     return (
-      <div className={articleHeadingShell()}>
+      <div
+        className={articleHeadingShell()}
+        data-indented={block.indent ? "" : undefined}
+      >
         <span
           ref={captionRef}
           className={editorSubheadingCaptionStyle}
@@ -2034,7 +2093,10 @@ function EditableBlock({
 
   if (block.type === "blockquote") {
     return (
-      <div className={articleBlockquoteShell()}>
+      <div
+        className={articleBlockquoteShell()}
+        data-indented={block.indent ? "" : undefined}
+      >
         <Image
           src="/assets/quote-light.png"
           alt=""
@@ -2243,21 +2305,51 @@ function EditableBlock({
   // ---------------------------------------------------------------------------
 
   if (isListItemType(block.type)) {
-    // Numbered: zero-pad each ordinal to the digit width of the run's largest
-    // number so "1".."9" render as "01".."09" once the list hits double digits.
-    const markerLabel =
-      listOrdinal && listCount
-        ? String(listOrdinal).padStart(String(listCount).length, "0")
-        : String(listOrdinal ?? 1);
+    // The marker text is precomputed by computeListNumbering (zero-padded
+    // decimal or a→z), so continue/reset/alpha all resolve in one place.
+    const markerLabel = listLabel ?? "1";
 
     return (
       <div className={editorListItemShellStyle} data-list-item="">
         {block.type === "list_item" ? (
-          <span className={editorListMarkerStyle} aria-hidden>
+          <button
+            type="button"
+            className={editorListMarkerButtonStyle}
+            data-numbering-marker=""
+            aria-label="List numbering options"
+            // Keep the caret in the editor when opening the popover.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) =>
+              onMarkerClick?.(e.currentTarget.getBoundingClientRect())
+            }
+          >
             {markerLabel}
-          </span>
+          </button>
         ) : (
-          <span className={editorListBulletStyle} aria-hidden />
+          <button
+            type="button"
+            className={
+              block.type === "bullet_list_item" && block.marker
+                ? editorListBulletIconButtonStyle
+                : editorListBulletButtonStyle
+            }
+            data-bullet-marker=""
+            aria-label="List bullet options"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) =>
+              onMarkerClick?.(e.currentTarget.getBoundingClientRect())
+            }
+          >
+            {block.type === "bullet_list_item" && block.marker && (
+              <span className={editorListBulletCircleStyle}>
+                {block.marker === "check" ? (
+                  <CheckSmallIcon className={editorBulletGlyphStyle} aria-hidden />
+                ) : (
+                  <CrossSmallIcon className={editorBulletGlyphStyle} aria-hidden />
+                )}
+              </span>
+            )}
+          </button>
         )}
         <p
           ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
@@ -2282,7 +2374,10 @@ function EditableBlock({
 
   if (block.type === "metric") {
     return (
-      <div className={articleMetric()}>
+      <div
+        className={articleMetric()}
+        data-indented={block.indent ? "" : undefined}
+      >
         <div
           ref={combinedRef as React.RefCallback<HTMLDivElement>}
           className={editorMetricValueStyle}
@@ -2328,6 +2423,9 @@ function EditableBlock({
       data-placeholder={placeholder}
       data-block-index={blockIndex}
       data-empty={isBlockEmpty(block) ? "" : undefined}
+      data-indented={
+        (block as { indent?: boolean }).indent ? "" : undefined
+      }
       {...slashAnchorProps}
     />
   );
@@ -2819,6 +2917,17 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
   // Floating selection toolbar (formatting / link editing / link actions).
   const [toolbar, setToolbar] = useState<ToolbarState | null>(null);
+  // Numbered-list marker popover (continue / reset / swap style). Anchored to
+  // the clicked marker's rect.
+  const [numbering, setNumbering] = useState<{
+    index: number;
+    rect: DOMRect;
+  } | null>(null);
+  // Bulleted-list marker popover (dot / check / cross), anchored the same way.
+  const [bullet, setBullet] = useState<{
+    index: number;
+    rect: DOMRect;
+  } | null>(null);
   // Latest selection tracker — assigned every render so the once-registered
   // document listener always calls the current closure (needs live blocks).
   const trackSelectionRef = useRef<() => void>(() => {});
@@ -2967,13 +3076,19 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
     // The new block inherits the current block's type for list items only, so
     // pressing Enter continues the list. Every other block type (headings,
-    // blockquotes, metrics, …) splits into a default paragraph.
+    // blockquotes, metrics, …) splits into a default paragraph — which carries
+    // the indent forward so splitting an indented block keeps both halves indented.
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
       if (isListItemType(current.type)) {
         return { type: current.type, children: afterNodes };
       }
-      return { type: "paragraph", children: afterNodes };
+      const indent = (current as { indent?: boolean }).indent;
+      return {
+        type: "paragraph",
+        children: afterNodes,
+        ...(indent ? { indent: true } : {}),
+      };
     })();
 
     updateBlocks([
@@ -2991,10 +3106,19 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     }, 0);
   }
 
+  // A fresh empty paragraph that inherits `indent` from `source` — so a new
+  // node created off an indented block (Enter at its start/end) stays indented.
+  function emptyParagraphInheriting(source: BlockNode | undefined): BlockNode {
+    const base = emptyParagraphBlock();
+    return (source as { indent?: boolean } | undefined)?.indent
+      ? ({ ...base, indent: true } as BlockNode)
+      : base;
+  }
+
   function insertParagraphBefore(index: number) {
     updateBlocks([
       ...blocks.slice(0, index),
-      emptyParagraphBlock(),
+      emptyParagraphInheriting(blocks[index]),
       ...blocks.slice(index),
     ]);
     cancelHistoryDebounce();
@@ -3017,7 +3141,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
     updateBlocks([
       ...blocks.slice(0, index + 1),
-      emptyParagraphBlock(),
+      emptyParagraphInheriting(blocks[index]),
       ...blocks.slice(index + 1),
     ]);
     cancelHistoryDebounce();
@@ -3036,10 +3160,27 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   /** Enter at the start of a list item: prepend an empty item of the same list
    *  type (numbered or bulleted), keeping the caret on the current item. */
   function insertListItemBefore(index: number) {
-    const type = blocks[index].type as ListItemType;
+    const source = blocks[index];
+    const type = source.type as ListItemType;
+    // Prepending before a numbered run's first item makes the new item the run
+    // head — carry the run-level marker/continue settings so the list keeps its
+    // style. (These fields are ignored on non-head items, so leaving copies on
+    // the old head is harmless.)
+    const atRunStart =
+      type === "list_item" &&
+      (index === 0 || blocks[index - 1].type !== "list_item");
+    const newItem: BlockNode =
+      atRunStart && source.type === "list_item"
+        ? {
+            type: "list_item",
+            children: [{ type: "text", text: "" }],
+            marker: source.marker,
+            continued: source.continued,
+          }
+        : emptyListItemBlock(type);
     updateBlocks([
       ...blocks.slice(0, index),
-      emptyListItemBlock(type),
+      newItem,
       ...blocks.slice(index),
     ]);
     cancelHistoryDebounce();
@@ -3050,6 +3191,102 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       const el = blockRefs.current[index + 1];
       if (el) focusBlockAtStart(el);
     }, 0);
+  }
+
+  // -------------------------------------------------------------------------
+  // Numbered-list numbering controls (the marker popover)
+  // -------------------------------------------------------------------------
+
+  /** First index of the contiguous list_item run containing `index`. */
+  function listRunStart(index: number): number {
+    let start = index;
+    while (start > 0 && blocks[start - 1].type === "list_item") start--;
+    return start;
+  }
+
+  /** True when a numbered-list run exists before the run containing `index`. */
+  function hasPrecedingList(index: number): boolean {
+    const start = listRunStart(index);
+    for (let k = 0; k < start; k++) {
+      if (blocks[k].type === "list_item") return true;
+    }
+    return false;
+  }
+
+  function isContinueActive(index: number): boolean {
+    const first = blocks[listRunStart(index)];
+    return first?.type === "list_item" && first.continued === true;
+  }
+
+  /** Toggle "continue numbering" on the run head. No-op with no preceding list. */
+  function toggleContinueNumbering(index: number) {
+    const start = listRunStart(index);
+    const first = blocks[start];
+    if (first.type !== "list_item") return;
+    const turningOn = first.continued !== true;
+    if (turningOn && !hasPrecedingList(index)) return;
+    const next = [...blocks];
+    next[start] = { ...first, continued: turningOn ? true : undefined };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
+  /** Restart the counter at the clicked item (toggle an explicit start of 1). */
+  function resetNumbering(index: number) {
+    const item = blocks[index];
+    if (item.type !== "list_item") return;
+    const next = [...blocks];
+    next[index] = { ...item, start: item.start != null ? undefined : 1 };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
+  /** Swap the whole run between decimal (1,2,3…) and alpha (a,b,c…) markers. */
+  function swapListStyle(index: number) {
+    const start = listRunStart(index);
+    const first = blocks[start];
+    if (first.type !== "list_item") return;
+    const nextMarker: ListMarkerStyle | undefined =
+      first.marker === "alpha" ? undefined : "alpha";
+    const next = [...blocks];
+    next[start] = { ...first, marker: nextMarker };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
+  // -------------------------------------------------------------------------
+  // Bulleted-list marker controls (the bullet popover)
+  // -------------------------------------------------------------------------
+
+  /** The clicked bullet item's current style ("dot" when unset). */
+  function bulletStyleOf(index: number): BulletStyle {
+    const item = blocks[index];
+    if (item?.type !== "bullet_list_item") return "dot";
+    return item.marker ?? "dot";
+  }
+
+  /** Set (or clear, for "dot") the clicked bullet item's glyph. */
+  function setBulletStyle(index: number, style: BulletStyle) {
+    const item = blocks[index];
+    if (item?.type !== "bullet_list_item") return;
+    const next = [...blocks];
+    next[index] = {
+      ...item,
+      marker: style === "dot" ? undefined : style,
+    };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
+  /** Open the numbering or bullet popover for the clicked list marker. */
+  function handleMarkerClick(index: number, rect: DOMRect) {
+    const b = blocks[index];
+    if (b?.type === "list_item") setNumbering({ index, rect });
+    else if (b?.type === "bullet_list_item") setBullet({ index, rect });
   }
 
   /** Enter at the end of a list item: append a fresh empty item of the same
@@ -3921,27 +4158,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   // Render
   // -------------------------------------------------------------------------
 
-  // Ordinal + run length for each block that belongs to a numbered list. Each
-  // contiguous run of list_item blocks is one list; the run length is its
-  // largest number, which drives zero-padding width in the marker.
-  const listInfo: Array<{ ordinal: number; count: number } | null> = (() => {
-    const info: Array<{ ordinal: number; count: number } | null> = new Array(
-      blocks.length,
-    ).fill(null);
-    let i = 0;
-    while (i < blocks.length) {
-      if (blocks[i].type === "list_item") {
-        let j = i;
-        while (j < blocks.length && blocks[j].type === "list_item") j++;
-        const count = j - i;
-        for (let k = i; k < j; k++) info[k] = { ordinal: k - i + 1, count };
-        i = j;
-      } else {
-        i++;
-      }
-    }
-    return info;
-  })();
+  // Resolved marker text + style for every numbered-list item. Honours
+  // continue/reset/alpha via the same helper the read-only renderer uses.
+  const listNumbering = computeListNumbering(blocks);
 
   return (
     <>
@@ -4065,14 +4284,15 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           onInsertParagraphAfter={
             block.type === "image" ||
             block.type === "component" ||
-            block.type === "metric"
+            block.type === "metric" ||
+            block.type === "blockquote"
               ? () => insertParagraphAfter(i)
               : undefined
           }
           onInsertListItemBefore={() => insertListItemBefore(i)}
           onInsertListItemAfter={() => insertListItemAfter(i)}
-          listOrdinal={listInfo[i]?.ordinal}
-          listCount={listInfo[i]?.count}
+          listLabel={listNumbering[i]?.label}
+          onMarkerClick={(rect) => handleMarkerClick(i, rect)}
           elRef={(el) => {
             blockRefs.current[i] = el;
           }}
@@ -4105,32 +4325,52 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       )}
 
       {toolbar && (
-        <>
-          <div
-            data-selection-anchor=""
-            aria-hidden
-            style={{
-              position: "fixed",
-              left: toolbar.rect.left,
-              top: toolbar.rect.top,
-              width: toolbar.rect.width,
-              height: toolbar.rect.height,
-              pointerEvents: "none",
-            }}
-          />
-          <SelectionToolbar
-            mode={toolbar.mode}
-            activeMarks={toolbar.activeMarks}
-            linkHref={toolbar.href}
-            onToggleMark={handleToggleMark}
-            onStartLink={handleStartLink}
-            onApplyLink={handleApplyLink}
-            onRemoveLink={handleRemoveLink}
-            onGotoLink={handleGotoLink}
-            onEditLink={handleEditLink}
-            onDismiss={handleToolbarDismiss}
-          />
-        </>
+        <SelectionToolbar
+          mode={toolbar.mode}
+          rect={toolbar.rect}
+          activeMarks={toolbar.activeMarks}
+          linkHref={toolbar.href}
+          onToggleMark={handleToggleMark}
+          onStartLink={handleStartLink}
+          onApplyLink={handleApplyLink}
+          onRemoveLink={handleRemoveLink}
+          onGotoLink={handleGotoLink}
+          onEditLink={handleEditLink}
+          onDismiss={handleToolbarDismiss}
+        />
+      )}
+
+      {numbering && (
+        <NumberingPopover
+          rect={numbering.rect}
+          marker={listNumbering[numbering.index]?.marker ?? "decimal"}
+          continueActive={isContinueActive(numbering.index)}
+          onContinue={() => {
+            toggleContinueNumbering(numbering.index);
+            setNumbering(null);
+          }}
+          onReset={() => {
+            resetNumbering(numbering.index);
+            setNumbering(null);
+          }}
+          onSwapStyle={() => {
+            swapListStyle(numbering.index);
+            setNumbering(null);
+          }}
+          onDismiss={() => setNumbering(null)}
+        />
+      )}
+
+      {bullet && (
+        <BulletPopover
+          rect={bullet.rect}
+          style={bulletStyleOf(bullet.index)}
+          onSelect={(style) => {
+            setBulletStyle(bullet.index, style);
+            setBullet(null);
+          }}
+          onDismiss={() => setBullet(null)}
+        />
       )}
 
       <ImageInsertDialog

@@ -8,6 +8,7 @@ afterEach(cleanup);
 
 function noopHandlers() {
   return {
+    rect: { left: 0, top: 0, width: 0, height: 0 },
     onToggleMark: vi.fn(),
     onStartLink: vi.fn(),
     onApplyLink: vi.fn(),

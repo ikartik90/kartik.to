@@ -1558,6 +1558,49 @@ describe("ArticleEditor", () => {
     }
   });
 
+  it("inserts a paragraph after the blockquote when Enter is pressed in the citation caption", () => {
+    const post = {
+      id: "bq-cap-enter",
+      slug: "bq-cap-enter",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "blockquote" as const,
+            children: [{ type: "text" as const, text: "A quote" }],
+            caption: "Ada Lovelace",
+          },
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text: "Next block" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    const caption = document.querySelector(
+      "cite[data-placeholder='Add citation...']",
+    ) as HTMLElement;
+    caption.focus();
+    fireEvent.keyDown(caption, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks).toHaveLength(3);
+    expect(blocks[0].type).toBe("blockquote");
+    expect(blocks[1].type).toBe("paragraph");
+    expect(blocks[2].type).toBe("paragraph");
+    if (blocks[1].type === "paragraph") {
+      expect(blocks[1].children.every((c) => c.type === "text" && !c.text)).toBe(
+        true,
+      );
+    }
+  });
+
   it("inserts a paragraph above when Enter is pressed at the start of a paragraph", () => {
     const post = {
       id: "p-enter-start",
@@ -2178,5 +2221,427 @@ describe("ArticleEditor ⌘S save", () => {
 
     expect(saveDraft).not.toHaveBeenCalled();
     expect(createDraft).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Numbered-list marker popover (continue / reset / swap style)
+// ---------------------------------------------------------------------------
+
+describe("ArticleEditor numbering popover", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  type ListItem = { type: "list_item"; children: { type: "text"; text: string }[] };
+
+  function seed(content: Document["content"]) {
+    const post = {
+      id: "num1",
+      slug: "num1",
+      title: "T",
+      status: "DRAFT" as const,
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+  }
+
+  const listItem = (text: string): ListItem => ({
+    type: "list_item",
+    children: [{ type: "text", text }],
+  });
+
+  const markers = () =>
+    Array.from(document.querySelectorAll("[data-numbering-marker]")).map(
+      (el) => el.textContent,
+    );
+
+  const openPopoverForMarker = (i: number) => {
+    const marker = document.querySelectorAll("[data-numbering-marker]")[i];
+    fireEvent.click(marker);
+  };
+
+  it("opens the numbering popover when a marker is clicked", () => {
+    seed([listItem("one"), listItem("two")]);
+    expect(
+      screen.queryByRole("toolbar", { name: "List numbering options" }),
+    ).toBeNull();
+
+    openPopoverForMarker(0);
+
+    expect(
+      screen.getByRole("toolbar", { name: "List numbering options" }),
+    ).toBeDefined();
+  });
+
+  it("reset numbering restarts the counter at the clicked item", () => {
+    seed([listItem("one"), listItem("two"), listItem("three")]);
+    expect(markers()).toEqual(["1", "2", "3"]);
+
+    openPopoverForMarker(2);
+    fireEvent.click(screen.getByLabelText("Reset numbering at this item"));
+
+    const block = useEditorStore.getState().document.content[2];
+    expect(block.type === "list_item" && block.start).toBe(1);
+    expect(markers()).toEqual(["1", "2", "1"]);
+  });
+
+  it("swaps the run to lettered markers and back", () => {
+    seed([listItem("one"), listItem("two"), listItem("three")]);
+
+    openPopoverForMarker(0);
+    fireEvent.click(screen.getByLabelText("Switch to lettered list"));
+
+    expect(markers()).toEqual(["a", "b", "c"]);
+    const head = useEditorStore.getState().document.content[0];
+    expect(head.type === "list_item" && head.marker).toBe("alpha");
+
+    // The third button now offers switching back to numbers.
+    openPopoverForMarker(1);
+    fireEvent.click(screen.getByLabelText("Switch to numbered list"));
+    expect(markers()).toEqual(["1", "2", "3"]);
+  });
+
+  it("continue numbering picks up from the previous list", () => {
+    seed([
+      listItem("a"),
+      listItem("b"),
+      listItem("c"),
+      { type: "paragraph", children: [{ type: "text", text: "gap" }] },
+      listItem("d"),
+      listItem("e"),
+    ]);
+    expect(markers()).toEqual(["1", "2", "3", "1", "2"]);
+
+    openPopoverForMarker(3); // head of the second list
+    fireEvent.click(
+      screen.getByLabelText("Continue numbering from previous list"),
+    );
+
+    expect(markers()).toEqual(["1", "2", "3", "4", "5"]);
+    const head = useEditorStore.getState().document.content[4];
+    expect(head.type === "list_item" && head.continued).toBe(true);
+  });
+
+  it("continue numbering is a no-op when no list precedes it", () => {
+    seed([listItem("only"), listItem("list")]);
+
+    openPopoverForMarker(0);
+    fireEvent.click(
+      screen.getByLabelText("Continue numbering from previous list"),
+    );
+
+    const head = useEditorStore.getState().document.content[0];
+    expect(head.type === "list_item" && head.continued).toBeUndefined();
+    expect(markers()).toEqual(["1", "2"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Block indentation (Tab / Shift+Tab)
+// ---------------------------------------------------------------------------
+
+describe("ArticleEditor block indent", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  function seed(block: Document["content"][number]) {
+    const post = {
+      id: "ind1",
+      slug: "ind1",
+      title: "T",
+      status: "DRAFT" as const,
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content: [block] },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+    return document.querySelector("[data-block-index='0']") as HTMLElement;
+  }
+
+  function caretAtStart(el: HTMLElement) {
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(el.firstChild ?? el, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function caretAtEnd(el: HTMLElement) {
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  const para = (text: string) => ({
+    type: "paragraph" as const,
+    children: [{ type: "text" as const, text }],
+  });
+
+  const indentOf = (i = 0) => {
+    const b = useEditorStore.getState().document.content[i];
+    return (b as { indent?: boolean }).indent;
+  };
+
+  it("indents a paragraph on Tab at the start", () => {
+    const el = seed(para("hello"));
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Tab" });
+
+    expect(indentOf()).toBe(true);
+    expect(document.querySelector("p[data-block-index='0'][data-indented]")).not.toBeNull();
+  });
+
+  it("outdents on Shift+Tab", () => {
+    const el = seed({ ...para("hello"), indent: true });
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Tab", shiftKey: true });
+
+    expect(indentOf()).toBeUndefined();
+    expect(document.querySelector("[data-block-index='0'][data-indented]")).toBeNull();
+  });
+
+  it("Tab on an already-indented block is a no-op", () => {
+    const el = seed({ ...para("hello"), indent: true });
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Tab" });
+
+    expect(indentOf()).toBe(true);
+  });
+
+  it("Shift+Tab on a non-indented block is a no-op", () => {
+    const el = seed(para("hello"));
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Tab", shiftKey: true });
+
+    expect(indentOf()).toBeUndefined();
+  });
+
+  it("indents with the caret anywhere in the block (not just the start)", () => {
+    const el = seed(para("hello"));
+    el.focus();
+    caretAtEnd(el);
+
+    fireEvent.keyDown(el, { key: "Tab" });
+
+    expect(indentOf()).toBe(true);
+  });
+
+  it("carries the indent to the new paragraph when splitting mid-block", () => {
+    const el = seed({ ...para("hello world"), indent: true });
+    el.focus();
+    // Caret between "hello" and " world".
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(el.firstChild!, 5);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    fireEvent.keyDown(el, { key: "Enter" });
+
+    const content = useEditorStore.getState().document.content;
+    expect((content[0] as { indent?: boolean }).indent).toBe(true);
+    expect((content[1] as { indent?: boolean }).indent).toBe(true);
+    expect(content[1].type).toBe("paragraph");
+  });
+
+  it("carries the indent to a new block on Enter at the end", () => {
+    const el = seed({ ...para("hello"), indent: true });
+    el.focus();
+    caretAtEnd(el);
+
+    fireEvent.keyDown(el, { key: "Enter" });
+
+    const content = useEditorStore.getState().document.content;
+    expect((content[1] as { indent?: boolean }).indent).toBe(true);
+  });
+
+  it("carries the indent to the empty paragraph on Enter at the start", () => {
+    const el = seed({ ...para("hello"), indent: true });
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Enter" });
+
+    // Both the new empty paragraph and the shifted content stay indented.
+    const content = useEditorStore.getState().document.content;
+    expect((content[0] as { indent?: boolean }).indent).toBe(true);
+    expect((content[1] as { indent?: boolean }).indent).toBe(true);
+  });
+
+  it("splitting an indented heading yields an indented paragraph", () => {
+    const el = seed({
+      type: "heading",
+      level: 2,
+      indent: true,
+      children: [{ type: "text", text: "Title" }],
+    });
+    el.focus();
+    caretAtEnd(el);
+
+    fireEvent.keyDown(el, { key: "Enter" });
+
+    const content = useEditorStore.getState().document.content;
+    expect(content[0].type).toBe("heading");
+    expect((content[0] as { indent?: boolean }).indent).toBe(true);
+    expect(content[1].type).toBe("paragraph");
+    expect((content[1] as { indent?: boolean }).indent).toBe(true);
+  });
+
+  it("indents a blockquote on Tab", () => {
+    const el = seed({
+      type: "blockquote",
+      children: [{ type: "text", text: "quote" }],
+    });
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Tab" });
+
+    expect(indentOf()).toBe(true);
+  });
+
+  it("indents a metric on Tab", () => {
+    const el = seed({
+      type: "metric",
+      children: [{ type: "text", text: "$1M" }],
+    });
+    el.focus();
+    caretAtStart(el);
+
+    fireEvent.keyDown(el, { key: "Tab" });
+
+    expect(indentOf()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bulleted-list marker popover (dot / check / cross)
+// ---------------------------------------------------------------------------
+
+describe("ArticleEditor bullet popover", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  type BulletItem = {
+    type: "bullet_list_item";
+    marker?: "check" | "cross";
+    children: { type: "text"; text: string }[];
+  };
+
+  function seed(items: BulletItem[]) {
+    const post = {
+      id: "bul1",
+      slug: "bul1",
+      title: "T",
+      status: "DRAFT" as const,
+      category: "ARTICLE" as const,
+      content: { type: "doc" as const, content: items },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+  }
+
+  const bullet = (text: string, marker?: "check" | "cross"): BulletItem => ({
+    type: "bullet_list_item",
+    ...(marker ? { marker } : {}),
+    children: [{ type: "text", text }],
+  });
+
+  const openPopover = (i: number) => {
+    const marker = document.querySelectorAll("[data-bullet-marker]")[i];
+    fireEvent.click(marker);
+  };
+
+  const markerOf = (i: number) => {
+    const b = useEditorStore.getState().document.content[i];
+    return b.type === "bullet_list_item" ? b.marker : undefined;
+  };
+
+  it("opens the bullet popover when a bullet is clicked", () => {
+    seed([bullet("one"), bullet("two")]);
+    expect(
+      screen.queryByRole("toolbar", { name: "List bullet options" }),
+    ).toBeNull();
+
+    openPopover(0);
+
+    expect(
+      screen.getByRole("toolbar", { name: "List bullet options" }),
+    ).toBeDefined();
+    // Default (dot) option is selected.
+    expect(
+      screen.getByLabelText("Bulleted list").getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("sets the check glyph when 'Checked list' is chosen", () => {
+    seed([bullet("one")]);
+    openPopover(0);
+    fireEvent.click(screen.getByLabelText("Checked list"));
+
+    expect(markerOf(0)).toBe("check");
+    // The marker button now renders a glyph (svg) instead of the bare dot.
+    expect(
+      document.querySelector("[data-bullet-marker] svg"),
+    ).not.toBeNull();
+  });
+
+  it("sets the cross glyph when 'Crossed list' is chosen", () => {
+    seed([bullet("one")]);
+    openPopover(0);
+    fireEvent.click(screen.getByLabelText("Crossed list"));
+
+    expect(markerOf(0)).toBe("cross");
+  });
+
+  it("returns to the default dot when 'Bulleted list' is chosen", () => {
+    seed([bullet("one", "check")]);
+    openPopover(0);
+    fireEvent.click(screen.getByLabelText("Bulleted list"));
+
+    expect(markerOf(0)).toBeUndefined();
+    expect(document.querySelector("[data-bullet-marker] svg")).toBeNull();
+  });
+
+  it("styles bullets per-item (one check, one default)", () => {
+    seed([bullet("one", "check"), bullet("two")]);
+    expect(markerOf(0)).toBe("check");
+    expect(markerOf(1)).toBeUndefined();
   });
 });

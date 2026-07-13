@@ -222,6 +222,14 @@ body {
     margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
   }
 
+  /* One-level indent (Tab in the editor) — shifts the block's content right by
+     a list marker + gap (3xl) so paragraphs, subheadings, blockquotes, and
+     metrics line up with bulleted/numbered list-item text. box-sizing:border-box
+     keeps the block within its content column. Rendered in the reader too. */
+  article [data-indented] {
+    padding-inline-start: var(--spacing-3xl);
+  }
+
   article > img {
     object-fit: cover;
     outline-width: var(--spacing-3xs);
@@ -242,9 +250,11 @@ body {
     anchor-name: --slash-menu;
   }
 
-  /* Selection toolbar anchor — see selectionToolbar recipe in panda.config.ts */
+  /* Shared selection-popover anchor — see the selectionPopover recipe in
+     panda.config.ts. One name for all four popovers (text / link / numbering /
+     bullet); only one is ever mounted at a time. */
   [data-selection-anchor] {
-    anchor-name: --selection-menu;
+    anchor-name: --selection-popover;
   }
 
   [data-brand-avatar] {

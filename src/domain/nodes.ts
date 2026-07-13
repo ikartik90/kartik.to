@@ -47,9 +47,12 @@ export type InlineNode = TextNode;
 // children field to break the circular reference.
 // ---------------------------------------------------------------------------
 
+// `indent` marks a block as shifted one list-level to the right (Tab in the
+// editor) so its content aligns with bulleted/numbered list-item text.
 export const ParagraphNodeSchema = z.object({
   type: z.literal("paragraph"),
   children: z.array(InlineNodeSchema),
+  indent: z.boolean().optional(),
 });
 
 export const HeadingNodeSchema = z.object({
@@ -64,27 +67,43 @@ export const HeadingNodeSchema = z.object({
   ]),
   children: z.array(InlineNodeSchema),
   caption: z.string().optional(),
+  indent: z.boolean().optional(),
 });
 
 export const BlockquoteNodeSchema = z.object({
   type: z.literal("blockquote"),
   children: z.array(InlineNodeSchema),
   caption: z.string().optional(),
+  indent: z.boolean().optional(),
 });
 
 // A single ordered-list entry. Numbered lists are modelled as runs of
 // consecutive `list_item` blocks — the renderer groups them into one <ol> and
 // computes each ordinal (plus zero-padding width) from the run's length.
+//
+// Numbering behaviour (see src/utils/list-numbering.ts) is driven by three
+// optional fields, all resolved at render time so the count stays live:
+//   • `marker`   — run style, read from the run's first item ("alpha" ⇒ a,b,c…).
+//   • `continued`— on the run's first item: begin one past the previous
+//                  numbered list's last ordinal instead of at 1.
+//   • `start`    — explicit ordinal for THIS item; "reset numbering" sets 1 here
+//                  and the run counts on from it.
 export const ListItemNodeSchema = z.object({
   type: z.literal("list_item"),
   children: z.array(InlineNodeSchema),
+  marker: z.enum(["decimal", "alpha"]).optional(),
+  continued: z.boolean().optional(),
+  start: z.number().int().positive().optional(),
 });
 
 // A single unordered-list entry. Bulleted lists are runs of consecutive
-// `bullet_list_item` blocks — the renderer groups them into one <ul>.
+// `bullet_list_item` blocks — the renderer groups them into one <ul>. `marker`
+// swaps this item's bullet glyph between the default dot, a check, or a cross
+// (per-item, so a list can mix them like a checklist).
 export const BulletListItemNodeSchema = z.object({
   type: z.literal("bullet_list_item"),
   children: z.array(InlineNodeSchema),
+  marker: z.enum(["check", "cross"]).optional(),
 });
 
 export const CodeLanguageSchema = z.enum([
@@ -129,6 +148,7 @@ export const MetricNodeSchema = z.object({
   type: z.literal("metric"),
   children: z.array(InlineNodeSchema),
   caption: z.string().optional(),
+  indent: z.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------

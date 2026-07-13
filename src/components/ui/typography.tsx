@@ -58,7 +58,8 @@ export const typographyStyles = cva({
   },
 });
 
-export interface TypographyProps {
+export interface TypographyProps
+  extends React.HTMLAttributes<HTMLElement> {
   tag: TypographyTag;
   type: TypographyType;
   children: React.ReactNode;
@@ -70,8 +71,11 @@ export function Typography({
   type,
   children,
   className,
+  ...rest
 }: TypographyProps) {
   return (
-    <Tag className={cx(typographyStyles({ type }), className)}>{children}</Tag>
+    <Tag className={cx(typographyStyles({ type }), className)} {...rest}>
+      {children}
+    </Tag>
   );
 }

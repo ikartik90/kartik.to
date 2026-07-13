@@ -27,7 +27,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useImageInsert, type ImageInsertPhase } from "@/hooks/use-image-insert";
 import { formatFileSize, formatImageType } from "@/utils/format-file-size";
-import CloseIcon from "@/assets/icons/close.svg";
+import CloseIcon from "@/assets/icons/cross.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
