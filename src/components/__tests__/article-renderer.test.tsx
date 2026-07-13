@@ -104,6 +104,28 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector(".article-subheading-caption")).toBeNull();
     });
 
+    it("marks indented blocks with data-indented and leaves others unmarked", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "paragraph", indent: true, children: [{ type: "text", text: "Indented para" }] },
+            { type: "paragraph", children: [{ type: "text", text: "Plain para" }] },
+            { type: "blockquote", indent: true, children: [{ type: "text", text: "Indented quote" }] },
+            { type: "metric", indent: true, children: [{ type: "text", text: "$1M" }] },
+            { type: "heading", level: 2, indent: true, children: [{ type: "text", text: "Indented head" }] },
+          ])}
+        />,
+      );
+      const indented = container.querySelectorAll("[data-indented]");
+      // paragraph + blockquote shell + metric + heading = 4
+      expect(indented).toHaveLength(4);
+      expect(screen.getByText("Indented para").hasAttribute("data-indented")).toBe(true);
+      expect(screen.getByText("Plain para").hasAttribute("data-indented")).toBe(false);
+      expect(
+        container.querySelector(".article-blockquote-shell")?.hasAttribute("data-indented"),
+      ).toBe(true);
+    });
+
     it("renders a blockquote with decorative quote mark styling", () => {
       const { container } = render(
         <ArticleRenderer
@@ -240,6 +262,51 @@ describe("ArticleRenderer", () => {
       expect(markers[11].textContent).toBe("12");
     });
 
+    it("renders lettered markers when the run head is styled alpha", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "list_item", marker: "alpha", children: [{ type: "text", text: "A" }] },
+            { type: "list_item", children: [{ type: "text", text: "B" }] },
+            { type: "list_item", children: [{ type: "text", text: "C" }] },
+          ])}
+        />,
+      );
+      const markers = container.querySelectorAll(".list-marker");
+      expect(Array.from(markers).map((m) => m.textContent)).toEqual([
+        "a",
+        "b",
+        "c",
+      ]);
+    });
+
+    it("continues numbering across separate lists when the head opts in", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "list_item", children: [{ type: "text", text: "1" }] },
+            { type: "list_item", children: [{ type: "text", text: "2" }] },
+            { type: "list_item", children: [{ type: "text", text: "3" }] },
+            { type: "paragraph", children: [{ type: "text", text: "gap" }] },
+            { type: "list_item", continued: true, children: [{ type: "text", text: "4" }] },
+            { type: "list_item", children: [{ type: "text", text: "5" }] },
+          ])}
+        />,
+      );
+      const lists = container.querySelectorAll("ol");
+      expect(lists).toHaveLength(2);
+      const markers = container.querySelectorAll(".list-marker");
+      expect(Array.from(markers).map((m) => m.textContent)).toEqual([
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+      ]);
+      // The continued list carries the semantic start ordinal for a11y.
+      expect(lists[1].getAttribute("start")).toBe("4");
+    });
+
     it("groups consecutive bullet_list_item blocks into a single unordered list", () => {
       const { container } = render(
         <ArticleRenderer
@@ -255,6 +322,28 @@ describe("ArticleRenderer", () => {
       expect(lists[0].querySelectorAll("li")).toHaveLength(2);
       expect(lists[0].querySelectorAll(".list-bullet")).toHaveLength(2);
       expect(container.textContent).toContain("BulletAlpha");
+    });
+
+    it("renders per-item check/cross bullet glyphs, keeping plain dots elsewhere", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "bullet_list_item", marker: "check", children: [{ type: "text", text: "Done" }] },
+            { type: "bullet_list_item", marker: "cross", children: [{ type: "text", text: "Nope" }] },
+            { type: "bullet_list_item", children: [{ type: "text", text: "Plain" }] },
+          ])}
+        />,
+      );
+      // Two badge markers (check + cross): each is a 24px box holding a 16px
+      // gradient circle with an svg glyph; the third is a plain dot.
+      expect(container.querySelectorAll(".list-bullet-icon")).toHaveLength(2);
+      expect(
+        container.querySelectorAll(".list-bullet-icon .list-bullet-circle"),
+      ).toHaveLength(2);
+      expect(
+        container.querySelectorAll(".list-bullet-circle svg"),
+      ).toHaveLength(2);
+      expect(container.querySelectorAll(".list-bullet")).toHaveLength(1);
     });
 
     it("renders adjacent numbered and bulleted runs as separate ol and ul", () => {

@@ -152,7 +152,11 @@ describe("CommandPalette", () => {
       expect(screen.getByText("Edit metadata")).toBeDefined();
       expect(screen.getByText("New blog article…")).toBeDefined();
       expect(screen.getByText("New work article…")).toBeDefined();
-      expect(screen.getByText("New page…")).toBeDefined();
+    });
+
+    it("no longer offers 'New page…' (no utility for it yet)", () => {
+      render(<CommandPalette />);
+      expect(screen.queryByText("New page…")).toBeNull();
     });
   });
 
@@ -194,7 +198,6 @@ describe("CommandPalette", () => {
       expect(screen.queryByText("This Page")).toBeNull();
       expect(screen.queryByText("Publish")).toBeNull();
       expect(screen.queryByText("New blog article…")).toBeNull();
-      expect(screen.queryByText("New page…")).toBeNull();
       expect(screen.queryByText("Edit metadata")).toBeNull();
     });
 
@@ -234,6 +237,25 @@ describe("CommandPalette", () => {
     it("offers 'Discard draft' when the viewed post is an unpublished draft", async () => {
       render(<CommandPalette />);
       expect(await screen.findByText("Discard draft")).toBeDefined();
+    });
+
+    it("omits the draft being viewed from the Drafts list", async () => {
+      const otherDraft = {
+        ...draftPost,
+        id: "draft-2",
+        slug: "other-draft",
+        title: "Other Draft",
+      };
+      const { getDrafts } = await import("@/app/actions/post");
+      (getDrafts as ReturnType<typeof vi.fn>).mockResolvedValue([
+        draftPost,
+        otherDraft,
+      ]);
+      render(<CommandPalette />);
+      // The other draft still appears under the Drafts group…
+      expect(await screen.findByText("Other Draft")).toBeDefined();
+      // …but the currently-viewed draft is not listed as an option.
+      expect(screen.queryByText("My Draft")).toBeNull();
     });
   });
 

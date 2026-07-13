@@ -13,7 +13,6 @@ import EditIcon from "@/assets/icons/edit.svg";
 import MetadataIcon from "@/assets/icons/metadata.svg";
 import WriteIcon from "@/assets/icons/write.svg";
 import WorkIcon from "@/assets/icons/work.svg";
-import PageIcon from "@/assets/icons/page.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -269,23 +268,19 @@ export function CommandPalette() {
                       <WorkIcon className={iconStyle} />
                       New work article…
                     </Command.Item>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={() => {
-                        console.log("new page");
-                        close();
-                      }}
-                    >
-                      <PageIcon className={iconStyle} />
-                      New page…
-                    </Command.Item>
                   </Command.Group>
 
-                  {/* Drafts — shown when any drafts exist */}
-                  {drafts.length > 0 && (
+                  {/* Drafts — the draft being viewed is omitted so the
+                      current page never lists itself */}
+                  {(() => {
+                    const listableDrafts = drafts.filter(
+                      (draft) => draft.id !== currentDraft?.id,
+                    );
+                    if (listableDrafts.length === 0) return null;
+                    return (
                     <Command.Group className={groupStyle}>
                       <div className={groupHeadingStyle}>Drafts</div>
-                      {drafts.map((draft) => (
+                      {listableDrafts.map((draft) => (
                         <Command.Item
                           key={draft.id}
                           className={itemStyle}
@@ -300,7 +295,8 @@ export function CommandPalette() {
                         </Command.Item>
                       ))}
                     </Command.Group>
-                  )}
+                    );
+                  })()}
                 </>
               )}
             </>

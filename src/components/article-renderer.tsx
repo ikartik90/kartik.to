@@ -23,6 +23,9 @@ import {
   articleListItemShell,
   listMarker,
   listBullet,
+  listBulletIcon,
+  listBulletCircle,
+  menuIcon,
   articleListItemContent,
   articleMetric,
   articleMetricValue,
@@ -33,6 +36,12 @@ import {
   horizontalRule,
 } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
+import {
+  computeListNumbering,
+  type ListItemNumbering,
+} from "@/utils/list-numbering";
+import CheckSmallIcon from "@/assets/icons/check-small.svg";
+import CrossSmallIcon from "@/assets/icons/cross-small.svg";
 import type { Document } from "@/domain/post";
 import type { BlockNode, InlineNode } from "@/domain/nodes";
 
@@ -103,30 +112,52 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
   switch (node.type) {
     case "paragraph":
       return (
-        <Typography key={index} tag="p" type="paragraph">
+        <Typography
+          key={index}
+          tag="p"
+          type="paragraph"
+          data-indented={node.indent ? "" : undefined}
+        >
           {node.children.map(renderInlineNode)}
         </Typography>
       );
 
     case "heading": {
       const { tag, type } = HEADING_MAP[node.level] ?? HEADING_MAP[2];
-      const heading = (
-        <Typography tag={tag} type={type}>
-          {node.children.map(renderInlineNode)}
-        </Typography>
-      );
-      if (!node.caption) return <React.Fragment key={index}>{heading}</React.Fragment>;
+      // A captionless heading is its own block root; a captioned one is wrapped
+      // in the shell. Put the indent marker on whichever is the outer element.
+      if (!node.caption)
+        return (
+          <Typography
+            key={index}
+            tag={tag}
+            type={type}
+            data-indented={node.indent ? "" : undefined}
+          >
+            {node.children.map(renderInlineNode)}
+          </Typography>
+        );
       return (
-        <div key={index} className={articleHeadingShell()}>
+        <div
+          key={index}
+          className={articleHeadingShell()}
+          data-indented={node.indent ? "" : undefined}
+        >
           <span className={articleSubheadingCaption()}>{node.caption}</span>
-          {heading}
+          <Typography tag={tag} type={type}>
+            {node.children.map(renderInlineNode)}
+          </Typography>
         </div>
       );
     }
 
     case "blockquote":
       return (
-        <div key={index} className={articleBlockquoteShell()}>
+        <div
+          key={index}
+          className={articleBlockquoteShell()}
+          data-indented={node.indent ? "" : undefined}
+        >
           <Image
             src="/assets/quote-light.png"
             alt=""
@@ -196,7 +227,11 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
 
     case "metric":
       return (
-        <div key={index} className={articleMetric()}>
+        <div
+          key={index}
+          className={articleMetric()}
+          data-indented={node.indent ? "" : undefined}
+        >
           <span className={articleMetricValue()}>
             {node.children.map(renderInlineNode)}
           </span>
@@ -220,16 +255,23 @@ type BulletListItemNode = Extract<BlockNode, { type: "bullet_list_item" }>;
 
 function renderNumberedList(
   items: ListItemNode[],
+  numbering: ListItemNumbering[],
   key: React.Key,
 ): React.ReactNode {
-  // Zero-pad each ordinal to the digit width of the largest number in the list.
-  const width = String(items.length).length;
   return (
-    <ol key={key} className={articleList()}>
+    <ol
+      key={key}
+      className={articleList()}
+      start={numbering[0]?.ordinal ?? 1}
+    >
       {items.map((item, i) => (
-        <li key={i} className={articleListItemShell()}>
+        <li
+          key={i}
+          className={articleListItemShell()}
+          value={numbering[i]?.ordinal}
+        >
           <span className={listMarker()} aria-hidden>
-            {String(i + 1).padStart(width, "0")}
+            {numbering[i]?.label ?? String(i + 1)}
           </span>
           <span className={articleListItemContent()}>
             {item.children.map(renderInlineNode)}
@@ -248,7 +290,19 @@ function renderBulletList(
     <ul key={key} className={articleList()}>
       {items.map((item, i) => (
         <li key={i} className={articleListItemShell()}>
-          <span className={listBullet()} aria-hidden />
+          {item.marker ? (
+            <span className={listBulletIcon()} aria-hidden>
+              <span className={listBulletCircle()}>
+                {item.marker === "check" ? (
+                  <CheckSmallIcon className={menuIcon()} />
+                ) : (
+                  <CrossSmallIcon className={menuIcon()} />
+                )}
+              </span>
+            </span>
+          ) : (
+            <span className={listBullet()} aria-hidden />
+          )}
           <span className={articleListItemContent()}>
             {item.children.map(renderInlineNode)}
           </span>
@@ -269,6 +323,9 @@ interface ArticleRendererProps {
 export function ArticleRenderer({ content }: ArticleRendererProps) {
   const nodes = content.content;
   const output: React.ReactNode[] = [];
+  // Resolve ordinals/labels for the whole document so "continue numbering"
+  // across separate lists lines up with the editor.
+  const numbering = computeListNumbering(nodes);
 
   let i = 0;
   while (i < nodes.length) {
@@ -277,7 +334,11 @@ export function ArticleRenderer({ content }: ArticleRendererProps) {
       let j = i;
       while (j < nodes.length && nodes[j].type === "list_item") j++;
       output.push(
-        renderNumberedList(nodes.slice(i, j) as ListItemNode[], `list-${i}`),
+        renderNumberedList(
+          nodes.slice(i, j) as ListItemNode[],
+          numbering.slice(i, j) as ListItemNumbering[],
+          `list-${i}`,
+        ),
       );
       i = j;
     } else if (node.type === "bullet_list_item") {

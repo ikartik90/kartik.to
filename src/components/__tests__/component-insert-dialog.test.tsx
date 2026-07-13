@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ComponentInsertDialog } from "../component-insert-dialog";
 
-vi.mock("@/assets/icons/close.svg", () => ({
+vi.mock("@/assets/icons/cross.svg", () => ({
   default: (props: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="icon-close" {...props} />
   ),

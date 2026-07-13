@@ -4,10 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import {
   menuIcon,
-  selectionToolbar,
-  selectionToolbarDivider,
-  selectionToolbarItem,
+  selectionPopoverDivider,
+  selectionPopoverItem,
 } from "../../styled-system/recipes";
+import {
+  SelectionPopover,
+  preserveSelection,
+  type SelectionPopoverRect,
+} from "@/components/selection-popover";
 import type { Mark } from "@/domain/nodes";
 import LinkIcon from "@/assets/icons/link.svg";
 import BoldIcon from "@/assets/icons/bold.svg";
@@ -31,6 +35,8 @@ export type ToggleableMark = Exclude<Mark["type"], "link">;
 
 interface SelectionToolbarProps {
   mode: SelectionToolbarMode;
+  /** Viewport-relative rect the toolbar anchors to. */
+  rect: SelectionPopoverRect;
   /** Mark types the current selection fully carries — drives the active state. */
   activeMarks: ReadonlySet<Mark["type"]>;
   /** Existing link href — prefilled in link-edit, opened by goto in link-view. */
@@ -75,9 +81,8 @@ const FORMAT_GROUPS: FormatButton[][] = [
 // Styles
 // ---------------------------------------------------------------------------
 
-const toolbarStyle = selectionToolbar();
-const itemStyle = selectionToolbarItem();
-const dividerStyle = selectionToolbarDivider();
+const itemStyle = selectionPopoverItem();
+const dividerStyle = selectionPopoverDivider();
 const iconStyle = menuIcon();
 
 const linkRowStyle = css({
@@ -135,6 +140,7 @@ const hotkeyLabelStyle = css({
 
 export function SelectionToolbar({
   mode,
+  rect,
   activeMarks,
   linkHref,
   onToggleMark,
@@ -145,7 +151,6 @@ export function SelectionToolbar({
   onEditLink,
   onDismiss,
 }: SelectionToolbarProps) {
-  const toolbarRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [href, setHref] = useState(linkHref ?? "");
 
@@ -163,38 +168,9 @@ export function SelectionToolbar({
     }
   }, [mode]);
 
-  // Escape closes the toolbar from any mode (link-edit also handles it locally).
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () =>
-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [onDismiss]);
-
-  // Dismiss when pointer goes down outside the toolbar.
-  useEffect(() => {
-    function handlePointerDown(e: PointerEvent) {
-      const target = e.target as Node;
-      if (toolbarRef.current && !toolbarRef.current.contains(target)) {
-        onDismiss();
-      }
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () =>
-      document.removeEventListener("pointerdown", handlePointerDown);
-  }, [onDismiss]);
-
-  // Keep the editor selection intact when clicking formatting buttons.
-  const preserveSelection = (e: React.MouseEvent) => e.preventDefault();
-
   if (mode === "link-edit") {
     return (
-      <div ref={toolbarRef} className={toolbarStyle} role="toolbar" aria-label="Edit link">
+      <SelectionPopover rect={rect} ariaLabel="Edit link" onDismiss={onDismiss}>
         <div className={linkRowStyle}>
           <LinkIcon className={iconStyle} aria-hidden />
           <input
@@ -211,10 +187,6 @@ export function SelectionToolbar({
                 e.preventDefault();
                 const trimmed = href.trim();
                 if (trimmed) onApplyLink(trimmed);
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                e.stopPropagation();
-                onDismiss();
               }
             }}
           />
@@ -223,13 +195,17 @@ export function SelectionToolbar({
             <span className={hotkeyLabelStyle}>to exit</span>
           </div>
         </div>
-      </div>
+      </SelectionPopover>
     );
   }
 
   if (mode === "link-view") {
     return (
-      <div ref={toolbarRef} className={toolbarStyle} role="toolbar" aria-label="Link actions">
+      <SelectionPopover
+        rect={rect}
+        ariaLabel="Link actions"
+        onDismiss={onDismiss}
+      >
         <button
           type="button"
           className={itemStyle}
@@ -257,12 +233,16 @@ export function SelectionToolbar({
         >
           <TrashIcon className={iconStyle} aria-hidden />
         </button>
-      </div>
+      </SelectionPopover>
     );
   }
 
   return (
-    <div ref={toolbarRef} className={toolbarStyle} role="toolbar" aria-label="Format selection">
+    <SelectionPopover
+      rect={rect}
+      ariaLabel="Format selection"
+      onDismiss={onDismiss}
+    >
       <button
         type="button"
         className={itemStyle}
@@ -296,6 +276,6 @@ export function SelectionToolbar({
           })}
         </div>
       ))}
-    </div>
+    </SelectionPopover>
   );
 }

@@ -18,7 +18,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { DemoFrame } from "@/components/demo-frame";
 import { demoComponents } from "@/components/demo/registry";
-import CloseIcon from "@/assets/icons/close.svg";
+import CloseIcon from "@/assets/icons/cross.svg";
 
 // ---------------------------------------------------------------------------
 // Styles
