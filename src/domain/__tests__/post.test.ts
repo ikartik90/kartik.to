@@ -28,12 +28,12 @@ describe("MarkSchema", () => {
     expect(MarkSchema.safeParse({ type: "underline" }).success).toBe(true);
   });
 
-  it("accepts wavy_underline", () => {
-    expect(MarkSchema.safeParse({ type: "wavy_underline" }).success).toBe(true);
-  });
-
   it("accepts strikethrough", () => {
     expect(MarkSchema.safeParse({ type: "strikethrough" }).success).toBe(true);
+  });
+
+  it("accepts highlight", () => {
+    expect(MarkSchema.safeParse({ type: "highlight" }).success).toBe(true);
   });
 
   it("accepts link with a valid href", () => {
@@ -53,7 +53,7 @@ describe("MarkSchema", () => {
   });
 
   it("rejects an unknown mark type", () => {
-    expect(MarkSchema.safeParse({ type: "highlight" }).success).toBe(false);
+    expect(MarkSchema.safeParse({ type: "wavy_underline" }).success).toBe(false);
   });
 });
 

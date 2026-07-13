@@ -18,8 +18,8 @@ import BoldIcon from "@/assets/icons/bold.svg";
 import ItalicIcon from "@/assets/icons/italic.svg";
 import CodeIcon from "@/assets/icons/code.svg";
 import UnderlineSolidIcon from "@/assets/icons/underline-solid.svg";
-import UnderlineSquiggleIcon from "@/assets/icons/underline-squiggle.svg";
 import StrikethroughIcon from "@/assets/icons/strikethrough.svg";
+import HighlightIcon from "@/assets/icons/highlight.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import GotoIcon from "@/assets/icons/goto.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -67,12 +67,8 @@ const FORMAT_GROUPS: FormatButton[][] = [
     { mark: "underline", label: "Underline", Icon: UnderlineSolidIcon },
   ],
   [
-    {
-      mark: "wavy_underline",
-      label: "Wavy underline",
-      Icon: UnderlineSquiggleIcon,
-    },
     { mark: "strikethrough", label: "Strikethrough", Icon: StrikethroughIcon },
+    { mark: "highlight", label: "Highlight", Icon: HighlightIcon },
     { mark: "code", label: "Code", Icon: CodeIcon },
   ],
 ];
