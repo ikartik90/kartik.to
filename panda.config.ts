@@ -158,26 +158,10 @@ export default defineConfig({
             },
             // Always a gradient — use with `background`, not `backgroundColor`
             brandedEmphasis: {
-              value:
-                "linear-gradient(135deg, {colors.brand.pink} 0%, {colors.brand.orange} 100%)",
-            },
-            // Numbered-list ordinal badge gradient — theme-directional per Figma
-            // (413:684 light: orange→pink; 413:688 dark: pink→orange).
-            listMarker: {
               value: {
-                base: "linear-gradient(142.66deg, {colors.brand.orange} 0%, {colors.brand.pink} 78.36%)",
-                _dark:
-                  "linear-gradient(107.32deg, {colors.brand.pink} 38.11%, {colors.brand.orange} 100%)",
-              },
-            },
-            // Metric value display gradient — theme-directional per Figma
-            // (456:979 light: orange→pink; 456:968 dark: pink→orange).
-            metricValue: {
-              value: {
-                base: "linear-gradient(160.811deg, {colors.brand.orange} 0%, {colors.brand.pink} 78.361%)",
-                _dark:
-                  "linear-gradient(124.361deg, {colors.brand.pink} 38.114%, {colors.brand.orange} 100%)",
-              },
+                base: "linear-gradient(135deg, {colors.brand.orange} 0%, {colors.brand.pink} 60%)",
+                _dark: "linear-gradient(135deg, {colors.brand.pink} 40%, {colors.brand.orange} 100%)",
+              }
             },
           },
 
@@ -303,8 +287,8 @@ export default defineConfig({
           description:
             "Highlight mark (<mark>) inside article prose — brand gradient behind fixed neutral.700 text.",
           base: {
-            background: "bg.listMarker",
-            color: "bg.canvas",
+            background: "bg.brandedEmphasis",
+            color: "neutral.900",
             paddingInline: "xxs",
             paddingBlock: "xxs",
             boxDecorationBreak: "clone",
@@ -949,7 +933,7 @@ export default defineConfig({
             // empty editor field keeps its normal placeholder colour instead of
             // turning the placeholder transparent.
             "&:not(:empty):not([data-empty])": {
-              background: "bg.listMarker",
+              background: "bg.brandedEmphasis",
               backgroundClip: "text",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
@@ -1022,7 +1006,7 @@ export default defineConfig({
             marginBlockStart: "xs",
             paddingInline: "sm",
             borderRadius: "lg",
-            background: "bg.listMarker",
+            background: "bg.brandedEmphasis",
             color: "text.listMarker",
             textStyle: "paragraph",
             fontWeight: "medium",
@@ -1053,7 +1037,7 @@ export default defineConfig({
               width: "token(sizes.listBullet)",
               height: "token(sizes.listBullet)",
               borderRadius: "token(spacing.half)",
-              background: "bg.listMarker",
+              background: "bg.brandedEmphasis",
             },
           },
         }),
@@ -1087,7 +1071,7 @@ export default defineConfig({
             width: "token(spacing.xl)",
             height: "token(spacing.xl)",
             borderRadius: "token(spacing.half)",
-            background: "bg.listMarker",
+            background: "bg.brandedEmphasis",
             color: "text.listMarker",
           },
         }),
@@ -1130,7 +1114,7 @@ export default defineConfig({
             // Clip the gradient into the glyphs only once there is text — an empty
             // editor field keeps its normal placeholder colour.
             "&:not(:empty):not([data-empty])": {
-              background: "bg.metricValue",
+              background: "bg.brandedEmphasis",
               backgroundClip: "text",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
