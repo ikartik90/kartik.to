@@ -3116,7 +3116,15 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
       if (isListItemType(current.type)) {
-        return { type: current.type, children: afterNodes };
+        // Carry the item's bullet glyph forward so splitting keeps the style.
+        // (On numbered items `marker` is a run-head field the numbering algo
+        // ignores off-head, so copying it here is harmless.)
+        const marker = (current as { marker?: string }).marker;
+        return {
+          type: current.type,
+          children: afterNodes,
+          ...(marker ? { marker } : {}),
+        } as BlockNode;
       }
       const indent = (current as { indent?: boolean }).indent;
       return {
@@ -3192,6 +3200,20 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     return { type, children: [{ type: "text", text: "" }] };
   }
 
+  /** A fresh empty item that inherits `source`'s bullet glyph, so adding an
+   *  item to a checked/crossed list keeps that style. Numbered items carry no
+   *  per-item glyph, so they fall through to a plain empty item. */
+  function emptyListItemInheriting(source: BlockNode): BlockNode {
+    if (source.type === "bullet_list_item" && source.marker) {
+      return {
+        type: "bullet_list_item",
+        children: [{ type: "text", text: "" }],
+        marker: source.marker,
+      };
+    }
+    return emptyListItemBlock(source.type as ListItemType);
+  }
+
   /** Enter at the start of a list item: prepend an empty item of the same list
    *  type (numbered or bulleted), keeping the caret on the current item. */
   function insertListItemBefore(index: number) {
@@ -3212,7 +3234,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
             marker: source.marker,
             continued: source.continued,
           }
-        : emptyListItemBlock(type);
+        : emptyListItemInheriting(source);
     updateBlocks([
       ...blocks.slice(0, index),
       newItem,
@@ -3317,6 +3339,56 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     pushHistoryNow();
   }
 
+  /** Bounds [start, end) of the contiguous bullet run containing `index`. */
+  function bulletRunBounds(index: number): { start: number; end: number } {
+    let start = index;
+    while (start > 0 && blocks[start - 1].type === "bullet_list_item") start--;
+    let end = index;
+    while (end < blocks.length && blocks[end].type === "bullet_list_item") end++;
+    return { start, end };
+  }
+
+  /** The representative glyph of the nearest bulleted list ending before
+   *  `runStart` (its head item's style), or null when none precedes it.
+   *  Mirrors how "continue numbering" reaches back across intervening blocks. */
+  function prevBulletRunStyle(runStart: number): BulletStyle | null {
+    let last = runStart - 1;
+    while (last >= 0 && blocks[last].type !== "bullet_list_item") last--;
+    if (last < 0) return null;
+    let head = last;
+    while (head > 0 && blocks[head - 1].type === "bullet_list_item") head--;
+    const item = blocks[head];
+    return item.type === "bullet_list_item" ? item.marker ?? "dot" : null;
+  }
+
+  /** Apply `style` to every item in the bullet run containing `index`. */
+  function setBulletRunStyle(index: number, style: BulletStyle) {
+    const { start, end } = bulletRunBounds(index);
+    const marker = style === "dot" ? undefined : style;
+    const next = [...blocks];
+    for (let k = start; k < end; k++) {
+      const item = next[k];
+      if (item.type === "bullet_list_item") next[k] = { ...item, marker };
+    }
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
+  /** Carry the previous bulleted list's style onto this run. No-op when no
+   *  bulleted list precedes it — mirrors "continue numbering". */
+  function continueBulleting(index: number) {
+    const { start } = bulletRunBounds(index);
+    const style = prevBulletRunStyle(start);
+    if (style === null) return;
+    setBulletRunStyle(index, style);
+  }
+
+  /** Reset this run back to the default dot bullet — mirrors "reset numbering". */
+  function resetBulleting(index: number) {
+    setBulletRunStyle(index, "dot");
+  }
+
   /** Open the numbering or bullet popover for the clicked list marker. */
   function handleMarkerClick(index: number, rect: DOMRect) {
     const b = blocks[index];
@@ -3327,10 +3399,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   /** Enter at the end of a list item: append a fresh empty item of the same
    *  list type and focus it. */
   function insertListItemAfter(index: number) {
-    const type = blocks[index].type as ListItemType;
     updateBlocks([
       ...blocks.slice(0, index + 1),
-      emptyListItemBlock(type),
+      emptyListItemInheriting(blocks[index]),
       ...blocks.slice(index + 1),
     ]);
     cancelHistoryDebounce();
@@ -4408,6 +4479,14 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           style={bulletStyleOf(bullet.index)}
           onSelect={(style) => {
             setBulletStyle(bullet.index, style);
+            setBullet(null);
+          }}
+          onContinue={() => {
+            continueBulleting(bullet.index);
+            setBullet(null);
+          }}
+          onReset={() => {
+            resetBulleting(bullet.index);
             setBullet(null);
           }}
           onDismiss={() => setBullet(null)}

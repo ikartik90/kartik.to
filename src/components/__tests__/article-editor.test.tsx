@@ -1867,6 +1867,27 @@ describe("ArticleEditor", () => {
     };
   }
 
+  function bulletPostItems(
+    items: Array<{ text: string; marker?: "check" | "cross" }>,
+  ) {
+    return {
+      id: "bl",
+      slug: "bl",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: items.map((it) => ({
+          type: "bullet_list_item" as const,
+          children: [{ type: "text" as const, text: it.text }],
+          ...(it.marker ? { marker: it.marker } : {}),
+        })),
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
   it("creates a bullet_list_item via the slash menu", () => {
     render(<ArticleEditor />);
     const block = document.querySelector("[data-block-index='0']") as HTMLElement;
@@ -1901,6 +1922,102 @@ describe("ArticleEditor", () => {
     fireEvent.keyDown(block, { key: "Enter" });
 
     expect(useEditorStore.getState().document.content[0].type).toBe("paragraph");
+  });
+
+  it("carries the bullet glyph forward when Enter appends an item after", () => {
+    render(<ArticleEditor initialPost={bulletPostItems([{ text: "Hello", marker: "check" }])} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, "Hello".length);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    if (blocks[1].type === "bullet_list_item")
+      expect(blocks[1].marker).toBe("check");
+  });
+
+  it("carries the bullet glyph forward when Enter prepends an item before", () => {
+    render(<ArticleEditor initialPost={bulletPostItems([{ text: "Hello", marker: "cross" }])} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 0);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    // The new empty item is prepended; the "Hello" item shifts to index 1.
+    if (blocks[0].type === "bullet_list_item")
+      expect(blocks[0].marker).toBe("cross");
+    if (blocks[1].type === "bullet_list_item")
+      expect(blocks[1].children[0]).toMatchObject({ text: "Hello" });
+  });
+
+  it("carries the bullet glyph forward when Enter splits an item", () => {
+    render(<ArticleEditor initialPost={bulletPostItems([{ text: "HelloWorld", marker: "check" }])} />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    placeCaret(block, 5);
+    fireEvent.keyDown(block, { key: "Enter" });
+
+    const blocks = useEditorStore.getState().document.content;
+    if (blocks[0].type === "bullet_list_item")
+      expect(blocks[0].marker).toBe("check");
+    if (blocks[1].type === "bullet_list_item")
+      expect(blocks[1].marker).toBe("check");
+  });
+
+  it("resets a bullet run to the default dot via the popover", () => {
+    render(
+      <ArticleEditor
+        initialPost={bulletPostItems([
+          { text: "A", marker: "check" },
+          { text: "B", marker: "check" },
+        ])}
+      />,
+    );
+    const marker = document.querySelectorAll("[data-bullet-marker]")[0] as HTMLElement;
+    fireEvent.click(marker);
+    fireEvent.click(screen.getByLabelText("Reset bullets to the default style"));
+
+    const blocks = useEditorStore.getState().document.content;
+    if (blocks[0].type === "bullet_list_item")
+      expect(blocks[0].marker).toBeUndefined();
+    if (blocks[1].type === "bullet_list_item")
+      expect(blocks[1].marker).toBeUndefined();
+  });
+
+  it("continues the previous bullet run's style via the popover", () => {
+    const post = {
+      id: "bl2",
+      slug: "bl2",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "bullet_list_item" as const,
+            children: [{ type: "text" as const, text: "A" }],
+            marker: "cross" as const,
+          },
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text: "gap" }],
+          },
+          {
+            type: "bullet_list_item" as const,
+            children: [{ type: "text" as const, text: "B" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+    const markers = document.querySelectorAll("[data-bullet-marker]");
+    // The second run's marker button is the last one.
+    fireEvent.click(markers[markers.length - 1] as HTMLElement);
+    fireEvent.click(screen.getByLabelText("Continue bullets from previous list"));
+
+    const blocks = useEditorStore.getState().document.content;
+    if (blocks[2].type === "bullet_list_item")
+      expect(blocks[2].marker).toBe("cross");
   });
 
   it("inserts a paragraph above when Enter is pressed at the start of a heading", () => {
