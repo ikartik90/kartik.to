@@ -1,5 +1,4 @@
 import React from "react";
-import Image from "next/image";
 import {
   Typography,
   type TypographyTag,
@@ -28,6 +27,7 @@ import {
   menuIcon,
   articleListItemContent,
   articleMetric,
+  articleMetricCaption,
   articleMetricValue,
   articleMetricLabel,
   codeBlock,
@@ -186,22 +186,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           className={articleBlockquoteShell()}
           data-indented={node.indent ? "" : undefined}
         >
-          <Image
-            src="/assets/quote-light.png"
-            alt=""
-            width={52}
-            height={52}
-            className={articleBlockquoteMark({ theme: "light" })}
-            aria-hidden
-          />
-          <Image
-            src="/assets/quote-dark.png"
-            alt=""
-            width={52}
-            height={52}
-            className={articleBlockquoteMark({ theme: "dark" })}
-            aria-hidden
-          />
+          <span className={articleBlockquoteMark()} aria-hidden />
           <div className={articleBlockquoteBody()}>
             <blockquote className={articleBlockquote()}>
               {renderInlineNodes(node.children)}
@@ -260,11 +245,14 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           className={articleMetric()}
           data-indented={node.indent ? "" : undefined}
         >
+          {node.caption && (
+            <span className={articleMetricCaption()}>{node.caption}</span>
+          )}
           <span className={articleMetricValue()}>
             {renderInlineNodes(node.children)}
           </span>
-          {node.caption && (
-            <span className={articleMetricLabel()}>{node.caption}</span>
+          {node.subtext && (
+            <span className={articleMetricLabel()}>{node.subtext}</span>
           )}
         </div>
       );

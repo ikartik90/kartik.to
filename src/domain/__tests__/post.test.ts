@@ -241,17 +241,18 @@ describe("BlockNodeSchema", () => {
     ).toBe(false);
   });
 
-  it("accepts a metric node with a value and label", () => {
+  it("accepts a metric node with a caption, value, and subtext", () => {
     expect(
       BlockNodeSchema.safeParse({
         type: "metric",
         children: [{ type: "text", text: "$377k" }],
-        caption: "Additional GMV contributed since launch (Mar–Sep)",
+        caption: "GMV impact",
+        subtext: "Additional GMV contributed since launch (Mar–Sep)",
       }).success,
     ).toBe(true);
   });
 
-  it("accepts a metric node without a label", () => {
+  it("accepts a metric node without a caption or subtext", () => {
     expect(
       BlockNodeSchema.safeParse({
         type: "metric",
