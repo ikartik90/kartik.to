@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { css, cx } from "../../styled-system/css";
 import {
@@ -25,6 +24,7 @@ import {
   listBulletCircle,
   articleListItemContent,
   articleMetric,
+  articleMetricCaption,
   articleMetricValue,
   articleMetricLabel,
   codeBlock,
@@ -946,7 +946,22 @@ const editorMetricValueStyle = cx(
   }),
 );
 
-// Metric label — the descriptive line beneath the value.
+// Metric caption — the optional eyebrow above the value (image-caption style,
+// left-aligned).
+const editorMetricCaptionStyle = cx(
+  editableBaseStyle,
+  articleMetricCaption(),
+  css({
+    minHeight: "1.5em",
+    "&:empty::before, &[data-empty]::before": {
+      content: "attr(data-placeholder)",
+      color: "text.default/40",
+      pointerEvents: "none",
+    },
+  }),
+);
+
+// Metric label — the descriptive subtext line beneath the value.
 const editorMetricLabelStyle = cx(
   editableBaseStyle,
   articleMetricLabel(),
@@ -1113,6 +1128,9 @@ function EditableBlock({
   // Local ref to the DOM element — needed for the imperative innerHTML update.
   const contentRef = useRef<HTMLElement | null>(null);
   const captionRef = useRef<HTMLElement | null>(null);
+  // Metric-only: the subtext line below the value (the value uses contentRef and
+  // the eyebrow caption above reuses captionRef).
+  const subtextRef = useRef<HTMLElement | null>(null);
   const showcaseMediaRef = useRef<HTMLElement | null>(null);
 
   // Stable combined ref: forwards to both contentRef and the parent's elRef
@@ -1195,6 +1213,28 @@ function EditableBlock({
       range.setStart(node, position === "end" ? node.length : 0);
     } else {
       range.setStart(caption, 0);
+    }
+    range.collapse(position === "end" ? false : true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, []);
+
+  // Metric-only: move the caret into the subtext line below the value (mirrors
+  // focusCaption, which targets the eyebrow caption above).
+  const focusSubtext = useCallback((position: "start" | "end") => {
+    const subtext = subtextRef.current;
+    if (!subtext) return;
+    subtext.focus();
+    if (!subtext.isContentEditable) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    const node =
+      position === "end" ? lastTextNode(subtext) : firstTextNode(subtext);
+    if (node) {
+      range.setStart(node, position === "end" ? node.length : 0);
+    } else {
+      range.setStart(subtext, 0);
     }
     range.collapse(position === "end" ? false : true);
     sel.removeAllRanges();
@@ -1306,6 +1346,15 @@ function EditableBlock({
     const el = captionRef.current;
     if (!el || document.activeElement === el) return;
     el.innerText = block.caption ?? "";
+  }, [block]);
+
+  // Metric-only: keep the subtext line in sync (mirrors the caption effect
+  // above; the eyebrow caption uses captionRef, the subtext uses subtextRef).
+  useEffect(() => {
+    if (block.type !== "metric") return;
+    const el = subtextRef.current;
+    if (!el || document.activeElement === el) return;
+    el.innerText = block.subtext ?? "";
   }, [block]);
 
   // ---------------------------------------------------------------------------
@@ -1430,11 +1479,11 @@ function EditableBlock({
         }
       }
 
-      // ArrowUp from a subheading's first line → its eyebrow caption.
+      // ArrowUp from a subheading's / metric's first line → its eyebrow caption.
       if (
         e.key === "ArrowUp" &&
         !e.shiftKey &&
-        block.type === "heading" &&
+        (block.type === "heading" || block.type === "metric") &&
         isCaretAtFirstLine(e.currentTarget)
       ) {
         e.preventDefault();
@@ -1454,7 +1503,8 @@ function EditableBlock({
         return;
       }
 
-      // ArrowDown from a blockquote's / metric's last line → its caption line.
+      // ArrowDown from a blockquote's last line → its citation; from a metric's
+      // last line → its subtext line below the value.
       if (
         e.key === "ArrowDown" &&
         !e.shiftKey &&
@@ -1462,7 +1512,8 @@ function EditableBlock({
         isCaretAtLastLine(e.currentTarget)
       ) {
         e.preventDefault();
-        focusCaption("start");
+        if (block.type === "metric") focusSubtext("start");
+        else focusCaption("start");
         return;
       }
 
@@ -1478,11 +1529,11 @@ function EditableBlock({
         return;
       }
 
-      // ArrowLeft at the start of a subheading → its eyebrow caption.
+      // ArrowLeft at the start of a subheading / metric value → its eyebrow caption.
       if (
         e.key === "ArrowLeft" &&
         !e.shiftKey &&
-        block.type === "heading" &&
+        (block.type === "heading" || block.type === "metric") &&
         isCaretAtStart(e.currentTarget)
       ) {
         e.preventDefault();
@@ -1502,7 +1553,8 @@ function EditableBlock({
         return;
       }
 
-      // ArrowRight at the end of a blockquote / metric value → its caption line.
+      // ArrowRight at the end of a blockquote value → its citation; at the end
+      // of a metric value → its subtext line below.
       if (
         e.key === "ArrowRight" &&
         !e.shiftKey &&
@@ -1510,7 +1562,8 @@ function EditableBlock({
         isCaretAtEnd(e.currentTarget)
       ) {
         e.preventDefault();
-        focusCaption("start");
+        if (block.type === "metric") focusSubtext("start");
+        else focusCaption("start");
         return;
       }
 
@@ -1665,6 +1718,7 @@ function EditableBlock({
       onInsertListItemBefore,
       onInsertListItemAfter,
       focusCaption,
+      focusSubtext,
     ],
   );
 
@@ -1772,6 +1826,24 @@ function EditableBlock({
       onChange({
         ...block,
         caption: text.trim().length > 0 ? text : undefined,
+      });
+    },
+    [block, onChange],
+  );
+
+  // Metric-only: persist the subtext line (mirrors handleCaptionInput, which
+  // writes the eyebrow caption).
+  const handleSubtextInput = useCallback(
+    (e: React.FormEvent<HTMLElement>) => {
+      if (block.type !== "metric") return;
+      const el = e.currentTarget;
+      const text = (el.innerText || el.textContent || "").replace(/\n$/, "");
+      if (text.trim().length === 0) {
+        el.innerHTML = "";
+      }
+      onChange({
+        ...block,
+        subtext: text.trim().length > 0 ? text : undefined,
       });
     },
     [block, onChange],
@@ -2132,22 +2204,7 @@ function EditableBlock({
         className={articleBlockquoteShell()}
         data-indented={block.indent ? "" : undefined}
       >
-        <Image
-          src="/assets/quote-light.png"
-          alt=""
-          width={52}
-          height={52}
-          className={articleBlockquoteMark({ theme: "light" })}
-          aria-hidden
-        />
-        <Image
-          src="/assets/quote-dark.png"
-          alt=""
-          width={52}
-          height={52}
-          className={articleBlockquoteMark({ theme: "dark" })}
-          aria-hidden
-        />
+        <span className={articleBlockquoteMark()} aria-hidden />
         <div className={articleBlockquoteBody()}>
           <blockquote
             ref={combinedRef as React.RefCallback<HTMLElement>}
@@ -2404,7 +2461,8 @@ function EditableBlock({
   }
 
   // ---------------------------------------------------------------------------
-  // Metric — gradient value with an editable label beneath it
+  // Metric — an optional eyebrow caption above a gradient value, with an
+  // optional descriptive subtext line beneath it.
   // ---------------------------------------------------------------------------
 
   if (block.type === "metric") {
@@ -2413,6 +2471,16 @@ function EditableBlock({
         className={articleMetric()}
         data-indented={block.indent ? "" : undefined}
       >
+        <span
+          ref={captionRef}
+          className={editorMetricCaptionStyle}
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Add caption..."
+          data-empty={!block.caption?.trim() ? "" : undefined}
+          onInput={handleCaptionInput}
+          onKeyDown={handleHeadingCaptionKeyDown}
+        />
         <div
           ref={combinedRef as React.RefCallback<HTMLDivElement>}
           className={editorMetricValueStyle}
@@ -2427,14 +2495,14 @@ function EditableBlock({
           {...slashAnchorProps}
         />
         <span
-          ref={captionRef}
+          ref={subtextRef}
           className={editorMetricLabelStyle}
           contentEditable
           suppressContentEditableWarning
-          data-placeholder="Add label..."
+          data-placeholder="Add subtext..."
           data-block-index={blockIndex}
-          data-empty={!block.caption?.trim() ? "" : undefined}
-          onInput={handleCaptionInput}
+          data-empty={!block.subtext?.trim() ? "" : undefined}
+          onInput={handleSubtextInput}
           onKeyDown={handleCaptionKeyDown}
         />
       </div>
@@ -3432,6 +3500,16 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       if (el) focusBlockAtEnd(el);
       return;
     }
+
+    // The current (focused) block merges away. With index+type keys React
+    // reuses its DOM node for whatever block now occupies this slot — the
+    // shifted-up successor, or the synthetic trailing paragraph appended when
+    // the merge target is a list item / code block. EditableBlock's innerHTML
+    // sync skips focused nodes, so without blurring the old text lingers in
+    // that reused node (duplicated) until an unrelated re-render. Blur first so
+    // the sync runs; focus is restored to the merge join below. (Mirrors
+    // deleteBlock.)
+    (document.activeElement as HTMLElement | null)?.blur();
 
     const prevBlock = blocks[index - 1];
 

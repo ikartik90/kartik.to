@@ -878,24 +878,25 @@ export default defineConfig({
         articleBlockquoteMark: defineRecipe({
           className: "article-blockquote-mark",
           description:
-            "Theme-aware quote mark at native PNG resolution (52×52 @1x).",
+            "Quote mark (52×52) drawn as the brand gradient, masked to the blockquote glyph so it theme-flips with the gradient token.",
           base: {
             width: "token(sizes.quoteMark)",
             height: "token(sizes.quoteMark)",
             flexShrink: 0,
             pointerEvents: "none",
-          },
-          variants: {
-            theme: {
-              light: {
-                display: "block",
-                _dark: { display: "none" },
-              },
-              dark: {
-                display: "none",
-                _dark: { display: "block" },
-              },
-            },
+            // The gradient fills the box; the blockquote glyph (src/assets/icons/
+            // blockquote.svg, inlined) masks it to shape via its alpha channel.
+            background: "bg.brandedEmphasis",
+            maskImage:
+              "url(\"data:image/svg+xml,%3Csvg width='52' height='52' viewBox='0 0 52 52' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14.5596 8.32031C15.4635 8.32031 16.1963 9.05306 16.1963 9.95703C16.1962 10.3244 16.073 10.6811 15.8457 10.9697C13.6019 13.8179 12.4805 17.7879 12.4805 22.8799H20.7998C21.9485 22.8799 22.8799 23.8112 22.8799 24.96V41.5996C22.8799 42.7484 21.9486 43.6797 20.7998 43.6797H6.24023C5.09148 43.6797 4.16016 42.7484 4.16016 41.5996V27.04C4.16016 16.6408 12.4789 8.32146 14.5596 8.32031ZM39.5195 8.32031C40.4235 8.32031 41.1572 9.05306 41.1572 9.95703C41.1572 10.3244 41.033 10.6811 40.8057 10.9697C38.5619 13.8179 37.4404 17.788 37.4404 22.8799H45.7598C46.9085 22.8799 47.8398 23.8112 47.8398 24.96V41.5996C47.8398 42.7484 46.9085 43.6797 45.7598 43.6797H31.2002C30.0514 43.6797 29.1201 42.7484 29.1201 41.5996V27.04C29.1201 16.6408 37.4388 8.32156 39.5195 8.32031Z' fill='white'/%3E%3C/svg%3E\")",
+            maskSize: "contain",
+            maskRepeat: "no-repeat",
+            maskPosition: "center",
+            WebkitMaskImage:
+              "url(\"data:image/svg+xml,%3Csvg width='52' height='52' viewBox='0 0 52 52' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14.5596 8.32031C15.4635 8.32031 16.1963 9.05306 16.1963 9.95703C16.1962 10.3244 16.073 10.6811 15.8457 10.9697C13.6019 13.8179 12.4805 17.7879 12.4805 22.8799H20.7998C21.9485 22.8799 22.8799 23.8112 22.8799 24.96V41.5996C22.8799 42.7484 21.9486 43.6797 20.7998 43.6797H6.24023C5.09148 43.6797 4.16016 42.7484 4.16016 41.5996V27.04C4.16016 16.6408 12.4789 8.32146 14.5596 8.32031ZM39.5195 8.32031C40.4235 8.32031 41.1572 9.05306 41.1572 9.95703C41.1572 10.3244 41.033 10.6811 40.8057 10.9697C38.5619 13.8179 37.4404 17.788 37.4404 22.8799H45.7598C46.9085 22.8799 47.8398 23.8112 47.8398 24.96V41.5996C47.8398 42.7484 46.9085 43.6797 45.7598 43.6797H31.2002C30.0514 43.6797 29.1201 42.7484 29.1201 41.5996V27.04C29.1201 16.6408 37.4388 8.32156 39.5195 8.32031Z' fill='white'/%3E%3C/svg%3E\")",
+            WebkitMaskSize: "contain",
+            WebkitMaskRepeat: "no-repeat",
+            WebkitMaskPosition: "center",
           },
         }),
 
@@ -1102,6 +1103,18 @@ export default defineConfig({
           },
         }),
 
+        articleMetricCaption: defineRecipe({
+          className: "article-metric-caption",
+          description:
+            "Metric caption — optional eyebrow above the value; same style as an image caption but left-aligned (the metric column is flush-left).",
+          base: {
+            textStyle: "caption",
+            color: "text.default",
+            textAlign: "left",
+            wordBreak: "break-word",
+          },
+        }),
+
         articleMetricValue: defineRecipe({
           className: "article-metric-value",
           description:
@@ -1125,9 +1138,9 @@ export default defineConfig({
         articleMetricLabel: defineRecipe({
           className: "article-metric-label",
           description:
-            "Metric label — descriptive line beneath the value; standard text colour (neutral.700 light / neutral.200 dark per Figma).",
+            "Metric label — descriptive line beneath the value; paragraph text style, standard text colour (neutral.700 light / neutral.200 dark per Figma).",
           base: {
-            textStyle: "metricLabel",
+            textStyle: "paragraph",
             color: "text.default",
             wordBreak: "break-word",
           },
@@ -1382,15 +1395,6 @@ export default defineConfig({
             fontWeight: "{fontWeights.base}",
             fontSize: "1.25rem",
             lineHeight: "1.8",
-          },
-        },
-        // Metric label — 20px/28px descriptive line beneath the value (Figma 456:981).
-        metricLabel: {
-          value: {
-            fontFamily: "{fonts.switzer}",
-            fontWeight: "{fontWeights.base}",
-            fontSize: "1.25rem",
-            lineHeight: "1.4",
           },
         },
         paragraph: {

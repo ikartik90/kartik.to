@@ -2020,6 +2020,50 @@ describe("ArticleEditor", () => {
       expect(blocks[2].marker).toBe("cross");
   });
 
+  it("Backspace at the start of a paragraph merges it into a preceding bullet item without duplicating text", () => {
+    const post = {
+      id: "bl-merge",
+      slug: "bl-merge",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          {
+            type: "bullet_list_item" as const,
+            children: [{ type: "text" as const, text: "Item" }],
+            marker: "check" as const,
+          },
+          {
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, text: "Tail" }],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+    const para = document.querySelector("[data-block-index='1']") as HTMLElement;
+    placeCaret(para, 0);
+    fireEvent.keyDown(para, { key: "Backspace" });
+
+    const blocks = useEditorStore.getState().document.content;
+    // Paragraph merges into the bullet; a synthetic trailing paragraph follows
+    // the now-terminal list item.
+    expect(blocks.map((b) => b.type)).toEqual(["bullet_list_item", "paragraph"]);
+    if (blocks[0].type === "bullet_list_item") {
+      expect(blocks[0].children[0]).toMatchObject({ text: "ItemTail" });
+      expect(blocks[0].marker).toBe("check");
+    }
+    // Regression: the reused (previously-focused) DOM node must show the empty
+    // trailing paragraph, not the deleted paragraph's stale, duplicated "Tail".
+    const itemEl = document.querySelector("[data-block-index='0']") as HTMLElement;
+    const trailingEl = document.querySelector("[data-block-index='1']") as HTMLElement;
+    expect(itemEl.textContent).toBe("ItemTail");
+    expect(trailingEl.textContent).toBe("");
+  });
+
   it("inserts a paragraph above when Enter is pressed at the start of a heading", () => {
     const post = {
       id: "h-enter-start",

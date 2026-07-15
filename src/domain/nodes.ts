@@ -141,13 +141,15 @@ export const ComponentNodeSchema = z.object({
   caption: z.string().optional(),
 });
 
-// A metric callout — a large brand-gradient `value` (e.g. "$377k") stacked over
-// a descriptive `label`. Modelled like a blockquote: the value is the primary
-// inline-node `children` array and the label reuses the shared `caption` field.
+// A metric callout — a large brand-gradient `value` (e.g. "$377k") with an
+// optional eyebrow `caption` above it and a descriptive `subtext` line below.
+// The value is the primary inline-node `children` array; `caption` reuses the
+// shared eyebrow-caption field (as headings do), `subtext` is metric-specific.
 export const MetricNodeSchema = z.object({
   type: z.literal("metric"),
   children: z.array(InlineNodeSchema),
   caption: z.string().optional(),
+  subtext: z.string().optional(),
   indent: z.boolean().optional(),
 });
 

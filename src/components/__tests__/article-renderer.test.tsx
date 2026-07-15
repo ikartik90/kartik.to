@@ -452,18 +452,22 @@ describe("ArticleRenderer", () => {
   });
 
   describe("metric", () => {
-    it("renders the value and label", () => {
+    it("renders the caption, value, and subtext", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
             {
               type: "metric",
               children: [{ type: "text", text: "$377k" }],
-              caption: "Additional GMV contributed since launch (Mar–Sep)",
+              caption: "GMV impact",
+              subtext: "Additional GMV contributed since launch (Mar–Sep)",
             },
           ])}
         />,
       );
+      expect(
+        container.querySelector(".article-metric-caption")?.textContent,
+      ).toBe("GMV impact");
       expect(container.querySelector(".article-metric-value")?.textContent).toBe(
         "$377k",
       );
@@ -472,7 +476,7 @@ describe("ArticleRenderer", () => {
       );
     });
 
-    it("omits the label when there is no caption", () => {
+    it("omits the caption and subtext when absent", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
@@ -486,6 +490,7 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector(".article-metric-value")?.textContent).toBe(
         "88%",
       );
+      expect(container.querySelector(".article-metric-caption")).toBeNull();
       expect(container.querySelector(".article-metric-label")).toBeNull();
     });
   });
