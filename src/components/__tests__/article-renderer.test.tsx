@@ -643,6 +643,74 @@ describe("ArticleRenderer", () => {
     });
   });
 
+  describe("sidenotes", () => {
+    const twoNotes = doc([
+      {
+        type: "paragraph",
+        children: [
+          { type: "text", text: "See " },
+          {
+            type: "text",
+            text: "this",
+            marks: [{ type: "sidenote", id: "n1", text: "First note" }],
+          },
+          { type: "text", text: " and " },
+          {
+            type: "text",
+            text: "that",
+            marks: [{ type: "sidenote", id: "n2", text: "Second note" }],
+          },
+        ],
+      },
+    ]);
+
+    it("wraps annotated text in a sidenote span with an anchor-name and superscript", () => {
+      const { container } = render(<ArticleRenderer content={twoNotes} />);
+      const spans = container.querySelectorAll("[data-sidenote-id]");
+      expect(spans.length).toBe(2);
+      const first = spans[0] as HTMLElement;
+      expect(first.getAttribute("data-sidenote-id")).toBe("n1");
+      expect(first.style.getPropertyValue("anchor-name")).toBe("--sn-n1");
+      expect(first.querySelector("sup")).not.toBeNull();
+    });
+
+    it("sets the document-order ordinal on each superscript (data-sidenote-number)", () => {
+      const { container } = render(<ArticleRenderer content={twoNotes} />);
+      const sups = container.querySelectorAll("[data-sidenote-id] sup");
+      expect(
+        Array.from(sups).map((s) => s.getAttribute("data-sidenote-number")),
+      ).toEqual(["1", "2"]);
+    });
+
+    it("renders one aside card per note with its body text and matching anchor", () => {
+      const { container } = render(<ArticleRenderer content={twoNotes} />);
+      const cards = container.querySelectorAll("aside");
+      expect(cards.length).toBe(2);
+      // Scope to this render's container — the file renders without cleanup.
+      expect(cards[0].querySelector(".sidenote-card-body")?.textContent).toBe(
+        "First note",
+      );
+      expect(cards[1].querySelector(".sidenote-card-body")?.textContent).toBe(
+        "Second note",
+      );
+      // Card is anchored to the annotation via --sn-anchor.
+      expect(
+        (cards[0] as HTMLElement).style.getPropertyValue("--sn-anchor"),
+      ).toBe("--sn-n1");
+    });
+
+    it("renders no aside cards when there are no sidenotes", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "paragraph", children: [{ type: "text", text: "plain" }] },
+          ])}
+        />,
+      );
+      expect(container.querySelectorAll("aside").length).toBe(0);
+    });
+  });
+
   describe("edge cases", () => {
     it("renders an empty document without crashing", () => {
       const { container } = render(

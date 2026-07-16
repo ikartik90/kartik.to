@@ -15,6 +15,9 @@ function noopHandlers() {
     onRemoveLink: vi.fn(),
     onGotoLink: vi.fn(),
     onEditLink: vi.fn(),
+    onAddSidenote: vi.fn(),
+    onEditSidenote: vi.fn(),
+    onDeleteSidenote: vi.fn(),
     onDismiss: vi.fn(),
   };
 }
@@ -131,5 +134,27 @@ describe("SelectionToolbar — link-view mode", () => {
     expect(h.onEditLink).toHaveBeenCalled();
     expect(h.onGotoLink).toHaveBeenCalled();
     expect(h.onRemoveLink).toHaveBeenCalled();
+  });
+});
+
+describe("SelectionToolbar — sidenote-view mode", () => {
+  it("renders only Edit and Delete actions and wires them", () => {
+    const h = noopHandlers();
+    render(
+      <SelectionToolbar mode="sidenote-view" activeMarks={empty} {...h} />,
+    );
+    expect(
+      screen.getByRole("toolbar", { name: "Sidenote actions" }),
+    ).toBeDefined();
+    // Exactly two actions — no Open, no formatting buttons.
+    expect(screen.getByLabelText("Edit sidenote")).toBeDefined();
+    expect(screen.getByLabelText("Delete sidenote")).toBeDefined();
+    expect(screen.queryByLabelText("Bold")).toBeNull();
+    expect(screen.queryByLabelText("Open link")).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Edit sidenote"));
+    fireEvent.click(screen.getByLabelText("Delete sidenote"));
+    expect(h.onEditSidenote).toHaveBeenCalled();
+    expect(h.onDeleteSidenote).toHaveBeenCalled();
   });
 });

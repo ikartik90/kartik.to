@@ -46,6 +46,15 @@ export default defineConfig({
           listBullet: { value: "8px" },
           // Selection toolbar icon button (Figma 422:834 — 28px square)
           toolbarButton: { value: "28px" },
+          // Margin-note card in the aside column, and its offset to the right of
+          // the annotated text (per spec: 100px right of the text content).
+          sidenoteWidth: { value: "320px" },
+          sidenoteOffset: { value: "100px" },
+          // Centred (stacked) fallback: content-column width minus this inset,
+          // floored at the min width.
+          sidenoteStackedInset: { value: "80px" },
+          sidenoteMinWidth: { value: "320px" },
+          sidenoteMaxWidth: { value: "480px" },
         },
 
         colors: {
@@ -296,6 +305,166 @@ export default defineConfig({
             // Keep nested marks on the highlight's own colour (see self-improvement.md).
             "& :is(strong, b, em, i, u, s, code, a)": {
               color: "inherit",
+            },
+          },
+        }),
+
+        articleSidenote: defineRecipe({
+          className: "article-sidenote",
+          description:
+            "Sidenote annotation mark — the annotated run of prose. A dotted underline signals the margin note; the run also carries an `anchor-name` (set inline, per note) the aside card positions against.",
+          base: {
+            textDecorationLine: "underline",
+            textDecorationStyle: "dotted",
+            textDecorationColor:
+              "color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent)",
+            // 1px dotted underline under the annotated text only; skip-ink off
+            // so glyph descenders don't eat dots out of the line.
+            textDecorationThickness: "token(spacing.xxs)",
+            textDecorationSkipInk: "none",
+            textUnderlineOffset: "0.2em",
+            cursor: "default",
+            // Nested marks keep their own colour; only the underline is added.
+            "& :is(strong, b, em, i, u, s, code, a)": { color: "inherit" },
+          },
+        }),
+
+        articleSidenoteRef: defineRecipe({
+          className: "article-sidenote-ref",
+          description:
+            "Superscript ordinal after an annotated run. The digit is read from the `data-sidenote-number` attribute — assigned from the AST-derived ordinal (see collectSidenotes / SidenoteLayer + the reader). A CSS counter was avoided because Chromium doesn't re-resolve `counter()` generated content when a preceding counter-incrementing element is removed, so ordinals wouldn't decrement live. Painted in the brand gradient.",
+          base: {
+            verticalAlign: "super",
+            marginInlineStart: "3xs",
+            fontSize: "0.7em",
+            fontWeight: "medium",
+            userSelect: "none",
+            // inline-block makes the ref an atomic inline, so the wrapper's
+            // dotted underline is NOT drawn under it — the underline stays
+            // limited to the annotated text, never the ordinal.
+            display: "inline-block",
+            _after: {
+              content: "attr(data-sidenote-number)",
+              background: "bg.brandedEmphasis",
+              backgroundClip: "text",
+              WebkitBackgroundClip: "text",
+              color: "transparent",
+              WebkitTextFillColor: "transparent",
+            },
+          },
+        }),
+
+        sidenoteCard: defineRecipe({
+          className: "sidenote-card",
+          description:
+            "Margin note, CSS-anchored via anchor() and revealed only when its annotation is active (caret in the editor; hover/click in the reader). `side` (default): 100px right of the text-content column (via the --sidenote-rail anchor) and 2px above the annotated line. `stacked` (no room): centred on the content column, 4px below/above the line with flip-block — like the slash menu. Vertical/default anchor is the annotation's --sn-<id> (set inline via --sn-anchor).",
+          base: {
+            // Fixed (not absolute) so anchor()'s flip-block fallback measures
+            // overflow against the VIEWPORT — anchor positioning keeps the card
+            // pinned to its annotation as the page scrolls. Absolute would size
+            // the fallback against the tall <article> (always room below) and
+            // never flip above.
+            position: "fixed",
+            zIndex: 40,
+            positionAnchor: "var(--sn-anchor)",
+            maxWidth: "token(sizes.sidenoteMaxWidth)",
+            display: "flex",
+            gap: "sm",
+            padding: "md",
+            backgroundColor: "bg.surface",
+            borderRadius: "md",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
+            boxShadow:
+              "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+            color: "text.default",
+            // Hidden until its annotation is active.
+            opacity: 0,
+            visibility: "hidden",
+            pointerEvents: "none",
+            transitionProperty: "opacity, visibility",
+            transitionDuration: "120ms",
+            transitionTimingFunction: "ease-out",
+            // allow-discrete so `visibility` flips to visible at the START of the
+            // reveal (not after 120ms) — otherwise the card stays unfocusable for
+            // a frame and the Edit auto-focus lands on nothing.
+            transitionBehavior: "allow-discrete",
+            "&[data-active='true']": {
+              opacity: 1,
+              visibility: "visible",
+              pointerEvents: "auto",
+            },
+          },
+          variants: {
+            placement: {
+              side: {
+                width: "token(sizes.sidenoteWidth)",
+                left: "anchor(--sidenote-rail right)",
+                marginLeft: "token(sizes.sidenoteOffset)",
+                top: "anchor(top)",
+                marginTop: "calc(-1 * token(spacing.md))",
+              },
+              // Centred on the content column: width = column − 80px, floored at
+              // the min width; 4px below/above the line with flip-block.
+              stacked: {
+                width:
+                  "calc(anchor-size(--sidenote-rail width) - token(sizes.sidenoteStackedInset))",
+                minWidth: "token(sizes.sidenoteMinWidth)",
+                left: "anchor(--sidenote-rail center)",
+                translate: "-50% 0",
+                top: "anchor(bottom)",
+                marginTop: "sm",
+                positionTryFallbacks: "flip-block",
+              },
+            },
+          },
+          defaultVariants: { placement: "side" },
+        }),
+
+        sidenoteCardContent: defineRecipe({
+          className: "sidenote-card-content",
+          description:
+            "Text column of a margin-note card — the ordinal marker followed by the note body.",
+          base: {
+            flex: "1 0 0",
+            minWidth: 0,
+            textStyle: "sidenote",
+            color: "text.default",
+          },
+        }),
+
+        sidenoteCardMarker: defineRecipe({
+          className: "sidenote-card-marker",
+          description:
+            "Leading ordinal in a margin-note card (matches the annotation's superscript), painted in the brand gradient.",
+          base: {
+            marginInlineEnd: "xs",
+            fontWeight: "medium",
+            background: "bg.brandedEmphasis",
+            backgroundClip: "text",
+            WebkitBackgroundClip: "text",
+            color: "transparent",
+            WebkitTextFillColor: "transparent",
+            userSelect: "none",
+          },
+        }),
+
+        sidenoteCardBody: defineRecipe({
+          className: "sidenote-card-body",
+          description:
+            "Editable/read note body inside a margin-note card. Shows a placeholder while empty and unfocused.",
+          base: {
+            // inline-block (+ a min width) gives an EMPTY contentEditable a line
+            // box so the caret is placeable/visible on click; caretColor makes
+            // it explicit rather than relying on `auto`.
+            display: "inline-block",
+            minWidth: "token(spacing.md)",
+            caretColor: "text.default",
+            focusVisibleRing: "none",
+            "&[data-placeholder]:empty::after": {
+              content: "attr(data-placeholder)",
+              color: "text.default/40",
             },
           },
         }),

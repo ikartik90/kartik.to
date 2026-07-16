@@ -10,6 +10,8 @@ import {
   articleUnderline,
   articleStrikethrough,
   articleHighlight,
+  articleSidenote,
+  articleSidenoteRef,
   articleBlockquote,
   articleBlockquoteBody,
   articleBlockquoteCite,
@@ -67,6 +69,14 @@ import {
 } from "@/utils/list-numbering";
 import CheckSmallIcon from "@/assets/icons/check-small.svg";
 import CrossSmallIcon from "@/assets/icons/cross-small.svg";
+import { SidenoteLayer } from "@/components/sidenote-layer";
+import {
+  collectSidenotes,
+  makeSidenoteId,
+  sidenoteAnchorName,
+  sidenoteBases,
+  type SidenoteEntry,
+} from "@/utils/sidenotes";
 import { Button } from "@/components/ui/button";
 import { typographyStyles } from "@/components/ui/typography";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -87,6 +97,8 @@ const linkClass = articleLink();
 const underlineClass = articleUnderline();
 const strikethroughClass = articleStrikethrough();
 const highlightClass = articleHighlight();
+const sidenoteClass = articleSidenote();
+const sidenoteRefClass = articleSidenoteRef();
 
 function isHighlighted(node: InlineNode): boolean {
   return (node.marks ?? []).some((m) => m.type === "highlight");
@@ -129,7 +141,24 @@ function styledTextToHtml(node: InlineNode): string {
  * Consecutive highlighted nodes coalesce into one <mark> so the gradient stays
  * continuous across a run (see self-improvement.md).
  */
-export function inlineNodesToHtml(nodes: InlineNode[]): string {
+/** The sidenote id a node carries, or null. Groups a note's contiguous runs. */
+function sidenoteIdOf(node: InlineNode): string | null {
+  const mark = (node.marks ?? []).find((m) => m.type === "sidenote");
+  return mark?.type === "sidenote" ? mark.id : null;
+}
+
+function sidenoteTextOf(node: InlineNode): string {
+  const mark = (node.marks ?? []).find((m) => m.type === "sidenote");
+  return mark?.type === "sidenote" ? mark.text : "";
+}
+
+/** HTML-escape a string for use inside a double-quoted attribute value. */
+function escapeAttr(text: string): string {
+  return escapeHtml(text).replace(/"/g, "&quot;");
+}
+
+/** Serialise a run of non-sidenote nodes, coalescing consecutive highlights. */
+function inlineRunToHtml(nodes: InlineNode[]): string {
   let out = "";
   let i = 0;
   while (i < nodes.length) {
@@ -143,6 +172,46 @@ export function inlineNodesToHtml(nodes: InlineNode[]): string {
     } else {
       out += styledTextToHtml(nodes[i]);
       i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Serialise inline nodes to editor HTML. `base` is the count of distinct notes
+ * appearing before this block (see sidenoteBases): each note's `<sup>` gets its
+ * global ordinal in `data-sidenote-number` (rendered via `content: attr(...)`),
+ * so numbering survives the block-content-sync re-serialisation and stays live
+ * on add/remove — a CSS counter can't (Chromium doesn't re-resolve `counter()`
+ * when a preceding counter element is removed).
+ */
+export function inlineNodesToHtml(nodes: InlineNode[], base = 0): string {
+  let out = "";
+  let i = 0;
+  let noteIndex = 0;
+  const numberById = new Map<string, number>();
+  while (i < nodes.length) {
+    const id = sidenoteIdOf(nodes[i]);
+    if (id !== null) {
+      // Wrap a note's contiguous runs in one dotted-underline span carrying the
+      // note id/text (for round-tripping) and a per-note anchor-name (for the
+      // aside card). The trailing <sup> shows the ordinal via data-sidenote-number.
+      const start = i;
+      while (i < nodes.length && sidenoteIdOf(nodes[i]) === id) i++;
+      const group = nodes.slice(start, i);
+      if (!numberById.has(id)) numberById.set(id, base + ++noteIndex);
+      out +=
+        `<span class="${sidenoteClass}" data-sidenote-id="${escapeAttr(id)}"` +
+        ` data-sidenote-text="${escapeAttr(sidenoteTextOf(group[0]))}"` +
+        ` style="anchor-name:${sidenoteAnchorName(id)}">` +
+        `${inlineRunToHtml(group)}` +
+        `<sup class="${sidenoteRefClass}" contenteditable="false" aria-hidden="true"` +
+        ` data-sidenote-number="${numberById.get(id)}"></sup>` +
+        `</span>`;
+    } else {
+      const start = i;
+      while (i < nodes.length && sidenoteIdOf(nodes[i]) === null) i++;
+      out += inlineRunToHtml(nodes.slice(start, i));
     }
   }
   return out;
@@ -185,7 +254,16 @@ export function domToInlineNodes(el: Node): InlineNode[] {
       else if (el.tagName === "A") {
         const href = (el as HTMLAnchorElement).href;
         if (href) nextMarks.push({ type: "link", href });
+      } else if (el.tagName === "SPAN" && el.hasAttribute("data-sidenote-id")) {
+        nextMarks.push({
+          type: "sidenote",
+          id: el.getAttribute("data-sidenote-id") ?? "",
+          text: el.getAttribute("data-sidenote-text") ?? "",
+        });
       }
+      // The decorative ordinal superscript holds no text — skip it entirely so
+      // its (CSS-generated) digit never leaks into the AST.
+      else if (el.tagName === "SUP") return;
       // BR tags produce a zero-width space we skip
       else if (el.tagName === "BR") return;
 
@@ -195,6 +273,40 @@ export function domToInlineNodes(el: Node): InlineNode[] {
 
   el.childNodes.forEach((child) => walk(child, []));
   return nodes;
+}
+
+/**
+ * Remove sidenote wrappers left empty by deleting their annotated text. The
+ * orphaned `<sup>` inside keeps incrementing the `sidenote` CSS counter, so the
+ * ordinals never decrement until the wrapper is gone. Returns whether any were
+ * removed. Empty wrappers hold no characters, so callers can restore the caret
+ * by re-applying the pre-strip selection offsets.
+ */
+export function stripEmptySidenoteWrappers(el: HTMLElement): boolean {
+  const orphans = Array.from(
+    el.querySelectorAll<HTMLElement>("[data-sidenote-id]"),
+  ).filter((w) => (w.textContent ?? "") === "");
+  orphans.forEach((w) => w.remove());
+  return orphans.length > 0;
+}
+
+/**
+ * Renumber a block's sidenote superscripts in place from `base` (distinct notes
+ * before the block). Used for the FOCUSED block, whose content-sync effect is
+ * skipped to protect the caret — so add/remove within it can't rely on a
+ * re-serialise to refresh `data-sidenote-number`. Setting the attribute alone
+ * doesn't touch the editable text, so the caret is undisturbed.
+ */
+export function renumberSidenoteSups(el: HTMLElement, base = 0): void {
+  const numberById = new Map<string, number>();
+  let n = base;
+  el.querySelectorAll<HTMLElement>("[data-sidenote-id]").forEach((wrapper) => {
+    const id = wrapper.getAttribute("data-sidenote-id");
+    if (!id) return;
+    if (!numberById.has(id)) numberById.set(id, ++n);
+    const sup = wrapper.querySelector<HTMLElement>(".article-sidenote-ref");
+    if (sup) sup.setAttribute("data-sidenote-number", String(numberById.get(id)));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -729,6 +841,43 @@ export function findLinkRangeAt(
   return { start, end, href };
 }
 
+/**
+ * Locate the contiguous run of one sidenote surrounding character `offset`.
+ * Returns the note's [start, end) bounds and id, or null when `offset` is not
+ * inside a sidenote. Mirrors findLinkRangeAt (endpoints count as inside).
+ */
+export function findSidenoteRangeAt(
+  nodes: InlineNode[],
+  offset: number,
+): { start: number; end: number; id: string } | null {
+  const spans = nodes.map((node) => {
+    const mark = (node.marks ?? []).find((m) => m.type === "sidenote");
+    return { len: node.text.length, id: mark?.type === "sidenote" ? mark.id : null };
+  });
+  let pos = 0;
+  const bounds = spans.map((s) => {
+    const start = pos;
+    pos += s.len;
+    return { start, end: pos, id: s.id };
+  });
+
+  const hitIndex = bounds.findIndex(
+    (b) => b.id !== null && offset >= b.start && offset <= b.end,
+  );
+  if (hitIndex === -1) return null;
+
+  const id = bounds[hitIndex].id as string;
+  let start = bounds[hitIndex].start;
+  let end = bounds[hitIndex].end;
+  for (let i = hitIndex - 1; i >= 0 && bounds[i].id === id; i--) {
+    start = bounds[i].start;
+  }
+  for (let i = hitIndex + 1; i < bounds.length && bounds[i].id === id; i++) {
+    end = bounds[i].end;
+  }
+  return { start, end, id };
+}
+
 // ---------------------------------------------------------------------------
 
 /** Return true if a block carries no text content. */
@@ -1027,6 +1176,9 @@ function isListItemType(type: BlockNode["type"]): type is ListItemType {
 interface EditableBlockProps {
   block: BlockNode;
   blockIndex: number;
+  /** Count of distinct sidenotes before this block — offsets the block's own
+   *  note ordinals to their global values (see inlineNodesToHtml / sidenoteBases). */
+  sidenoteBase: number;
   isFirst: boolean;
   isOnly: boolean;
   onChange: (block: BlockNode) => void;
@@ -1090,6 +1242,7 @@ interface EditableBlockProps {
 function EditableBlock({
   block,
   blockIndex,
+  sidenoteBase,
   isFirst,
   isOnly,
   onChange,
@@ -1329,10 +1482,12 @@ function EditableBlock({
       block.type === "code_block"
         ? block.children.map((c) => c.text).join("")
         : "children" in block
-          ? inlineNodesToHtml(block.children as InlineNode[])
+          ? inlineNodesToHtml(block.children as InlineNode[], sidenoteBase)
           : "";
     el.innerHTML = html;
-  }, [block]);
+    // `sidenoteBase` is a dep so a note added/removed in an EARLIER block
+    // re-serialises this (non-focused) block with its new ordinals.
+  }, [block, sidenoteBase]);
 
   useEffect(() => {
     if (
@@ -1772,7 +1927,7 @@ function EditableBlock({
               children: replaced,
             } as BlockNode);
             // Rebuild HTML with code spans
-            el.innerHTML = inlineNodesToHtml(replaced);
+            el.innerHTML = inlineNodesToHtml(replaced, sidenoteBase);
             // Move caret to end
             const range = document.createRange();
             range.selectNodeContents(el);
@@ -1795,6 +1950,20 @@ function EditableBlock({
 
       if ("children" in block) {
         const nodes = domToInlineNodes(el);
+        // Deleting an annotation's text leaves its empty `.article-sidenote`
+        // wrapper (and the contenteditable=false <sup> inside it) orphaned in the
+        // DOM. domToInlineNodes already drops it from the AST, but the orphaned
+        // <sup> keeps incrementing the `sidenote` CSS counter, so the visible
+        // ordinals never decrement. Strip empty sidenote wrappers here; they hold
+        // no characters, so removing them leaves selection offsets unchanged.
+        const off = getSelectionOffsets(el);
+        if (stripEmptySidenoteWrappers(el) && off) {
+          setSelectionRange(el, off.start, off.end);
+        }
+        // This block is focused, so its content-sync effect won't re-serialise
+        // it — refresh its own superscripts directly (e.g. after deleting an
+        // annotation, the ones after it decrement).
+        renumberSidenoteSups(el, sidenoteBase);
         onChange({
           ...(block as Extract<BlockNode, { children: InlineNode[] }>),
           children: nodes,
@@ -1805,7 +1974,7 @@ function EditableBlock({
       // can update the filter query or dismiss the menu.
       onSlashInput?.(el.innerText ?? "");
     },
-    [block, onChange, onSlashInput],
+    [block, sidenoteBase, onChange, onSlashInput],
   );
 
   const handleCaptionInput = useCallback(
@@ -2613,6 +2782,8 @@ interface ToolbarState {
   range: { start: number; end: number };
   /** Existing link href (link-view / link-edit). */
   href?: string;
+  /** Target sidenote id (sidenote-view). */
+  sidenoteId?: string;
   /** Mark types the selection fully carries (drives active button state). */
   activeMarks: Set<Mark["type"]>;
 }
@@ -2625,6 +2796,7 @@ const TOOLBAR_MARK_TYPES: Mark["type"][] = [
   "strikethrough",
   "highlight",
   "link",
+  "sidenote",
 ];
 
 export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
@@ -2771,6 +2943,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   }, [router]);
 
   const blocks = ensureBlocks(doc);
+  // Distinct-note count before each block — offsets each block's own sidenote
+  // ordinals to their global values when serialising it independently.
+  const sidenoteBaseList = sidenoteBases(blocks);
   const blockRefs = useRef<(HTMLElement | null)[]>([]);
   const titleRef = useRef<HTMLHeadingElement>(null);
   // Index of the editing host where the current pointer-drag started.
@@ -3020,6 +3195,17 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
   // Floating selection toolbar (formatting / link editing / link actions).
   const [toolbar, setToolbar] = useState<ToolbarState | null>(null);
+  // Id of a just-added sidenote whose aside card should grab focus so the note
+  // can be typed straight away; cleared once the card focuses.
+  const [pendingSidenoteFocusId, setPendingSidenoteFocusId] = useState<
+    string | null
+  >(null);
+  // Id of the sidenote whose card is open for editing (set from the sidenote
+  // popover's Edit action / on add). The caret merely surfaces the popover; the
+  // card only appears once you choose Edit.
+  const [editingSidenoteId, setEditingSidenoteId] = useState<string | null>(
+    null,
+  );
   // Numbered-list marker popover (continue / reset / swap style). Anchored to
   // the clicked marker's rect.
   const [numbering, setNumbering] = useState<{
@@ -3735,13 +3921,14 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     el: HTMLElement,
     children: InlineNode[],
     blockType: SlashMenuBlockType,
+    base = 0,
   ) {
     if (blockType === "horizontal_rule") return;
     if (blockType === "code_block") {
       el.innerHTML = children.map((n) => n.text).join("");
       return;
     }
-    el.innerHTML = inlineNodesToHtml(children);
+    el.innerHTML = inlineNodesToHtml(children, base);
   }
 
   /**
@@ -3756,7 +3943,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     setSlashQuery("");
 
     const keptChildren = stripSlashTrigger(domToInlineNodes(el));
-    syncFocusedBlockDom(el, keptChildren, "paragraph");
+    syncFocusedBlockDom(el, keptChildren, "paragraph", sidenoteBaseList[index]);
 
     const next = [...blocks];
     next[index] = { type: "paragraph", children: keptChildren };
@@ -3798,7 +3985,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
     // Read from the DOM — it is authoritative while the block is focused.
     const keptChildren = stripSlashTrigger(domToInlineNodes(el));
-    syncFocusedBlockDom(el, keptChildren, type);
+    syncFocusedBlockDom(el, keptChildren, type, sidenoteBaseList[index]);
 
     if (type === "media") {
       const next = [...blocks];
@@ -3990,6 +4177,28 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     }
     const nodes = domToInlineNodes(el);
 
+    // Caret on — or a selection wholly within — an annotated run shows the
+    // sidenote actions (Edit / Delete), taking priority over the format toolbar
+    // and link view. Suppressed while that note's card is already being edited.
+    const sidenote = findSidenoteRangeAt(nodes, offsets.start);
+    if (
+      sidenote &&
+      offsets.start >= sidenote.start &&
+      offsets.end <= sidenote.end &&
+      editingSidenoteId !== sidenote.id
+    ) {
+      const snRange = domRangeForOffsets(el, sidenote.start, sidenote.end);
+      setToolbar({
+        mode: "sidenote-view",
+        index,
+        rect: rectFromRange(snRange ?? range),
+        range: { start: sidenote.start, end: sidenote.end },
+        sidenoteId: sidenote.id,
+        activeMarks: new Set(),
+      });
+      return;
+    }
+
     if (offsets.start !== offsets.end) {
       const activeMarks = new Set(
         TOOLBAR_MARK_TYPES.filter((m) =>
@@ -4042,7 +4251,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         ? marks.filter((m) => m.type !== type)
         : [...marks.filter((m) => m.type !== type), { type } as Mark],
     );
-    el.innerHTML = inlineNodesToHtml(next);
+    el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
     setSelectionRange(el, range.start, range.end);
   }
@@ -4099,7 +4308,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       ...marks.filter((m) => m.type !== "link"),
       { type: "link", href } as Mark,
     ]);
-    el.innerHTML = inlineNodesToHtml(next);
+    el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
     // Collapse into the link so the link-view popover surfaces next.
     setSelectionRange(el, range.end, range.end);
@@ -4118,7 +4327,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
       marks.filter((m) => m.type !== "link"),
     );
-    el.innerHTML = inlineNodesToHtml(next);
+    el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
     setSelectionRange(el, range.end, range.end);
     setToolbar(null);
@@ -4127,6 +4336,121 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   function handleGotoLink() {
     if (!toolbar?.href) return;
     window.open(toolbar.href, "_blank", "noopener,noreferrer");
+  }
+
+  // Toggle a sidenote annotation over the current selection. Adds an empty note
+  // (whose text is typed into the aside card) or removes it if the range already
+  // carries one. The ordinal is derived at render, so no numbering happens here.
+  function handleAddSidenote() {
+    if (!toolbar) return;
+    const { index, range } = toolbar;
+    const el = blockRefs.current[index];
+    const block = blocks[index];
+    if (!el || !block || !("children" in block) || range.start === range.end) {
+      return;
+    }
+    const nodes = domToInlineNodes(el);
+    const has = rangeHasMark(nodes, range.start, range.end, "sidenote");
+    const id = has ? null : makeSidenoteId();
+    const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
+      has
+        ? marks.filter((m) => m.type !== "sidenote")
+        : [
+            ...marks.filter((m) => m.type !== "sidenote"),
+            { type: "sidenote", id: id as string, text: "" } as Mark,
+          ],
+    );
+    el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
+    updateBlock(index, { ...block, children: next });
+    setSelectionRange(el, range.start, range.end);
+    // A freshly added note opens straight into its card for editing.
+    if (id) {
+      setEditingSidenoteId(id);
+      setPendingSidenoteFocusId(id);
+    }
+  }
+
+  // Sidenote popover (Edit): reveal this note's card and focus it. The caret is
+  // still on the annotation; suppressing the popover for the edited id (see
+  // trackSelection) keeps it from reappearing before the card takes focus.
+  function handleEditSidenote() {
+    if (!toolbar?.sidenoteId) return;
+    setEditingSidenoteId(toolbar.sidenoteId);
+    setPendingSidenoteFocusId(toolbar.sidenoteId);
+    setToolbar(null);
+  }
+
+  // Sidenote popover (Delete): strip the note's mark over its run (removing the
+  // annotation, its superscript, and its aside card).
+  function handleDeleteSidenote() {
+    if (!toolbar?.sidenoteId) return;
+    const { index, range, sidenoteId } = toolbar;
+    const el = blockRefs.current[index];
+    const block = blocks[index];
+    if (!el || !block || !("children" in block)) {
+      setToolbar(null);
+      return;
+    }
+    const nodes = domToInlineNodes(el);
+    const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
+      marks.filter((m) => !(m.type === "sidenote" && m.id === sidenoteId)),
+    );
+    el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
+    updateBlock(index, { ...block, children: next });
+    if (editingSidenoteId === sidenoteId) setEditingSidenoteId(null);
+    setSelectionRange(el, range.end, range.end);
+    setToolbar(null);
+  }
+
+  // Persist an aside-card edit back into every run of that note: update the AST
+  // and keep the prose DOM's data-sidenote-text in sync so a later re-serialise
+  // of the block (domToInlineNodes) preserves the note text.
+  function handleSidenoteTextChange(entry: SidenoteEntry, text: string) {
+    const block = blocks[entry.blockIndex];
+    if (!block || !("children" in block)) return;
+    const children = block.children.map((node) => {
+      const marks = node.marks ?? [];
+      if (!marks.some((m) => m.type === "sidenote" && m.id === entry.id)) {
+        return node;
+      }
+      return {
+        ...node,
+        marks: marks.map((m) =>
+          m.type === "sidenote" && m.id === entry.id ? { ...m, text } : m,
+        ),
+      };
+    });
+    updateBlock(entry.blockIndex, { ...block, children });
+    blockRefs.current[entry.blockIndex]
+      ?.querySelectorAll(`[data-sidenote-id="${CSS.escape(entry.id)}"]`)
+      .forEach((el) => el.setAttribute("data-sidenote-text", text));
+  }
+
+  // Sidenote card (Esc): close the card and return the caret to the annotated
+  // text. Moving focus into the prose block blurs the card, which fires its
+  // onStopEditing (clearing editingSidenoteId) via onBlurCapture.
+  function handleExitSidenoteEdit(entry: SidenoteEntry) {
+    const el = blockRefs.current[entry.blockIndex];
+    if (!el) {
+      setEditingSidenoteId(null);
+      return;
+    }
+    const span = el.querySelector<HTMLElement>(
+      `[data-sidenote-id="${CSS.escape(entry.id)}"]`,
+    );
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    const target = span ? lastTextNode(span) : null;
+    if (target) {
+      range.setStart(target, target.length);
+    } else {
+      range.selectNodeContents(el);
+    }
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
   }
 
   function handleEditLink() {
@@ -4419,6 +4743,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           key={`${i}-${block.type}`}
           block={block}
           blockIndex={i}
+          sidenoteBase={sidenoteBaseList[i]}
           isFirst={i === 0}
           isOnly={blocks.length === 1}
           onChange={(updated) => updateBlock(i, updated)}
@@ -4526,9 +4851,24 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           onRemoveLink={handleRemoveLink}
           onGotoLink={handleGotoLink}
           onEditLink={handleEditLink}
+          onAddSidenote={handleAddSidenote}
+          onEditSidenote={handleEditSidenote}
+          onDeleteSidenote={handleDeleteSidenote}
           onDismiss={handleToolbarDismiss}
         />
       )}
+
+      <SidenoteLayer
+        entries={collectSidenotes(blocks)}
+        trigger="caret"
+        editable
+        activeId={editingSidenoteId}
+        autoFocusId={pendingSidenoteFocusId}
+        onAutoFocused={() => setPendingSidenoteFocusId(null)}
+        onStopEditing={() => setEditingSidenoteId(null)}
+        onExitEdit={handleExitSidenoteEdit}
+        onChangeText={handleSidenoteTextChange}
+      />
 
       {numbering && (
         <NumberingPopover
