@@ -5,10 +5,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   inlineNodesToHtml,
   domToInlineNodes,
+  stripEmptySidenoteWrappers,
+  renumberSidenoteSups,
   ArticleEditor,
   transformMarksInRange,
   rangeHasMark,
   findLinkRangeAt,
+  findSidenoteRangeAt,
   mergeAdjacentInlineNodes,
 } from "../article-editor";
 import type { InlineNode, Mark } from "@/domain/nodes";
@@ -215,6 +218,88 @@ describe("inlineNodesToHtml", () => {
   it("returns empty string for empty array", () => {
     expect(inlineNodesToHtml([])).toBe("");
   });
+
+  it("wraps a sidenote run in a dotted span with an anchor-name and a numbered superscript", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "term",
+        marks: [{ type: "sidenote", id: "abc", text: "a note" }],
+      },
+    ];
+    // base 0 → the block's first note is ordinal 1.
+    expect(inlineNodesToHtml(nodes)).toBe(
+      '<span class="article-sidenote" data-sidenote-id="abc"' +
+        ' data-sidenote-text="a note" style="anchor-name:--sn-abc">term' +
+        '<sup class="article-sidenote-ref" contenteditable="false" aria-hidden="true"' +
+        ' data-sidenote-number="1"></sup></span>',
+    );
+  });
+
+  it("offsets note ordinals by the block base and increments within the block", () => {
+    const nodes: InlineNode[] = [
+      { type: "text", text: "a", marks: [{ type: "sidenote", id: "x", text: "" }] },
+      { type: "text", text: " and " },
+      { type: "text", text: "b", marks: [{ type: "sidenote", id: "y", text: "" }] },
+    ];
+    const html = inlineNodesToHtml(nodes, 4);
+    expect(html).toContain('data-sidenote-id="x"');
+    expect(html.match(/data-sidenote-number="(\d+)"/g)).toEqual([
+      'data-sidenote-number="5"',
+      'data-sidenote-number="6"',
+    ]);
+  });
+
+  it("coalesces contiguous runs of one sidenote into a single span", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "hello ",
+        marks: [{ type: "sidenote", id: "x", text: "n" }],
+      },
+      {
+        type: "text",
+        text: "world",
+        marks: [{ type: "sidenote", id: "x", text: "n" }, { type: "bold" }],
+      },
+    ];
+    expect(inlineNodesToHtml(nodes)).toContain(
+      '<span class="article-sidenote" data-sidenote-id="x"',
+    );
+    // A single wrapper (one <sup>) with the bold nested inside.
+    const html = inlineNodesToHtml(nodes);
+    expect(html.match(/<sup/g)?.length).toBe(1);
+    expect(html).toContain("hello <strong>world</strong>");
+  });
+
+  it("keeps two adjacent sidenotes with different ids in separate spans", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "a",
+        marks: [{ type: "sidenote", id: "1", text: "one" }],
+      },
+      {
+        type: "text",
+        text: "b",
+        marks: [{ type: "sidenote", id: "2", text: "two" }],
+      },
+    ];
+    expect(inlineNodesToHtml(nodes).match(/<sup/g)?.length).toBe(2);
+  });
+
+  it("escapes the note text in the data attribute", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "t",
+        marks: [{ type: "sidenote", id: "i", text: 'a "quoted" & <tag>' }],
+      },
+    ];
+    expect(inlineNodesToHtml(nodes)).toContain(
+      'data-sidenote-text="a &quot;quoted&quot; &amp; &lt;tag&gt;"',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -282,6 +367,110 @@ describe("domToInlineNodes", () => {
       { type: "text", text: "hello" },
       { type: "text", text: "world" },
     ]);
+  });
+
+  it("extracts a sidenote (id + text) from its wrapper span and drops the <sup>", () => {
+    expect(
+      parse(
+        '<span data-sidenote-id="abc" data-sidenote-text="a note">term' +
+          '<sup class="article-sidenote-ref" contenteditable="false"></sup></span>',
+      ),
+    ).toEqual([
+      {
+        type: "text",
+        text: "term",
+        marks: [{ type: "sidenote", id: "abc", text: "a note" }],
+      },
+    ]);
+  });
+
+  it("round-trips a sidenote through inlineNodesToHtml → domToInlineNodes", () => {
+    const nodes: InlineNode[] = [
+      { type: "text", text: "before " },
+      {
+        type: "text",
+        text: "annotated",
+        marks: [{ type: "sidenote", id: "n1", text: "the note" }],
+      },
+      { type: "text", text: " after" },
+    ];
+    expect(parse(inlineNodesToHtml(nodes))).toEqual(nodes);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stripEmptySidenoteWrappers
+// ---------------------------------------------------------------------------
+
+describe("stripEmptySidenoteWrappers", () => {
+  function make(html: string): HTMLElement {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    return div;
+  }
+
+  const annotated = (id: string, text: string) =>
+    `<span class="article-sidenote" data-sidenote-id="${id}" data-sidenote-text="n">${text}` +
+    `<sup class="article-sidenote-ref" contenteditable="false"></sup></span>`;
+
+  it("removes a sidenote wrapper left empty by deleting its text (with its <sup>)", () => {
+    const el = make(`a ${annotated("x", "")} b`);
+    expect(el.querySelectorAll("[data-sidenote-id]").length).toBe(1);
+    expect(el.querySelectorAll("sup").length).toBe(1);
+
+    expect(stripEmptySidenoteWrappers(el)).toBe(true);
+
+    expect(el.querySelectorAll("[data-sidenote-id]").length).toBe(0);
+    expect(el.querySelectorAll("sup").length).toBe(0);
+    expect(el.textContent).toBe("a  b");
+  });
+
+  it("keeps wrappers that still have annotated text, and reports no change", () => {
+    const el = make(`a ${annotated("x", "kept")} b`);
+    expect(stripEmptySidenoteWrappers(el)).toBe(false);
+    expect(el.querySelectorAll("[data-sidenote-id]").length).toBe(1);
+    expect(el.querySelector("[data-sidenote-id]")?.textContent).toBe("kept");
+  });
+
+  it("removes only the emptied note when others remain (so ordinals can decrement)", () => {
+    const el = make(`${annotated("a", "")} then ${annotated("b", "second")}`);
+    stripEmptySidenoteWrappers(el);
+    const remaining = el.querySelectorAll("[data-sidenote-id]");
+    expect(remaining.length).toBe(1);
+    expect(remaining[0].getAttribute("data-sidenote-id")).toBe("b");
+    // One wrapper left in the DOM.
+    expect(el.querySelectorAll("sup").length).toBe(1);
+  });
+});
+
+describe("renumberSidenoteSups", () => {
+  function make(html: string): HTMLElement {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    return div;
+  }
+  const annotated = (id: string, text: string) =>
+    `<span class="article-sidenote" data-sidenote-id="${id}">${text}` +
+    `<sup class="article-sidenote-ref"></sup></span>`;
+
+  const numbers = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll(".article-sidenote-ref")).map((s) =>
+      s.getAttribute("data-sidenote-number"),
+    );
+
+  it("numbers a block's superscripts from base + 1 in DOM order", () => {
+    const el = make(`${annotated("a", "x")} and ${annotated("b", "y")}`);
+    renumberSidenoteSups(el, 3);
+    expect(numbers(el)).toEqual(["4", "5"]);
+  });
+
+  it("re-numbers after a note is removed so later ones decrement", () => {
+    const el = make(
+      `${annotated("a", "x")} ${annotated("b", "y")} ${annotated("c", "z")}`,
+    );
+    el.querySelector('[data-sidenote-id="a"]')!.remove();
+    renumberSidenoteSups(el, 0);
+    expect(numbers(el)).toEqual(["1", "2"]);
   });
 });
 
@@ -2222,6 +2411,57 @@ describe("findLinkRangeAt", () => {
       end: 4,
       href: "https://x.io",
     });
+  });
+});
+
+describe("findSidenoteRangeAt", () => {
+  const nodes: InlineNode[] = [
+    { type: "text", text: "see " },
+    {
+      type: "text",
+      text: "the term",
+      marks: [{ type: "sidenote", id: "n1", text: "a note" }],
+    },
+    { type: "text", text: " end" },
+  ];
+
+  it("returns the note's bounds and id when the caret is inside it", () => {
+    expect(findSidenoteRangeAt(nodes, 7)).toEqual({
+      start: 4,
+      end: 12,
+      id: "n1",
+    });
+  });
+
+  it("counts the boundaries as inside", () => {
+    expect(findSidenoteRangeAt(nodes, 4)).not.toBeNull();
+    expect(findSidenoteRangeAt(nodes, 12)).not.toBeNull();
+  });
+
+  it("returns null outside any sidenote", () => {
+    expect(findSidenoteRangeAt(nodes, 1)).toBeNull();
+    expect(findSidenoteRangeAt(nodes, 14)).toBeNull();
+  });
+
+  it("expands across adjacent nodes sharing the same id (e.g. a bolded run)", () => {
+    const split: InlineNode[] = [
+      { type: "text", text: "ab", marks: [{ type: "sidenote", id: "s", text: "" }] },
+      {
+        type: "text",
+        text: "cd",
+        marks: [{ type: "bold" }, { type: "sidenote", id: "s", text: "" }],
+      },
+    ];
+    expect(findSidenoteRangeAt(split, 3)).toEqual({ start: 0, end: 4, id: "s" });
+  });
+
+  it("does not merge two adjacent notes with different ids", () => {
+    const two: InlineNode[] = [
+      { type: "text", text: "a", marks: [{ type: "sidenote", id: "x", text: "" }] },
+      { type: "text", text: "b", marks: [{ type: "sidenote", id: "y", text: "" }] },
+    ];
+    expect(findSidenoteRangeAt(two, 0)).toEqual({ start: 0, end: 1, id: "x" });
+    expect(findSidenoteRangeAt(two, 2)).toEqual({ start: 1, end: 2, id: "y" });
   });
 });
 

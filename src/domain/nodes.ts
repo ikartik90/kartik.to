@@ -12,6 +12,14 @@ export const MarkSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("strikethrough") }),
   z.object({ type: z.literal("highlight") }),
   z.object({ type: z.literal("link"), href: z.url() }),
+  // A margin annotation. `id` groups the run and gives it a stable anchor name
+  // (two adjacent sidenotes stay distinct); `text` is the note body shown in the
+  // aside card. The visible ordinal is derived from document order, not stored.
+  z.object({
+    type: z.literal("sidenote"),
+    id: z.string().min(1),
+    text: z.string(),
+  }),
 ]);
 
 export type Mark = z.infer<typeof MarkSchema>;

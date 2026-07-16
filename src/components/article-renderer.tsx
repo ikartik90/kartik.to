@@ -11,6 +11,8 @@ import {
   articleUnderline,
   articleStrikethrough,
   articleHighlight,
+  articleSidenote,
+  articleSidenoteRef,
   articleBlockquote,
   articleBlockquoteBody,
   articleBlockquoteCite,
@@ -42,8 +44,10 @@ import {
 } from "@/utils/list-numbering";
 import CheckSmallIcon from "@/assets/icons/check-small.svg";
 import CrossSmallIcon from "@/assets/icons/cross-small.svg";
+import { SidenoteLayer } from "@/components/sidenote-layer";
+import { collectSidenotes, sidenoteAnchorName } from "@/utils/sidenotes";
 import type { Document } from "@/domain/post";
-import type { BlockNode, InlineNode } from "@/domain/nodes";
+import type { BlockNode, InlineNode, Mark } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // Heading level → Typography tag + type
@@ -104,11 +108,16 @@ function renderStyledNode(node: InlineNode, index: number): React.ReactNode {
   return <React.Fragment key={index}>{content}</React.Fragment>;
 }
 
-/** Render a children array, coalescing consecutive highlighted nodes into one <mark>. */
-function renderInlineNodes(nodes: InlineNode[]): React.ReactNode[] {
-  const isHighlighted = (n: InlineNode) =>
-    (n.marks ?? []).some((m) => m.type === "highlight");
+const isHighlighted = (n: InlineNode) =>
+  (n.marks ?? []).some((m) => m.type === "highlight");
 
+const sidenoteMarkOf = (n: InlineNode): Extract<Mark, { type: "sidenote" }> | null => {
+  const mark = (n.marks ?? []).find((m) => m.type === "sidenote");
+  return mark?.type === "sidenote" ? mark : null;
+};
+
+/** Render a run of non-sidenote nodes, coalescing consecutive highlights into one <mark>. */
+function renderRun(nodes: InlineNode[], base: number): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   let i = 0;
   while (i < nodes.length) {
@@ -116,17 +125,63 @@ function renderInlineNodes(nodes: InlineNode[]): React.ReactNode[] {
       const start = i;
       const run: React.ReactNode[] = [];
       while (i < nodes.length && isHighlighted(nodes[i])) {
-        run.push(renderStyledNode(nodes[i], i));
+        run.push(renderStyledNode(nodes[i], base + i));
         i++;
       }
       out.push(
-        <mark key={`hl-${start}`} className={articleHighlight()}>
+        <mark key={`hl-${base + start}`} className={articleHighlight()}>
           {run}
         </mark>,
       );
     } else {
-      out.push(renderStyledNode(nodes[i], i));
+      out.push(renderStyledNode(nodes[i], base + i));
       i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Render a children array. Contiguous runs sharing a sidenote id are wrapped in
+ * one dotted-underline span (carrying the note's anchor-name) with a trailing
+ * superscript ordinal; everything else falls through to the highlight-aware run.
+ */
+function renderInlineNodes(
+  nodes: InlineNode[],
+  numberOf: Map<string, number>,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let i = 0;
+  while (i < nodes.length) {
+    const sidenote = sidenoteMarkOf(nodes[i]);
+    if (sidenote) {
+      const start = i;
+      while (i < nodes.length && sidenoteMarkOf(nodes[i])?.id === sidenote.id) {
+        i++;
+      }
+      out.push(
+        <span
+          key={`sn-${start}`}
+          className={articleSidenote()}
+          data-sidenote-id={sidenote.id}
+          style={
+            { anchorName: sidenoteAnchorName(sidenote.id) } as React.CSSProperties
+          }
+        >
+          {renderRun(nodes.slice(start, i), start)}
+          {/* Ordinal is set at render (SSR) so no number flashes in on hydrate;
+              SidenoteLayer keeps it live in the editor. */}
+          <sup
+            className={articleSidenoteRef()}
+            data-sidenote-number={numberOf.get(sidenote.id)}
+            aria-hidden
+          />
+        </span>,
+      );
+    } else {
+      const start = i;
+      while (i < nodes.length && !sidenoteMarkOf(nodes[i])) i++;
+      out.push(...renderRun(nodes.slice(start, i), start));
     }
   }
   return out;
@@ -136,7 +191,11 @@ function renderInlineNodes(nodes: InlineNode[]): React.ReactNode[] {
 // Block node renderer
 // ---------------------------------------------------------------------------
 
-function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
+function renderBlockNode(
+  node: BlockNode,
+  index: number,
+  numberOf: Map<string, number>,
+): React.ReactNode {
   switch (node.type) {
     case "paragraph":
       return (
@@ -146,7 +205,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           type="paragraph"
           data-indented={node.indent ? "" : undefined}
         >
-          {renderInlineNodes(node.children)}
+          {renderInlineNodes(node.children, numberOf)}
         </Typography>
       );
 
@@ -162,7 +221,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
             type={type}
             data-indented={node.indent ? "" : undefined}
           >
-            {renderInlineNodes(node.children)}
+            {renderInlineNodes(node.children, numberOf)}
           </Typography>
         );
       return (
@@ -173,7 +232,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
         >
           <span className={articleSubheadingCaption()}>{node.caption}</span>
           <Typography tag={tag} type={type}>
-            {renderInlineNodes(node.children)}
+            {renderInlineNodes(node.children, numberOf)}
           </Typography>
         </div>
       );
@@ -189,7 +248,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
           <span className={articleBlockquoteMark()} aria-hidden />
           <div className={articleBlockquoteBody()}>
             <blockquote className={articleBlockquote()}>
-              {renderInlineNodes(node.children)}
+              {renderInlineNodes(node.children, numberOf)}
             </blockquote>
             {node.caption && (
               <cite className={articleBlockquoteCite()}>{node.caption}</cite>
@@ -249,7 +308,7 @@ function renderBlockNode(node: BlockNode, index: number): React.ReactNode {
             <span className={articleMetricCaption()}>{node.caption}</span>
           )}
           <span className={articleMetricValue()}>
-            {renderInlineNodes(node.children)}
+            {renderInlineNodes(node.children, numberOf)}
           </span>
           {node.subtext && (
             <span className={articleMetricLabel()}>{node.subtext}</span>
@@ -273,6 +332,7 @@ function renderNumberedList(
   items: ListItemNode[],
   numbering: ListItemNumbering[],
   key: React.Key,
+  numberOf: Map<string, number>,
 ): React.ReactNode {
   return (
     <ol
@@ -290,7 +350,7 @@ function renderNumberedList(
             {numbering[i]?.label ?? String(i + 1)}
           </span>
           <span className={articleListItemContent()}>
-            {renderInlineNodes(item.children)}
+            {renderInlineNodes(item.children, numberOf)}
           </span>
         </li>
       ))}
@@ -301,6 +361,7 @@ function renderNumberedList(
 function renderBulletList(
   items: BulletListItemNode[],
   key: React.Key,
+  numberOf: Map<string, number>,
 ): React.ReactNode {
   return (
     <ul key={key} className={articleList()}>
@@ -320,7 +381,7 @@ function renderBulletList(
             <span className={listBullet()} aria-hidden />
           )}
           <span className={articleListItemContent()}>
-            {renderInlineNodes(item.children)}
+            {renderInlineNodes(item.children, numberOf)}
           </span>
         </li>
       ))}
@@ -342,6 +403,10 @@ export function ArticleRenderer({ content }: ArticleRendererProps) {
   // Resolve ordinals/labels for the whole document so "continue numbering"
   // across separate lists lines up with the editor.
   const numbering = computeListNumbering(nodes);
+  // Document-order sidenote ordinal for each note id — drives the superscript
+  // number (data-sidenote-number) and matches the aside card numbering.
+  const sidenotes = collectSidenotes(nodes);
+  const numberOf = new Map(sidenotes.map((e) => [e.id, e.number]));
 
   let i = 0;
   while (i < nodes.length) {
@@ -354,6 +419,7 @@ export function ArticleRenderer({ content }: ArticleRendererProps) {
           nodes.slice(i, j) as ListItemNode[],
           numbering.slice(i, j) as ListItemNumbering[],
           `list-${i}`,
+          numberOf,
         ),
       );
       i = j;
@@ -364,14 +430,20 @@ export function ArticleRenderer({ content }: ArticleRendererProps) {
         renderBulletList(
           nodes.slice(i, j) as BulletListItemNode[],
           `bullet-${i}`,
+          numberOf,
         ),
       );
       i = j;
     } else {
-      output.push(renderBlockNode(node, i));
+      output.push(renderBlockNode(node, i, numberOf));
       i++;
     }
   }
 
-  return <>{output}</>;
+  return (
+    <>
+      {output}
+      <SidenoteLayer entries={sidenotes} />
+    </>
+  );
 }

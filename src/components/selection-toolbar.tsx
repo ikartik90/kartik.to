@@ -20,6 +20,7 @@ import CodeIcon from "@/assets/icons/code.svg";
 import UnderlineSolidIcon from "@/assets/icons/underline-solid.svg";
 import StrikethroughIcon from "@/assets/icons/strikethrough.svg";
 import HighlightIcon from "@/assets/icons/highlight.svg";
+import SidenoteIcon from "@/assets/icons/sidenote.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import GotoIcon from "@/assets/icons/goto.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -28,7 +29,11 @@ import TrashIcon from "@/assets/icons/trash.svg";
 // Types
 // ---------------------------------------------------------------------------
 
-export type SelectionToolbarMode = "format" | "link-edit" | "link-view";
+export type SelectionToolbarMode =
+  | "format"
+  | "link-edit"
+  | "link-view"
+  | "sidenote-view";
 
 /** The togglable (non-link) marks exposed as formatting buttons. */
 export type ToggleableMark = Exclude<Mark["type"], "link">;
@@ -47,6 +52,9 @@ interface SelectionToolbarProps {
   onRemoveLink: () => void;
   onGotoLink: () => void;
   onEditLink: () => void;
+  onAddSidenote: () => void;
+  onEditSidenote: () => void;
+  onDeleteSidenote: () => void;
   onDismiss: () => void;
 }
 
@@ -145,6 +153,9 @@ export function SelectionToolbar({
   onRemoveLink,
   onGotoLink,
   onEditLink,
+  onAddSidenote,
+  onEditSidenote,
+  onDeleteSidenote,
   onDismiss,
 }: SelectionToolbarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -233,6 +244,35 @@ export function SelectionToolbar({
     );
   }
 
+  if (mode === "sidenote-view") {
+    return (
+      <SelectionPopover
+        rect={rect}
+        ariaLabel="Sidenote actions"
+        onDismiss={onDismiss}
+      >
+        <button
+          type="button"
+          className={itemStyle}
+          aria-label="Edit sidenote"
+          onMouseDown={preserveSelection}
+          onClick={onEditSidenote}
+        >
+          <EditIcon className={iconStyle} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className={itemStyle}
+          aria-label="Delete sidenote"
+          onMouseDown={preserveSelection}
+          onClick={onDeleteSidenote}
+        >
+          <TrashIcon className={iconStyle} aria-hidden />
+        </button>
+      </SelectionPopover>
+    );
+  }
+
   return (
     <SelectionPopover
       rect={rect}
@@ -249,6 +289,17 @@ export function SelectionToolbar({
         onClick={onStartLink}
       >
         <LinkIcon className={iconStyle} aria-hidden />
+      </button>
+      <button
+        type="button"
+        className={itemStyle}
+        aria-label="Add sidenote"
+        aria-pressed={activeMarks.has("sidenote")}
+        data-active={activeMarks.has("sidenote") ? "true" : undefined}
+        onMouseDown={preserveSelection}
+        onClick={onAddSidenote}
+      >
+        <SidenoteIcon className={iconStyle} aria-hidden />
       </button>
       {FORMAT_GROUPS.map((group, groupIdx) => (
         <div key={groupIdx} className={css({ display: "contents" })}>
