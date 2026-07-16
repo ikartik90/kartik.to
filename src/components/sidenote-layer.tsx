@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import {
   sidenoteCard,
@@ -60,13 +60,29 @@ const hintLabelStyle = css({
   whiteSpace: "nowrap",
 });
 
-// Space the `side` placement needs to the right of the content column before it
-// falls back to `stacked` — the 100px offset + card width + a small safety gap.
-const SIDE_OFFSET = 100;
-const CARD_WIDTH = 320;
-const SIDE_SAFE_GAP = 16;
+// Horizontal geometry (mirrors the sidenote size tokens in panda.config.ts).
+// The `left`/`width` of a card are computed here from the rail's measured rect
+// and applied inline, rather than via CSS `anchor(--sidenote-rail …)`: WebKit
+// resolves only an element's default `position-anchor` (here the annotation,
+// used for the vertical axis), so a second named-anchor query for the
+// horizontal axis silently fails in Safari. Doing it in JS is safe because the
+// content column's x-edges are scroll-invariant.
+const SIDE_OFFSET = 100; // sizes.sidenoteOffset — 100px right of the column.
+const CARD_WIDTH = 320; // sizes.sidenoteWidth
+const SIDE_SAFE_GAP = 16; // room to keep before falling back to `stacked`.
+const STACKED_INSET = 80; // sizes.sidenoteStackedInset
+const STACKED_MIN_WIDTH = 320; // sizes.sidenoteMinWidth
+const STACKED_MAX_WIDTH = 480; // sizes.sidenoteMaxWidth
 
 type Placement = "side" | "stacked";
+
+// Inline horizontal geometry for the active card. `left` is a viewport px value
+// (the card is position:fixed); `stacked` is centred on the column via the
+// recipe's `translate: -50%`.
+interface CardGeometry {
+  left: number;
+  width: number;
+}
 
 interface SidenoteLayerProps {
   entries: SidenoteEntry[];
@@ -104,6 +120,7 @@ export function SidenoteLayer({
   const [clickId, setClickId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [placement, setPlacement] = useState<Placement>("side");
+  const [geometry, setGeometry] = useState<CardGeometry | null>(null);
 
   const triggered = trigger === "caret" ? activeId : (hoverId ?? clickId);
   const visibleId = triggered ?? focusedId ?? autoFocusId ?? null;
@@ -139,16 +156,32 @@ export function SidenoteLayer({
     };
   }, [trigger]);
 
-  // Choose side vs stacked for the visible note based on horizontal room.
-  useEffect(() => {
+  // Choose side vs stacked for the visible note and compute its horizontal
+  // geometry from the rail's rect. Layout effect so the inline left/width is set
+  // before paint (no flash at a stale position as the card reveals). Runs on
+  // mount + resize; horizontal geometry is scroll-invariant so scroll needs no
+  // recompute (the card is position:fixed and the column's x-edges don't move).
+  useLayoutEffect(() => {
     if (!visibleId) return;
     function measure() {
       const rail = railRef.current;
       if (!rail) return;
-      const right = rail.getBoundingClientRect().right;
+      const rect = rail.getBoundingClientRect();
       const fits =
-        right + SIDE_OFFSET + CARD_WIDTH + SIDE_SAFE_GAP <= window.innerWidth;
-      setPlacement(fits ? "side" : "stacked");
+        rect.right + SIDE_OFFSET + CARD_WIDTH + SIDE_SAFE_GAP <=
+        window.innerWidth;
+      if (fits) {
+        setPlacement("side");
+        setGeometry({ left: rect.right + SIDE_OFFSET, width: CARD_WIDTH });
+      } else {
+        setPlacement("stacked");
+        const width = Math.max(
+          STACKED_MIN_WIDTH,
+          Math.min(rect.width - STACKED_INSET, STACKED_MAX_WIDTH),
+        );
+        // Centred on the column — the recipe applies translate: -50%.
+        setGeometry({ left: rect.left + rect.width / 2, width });
+      }
     }
     measure();
     window.addEventListener("resize", measure);
@@ -164,7 +197,15 @@ export function SidenoteLayer({
           data-sidenote-card
           data-active={visibleId === entry.id ? "true" : undefined}
           className={cardClass[placement]}
-          style={{ "--sn-anchor": entry.anchorName } as React.CSSProperties}
+          style={
+            {
+              "--sn-anchor": entry.anchorName,
+              ...(geometry && {
+                left: `${geometry.left}px`,
+                width: `${geometry.width}px`,
+              }),
+            } as React.CSSProperties
+          }
           onPointerEnter={
             trigger === "pointer" ? () => setHoverId(entry.id) : undefined
           }

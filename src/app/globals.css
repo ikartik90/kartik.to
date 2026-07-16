@@ -260,9 +260,12 @@ body {
   }
 
   /* Sidenote rail — an invisible, out-of-flow box spanning the text-content
-     column (640px, centred in the article). Its right/centre edges are the
-     anchor a sidenote card positions against horizontally (100px right of the
-     column when there's room, else centred on it). See the sidenoteCard recipe. */
+     column (640px, centred in the article). SidenoteLayer measures its rect to
+     place each card horizontally (100px right of the column's right edge when
+     there's room, else centred on it) — done in JS rather than a CSS
+     `anchor(--sidenote-rail …)` query because WebKit/Safari resolves only an
+     element's default position-anchor (the annotation, used for the vertical
+     axis). See the sidenoteCard recipe and SidenoteLayer. */
   [data-sidenote-rail] {
     position: absolute;
     inset-block: 0;
@@ -271,7 +274,6 @@ body {
     width: min(100%, var(--sizes-article-content));
     pointer-events: none;
     visibility: hidden;
-    anchor-name: --sidenote-rail;
   }
 
   [data-brand-avatar] {

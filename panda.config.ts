@@ -397,21 +397,22 @@ export default defineConfig({
             },
           },
           variants: {
+            // Horizontal geometry (`left`/`width`) is driven by inline styles the
+            // SidenoteLayer computes from the rail's measured rect — it's
+            // scroll-invariant (the content column's x-edges don't move on
+            // vertical scroll) and avoids a SECOND named-anchor query, which
+            // WebKit/Safari doesn't resolve (only the element's default
+            // `position-anchor` works there; `anchor(--sidenote-rail …)` and
+            // `anchor-size()` silently fail). Vertical stays CSS-anchored to the
+            // annotation (`--sn-anchor`, the default anchor) so it tracks scroll.
             placement: {
               side: {
-                width: "token(sizes.sidenoteWidth)",
-                left: "anchor(--sidenote-rail right)",
-                marginLeft: "token(sizes.sidenoteOffset)",
                 top: "anchor(top)",
                 marginTop: "calc(-1 * token(spacing.md))",
               },
-              // Centred on the content column: width = column − 80px, floored at
-              // the min width; 4px below/above the line with flip-block.
+              // Centred on the content column (left computed inline); 4px
+              // below/above the line with flip-block.
               stacked: {
-                width:
-                  "calc(anchor-size(--sidenote-rail width) - token(sizes.sidenoteStackedInset))",
-                minWidth: "token(sizes.sidenoteMinWidth)",
-                left: "anchor(--sidenote-rail center)",
                 translate: "-50% 0",
                 top: "anchor(bottom)",
                 marginTop: "sm",
