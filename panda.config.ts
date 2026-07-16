@@ -369,6 +369,7 @@ export default defineConfig({
             positionAnchor: "var(--sn-anchor)",
             maxWidth: "token(sizes.sidenoteMaxWidth)",
             display: "flex",
+            flexDirection: "column",
             gap: "sm",
             padding: "md",
             backgroundColor: "bg.surface",
@@ -426,8 +427,9 @@ export default defineConfig({
         sidenoteCardContent: defineRecipe({
           className: "sidenote-card-content",
           description:
-            "Text column of a margin-note card — the ordinal marker followed by the note body.",
+            "Text row of a margin-note card — the ordinal marker followed by the note body.",
           base: {
+            display: "flex",
             flex: "1 0 0",
             minWidth: 0,
             textStyle: "sidenote",

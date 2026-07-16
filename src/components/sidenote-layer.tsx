@@ -37,7 +37,6 @@ const hintStyle = css({
   display: "flex",
   alignItems: "center",
   gap: "sm",
-  marginTop: "sm",
   userSelect: "none",
 });
 const hintKeyStyle = css({
@@ -234,13 +233,13 @@ export function SidenoteLayer({
               onExit={() => onExitEdit?.(entry)}
               onChange={(text) => onChangeText?.(entry, text)}
             />
-            {editable && (
-              <div className={hintStyle} aria-hidden>
-                <span className={hintKeyStyle}>Esc</span>
-                <span className={hintLabelStyle}>to exit</span>
-              </div>
-            )}
           </div>
+          {editable && (
+            <div className={hintStyle} aria-hidden>
+              <span className={hintKeyStyle}>Esc</span>
+              <span className={hintLabelStyle}>to exit</span>
+            </div>
+          )}
         </aside>
       ))}
     </>
