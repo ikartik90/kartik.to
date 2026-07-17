@@ -264,12 +264,31 @@ export default defineConfig({
 
         articleLink: defineRecipe({
           className: "article-link",
-          description: "Hyperlink inside article prose.",
+          description:
+            "Hyperlink inside article prose. The underline is drawn as two stacked background bars, not text-decoration, so the hover state can be the brand gradient (text-decoration-color can't be a gradient): a neutral color-mix bar (text.paragraph @ 50%) with the brandedEmphasis gradient layered on top, hidden at rest and grown in on hover. box-decoration-break:clone repeats the bars on each line of a wrapped link.",
           base: {
-            textStyle: "link",
+            // No text-decoration at all — the underline is the background bars
+            // below; textDecorationLine:none suppresses the browser's default
+            // <a> underline.
+            textDecorationLine: "none",
             color: "text.default",
-            transition: "color 150ms ease",
-            _hover: { color: "text.title" },
+            paddingBottom: "xs",
+            backgroundImage:
+              "token(colors.bg.brandedEmphasis), linear-gradient(color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent), color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent))",
+            backgroundRepeat: "no-repeat",
+            // Anchored to the bottom of the padding box (2px below the line box)
+            // so the gradient grows upward to exactly cover the neutral bar on
+            // hover. 1px thick (spacing.xxs).
+            backgroundPosition: "0 100%",
+            backgroundSize: "100% 0, 100% token(spacing.xxs)",
+            WebkitBoxDecorationBreak: "clone",
+            boxDecorationBreak: "clone",
+            transition: "color 150ms ease, background-size 150ms ease",
+            _hover: {
+              color: "text.title",
+              backgroundSize:
+                "100% token(spacing.xxs), 100% token(spacing.xxs)",
+            },
           },
         }),
 
@@ -430,6 +449,7 @@ export default defineConfig({
             "Text row of a margin-note card — the ordinal marker followed by the note body.",
           base: {
             display: "flex",
+            gap: "xs",
             flex: "1 0 0",
             minWidth: 0,
             textStyle: "sidenote",
@@ -442,7 +462,6 @@ export default defineConfig({
           description:
             "Leading ordinal in a margin-note card (matches the annotation's superscript), painted in the brand gradient.",
           base: {
-            marginInlineEnd: "xs",
             fontWeight: "medium",
             background: "bg.brandedEmphasis",
             backgroundClip: "text",
