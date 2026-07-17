@@ -252,7 +252,11 @@ export function domToInlineNodes(el: Node): InlineNode[] {
         nextMarks.push({ type: "strikethrough" });
       else if (el.tagName === "MARK") nextMarks.push({ type: "highlight" });
       else if (el.tagName === "A") {
-        const href = (el as HTMLAnchorElement).href;
+        // The raw attribute, NOT `.href` — the latter is resolved against the
+        // page URL, so a bare "google.com" would come back as
+        // "http://localhost:3000/edit/google.com". Links are normalised to an
+        // absolute URL on apply (see normalizeLinkHref), so this round-trips.
+        const href = el.getAttribute("href");
         if (href) nextMarks.push({ type: "link", href });
       } else if (el.tagName === "SPAN" && el.hasAttribute("data-sidenote-id")) {
         nextMarks.push({
@@ -800,6 +804,24 @@ export function transformMarksInRange(
     }
   }
   return mergeAdjacentInlineNodes(result);
+}
+
+/**
+ * Normalise a user-typed link target. A bare host ("google.com") gets an
+ * implicit "https://" so it isn't treated as a page-relative path. An explicit
+ * scheme ("http://", "https://", "mailto:", "tel:", any "scheme://…"), a
+ * root-relative path ("/writing/x"), a fragment ("#foo"), a query ("?q"), or a
+ * protocol-relative URL ("//host") is left untouched. A "host:port" like
+ * "google.com:8080" still gets "https://" — its dotted prefix marks it as a
+ * host, not a scheme.
+ */
+export function normalizeLinkHref(raw: string): string {
+  const href = raw.trim();
+  if (!href) return href;
+  if (/^(\/|#|\?)/.test(href)) return href;
+  const scheme = href.match(/^([a-z][a-z0-9+.-]*):/i);
+  if (scheme && !scheme[1].includes(".")) return href;
+  return `https://${href}`;
 }
 
 /**
@@ -4114,11 +4136,23 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   }
 
   function rectFromRange(range: Range): ToolbarRect {
-    // jsdom's Range has no getBoundingClientRect; degrade to a zero rect.
+    // Anchor to the FIRST line's rect, not the whole-range bounding box. A run
+    // that wraps across lines (common for sidenote annotations, rarer for links
+    // or a short text selection) has a bounding box spanning the full column —
+    // line 1 ends at the right edge, line 2 starts at the left — so its centre
+    // falls between the fragments rather than over the text, and the centred
+    // popover drifts to the column middle. The first client rect keeps the
+    // popover above the start of the run for every mode alike.
+    // jsdom's Range has neither getClientRects nor getBoundingClientRect.
+    const rects =
+      typeof range.getClientRects === "function"
+        ? Array.from(range.getClientRects())
+        : [];
     const r =
-      typeof range.getBoundingClientRect === "function"
+      rects[0] ??
+      (typeof range.getBoundingClientRect === "function"
         ? range.getBoundingClientRect()
-        : { left: 0, top: 0, width: 0, height: 0 };
+        : { left: 0, top: 0, width: 0, height: 0 });
     return { left: r.left, top: r.top, width: r.width, height: r.height };
   }
 
@@ -4180,6 +4214,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     // Caret on — or a selection wholly within — an annotated run shows the
     // sidenote actions (Edit / Delete), taking priority over the format toolbar
     // and link view. Suppressed while that note's card is already being edited.
+    // Anchored to the live selection (`range`), not the whole annotation: a
+    // collapsed caret centres the toolbar on the caret; a multi-char selection
+    // positions it exactly like the format toolbar. The `range` field stays the
+    // full annotation bounds — that's what Edit / Delete act on.
     const sidenote = findSidenoteRangeAt(nodes, offsets.start);
     if (
       sidenote &&
@@ -4187,13 +4225,31 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       offsets.end <= sidenote.end &&
       editingSidenoteId !== sidenote.id
     ) {
-      const snRange = domRangeForOffsets(el, sidenote.start, sidenote.end);
       setToolbar({
         mode: "sidenote-view",
         index,
-        rect: rectFromRange(snRange ?? range),
+        rect: rectFromRange(range),
         range: { start: sidenote.start, end: sidenote.end },
         sidenoteId: sidenote.id,
+        activeMarks: new Set(),
+      });
+      return;
+    }
+
+    // A caret on — or a selection wholly within — a link shows the link actions
+    // (Edit / Open / Remove), taking priority over the format toolbar (mirrors
+    // the sidenote branch above). Anchored to the live selection (`range`): a
+    // collapsed caret centres on the caret, a multi-char selection positions
+    // like the format toolbar. The `range` field stays the full link bounds —
+    // that's what Edit / Remove act on.
+    const link = findLinkRangeAt(nodes, offsets.start);
+    if (link && offsets.start >= link.start && offsets.end <= link.end) {
+      setToolbar({
+        mode: "link-view",
+        index,
+        rect: rectFromRange(range),
+        range: { start: link.start, end: link.end },
+        href: link.href,
         activeMarks: new Set(),
       });
       return;
@@ -4211,21 +4267,6 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         rect: rectFromRange(range),
         range: offsets,
         activeMarks,
-      });
-      return;
-    }
-
-    // Collapsed caret — show the link actions popover when inside a link.
-    const link = findLinkRangeAt(nodes, offsets.start);
-    if (link) {
-      const linkRange = domRangeForOffsets(el, link.start, link.end);
-      setToolbar({
-        mode: "link-view",
-        index,
-        rect: rectFromRange(linkRange ?? range),
-        range: { start: link.start, end: link.end },
-        href: link.href,
-        activeMarks: new Set(),
       });
       return;
     }
@@ -4303,10 +4344,11 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       setToolbar(null);
       return;
     }
+    const normalized = normalizeLinkHref(href);
     const nodes = domToInlineNodes(el);
     const next = transformMarksInRange(nodes, range.start, range.end, (marks) => [
       ...marks.filter((m) => m.type !== "link"),
-      { type: "link", href } as Mark,
+      { type: "link", href: normalized } as Mark,
     ]);
     el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
