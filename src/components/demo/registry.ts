@@ -1,30 +1,32 @@
 import type { ComponentType } from "react";
-import dynamic from "next/dynamic";
 import { filenameToLabel } from "@/utils/filename-to-label";
 import type { DemoFrameAspectRatio } from "@/components/demo-frame";
 import type { DemoLoggerConfig } from "@/components/demo-logger";
+import type { DemoAsset } from "@/utils/demo-assets";
 
 export interface DemoComponentEntry {
   id: string;
   label: string;
-  Component: ComponentType;
+  /** Lazily imports the demo's module chunk (loaded after the page loads). */
+  load: () => Promise<ComponentType>;
   aspectRatio?: DemoFrameAspectRatio;
   logger?: boolean | DemoLoggerConfig;
+  /** Demo-specific assets, on top of the shared common/logger asset sets. */
+  assets?: DemoAsset[];
 }
 
-interface DemoRegistryEntry {
-  Component: ComponentType;
-  aspectRatio?: DemoFrameAspectRatio;
-  logger?: boolean | DemoLoggerConfig;
-}
+type DemoRegistryEntry = Omit<DemoComponentEntry, "id" | "label">;
 
-/** Add one import + entry here for each new file in this directory. */
+/** Add one entry here for each new file in this directory. */
 const registry: Record<string, DemoRegistryEntry> = {
   "calchemy-demo": {
-    Component: dynamic(
-      () => import("./calchemy-demo").then((module) => module.CalchemyDemo),
-      { ssr: false },
-    ),
+    load: async () => {
+      const mod = await import("./calchemy-demo");
+      // Warm the engine as part of loading so the single frame preloader covers
+      // it — the component then mounts ready, no second internal spinner.
+      await mod.prepareCalchemyDemo();
+      return mod.CalchemyDemo;
+    },
     logger: {
       emptyHint:
         "Enter a text expression in the date picker input to see output logs",
@@ -36,9 +38,7 @@ export const demoComponents: DemoComponentEntry[] = Object.entries(registry)
   .map(([id, entry]) => ({
     id,
     label: filenameToLabel(id),
-    Component: entry.Component,
-    aspectRatio: entry.aspectRatio,
-    logger: entry.logger,
+    ...entry,
   }))
   .sort((a, b) => a.label.localeCompare(b.label));
 

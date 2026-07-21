@@ -56,7 +56,7 @@ const consoleIconStyle = cx(
 const headerLabelStyle = css({
   flex: "1 1 auto",
   minWidth: 0,
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
   color: "text.commandItem",
   margin: 0,
 });
@@ -97,14 +97,14 @@ const illustrationForLightUiStyle = css({
 });
 
 const emptyMessageStyle = css({
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
   color: "text.commandItem",
   margin: 0,
   textAlign: "center",
 });
 
 const emptyHintStyle = css({
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "text.commandItem/50",
   lineHeight: "1.25rem",
   margin: 0,

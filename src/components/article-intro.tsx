@@ -13,7 +13,7 @@ const backButtonStyle = css({
 });
 
 const backLabelStyle = css({
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
 });
 
 interface ArticleIntroProps {

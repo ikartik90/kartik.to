@@ -25,7 +25,7 @@ describe("Header", () => {
       document.querySelector('img[src*="kartik-iyer-logo"]'),
     ).not.toBeNull();
     expect(screen.getByText("Kartik Iyer")).toBeDefined();
-    expect(screen.getByText("DESIGNER • ENGINEER • BUILDER •")).toBeDefined();
+    expect(screen.getByText("DESIGNER • BUILDER • ENGINEER •")).toBeDefined();
   });
 
   it("renders nothing on non-home pages", () => {

@@ -1,4 +1,6 @@
 import { beforeEach } from "vitest";
+import { __resetDemoAssetCache } from "./utils/demo-assets";
+import { __resetDemoLoadCache } from "./hooks/use-demo-loader";
 
 // Polyfill ResizeObserver for JSDOM — used by cmdk internally
 global.ResizeObserver = class ResizeObserver {
@@ -38,4 +40,7 @@ if (typeof window !== "undefined" && typeof window.localStorage?.clear !== "func
 // Isolate tests from each other's persisted editor autosave state.
 beforeEach(() => {
   window.localStorage?.clear();
+  // Demo module + asset caches are module-level; reset so cases start cold.
+  __resetDemoAssetCache();
+  __resetDemoLoadCache();
 });

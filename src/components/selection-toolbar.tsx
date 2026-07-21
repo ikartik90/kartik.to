@@ -105,7 +105,7 @@ const linkInputStyle = css({
   background: "transparent",
   border: "none",
   color: "text.default",
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
   focusVisibleRing: "none",
   _placeholder: { color: "text.default/40" },
 });
@@ -128,13 +128,13 @@ const hotkeyKeyStyle = css({
   borderColor: "border.divider",
   backgroundColor: "bg.itemHover",
   color: "text.default",
-  textStyle: "commandLabel",
+  textStyle: "caption",
   whiteSpace: "nowrap",
 });
 
 const hotkeyLabelStyle = css({
   color: "text.default/50",
-  textStyle: "commandLabel",
+  textStyle: "caption",
   whiteSpace: "nowrap",
 });
 

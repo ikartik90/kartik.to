@@ -55,6 +55,7 @@ import {
   type ToggleableMark,
 } from "@/components/selection-toolbar";
 import { DemoFrame } from "@/components/demo-frame";
+import { DemoComponent } from "@/components/demo-component";
 import { getDemoComponent } from "@/components/demo/registry";
 import {
   ImageInsertDialog,
@@ -2515,7 +2516,6 @@ function EditableBlock({
 
   if (block.type === "component") {
     const demo = getDemoComponent(block.componentId);
-    const Demo = demo?.Component;
     const showcaseMediaProps = {
       tabIndex: 0 as const,
       "data-showcase-media": "",
@@ -2541,8 +2541,8 @@ function EditableBlock({
             {...showcaseMediaProps}
           >
             <div inert className={editorDemoPreviewStyle}>
-              {Demo ? (
-                <Demo />
+              {demo ? (
+                <DemoComponent entry={demo} />
               ) : (
                 <span>Unknown component: {block.componentId}</span>
               )}

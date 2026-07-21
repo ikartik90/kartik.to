@@ -34,9 +34,11 @@ tokens:
     neutral:
       100: "#EEF2F6"
       200: "#CFD9E2"
-      300: "#A9BFD6"
-      600: "#576675"
-      700: "#414244"
+      300: "#C3CDD7"
+      400: "#A9BFD6"
+      500: "#576675"
+      600: "#414244"
+      700: "#384047"
       800: "#2E3338"
       900: "#1F2123"
 
@@ -44,7 +46,7 @@ tokens:
 
   colors:
     border:
-      divider: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
+      divider: "color-mix(in srgb, {palette.neutral.500} 25%, transparent)"
       imageOutline:
         light: "color-mix(in srgb, {palette.neutral.900} 10%, transparent)"
         dark: "color-mix(in srgb, {palette.neutral.100} 10%, transparent)"
@@ -53,35 +55,35 @@ tokens:
       bg:
         canvas: "{palette.neutral.100}"
         surface: "{palette.neutral.200}"
-        itemHover: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
+        itemHover: "color-mix(in srgb, {palette.neutral.500} 25%, transparent)"
         brandedEmphasis: "{palette.brand-gradient}"
         selection: "{palette.brand-orange}"
       text:
-        default: "{palette.neutral.700}"
+        default: "{palette.neutral.600}"
         title: "{palette.neutral.900}"
-        paragraph: "{palette.neutral.600}"
+        paragraph: "{palette.neutral.500}"
         brandedEmphasis: "{palette.neutral.900}"
         selection: "{palette.neutral.900}"
-        commandItem: "{palette.neutral.700}"
+        commandItem: "{palette.neutral.600}"
       logo:
-        default: "{palette.neutral.600}"
+        default: "{palette.neutral.500}"
 
     dark:
       bg:
         canvas: "{palette.neutral.900}"
         surface: "{palette.neutral.800}"
-        itemHover: "color-mix(in srgb, {palette.neutral.600} 25%, transparent)"
+        itemHover: "color-mix(in srgb, {palette.neutral.500} 25%, transparent)"
         brandedEmphasis: "{palette.brand-gradient}"
         selection: "{palette.brand-pink}"
       text:
         default: "{palette.neutral.200}"
         title: "{palette.neutral.100}"
-        paragraph: "{palette.neutral.300}"
+        paragraph: "{palette.neutral.400}"
         brandedEmphasis: "{palette.neutral.900}"
         selection: "{palette.neutral.900}"
-        commandItem: "{palette.neutral.300}"
+        commandItem: "{palette.neutral.400}"
       logo:
-        default: "{palette.neutral.300}"
+        default: "{palette.neutral.400}"
 
   fonts:
     switzer: "var(--font-switzer), Helvetica, sans-serif"

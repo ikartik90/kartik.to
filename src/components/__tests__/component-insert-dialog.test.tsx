@@ -18,8 +18,16 @@ vi.mock("@/components/demo-frame", () => ({
 }));
 
 const mockDemoComponents = vi.hoisted(() => [
-  { id: "alpha-demo", label: "Alpha Demo", Component: () => <div>alpha</div> },
-  { id: "beta-demo", label: "Beta Demo", Component: () => <div>beta</div> },
+  {
+    id: "alpha-demo",
+    label: "Alpha Demo",
+    load: async () => () => <div>alpha</div>,
+  },
+  {
+    id: "beta-demo",
+    label: "Beta Demo",
+    load: async () => () => <div>beta</div>,
+  },
 ]);
 
 vi.mock("@/components/demo/registry", () => ({

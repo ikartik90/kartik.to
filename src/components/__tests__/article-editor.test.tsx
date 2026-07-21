@@ -87,11 +87,18 @@ vi.mock("@/components/demo-frame", () => ({
 const demoRegistryEntry = vi.hoisted(() => ({
   id: "calchemy-demo",
   label: "Calchemy Demo",
-  Component: () => (
-    <button type="button" data-testid="demo-interact" onClick={() => undefined}>
-      Demo
-    </button>
-  ),
+  load: async () =>
+    function Demo() {
+      return (
+        <button
+          type="button"
+          data-testid="demo-interact"
+          onClick={() => undefined}
+        >
+          Demo
+        </button>
+      );
+    },
 }));
 
 vi.mock("@/components/demo/registry", () => ({
@@ -153,7 +160,9 @@ describe("inlineNodesToHtml", () => {
     const nodes: InlineNode[] = [
       { type: "text", text: "fn()", marks: [{ type: "code" }] },
     ];
-    expect(inlineNodesToHtml(nodes)).toBe("<code>fn()</code>");
+    expect(inlineNodesToHtml(nodes)).toBe(
+      '<code class="inline-code">fn()</code>',
+    );
   });
 
   it("wraps highlighted text in <mark>", () => {
@@ -504,8 +513,8 @@ describe("ArticleEditor", () => {
 
   it("renders the title input with placeholder 'Title'", () => {
     render(<ArticleEditor />);
-    const input = screen.getByPlaceholderText("Title");
-    expect(input).toBeDefined();
+    const title = screen.getByLabelText("Title");
+    expect(title.getAttribute("data-placeholder")).toBe("Title");
   });
 
   it("renders the body placeholder on the first block when body is empty", () => {
@@ -711,7 +720,7 @@ describe("ArticleEditor", () => {
     );
   });
 
-  it("renders a figcaption with placeholder on component blocks", () => {
+  it("renders a figcaption with placeholder on component blocks", async () => {
     const post = {
       id: "comp1",
       slug: "comp1",
@@ -736,11 +745,11 @@ describe("ArticleEditor", () => {
       "figcaption[data-placeholder='Add caption...']",
     );
     expect(caption).not.toBeNull();
-    expect(screen.getByTestId("demo-interact")).toBeDefined();
+    expect(await screen.findByTestId("demo-interact")).toBeDefined();
     expect(document.querySelector("[inert]")).not.toBeNull();
   });
 
-  it("does not allow interacting with the demo preview in edit mode", () => {
+  it("does not allow interacting with the demo preview in edit mode", async () => {
     const post = {
       id: "comp2",
       slug: "comp2",
@@ -761,7 +770,7 @@ describe("ArticleEditor", () => {
     };
     render(<ArticleEditor initialPost={post} />);
 
-    const demoButton = screen.getByTestId("demo-interact");
+    const demoButton = await screen.findByTestId("demo-interact");
     const clickSpy = vi.spyOn(demoButton, "click");
 
     fireEvent.click(demoButton);
@@ -1330,23 +1339,26 @@ describe("ArticleEditor", () => {
       updatedAt: new Date(),
     };
     render(<ArticleEditor initialPost={post} />);
-    const input = screen.getByPlaceholderText("Title") as HTMLInputElement;
-    expect(input.value).toBe("My Post");
+    // The title is a contentEditable <h1>, seeded via innerHTML by an effect.
+    const title = screen.getByLabelText("Title");
+    expect(title.textContent).toBe("My Post");
   });
 
   it("updates the store title when typing in the title input", () => {
     render(<ArticleEditor />);
-    const input = screen.getByPlaceholderText("Title");
-    fireEvent.change(input, { target: { value: "New title" } });
+    const title = screen.getByLabelText("Title");
+    // onInput reads e.currentTarget.innerText (a jsdom expando).
+    title.innerText = "New title";
+    fireEvent.input(title);
     expect(useEditorStore.getState().title).toBe("New title");
   });
 
   it("pressing Enter in title moves focus to first body block", () => {
     render(<ArticleEditor />);
-    const input = screen.getByPlaceholderText("Title");
+    const title = screen.getByLabelText("Title");
     const firstBlock = document.querySelector("[data-block-index='0']") as HTMLElement;
     const focusSpy = vi.spyOn(firstBlock, "focus");
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(title, { key: "Enter" });
     expect(focusSpy).toHaveBeenCalled();
   });
 

@@ -23,7 +23,6 @@ import {
 } from "@/components/demo-logger";
 import { DemoLoggerProvider } from "@/hooks/use-demo-logger";
 import {
-  getAspectRatioHeight,
   getDemoFrameMinHeight,
   shouldOverrideDemoFrameAspectRatio,
   type DemoFrameAspectRatio,
@@ -89,26 +88,9 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       [ref],
     );
 
-    useLayoutEffect(() => {
-      if (!loggerEnabled) return;
-
-      const frame = frameRef.current;
-      if (!frame) return;
-
-      const updateAspectFloor = () => {
-        const aspectMin = getAspectRatioHeight(
-          frame.clientWidth,
-          resolvedAspectRatio,
-        );
-        setDemoAreaStyle({ minHeight: aspectMin });
-      };
-
-      const observer = new ResizeObserver(updateAspectFloor);
-      observer.observe(frame);
-      updateAspectFloor();
-
-      return () => observer.disconnect();
-    }, [loggerEnabled, resolvedAspectRatio, children]);
+    // Logger frames reserve their aspect-ratio height as a CSS floor (cqw
+    // compound variant on `demoFrameDemoArea`), so the frame is full-height from
+    // SSR with no client-measured jump — no JS sizing needed here.
 
     useLayoutEffect(() => {
       if (loggerEnabled) return;

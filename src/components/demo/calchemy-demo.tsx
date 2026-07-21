@@ -12,9 +12,10 @@ import {
   useCalchemyContext,
 } from "@calchemy/date-react";
 import { CalendarScroll } from "@calchemy/date-react/calendar-scroll";
-import { css, cx } from "../../../styled-system/css";
+import { css } from "../../../styled-system/css";
 import { menuIcon } from "../../../styled-system/recipes";
 import { Button } from "@/components/ui/button";
+import { DemoPreloader } from "@/components/demo-component";
 import CalendarIcon from "@/assets/icons/calendar.svg";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
@@ -211,7 +212,7 @@ const calchemyDemoStyle = css({
   "& [calchemy-period-heading]": {
     margin: 0,
     textAlign: "center",
-    textStyle: "paragraph",
+    textStyle: "bodyLarge",
     color: "text.commandItem",
   },
 
@@ -228,7 +229,7 @@ const calchemyDemoStyle = css({
     justifyContent: "center",
     width: calchemyCellSize,
     height: calchemyCellSize,
-    textStyle: "commandItem",
+    textStyle: "bodySmall",
     textAlign: "center",
     color: "text.commandItem",
   },
@@ -259,7 +260,7 @@ const calchemyDemoStyle = css({
     padding: 0,
     border: "none",
     background: "transparent",
-    textStyle: "commandItem",
+    textStyle: "bodySmall",
     fontVariantNumeric: "tabular-nums",
     textAlign: "center",
     color: "text.commandItem",
@@ -292,7 +293,14 @@ const calchemyDemoStyle = css({
 });
 
 const calchemyDemoLoadingStyle = css({
+  width: calchemyWideDemoWidth,
+  maxWidth: "full",
   minHeight: "calc(token(spacing.4xl) + token(spacing.5xl) * 3)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "bg.surface",
+  borderRadius: "md",
 });
 
 const inputRowStyle = css({
@@ -307,7 +315,7 @@ const inputRowStyle = css({
   borderColor: "border.divider",
   flexShrink: 0,
   color: "text.commandItem",
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
   textWrap: "pretty",
 });
 
@@ -533,8 +541,41 @@ function CalchemyParseLogger() {
   return null;
 }
 
+// The engine (which lazily imports the Temporal polyfill) is created once and
+// cached, so `prepareCalchemyDemo()` can warm it during the demo's load — the
+// demo frame's preloader then covers this init too and the component mounts
+// ready, with no second internal spinner.
+let cachedCalchemyEngine: CalchemyEngine | null = null;
+let calchemyEnginePromise: Promise<CalchemyEngine> | null = null;
+
+function acquireCalchemyEngine(): Promise<CalchemyEngine> {
+  if (cachedCalchemyEngine) return Promise.resolve(cachedCalchemyEngine);
+  if (!calchemyEnginePromise) {
+    calchemyEnginePromise = createCalchemy({
+      defaultContext: { locale: "en-US", weekStartsOn: 0 },
+    }).then((instance) => {
+      cachedCalchemyEngine = instance;
+      return instance;
+    });
+  }
+  return calchemyEnginePromise;
+}
+
+/** Warms the Calchemy engine so the demo can render synchronously once loaded. */
+export function prepareCalchemyDemo(): Promise<void> {
+  return acquireCalchemyEngine().then(() => undefined);
+}
+
+/** Test-only: drops the cached engine so cases can exercise the loading state. */
+export function __resetCalchemyDemoCache(): void {
+  cachedCalchemyEngine = null;
+  calchemyEnginePromise = null;
+}
+
 export function CalchemyDemo() {
-  const [calchemy, setCalchemy] = useState<CalchemyEngine | null>(null);
+  const [calchemy, setCalchemy] = useState<CalchemyEngine | null>(
+    cachedCalchemyEngine,
+  );
   const demoRootRef = useRef<HTMLDivElement>(null);
   const { visiblePeriods, placeholder } = useCalchemyDemoLayout(
     demoRootRef,
@@ -542,32 +583,27 @@ export function CalchemyDemo() {
   );
 
   useEffect(() => {
-    let cancelled = false;
+    if (calchemy) return;
 
-    createCalchemy({
-      defaultContext: {
-        locale: "en-US",
-        weekStartsOn: 0,
-      },
-    }).then((instance) => {
-      if (!cancelled) {
-        setCalchemy(instance);
-      }
+    let cancelled = false;
+    acquireCalchemyEngine().then((instance) => {
+      if (!cancelled) setCalchemy(instance);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [calchemy]);
 
   if (!calchemy) {
     return (
       <div
         ref={demoRootRef}
-        className={cx(calchemyDemoStyle, calchemyDemoLoadingStyle)}
+        className={calchemyDemoLoadingStyle}
         aria-busy="true"
-        aria-hidden
-      />
+      >
+        <DemoPreloader />
+      </div>
     );
   }
 

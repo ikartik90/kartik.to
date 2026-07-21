@@ -8,7 +8,7 @@ describe("demo component registry", () => {
       id: "calchemy-demo",
       label: "Calchemy Demo",
     });
-    expect(demoComponents[0]?.Component).toBeDefined();
+    expect(typeof demoComponents[0]?.load).toBe("function");
   });
 
   it("resolves calchemy-demo by id", () => {

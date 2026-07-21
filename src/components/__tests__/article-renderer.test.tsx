@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { ArticleRenderer } from "../article-renderer";
 import type { Document } from "@/domain/post";
@@ -15,7 +15,7 @@ vi.mock("@/components/demo/registry", () => ({
   getDemoComponent: () => ({
     id: "calchemy-demo",
     label: "Calchemy Demo",
-    Component: () => <div data-testid="demo">Demo</div>,
+    load: async () => () => <div data-testid="demo">Demo</div>,
   }),
 }));
 
@@ -415,7 +415,7 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector("figcaption")).toBeNull();
     });
 
-    it("renders a component inside a figure with caption", () => {
+    it("renders a component inside a figure with caption", async () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
@@ -427,13 +427,16 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
+      // Scope to this render's container (the file renders without cleanup, so
+      // global `screen` would match a prior test's demo before this one reveals).
+      await within(container).findByTestId("demo");
       const figure = container.querySelector("figure");
       expect(figure).not.toBeNull();
       expect(figure?.querySelector("[data-testid='demo']")).not.toBeNull();
       expect(screen.getByText("Component caption text")).toBeDefined();
     });
 
-    it("omits figcaption for a component without caption", () => {
+    it("omits figcaption for a component without caption", async () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
@@ -444,6 +447,9 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
+      // Scope to this render's container (the file renders without cleanup, so
+      // global `screen` would match a prior test's demo before this one reveals).
+      await within(container).findByTestId("demo");
       const figure = container.querySelector("figure");
       expect(figure).not.toBeNull();
       expect(figure?.querySelector("[data-testid='demo']")).not.toBeNull();

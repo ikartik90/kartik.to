@@ -14,6 +14,7 @@ import {
 } from "@/app/actions/post";
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
+import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
 
@@ -56,7 +57,16 @@ export function useCommandPalette(
   openKey = 0,
 ): CommandPaletteHandlers {
   const { data: session } = authClient.useSession();
-  const isAdmin = !!session?.user;
+
+  // The admin session lives client-side (localStorage), invisible to the server,
+  // so the server always renders the logged-out tree. Gate every admin-only
+  // affordance behind `mounted` so the first client render matches that server
+  // HTML; the admin UI then appears one commit later. Without this guard the
+  // extra admin nodes on the first client render diverge from the server markup
+  // and React aborts hydration with error #418. (Same guard as `isDark` below.)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isAdmin = mounted && !!session?.user;
 
   const pathname = usePathname();
   const router = useRouter();
@@ -67,8 +77,6 @@ export function useCommandPalette(
   const editCategory = useEditorStore((state) => state.category);
 
   const { mode, setMode } = useThemeStore();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   const isDark =
     mounted &&
@@ -166,14 +174,18 @@ export function useCommandPalette(
     });
   };
 
+  // Open the editor in a new tab via a real anchor navigation, not
+  // `window.open` — the latter is silently pop-up-blocked in some browsers even
+  // from a user gesture, so the command would appear to do nothing. See
+  // openInNewTab.
   const handleNewBlogArticle = () => {
     close();
-    window.open(getEditUrl("ARTICLE"), "_blank");
+    openInNewTab(getEditUrl("ARTICLE"));
   };
 
   const handleNewWorkArticle = () => {
     close();
-    window.open(getEditUrl("WORK"), "_blank");
+    openInNewTab(getEditUrl("WORK"));
   };
 
   const handleOpenDraft = (draft: Post) => {

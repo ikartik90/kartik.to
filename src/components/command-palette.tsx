@@ -38,7 +38,7 @@ const inputStyle = css({
   flex: "1 0 0",
   background: "none",
   border: "none",
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
   color: "text.commandItem",
   focusVisibleRing: "none",
   _focusVisible: {
@@ -72,13 +72,13 @@ const hotkeyBadgeStyle = css({
 });
 
 const hotkeyKeyStyle = css({
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "text.commandItem",
   whiteSpace: "nowrap",
 });
 
 const hotkeyLabelStyle = css({
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "text.commandItem/50",
   whiteSpace: "nowrap",
 });
@@ -102,7 +102,7 @@ const groupHeadingStyle = css({
   alignItems: "center",
   height: "24px",
   paddingInline: "md",
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "text.commandItem/50",
 });
 
