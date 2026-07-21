@@ -14,6 +14,7 @@ import {
 } from "@/app/actions/post";
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
+import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
 
@@ -173,14 +174,18 @@ export function useCommandPalette(
     });
   };
 
+  // Open the editor in a new tab via a real anchor navigation, not
+  // `window.open` — the latter is silently pop-up-blocked in some browsers even
+  // from a user gesture, so the command would appear to do nothing. See
+  // openInNewTab.
   const handleNewBlogArticle = () => {
     close();
-    window.open(getEditUrl("ARTICLE"), "_blank");
+    openInNewTab(getEditUrl("ARTICLE"));
   };
 
   const handleNewWorkArticle = () => {
     close();
-    window.open(getEditUrl("WORK"), "_blank");
+    openInNewTab(getEditUrl("WORK"));
   };
 
   const handleOpenDraft = (draft: Post) => {
