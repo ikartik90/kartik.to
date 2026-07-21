@@ -56,7 +56,16 @@ export function useCommandPalette(
   openKey = 0,
 ): CommandPaletteHandlers {
   const { data: session } = authClient.useSession();
-  const isAdmin = !!session?.user;
+
+  // The admin session lives client-side (localStorage), invisible to the server,
+  // so the server always renders the logged-out tree. Gate every admin-only
+  // affordance behind `mounted` so the first client render matches that server
+  // HTML; the admin UI then appears one commit later. Without this guard the
+  // extra admin nodes on the first client render diverge from the server markup
+  // and React aborts hydration with error #418. (Same guard as `isDark` below.)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isAdmin = mounted && !!session?.user;
 
   const pathname = usePathname();
   const router = useRouter();
@@ -67,8 +76,6 @@ export function useCommandPalette(
   const editCategory = useEditorStore((state) => state.category);
 
   const { mode, setMode } = useThemeStore();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   const isDark =
     mounted &&

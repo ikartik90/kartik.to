@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CommandPalette } from "../command-palette";
 
@@ -103,6 +104,32 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
       expect(screen.queryByText("Edit page")).toBeNull();
       expect(screen.queryByText("New blog article…")).toBeNull();
+    });
+  });
+
+  describe("hydration safety", () => {
+    // The admin session lives only in the browser (localStorage), so the server
+    // always renders logged-out. The server HTML must therefore contain no admin
+    // UI even when a session is present — otherwise the first client render adds
+    // admin nodes the server never sent, React's hydration diverges, and it
+    // aborts the subtree with error #418. renderToString reproduces the server
+    // render (effects don't run), which is exactly the markup the client must match.
+    it("omits admin groups from the server render even with an active session", () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      const html = renderToString(<CommandPalette />);
+      expect(html).not.toContain("This Page");
+      expect(html).not.toContain("Edit page");
+      expect(html).not.toContain("New blog article");
+    });
+
+    it("still renders the always-visible Settings group in the server render", () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      const html = renderToString(<CommandPalette />);
+      expect(html).toContain("Settings");
     });
   });
 
