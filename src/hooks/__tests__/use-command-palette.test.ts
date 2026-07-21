@@ -32,6 +32,11 @@ vi.mock("@/utils/content-sync", () => ({
   notifyContentUpdated: () => mockNotifyContentUpdated(),
 }));
 
+const mockOpenInNewTab = vi.fn<(url: string) => void>();
+vi.mock("@/utils/open-in-new-tab", () => ({
+  openInNewTab: (url: string) => mockOpenInNewTab(url),
+}));
+
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn().mockResolvedValue({
@@ -84,6 +89,7 @@ describe("useCommandPalette", () => {
     mockReplace.mockClear();
     mockRefresh.mockClear();
     mockNotifyContentUpdated.mockClear();
+    mockOpenInNewTab.mockClear();
     mockPathname.mockReturnValue("/");
     mockUseSession.mockReturnValue({ data: null });
 
@@ -249,25 +255,38 @@ describe("useCommandPalette", () => {
   // -------------------------------------------------------------------------
 
   describe("handleNewBlogArticle", () => {
-    it("calls close and opens /edit/new?category=ARTICLE in a new tab", () => {
-      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    it("closes the palette and opens the article editor in a new tab", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleNewBlogArticle());
       expect(close).toHaveBeenCalledOnce();
-      expect(openSpy).toHaveBeenCalledWith(
+      expect(mockOpenInNewTab).toHaveBeenCalledWith(
         "/edit/new?category=ARTICLE",
-        "_blank",
       );
+    });
+
+    // Regression: window.open is silently pop-up-blocked in some browsers, so
+    // the command must route through the anchor-based helper instead.
+    it("does not use window.open", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewBlogArticle());
+      expect(openSpy).not.toHaveBeenCalled();
     });
   });
 
   describe("handleNewWorkArticle", () => {
-    it("calls close and opens /edit/new?category=WORK in a new tab", () => {
-      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    it("closes the palette and opens the work editor in a new tab", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleNewWorkArticle());
       expect(close).toHaveBeenCalledOnce();
-      expect(openSpy).toHaveBeenCalledWith("/edit/new?category=WORK", "_blank");
+      expect(mockOpenInNewTab).toHaveBeenCalledWith("/edit/new?category=WORK");
+    });
+
+    it("does not use window.open", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewWorkArticle());
+      expect(openSpy).not.toHaveBeenCalled();
     });
   });
 
