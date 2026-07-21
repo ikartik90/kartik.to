@@ -318,15 +318,6 @@ body {
   }
 }
 
-/* Social-icon hover glow: the masked gradient layer spins via transform only,
-   so the animation stays on the compositor and never starves the canvas cursor.
-   The global reduced-motion rule below neutralizes it automatically. */
-@keyframes social-glow-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* Unlayered — must beat @layer recipes .social-tooltip { opacity: 0 } */
 [data-social-link-item][data-tooltip-visible]:not([data-tooltip-dismissed])
   [data-social-tooltip],

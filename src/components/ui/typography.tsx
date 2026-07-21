@@ -42,7 +42,7 @@ export const typographyStyles = cva({
         textWrap: "balance",
       },
       paragraph: {
-        textStyle: "paragraph",
+        textStyle: "bodyLarge",
         color: "text.paragraph",
       },
       quote: {

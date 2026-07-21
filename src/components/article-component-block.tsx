@@ -2,6 +2,7 @@
 
 import { Typography } from "@/components/ui/typography";
 import { DemoFrame } from "@/components/demo-frame";
+import { DemoComponent } from "@/components/demo-component";
 import { getDemoComponent } from "@/components/demo/registry";
 import { articleShowcase } from "../../styled-system/recipes";
 
@@ -15,14 +16,13 @@ export function ArticleComponentBlock({
   caption,
 }: ArticleComponentBlockProps) {
   const demo = getDemoComponent(componentId);
-  const Demo = demo?.Component;
 
-  if (!Demo) return null;
+  if (!demo) return null;
 
   return (
     <figure className={articleShowcase()}>
       <DemoFrame aspectRatio={demo.aspectRatio} logger={demo.logger}>
-        <Demo />
+        <DemoComponent entry={demo} />
       </DemoFrame>
       {caption ? (
         <Typography tag="figcaption" type="caption">

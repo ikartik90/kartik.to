@@ -17,7 +17,7 @@ export const buttonRecipe = cva({
       secondary: {
         backgroundColor: "bg.button.secondary.default",
         color: "text.commandItem",
-        textStyle: "commandItem",
+        textStyle: "bodySmall",
         paddingInline: "md",
         paddingBlock: "xs",
         borderRadius: "sm",
@@ -54,7 +54,7 @@ export const buttonRecipe = cva({
         padding: "none",
         background: "none",
         color: { base: "brand.pink", _dark: "brand.orange" },
-        textStyle: "commandItem",
+        textStyle: "bodySmall",
         textDecoration: "underline",
         textUnderlineOffset: "3px",
         verticalAlign: "baseline",

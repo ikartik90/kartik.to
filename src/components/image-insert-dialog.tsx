@@ -11,7 +11,6 @@ import {
   dialogFooterGroup,
   uploadBody,
   uploadBodySlot,
-  uploadProgress as uploadProgressTrack,
   libraryBody,
   mediaLibrarySidebar,
   mediaLibraryItem,
@@ -25,6 +24,7 @@ import {
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { useImageInsert, type ImageInsertPhase } from "@/hooks/use-image-insert";
 import { formatFileSize, formatImageType } from "@/utils/format-file-size";
 import CloseIcon from "@/assets/icons/cross.svg";
@@ -62,7 +62,7 @@ const illustrationForLightUiStyle = css({
 });
 
 const hintStyle = css({
-  textStyle: "commandItem",
+  textStyle: "bodySmall",
   color: "text.commandItem",
   textWrap: "pretty",
   lineHeight: "1.5rem",
@@ -70,20 +70,10 @@ const hintStyle = css({
 });
 
 const formatsStyle = css({
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "text.commandItem/50",
   lineHeight: "1.25rem",
   margin: "none",
-});
-
-const progressFillStyle = css({
-  position: "absolute",
-  top: 0,
-  left: 0,
-  height: "100%",
-  borderRadius: "xs",
-  transition: "width linear 100ms",
-  backgroundColor: { base: "brand.pink", _dark: "brand.orange" },
 });
 
 const filenameStyle = css({
@@ -112,7 +102,7 @@ const altFieldStyle = css({
   background: "none",
   border: "none",
   padding: "none",
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "text.commandItem",
   lineHeight: "1.25rem",
   resize: "none",
@@ -133,7 +123,7 @@ const libraryFilenameStyle = css({
 });
 
 const errorStyle = css({
-  textStyle: "commandLabel",
+  textStyle: "caption",
   color: "brand.pink",
   textAlign: "center",
 });
@@ -371,18 +361,7 @@ export function ImageInsertDialog({
             </div>
 
             {phase === "uploading" ? (
-              <div
-                className={uploadProgressTrack()}
-                role="progressbar"
-                aria-valuenow={uploadProgress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div
-                  className={progressFillStyle}
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
+              <ProgressBar value={uploadProgress} label="Uploading image" />
             ) : error ? (
               <p className={errorStyle}>{error}</p>
             ) : (

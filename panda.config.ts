@@ -61,9 +61,11 @@ export default defineConfig({
           neutral: {
             100: { value: "#EEF2F6" },
             200: { value: "#CFD9E2" },
-            300: { value: "#A9BFD6" },
-            600: { value: "#576675" },
-            700: { value: "#414244" },
+            300: { value: "#C3CDD7" },
+            400: { value: "#A9BFD6" },
+            500: { value: "#576675" },
+            600: { value: "#414244" },
+            700: { value: "#384047" },
             800: { value: "#2E3338" },
             900: { value: "#1F2123" },
           },
@@ -112,10 +114,6 @@ export default defineConfig({
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
           xl: { value: "{spacing.xl}" },
-          // dialogPanel content-box top corners: outer radii.md − border 3xs
-          dialogInner: {
-            value: "calc(var(--radii-md) - var(--spacing-3xs))",
-          },
         },
       },
 
@@ -132,23 +130,23 @@ export default defineConfig({
             },
             itemHover: {
               value:
-                "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
+                "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
             },
             button: {
               secondary: {
                 default: {
                   value:
-                    "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
+                    "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
                 },
                 hover: {
                   value:
-                    "color-mix(in srgb, var(--colors-neutral-600) 50%, transparent)",
+                    "color-mix(in srgb, var(--colors-neutral-500) 50%, transparent)",
                 },
               },
               tertiary: {
                 hover: {
                   value:
-                    "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
+                    "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
                 },
               },
             },
@@ -177,7 +175,7 @@ export default defineConfig({
           text: {
             default: {
               value: {
-                base: "{colors.neutral.700}",
+                base: "{colors.neutral.500}",
                 _dark: "{colors.neutral.200}",
               },
             },
@@ -189,8 +187,8 @@ export default defineConfig({
             },
             paragraph: {
               value: {
-                base: "{colors.neutral.600}",
-                _dark: "{colors.neutral.300}",
+                base: "{colors.neutral.500}",
+                _dark: "{colors.neutral.400}",
               },
             },
             // Only readable over bg.brandedEmphasis (the gradient) — same in both themes
@@ -211,8 +209,8 @@ export default defineConfig({
             // Command palette item labels — lighter than text.default in dark mode
             commandItem: {
               value: {
-                base: "{colors.neutral.700}",
-                _dark: "{colors.neutral.300}",
+                base: "{colors.neutral.500}",
+                _dark: "{colors.neutral.400}",
               },
             },
           },
@@ -220,7 +218,7 @@ export default defineConfig({
           border: {
             divider: {
               value:
-                "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
+                "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
             },
             // 10% opacity inset outline for images (interface-design rule 11)
             imageOutline: {
@@ -241,8 +239,8 @@ export default defineConfig({
           logo: {
             default: {
               value: {
-                base: "{colors.neutral.600}",
-                _dark: "{colors.neutral.300}",
+                base: "{colors.neutral.500}",
+                _dark: "{colors.neutral.400}",
               },
             },
           },
@@ -313,7 +311,7 @@ export default defineConfig({
         articleHighlight: defineRecipe({
           className: "article-highlight",
           description:
-            "Highlight mark (<mark>) inside article prose — brand gradient behind fixed neutral.700 text.",
+            "Highlight mark (<mark>) inside article prose — brand gradient behind fixed neutral.600 text.",
           base: {
             background: "bg.brandedEmphasis",
             color: "neutral.900",
@@ -337,11 +335,8 @@ export default defineConfig({
             textDecorationStyle: "dotted",
             textDecorationColor:
               "color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent)",
-            // 1px dotted underline under the annotated text only; skip-ink off
-            // so glyph descenders don't eat dots out of the line.
             textDecorationThickness: "token(spacing.xxs)",
-            textDecorationSkipInk: "none",
-            textUnderlineOffset: "0.2em",
+            textUnderlineOffset: "token(spacing.xs)",
             cursor: "default",
             // Nested marks keep their own colour; only the underline is added.
             "& :is(strong, b, em, i, u, s, code, a)": { color: "inherit" },
@@ -586,6 +581,29 @@ export default defineConfig({
               },
             },
           },
+          // A logger frame drops `aspect-ratio` (its height = demo area + footer),
+          // so reserve the aspect-ratio height as a CSS floor via container-query
+          // units (the frame is `container-type: inline-size`). This keeps the
+          // frame at full height from SSR — no client-measured jump — while
+          // content taller than the floor still grows it (height: auto). cqw
+          // factor = ratioHeight / ratioWidth.
+          compoundVariants: [
+            {
+              logger: true,
+              aspectRatio: "sm",
+              css: { minHeight: "50cqw" },
+            },
+            {
+              logger: true,
+              aspectRatio: "md",
+              css: { minHeight: "calc(200cqw / 3)" },
+            },
+            {
+              logger: true,
+              aspectRatio: "lg",
+              css: { minHeight: "120cqw" },
+            },
+          ],
           defaultVariants: {
             aspectRatio: "sm",
           },
@@ -807,7 +825,7 @@ export default defineConfig({
           base: {
             margin: "none",
             padding: "none",
-            textStyle: "commandItem",
+            textStyle: "bodySmall",
             color: "text.commandItem",
             fontWeight: "inherit",
             textWrap: "balance",
@@ -901,14 +919,47 @@ export default defineConfig({
 
         uploadProgress: defineRecipe({
           className: "upload-progress",
-          description: "Upload progress bar track and fill.",
+          description:
+            "Shared progress-bar track (upload dialog + demo preloader).",
           base: {
             position: "relative",
             width: "token(sizes.imagePreviewMax)",
+            maxWidth: "token(spacing.full)",
             height: "token(spacing.xxs)",
             borderRadius: "xs",
             backgroundColor: "border.divider",
             overflow: "hidden",
+          },
+        }),
+
+        progressBarFill: defineRecipe({
+          className: "progress-bar-fill",
+          description: "Animated fill inside the shared progress-bar track.",
+          base: {
+            position: "absolute",
+            top: 0,
+            left: 0,
+            height: "token(spacing.full)",
+            borderRadius: "xs",
+            transition: "width linear 100ms",
+            backgroundColor: { base: "brand.pink", _dark: "brand.orange" },
+          },
+        }),
+
+        demoPreloader: defineRecipe({
+          className: "demo-preloader",
+          description:
+            "Centers the shared progress bar while a component demo loads.",
+          base: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "md",
+            width: "token(sizes.imagePreviewMax)",
+            maxWidth: "token(spacing.full)",
+            minHeight: "token(spacing.5xl)",
+            paddingInline: "lg",
           },
         }),
 
@@ -945,7 +996,7 @@ export default defineConfig({
             border: "none",
             background: "none",
             cursor: "pointer",
-            textStyle: "commandItem",
+            textStyle: "bodySmall",
             color: "text.commandItem",
             textAlign: "left",
             "&[aria-selected='true']": {
@@ -1002,7 +1053,7 @@ export default defineConfig({
             width: "100%",
             maxWidth: "token(sizes.imagePreviewMax)",
             minWidth: 0,
-            textStyle: "commandLabel",
+            textStyle: "caption",
           },
         }),
 
@@ -1200,7 +1251,7 @@ export default defineConfig({
             borderRadius: "lg",
             background: "bg.brandedEmphasis",
             color: "text.listMarker",
-            textStyle: "paragraph",
+            textStyle: "bodyLarge",
             fontWeight: "medium",
             textAlign: "center",
             whiteSpace: "nowrap",
@@ -1275,7 +1326,7 @@ export default defineConfig({
           base: {
             flex: "1 1 auto",
             minWidth: 0,
-            textStyle: "paragraph",
+            textStyle: "bodyLarge",
             color: "text.paragraph",
             wordBreak: "break-word",
           },
@@ -1329,9 +1380,9 @@ export default defineConfig({
         articleMetricLabel: defineRecipe({
           className: "article-metric-label",
           description:
-            "Metric label — descriptive line beneath the value; paragraph text style, standard text colour (neutral.700 light / neutral.200 dark per Figma).",
+            "Metric label — descriptive line beneath the value; paragraph text style, standard text colour (neutral.600 light / neutral.200 dark per Figma).",
           base: {
-            textStyle: "paragraph",
+            textStyle: "bodyLarge",
             color: "text.default",
             wordBreak: "break-word",
           },
@@ -1506,7 +1557,7 @@ export default defineConfig({
             borderColor: "border.divider",
             backgroundColor: "bg.button.tertiary.hover",
             color: "text.commandItem",
-            textStyle: "commandLabel",
+            textStyle: "caption",
             whiteSpace: "nowrap",
             opacity: 0,
             visibility: "hidden",
@@ -1560,7 +1611,7 @@ export default defineConfig({
             paddingInline: "md",
             borderRadius: "sm",
             cursor: "default",
-            textStyle: "commandItem",
+            textStyle: "bodySmall",
             color: "text.commandItem",
             // cmdk sets data-selected; slash-menu uses aria-selected on native buttons
             "&[data-selected='true'], &[aria-selected='true']": {
@@ -1588,7 +1639,7 @@ export default defineConfig({
             lineHeight: "1.8",
           },
         },
-        paragraph: {
+        bodyLarge: {
           value: {
             fontFamily: "{fonts.switzer}",
             fontWeight: "{fontWeights.base}",
@@ -1623,20 +1674,12 @@ export default defineConfig({
             letterSpacing: "0.5%",
           },
         },
-        commandItem: {
+        bodySmall: {
           value: {
             fontFamily: "{fonts.switzer}",
             fontWeight: "{fontWeights.base}",
             fontSize: "0.875rem",
-            lineHeight: "1.5rem",
-          },
-        },
-        commandLabel: {
-          value: {
-            fontFamily: "{fonts.switzer}",
-            fontWeight: "{fontWeights.base}",
-            fontSize: "0.75rem",
-            lineHeight: "1.25rem",
+            lineHeight: "1.72",
           },
         },
         inlineCode: {
@@ -1645,17 +1688,11 @@ export default defineConfig({
             fontSize: "0.875em",
           },
         },
-        link: {
-          value: {
-            textDecoration: "underline",
-            textUnderlineOffset: "3px",
-          },
-        },
         code: {
           value: {
             fontFamily: "{fonts.jetbrainsMono}",
             fontSize: "0.875rem",
-            lineHeight: "1.7",
+            lineHeight: "1.72",
           },
         },
       },

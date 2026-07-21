@@ -31,7 +31,7 @@ const rowLinkStyle = css({
   borderTopStyle: "solid",
   borderTopColor: "border.divider",
   textDecoration: "none",
-  textStyle: "paragraph",
+  textStyle: "bodyLarge",
   color: "text.default",
   transition: "color 150ms ease",
   _hover: { color: "text.title" },

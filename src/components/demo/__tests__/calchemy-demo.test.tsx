@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { CalchemyDemo } from "../calchemy-demo";
+import { CalchemyDemo, __resetCalchemyDemoCache } from "../calchemy-demo";
 import { DemoFrame } from "@/components/demo-frame";
 
 const mockUseCalchemyContext = vi.fn();
@@ -54,6 +60,8 @@ vi.mock("@calchemy/date-react", () => ({
 afterEach(() => {
   cleanup();
   mockUseCalchemyContext.mockReset();
+  // The engine is module-cached; drop it so each case exercises fresh init.
+  __resetCalchemyDemoCache();
 });
 
 describe("CalchemyDemo", () => {
@@ -140,6 +148,13 @@ describe("CalchemyDemo", () => {
       <DemoFrame logger>
         <CalchemyDemo />
       </DemoFrame>,
+    );
+
+    // The logger is collapsed by default; expand it so its body exposes
+    // role="log" (and its entries become visible). State persists across the
+    // rerender below, so this is only needed once.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Expand output logs" }),
     );
 
     await waitFor(() => {

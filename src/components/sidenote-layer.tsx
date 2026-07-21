@@ -50,12 +50,12 @@ const hintKeyStyle = css({
   borderColor: "border.divider",
   backgroundColor: "bg.itemHover",
   color: "text.default",
-  textStyle: "commandLabel",
+  textStyle: "caption",
   whiteSpace: "nowrap",
 });
 const hintLabelStyle = css({
   color: "text.default/50",
-  textStyle: "commandLabel",
+  textStyle: "caption",
   whiteSpace: "nowrap",
 });
 

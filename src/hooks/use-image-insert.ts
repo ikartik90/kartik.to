@@ -12,6 +12,9 @@ import {
   MAX_IMAGE_UPLOAD_BYTES,
   type MediaAsset,
 } from "@/domain/media";
+import { PROGRESS_COMPLETE_HOLD_MS } from "@/components/ui/progress-bar";
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type ImageInsertPhase = "upload" | "uploading" | "library";
 
@@ -172,7 +175,12 @@ export function useImageInsert({
         });
 
         await uploadFileWithProgress(uploadUrl, file, setUploadProgress);
-        await refreshLibrary(key);
+        // Hold the filled (100%) bar for a beat — overlapping the library
+        // refresh — so the brand fill visibly completes before the view swaps.
+        await Promise.all([
+          refreshLibrary(key),
+          delay(PROGRESS_COMPLETE_HOLD_MS),
+        ]);
         setPhase("library");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload failed");

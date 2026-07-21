@@ -17,6 +17,7 @@ import {
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { DemoFrame } from "@/components/demo-frame";
+import { DemoComponent } from "@/components/demo-component";
 import { demoComponents } from "@/components/demo/registry";
 import CloseIcon from "@/assets/icons/cross.svg";
 
@@ -89,7 +90,6 @@ export function ComponentInsertDialog({
 
   const selected =
     demoComponents.find((demo) => demo.id === selectedId) ?? null;
-  const Demo = selected?.Component;
 
   // Default-select the first component each time the dialog (re)opens. Adjusted
   // during render — the sanctioned pattern for resetting on a prop transition.
@@ -188,7 +188,7 @@ export function ComponentInsertDialog({
                   interactive={false}
                 >
                   <div inert className={demoPreviewStyle}>
-                    {Demo ? <Demo /> : null}
+                    {selected ? <DemoComponent entry={selected} /> : null}
                   </div>
                 </DemoFrame>
               </div>

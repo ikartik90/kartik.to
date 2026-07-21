@@ -106,11 +106,23 @@ Project Root
 
 - **Server-First**: Default to Server Components. Use `'use client'` only for interactive state (Zustand) or `adminLogin()` console utility.
 - **Flat Discovery**: Keep `src/components/` flat. Avoid deep nesting unless functionally justified.
-- **Testing**: Every functional directory MUST contain a `__tests__` subfolder.
+- **Test-First**: Write tests before implementing logic (TDD); every functional directory MUST contain a co-located `__tests__` subfolder.
 
 ---
 
 # Testing Guidelines
+
+## Test-Driven Development (TDD)
+
+**TDD is the default workflow for any code with logic.** Write the test before the implementation, not after.
+
+- **Red → Green → Refactor**: Write a failing test that specifies the intended behavior; run `npm test` and confirm it fails for the right reason; write the minimum code to make it pass; then refactor with the test as your safety net.
+- **Spec, not snapshot**: Assert against the _specification_ (inputs → expected outputs, valid/invalid cases), never against whatever the current implementation happens to emit. A test that cannot fail proves nothing.
+- **Incremental, not backfilled**: Add tests one behavior at a time as the design emerges. Do not batch-write tests after the code is "done" merely to satisfy the coverage rule.
+- **Bugs start red**: Reproduce every bug with a failing test first, then fix it. This locks the regression out for good.
+- **Pragmatic scope**: Pure presentational work (Panda recipes, layout, tokens) has no meaningful failing state — verify it in the browser preview and reserve tests for behavior (interaction, state, output), which is still written test-first.
+
+## Coverage & Isolation
 
 - **Ubiquitous Coverage**: If it contains logic, it requires a `__tests__` folder.
 - **Isolation**: `__tests__` must reside in the same directory as the code its constituents are testing.
@@ -138,6 +150,7 @@ Project Root
 ## Dos
 
 - **DO** follow YAGNI principles, and one-liner solutions.
+- **DO** write a failing test before implementing logic (TDD); make it pass, then refactor.
 - **DO** verify current Next.js documentation in `node_modules/next/dist/docs/` before implementing new patterns.
 - **DO** promote local components to the global library upon second use.
 - **DO** use Server Actions for all content mutations.

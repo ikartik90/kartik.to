@@ -15,13 +15,8 @@ import {
   socialTooltip,
   socialTooltipIcon,
 } from "../../styled-system/recipes";
-import { SocialIconGlow } from "./social-icon-glow";
 import { SocialIconShader } from "./social-icon-shader";
 import { buttonRecipe } from "./ui/button-recipe";
-
-// A/B: "shader" = tuned GemSmoke WebGL (hover-only, DPR-capped); "glow" = the
-// compositor-only CSS gradient. Flip to compare the two hover treatments.
-const HOVER_EFFECT: "shader" | "glow" = "shader";
 
 const COPY_SUCCESS_MS = 2000;
 const EMAIL_COPY_TEXT = "ikartik90@gmail.com";
@@ -463,11 +458,10 @@ function SocialLinkItem({
     setTooltipHovered(false);
   }
 
-  const HoverEffect = HOVER_EFFECT === "shader" ? SocialIconShader : SocialIconGlow;
   const icon = (
-    <HoverEffect maskSrc={item.maskSrc} active={triggerHovered}>
+    <SocialIconShader maskSrc={item.maskSrc} active={triggerHovered}>
       <item.Icon className={triggerIconStyle} aria-hidden />
-    </HoverEffect>
+    </SocialIconShader>
   );
 
   return (
