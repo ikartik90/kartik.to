@@ -202,7 +202,7 @@ function renderBlockNode(
         <Typography
           key={index}
           tag="p"
-          type="paragraph"
+          type="bodyLarge"
           data-indented={node.indent ? "" : undefined}
         >
           {renderInlineNodes(node.children, numberOf)}

@@ -50,14 +50,14 @@ const iconStyle = menuIcon();
 
 const consoleIconStyle = cx(
   iconStyle,
-  css({ color: "text.commandItem" }),
+  css({ color: "text.body" }),
 );
 
 const headerLabelStyle = css({
   flex: "1 1 auto",
   minWidth: 0,
   textStyle: "bodySmall",
-  color: "text.commandItem",
+  color: "text.body",
   margin: 0,
 });
 
@@ -98,14 +98,14 @@ const illustrationForLightUiStyle = css({
 
 const emptyMessageStyle = css({
   textStyle: "bodySmall",
-  color: "text.commandItem",
+  color: "text.body",
   margin: 0,
   textAlign: "center",
 });
 
 const emptyHintStyle = css({
   textStyle: "caption",
-  color: "text.commandItem/50",
+  color: "text.body/50",
   lineHeight: "1.25rem",
   margin: 0,
   textAlign: "center",

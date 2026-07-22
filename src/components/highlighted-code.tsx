@@ -16,7 +16,7 @@ interface HighlightedCodeProps {
 const syntaxPrimaryStyle = css({ color: "brand.pink" });
 const syntaxSecondaryStyle = css({ color: "brand.orange" });
 const syntaxNeutralStyle = css({ color: "text.default" });
-const syntaxCommentStyle = css({ color: "text.paragraph" });
+const syntaxCommentStyle = css({ color: "text.body" });
 
 const SYNTAX_ROLE_CLASS: Record<SyntaxTokenRole, string> = {
   primary: syntaxPrimaryStyle,

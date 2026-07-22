@@ -31,7 +31,7 @@ const inputRowStyle = css({
   borderBottomStyle: "solid",
   borderColor: "border.divider",
   flexShrink: 0,
-  color: "text.commandItem",
+  color: "text.body",
 });
 
 const inputStyle = css({
@@ -39,14 +39,14 @@ const inputStyle = css({
   background: "none",
   border: "none",
   textStyle: "bodySmall",
-  color: "text.commandItem",
+  color: "text.body",
   focusVisibleRing: "none",
   _focusVisible: {
     boxShadow: "none",
     borderRadius: "unset",
   },
   _placeholder: {
-    color: "text.commandItem/25",
+    color: "text.body/25",
   },
 });
 
@@ -73,13 +73,13 @@ const hotkeyBadgeStyle = css({
 
 const hotkeyKeyStyle = css({
   textStyle: "caption",
-  color: "text.commandItem",
+  color: "text.body",
   whiteSpace: "nowrap",
 });
 
 const hotkeyLabelStyle = css({
   textStyle: "caption",
-  color: "text.commandItem/50",
+  color: "text.body/50",
   whiteSpace: "nowrap",
 });
 
@@ -103,7 +103,7 @@ const groupHeadingStyle = css({
   height: "24px",
   paddingInline: "md",
   textStyle: "caption",
-  color: "text.commandItem/50",
+  color: "text.body/50",
 });
 
 const itemStyle = menuItem();

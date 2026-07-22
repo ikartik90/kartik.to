@@ -63,7 +63,7 @@ const illustrationForLightUiStyle = css({
 
 const hintStyle = css({
   textStyle: "bodySmall",
-  color: "text.commandItem",
+  color: "text.body",
   textWrap: "pretty",
   lineHeight: "1.5rem",
   margin: "none",
@@ -71,7 +71,7 @@ const hintStyle = css({
 
 const formatsStyle = css({
   textStyle: "caption",
-  color: "text.commandItem/50",
+  color: "text.body/50",
   lineHeight: "1.25rem",
   margin: "none",
 });
@@ -79,7 +79,7 @@ const formatsStyle = css({
 const filenameStyle = css({
   flex: "1 1 auto",
   minWidth: 0,
-  color: "text.commandItem",
+  color: "text.body",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -89,7 +89,7 @@ const fileMetaStyle = css({
   flexShrink: 0,
   width: "120px",
   textAlign: "right",
-  color: "text.commandItem/50",
+  color: "text.body/50",
   fontVariantNumeric: "tabular-nums",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -103,14 +103,14 @@ const altFieldStyle = css({
   border: "none",
   padding: "none",
   textStyle: "caption",
-  color: "text.commandItem",
+  color: "text.body",
   lineHeight: "1.25rem",
   resize: "none",
   overflow: "hidden",
   whiteSpace: "pre-wrap",
   overflowWrap: "break-word",
   _placeholder: {
-    color: "text.commandItem/50",
+    color: "text.body/50",
   },
 });
 

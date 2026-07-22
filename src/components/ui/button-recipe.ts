@@ -16,7 +16,7 @@ export const buttonRecipe = cva({
     variant: {
       secondary: {
         backgroundColor: "bg.button.secondary.default",
-        color: "text.commandItem",
+        color: "text.body",
         textStyle: "bodySmall",
         paddingInline: "md",
         paddingBlock: "xs",
@@ -30,7 +30,7 @@ export const buttonRecipe = cva({
         alignItems: "center",
         justifyContent: "center",
         borderRadius: "sm",
-        color: "text.commandItem",
+        color: "text.body",
         backgroundColor: "transparent",
         "& svg path[stroke]": {
           stroke: "currentColor",

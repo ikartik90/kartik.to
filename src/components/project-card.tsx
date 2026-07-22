@@ -41,7 +41,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   return (
     <a href={`/work/${project.slug}`} className={cardStyle}>
       <div className={coverStyle} role="presentation" aria-hidden="true" />
-      <Typography tag="h2" type="paragraph">
+      <Typography tag="h2" type="bodyLarge">
         {project.title}
       </Typography>
       {description && (
