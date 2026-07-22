@@ -365,7 +365,7 @@ describe("PostSchema", () => {
   });
 
   it("rejects a post missing slug", () => {
-    const { slug: _, ...withoutSlug } = validPost;
+    const { slug, ...withoutSlug } = validPost;
     expect(PostSchema.safeParse(withoutSlug).success).toBe(false);
   });
 

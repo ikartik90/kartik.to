@@ -10,6 +10,6 @@ import type { ReactNode } from "react";
  *   1. Define its schema in src/domain/post.ts and add it to BlockNodeSchema.
  *   2. Add its renderer here, keyed by the same `type` string literal.
  */
-export const nodeRenderers: Partial<
-  Record<BlockNode["type"], (node: any) => ReactNode>
-> = {};
+export const nodeRenderers: {
+  [K in BlockNode["type"]]?: (node: Extract<BlockNode, { type: K }>) => ReactNode;
+} = {};

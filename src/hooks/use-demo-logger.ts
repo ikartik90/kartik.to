@@ -5,6 +5,7 @@ import {
   createElement,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -116,12 +117,18 @@ export function useDemoLoggerEntries(): DemoLoggerEntry[] {
 
 export function useDemoLogger() {
   const context = useContext(DemoLoggerContext);
+  // Mirror the latest context callbacks into refs so the memoized log helpers
+  // below stay referentially stable (empty deps) while always calling through
+  // to the current provider. Synced in an effect — writing refs during render
+  // is unsafe (react-hooks/refs).
   const appendRef = useRef(context?.append);
-  appendRef.current = context?.append;
   const upsertRef = useRef(context?.upsert);
-  upsertRef.current = context?.upsert;
   const removeRef = useRef(context?.remove);
-  removeRef.current = context?.remove;
+  useEffect(() => {
+    appendRef.current = context?.append;
+    upsertRef.current = context?.upsert;
+    removeRef.current = context?.remove;
+  });
 
   const log = useCallback((...args: unknown[]) => {
     appendRef.current?.("log", args);

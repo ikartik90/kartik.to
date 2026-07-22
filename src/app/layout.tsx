@@ -45,7 +45,6 @@ export default function RootLayout({
         {/* Raw synchronous inline script — must run before first paint to
             avoid FOUC. next/script beforeInteractive queues via __next_s and
             fires after the client runtime loads, too late. */}
-        {/* eslint-disable-next-line @next/next/no-before-interactive-script-outside-document */}
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeScript }}

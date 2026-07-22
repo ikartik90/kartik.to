@@ -125,6 +125,9 @@ export function useImageInsert({
 
   useEffect(() => {
     if (!open) {
+      // Reset the form when the (externally controlled) dialog closes so it
+      // reopens clean — syncing to the `open` prop, not deriving render state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       reset();
     }
   }, [open, reset]);

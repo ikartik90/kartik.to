@@ -247,16 +247,11 @@ body {
     color: var(--colors-text-default);
   }
 
-  /* Slash menu anchor — see slashMenuPopover recipe in panda.config.ts */
+  /* Slash menu anchor — see slashMenuPopover recipe in panda.config.ts. The
+     editor sets this on its own node; the selection/bullet/number popovers
+     instead carry their `anchor-name` inline via Popover's `anchorName` prop. */
   [data-slash-anchor] {
     anchor-name: --slash-menu;
-  }
-
-  /* Shared selection-popover anchor — see the selectionPopover recipe in
-     panda.config.ts. One name for all four popovers (text / link / numbering /
-     bullet); only one is ever mounted at a time. */
-  [data-selection-anchor] {
-    anchor-name: --selection-popover;
   }
 
   /* Sidenote rail — an invisible, out-of-flow box spanning the text-content

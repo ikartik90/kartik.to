@@ -12,7 +12,7 @@ export function IntroSection() {
   return (
     <section className={sectionStyle}>
       <Typography tag="p" type="paragraph">
-        Hi, I'm Kartik, an AI-native designer building digital experiences for
+        Hi, I&apos;m Kartik, an AI-native designer building digital experiences for
         hypergrowth businesses. I invest care into the details that make
         software feel considered.
       </Typography>

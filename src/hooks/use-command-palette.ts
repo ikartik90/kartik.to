@@ -65,6 +65,9 @@ export function useCommandPalette(
   // extra admin nodes on the first client render diverge from the server markup
   // and React aborts hydration with error #418. (Same guard as `isDark` below.)
   const [mounted, setMounted] = useState(false);
+  // Deliberate mount-flag flip: the one-commit-later render is the whole point
+  // of the hydration guard described above (see error #418).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
   const isAdmin = mounted && !!session?.user;
 
@@ -89,6 +92,9 @@ export function useCommandPalette(
 
   useEffect(() => {
     if (!isAdmin) {
+      // Clear any cached drafts when the admin session goes away — this syncs
+      // client state to the (external) auth session, not a render-derived value.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDrafts([]);
       return;
     }
