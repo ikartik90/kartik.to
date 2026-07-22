@@ -28,11 +28,14 @@ export function useDismiss({
   enabled = true,
 }: UseDismissOptions): void {
   // Escape closes from anywhere. Capture + stopPropagation so it dismisses the
-  // popover rather than reaching an editor-level Escape handler first.
+  // popover rather than reaching an editor-level Escape handler first, and
+  // preventDefault so the browser doesn't also run its own Escape action —
+  // e.g. Safari leaving fullscreen when the menu is dismissed.
   useEffect(() => {
     if (!enabled) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        e.preventDefault();
         e.stopPropagation();
         onDismiss();
       }

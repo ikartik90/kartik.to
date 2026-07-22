@@ -54,6 +54,33 @@ describe("Dialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("closes on Escape and prevents the default (Safari fullscreen) action", () => {
+    const ref = createRef<HTMLDialogElement>();
+    const onClose = vi.fn();
+    render(
+      <Dialog ref={ref} onClose={onClose}>
+        <p>inner content</p>
+      </Dialog>,
+    );
+    ref.current?.showModal();
+    const dialog = ref.current!;
+    // fireEvent returns false when the event's default was prevented.
+    const notPrevented = fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(notPrevented).toBe(false);
+    expect(dialog.close).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not intercept non-Escape keys", () => {
+    const ref = createRef<HTMLDialogElement>();
+    render(<Dialog ref={ref}>content</Dialog>);
+    ref.current?.showModal();
+    const dialog = ref.current!;
+    const notPrevented = fireEvent.keyDown(dialog, { key: "a" });
+    expect(notPrevented).toBe(true);
+    expect(dialog.close).not.toHaveBeenCalled();
+  });
+
   it("calls close() and onClose when clicking the backdrop", () => {
     const ref = createRef<HTMLDialogElement>();
     const onClose = vi.fn();
