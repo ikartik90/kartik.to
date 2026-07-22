@@ -65,7 +65,7 @@ export function WritingSection({ articles }: WritingSectionProps) {
         {articles.map((article) => (
           <li key={article.id}>
             <a href={`/writing/${article.slug}`} className={rowLinkStyle}>
-              <Typography tag="span" type="paragraph">
+              <Typography tag="span" type="bodyLarge">
                 {article.title}
               </Typography>
               {article.publishedAt && (

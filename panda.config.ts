@@ -1,4 +1,4 @@
-import { defineConfig, defineRecipe } from "@pandacss/dev";
+import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 
 export default defineConfig({
   presets: [],
@@ -175,7 +175,7 @@ export default defineConfig({
           text: {
             default: {
               value: {
-                base: "{colors.neutral.500}",
+                base: "{colors.neutral.700}",
                 _dark: "{colors.neutral.200}",
               },
             },
@@ -185,7 +185,7 @@ export default defineConfig({
                 _dark: "{colors.neutral.100}",
               },
             },
-            paragraph: {
+            body: {
               value: {
                 base: "{colors.neutral.500}",
                 _dark: "{colors.neutral.400}",
@@ -205,13 +205,6 @@ export default defineConfig({
             },
             selection: {
               value: "{colors.neutral.900}",
-            },
-            // Command palette item labels — lighter than text.default in dark mode
-            commandItem: {
-              value: {
-                base: "{colors.neutral.500}",
-                _dark: "{colors.neutral.400}",
-              },
             },
           },
 
@@ -244,6 +237,70 @@ export default defineConfig({
               },
             },
           },
+
+          // Text-input family (TextInput, and the forthcoming Select/Date inputs
+          // that share the same frame). Resting greys are neutral.600 (light) /
+          // neutral.400 (dark); the `active` accent is the brand hue — pink in
+          // light, orange in dark, matching border.focusRing. bg/border are
+          // translucent mixes so the frame reads as a subtle fill (Figma 586:876).
+          field: {
+            bg: {
+              default: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                },
+              },
+              active: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
+                },
+              },
+            },
+            border: {
+              default: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-500) 50%, transparent)",
+                },
+              },
+              active: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-brand-pink) 25%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-brand-orange) 25%, transparent)",
+                },
+              },
+            },
+            text: {
+              // Resting value + leading icon.
+              default: {
+                value: {
+                  base: "{colors.neutral.600}",
+                  _dark: "{colors.neutral.400}",
+                },
+              },
+              // Resting label + hint (value @ 50%).
+              muted: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-600) 50%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-400) 50%, transparent)",
+                },
+              },
+              // Active label / value / leading icon accent.
+              active: {
+                value: {
+                  base: "{colors.brand.pink}",
+                  _dark: "{colors.brand.orange}",
+                },
+              },
+            },
+          },
         },
       },
 
@@ -263,7 +320,7 @@ export default defineConfig({
         articleLink: defineRecipe({
           className: "article-link",
           description:
-            "Hyperlink inside article prose. The underline is drawn as two stacked background bars, not text-decoration, so the hover state can be the brand gradient (text-decoration-color can't be a gradient): a neutral color-mix bar (text.paragraph @ 50%) with the brandedEmphasis gradient layered on top, hidden at rest and grown in on hover. box-decoration-break:clone repeats the bars on each line of a wrapped link.",
+            "Hyperlink inside article prose. The underline is drawn as two stacked background bars, not text-decoration, so the hover state can be the brand gradient (text-decoration-color can't be a gradient): a neutral color-mix bar (text.body @ 50%) with the brandedEmphasis gradient layered on top, hidden at rest and grown in on hover. box-decoration-break:clone repeats the bars on each line of a wrapped link.",
           base: {
             // No text-decoration at all — the underline is the background bars
             // below; textDecorationLine:none suppresses the browser's default
@@ -272,7 +329,7 @@ export default defineConfig({
             color: "text.default",
             paddingBottom: "xs",
             backgroundImage:
-              "token(colors.bg.brandedEmphasis), linear-gradient(color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent), color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent))",
+              "token(colors.bg.brandedEmphasis), linear-gradient(color-mix(in srgb, var(--colors-text-body) 50%, transparent), color-mix(in srgb, var(--colors-text-body) 50%, transparent))",
             backgroundRepeat: "no-repeat",
             // Anchored to the bottom of the padding box (2px below the line box)
             // so the gradient grows upward to exactly cover the neutral bar on
@@ -334,7 +391,7 @@ export default defineConfig({
             textDecorationLine: "underline",
             textDecorationStyle: "dotted",
             textDecorationColor:
-              "color-mix(in srgb, var(--colors-text-paragraph) 50%, transparent)",
+              "color-mix(in srgb, var(--colors-text-body) 50%, transparent)",
             textDecorationThickness: "token(spacing.xxs)",
             textUnderlineOffset: "token(spacing.xs)",
             cursor: "default",
@@ -745,8 +802,8 @@ export default defineConfig({
           },
           variants: {
             level: {
-              log: { color: "text.commandItem" },
-              info: { color: "text.commandItem" },
+              log: { color: "text.body" },
+              info: { color: "text.body" },
               warn: { color: "bg.brandedEmphasis" },
               error: { color: "bg.brandedEmphasis" },
             },
@@ -826,7 +883,7 @@ export default defineConfig({
             margin: "none",
             padding: "none",
             textStyle: "bodySmall",
-            color: "text.commandItem",
+            color: "text.body",
             fontWeight: "inherit",
             textWrap: "balance",
           },
@@ -997,7 +1054,7 @@ export default defineConfig({
             background: "none",
             cursor: "pointer",
             textStyle: "bodySmall",
-            color: "text.commandItem",
+            color: "text.body",
             textAlign: "left",
             "&[aria-selected='true']": {
               backgroundColor: "bg.itemHover",
@@ -1204,7 +1261,7 @@ export default defineConfig({
           base: {
             textStyle: "caption",
             fontStyle: "normal",
-            color: "text.paragraph/50",
+            color: "text.body/50",
             wordBreak: "break-word",
           },
         }),
@@ -1327,7 +1384,7 @@ export default defineConfig({
             flex: "1 1 auto",
             minWidth: 0,
             textStyle: "bodyLarge",
-            color: "text.paragraph",
+            color: "text.body",
             wordBreak: "break-word",
           },
         }),
@@ -1516,7 +1573,7 @@ export default defineConfig({
             height: "toolbarButton",
             borderRadius: "sm",
             cursor: "default",
-            color: "text.commandItem",
+            color: "text.body",
             transition: "background-color 150ms ease",
             _hover: { backgroundColor: "bg.itemHover" },
             "&[data-active='true']": { backgroundColor: "bg.itemHover" },
@@ -1556,7 +1613,7 @@ export default defineConfig({
             borderStyle: "solid",
             borderColor: "border.divider",
             backgroundColor: "bg.button.tertiary.hover",
-            color: "text.commandItem",
+            color: "text.body",
             textStyle: "caption",
             whiteSpace: "nowrap",
             opacity: 0,
@@ -1612,12 +1669,288 @@ export default defineConfig({
             borderRadius: "sm",
             cursor: "default",
             textStyle: "bodySmall",
-            color: "text.commandItem",
+            color: "text.body",
             // cmdk sets data-selected; slash-menu uses aria-selected on native buttons
             "&[data-selected='true'], &[aria-selected='true']": {
               backgroundColor: "bg.itemHover",
             },
           },
+        }),
+      },
+
+      slotRecipes: {
+        field: defineSlotRecipe({
+          className: "field",
+          description:
+            "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` control flips the same root into a control ∣ label/hint grid (the Switch archetype), detected via `:has` — no prop. Scope: default + active only.",
+          slots: ["root", "label", "frame", "leading", "control", "hint"],
+          base: {
+            root: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              width: "token(spacing.full)",
+              // A switch control flips the field from a vertical stack into the
+              // control ∣ label/hint grid — same field, a different archetype,
+              // detected structurally (no prop) the way the active state keys
+              // off :focus-visible. Text inputs never match, so they're unaffected.
+              "&:has([role='switch'])": {
+                display: "grid",
+                gridTemplateColumns: "auto 1fr",
+                alignItems: "center",
+                rowGap: "xs",
+                columnGap: "md",
+                width: "fit-content",
+              },
+            },
+            label: {
+              color: "field.text.muted",
+              width: "token(spacing.full)",
+              wordBreak: "break-word",
+              cursor: "default",
+              transition: "color 150ms ease",
+              // Active tracks the control's focus from the field root, so the
+              // label (a sibling above the frame) recolors even though it sits
+              // outside the shell.
+              "[data-field]:has([data-control]:focus-visible) &": {
+                color: "field.text.active",
+              },
+              // Switch archetype: the label sits to the right of the control and
+              // reads as regular text (not the muted field label), and clicking
+              // it toggles — so it takes the pointer cursor.
+              "[data-field]:has([role='switch']) &": {
+                gridColumn: 2,
+                gridRow: 1,
+                width: "auto",
+                color: "text.default",
+                cursor: "pointer",
+              },
+            },
+            frame: {
+              display: "flex",
+              alignItems: "center",
+              gap: "md",
+              width: "token(spacing.full)",
+              paddingInline: "md",
+              borderRadius: "sm",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              overflow: "hidden",
+              // Clicking the frame's dead padding focuses the control, so it
+              // should read as a text field.
+              cursor: "text",
+              backgroundColor: "field.bg.default",
+              borderColor: "field.border.default",
+              // Frame `color` is the single source for the leading icon and the
+              // control (both `color: inherit`); the active selector flips all
+              // three at once.
+              color: "field.text.default",
+              transition:
+                "background-color 150ms ease, border-color 150ms ease, color 150ms ease",
+              "[data-field]:has([data-control]:focus-visible) &": {
+                backgroundColor: "field.bg.active",
+                borderColor: "field.border.active",
+                color: "field.text.active",
+              },
+              // Keyboard focus draws the ring on the shell (as the command
+              // palette does for its input row) so it hugs the whole field,
+              // icon included, rather than the raw input. Inset so the frame's
+              // overflow:hidden can't clip it; width/colour match the app-wide
+              // keyboard ring in globals.css.
+              "html[data-keyboard-focus] [data-field]:has([data-control]:focus-visible) &":
+                {
+                  boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+                },
+            },
+            leading: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              width: "token(spacing.xxl)",
+              height: "token(spacing.xxl)",
+              color: "inherit",
+              transition: "color 150ms ease",
+              // Decorative — clicks fall through to the frame's focus-forward.
+              pointerEvents: "none",
+              "& svg": {
+                width: "token(spacing.full)",
+                height: "token(spacing.full)",
+                display: "block",
+              },
+              "& svg path[stroke]": { stroke: "currentColor" },
+              "& svg path[fill]": { fill: "currentColor" },
+            },
+            control: {
+              flex: "1 1 0",
+              minWidth: 0,
+              width: "token(spacing.full)",
+              margin: "none",
+              padding: "none",
+              border: "none",
+              background: "transparent",
+              appearance: "none",
+              color: "inherit",
+              transition: "color 150ms ease",
+              caretColor: "field.text.active",
+              "&::placeholder": { color: "field.text.muted" },
+              // The UA outline is already reset app-wide (globals.css). The
+              // app-wide keyboard ring, however, targets the raw <input>, which
+              // this frame's overflow:hidden clips into an awkward inner
+              // rectangle — suppress it so the frame can carry the ring instead.
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "none",
+              },
+            },
+            hint: {
+              color: "field.text.muted",
+              width: "token(spacing.full)",
+              wordBreak: "break-word",
+              marginTop: "sm",
+              // Switch archetype: the hint drops under the label (grid row 2),
+              // aligned to it rather than stacked with its own top margin.
+              "[data-field]:has([role='switch']) &": {
+                gridColumn: 2,
+                gridRow: 2,
+                width: "auto",
+                marginTop: "none",
+              },
+            },
+          },
+          // Size scales the field as a coordinated set — label, value, hint,
+          // and frame height move together in proportion, so you get a "small
+          // field" or a "large field" rather than a mismatched label over a
+          // normal input. `md` is the Figma default (586:876); `lg` steps each
+          // part up one text style and the frame up 8px so the value's taller
+          // line-height keeps the same 6px vertical inset. `sm` is the compact
+          // step used by the switch archetype (caption label + hint, tighter
+          // column gap); text inputs stay on md/lg.
+          variants: {
+            size: {
+              sm: {
+                label: { textStyle: "caption" },
+                hint: { textStyle: "caption" },
+                root: { "&:has([role='switch'])": { columnGap: "sm" } },
+              },
+              md: {
+                label: { textStyle: "bodySmall" },
+                control: { textStyle: "bodyLarge" },
+                hint: { textStyle: "sidenote" },
+                frame: { height: "token(spacing.4xl)" },
+              },
+              lg: {
+                label: { textStyle: "bodyLarge" },
+                control: { textStyle: "subheading" },
+                hint: { textStyle: "bodySmall" },
+                frame: {
+                  height: "calc(token(spacing.4xl) + token(spacing.md))",
+                },
+              },
+            },
+          },
+          defaultVariants: { size: "md" },
+          // FieldRoot calls field({ size }) with a runtime value, so the static
+          // extractor only sees the default (md) — force sm/lg to be generated
+          // too, else their label/hint/frame styles silently render nothing.
+          staticCss: [{ size: ["*"] }],
+        }),
+
+        // Named `switchField` (not `switch` — a reserved word breaks the
+        // generated `export const switch`). Just the toggle visual now: the
+        // track + thumb. The surrounding layout (control ∣ label/hint grid) and
+        // the label/hint typography come from the shared `field` recipe, which
+        // the Switch plugs into as its control — so this recipe owns only what
+        // is switch-specific. Track = `field.bg/border.*`, thumb =
+        // `field.text.*`, keyed off `aria-checked` (Figma 607:1166).
+        switchField: defineSlotRecipe({
+          className: "switch-field",
+          description:
+            "The track + thumb of a toggle switch — the control slot of a `field`. Off = neutral, on = brand accent (keyed off `aria-checked` on the <button role=switch>), reusing the field tokens the text input uses. `size` scales the track geometry and thumb travel (sm/lg); the label/hint and the control ∣ text layout come from the `field` recipe. Geometry derives from spacing tokens — track height = thumb + 2·inset, travel = width − 2·inset − thumb — so nothing is arbitrary.",
+          slots: ["control", "thumb"],
+          base: {
+            control: {
+              // Placed in the field grid the `field` recipe sets up when a
+              // switch is present: first column, aligned with the label row.
+              gridColumn: 1,
+              gridRow: 1,
+              position: "relative",
+              flexShrink: 0,
+              display: "inline-block",
+              padding: "none",
+              margin: "none",
+              appearance: "none",
+              cursor: "pointer",
+              // Pill: 12px ≥ half of either track height, so both sizes read
+              // fully rounded.
+              borderRadius: "lg",
+              backgroundColor: "field.bg.default",
+              // The 0.5px edge is an inset box-shadow, NOT a `border`: with
+              // box-sizing:border-box a real border is subtracted from the
+              // interior (24→23px), and the absolutely-positioned thumb is
+              // offset from the padding edge (inside the border), so top:4 lands
+              // 4.5px above / 3.5px below — visibly off-centre. A box-shadow
+              // takes no layout, so the interior stays the full 24px and the
+              // thumb's 4+16+4 insets centre it exactly on both axes.
+              boxShadow:
+                "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
+              transition: "background-color 150ms ease, box-shadow 150ms ease",
+              "&[aria-checked='true']": {
+                backgroundColor: "field.bg.active",
+                boxShadow:
+                  "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-active)",
+              },
+              _disabled: { cursor: "not-allowed", opacity: 0.5 },
+            },
+            thumb: {
+              position: "absolute",
+              borderRadius: "token(spacing.half)",
+              backgroundColor: "field.text.default",
+              transition:
+                "transform 150ms ease, background-color 150ms ease",
+              "[aria-checked='true'] &": {
+                backgroundColor: "field.text.active",
+              },
+            },
+          },
+          variants: {
+            size: {
+              lg: {
+                control: {
+                  width: "token(spacing.4xl)",
+                  height: "calc(token(spacing.xl) + 2 * token(spacing.sm))",
+                },
+                thumb: {
+                  width: "token(spacing.xl)",
+                  height: "token(spacing.xl)",
+                  top: "token(spacing.sm)",
+                  left: "token(spacing.sm)",
+                  "[aria-checked='true'] &": {
+                    transform: "translateX(token(spacing.xl))",
+                  },
+                },
+              },
+              sm: {
+                control: {
+                  width: "token(spacing.xxl)",
+                  height: "calc(token(spacing.md) + 2 * token(spacing.xs))",
+                },
+                thumb: {
+                  width: "token(spacing.md)",
+                  height: "token(spacing.md)",
+                  top: "token(spacing.xs)",
+                  left: "token(spacing.xs)",
+                  "[aria-checked='true'] &": {
+                    transform: "translateX(token(spacing.md))",
+                  },
+                },
+              },
+            },
+          },
+          defaultVariants: { size: "lg" },
+          // The Switch component calls switchField({ size }) with a runtime
+          // value, so the static extractor only sees the default (lg). Force
+          // both size variants to be generated.
+          staticCss: [{ size: ["*"] }],
         }),
       },
 

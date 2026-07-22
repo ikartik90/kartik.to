@@ -11,7 +11,7 @@ const sectionStyle = css({
 export function IntroSection() {
   return (
     <section className={sectionStyle}>
-      <Typography tag="p" type="paragraph">
+      <Typography tag="p" type="bodyLarge">
         Hi, I&apos;m Kartik, an AI-native designer building digital experiences for
         hypergrowth businesses. I invest care into the details that make
         software feel considered.

@@ -3,7 +3,8 @@ import { cva, cx } from "../../../styled-system/css";
 export type TypographyType =
   | "title"
   | "subheading"
-  | "paragraph"
+  | "bodyLarge"
+  | "bodySmall"
   | "quote"
   | "caption"
   | "sidenote";
@@ -41,9 +42,13 @@ export const typographyStyles = cva({
         textStyle: "subheading",
         textWrap: "balance",
       },
-      paragraph: {
+      bodyLarge: {
         textStyle: "bodyLarge",
-        color: "text.paragraph",
+        color: "text.body",
+      },
+      bodySmall: {
+        textStyle: "bodySmall",
+        color: "text.body",
       },
       quote: {
         textStyle: "quote",

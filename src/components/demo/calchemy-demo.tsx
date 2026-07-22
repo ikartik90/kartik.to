@@ -76,15 +76,15 @@ const calchemyFieldStyle = css({
   padding: 0,
   margin: 0,
   font: "inherit",
-  color: "text.commandItem",
-  caretColor: "text.commandItem",
+  color: "text.body",
+  caretColor: "text.body",
   textWrap: "pretty",
   _focusVisible: {
     boxShadow: "none",
     borderRadius: "unset",
   },
   "&::placeholder": {
-    color: "text.commandItem/25",
+    color: "text.body/25",
     opacity: 1,
   },
 });
@@ -176,7 +176,7 @@ const calchemyPeriodHeadingStyle = css({
   margin: 0,
   textAlign: "center",
   textStyle: "bodyLarge",
-  color: "text.commandItem",
+  color: "text.body",
 });
 
 // Root is [calchemy-days]; the weekday cells are rendered internally.
@@ -193,10 +193,10 @@ const calchemyWeekdaysStyle = css({
     height: calchemyCellSize,
     textStyle: "bodySmall",
     textAlign: "center",
-    color: "text.commandItem",
+    color: "text.body",
   },
   "& [calchemy-weekday][calchemy-weekend]": {
-    color: "text.commandItem/50",
+    color: "text.body/50",
   },
 });
 
@@ -223,12 +223,12 @@ const calchemyGridStyle = css({
     textStyle: "bodySmall",
     fontVariantNumeric: "tabular-nums",
     textAlign: "center",
-    color: "text.commandItem",
+    color: "text.body",
     borderRadius: "sm",
     cursor: "default",
   },
   "& [calchemy-date][calchemy-weekend]": {
-    color: "text.commandItem/50",
+    color: "text.body/50",
   },
   "& [calchemy-date][calchemy-selected]": {
     backgroundColor: "brand.pink/15",
@@ -273,7 +273,7 @@ const inputRowStyle = css({
   borderBottomStyle: "solid",
   borderColor: "border.divider",
   flexShrink: 0,
-  color: "text.commandItem",
+  color: "text.body",
   textStyle: "bodySmall",
   textWrap: "pretty",
 
@@ -301,7 +301,7 @@ const inputRowStyle = css({
   },
 
   "& [calchemy-completions]": {
-    color: "text.commandItem/25",
+    color: "text.body/25",
   },
 });
 

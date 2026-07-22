@@ -949,7 +949,7 @@ const editorCodeLanguageSelectStyle = css({
   right: "md",
   zIndex: 1,
   textStyle: "caption",
-  color: "text.commandItem",
+  color: "text.body",
   backgroundColor: "bg.surface",
   borderWidth: "token(spacing.3xs)",
   borderStyle: "solid",
@@ -2711,7 +2711,7 @@ function EditableBlock({
   return (
     <p
       ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
-      className={cx(editableBaseStyle, typographyStyles({ type: "paragraph" }))}
+      className={cx(editableBaseStyle, typographyStyles({ type: "bodyLarge" }))}
       contentEditable
       suppressContentEditableWarning
       onKeyDown={handleKeyDown}
