@@ -3,6 +3,7 @@
 import {
   forwardRef,
   type HTMLAttributes,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -146,12 +147,25 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
       onClick?.(e);
     }
 
+    // Own the Escape dismissal rather than leaving it to the browser's native
+    // <dialog> cancel. In Safari, an Escape that closes a modal dialog is also
+    // treated as an "exit fullscreen" request; preventDefault() suppresses that,
+    // and we close the dialog ourselves. Capture phase so no child (e.g. cmdk)
+    // can swallow the key first.
+    function handleKeyDownCapture(e: KeyboardEvent<HTMLDialogElement>) {
+      if (e.key === "Escape" && e.currentTarget.open) {
+        e.preventDefault();
+        e.currentTarget.close();
+      }
+    }
+
     return (
       <dialog
         ref={ref}
         className={cx(dialogRecipe({ align, justify }), className)}
         onClose={onClose}
         onClick={handleClick}
+        onKeyDownCapture={handleKeyDownCapture}
         {...rest}
       >
         {children}

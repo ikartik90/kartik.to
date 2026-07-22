@@ -36,6 +36,22 @@ describe("useDismiss", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("prevents the default Escape action (so Safari doesn't leave fullscreen)", () => {
+    const onDismiss = vi.fn();
+    render(<Harness onDismiss={onDismiss} />);
+    // fireEvent returns false when the dispatched event's default was prevented.
+    const notPrevented = fireEvent.keyDown(document, { key: "Escape" });
+    expect(notPrevented).toBe(false);
+  });
+
+  it("leaves other keys' default action intact", () => {
+    const onDismiss = vi.fn();
+    render(<Harness onDismiss={onDismiss} />);
+    const notPrevented = fireEvent.keyDown(document, { key: "a" });
+    expect(notPrevented).toBe(true);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it("dismisses on outside pointer-down but not inside", () => {
     const onDismiss = vi.fn();
     render(<Harness onDismiss={onDismiss} />);
