@@ -1438,9 +1438,9 @@ export default defineConfig({
         slashMenuPopover: defineRecipe({
           className: "slash-menu-popover",
           description:
-            "Slash menu — positioned with CSS anchor() against the active block's anchor-name.",
+            "Slash menu — positioned with CSS anchor() against the active block's anchor-name. Fixed (not absolute) so position-try-fallbacks measures overflow against the viewport — otherwise flip-block never fires (the containing block is taller than the viewport, so there's always 'room below').",
           base: {
-            position: "absolute",
+            position: "fixed",
             zIndex: 50,
             width: "200px",
             positionAnchor: "--slash-menu",

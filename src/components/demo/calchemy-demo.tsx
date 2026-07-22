@@ -45,6 +45,11 @@ const calchemyWideScrollCenterPadding = `calc((${calchemyWideScrollViewportWidth
 const calchemyNarrowScrollCenterPadding = `calc((${calchemyNarrowScrollViewportWidth} - ${calchemyNarrowVisiblePeriodSetWidth}) / 2)`;
 const calchemyCompactScrollCenterPadding = `calc((${calchemyCompactScrollViewportWidth} - ${calchemyCompactVisiblePeriodSetWidth}) / 2)`;
 
+// Calchemy renders an attribute-tagged subtree ([calchemy-*]); every element
+// that surfaces a `className` prop is styled directly via its own local `css()`
+// below. Only the elements the library renders internally (the field wrapper +
+// backdrop, and the weekday/week/date cells inside Weekdays and Grid) can't take
+// a class, so they stay as attribute selectors nested under their owning class.
 const calchemyDemoStyle = css({
   width: calchemyWideDemoWidth,
   maxWidth: "full",
@@ -54,6 +59,223 @@ const calchemyDemoStyle = css({
   backgroundColor: "bg.surface",
   borderRadius: "md",
   overflow: "hidden",
+  _demoFrameNarrow: { width: calchemyNarrowDemoWidth },
+  _demoFrameCompact: { width: calchemyCompactDemoWidth },
+});
+
+// Applied to CalchemyUI.Field, whose `className` lands on the inner <input>.
+const calchemyFieldStyle = css({
+  position: "relative",
+  zIndex: 1,
+  flex: "1 1 auto",
+  width: "full",
+  minWidth: 0,
+  border: "none",
+  focusVisibleRing: "none",
+  background: "transparent",
+  padding: 0,
+  margin: 0,
+  font: "inherit",
+  color: "text.commandItem",
+  caretColor: "text.commandItem",
+  textWrap: "pretty",
+  _focusVisible: {
+    boxShadow: "none",
+    borderRadius: "unset",
+  },
+  "&::placeholder": {
+    color: "text.commandItem/25",
+    opacity: 1,
+  },
+});
+
+const calchemyCandidatesStyle = css({
+  display: "none",
+});
+
+const calchemyCalendarStyle = css({
+  position: "relative",
+  display: "flex",
+  alignItems: "flex-start",
+  width: "full",
+  padding: "md",
+});
+
+const calchemyScrollStyle = css({
+  display: "flex",
+  alignItems: "flex-start",
+  width: calchemyWideScrollViewportWidth,
+  maxWidth: "full",
+  overflowX: "auto",
+  overflowY: "hidden",
+  scrollbarWidth: "none",
+  scrollSnapType: "x mandatory",
+  scrollPaddingInline: calchemyWideScrollCenterPadding,
+  "&::-webkit-scrollbar": {
+    display: "none",
+  },
+  _demoFrameNarrow: {
+    width: calchemyNarrowScrollViewportWidth,
+    scrollPaddingInline: calchemyNarrowScrollCenterPadding,
+  },
+  _demoFrameCompact: {
+    width: calchemyCompactScrollViewportWidth,
+    scrollPaddingInline: calchemyCompactScrollCenterPadding,
+  },
+});
+
+const calchemyPeriodListStyle = css({
+  display: "flex",
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  alignItems: "flex-start",
+  gap: "xl",
+  width: "max-content",
+  paddingInline: calchemyWideScrollCenterPadding,
+  _demoFrameNarrow: {
+    paddingInline: calchemyNarrowScrollCenterPadding,
+  },
+  _demoFrameCompact: {
+    paddingInline: calchemyCompactScrollCenterPadding,
+  },
+});
+
+const calchemyPeriodStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: "sm",
+  padding: "md",
+  flexShrink: 0,
+  [`&:nth-of-type(${CALCHEMY_WIDE_VISIBLE_PERIODS}n + 1)`]: {
+    scrollSnapAlign: "start",
+    scrollSnapStop: "always",
+  },
+  _demoFrameNarrow: {
+    [`&:nth-of-type(${CALCHEMY_WIDE_VISIBLE_PERIODS}n + 1)`]: {
+      scrollSnapAlign: "unset",
+      scrollSnapStop: "unset",
+    },
+    [`&:nth-of-type(${CALCHEMY_NARROW_VISIBLE_PERIODS}n + 1)`]: {
+      scrollSnapAlign: "start",
+      scrollSnapStop: "always",
+    },
+  },
+  _demoFrameCompact: {
+    [`&:nth-of-type(${CALCHEMY_NARROW_VISIBLE_PERIODS}n + 1)`]: {
+      scrollSnapAlign: "unset",
+      scrollSnapStop: "unset",
+    },
+    [`&:nth-of-type(${CALCHEMY_COMPACT_VISIBLE_PERIODS}n + 1)`]: {
+      scrollSnapAlign: "start",
+      scrollSnapStop: "always",
+    },
+  },
+});
+
+const calchemyPeriodHeadingStyle = css({
+  margin: 0,
+  textAlign: "center",
+  textStyle: "bodyLarge",
+  color: "text.commandItem",
+});
+
+// Root is [calchemy-days]; the weekday cells are rendered internally.
+const calchemyWeekdaysStyle = css({
+  display: "grid",
+  gridTemplateColumns: `repeat(7, ${calchemyCellSize})`,
+  gap: "sm",
+  justifyContent: "center",
+  "& [calchemy-weekday]": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: calchemyCellSize,
+    height: calchemyCellSize,
+    textStyle: "bodySmall",
+    textAlign: "center",
+    color: "text.commandItem",
+  },
+  "& [calchemy-weekday][calchemy-weekend]": {
+    color: "text.commandItem/50",
+  },
+});
+
+// Root is [calchemy-grid]; the week rows and day cells are rendered internally.
+const calchemyGridStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: "sm",
+  "& [calchemy-week]": {
+    display: "grid",
+    gridTemplateColumns: `repeat(7, ${calchemyCellSize})`,
+    gap: "sm",
+    justifyContent: "center",
+  },
+  "& [calchemy-date], & [calchemy-cell]": {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: calchemyCellSize,
+    height: calchemyCellSize,
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    textStyle: "bodySmall",
+    fontVariantNumeric: "tabular-nums",
+    textAlign: "center",
+    color: "text.commandItem",
+    borderRadius: "sm",
+    cursor: "default",
+  },
+  "& [calchemy-date][calchemy-weekend]": {
+    color: "text.commandItem/50",
+  },
+  "& [calchemy-date][calchemy-selected]": {
+    backgroundColor: "brand.pink/15",
+    color: "brand.pink",
+  },
+  "& [calchemy-date][calchemy-today]": {
+    color: "brand.pink",
+  },
+  _dark: {
+    "& [calchemy-date][calchemy-selected]": {
+      backgroundColor: "brand.orange/15",
+      color: "brand.orange",
+    },
+    "& [calchemy-date][calchemy-today]": {
+      color: "brand.orange",
+    },
+  },
+});
+
+const calchemyDemoLoadingStyle = css({
+  width: calchemyWideDemoWidth,
+  maxWidth: "full",
+  minHeight: "calc(token(spacing.4xl) + token(spacing.5xl) * 3)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "bg.surface",
+  borderRadius: "md",
+});
+
+// The demo owns this row div, so the field wrapper + backdrop layers (which
+// Calchemy renders internally around the input) are styled here via attribute
+// selectors; the input itself carries `calchemyFieldStyle` through Field.
+const inputRowStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+  width: "full",
+  height: "token(spacing.4xl)",
+  paddingInline: "lg",
+  borderBottomWidth: "token(spacing.3xs)",
+  borderBottomStyle: "solid",
+  borderColor: "border.divider",
+  flexShrink: 0,
+  color: "text.commandItem",
+  textStyle: "bodySmall",
+  textWrap: "pretty",
 
   "& [calchemy-field]": {
     position: "relative",
@@ -81,242 +303,6 @@ const calchemyDemoStyle = css({
   "& [calchemy-completions]": {
     color: "text.commandItem/25",
   },
-
-  "& [calchemy-field] input": {
-    position: "relative",
-    zIndex: 1,
-    flex: "1 1 auto",
-    width: "full",
-    minWidth: 0,
-    border: "none",
-    focusVisibleRing: "none",
-    background: "transparent",
-    padding: 0,
-    margin: 0,
-    font: "inherit",
-    color: "text.commandItem",
-    caretColor: "text.commandItem",
-    textWrap: "pretty",
-    _focusVisible: {
-      boxShadow: "none",
-      borderRadius: "unset",
-    },
-  },
-
-  "& [calchemy-field] input::placeholder": {
-    color: "text.commandItem/25",
-    opacity: 1,
-  },
-
-  "& [calchemy-candidates]": {
-    display: "none",
-  },
-
-  "& [calchemy-calendar]": {
-    position: "relative",
-    display: "flex",
-    alignItems: "flex-start",
-    width: "full",
-    padding: "md",
-  },
-
-  "& [calchemy-scroll]": {
-    display: "flex",
-    alignItems: "flex-start",
-    width: calchemyWideScrollViewportWidth,
-    maxWidth: "full",
-    overflowX: "auto",
-    overflowY: "hidden",
-    scrollbarWidth: "none",
-    scrollSnapType: "x mandatory",
-    scrollPaddingInline: calchemyWideScrollCenterPadding,
-  },
-
-  "& [calchemy-scroll]::-webkit-scrollbar": {
-    display: "none",
-  },
-
-  "& [calchemy-period-list]": {
-    display: "flex",
-    flexDirection: "row",
-    flexWrap: "nowrap",
-    alignItems: "flex-start",
-    gap: "xl",
-    width: "max-content",
-    paddingInline: calchemyWideScrollCenterPadding,
-  },
-
-  "& [calchemy-period]": {
-    display: "flex",
-    flexDirection: "column",
-    gap: "sm",
-    padding: "md",
-    flexShrink: 0,
-  },
-
-  [`& [calchemy-period]:nth-of-type(${CALCHEMY_WIDE_VISIBLE_PERIODS}n + 1)`]: {
-    scrollSnapAlign: "start",
-    scrollSnapStop: "always",
-  },
-
-  _demoFrameNarrow: {
-    width: calchemyNarrowDemoWidth,
-
-    [`& [calchemy-period]:nth-of-type(${CALCHEMY_WIDE_VISIBLE_PERIODS}n + 1)`]:
-      {
-        scrollSnapAlign: "unset",
-        scrollSnapStop: "unset",
-      },
-
-    [`& [calchemy-period]:nth-of-type(${CALCHEMY_NARROW_VISIBLE_PERIODS}n + 1)`]:
-      {
-        scrollSnapAlign: "start",
-        scrollSnapStop: "always",
-      },
-
-    "& [calchemy-scroll]": {
-      width: calchemyNarrowScrollViewportWidth,
-      scrollPaddingInline: calchemyNarrowScrollCenterPadding,
-    },
-
-    "& [calchemy-period-list]": {
-      paddingInline: calchemyNarrowScrollCenterPadding,
-    },
-  },
-
-  _demoFrameCompact: {
-    width: calchemyCompactDemoWidth,
-
-    [`& [calchemy-period]:nth-of-type(${CALCHEMY_NARROW_VISIBLE_PERIODS}n + 1)`]:
-      {
-        scrollSnapAlign: "unset",
-        scrollSnapStop: "unset",
-      },
-
-    [`& [calchemy-period]:nth-of-type(${CALCHEMY_COMPACT_VISIBLE_PERIODS}n + 1)`]:
-      {
-        scrollSnapAlign: "start",
-        scrollSnapStop: "always",
-      },
-
-    "& [calchemy-scroll]": {
-      width: calchemyCompactScrollViewportWidth,
-      scrollPaddingInline: calchemyCompactScrollCenterPadding,
-    },
-
-    "& [calchemy-period-list]": {
-      paddingInline: calchemyCompactScrollCenterPadding,
-    },
-  },
-
-  "& [calchemy-period-heading]": {
-    margin: 0,
-    textAlign: "center",
-    textStyle: "bodyLarge",
-    color: "text.commandItem",
-  },
-
-  "& [calchemy-days]": {
-    display: "grid",
-    gridTemplateColumns: `repeat(7, ${calchemyCellSize})`,
-    gap: "sm",
-    justifyContent: "center",
-  },
-
-  "& [calchemy-weekday]": {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: calchemyCellSize,
-    height: calchemyCellSize,
-    textStyle: "bodySmall",
-    textAlign: "center",
-    color: "text.commandItem",
-  },
-
-  "& [calchemy-weekday][calchemy-weekend]": {
-    color: "text.commandItem/50",
-  },
-
-  "& [calchemy-grid]": {
-    display: "flex",
-    flexDirection: "column",
-    gap: "sm",
-  },
-
-  "& [calchemy-week]": {
-    display: "grid",
-    gridTemplateColumns: `repeat(7, ${calchemyCellSize})`,
-    gap: "sm",
-    justifyContent: "center",
-  },
-
-  "& [calchemy-date], & [calchemy-cell]": {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: calchemyCellSize,
-    height: calchemyCellSize,
-    padding: 0,
-    border: "none",
-    background: "transparent",
-    textStyle: "bodySmall",
-    fontVariantNumeric: "tabular-nums",
-    textAlign: "center",
-    color: "text.commandItem",
-    borderRadius: "sm",
-    cursor: "default",
-  },
-
-  "& [calchemy-date][calchemy-weekend]": {
-    color: "text.commandItem/50",
-  },
-
-  "& [calchemy-date][calchemy-selected]": {
-    backgroundColor: "brand.pink/15",
-    color: "brand.pink",
-  },
-
-  "& [calchemy-date][calchemy-today]": {
-    color: "brand.pink",
-  },
-
-  _dark: {
-    "& [calchemy-date][calchemy-selected]": {
-      backgroundColor: "brand.orange/15",
-      color: "brand.orange",
-    },
-    "& [calchemy-date][calchemy-today]": {
-      color: "brand.orange",
-    },
-  },
-});
-
-const calchemyDemoLoadingStyle = css({
-  width: calchemyWideDemoWidth,
-  maxWidth: "full",
-  minHeight: "calc(token(spacing.4xl) + token(spacing.5xl) * 3)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "bg.surface",
-  borderRadius: "md",
-});
-
-const inputRowStyle = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "md",
-  width: "full",
-  height: "token(spacing.4xl)",
-  paddingInline: "lg",
-  borderBottomWidth: "token(spacing.3xs)",
-  borderBottomStyle: "solid",
-  borderColor: "border.divider",
-  flexShrink: 0,
-  color: "text.commandItem",
-  textStyle: "bodySmall",
-  textWrap: "pretty",
 });
 
 const iconStyle = menuIcon();
@@ -617,21 +603,33 @@ export function CalchemyDemo() {
       <div ref={demoRootRef} className={calchemyDemoStyle}>
         <div className={inputRowStyle} data-calchemy-input-row>
           <CalendarIcon className={iconStyle} aria-hidden />
-          <CalchemyUI.Field placeholder={placeholder} />
+          <CalchemyUI.Field
+            placeholder={placeholder}
+            className={calchemyFieldStyle}
+          />
         </div>
-        <CalchemyUI.Candidates />
+        <CalchemyUI.Candidates className={calchemyCandidatesStyle} />
         <CalchemyUI.Calendar
           key={visiblePeriods}
           period={{ months: visiblePeriods }}
+          className={calchemyCalendarStyle}
         >
           <CalchemyCalendarNavPrevious />
           <CalchemyCalendarNavNext />
-          <CalendarScroll direction="horizontal">
-            <CalchemyUI.CalendarPeriodList>
-              <CalchemyUI.CalendarPeriod>
-                <CalchemyUI.CalendarPeriodHeading />
-                <CalchemyUI.CalendarWeekdays weekdayFormat="narrow" />
-                <CalchemyUI.CalendarGrid showBookends={false} />
+          <CalendarScroll direction="horizontal" className={calchemyScrollStyle}>
+            <CalchemyUI.CalendarPeriodList className={calchemyPeriodListStyle}>
+              <CalchemyUI.CalendarPeriod className={calchemyPeriodStyle}>
+                <CalchemyUI.CalendarPeriodHeading
+                  className={calchemyPeriodHeadingStyle}
+                />
+                <CalchemyUI.CalendarWeekdays
+                  weekdayFormat="narrow"
+                  className={calchemyWeekdaysStyle}
+                />
+                <CalchemyUI.CalendarGrid
+                  showBookends={false}
+                  className={calchemyGridStyle}
+                />
               </CalchemyUI.CalendarPeriod>
             </CalchemyUI.CalendarPeriodList>
           </CalendarScroll>

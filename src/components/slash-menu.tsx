@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
-import { menuIcon, menuItem, slashMenuPopover } from "../../styled-system/recipes";
+import { menuIcon, slashMenuPopover } from "../../styled-system/recipes";
+import { Popover } from "@/components/menu/popover";
+import { Menu } from "@/components/menu/menu";
 import SubheadingIcon from "@/assets/icons/subheading.svg";
 import ParagraphIcon from "@/assets/icons/paragraph.svg";
 import MediaIcon from "@/assets/icons/media.svg";
@@ -13,23 +14,6 @@ import BorderIcon from "@/assets/icons/border.svg";
 import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 import BulletedListIcon from "@/assets/icons/bulleted-list.svg";
 import MetricIcon from "@/assets/icons/metric.svg";
-
-// ---------------------------------------------------------------------------
-// Module-level mouse position tracker — updated before any menu mounts so the
-// initial cursor position is always available synchronously on mount.
-// ---------------------------------------------------------------------------
-let _mouseX = -1;
-let _mouseY = -1;
-if (typeof document !== "undefined") {
-  document.addEventListener(
-    "mousemove",
-    (e) => {
-      _mouseX = e.clientX;
-      _mouseY = e.clientY;
-    },
-    { passive: true },
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -189,8 +173,6 @@ export function slashMenuHasResults(
 // Styles
 // ---------------------------------------------------------------------------
 
-const popoverStyle = slashMenuPopover();
-const itemStyle = menuItem();
 const iconStyle = menuIcon();
 
 const componentLabelStyle = css({
@@ -201,6 +183,17 @@ const componentLabelStyle = css({
 
 // ---------------------------------------------------------------------------
 // Component
+//
+// A thin domain wrapper over the shared Popover + Menu.Listbox primitives. The
+// wrapper owns slash-specific data (allowedTypes/excludeType filtering + the
+// injected Component item); the registry owns cursor/keyboard/hover. Filtering
+// is pre-applied here (non-matching options are absent from the DOM, not merely
+// hidden) and `query` is also handed to Menu.Listbox so the cursor re-homes to
+// the first result as the query changes.
+//
+// Element-anchored: the editor sets `data-slash-anchor` (→ `--slash-menu`) on
+// the active block, and the slashMenuPopover recipe positions against it — so
+// Popover renders no synthesized anchor and no inline geometry.
 // ---------------------------------------------------------------------------
 
 export function SlashMenu({
@@ -211,137 +204,45 @@ export function SlashMenu({
   onOpenComponentPicker,
   onDismiss,
 }: SlashMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
   const { entries } = getFilteredSlashMenu(query, allowedTypes, excludeType);
 
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const entriesRef = useRef(entries);
-  entriesRef.current = entries;
-  const activeIndexRef = useRef(activeIndex);
-  activeIndexRef.current = activeIndex;
-
-  const [prevQuery, setPrevQuery] = useState(query);
-  if (query !== prevQuery) {
-    setPrevQuery(query);
-    setActiveIndex(0);
-  }
-
-  useEffect(() => {
-    const menu = menuRef.current;
-    if (!menu) return;
-
-    const rafId = requestAnimationFrame(() => {
-      const el = document.elementFromPoint(_mouseX, _mouseY);
-      if (el && menu.contains(el)) {
-        const items = menu.querySelectorAll<HTMLElement>('[role="menuitem"]');
-        const idx = Array.from(items).findIndex(
-          (item) => item === el || item.contains(el),
-        );
-        if (idx !== -1) setActiveIndex(idx);
-      }
-    });
-
-    return () => cancelAnimationFrame(rafId);
-  }, []);
-
-  useEffect(() => {
-    function handlePointerDown(e: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onDismiss();
-      }
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [onDismiss]);
-
-  useEffect(() => {
-    function selectEntry(entry: SlashMenuEntry | undefined) {
-      if (!entry) return;
-      if (entry.kind === "component") {
-        onOpenComponentPicker();
-      } else {
-        onSelect(entry.type);
-      }
-    }
-
-    function handleKeyDown(e: KeyboardEvent) {
-      switch (e.key) {
-        case "Escape":
-          e.stopPropagation();
-          onDismiss();
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setActiveIndex(
-            (i) => (i + 1) % Math.max(entriesRef.current.length, 1),
-          );
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setActiveIndex(
-            (i) =>
-              (i - 1 + entriesRef.current.length) %
-              Math.max(entriesRef.current.length, 1),
-          );
-          break;
-        case "Enter":
-          e.preventDefault();
-          e.stopPropagation();
-          selectEntry(entriesRef.current[activeIndexRef.current]);
-          break;
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () =>
-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [onDismiss, onSelect, onOpenComponentPicker]);
-
   return (
-    <div
-      ref={menuRef}
-      className={popoverStyle}
-      role="menu"
-      aria-label="Insert block"
+    <Popover
+      className={slashMenuPopover()}
+      role="listbox"
+      ariaLabel="Insert block"
+      onDismiss={onDismiss}
     >
-      {entries.map((entry, idx) => {
-        if (entry.kind === "component") {
-          return (
-            <button
-              key="component"
-              type="button"
-              role="menuitem"
-              aria-selected={idx === activeIndex}
-              className={itemStyle}
-              onPointerEnter={() => setActiveIndex(idx)}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => onOpenComponentPicker()}
-            >
-              <entry.Icon className={iconStyle} aria-hidden />
-              <span className={componentLabelStyle}>{entry.label}</span>
-            </button>
-          );
-        }
+      <Menu.Listbox query={query} loop>
+        {entries.map((entry) => {
+          if (entry.kind === "component") {
+            return (
+              <Menu.Option
+                key="component"
+                id="component"
+                value={entry.label}
+                onSelect={onOpenComponentPicker}
+              >
+                <entry.Icon className={iconStyle} aria-hidden />
+                <span className={componentLabelStyle}>{entry.label}</span>
+              </Menu.Option>
+            );
+          }
 
-        const { type, label, Icon } = entry;
-        return (
-          <button
-            key={type}
-            role="menuitem"
-            aria-selected={idx === activeIndex}
-            className={itemStyle}
-            onPointerEnter={() => {
-              setActiveIndex(idx);
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => onSelect(type)}
-          >
-            <Icon className={iconStyle} aria-hidden />
-            {label}
-          </button>
-        );
-      })}
-    </div>
+          const { type, label, Icon } = entry;
+          return (
+            <Menu.Option
+              key={type}
+              id={type}
+              value={label}
+              onSelect={() => onSelect(type)}
+            >
+              <Icon className={iconStyle} aria-hidden />
+              {label}
+            </Menu.Option>
+          );
+        })}
+      </Menu.Listbox>
+    </Popover>
   );
 }

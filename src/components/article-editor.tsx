@@ -62,8 +62,8 @@ import {
   type ImageDialogMode,
 } from "@/components/image-insert-dialog";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
-import { NumberingPopover } from "@/components/numbering-popover";
-import { BulletPopover, type BulletStyle } from "@/components/bullet-popover";
+import { NumberToolbar } from "@/components/number-toolbar";
+import { BulletToolbar, type BulletStyle } from "@/components/bullet-toolbar";
 import {
   computeListNumbering,
   type ListMarkerStyle,
@@ -1310,9 +1310,13 @@ function EditableBlock({
   const showcaseMediaRef = useRef<HTMLElement | null>(null);
 
   // Stable combined ref: forwards to both contentRef and the parent's elRef
-  // callback without recreating on every render.
+  // callback without recreating on every render. elRef is mirrored into a ref,
+  // synced after commit (writing a ref during render is unsafe), so combinedRef
+  // can stay identity-stable while always calling the latest elRef.
   const elRefRef = useRef(elRef);
-  elRefRef.current = elRef;
+  useEffect(() => {
+    elRefRef.current = elRef;
+  }, [elRef]);
   const combinedRef = useCallback((el: HTMLElement | null) => {
     contentRef.current = el;
     elRefRef.current(el);
@@ -1918,7 +1922,7 @@ function EditableBlock({
           const replaced: InlineNode[] = nodes.flatMap((n) => {
             if (!n.marks || n.marks.length === 0) {
               const parts: InlineNode[] = [];
-              let remaining = n.text;
+              const remaining = n.text;
               let m: RegExpExecArray | null;
               const re = /`([^`]+)`/g;
               let lastIndex = 0;
@@ -2827,8 +2831,6 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     setTitle,
     document: doc,
     setDocument,
-    setDraftId,
-    setDirty,
     pushHistory,
   } = useEditorStore();
 
@@ -2881,6 +2883,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const s = useEditorStore.getState();
     s.pushHistory({ title: s.title, document: s.document });
     return () => useEditorStore.getState().reset();
+    // Intentionally keyed on identity (id), not the whole `initialPost` object:
+    // re-seeding on every new prop reference would wipe in-progress edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPost?.id, category]);
 
   // Autosave to localStorage (debounced) so an accidental refresh or tab close
@@ -3232,16 +3237,16 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   // the clicked marker's rect.
   const [numbering, setNumbering] = useState<{
     index: number;
-    rect: DOMRect;
+    rect: ToolbarRect;
   } | null>(null);
   // Bulleted-list marker popover (dot / check / cross), anchored the same way.
   const [bullet, setBullet] = useState<{
     index: number;
-    rect: DOMRect;
+    rect: ToolbarRect;
   } | null>(null);
   // Latest selection tracker — assigned every render so the once-registered
   // document listener always calls the current closure (needs live blocks).
-  const trackSelectionRef = useRef<() => void>(() => {});
+  const trackSelectionRef = useRef<(force?: boolean) => void>(() => {});
 
   // -------------------------------------------------------------------------
   // Focus helpers
@@ -3668,8 +3673,11 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   /** Open the numbering or bullet popover for the clicked list marker. */
   function handleMarkerClick(index: number, rect: DOMRect) {
     const b = blocks[index];
-    if (b?.type === "list_item") setNumbering({ index, rect });
-    else if (b?.type === "bullet_list_item") setBullet({ index, rect });
+    // <article>-relative so the popover anchor rides the scrolling article (see
+    // Popover / toArticleRect).
+    const rel = toArticleRect(rect, blockRefs.current[index]);
+    if (b?.type === "list_item") setNumbering({ index, rect: rel });
+    else if (b?.type === "bullet_list_item") setBullet({ index, rect: rel });
   }
 
   /** Enter at the end of a list item: append a fresh empty item of the same
@@ -4135,6 +4143,28 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     return null;
   }
 
+  // Viewport-space → <article>-relative. The toolbar's anchor is an absolute
+  // child of the `position: relative` <article>, so article-relative coordinates
+  // (which don't change as the page scrolls) let it ride the article content and
+  // the browser tracks / auto-hides the popover natively — no per-scroll JS.
+  function toArticleRect(
+    r: { left: number; top: number; width: number; height: number },
+    within: Node | null,
+  ): ToolbarRect {
+    const el = within?.nodeType === 1 ? (within as Element) : within?.parentElement;
+    const article = el?.closest("article") ?? null;
+    const base =
+      article && typeof article.getBoundingClientRect === "function"
+        ? article.getBoundingClientRect()
+        : { left: 0, top: 0 };
+    return {
+      left: r.left - base.left,
+      top: r.top - base.top,
+      width: r.width,
+      height: r.height,
+    };
+  }
+
   function rectFromRange(range: Range): ToolbarRect {
     // Anchor to the FIRST line's rect, not the whole-range bounding box. A run
     // that wraps across lines (common for sidenote annotations, rarer for links
@@ -4153,7 +4183,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       (typeof range.getBoundingClientRect === "function"
         ? range.getBoundingClientRect()
         : { left: 0, top: 0, width: 0, height: 0 });
-    return { left: r.left, top: r.top, width: r.width, height: r.height };
+    return toArticleRect(r, range.startContainer);
   }
 
   function domRangeForOffsets(
@@ -4170,9 +4200,15 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     return range;
   }
 
-  // Recomputes the toolbar from the live selection. Called on selectionchange,
-  // scroll and resize. Skipped while the slash menu or the link editor is open.
-  function trackSelection() {
+  // Recomputes the toolbar from the live selection. Called on selectionchange
+  // and resize (scroll needs no JS — the <article>-relative anchor rides the
+  // content and the browser tracks it). Skipped while the slash menu or the
+  // link editor is open.
+  // `forceRect` re-measures the anchor even when the selection is unchanged
+  // (resize/reflow); otherwise a same-selection update keeps the existing rect
+  // so toggling a mark — which fires selectionchange after rewriting the run —
+  // doesn't shift the toolbar as the glyphs change width.
+  function trackSelection(forceRect = false) {
     if (slashAnchor) {
       setToolbar(null);
       return;
@@ -4261,10 +4297,20 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           rangeHasMark(nodes, offsets.start, offsets.end, m),
         ),
       );
+      // Keep the anchor fixed for the lifetime of a selection: only re-measure
+      // when the selection itself moves (or a reflow forces it). A mark toggle
+      // leaves start/end untouched, so it reuses the original rect and the
+      // toolbar stays put instead of re-centering on the now-wider run.
+      const sameSelection =
+        !forceRect &&
+        toolbar?.mode === "format" &&
+        toolbar.index === index &&
+        toolbar.range.start === offsets.start &&
+        toolbar.range.end === offsets.end;
       setToolbar({
         mode: "format",
         index,
-        rect: rectFromRange(range),
+        rect: sameSelection ? toolbar.rect : rectFromRange(range),
         range: offsets,
         activeMarks,
       });
@@ -4272,7 +4318,6 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     }
     setToolbar(null);
   }
-  trackSelectionRef.current = trackSelection;
 
   // Toggle an inline mark over a character range within block `index`. Shared
   // by the selection toolbar and the ⌘B/⌘I/⌘U keyboard shortcuts.
@@ -4507,26 +4552,32 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   }
 
   // Register selection tracking once — the ref always holds the latest closure.
+  // No scroll listener: the toolbar's <article>-relative anchor rides the
+  // scrolling article and the browser tracks/auto-hides the popover natively
+  // (like the slash menu and sidenote cards), so re-measuring on scroll — which
+  // lagged a frame behind and made the toolbar flutter — is gone. Resize forces
+  // a re-measure since the text column can reflow under a stable selection.
   useEffect(() => {
-    function run() {
-      trackSelectionRef.current();
+    function onSelectionChange() {
+      trackSelectionRef.current(false);
     }
-    document.addEventListener("selectionchange", run);
-    window.addEventListener("scroll", run, true);
-    window.addEventListener("resize", run);
+    function onResize() {
+      trackSelectionRef.current(true);
+    }
+    document.addEventListener("selectionchange", onSelectionChange);
+    window.addEventListener("resize", onResize);
     return () => {
-      document.removeEventListener("selectionchange", run);
-      window.removeEventListener("scroll", run, true);
-      window.removeEventListener("resize", run);
+      document.removeEventListener("selectionchange", onSelectionChange);
+      window.removeEventListener("resize", onResize);
     };
   }, []);
 
   // ── Cross-block Delete / Backspace handler (assigned every render via ref) ──
   //
   // Handles Delete / Backspace when the selection spans multiple editing hosts.
-  // Assigned to crossBlockDeleteRef every render so the once-registered
-  // document listener always calls the latest closure (needs current blocks).
-  crossBlockDeleteRef.current = (e: KeyboardEvent) => {
+  // The once-registered document listener always calls the latest closure
+  // (needs current blocks) via crossBlockDeleteRef, synced after commit below.
+  function crossBlockDelete(e: KeyboardEvent) {
     // Resolve the block index (-1 = title) for any DOM node.
     function resolveBlockIdx(node: Node | null): number | null {
       if (!node) return null;
@@ -4702,7 +4753,15 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       cancelHistoryDebounce();
       pushHistoryNow();
     }
-  };
+  }
+
+  // Keep the latest closures reachable from the once-registered document
+  // listeners without re-subscribing. Synced after commit — writing refs
+  // during render is unsafe (react-hooks/refs).
+  useEffect(() => {
+    trackSelectionRef.current = trackSelection;
+    crossBlockDeleteRef.current = crossBlockDelete;
+  });
 
   // -------------------------------------------------------------------------
   // Render
@@ -4913,7 +4972,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       />
 
       {numbering && (
-        <NumberingPopover
+        <NumberToolbar
           rect={numbering.rect}
           marker={listNumbering[numbering.index]?.marker ?? "decimal"}
           continueActive={isContinueActive(numbering.index)}
@@ -4934,7 +4993,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       )}
 
       {bullet && (
-        <BulletPopover
+        <BulletToolbar
           rect={bullet.rect}
           style={bulletStyleOf(bullet.index)}
           onSelect={(style) => {

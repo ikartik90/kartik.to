@@ -2,16 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
-import {
-  menuIcon,
-  selectionPopoverDivider,
-  selectionPopoverItem,
-} from "../../styled-system/recipes";
-import {
-  SelectionPopover,
-  preserveSelection,
-  type SelectionPopoverRect,
-} from "@/components/selection-popover";
+import { menuIcon } from "../../styled-system/recipes";
+import { selectionPopover } from "../../styled-system/recipes";
+import { Popover, type PopoverRect } from "@/components/menu/popover";
+import { Menu } from "@/components/menu/menu";
 import type { Mark } from "@/domain/nodes";
 import LinkIcon from "@/assets/icons/link.svg";
 import BoldIcon from "@/assets/icons/bold.svg";
@@ -41,7 +35,7 @@ export type ToggleableMark = Exclude<Mark["type"], "link">;
 interface SelectionToolbarProps {
   mode: SelectionToolbarMode;
   /** Viewport-relative rect the toolbar anchors to. */
-  rect: SelectionPopoverRect;
+  rect: PopoverRect;
   /** Mark types the current selection fully carries — drives the active state. */
   activeMarks: ReadonlySet<Mark["type"]>;
   /** Existing link href — prefilled in link-edit, opened by goto in link-view. */
@@ -85,9 +79,10 @@ const FORMAT_GROUPS: FormatButton[][] = [
 // Styles
 // ---------------------------------------------------------------------------
 
-const itemStyle = selectionPopoverItem();
-const dividerStyle = selectionPopoverDivider();
 const iconStyle = menuIcon();
+const toolbarClass = selectionPopover();
+// Pairs with the selectionPopover recipe's `position-anchor`.
+const selectionAnchor = "--selection-popover";
 
 const linkRowStyle = css({
   display: "flex",
@@ -177,7 +172,14 @@ export function SelectionToolbar({
 
   if (mode === "link-edit") {
     return (
-      <SelectionPopover rect={rect} ariaLabel="Edit link" onDismiss={onDismiss}>
+      <Popover
+        rect={rect}
+        anchorName={selectionAnchor}
+        className={toolbarClass}
+        role="toolbar"
+        ariaLabel="Edit link"
+        onDismiss={onDismiss}
+      >
         <div className={linkRowStyle}>
           <LinkIcon className={iconStyle} aria-hidden />
           <input
@@ -202,127 +204,96 @@ export function SelectionToolbar({
             <span className={hotkeyLabelStyle}>to exit</span>
           </div>
         </div>
-      </SelectionPopover>
+      </Popover>
     );
   }
 
   if (mode === "link-view") {
     return (
-      <SelectionPopover
+      <Popover
         rect={rect}
+        anchorName={selectionAnchor}
+        className={toolbarClass}
+        role="toolbar"
         ariaLabel="Link actions"
         onDismiss={onDismiss}
       >
-        <button
-          type="button"
-          className={itemStyle}
-          aria-label="Edit link"
-          onMouseDown={preserveSelection}
-          onClick={onEditLink}
-        >
-          <EditIcon className={iconStyle} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={itemStyle}
-          aria-label="Open link"
-          onMouseDown={preserveSelection}
-          onClick={onGotoLink}
-        >
-          <GotoIcon className={iconStyle} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={itemStyle}
-          aria-label="Remove link"
-          onMouseDown={preserveSelection}
-          onClick={onRemoveLink}
-        >
-          <TrashIcon className={iconStyle} aria-hidden />
-        </button>
-      </SelectionPopover>
+        <Menu.Toolbar>
+          <Menu.Button ariaLabel="Edit link" onClick={onEditLink}>
+            <EditIcon className={iconStyle} aria-hidden />
+          </Menu.Button>
+          <Menu.Button ariaLabel="Open link" onClick={onGotoLink}>
+            <GotoIcon className={iconStyle} aria-hidden />
+          </Menu.Button>
+          <Menu.Button ariaLabel="Remove link" onClick={onRemoveLink}>
+            <TrashIcon className={iconStyle} aria-hidden />
+          </Menu.Button>
+        </Menu.Toolbar>
+      </Popover>
     );
   }
 
   if (mode === "sidenote-view") {
     return (
-      <SelectionPopover
+      <Popover
         rect={rect}
+        anchorName={selectionAnchor}
+        className={toolbarClass}
+        role="toolbar"
         ariaLabel="Sidenote actions"
         onDismiss={onDismiss}
       >
-        <button
-          type="button"
-          className={itemStyle}
-          aria-label="Edit sidenote"
-          onMouseDown={preserveSelection}
-          onClick={onEditSidenote}
-        >
-          <EditIcon className={iconStyle} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={itemStyle}
-          aria-label="Delete sidenote"
-          onMouseDown={preserveSelection}
-          onClick={onDeleteSidenote}
-        >
-          <TrashIcon className={iconStyle} aria-hidden />
-        </button>
-      </SelectionPopover>
+        <Menu.Toolbar>
+          <Menu.Button ariaLabel="Edit sidenote" onClick={onEditSidenote}>
+            <EditIcon className={iconStyle} aria-hidden />
+          </Menu.Button>
+          <Menu.Button ariaLabel="Delete sidenote" onClick={onDeleteSidenote}>
+            <TrashIcon className={iconStyle} aria-hidden />
+          </Menu.Button>
+        </Menu.Toolbar>
+      </Popover>
     );
   }
 
   return (
-    <SelectionPopover
+    <Popover
       rect={rect}
+      anchorName={selectionAnchor}
+      className={toolbarClass}
+      role="toolbar"
       ariaLabel="Format selection"
       onDismiss={onDismiss}
     >
-      <button
-        type="button"
-        className={itemStyle}
-        aria-label="Add link"
-        aria-pressed={activeMarks.has("link")}
-        data-active={activeMarks.has("link") ? "true" : undefined}
-        onMouseDown={preserveSelection}
-        onClick={onStartLink}
-      >
-        <LinkIcon className={iconStyle} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className={itemStyle}
-        aria-label="Add sidenote"
-        aria-pressed={activeMarks.has("sidenote")}
-        data-active={activeMarks.has("sidenote") ? "true" : undefined}
-        onMouseDown={preserveSelection}
-        onClick={onAddSidenote}
-      >
-        <SidenoteIcon className={iconStyle} aria-hidden />
-      </button>
-      {FORMAT_GROUPS.map((group, groupIdx) => (
-        <div key={groupIdx} className={css({ display: "contents" })}>
-          <span className={dividerStyle} aria-hidden />
-          {group.map(({ mark, label, Icon }) => {
-            const active = activeMarks.has(mark);
-            return (
-              <button
+      <Menu.Toolbar>
+        <Menu.Button
+          ariaLabel="Add link"
+          pressed={activeMarks.has("link")}
+          onClick={onStartLink}
+        >
+          <LinkIcon className={iconStyle} aria-hidden />
+        </Menu.Button>
+        <Menu.Button
+          ariaLabel="Add sidenote"
+          pressed={activeMarks.has("sidenote")}
+          onClick={onAddSidenote}
+        >
+          <SidenoteIcon className={iconStyle} aria-hidden />
+        </Menu.Button>
+        {FORMAT_GROUPS.map((group, groupIdx) => (
+          <Menu.Group key={groupIdx}>
+            {group.map(({ mark, label, Icon }) => (
+              <Menu.Button
                 key={mark}
-                type="button"
-                className={itemStyle}
-                aria-label={label}
-                aria-pressed={active}
-                data-active={active ? "true" : undefined}
-                onMouseDown={preserveSelection}
+                ariaLabel={label}
+                pressed={activeMarks.has(mark)}
                 onClick={() => onToggleMark(mark)}
               >
                 <Icon className={iconStyle} aria-hidden />
-              </button>
-            );
-          })}
-        </div>
-      ))}
-    </SelectionPopover>
+              </Menu.Button>
+            ))}
+          </Menu.Group>
+        ))}
+      </Menu.Toolbar>
+    </Popover>
   );
 }

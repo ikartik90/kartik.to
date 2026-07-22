@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  menuIcon,
-  selectionPopoverDivider,
-  selectionPopoverItem,
-} from "../../styled-system/recipes";
-import {
-  SelectionPopover,
-  preserveSelection,
-  type SelectionPopoverRect,
-} from "@/components/selection-popover";
+import { menuIcon, selectionPopover } from "../../styled-system/recipes";
+import { Popover, type PopoverRect } from "@/components/menu/popover";
+import { Menu } from "@/components/menu/menu";
 import type { ListMarkerStyle } from "@/utils/list-numbering";
 import ContinueNumberingIcon from "@/assets/icons/continue-numbering.svg";
 import ResetNumberingIcon from "@/assets/icons/reset-numbering.svg";
@@ -20,9 +13,9 @@ import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 // Props
 // ---------------------------------------------------------------------------
 
-interface NumberingPopoverProps {
+interface NumberToolbarProps {
   /** Viewport-relative rect of the clicked ordinal marker. */
-  rect: SelectionPopoverRect;
+  rect: PopoverRect;
   /** Current run style — decides whether the swap button offers a→z or 1→n. */
   marker: ListMarkerStyle;
   /** Whether "continue numbering" is currently on for this run. */
@@ -37,15 +30,16 @@ interface NumberingPopoverProps {
 // Styles
 // ---------------------------------------------------------------------------
 
-const itemStyle = selectionPopoverItem();
-const dividerStyle = selectionPopoverDivider();
 const iconStyle = menuIcon();
+const toolbarClass = selectionPopover({ align: "start" });
+// Pairs with the selectionPopover recipe's `position-anchor`.
+const selectionAnchor = "--selection-popover";
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function NumberingPopover({
+export function NumberToolbar({
   rect,
   marker,
   continueActive,
@@ -53,7 +47,7 @@ export function NumberingPopover({
   onReset,
   onSwapStyle,
   onDismiss,
-}: NumberingPopoverProps) {
+}: NumberToolbarProps) {
   const isAlpha = marker === "alpha";
   const SwapIcon = isAlpha ? NumberedListIcon : AlphabetedListIcon;
   const swapLabel = isAlpha
@@ -61,43 +55,35 @@ export function NumberingPopover({
     : "Switch to lettered list";
 
   return (
-    <SelectionPopover
+    <Popover
       rect={rect}
-      align="start"
+      anchorName={selectionAnchor}
+      className={toolbarClass}
+      role="toolbar"
       ariaLabel="List numbering options"
       dismissOnReflow
       onDismiss={onDismiss}
     >
-      <button
-        type="button"
-        className={itemStyle}
-        aria-label="Continue numbering from previous list"
-        aria-pressed={continueActive}
-        data-active={continueActive ? "true" : undefined}
-        onMouseDown={preserveSelection}
-        onClick={onContinue}
-      >
-        <ContinueNumberingIcon className={iconStyle} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className={itemStyle}
-        aria-label="Reset numbering at this item"
-        onMouseDown={preserveSelection}
-        onClick={onReset}
-      >
-        <ResetNumberingIcon className={iconStyle} aria-hidden />
-      </button>
-      <span className={dividerStyle} aria-hidden />
-      <button
-        type="button"
-        className={itemStyle}
-        aria-label={swapLabel}
-        onMouseDown={preserveSelection}
-        onClick={onSwapStyle}
-      >
-        <SwapIcon className={iconStyle} aria-hidden />
-      </button>
-    </SelectionPopover>
+      <Menu.Toolbar>
+        <Menu.Button
+          ariaLabel="Continue numbering from previous list"
+          pressed={continueActive}
+          onClick={onContinue}
+        >
+          <ContinueNumberingIcon className={iconStyle} aria-hidden />
+        </Menu.Button>
+        <Menu.Button
+          ariaLabel="Reset numbering at this item"
+          onClick={onReset}
+        >
+          <ResetNumberingIcon className={iconStyle} aria-hidden />
+        </Menu.Button>
+        <Menu.Group>
+          <Menu.Button ariaLabel={swapLabel} onClick={onSwapStyle}>
+            <SwapIcon className={iconStyle} aria-hidden />
+          </Menu.Button>
+        </Menu.Group>
+      </Menu.Toolbar>
+    </Popover>
   );
 }
