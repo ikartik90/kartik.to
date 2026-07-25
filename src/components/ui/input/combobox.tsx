@@ -156,7 +156,7 @@ function ComboboxRoot({
             tone="onBrand"
           >
             <Field.Search autoFocus placeholder={searchPlaceholder} />
-            <OptionList.Options>{children}</OptionList.Options>
+            <OptionList.Listbox>{children}</OptionList.Listbox>
           </OptionList>
         </Popover>
       )}

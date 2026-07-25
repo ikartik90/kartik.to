@@ -1,8 +1,8 @@
 "use client";
 
-import { menuIcon, selectionPopover } from "../../styled-system/recipes";
+import { selectionPopover } from "../../styled-system/recipes";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
-import { Menu } from "@/components/menu/menu";
+import { OptionList } from "@/components/ui/input/option-list";
 import type { ListMarkerStyle } from "@/utils/list-numbering";
 import ContinueNumberingIcon from "@/assets/icons/continue-numbering.svg";
 import ResetNumberingIcon from "@/assets/icons/reset-numbering.svg";
@@ -30,7 +30,6 @@ interface NumberToolbarProps {
 // Styles
 // ---------------------------------------------------------------------------
 
-const iconStyle = menuIcon();
 const toolbarClass = selectionPopover({ align: "start" });
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
@@ -59,31 +58,30 @@ export function NumberToolbar({
       rect={rect}
       anchorName={selectionAnchor}
       className={toolbarClass}
-      role="toolbar"
-      ariaLabel="List numbering options"
       dismissOnReflow
       onDismiss={onDismiss}
     >
-      <Menu.Toolbar>
-        <Menu.Button
-          ariaLabel="Continue numbering from previous list"
-          pressed={continueActive}
-          onClick={onContinue}
-        >
-          <ContinueNumberingIcon className={iconStyle} aria-hidden />
-        </Menu.Button>
-        <Menu.Button
-          ariaLabel="Reset numbering at this item"
-          onClick={onReset}
-        >
-          <ResetNumberingIcon className={iconStyle} aria-hidden />
-        </Menu.Button>
-        <Menu.Group>
-          <Menu.Button ariaLabel={swapLabel} onClick={onSwapStyle}>
-            <SwapIcon className={iconStyle} aria-hidden />
-          </Menu.Button>
-        </Menu.Group>
-      </Menu.Toolbar>
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label="List numbering options">
+          <OptionList.Option
+            aria-label="Continue numbering from previous list"
+            pressed={continueActive}
+            onClick={onContinue}
+          >
+            <ContinueNumberingIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Option
+            aria-label="Reset numbering at this item"
+            onClick={onReset}
+          >
+            <ResetNumberingIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Divider />
+          <OptionList.Option aria-label={swapLabel} onClick={onSwapStyle}>
+            <SwapIcon aria-hidden />
+          </OptionList.Option>
+        </OptionList.Toolbar>
+      </OptionList>
     </Popover>
   );
 }

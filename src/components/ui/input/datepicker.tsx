@@ -150,14 +150,15 @@ export function DatePicker({
             weekStartsOn={weekStartsOn}
             today={today}
             tone="onBrand"
+            // Parser derived from the same `format` that drives the trigger's
+            // display — one pattern, both directions. It lives on the Calendar
+            // (which interprets the query), not the dumb search box.
+            queryParser={parseDate}
           >
             <Field.Search
               autoFocus
               defaultValue={display}
               placeholder="Type a date…"
-              // Explicit parser, derived from the same `format` that drives the
-              // trigger's display — one pattern, both directions.
-              queryParser={parseDate}
             />
             <Calendar.Period>
               <Field.Action>

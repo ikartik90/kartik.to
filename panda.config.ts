@@ -1582,9 +1582,9 @@ export default defineConfig({
             display: "flex",
             flexDirection: "column",
             overflow: "visible",
-            paddingBlock: "md",
-            paddingInline: "sm",
-            gap: "xs",
+            // No internal padding — the OptionList.Listbox's own 4px inset is the
+            // only gap between the panel edge and the rows (its root collapses via
+            // the `plain` tone, so the listbox sits directly in this popover).
             boxShadow:
               "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
           },
@@ -1681,38 +1681,6 @@ export default defineConfig({
             },
           },
           defaultVariants: { align: "center" },
-        }),
-
-        selectionPopoverItem: defineRecipe({
-          className: "selection-popover-item",
-          description:
-            "Icon button inside a selection popover — 28px square, active/hover tint (Figma 422:834).",
-          base: {
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            width: "toolbarButton",
-            height: "toolbarButton",
-            borderRadius: "sm",
-            cursor: "default",
-            color: "text.body",
-            transition: "background-color 150ms ease",
-            _hover: { backgroundColor: "bg.itemHover" },
-            "&[data-active='true']": { backgroundColor: "bg.itemHover" },
-          },
-        }),
-
-        selectionPopoverDivider: defineRecipe({
-          className: "selection-popover-divider",
-          description: "Vertical divider between selection popover groups.",
-          base: {
-            flexShrink: 0,
-            // `width` resolves against `sizes`; use token(spacing) for the scale.
-            width: "token(spacing.xxs)",
-            height: "toolbarButton",
-            backgroundColor: "border.divider",
-          },
         }),
 
         socialTooltip: defineRecipe({
@@ -2306,7 +2274,7 @@ export default defineConfig({
           className: "option-list",
           description:
             "Option list: an optional search/filter row above a scrollable listbox of option buttons on a 28px row pitch. Options carry their state as attributes (aria-selected / data-active / :disabled), so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand selected chip; `onBrand` drops into the Combobox popover (which owns the surface) and inverts — options brand, selected chip neutral.",
-          slots: ["root", "search", "list", "option", "empty"],
+          slots: ["root", "search", "list", "option", "empty", "divider"],
           base: {
             root: {
               display: "flex",
@@ -2358,8 +2326,10 @@ export default defineConfig({
               gap: "md",
               width: "token(spacing.full)",
               flexShrink: 0,
-              height: "token(sizes.optionRow)",
-              // Uniform 4px inset (Figma 647:2387 — `p-[4px]`).
+              // Hug the content — the 4px inset alone defines the row/chip box
+              // (Figma 647:2387 `p-[4px]`); no fixed height, so an icon-only
+              // toolbar chip is 20px + 8px = 28px and a text row is its line-box
+              // + 8px, rather than everything forced to a 32px track.
               padding: "sm",
               borderRadius: "sm",
               border: "none",
@@ -2394,9 +2364,12 @@ export default defineConfig({
               // BOTH `data-active` and `aria-selected` — without the guard the
               // neutral hover tint would win over the brand selected chip (equal
               // specificity → atomic-CSS order decides), leaving selection grey.
-              "&:hover:not([aria-selected='true']), &[data-active]:not([aria-selected='true'])":
+              "&:hover:not([aria-selected='true']):not([aria-pressed='true']), &[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
                 { backgroundColor: "field.bg.hover" },
-              "&[aria-selected='true']": {
+              // The single "on" state — a listbox's selected row and a toolbar's
+              // pressed toggle share the brand chip (full-converge: one item skin
+              // whether the row is picked or the toggle is on).
+              "&[aria-selected='true'], &[aria-pressed='true']": {
                 backgroundColor: "field.bg.active",
                 color: "field.text.active",
               },
@@ -2418,6 +2391,14 @@ export default defineConfig({
               textStyle: "bodySmall",
               color: "field.text.muted",
               userSelect: "none",
+            },
+            // Separates option groups (Menu.Group's old divider). Block = a
+            // horizontal hairline; the inline variant flips it vertical.
+            divider: {
+              flexShrink: 0,
+              backgroundColor: "border.divider",
+              width: "token(spacing.full)",
+              height: "token(spacing.xxs)",
             },
           },
           variants: {
@@ -2446,10 +2427,10 @@ export default defineConfig({
                   // Same selected-row guard as the base tone (see there): keep the
                   // neutral selected chip from being overridden by the brand hover
                   // tint on the row that is both highlighted and selected.
-                  "&:hover:not([aria-selected='true']), &[data-active]:not([aria-selected='true'])":
+                  "&:hover:not([aria-selected='true']):not([aria-pressed='true']), &[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
                     { backgroundColor: "field.bg.hoverBrand" },
-                  // Selected = neutral chip against the brand surface.
-                  "&[aria-selected='true']": {
+                  // On (selected or pressed) = neutral chip against the brand surface.
+                  "&[aria-selected='true'], &[aria-pressed='true']": {
                     backgroundColor: "field.bg.selected",
                     color: "field.text.default",
                   },
@@ -2461,11 +2442,45 @@ export default defineConfig({
                 },
                 empty: { color: "field.text.activeMuted" },
               },
+              plain: {
+                // For a menu whose Popover already owns the surface (the slash
+                // menu). The neutral sibling of onBrand — but here the root also
+                // COLLAPSES (display:contents), so the listbox sits directly in the
+                // popover with no wrapper div and no inset of its own; the list's
+                // 4px padding is the only gap. Keeps the default option palette.
+                root: { display: "contents" },
+              },
+            },
+            direction: {
+              // Block (default) is the vertical list already encoded in the base.
+              block: {},
+              // Inline is a row — toolbars and horizontal single-selects. The
+              // root collapses (display:contents) so the options sit directly in
+              // the consumer's frame (e.g. selectionPopover), which owns the pill
+              // surface; the option becomes a content-width chip.
+              inline: {
+                root: { display: "contents" },
+                list: {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: "xs",
+                  maxHeight: "none",
+                  overflow: "visible",
+                  width: "max-content",
+                  padding: "none",
+                },
+                option: { width: "auto" },
+                divider: {
+                  width: "token(spacing.xxs)",
+                  height: "auto",
+                  alignSelf: "stretch",
+                },
+              },
             },
           },
-          defaultVariants: { tone: "default" },
-          // OptionListRoot calls optionList({ tone }) with a runtime value.
-          staticCss: [{ tone: ["*"] }],
+          defaultVariants: { tone: "default", direction: "block" },
+          // OptionListRoot calls optionList({ tone, direction }) at runtime.
+          staticCss: [{ tone: ["*"], direction: ["*"] }],
         }),
       },
 

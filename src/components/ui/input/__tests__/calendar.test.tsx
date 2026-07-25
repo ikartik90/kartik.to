@@ -7,9 +7,9 @@ import { parseCalendarDate } from "@/utils/calendar-date";
 
 const TODAY = Temporal.PlainDate.from("2026-12-11");
 
-// Date navigation now needs an explicit parser on the Field.Search (a bare one
-// is a dumb string search). The tree wires DD/MM/YYYY by default; pass `null` to
-// exercise the parser-less (dumb) case, or a different parser to vary the format.
+// Date navigation now needs an explicit parser on the Calendar (a bare
+// Field.Search just emits raw strings). The tree wires DD/MM/YYYY by default;
+// pass `null` for the parser-less (dumb) case, or a different parser to vary it.
 function calendarTree(
   props: Partial<React.ComponentProps<typeof Calendar>> = {},
   queryParser:
@@ -17,11 +17,8 @@ function calendarTree(
     | null = parseCalendarDate("DD/MM/YYYY"),
 ) {
   return (
-    <Calendar today={TODAY} {...props}>
-      <Field.Search
-        placeholder="Type a date…"
-        queryParser={queryParser ?? undefined}
-      />
+    <Calendar today={TODAY} queryParser={queryParser ?? undefined} {...props}>
+      <Field.Search placeholder="Type a date…" />
       <Calendar.Period>
         <Field.Action>‹</Field.Action>
         <Calendar.Heading />
@@ -237,7 +234,7 @@ describe("search", () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
-  it("reads the typed date with the Field.Search's own parser", () => {
+  it("reads the typed date with the Calendar's parser", () => {
     const onValueChange = vi.fn();
     renderCalendar({ onValueChange }, parseCalendarDate("MM/DD/YYYY"));
     type("05/01/2027");
@@ -259,9 +256,8 @@ describe("search", () => {
     const onKeyDown = vi.fn();
     render(
       <Field>
-        <Calendar today={TODAY}>
+        <Calendar today={TODAY} queryParser={parseCalendarDate("DD/MM/YYYY")}>
           <Field.Search
-            queryParser={parseCalendarDate("DD/MM/YYYY")}
             onValueChange={onValueChange}
             onKeyDown={onKeyDown}
           />
@@ -347,13 +343,17 @@ describe("search preview", () => {
 
 describe("custom queryParser", () => {
   // A fully bespoke parser (not a format pattern) proves the hook is generic —
-  // and that a queryParser on the Field.Search wins over the calendar's format.
+  // any string → date function works, and it lives on the Calendar, not the box.
   function renderWithParser(queryParser: (q: string) => Temporal.PlainDate | null) {
     const onValueChange = vi.fn();
     render(
       <Field>
-        <Calendar today={TODAY} onValueChange={onValueChange}>
-          <Field.Search queryParser={queryParser} />
+        <Calendar
+          today={TODAY}
+          onValueChange={onValueChange}
+          queryParser={queryParser}
+        >
+          <Field.Search />
           <Calendar.Period>
             <Field.Action>‹</Field.Action>
             <Calendar.Heading />

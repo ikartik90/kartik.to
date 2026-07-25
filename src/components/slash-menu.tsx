@@ -1,8 +1,8 @@
 "use client";
 
-import { menuIcon, slashMenuPopover } from "../../styled-system/recipes";
+import { slashMenuPopover } from "../../styled-system/recipes";
 import { Popover } from "@/components/ui/popover";
-import { Menu } from "@/components/menu/menu";
+import { OptionList } from "@/components/ui/input/option-list";
 import SubheadingIcon from "@/assets/icons/subheading.svg";
 import ParagraphIcon from "@/assets/icons/paragraph.svg";
 import MediaIcon from "@/assets/icons/media.svg";
@@ -100,24 +100,20 @@ export function slashMenuHasResults(
 }
 
 // ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-const iconStyle = menuIcon();
-
-// ---------------------------------------------------------------------------
 // Component
 //
-// A thin domain wrapper over the shared Popover + Menu.Listbox primitives. The
+// A thin domain wrapper over the shared Popover + OptionList primitives. The
 // wrapper owns slash-specific data (allowedTypes/excludeType filtering); the
-// registry owns cursor/keyboard/hover. Filtering is pre-applied here
-// (non-matching options are absent from the DOM, not merely hidden) and `query`
-// is also handed to Menu.Listbox so the cursor re-homes to the first result as
-// the query changes.
+// OptionList owns cursor/keyboard/hover. Filtering is pre-applied here
+// (non-matching options are absent from the DOM, not merely hidden), so the
+// authored children ARE the filtered set and the highlight re-homes to the first
+// survivor when the active one drops out.
 //
-// Element-anchored: the editor sets `data-slash-anchor` (→ `--slash-menu`) on
-// the active block, and the slashMenuPopover recipe positions against it — so
-// Popover renders no synthesized anchor and no inline geometry.
+// `externalKeys` keeps focus in the editor: ArrowUp/Down/Enter are captured at
+// the document to drive the highlight and commit, and the option under the
+// pointer is preselected on open. `tone="plain"` because the slashMenuPopover
+// owns the surface. Element-anchored: the editor sets `data-slash-anchor`
+// (→ `--slash-menu`) and the recipe positions against it.
 // ---------------------------------------------------------------------------
 
 export function SlashMenu({
@@ -130,25 +126,20 @@ export function SlashMenu({
   const entries = getFilteredSlashMenu(query, allowedTypes, excludeType);
 
   return (
-    <Popover
-      className={slashMenuPopover()}
-      role="listbox"
-      ariaLabel="Insert block"
-      onDismiss={onDismiss}
-    >
-      <Menu.Listbox query={query} loop>
-        {entries.map(({ type, label, Icon }) => (
-          <Menu.Option
-            key={type}
-            id={type}
-            value={label}
-            onSelect={() => onSelect(type)}
-          >
-            <Icon className={iconStyle} aria-hidden />
-            {label}
-          </Menu.Option>
-        ))}
-      </Menu.Listbox>
+    <Popover className={slashMenuPopover()} onDismiss={onDismiss}>
+      <OptionList
+        tone="plain"
+        onValueChange={(type) => onSelect(type as SlashMenuBlockType)}
+      >
+        <OptionList.Listbox externalKeys loop aria-label="Insert block">
+          {entries.map(({ type, label, Icon }) => (
+            <OptionList.Option key={type} value={type}>
+              <Icon aria-hidden />
+              {label}
+            </OptionList.Option>
+          ))}
+        </OptionList.Listbox>
+      </OptionList>
     </Popover>
   );
 }

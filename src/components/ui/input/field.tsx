@@ -9,13 +9,10 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
-  type ForwardedRef,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type LabelHTMLAttributes,
-  type ReactElement,
   type ReactNode,
-  type Ref,
 } from "react";
 import { css, cx } from "../../../../styled-system/css";
 import { field } from "../../../../styled-system/recipes";
@@ -72,6 +69,18 @@ export function useField(component: string): FieldContextValue {
   const ctx = useContext(FieldContext);
   if (!ctx) throw new Error(`${component} must be used within <Field>.`);
   return ctx;
+}
+
+/**
+ * Like {@link useField} but returns null outside a <Field> instead of throwing.
+ * For a control that composes INTO a Field when there's a label/hint to wire
+ * (the Combobox's OptionList), yet also stands alone with nothing to label (a
+ * toolbar, the slash menu). OptionList reads the field ONLY for the aria-*
+ * wiring, so when there's no Field it simply emits no aria-labelledby/-describedby
+ * — exactly right for a control that isn't a labelled form field.
+ */
+export function useOptionalField(): FieldContextValue | null {
+  return useContext(FieldContext);
 }
 
 export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
@@ -302,7 +311,7 @@ const FieldAction = forwardRef<HTMLButtonElement, FieldActionProps>(
   },
 );
 
-export interface FieldSearchProps<T = string>
+export interface FieldSearchProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
   /** Controlled query. */
   value?: string;
@@ -310,68 +319,38 @@ export interface FieldSearchProps<T = string>
   defaultValue?: string;
   /** Fired with the raw query string on every keystroke. */
   onValueChange?: (value: string) => void;
-  /**
-   * Optional `string → T` transform run on each query. The input stays
-   * domain-agnostic — the consumer (or a composing parent like Calendar)
-   * supplies the meaning, and the result is handed to {@link onQuery}. A date
-   * field parses "11/12/2026" → a PlainDate; a filterable list might parse to a
-   * predicate. Omitting it is the DEFAULT dumb search: a direct string match,
-   * i.e. an implicit identity parser — so parsing is opt-IN and always explicit.
-   */
-  queryParser?: (query: string) => T;
-  /** Fired with the parsed query (and the raw string) — the query itself when no `queryParser` is set. */
-  onQuery?: (parsed: T, query: string) => void;
 }
 
-// A bare, borderless search input — the type-ahead slot at the top of the
-// calendar popover (and reusable by any filterable control). Presentation-light
-// so a parent slot (the `calendar` recipe's `search`) can dress it via
-// `className`; owns only the controlled/uncontrolled value like Switch, plus the
-// optional generic `queryParser` → `onQuery` transform (its ONLY nod to being
-// searchable — still no idea what it's searching for). Generic over the parse
-// result, so forwardRef needs the cast below to keep the type parameter.
-function FieldSearchInner<T = string>(
-  {
-    className,
-    value,
-    defaultValue,
-    onValueChange,
-    queryParser,
-    onQuery,
-    onInput,
-    ...rest
-  }: FieldSearchProps<T>,
-  ref: ForwardedRef<HTMLInputElement>,
-) {
-  return (
-    <input
-      ref={ref}
-      type="search"
-      value={value}
-      defaultValue={defaultValue}
-      className={className}
-      onInput={(e) => {
-        onInput?.(e);
-        const query = e.currentTarget.value;
-        onValueChange?.(query);
-        // No parser = a dumb search: the match IS the raw string (identity), so
-        // onQuery always fires. Real parsing is opt-in via `queryParser`.
-        onQuery?.(
-          queryParser ? queryParser(query) : (query as unknown as T),
-          query,
-        );
-      }}
-      {...rest}
-    />
-  );
-}
-
-// `forwardRef` erases the render function's own generic, so re-assert the
-// generic call signature (a standard generic-forwardRef workaround). The runtime
-// value is unchanged, so `child.type === Field.Search` identity still holds.
-const FieldSearch = forwardRef(FieldSearchInner) as <T = string>(
-  props: FieldSearchProps<T> & { ref?: Ref<HTMLInputElement> },
-) => ReactElement;
+// A bare, borderless search input — the type-ahead slot atop the calendar /
+// option-list popover, reusable by any filterable control. Presentation-light so
+// a parent slot (the recipe's `search`) can dress it via `className`; owns only
+// the controlled/uncontrolled value like Switch. Deliberately DUMB: it emits
+// nothing but the raw query string. Interpreting that query — parsing a date,
+// filtering a list, ranking matches — belongs to the container it's dropped into
+// (Calendar's `queryParser`, OptionList's `filter`), the only node that holds
+// what the query is matched against. That's what lets the SAME box serve the
+// date field and the option list untouched.
+const FieldSearch = forwardRef<HTMLInputElement, FieldSearchProps>(
+  function FieldSearch(
+    { className, value, defaultValue, onValueChange, onInput, ...rest },
+    ref,
+  ) {
+    return (
+      <input
+        ref={ref}
+        type="search"
+        value={value}
+        defaultValue={defaultValue}
+        className={className}
+        onInput={(e) => {
+          onInput?.(e);
+          onValueChange?.(e.currentTarget.value);
+        }}
+        {...rest}
+      />
+    );
+  },
+);
 
 /**
  * Compound field primitives. Presentation (root/label/frame/hint) is shared and
