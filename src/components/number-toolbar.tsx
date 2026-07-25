@@ -1,7 +1,7 @@
 "use client";
 
 import { menuIcon, selectionPopover } from "../../styled-system/recipes";
-import { Popover, type PopoverRect } from "@/components/menu/popover";
+import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { Menu } from "@/components/menu/menu";
 import type { ListMarkerStyle } from "@/utils/list-numbering";
 import ContinueNumberingIcon from "@/assets/icons/continue-numbering.svg";

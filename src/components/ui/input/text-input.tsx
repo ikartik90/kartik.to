@@ -9,7 +9,10 @@ export interface TextInputProps
   label?: ReactNode;
   /** Helper text below the input, linked to the control via aria-describedby. */
   hint?: ReactNode;
-  /** Decorative leading icon inside the input shell. */
+  /**
+   * Leading icon inside the input shell — a bare `<Icon/>`, sized and tinted by
+   * the frame. Mark it `aria-hidden` when it's purely decorative.
+   */
   iconBefore?: ReactNode;
   /** Applied to the field root — use it to size or place the whole field. */
   className?: string;
@@ -30,9 +33,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       <Field className={className}>
         {label != null && <Field.Label>{label}</Field.Label>}
         <Field.Frame>
-          {iconBefore != null && (
-            <Field.Adornment>{iconBefore}</Field.Adornment>
-          )}
+          {iconBefore}
           <Field.Control ref={ref} {...inputProps} />
         </Field.Frame>
         {hint != null && <Field.Hint>{hint}</Field.Hint>}

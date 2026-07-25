@@ -29,11 +29,15 @@ describe("TextInput", () => {
     ).toBeNull();
   });
 
-  it("renders the leading icon as decorative (aria-hidden)", () => {
+  it("renders a caller-marked decorative leading icon (aria-hidden)", () => {
     render(
-      <TextInput label="Label" iconBefore={<CalendarIcon data-testid="cal" />} />,
+      <TextInput
+        label="Label"
+        iconBefore={<CalendarIcon aria-hidden data-testid="cal" />}
+      />,
     );
-    // The adornment wrapper hides the purely decorative icon from AT.
+    // Icons pass bare into the frame; the caller marks a purely decorative one
+    // aria-hidden, and the frame just sizes/tints it.
     expect(screen.getByTestId("cal").closest("[aria-hidden]")).not.toBeNull();
   });
 

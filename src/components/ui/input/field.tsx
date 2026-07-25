@@ -8,10 +8,14 @@ import {
   useId,
   useRef,
   useState,
+  type ButtonHTMLAttributes,
+  type ForwardedRef,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type LabelHTMLAttributes,
+  type ReactElement,
   type ReactNode,
+  type Ref,
 } from "react";
 import { css, cx } from "../../../../styled-system/css";
 import { field } from "../../../../styled-system/recipes";
@@ -46,8 +50,11 @@ const TEXT_STYLE_OVERRIDE: Record<FieldTextStyle, string> = {
 
 type FieldContextValue = {
   controlId: string;
+  labelId: string;
   hintId: string;
   size: FieldSize;
+  hasLabel: boolean;
+  setHasLabel: (present: boolean) => void;
   hasHint: boolean;
   setHasHint: (present: boolean) => void;
   registerControl: (node: HTMLElement | null) => void;
@@ -89,13 +96,17 @@ export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
 function FieldRoot({ children, className, size = "md", ...rest }: FieldProps) {
   const uid = useId();
   const controlRef = useRef<HTMLElement | null>(null);
+  const [hasLabel, setHasLabel] = useState(false);
   const [hasHint, setHasHint] = useState(false);
   const styles = field({ size });
 
   const ctx: FieldContextValue = {
     controlId: `${uid}-control`,
+    labelId: `${uid}-label`,
     hintId: `${uid}-hint`,
     size,
+    hasLabel,
+    setHasLabel,
     hasHint,
     setHasHint,
     registerControl: (node) => {
@@ -126,9 +137,16 @@ export interface FieldLabelProps extends LabelHTMLAttributes<HTMLLabelElement> {
 }
 
 function FieldLabel({ children, type, className, ...rest }: FieldLabelProps) {
-  const { controlId, styles } = useField("Field.Label");
+  const { controlId, labelId, setHasLabel, styles } = useField("Field.Label");
+  // Register presence + expose an id so a compound control that can't be a
+  // single `htmlFor` target (e.g. the Calendar group) can `aria-labelledby` it.
+  useEffect(() => {
+    setHasLabel(true);
+    return () => setHasLabel(false);
+  }, [setHasLabel]);
   return (
     <label
+      id={labelId}
       htmlFor={controlId}
       className={cx(styles.label, type && TEXT_STYLE_OVERRIDE[type], className)}
       {...rest}
@@ -181,19 +199,6 @@ function FieldFrame({
   );
 }
 
-export interface FieldAdornmentProps extends HTMLAttributes<HTMLSpanElement> {
-  children: ReactNode;
-}
-
-/** Decorative leading slot — hidden from assistive tech, non-interactive. */
-function FieldAdornment({ children, className, ...rest }: FieldAdornmentProps) {
-  const { styles } = useField("Field.Adornment");
-  return (
-    <span aria-hidden className={cx(styles.leading, className)} {...rest}>
-      {children}
-    </span>
-  );
-}
 
 export type FieldControlProps = InputHTMLAttributes<HTMLInputElement>;
 
@@ -247,18 +252,143 @@ function FieldHint({ children, type, className, ...rest }: FieldHintProps) {
   );
 }
 
+export type FieldActionProps = ButtonHTMLAttributes<HTMLButtonElement>;
+
+// Interactive trailing/utility button — the counterpart to the decorative
+// Adornment. Being a real <button> it keeps its own focus and is excluded from
+// the frame's focus-forwarding (see FieldFrame's `closest(...button...)`), so it
+// never steals a padding-click meant for the control. Reused for the calendar's
+// month chevrons (Calendar.Period) and future clear/reveal toggles.
+const fieldActionClass = css({
+  display: "grid",
+  placeItems: "center",
+  flexShrink: 0,
+  // Sized to the calendar's column pitch so the chevrons sit on the same grid
+  // as the day cells (Figma 563:2714/563:2718 — a 24px hit target, 20px glyph).
+  width: "token(sizes.calendarDay)",
+  height: "token(sizes.calendarDay)",
+  borderRadius: "sm",
+  border: "none",
+  background: "transparent",
+  appearance: "none",
+  color: "inherit",
+  cursor: "pointer",
+  transition: "background-color 150ms ease, color 150ms ease",
+  "&:hover": { backgroundColor: "bg.itemHover" },
+  "&:disabled": {
+    opacity: 0.4,
+    cursor: "not-allowed",
+    "&:hover": { backgroundColor: "transparent" },
+  },
+  "& svg": {
+    width: "token(spacing.xxl)",
+    height: "token(spacing.xxl)",
+    display: "block",
+  },
+  "& svg path[stroke]": { stroke: "currentColor" },
+  "& svg path[fill]": { fill: "currentColor" },
+});
+
+const FieldAction = forwardRef<HTMLButtonElement, FieldActionProps>(
+  function FieldAction({ className, type, ...rest }, ref) {
+    return (
+      <button
+        ref={ref}
+        type={type ?? "button"}
+        className={cx(fieldActionClass, className)}
+        {...rest}
+      />
+    );
+  },
+);
+
+export interface FieldSearchProps<T = string>
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
+  /** Controlled query. */
+  value?: string;
+  /** Initial query when uncontrolled. */
+  defaultValue?: string;
+  /** Fired with the raw query string on every keystroke. */
+  onValueChange?: (value: string) => void;
+  /**
+   * Optional `string → T` transform run on each query. The input stays
+   * domain-agnostic — the consumer (or a composing parent like Calendar)
+   * supplies the meaning, and the result is handed to {@link onQuery}. A date
+   * field parses "11/12/2026" → a PlainDate; a filterable list might parse to a
+   * predicate. Omitting it is the DEFAULT dumb search: a direct string match,
+   * i.e. an implicit identity parser — so parsing is opt-IN and always explicit.
+   */
+  queryParser?: (query: string) => T;
+  /** Fired with the parsed query (and the raw string) — the query itself when no `queryParser` is set. */
+  onQuery?: (parsed: T, query: string) => void;
+}
+
+// A bare, borderless search input — the type-ahead slot at the top of the
+// calendar popover (and reusable by any filterable control). Presentation-light
+// so a parent slot (the `calendar` recipe's `search`) can dress it via
+// `className`; owns only the controlled/uncontrolled value like Switch, plus the
+// optional generic `queryParser` → `onQuery` transform (its ONLY nod to being
+// searchable — still no idea what it's searching for). Generic over the parse
+// result, so forwardRef needs the cast below to keep the type parameter.
+function FieldSearchInner<T = string>(
+  {
+    className,
+    value,
+    defaultValue,
+    onValueChange,
+    queryParser,
+    onQuery,
+    onInput,
+    ...rest
+  }: FieldSearchProps<T>,
+  ref: ForwardedRef<HTMLInputElement>,
+) {
+  return (
+    <input
+      ref={ref}
+      type="search"
+      value={value}
+      defaultValue={defaultValue}
+      className={className}
+      onInput={(e) => {
+        onInput?.(e);
+        const query = e.currentTarget.value;
+        onValueChange?.(query);
+        // No parser = a dumb search: the match IS the raw string (identity), so
+        // onQuery always fires. Real parsing is opt-in via `queryParser`.
+        onQuery?.(
+          queryParser ? queryParser(query) : (query as unknown as T),
+          query,
+        );
+      }}
+      {...rest}
+    />
+  );
+}
+
+// `forwardRef` erases the render function's own generic, so re-assert the
+// generic call signature (a standard generic-forwardRef workaround). The runtime
+// value is unchanged, so `child.type === Field.Search` identity still holds.
+const FieldSearch = forwardRef(FieldSearchInner) as <T = string>(
+  props: FieldSearchProps<T> & { ref?: Ref<HTMLInputElement> },
+) => ReactElement;
+
 /**
- * Compound field primitives. Presentation (root/label/frame/adornment/hint) is
- * shared and dumb; behavior lives in the control slot, which the assemblies
- * (TextInput, and later Select/Date) fill. The Switch plugs into the same
- * context as an alternative control (see switch.tsx), reusing Label + Hint.
- * Compose these directly for bespoke fields, or use the flat-prop assemblies for
- * the common case.
+ * Compound field primitives. Presentation (root/label/frame/hint) is shared and
+ * dumb; behavior lives in the control slot, which the assemblies (TextInput, and
+ * later Select/Date) fill. Decorative icons compose straight into the Frame as
+ * bare `<Icon aria-hidden />` children — the `frame` recipe sizes and tints them
+ * (leading before the control, trailing after it); no wrapper part. The Switch
+ * plugs into the same context as an alternative control (see switch.tsx), reusing
+ * Label + Hint; Action (interactive button) and Search (type-ahead input) are the
+ * shared pieces the Calendar composes. Compose these directly for bespoke fields,
+ * or use the flat-prop assemblies for the common case.
  */
 export const Field = Object.assign(FieldRoot, {
   Label: FieldLabel,
   Frame: FieldFrame,
-  Adornment: FieldAdornment,
   Control: FieldControl,
   Hint: FieldHint,
+  Action: FieldAction,
+  Search: FieldSearch,
 });
