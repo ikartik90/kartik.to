@@ -37,14 +37,12 @@ export default function CalendarPreviewPage() {
         <Calendar
           value={date}
           onValueChange={setDate}
+          // Explicit parser on the Calendar — date navigation is opt-in; a bare
+          // Field.Search just emits raw strings the Calendar never resolves.
+          queryParser={parseCalendarDate("DD/MM/YYYY")}
           // today={Temporal.PlainDate.from("2026-12-11")}
         >
-          {/* Explicit parser — date navigation is opt-in; a bare Field.Search
-              would be a dumb string match. */}
-          <Field.Search
-            placeholder="Type a date…"
-            queryParser={parseCalendarDate("DD/MM/YYYY")}
-          />
+          <Field.Search placeholder="Type a date…" />
           <Calendar.Period>
             <Field.Action>
               <ChevronLeftIcon />

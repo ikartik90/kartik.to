@@ -117,6 +117,13 @@ export interface CalendarProps
   /** Which weekday sits in column 0. Defaults to Sunday. */
   weekStartsOn?: WeekdayKey;
   /**
+   * Parses a dropped-in `Field.Search`'s raw query into a date to navigate to
+   * (e.g. `parseCalendarDate("DD/MM/YYYY")`). The box stays dumb — it emits the
+   * raw string and the Calendar interprets it here, the mirror of OptionList's
+   * `filter`. Omit it and typing navigates nowhere (a bare search is inert).
+   */
+  queryParser?: (query: string) => Temporal.PlainDate | null;
+  /**
    * Retint for the surface it sits on. `default` = standalone; `onBrand` = the
    * Date input popover's brand-tinted surface (palette inverts).
    */
@@ -133,6 +140,7 @@ function CalendarRoot({
   min,
   max,
   weekStartsOn = "sun",
+  queryParser,
   tone = "default",
   today: todayProp,
   className,
@@ -203,12 +211,12 @@ function CalendarRoot({
     nextMonth: () => setView((v) => v.add({ months: 1 })),
   };
 
-  // Type-ahead is a division of labour: the Field.Search runs the PARSER and
-  // hands back a date; the calendar decides what to DO with it. The calendar
-  // supplies NO default parser — date parsing is opt-in, made explicit by a
-  // `queryParser` on the Field.Search (e.g. `parseCalendarDate("DD/MM/YYYY")`),
-  // visible right where the search is. A bare Field.Search is a dumb string
-  // search: it emits the raw query, which isn't a date, so nothing navigates.
+  // Type-ahead is a division of labour: the Field.Search stays a dumb box that
+  // emits the raw query; the Calendar interprets it with its OWN `queryParser`
+  // and decides what to DO with the result (the mirror of OptionList's `filter`,
+  // which lives on the container for the same reason — only the container holds
+  // what the query is matched against). Parsing is opt-in: no `queryParser` prop
+  // means the raw string never resolves to a date, so nothing navigates.
   //
   // Typing only NAVIGATES: a resolved date pages the grid to that month, takes
   // the roving tabstop, and marks its cell `data-query` so the recipe can
@@ -225,19 +233,16 @@ function CalendarRoot({
   };
 
   // Dress a Field.Search dropped directly under <Calendar>: give it the `search`
-  // slot and consume its parsed query. Every other child, and the consumer's own
-  // handlers, are left untouched / composed with. The parser is the consumer's —
-  // a dumb Field.Search emits raw strings, so guard for an actual date.
+  // slot and interpret its raw query here via `queryParser`. Every other child,
+  // and the consumer's own handlers, are left untouched / composed with.
   const dressed = Children.map(children, (child) => {
     if (isValidElement(child) && child.type === Field.Search) {
-      const el = child as ReactElement<
-        FieldSearchProps<Temporal.PlainDate | null>
-      >;
+      const el = child as ReactElement<FieldSearchProps>;
       return cloneElement(el, {
         className: cx(styles.search, el.props.className),
-        onQuery: (parsed: Temporal.PlainDate | null, raw: string) => {
-          el.props.onQuery?.(parsed, raw);
-          const date = parsed instanceof Temporal.PlainDate ? parsed : null;
+        onValueChange: (raw: string) => {
+          el.props.onValueChange?.(raw);
+          const date = queryParser?.(raw) ?? null;
           setQuery(date);
           if (date) setView(date.with({ day: 1 }));
         },

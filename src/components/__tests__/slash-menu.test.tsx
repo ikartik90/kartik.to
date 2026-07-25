@@ -94,7 +94,9 @@ describe("SlashMenu", () => {
   // -------------------------------------------------------------------------
 
   it("positions via CSS anchor() — no inline top/left from JavaScript", () => {
-    const menu = renderMenu().getByRole("listbox", { name: "Insert block" });
+    const listbox = renderMenu().getByRole("listbox", { name: "Insert block" });
+    // The positioned element is the popover shell; the listbox is nested inside.
+    const menu = listbox.closest(".slash-menu-popover") as HTMLElement;
 
     expect(menu.style.top).toBe("");
     expect(menu.style.left).toBe("");
@@ -122,8 +124,10 @@ describe("SlashMenu", () => {
   it("highlights the first item by default", () => {
     renderMenu();
     const items = screen.getAllByRole("option");
-    expect(items[0].getAttribute("aria-selected")).toBe("true");
-    expect(items[1].getAttribute("aria-selected")).toBe("false");
+    // The roving highlight is `data-active` (aria-selected is reserved for a
+    // persistent selection, which a transient command menu never commits).
+    expect(items[0].hasAttribute("data-active")).toBe(true);
+    expect(items[1].hasAttribute("data-active")).toBe(false);
   });
 
   it("renders the Component item as a plain option without a submenu", () => {
@@ -230,8 +234,8 @@ describe("SlashMenu", () => {
     renderMenu();
     fireEvent.keyDown(document, { key: "ArrowDown" });
     const items = screen.getAllByRole("option");
-    expect(items[0].getAttribute("aria-selected")).toBe("false");
-    expect(items[1].getAttribute("aria-selected")).toBe("true");
+    expect(items[0].hasAttribute("data-active")).toBe(false);
+    expect(items[1].hasAttribute("data-active")).toBe(true);
   });
 
   it("moves active item up with ArrowUp", () => {
@@ -241,7 +245,7 @@ describe("SlashMenu", () => {
     fireEvent.keyDown(document, { key: "ArrowDown" });
     fireEvent.keyDown(document, { key: "ArrowUp" });
     const items = screen.getAllByRole("option");
-    expect(items[1].getAttribute("aria-selected")).toBe("true");
+    expect(items[1].hasAttribute("data-active")).toBe(true);
   });
 
   it("wraps from last item to first when pressing ArrowDown", () => {
@@ -249,8 +253,8 @@ describe("SlashMenu", () => {
     // Move down past the last item (10 items total → 10 presses wraps back to 0).
     for (let i = 0; i < 10; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
     const items = screen.getAllByRole("option");
-    expect(items[0].getAttribute("aria-selected")).toBe("true");
-    expect(items[items.length - 1].getAttribute("aria-selected")).toBe("false");
+    expect(items[0].hasAttribute("data-active")).toBe(true);
+    expect(items[items.length - 1].hasAttribute("data-active")).toBe(false);
   });
 
   it("wraps from first item to last when pressing ArrowUp", () => {
@@ -258,8 +262,8 @@ describe("SlashMenu", () => {
     // At index 0, pressing ArrowUp once wraps to the last item.
     fireEvent.keyDown(document, { key: "ArrowUp" });
     const items = screen.getAllByRole("option");
-    expect(items[items.length - 1].getAttribute("aria-selected")).toBe("true");
-    expect(items[0].getAttribute("aria-selected")).toBe("false");
+    expect(items[items.length - 1].hasAttribute("data-active")).toBe(true);
+    expect(items[0].hasAttribute("data-active")).toBe(false);
   });
 
   it("moves highlight to item under pointer (onPointerEnter)", () => {
@@ -267,8 +271,8 @@ describe("SlashMenu", () => {
     // Simulate hovering over the third item (Media, index 2).
     fireEvent.pointerEnter(screen.getByText("Media"));
     const items = screen.getAllByRole("option");
-    expect(items[2].getAttribute("aria-selected")).toBe("true");
-    expect(items[0].getAttribute("aria-selected")).toBe("false");
+    expect(items[2].hasAttribute("data-active")).toBe(true);
+    expect(items[0].hasAttribute("data-active")).toBe(false);
   });
 
   it("keyboard arrow navigation takes over from the pointer-entered position", () => {
@@ -277,7 +281,7 @@ describe("SlashMenu", () => {
     fireEvent.pointerEnter(screen.getByText("Media"));
     fireEvent.keyDown(document, { key: "ArrowDown" });
     const items = screen.getAllByRole("option");
-    expect(items[3].getAttribute("aria-selected")).toBe("true");
+    expect(items[3].hasAttribute("data-active")).toBe(true);
   });
 
   it("selects the active item on Enter", () => {
@@ -303,7 +307,7 @@ describe("SlashMenu", () => {
       );
     });
     const items = screen.getAllByRole("option");
-    expect(items[0].getAttribute("aria-selected")).toBe("true");
+    expect(items[0].hasAttribute("data-active")).toBe(true);
   });
 
   // -------------------------------------------------------------------------

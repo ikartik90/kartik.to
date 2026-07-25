@@ -1,8 +1,8 @@
 "use client";
 
-import { menuIcon, selectionPopover } from "../../styled-system/recipes";
+import { selectionPopover } from "../../styled-system/recipes";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
-import { Menu } from "@/components/menu/menu";
+import { OptionList } from "@/components/ui/input/option-list";
 import ContinueBulletingIcon from "@/assets/icons/continue-bulleting.svg";
 import ResetBulletingIcon from "@/assets/icons/reset-bulleting.svg";
 import BulletedListIcon from "@/assets/icons/bulleted-list.svg";
@@ -28,7 +28,6 @@ interface BulletToolbarProps {
   onDismiss: () => void;
 }
 
-const iconStyle = menuIcon();
 const toolbarClass = selectionPopover({ align: "start" });
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
@@ -56,37 +55,36 @@ export function BulletToolbar({
       rect={rect}
       anchorName={selectionAnchor}
       className={toolbarClass}
-      role="toolbar"
-      ariaLabel="List bullet options"
       dismissOnReflow
       onDismiss={onDismiss}
     >
-      <Menu.Toolbar>
-        <Menu.Button
-          ariaLabel="Continue bullets from previous list"
-          onClick={onContinue}
-        >
-          <ContinueBulletingIcon className={iconStyle} aria-hidden />
-        </Menu.Button>
-        <Menu.Button
-          ariaLabel="Reset bullets to the default style"
-          onClick={onReset}
-        >
-          <ResetBulletingIcon className={iconStyle} aria-hidden />
-        </Menu.Button>
-        <Menu.Group>
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label="List bullet options">
+          <OptionList.Option
+            aria-label="Continue bullets from previous list"
+            onClick={onContinue}
+          >
+            <ContinueBulletingIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Option
+            aria-label="Reset bullets to the default style"
+            onClick={onReset}
+          >
+            <ResetBulletingIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Divider />
           {OPTIONS.map(({ style: optStyle, label, Icon }) => (
-            <Menu.Button
+            <OptionList.Option
               key={optStyle}
-              ariaLabel={label}
+              aria-label={label}
               pressed={style === optStyle}
               onClick={() => onSelect(optStyle)}
             >
-              <Icon className={iconStyle} aria-hidden />
-            </Menu.Button>
+              <Icon aria-hidden />
+            </OptionList.Option>
           ))}
-        </Menu.Group>
-      </Menu.Toolbar>
+        </OptionList.Toolbar>
+      </OptionList>
     </Popover>
   );
 }

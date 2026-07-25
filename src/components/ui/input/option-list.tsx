@@ -21,7 +21,7 @@ import {
 import { cx } from "../../../../styled-system/css";
 import { optionList } from "../../../../styled-system/recipes";
 import { filterOptions, type OptionItem } from "@/utils/option-filter";
-import { Field, useField, type FieldSearchProps } from "./field";
+import { Field, useOptionalField, type FieldSearchProps } from "./field";
 
 // ---------------------------------------------------------------------------
 // OptionList — the composable listbox behind a Combobox, and a stand-alone,
@@ -29,14 +29,14 @@ import { Field, useField, type FieldSearchProps } from "./field";
 //
 //   <OptionList value={value} onValueChange={setValue}>
 //     <Field.Search placeholder="Search…" />          {/* optional filter row */}
-//     <OptionList.Options>
+//     <OptionList.Listbox>
 //       {fruits.map((f) => (
 //         <OptionList.Option key={f.value} value={f.value}>
 //           {f.icon}
 //           {f.label}
 //         </OptionList.Option>
 //       ))}
-//     </OptionList.Options>
+//     </OptionList.Listbox>
 //   </OptionList>
 //
 // Options are AUTHORED as children — one `<OptionList.Option value=…>` each, like
@@ -66,8 +66,13 @@ type OptionListContextValue = {
   /** The single highlighted option (query/hover/arrow ▸ selected ▸ first). */
   activeValue: string | null;
   select: (value: string) => void;
-  /** Move the highlight by ±1 enabled option; `focus` roves real button focus. */
-  moveActive: (delta: 1 | -1, focus: boolean) => void;
+  /**
+   * Move the highlight by ±1 enabled option; `focus` roves real button focus,
+   * `loop` wraps around the ends (the slash menu's externalKeys navigation).
+   */
+  moveActive: (delta: 1 | -1, focus: boolean, loop?: boolean) => void;
+  /** Park the highlight on a specific value — pointer-preselect on open. */
+  setActiveValue: (value: string | null) => void;
   optionId: (value: string) => string;
   listboxId: string;
   labelId: string;
@@ -84,6 +89,15 @@ function useOptionList(component: string): OptionListContextValue {
   if (!ctx) throw new Error(`${component} must be used within <OptionList>.`);
   return ctx;
 }
+
+// Which behavior container an OptionList.Option sits in — set by Listbox vs
+// Toolbar, read by the shared Option leaf to pick its semantics: a listbox
+// option (role=option, aria-selected, click selects a value) or a toolbar button
+// (aria-pressed when toggled, click acts, mousedown preserves the editor
+// selection). Defaults to `listbox` so a bare Option behaves as it always did.
+type ContainerMode = "listbox" | "toolbar";
+const OptionListContainerContext = createContext<ContainerMode>("listbox");
+const useContainerMode = () => useContext(OptionListContainerContext);
 
 // --- Reading the option DATA back out of the authored children ------------
 
@@ -110,12 +124,12 @@ function optionLabel(props: OptionListOptionProps): string {
         typeof child === "string" || typeof child === "number",
     )
     .join("");
-  return text.trim() || props.value;
+  return text.trim() || props.value || "";
 }
 
 /**
  * Recover the ordered option data from the tree — drilling through the
- * `OptionList.Options` wrapper and any fragments a `.map()` produces. Runs during
+ * `OptionList.Listbox` wrapper and any fragments a `.map()` produces. Runs during
  * render (no mount/registration race), the way the calendar reads its own
  * structure. Later duplicate values are ignored so `getElementById(optionId)`
  * stays unambiguous.
@@ -128,7 +142,8 @@ export function collectOptions(children: ReactNode): OptionItem[] {
       if (!isValidElement(child)) return;
       if (child.type === OptionListOption) {
         const props = child.props as OptionListOptionProps;
-        if (seen.has(props.value)) return;
+        // A valueless Option is a toolbar action button, not a selectable row.
+        if (props.value == null || seen.has(props.value)) return;
         seen.add(props.value);
         out.push({
           value: props.value,
@@ -136,7 +151,7 @@ export function collectOptions(children: ReactNode): OptionItem[] {
           disabled: !!props.disabled,
         });
       } else if (
-        child.type === OptionListOptions ||
+        child.type === OptionListListbox ||
         child.type === Fragment
       ) {
         visit((child.props as { children?: ReactNode }).children);
@@ -168,8 +183,14 @@ export interface OptionListProps
    * surface; `onBrand` = the Combobox popover's brand-tinted surface (palette
    * inverts).
    */
-  tone?: "default" | "onBrand";
-  /** `OptionList.Options` (wrapping `OptionList.Option`s) and an optional Field.Search. */
+  tone?: "default" | "onBrand" | "plain";
+  /**
+   * Layout axis. `block` (default) is the vertical list — a slash menu / combobox
+   * body. `inline` is a horizontal row — a toolbar or a segmented single-select;
+   * the root collapses so its behavior container sits in the consumer's frame.
+   */
+  direction?: "block" | "inline";
+  /** A behavior container (`OptionList.Listbox` / `OptionList.Toolbar`) and an optional Field.Search. */
   children: ReactNode;
 }
 
@@ -179,16 +200,22 @@ function OptionListRoot({
   onValueChange,
   filter = filterOptions,
   emptyLabel = "No results",
+  direction = "block",
   tone = "default",
   className,
   children,
   ...rest
 }: OptionListProps) {
-  // Like the interactive Calendar, this is always a field control, so it
-  // hard-consumes the field wiring; as a compound group it associates via
-  // aria-labelledby/-describedby (a listbox is labelled, not `htmlFor`-linked).
-  const { labelId, hasLabel, hintId, hasHint } = useField("OptionList");
-  const styles = optionList({ tone });
+  // Optional Field: composed INTO a <Field> (the Combobox) it borrows the
+  // label/hint ids to associate as a group (aria-labelledby/-describedby — a
+  // listbox is labelled, not `htmlFor`-linked). Standing alone (a toolbar, the
+  // slash menu) there's no Field and nothing to label, so the aria-* simply drop.
+  const field = useOptionalField();
+  const labelId = field?.labelId ?? "";
+  const hasLabel = field?.hasLabel ?? false;
+  const hintId = field?.hintId ?? "";
+  const hasHint = field?.hasHint ?? false;
+  const styles = optionList({ tone, direction });
   const uid = useId();
 
   const isControlled = value !== undefined;
@@ -235,10 +262,13 @@ function OptionListRoot({
     onValueChange?.(value);
   };
 
-  const moveActive = (delta: 1 | -1, focus: boolean) => {
+  const moveActive = (delta: 1 | -1, focus: boolean, loop = false) => {
     if (enabled.length === 0) return;
     const from = enabled.findIndex((option) => option.value === activeValue);
-    const next = Math.min(Math.max(from + delta, 0), enabled.length - 1);
+    const raw = from + delta;
+    const next = loop
+      ? (raw + enabled.length) % enabled.length
+      : Math.min(Math.max(raw, 0), enabled.length - 1);
     const value = enabled[next].value;
     setActive(value);
     // Rove real focus onto the newly-active option by its stable id (each
@@ -254,6 +284,7 @@ function OptionListRoot({
     activeValue,
     select,
     moveActive,
+    setActiveValue: setActive,
     optionId,
     listboxId: `${uid}-listbox`,
     labelId,
@@ -285,7 +316,7 @@ function OptionListRoot({
   // re-resolves to the first survivor. Everything else is passed through.
   const dressed = Children.map(children, (child) => {
     if (isValidElement(child) && child.type === Field.Search) {
-      const el = child as ReactElement<FieldSearchProps<string>>;
+      const el = child as ReactElement<FieldSearchProps>;
       return cloneElement(el, {
         className: cx(styles.search, el.props.className),
         role: "combobox",
@@ -304,7 +335,7 @@ function OptionListRoot({
           if (event.defaultPrevented) return;
           onSearchKeyDown(event);
         },
-      } as Partial<FieldSearchProps<string>>);
+      } as Partial<FieldSearchProps>);
     }
     return child;
   });
@@ -318,32 +349,66 @@ function OptionListRoot({
   );
 }
 
-export type OptionListOptionsProps = HTMLAttributes<HTMLDivElement>;
+export interface OptionListListboxProps extends HTMLAttributes<HTMLDivElement> {
+  /**
+   * Drive the highlight from a document-level captured keydown while focus stays
+   * OUTSIDE the list — for a menu floating over a still-focused editor (the slash
+   * menu). ArrowUp/Down move the highlight and Enter commits, without the editor
+   * ever losing focus, and the option under the pointer is preselected on open.
+   * Off (default) is the in-list model: roving real button focus, or the combobox
+   * search driving aria-activedescendant.
+   */
+  externalKeys?: boolean;
+  /** Wrap the highlight around the ends when navigating. */
+  loop?: boolean;
+}
+
+// Module-level pointer tracker — captured before a menu mounts so an
+// `externalKeys` listbox can preselect the option already under the cursor when
+// it opens (ported from the old Menu ListboxController).
+let pointerX = -1;
+let pointerY = -1;
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "mousemove",
+    (event) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+    },
+    { passive: true },
+  );
+}
 
 /**
  * The scrollable `role="listbox"` — renders just the `OptionList.Option`s that
  * pass the current filter (in authored order), or the empty row when none do.
- * Owns list-level roving: with focus inside it (a search-less list), ArrowUp/Down
- * move real button focus between options.
+ * Keyboard has three sources, one active at a time: the combobox search (root)
+ * drives aria-activedescendant while focus stays in the input; focus INSIDE this
+ * list roves real button focus (a search-less select); or `externalKeys` captures
+ * ArrowUp/Down/Enter at the document while focus stays in an editor (slash menu).
  */
-function OptionListOptions({
+function OptionListListbox({
   className,
   children,
   onKeyDown,
+  externalKeys = false,
+  loop = false,
   ...rest
-}: OptionListOptionsProps) {
+}: OptionListListboxProps) {
   const {
     styles,
     filteredValues,
     moveActive,
     activeValue,
+    select,
+    setActiveValue,
     listboxId,
     hasLabel,
     labelId,
     hasHint,
     hintId,
     emptyLabel,
-  } = useOptionList("OptionList.Options");
+  } = useOptionList("OptionList.Listbox");
   const listRef = useRef<HTMLDivElement>(null);
 
   // Keep the highlighted row in view AS IT MOVES — but scroll only THIS list's
@@ -366,15 +431,57 @@ function OptionListOptions({
     }
   }, [activeValue]);
 
+  // externalKeys: arrow/enter arrive at the document (focus is in the editor).
+  // Capture them so they drive the highlight and commit before the editor reacts.
+  // Escape is owned by the Popover shell (useDismiss), so it isn't handled here.
+  useEffect(() => {
+    if (!externalKeys) return;
+    function handle(event: globalThis.KeyboardEvent) {
+      switch (event.key) {
+        case "ArrowDown":
+          event.preventDefault();
+          moveActive(1, false, loop);
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          moveActive(-1, false, loop);
+          break;
+        case "Enter":
+          if (activeValue) {
+            event.preventDefault();
+            event.stopPropagation();
+            select(activeValue);
+          }
+          break;
+      }
+    }
+    document.addEventListener("keydown", handle, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", handle, { capture: true });
+  }, [externalKeys, loop, moveActive, activeValue, select]);
+
+  // externalKeys: preselect the option already under the pointer when it opens.
+  useEffect(() => {
+    if (!externalKeys || typeof document.elementFromPoint !== "function") return;
+    const raf = requestAnimationFrame(() => {
+      const value = document
+        .elementFromPoint(pointerX, pointerY)
+        ?.closest<HTMLElement>("[data-value]")
+        ?.getAttribute("data-value");
+      if (value) setActiveValue(value);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [externalKeys, setActiveValue]);
+
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (event.defaultPrevented) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      moveActive(1, true);
+      moveActive(1, true, loop);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      moveActive(-1, true);
+      moveActive(-1, true, loop);
     }
   };
 
@@ -382,7 +489,9 @@ function OptionListOptions({
   // options simply aren't rendered (dropping out of the a11y + tab order with
   // their DOM); non-Option children (should be none) pass through untouched.
   const visible = Children.toArray(children).filter(
-    (child) => !isOption(child) || filteredValues.has(child.props.value),
+    (child) =>
+      !isOption(child) ||
+      (child.props.value != null && filteredValues.has(child.props.value)),
   );
   const hasOptions = visible.some(isOption);
 
@@ -404,65 +513,158 @@ function OptionListOptions({
 
 export interface OptionListOptionProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "value"> {
-  /** Stable identity — what `onValueChange` reports and selection compares on. */
-  value: string;
   /**
-   * The searchable + trigger-display text. Optional when the children are a plain
-   * string (the string is then the label); set it for rich children (icon +
-   * text) so the search and the Combobox trigger have text to work with.
+   * Stable identity — what a Listbox's `onValueChange` reports and selection
+   * compares on. Optional for a Toolbar action button, which carries no value.
+   */
+  value?: string;
+  /**
+   * The searchable + trigger-display text (Listbox). Optional when the children
+   * are a plain string (the string is then the label); set it for rich children
+   * (icon + text) so the search and the Combobox trigger have text to work with.
    */
   label?: string;
+  /**
+   * Toolbar only: toggle state → `aria-pressed`. Omit for a plain action button
+   * (edit / delete / navigate), which gets no pressed state.
+   */
+  pressed?: boolean;
   children?: ReactNode;
 }
 
 /**
- * One option — a real `<button role="option">`. The "you have the button" leaf:
- * your `className` lands on it while the component sets the state attributes
- * (aria-selected, data-active, :disabled) the styling keys off. Children are the
- * visible content (text, or an icon + text); they fall back to `label` then
- * `value` so a bare `<OptionList.Option value="a" label="Apple" />` still renders.
+ * One item — a real `<button>`. The "you have the button" leaf: your `className`
+ * lands on it while the component sets the state attributes the styling keys off.
+ * Its SEMANTICS follow the container it sits in (via context):
+ *   • Listbox → `role="option"`, `aria-selected`, `data-active` (the roving
+ *     cursor), and a click selects its `value`.
+ *   • Toolbar → a plain button with `aria-pressed` when `pressed` is passed (a
+ *     toggle) or none (an action); mousedown is prevented so the press can't
+ *     collapse the editor's text selection, and the consumer's `onClick` runs.
+ * Children are the visible content (text, or icon + text), falling back to
+ * `label` then `value`.
  */
 function OptionListOption({
   value,
   label,
+  pressed,
   className,
   children,
+  onClick,
+  onMouseDown,
+  onPointerEnter,
   ...rest
 }: OptionListOptionProps) {
-  const { styles, selected, activeValue, select, optionId } =
+  const { styles, selected, activeValue, select, setActiveValue, optionId } =
     useOptionList("OptionList.Option");
+  const mode = useContainerMode();
+  const content = children ?? label ?? value;
+
+  if (mode === "toolbar") {
+    return (
+      <button
+        {...rest}
+        type="button"
+        aria-pressed={pressed}
+        data-value={value}
+        className={cx(styles.option, className)}
+        // Keep the editor's selection/caret alive through the press — the toolbar
+        // acts ON that selection, so it must not steal it (was Menu.Button's
+        // `preserveSelection`).
+        onMouseDown={(event) => {
+          onMouseDown?.(event);
+          if (!event.defaultPrevented) event.preventDefault();
+        }}
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
 
   const isSelected = value === selected;
   const isActive = value === activeValue;
-
   return (
     <button
       {...rest}
       type="button"
       role="option"
-      id={optionId(value)}
+      id={value != null ? optionId(value) : undefined}
       aria-selected={isSelected}
       data-active={isActive ? "" : undefined}
       data-value={value}
       tabIndex={isActive ? 0 : -1}
       className={cx(styles.option, className)}
-      onClick={() => select(value)}
+      onMouseDown={onMouseDown}
+      // Hover moves the highlight (the roving cursor), matching a native listbox
+      // and the old slash menu's pointer-preselect. A disabled row can't take it.
+      onPointerEnter={(event) => {
+        onPointerEnter?.(event);
+        if (value != null && !rest.disabled) setActiveValue(value);
+      }}
+      onClick={() => {
+        if (value != null) select(value);
+      }}
     >
-      {children ?? label ?? value}
+      {content}
     </button>
   );
 }
 
+// --- Toolbar (multi-toggle behavior container) -----------------------------
+
+export interface OptionListToolbarProps extends HTMLAttributes<HTMLDivElement> {
+  /** Names the toolbar for assistive tech — there's no visible label. */
+  "aria-label": string;
+}
+
 /**
- * Compound option list. `OptionList` is the root/context; the parts read it and
- * stay dumb. Options are authored as `OptionList.Option` children; `Field.Search`
- * (from field.tsx) composes in as the filter row. Surface it as the Combobox's
- * popover body (onBrand), or use it stand-alone as an always-open select
- * (default).
+ * A row of independent action / toggle buttons — the editor's selection, link,
+ * bullet and numbering bars. Owns SEMANTICS, not layout or state: it sets
+ * `role="toolbar"` and flips its `OptionList.Option` children into action /
+ * toggle buttons (pressed state stays controlled by the consumer, per option).
+ * No keyboard cursor — arrows would collide with the editor caret over the live
+ * selection. Pair with `direction="inline"` on the root for the row layout.
+ */
+function OptionListToolbar({
+  className,
+  children,
+  ...rest
+}: OptionListToolbarProps) {
+  const { styles } = useOptionList("OptionList.Toolbar");
+  return (
+    <OptionListContainerContext.Provider value="toolbar">
+      <div role="toolbar" className={cx(styles.list, className)} {...rest}>
+        {children}
+      </div>
+    </OptionListContainerContext.Provider>
+  );
+}
+
+// --- Divider (between toolbar / list groups) -------------------------------
+
+/** A hairline between groups — vertical in a Toolbar, horizontal in a block list. */
+function OptionListDivider({
+  className,
+  ...rest
+}: HTMLAttributes<HTMLSpanElement>) {
+  const { styles } = useOptionList("OptionList.Divider");
+  return <span aria-hidden className={cx(styles.divider, className)} {...rest} />;
+}
+
+/**
+ * Compound option list. `OptionList` is the root/context (layout, filtering,
+ * skin); the behavior containers own the interaction — `OptionList.Listbox`
+ * (single-select listbox) or `OptionList.Toolbar` (multi-toggle). `Option` is the
+ * shared item leaf that reads its container to know which. `Field.Search`
+ * composes in as the filter row. Surface it as the Combobox's popover body
+ * (onBrand), a stand-alone always-open select (default), or an editor toolbar.
  */
 export const OptionList = Object.assign(OptionListRoot, {
-  Options: OptionListOptions,
+  Listbox: OptionListListbox,
   Option: OptionListOption,
+  Toolbar: OptionListToolbar,
+  Divider: OptionListDivider,
 });
 
 export type { OptionItem };

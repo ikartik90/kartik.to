@@ -35,7 +35,7 @@ function optionEls() {
 function bareTree(props: ListProps = {}) {
   return (
     <OptionList {...props}>
-      <OptionList.Options>{optionEls()}</OptionList.Options>
+      <OptionList.Listbox>{optionEls()}</OptionList.Listbox>
     </OptionList>
   );
 }
@@ -45,7 +45,7 @@ function searchTree(props: ListProps = {}) {
   return (
     <OptionList {...props}>
       <Field.Search placeholder="Search…" />
-      <OptionList.Options>{optionEls()}</OptionList.Options>
+      <OptionList.Listbox>{optionEls()}</OptionList.Listbox>
     </OptionList>
   );
 }
@@ -61,10 +61,13 @@ const type = (value: string) =>
 afterEach(cleanup);
 
 describe("field wiring", () => {
-  it("throws when used outside <Field>", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => render(bareTree())).toThrow(/must be used within <Field>/);
-    spy.mockRestore();
+  it("renders standalone with no <Field> (toolbar / slash-menu case)", () => {
+    // The Field read is optional now: no Field → no throw, and the listbox
+    // simply carries no aria-labelledby/-describedby (nothing to label).
+    render(bareTree());
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.getAttribute("aria-labelledby")).toBeNull();
+    expect(listbox.getAttribute("aria-describedby")).toBeNull();
   });
 
   it("labels the listbox via Field.Label / Field.Hint", () => {
@@ -90,6 +93,64 @@ describe("field wiring", () => {
   });
 });
 
+describe("toolbar", () => {
+  it("renders role=toolbar with an accessible name, standalone (no Field)", () => {
+    render(
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label="Format selection">
+          <OptionList.Option aria-label="Bold">B</OptionList.Option>
+        </OptionList.Toolbar>
+      </OptionList>,
+    );
+    expect(
+      screen.getByRole("toolbar", { name: "Format selection" }),
+    ).toBeTruthy();
+  });
+
+  it("makes a `pressed` option a toggle and a bare one a plain action", () => {
+    render(
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label="Format">
+          <OptionList.Option value="bold" pressed aria-label="Bold">
+            B
+          </OptionList.Option>
+          <OptionList.Divider />
+          <OptionList.Option aria-label="Edit link">E</OptionList.Option>
+        </OptionList.Toolbar>
+      </OptionList>,
+    );
+    // The toggle advertises its pressed state…
+    expect(
+      screen.getByRole("button", { name: "Bold", pressed: true }),
+    ).toBeTruthy();
+    // …the plain action carries no aria-pressed…
+    expect(
+      screen.getByRole("button", { name: "Edit link" }).getAttribute("aria-pressed"),
+    ).toBeNull();
+    // …and toolbar buttons are not listbox options.
+    expect(screen.queryByRole("option")).toBeNull();
+  });
+
+  it("fires the option's onClick and preserves the editor selection", () => {
+    const onClick = vi.fn();
+    render(
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label="Format">
+          <OptionList.Option aria-label="Bold" onClick={onClick}>
+            B
+          </OptionList.Option>
+        </OptionList.Toolbar>
+      </OptionList>,
+    );
+    const bold = screen.getByRole("button", { name: "Bold" });
+    fireEvent.click(bold);
+    expect(onClick).toHaveBeenCalledOnce();
+    // mousedown is prevented so the press can't collapse the editor selection —
+    // fireEvent returns false when a handler called preventDefault.
+    expect(fireEvent.mouseDown(bold)).toBe(false);
+  });
+});
+
 describe("composition", () => {
   it("renders one option button per authored Option child", () => {
     renderBare();
@@ -112,12 +173,12 @@ describe("composition", () => {
     render(
       <Field>
         <OptionList>
-          <OptionList.Options>
+          <OptionList.Listbox>
             <OptionList.Option value="apple" label="Apple">
               <svg data-testid="apple-icon" />
               Apple
             </OptionList.Option>
-          </OptionList.Options>
+          </OptionList.Listbox>
         </OptionList>
       </Field>,
     );
@@ -196,7 +257,7 @@ describe("search filter", () => {
       <Field>
         <OptionList>
           <Field.Search placeholder="Search…" />
-          <OptionList.Options>
+          <OptionList.Listbox>
             <OptionList.Option value="apple" label="Apple">
               <svg />
               Apple
@@ -205,7 +266,7 @@ describe("search filter", () => {
               <svg />
               Mango
             </OptionList.Option>
-          </OptionList.Options>
+          </OptionList.Listbox>
         </OptionList>
       </Field>,
     );
@@ -220,7 +281,7 @@ describe("search filter", () => {
       <Field>
         <OptionList>
           <Field.Search onValueChange={onValueChange} />
-          <OptionList.Options>{optionEls()}</OptionList.Options>
+          <OptionList.Listbox>{optionEls()}</OptionList.Listbox>
         </OptionList>
       </Field>,
     );
@@ -306,5 +367,48 @@ describe("roving tabstop", () => {
     const avocado = screen.getByRole("option", { name: "Avocado" });
     expect(document.activeElement).toBe(avocado);
     expect(within(listbox).getByRole("option", { name: "Avocado" })).toBe(avocado);
+  });
+});
+
+describe("externalKeys (slash-menu — focus stays outside the list)", () => {
+  function renderExternal(props: ListProps = {}) {
+    const onValueChange = vi.fn();
+    render(
+      <OptionList onValueChange={onValueChange} {...props}>
+        <OptionList.Listbox externalKeys loop>
+          {optionEls()}
+        </OptionList.Listbox>
+      </OptionList>,
+    );
+    return onValueChange;
+  }
+  const pressDoc = (key: string) => fireEvent.keyDown(document, { key });
+  const activeValue = () =>
+    screen
+      .getAllByRole("option")
+      .find((o) => o.hasAttribute("data-active"))
+      ?.getAttribute("data-value");
+
+  it("moves the highlight via a document keydown, focus never entering the list", () => {
+    renderExternal();
+    expect(activeValue()).toBe("apple"); // defaults to the first enabled option
+    pressDoc("ArrowDown");
+    pressDoc("ArrowDown");
+    expect(activeValue()).toBe("banana");
+    expect(document.activeElement).toBe(document.body); // focus stayed put
+  });
+
+  it("commits the highlighted option on Enter", () => {
+    const onValueChange = renderExternal();
+    pressDoc("ArrowDown"); // apple -> avocado
+    pressDoc("Enter");
+    expect(onValueChange).toHaveBeenCalledWith("avocado");
+  });
+
+  it("wraps with loop — ArrowUp from the first lands on the last enabled option", () => {
+    renderExternal();
+    expect(activeValue()).toBe("apple");
+    pressDoc("ArrowUp");
+    expect(activeValue()).toBe("mango"); // jackfruit is disabled, so last enabled is mango
   });
 });

@@ -52,13 +52,13 @@ export default function OptionListPreviewPage() {
         <Field.Label>Fruit</Field.Label>
         <OptionList value={fruit} onValueChange={setFruit}>
           <Field.Search placeholder="Search…" />
-          <OptionList.Options>
+          <OptionList.Listbox>
             {FRUITS.map((f) => (
               <OptionList.Option key={f.value} value={f.value}>
                 {f.label}
               </OptionList.Option>
             ))}
-          </OptionList.Options>
+          </OptionList.Listbox>
         </OptionList>
         <Field.Hint>Type to filter, click to pick</Field.Hint>
       </Field>
@@ -68,14 +68,14 @@ export default function OptionListPreviewPage() {
       <Field>
         <Field.Label>Action</Field.Label>
         <OptionList value={action} onValueChange={setAction}>
-          <OptionList.Options>
+          <OptionList.Listbox>
             {ACTIONS.map(({ value, label, Icon }) => (
               <OptionList.Option key={value} value={value} label={label}>
                 <Icon />
                 {label}
               </OptionList.Option>
             ))}
-          </OptionList.Options>
+          </OptionList.Listbox>
         </OptionList>
         <Field.Hint>Composed icon + label</Field.Hint>
       </Field>

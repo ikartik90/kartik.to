@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import { menuIcon } from "../../styled-system/recipes";
 import { selectionPopover } from "../../styled-system/recipes";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
-import { Menu } from "@/components/menu/menu";
+import { OptionList } from "@/components/ui/input/option-list";
 import type { Mark } from "@/domain/nodes";
 import LinkIcon from "@/assets/icons/link.svg";
 import BoldIcon from "@/assets/icons/bold.svg";
@@ -214,21 +214,21 @@ export function SelectionToolbar({
         rect={rect}
         anchorName={selectionAnchor}
         className={toolbarClass}
-        role="toolbar"
-        ariaLabel="Link actions"
         onDismiss={onDismiss}
       >
-        <Menu.Toolbar>
-          <Menu.Button ariaLabel="Edit link" onClick={onEditLink}>
-            <EditIcon className={iconStyle} aria-hidden />
-          </Menu.Button>
-          <Menu.Button ariaLabel="Open link" onClick={onGotoLink}>
-            <GotoIcon className={iconStyle} aria-hidden />
-          </Menu.Button>
-          <Menu.Button ariaLabel="Remove link" onClick={onRemoveLink}>
-            <TrashIcon className={iconStyle} aria-hidden />
-          </Menu.Button>
-        </Menu.Toolbar>
+        <OptionList direction="inline">
+          <OptionList.Toolbar aria-label="Link actions">
+            <OptionList.Option aria-label="Edit link" onClick={onEditLink}>
+              <EditIcon aria-hidden />
+            </OptionList.Option>
+            <OptionList.Option aria-label="Open link" onClick={onGotoLink}>
+              <GotoIcon aria-hidden />
+            </OptionList.Option>
+            <OptionList.Option aria-label="Remove link" onClick={onRemoveLink}>
+              <TrashIcon aria-hidden />
+            </OptionList.Option>
+          </OptionList.Toolbar>
+        </OptionList>
       </Popover>
     );
   }
@@ -239,18 +239,21 @@ export function SelectionToolbar({
         rect={rect}
         anchorName={selectionAnchor}
         className={toolbarClass}
-        role="toolbar"
-        ariaLabel="Sidenote actions"
         onDismiss={onDismiss}
       >
-        <Menu.Toolbar>
-          <Menu.Button ariaLabel="Edit sidenote" onClick={onEditSidenote}>
-            <EditIcon className={iconStyle} aria-hidden />
-          </Menu.Button>
-          <Menu.Button ariaLabel="Delete sidenote" onClick={onDeleteSidenote}>
-            <TrashIcon className={iconStyle} aria-hidden />
-          </Menu.Button>
-        </Menu.Toolbar>
+        <OptionList direction="inline">
+          <OptionList.Toolbar aria-label="Sidenote actions">
+            <OptionList.Option aria-label="Edit sidenote" onClick={onEditSidenote}>
+              <EditIcon aria-hidden />
+            </OptionList.Option>
+            <OptionList.Option
+              aria-label="Delete sidenote"
+              onClick={onDeleteSidenote}
+            >
+              <TrashIcon aria-hidden />
+            </OptionList.Option>
+          </OptionList.Toolbar>
+        </OptionList>
       </Popover>
     );
   }
@@ -260,40 +263,41 @@ export function SelectionToolbar({
       rect={rect}
       anchorName={selectionAnchor}
       className={toolbarClass}
-      role="toolbar"
-      ariaLabel="Format selection"
       onDismiss={onDismiss}
     >
-      <Menu.Toolbar>
-        <Menu.Button
-          ariaLabel="Add link"
-          pressed={activeMarks.has("link")}
-          onClick={onStartLink}
-        >
-          <LinkIcon className={iconStyle} aria-hidden />
-        </Menu.Button>
-        <Menu.Button
-          ariaLabel="Add sidenote"
-          pressed={activeMarks.has("sidenote")}
-          onClick={onAddSidenote}
-        >
-          <SidenoteIcon className={iconStyle} aria-hidden />
-        </Menu.Button>
-        {FORMAT_GROUPS.map((group, groupIdx) => (
-          <Menu.Group key={groupIdx}>
-            {group.map(({ mark, label, Icon }) => (
-              <Menu.Button
-                key={mark}
-                ariaLabel={label}
-                pressed={activeMarks.has(mark)}
-                onClick={() => onToggleMark(mark)}
-              >
-                <Icon className={iconStyle} aria-hidden />
-              </Menu.Button>
-            ))}
-          </Menu.Group>
-        ))}
-      </Menu.Toolbar>
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label="Format selection">
+          <OptionList.Option
+            aria-label="Add link"
+            pressed={activeMarks.has("link")}
+            onClick={onStartLink}
+          >
+            <LinkIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Option
+            aria-label="Add sidenote"
+            pressed={activeMarks.has("sidenote")}
+            onClick={onAddSidenote}
+          >
+            <SidenoteIcon aria-hidden />
+          </OptionList.Option>
+          {FORMAT_GROUPS.map((group, groupIdx) => (
+            <Fragment key={groupIdx}>
+              <OptionList.Divider />
+              {group.map(({ mark, label, Icon }) => (
+                <OptionList.Option
+                  key={mark}
+                  aria-label={label}
+                  pressed={activeMarks.has(mark)}
+                  onClick={() => onToggleMark(mark)}
+                >
+                  <Icon aria-hidden />
+                </OptionList.Option>
+              ))}
+            </Fragment>
+          ))}
+        </OptionList.Toolbar>
+      </OptionList>
     </Popover>
   );
 }
