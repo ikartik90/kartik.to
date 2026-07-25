@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import { menuIcon } from "../../styled-system/recipes";
 import { selectionPopover } from "../../styled-system/recipes";
-import { Popover, type PopoverRect } from "@/components/menu/popover";
+import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { Menu } from "@/components/menu/menu";
 import type { Mark } from "@/domain/nodes";
 import LinkIcon from "@/assets/icons/link.svg";

@@ -42,6 +42,16 @@ export default defineConfig({
           tooltipIcon: { value: "14px" },
           // Numbered-list ordinal badge — square at single digit, pill beyond (Figma 413:684/688)
           listMarker: { value: "24px" },
+          // Calendar day cell — also the weekday header cell and the month
+          // chevrons, so the whole grid keeps one column pitch (Figma 563:3377).
+          calendarDay: { value: "24px" },
+          // Option list / combobox popover width. Fixed like the calendar's
+          // 208px pitch so a select popover and a date popover read as siblings
+          // (Figma 647:2383 option-list, 629:1416 combobox popover).
+          optionListWidth: { value: "208px" },
+          // One option row — the list-item hit target (24px line + 2×4 inset),
+          // also the empty-state row height (Figma 647:2387).
+          optionRow: { value: "32px" },
           // Bulleted-list dot diameter
           listBullet: { value: "8px" },
           // Selection toolbar icon button (Figma 422:834 — 28px square)
@@ -70,7 +80,9 @@ export default defineConfig({
             900: { value: "#1F2123" },
           },
           brand: {
+            rust: { value: "#41362E" },
             orange: { value: "#FFAB6F" },
+            rosemilk: { value: "#F2C9DE" },
             pink: { value: "#FF4D97" },
           },
         },
@@ -167,8 +179,9 @@ export default defineConfig({
             brandedEmphasis: {
               value: {
                 base: "linear-gradient(135deg, {colors.brand.orange} 0%, {colors.brand.pink} 60%)",
-                _dark: "linear-gradient(135deg, {colors.brand.pink} 40%, {colors.brand.orange} 100%)",
-              }
+                _dark:
+                  "linear-gradient(135deg, {colors.brand.pink} 40%, {colors.brand.orange} 100%)",
+              },
             },
           },
 
@@ -259,6 +272,41 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
                 },
               },
+              // Opaque covering surface for the Date input's calendar popover —
+              // it sits over the field, so it can't be translucent like `active`
+              // (Figma 631:894 dark / 631:898 light).
+              popover: {
+                value: { base: "#f2c9de", _dark: "#41362e" },
+              },
+              // Selected chip inside that popover — the resting text colour at
+              // 15%, so it reads neutral against the brand-tinted surface
+              // (Figma 563:2726 dark / 563:2767 light).
+              selected: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-600) 15%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-400) 15%, transparent)",
+                },
+              },
+              // Hovered / keyboard-active option row — the item hue at a low
+              // alpha, deliberately lighter than the 15% selected chip so hover
+              // reads as secondary to selection. `hover` follows the neutral
+              // default-tone text; `hoverBrand` follows the brand onBrand text
+              // (Figma 647:2389 default, 629:1419 onBrand — light 10% / dark 5%).
+              hover: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-600) 10%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-400) 5%, transparent)",
+                },
+              },
+              hoverBrand: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-brand-pink) 10%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-brand-orange) 5%, transparent)",
+                },
+              },
             },
             border: {
               default: {
@@ -292,11 +340,32 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-neutral-400) 50%, transparent)",
                 },
               },
+              // Placeholder text — the neutral accent at 25%, one step fainter
+              // than `muted` so an empty field reads as clearly unfilled without
+              // dragging labels/hints (which stay `muted`) down with it. The
+              // brand-surface counterpart is `activeMuted` (also 25%).
+              placeholder: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-400) 25%, transparent)",
+                },
+              },
               // Active label / value / leading icon accent.
               active: {
                 value: {
                   base: "{colors.brand.pink}",
                   _dark: "{colors.brand.orange}",
+                },
+              },
+              // Secondary/placeholder text on a brand-tinted surface — the
+              // active accent dialled back to 25% (the brand-surface counterpart
+              // of `muted`, e.g. the Date popover search placeholder).
+              activeMuted: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-brand-pink) 25%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-brand-orange) 25%, transparent)",
                 },
               },
             },
@@ -1521,6 +1590,60 @@ export default defineConfig({
           },
         }),
 
+        // The Date input's calendar popover — positioned to COVER the trigger
+        // frame (top/left of the anchor, at least its width) rather than sit
+        // below it, so the popover's search row lands over the collapsed value
+        // (Figma 563:2486). Anchor-name `--date-popover` is set on the frame only
+        // while open, so exactly one element carries it. Opaque tinted surface +
+        // brand inset border.
+        datePopover: defineRecipe({
+          className: "date-popover",
+          description:
+            "Covering calendar popover for the Date input: anchored over the trigger frame (top/left, ≥ its width) with an opaque brand-tinted surface + brand inset border. Distinct from the below-anchored menu popovers.",
+          base: {
+            position: "fixed",
+            zIndex: 50,
+            positionAnchor: "--date-popover",
+            top: "anchor(top)",
+            left: "anchor(left)",
+            minWidth: "anchor-size(width)",
+            backgroundColor: "field.bg.popover",
+            borderRadius: "sm",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow:
+              "inset 0 0 0 0.5px var(--colors-field-border-active), 0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+          },
+        }),
+
+        // The Combobox input's option-list popover — the Select counterpart to
+        // datePopover. Same covering behaviour (anchored over the trigger frame
+        // via `--combobox-popover`, opaque brand-tinted surface + brand inset
+        // border), but sized to the option list: at least `optionListWidth`, and
+        // never narrower than the trigger (Figma 629:1416 dark / 630:1702 light).
+        comboboxPopover: defineRecipe({
+          className: "combobox-popover",
+          description:
+            "Covering option-list popover for the Combobox input: anchored over the trigger frame (top/left) with an opaque brand-tinted surface + brand inset border, ≥ the option-list width and ≥ the trigger width. The Select sibling of datePopover.",
+          base: {
+            position: "fixed",
+            zIndex: 50,
+            positionAnchor: "--combobox-popover",
+            top: "anchor(top)",
+            left: "anchor(left)",
+            width: "token(sizes.optionListWidth)",
+            minWidth: "anchor-size(width)",
+            backgroundColor: "field.bg.popover",
+            borderRadius: "sm",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow:
+              "inset 0 0 0 0.5px var(--colors-field-border-active), 0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+          },
+        }),
+
         selectionPopover: defineRecipe({
           className: "selection-popover",
           description:
@@ -1683,7 +1806,7 @@ export default defineConfig({
           className: "field",
           description:
             "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` control flips the same root into a control ∣ label/hint grid (the Switch archetype), detected via `:has` — no prop. Scope: default + active only.",
-          slots: ["root", "label", "frame", "leading", "control", "hint"],
+          slots: ["root", "label", "frame", "control", "hint"],
           base: {
             root: {
               display: "flex",
@@ -1712,9 +1835,10 @@ export default defineConfig({
               // Active tracks the control's focus from the field root, so the
               // label (a sibling above the frame) recolors even though it sits
               // outside the shell.
-              "[data-field]:has([data-control]:focus-visible) &": {
-                color: "field.text.active",
-              },
+              "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &":
+                {
+                  color: "field.text.active",
+                },
               // Switch archetype: the label sits to the right of the control and
               // reads as regular text (not the muted field label), and clicking
               // it toggles — so it takes the pointer cursor.
@@ -1747,11 +1871,12 @@ export default defineConfig({
               color: "field.text.default",
               transition:
                 "background-color 150ms ease, border-color 150ms ease, color 150ms ease",
-              "[data-field]:has([data-control]:focus-visible) &": {
-                backgroundColor: "field.bg.active",
-                borderColor: "field.border.active",
-                color: "field.text.active",
-              },
+              "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &":
+                {
+                  backgroundColor: "field.bg.active",
+                  borderColor: "field.border.active",
+                  color: "field.text.active",
+                },
               // Keyboard focus draws the ring on the shell (as the command
               // palette does for its input row) so it hugs the whole field,
               // icon included, rather than the raw input. Inset so the frame's
@@ -1759,27 +1884,25 @@ export default defineConfig({
               // keyboard ring in globals.css.
               "html[data-keyboard-focus] [data-field]:has([data-control]:focus-visible) &":
                 {
-                  boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+                  boxShadow:
+                    "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
                 },
-            },
-            leading: {
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              width: "token(spacing.xxl)",
-              height: "token(spacing.xxl)",
-              color: "inherit",
-              transition: "color 150ms ease",
-              // Decorative — clicks fall through to the frame's focus-forward.
-              pointerEvents: "none",
-              "& svg": {
-                width: "token(spacing.full)",
-                height: "token(spacing.full)",
+              // Icons compose straight into the frame — a leading `<Icon/>` before
+              // the control, or a trailing one after it (the Date/Select triggers).
+              // A fixed 20px box that inherits the frame's colour (so it tracks the
+              // active accent) and is non-interactive, so clicks fall through to the
+              // frame's focus-forward / open target. `> svg` keeps it off any icon
+              // that might live inside the control itself.
+              "& > svg": {
+                flexShrink: 0,
+                width: "token(spacing.xxl)",
+                height: "token(spacing.xxl)",
                 display: "block",
+                pointerEvents: "none",
+                transition: "color 150ms ease",
               },
-              "& svg path[stroke]": { stroke: "currentColor" },
-              "& svg path[fill]": { fill: "currentColor" },
+              "& > svg path[stroke]": { stroke: "currentColor" },
+              "& > svg path[fill]": { fill: "currentColor" },
             },
             control: {
               flex: "1 1 0",
@@ -1793,7 +1916,19 @@ export default defineConfig({
               color: "inherit",
               transition: "color 150ms ease",
               caretColor: "field.text.active",
-              "&::placeholder": { color: "field.text.muted" },
+              // Placeholder text — the native input's `::placeholder` and the
+              // Select/Date trigger's `[data-placeholder]` sentinel share one
+              // rule. Resting is the neutral placeholder tone; when the field
+              // goes active (control focus-visible, or an open trigger's
+              // aria-expanded) it tracks the label / value / leading icon into
+              // the accent via `activeMuted` (the brand-surface counterpart of
+              // the placeholder tone, same 25%) rather than staying stranded in
+              // neutral grey against the now brand-tinted frame.
+              "&::placeholder, &[data-placeholder]": {
+                color: "field.text.placeholder",
+              },
+              "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &::placeholder, [data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &[data-placeholder]":
+                { color: "field.text.activeMuted" },
               // The UA outline is already reset app-wide (globals.css). The
               // app-wide keyboard ring, however, targets the raw <input>, which
               // this frame's overflow:hidden clips into an awkward inner
@@ -1905,8 +2040,7 @@ export default defineConfig({
               position: "absolute",
               borderRadius: "token(spacing.half)",
               backgroundColor: "field.text.default",
-              transition:
-                "transform 150ms ease, background-color 150ms ease",
+              transition: "transform 150ms ease, background-color 150ms ease",
               "[aria-checked='true'] &": {
                 backgroundColor: "field.text.active",
               },
@@ -1951,6 +2085,387 @@ export default defineConfig({
           // value, so the static extractor only sees the default (lg). Force
           // both size variants to be generated.
           staticCss: [{ size: ["*"] }],
+        }),
+
+        // The calendar grid popover for the Date input. Presentation only — the
+        // month math (Temporal) and selection live in `calendar.tsx`. Slots map
+        // 1:1 to the compound parts: `search` (Field.Search at the top),
+        // `period`/`heading`/`nav` (the ‹ December 2026 › header, nav = the
+        // Field.Action chevrons), `week`/`weekday` (the S M T… header row), and
+        // `grid`/`date` (the day cells). Date state is keyed off attributes the
+        // cell sets itself — `aria-selected`, `data-state` (today), `data-outside`
+        // (spill days), `:disabled` (out of min/max) — so consumers can restyle
+        // any of them (including `data-weekend`/`data-weekday`) without prop APIs.
+        calendar: defineSlotRecipe({
+          className: "calendar",
+          description:
+            "Calendar grid: a search field, a ‹ month year › period header, the weekday header row, and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px wide). Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
+          slots: [
+            "root",
+            "search",
+            "period",
+            "nav",
+            "heading",
+            "week",
+            "weekday",
+            "grid",
+            "date",
+          ],
+          base: {
+            root: {
+              display: "flex",
+              flexDirection: "column",
+              // The grid's own pitch — 4px between every stacked part.
+              gap: "sm",
+              width: "fit-content",
+              // The body inset. The search row bleeds back out of it to sit
+              // flush against the surface's edges (both Figma variants are a
+              // full-bleed search row above an 8px-inset body).
+              padding: "md",
+            },
+            search: {
+              width: "calc(token(spacing.full) + token(spacing.md) * 2)",
+              marginInline: "calc(token(spacing.md) * -1)",
+              marginBlockStart: "calc(token(spacing.md) * -1)",
+              // Restores the body's 8px top inset (4px here + the root gap).
+              marginBlockEnd: "sm",
+              height: "token(spacing.4xl)",
+              paddingInline: "md",
+              paddingBlock: "none",
+              border: "none",
+              borderBottomWidth: "token(spacing.3xs)",
+              borderBottomStyle: "solid",
+              borderBottomColor: "field.border.default",
+              background: "transparent",
+              appearance: "none",
+              color: "field.text.default",
+              textStyle: "bodyLarge",
+              caretColor: "field.text.active",
+              "&::placeholder": { color: "field.text.placeholder" },
+              "&::-webkit-search-cancel-button": { display: "none" },
+            },
+            period: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "sm",
+              // The chevrons are `color: inherit` Field.Actions, so the row owns
+              // their hue; the heading overrides its own.
+              color: "field.text.default",
+            },
+            nav: {
+              flexShrink: 0,
+              // Secondary to the month label — the glyph alone is halved, so the
+              // hover chip underneath stays at full strength.
+              "& svg": { opacity: 0.5, transition: "opacity 150ms ease" },
+              "&:hover svg": { opacity: 1 },
+            },
+            heading: {
+              flex: "1 1 auto",
+              textAlign: "center",
+              textStyle: "bodyLarge",
+              color: "field.text.default",
+            },
+            week: {
+              display: "grid",
+              gridTemplateColumns: "repeat(7, token(sizes.calendarDay))",
+              gap: "sm",
+              // The header row hangs 4px below the period row (Figma 563:2722).
+              paddingTop: "sm",
+            },
+            weekday: {
+              display: "grid",
+              placeItems: "center",
+              width: "token(sizes.calendarDay)",
+              textStyle: "bodySmall",
+              color: "field.text.default",
+              userSelect: "none",
+              // Saturday/Sunday recede — the header's half of the same rule the
+              // weekend day cells carry.
+              "&[data-weekend]": { opacity: 0.5 },
+            },
+            grid: {
+              display: "grid",
+              gridTemplateColumns: "repeat(7, token(sizes.calendarDay))",
+              gap: "sm",
+            },
+            date: {
+              display: "grid",
+              placeItems: "center",
+              width: "token(sizes.calendarDay)",
+              height: "token(sizes.calendarDay)",
+              borderRadius: "sm",
+              textStyle: "bodySmall",
+              color: "field.text.default",
+              cursor: "pointer",
+              userSelect: "none",
+              transition:
+                "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
+              // `data-query` is the search's pending target — Enter's date. It
+              // shares the hover declaration verbatim (here and in `:disabled`
+              // below) so previewing a typed date reads exactly like pointing at
+              // it, and an uncommittable one stays uncoloured either way.
+              "&:hover, &[data-query]": { backgroundColor: "bg.itemHover" },
+              // Weekend columns recede, matching their header — unless the cell
+              // is already carrying today or the selection.
+              "&[data-weekend]:not([aria-selected='true'], [data-state='today'], [data-outside])":
+                { opacity: 0.5 },
+              // Spill-over days are blank cells — they hold the column but
+              // render nothing, and drop out of the tab/a11y order with it.
+              "&[data-outside]": { opacity: 0.15 },
+              // Today — the accent as text only, no chip.
+              "&[data-state='today']": { color: "field.text.active" },
+              // Selected — the accent as a translucent chip; today's colour
+              // survives underneath it, so the two compose without a special
+              // case (a selected today reads exactly as selected).
+              "&[aria-selected='true']": {
+                backgroundColor: "field.bg.active",
+                color: "field.text.active",
+              },
+              "&:disabled": {
+                color: "field.text.muted",
+                opacity: 0.4,
+                cursor: "not-allowed",
+                "&:hover, &[data-query]": { backgroundColor: "transparent" },
+              },
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+              },
+            },
+          },
+          // `tone` is a palette swap over the shared geometry above — which half
+          // of the calendar reads brand, and who owns the surface.
+          //
+          //   default │ its OWN framed surface (field.bg/border.default, 208px);
+          //           │ dates neutral, today/selected brand (Figma 644:1678 dark
+          //           │ / 644:1681 light).
+          //   onBrand │ dropped INTO the Date popover, which owns the surface
+          //           │ (`datePopover`); the palette inverts — dates read brand,
+          //           │ today/selected drop to neutral to stand out against the
+          //           │ brand tint (Figma 631:893 / 631:897).
+          variants: {
+            tone: {
+              default: {
+                // The standalone calendar is a self-contained field surface, so
+                // it draws its own fill + inset ring rather than leaning on
+                // whatever it was dropped on. Edge as box-shadow, not border, so
+                // it takes no layout and the 208px arithmetic still holds.
+                root: {
+                  backgroundColor: "field.bg.default",
+                  borderRadius: "sm",
+                  overflow: "hidden",
+                  boxShadow:
+                    "inset 0 0 0 0.5px var(--colors-field-border-default)",
+                },
+              },
+              onBrand: {
+                search: {
+                  color: "field.text.active",
+                  borderBottomColor: "field.border.active",
+                  // Placeholder reads as the accent at 25%, not neutral muted
+                  // (brand orange dark / pink light).
+                  "&::placeholder": { color: "field.text.activeMuted" },
+                },
+                // Retints the chevrons, which inherit from the row (Figma
+                // 563:2715/563:2719 — brand stroke at 50%).
+                period: { color: "field.text.active" },
+                heading: { color: "field.text.active" },
+                weekday: { color: "field.text.active" },
+                date: {
+                  color: "field.text.active",
+                  // Today loses the accent and reads neutral (on this surface
+                  // the accent IS the background).
+                  "&[data-state='today']": { color: "field.text.default" },
+                  // Selected = neutral chip against the brand surface.
+                  "&[aria-selected='true']": {
+                    backgroundColor: "field.bg.selected",
+                    color: "field.text.default",
+                  },
+                },
+              },
+            },
+          },
+          defaultVariants: { tone: "default" },
+          // CalendarRoot calls calendar({ tone }) with a runtime value.
+          staticCss: [{ tone: ["*"] }],
+        }),
+
+        // The option list behind a Combobox — and a stand-alone, always-open
+        // select when used on its own. Presentation only; the filtering and
+        // selection live in `option-list.tsx`. Slots: `search` (the optional
+        // Field.Search filter row at the top), `list` (the scrollable
+        // `role=listbox` container), `option` (one `role=option` button), and
+        // `empty` (the no-matches row). Option state is keyed off attributes the
+        // button sets itself — `aria-selected`, `data-active` (roving/keyboard
+        // highlight), `:disabled` — so the look is re-skinnable off selectors.
+        // `tone` mirrors the calendar: `default` is a self-framed neutral
+        // surface with a brand selected chip (Figma 647:1947/2045); `onBrand` is
+        // the Combobox popover's inverse — options read brand, the selected chip
+        // drops to neutral to stand out on the brand tint (Figma 629:1416/630:1702).
+        optionList: defineSlotRecipe({
+          className: "option-list",
+          description:
+            "Option list: an optional search/filter row above a scrollable listbox of option buttons on a 28px row pitch. Options carry their state as attributes (aria-selected / data-active / :disabled), so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand selected chip; `onBrand` drops into the Combobox popover (which owns the surface) and inverts — options brand, selected chip neutral.",
+          slots: ["root", "search", "list", "option", "empty"],
+          base: {
+            root: {
+              display: "flex",
+              flexDirection: "column",
+              width: "token(sizes.optionListWidth)",
+              borderRadius: "sm",
+              overflow: "hidden",
+            },
+            // A full-width Field.Search dressed as the filter row — same look as
+            // the calendar's search slot (40px, 8px inset, a field-border rule
+            // under it), but no negative-margin bleed since the root has no
+            // padding of its own.
+            search: {
+              flexShrink: 0,
+              width: "token(spacing.full)",
+              height: "token(spacing.4xl)",
+              paddingInline: "md",
+              paddingBlock: "none",
+              border: "none",
+              borderBottomWidth: "token(spacing.3xs)",
+              borderBottomStyle: "solid",
+              borderBottomColor: "field.border.default",
+              background: "transparent",
+              appearance: "none",
+              color: "field.text.default",
+              textStyle: "bodyLarge",
+              caretColor: "field.text.active",
+              "&::placeholder": { color: "field.text.placeholder" },
+              "&::-webkit-search-cancel-button": { display: "none" },
+            },
+            list: {
+              display: "flex",
+              flexDirection: "column",
+              // Rows abut directly — each is its own 32px hit target, so no gap.
+              gap: "none",
+              padding: "sm",
+              overflowX: "hidden",
+              overflowY: "auto",
+              // 7 full rows + a ~12px peek of the next, so the half-row signals
+              // there's more to scroll (7 × 32 + 8px top/bottom padding + a 12px
+              // peek = 244px — Figma 647:2386).
+              maxHeight:
+                "calc(7 * token(sizes.optionRow) + 2 * token(spacing.sm) + token(spacing.lg))",
+            },
+            option: {
+              display: "flex",
+              alignItems: "center",
+              // Space a leading icon from the label when an option composes both.
+              gap: "md",
+              width: "token(spacing.full)",
+              flexShrink: 0,
+              height: "token(sizes.optionRow)",
+              // Uniform 4px inset (Figma 647:2387 — `p-[4px]`).
+              padding: "sm",
+              borderRadius: "sm",
+              border: "none",
+              background: "transparent",
+              appearance: "none",
+              textAlign: "left",
+              textStyle: "bodySmall",
+              color: "field.text.default",
+              cursor: "pointer",
+              userSelect: "none",
+              // Single line, truncated with an ellipsis.
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              // A composed leading icon: fixed 20px box, inherits the row colour
+              // (so it tracks selected/active) via currentColor.
+              "& svg": {
+                width: "token(spacing.xxl)",
+                height: "token(spacing.xxl)",
+                flexShrink: 0,
+                display: "block",
+              },
+              "& svg path[stroke]": { stroke: "currentColor" },
+              "& svg path[fill]": { fill: "currentColor" },
+              transition:
+                "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
+              // `data-active` is the roving/keyboard highlight; it shares the
+              // hover declaration verbatim so arrowing onto a row reads exactly
+              // like pointing at it (and a disabled row stays uncoloured either
+              // way, mirroring the calendar's day cells). The `:not` excludes the
+              // selected row: it's the default roving highlight, so it carries
+              // BOTH `data-active` and `aria-selected` — without the guard the
+              // neutral hover tint would win over the brand selected chip (equal
+              // specificity → atomic-CSS order decides), leaving selection grey.
+              "&:hover:not([aria-selected='true']), &[data-active]:not([aria-selected='true'])":
+                { backgroundColor: "field.bg.hover" },
+              "&[aria-selected='true']": {
+                backgroundColor: "field.bg.active",
+                color: "field.text.active",
+              },
+              "&:disabled": {
+                color: "field.text.muted",
+                opacity: 0.4,
+                cursor: "not-allowed",
+                "&:hover, &[data-active]": { backgroundColor: "transparent" },
+              },
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+              },
+            },
+            empty: {
+              display: "flex",
+              alignItems: "center",
+              height: "token(sizes.optionRow)",
+              paddingInline: "sm",
+              textStyle: "bodySmall",
+              color: "field.text.muted",
+              userSelect: "none",
+            },
+          },
+          variants: {
+            tone: {
+              default: {
+                // Self-contained field surface — its own fill + inset ring, like
+                // the calendar's default tone (edge as a box-shadow so it takes
+                // no layout and the width arithmetic holds).
+                root: {
+                  backgroundColor: "field.bg.default",
+                  boxShadow:
+                    "inset 0 0 0 0.5px var(--colors-field-border-default)",
+                },
+              },
+              onBrand: {
+                // Dropped INTO the Combobox popover, which owns the surface — so
+                // the root just fills it and the palette inverts.
+                root: { width: "token(spacing.full)" },
+                search: {
+                  color: "field.text.active",
+                  borderBottomColor: "field.border.active",
+                  "&::placeholder": { color: "field.text.activeMuted" },
+                },
+                option: {
+                  color: "field.text.active",
+                  // Same selected-row guard as the base tone (see there): keep the
+                  // neutral selected chip from being overridden by the brand hover
+                  // tint on the row that is both highlighted and selected.
+                  "&:hover:not([aria-selected='true']), &[data-active]:not([aria-selected='true'])":
+                    { backgroundColor: "field.bg.hoverBrand" },
+                  // Selected = neutral chip against the brand surface.
+                  "&[aria-selected='true']": {
+                    backgroundColor: "field.bg.selected",
+                    color: "field.text.default",
+                  },
+                  "&:disabled": {
+                    "&:hover, &[data-active]": {
+                      backgroundColor: "transparent",
+                    },
+                  },
+                },
+                empty: { color: "field.text.activeMuted" },
+              },
+            },
+          },
+          defaultVariants: { tone: "default" },
+          // OptionListRoot calls optionList({ tone }) with a runtime value.
+          staticCss: [{ tone: ["*"] }],
         }),
       },
 

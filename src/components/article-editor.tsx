@@ -3961,28 +3961,6 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     el.innerHTML = inlineNodesToHtml(children, base);
   }
 
-  /**
-   * The slash menu no longer picks a component itself — it opens the Insert
-   * Component overlay. Strip the trigger, leave a paragraph in place, and defer
-   * the actual component insertion until the overlay confirms (mirrors Media).
-   */
-  function handleSlashOpenComponentPicker() {
-    if (!slashAnchor) return;
-    const { index, el } = slashAnchor;
-    setSlashAnchor(null);
-    setSlashQuery("");
-
-    const keptChildren = stripSlashTrigger(domToInlineNodes(el));
-    syncFocusedBlockDom(el, keptChildren, "paragraph", sidenoteBaseList[index]);
-
-    const next = [...blocks];
-    next[index] = { type: "paragraph", children: keptChildren };
-    updateBlocks(next);
-
-    setComponentDialogBlockIndex(index);
-    setComponentDialogOpen(true);
-  }
-
   function handleComponentInsert(componentId: string) {
     if (componentDialogBlockIndex === null) return;
     const index = componentDialogBlockIndex;
@@ -4017,6 +3995,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const keptChildren = stripSlashTrigger(domToInlineNodes(el));
     syncFocusedBlockDom(el, keptChildren, type, sidenoteBaseList[index]);
 
+    // Media and Component are both deferred insertions: replace the trigger
+    // block with a paragraph placeholder, then hand off to a dialog that fills
+    // the remaining field (src / componentId) before the real block is written.
     if (type === "media") {
       const next = [...blocks];
       next[index] = { type: "paragraph", children: keptChildren };
@@ -4025,6 +4006,16 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       setImageDialogMode("insert");
       setImageDialogBlockIndex(index);
       setImageDialogOpen(true);
+      return;
+    }
+
+    if (type === "component") {
+      const next = [...blocks];
+      next[index] = { type: "paragraph", children: keptChildren };
+      updateBlocks(next);
+
+      setComponentDialogBlockIndex(index);
+      setComponentDialogOpen(true);
       return;
     }
 
@@ -4935,7 +4926,6 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
             blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined
           }
           onSelect={handleSlashSelect}
-          onOpenComponentPicker={handleSlashOpenComponentPicker}
           onDismiss={handleSlashDismiss}
         />
       )}

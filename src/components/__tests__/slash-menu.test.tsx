@@ -69,13 +69,11 @@ function setSlashAnchorOnBody() {
 
 describe("SlashMenu", () => {
   let onSelect: Mock<(type: SlashMenuBlockType) => void>;
-  let onOpenComponentPicker: Mock<() => void>;
   let onDismiss: Mock<() => void>;
   let anchorEl: HTMLElement;
 
   beforeEach(() => {
     onSelect = vi.fn<(type: SlashMenuBlockType) => void>();
-    onOpenComponentPicker = vi.fn<() => void>();
     onDismiss = vi.fn<() => void>();
     anchorEl = setSlashAnchorOnBody();
   });
@@ -87,12 +85,7 @@ describe("SlashMenu", () => {
 
   function renderMenu(props: Partial<React.ComponentProps<typeof SlashMenu>> = {}) {
     return render(
-      <SlashMenu
-        onSelect={onSelect}
-        onOpenComponentPicker={onOpenComponentPicker}
-        onDismiss={onDismiss}
-        {...props}
-      />,
+      <SlashMenu onSelect={onSelect} onDismiss={onDismiss} {...props} />,
     );
   }
 
@@ -133,26 +126,26 @@ describe("SlashMenu", () => {
     expect(items[1].getAttribute("aria-selected")).toBe("false");
   });
 
-  it("renders the Component item as a plain menuitem without a submenu", () => {
+  it("renders the Component item as a plain option without a submenu", () => {
     renderMenu();
     // No chevron / submenu — hovering the row does not open anything.
     fireEvent.pointerEnter(screen.getByText("Component"));
     expect(screen.queryByRole("menu", { name: "Insert component" })).toBeNull();
-    expect(onOpenComponentPicker).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("opens the component picker when the Component item is clicked", () => {
+  it("calls onSelect with 'component' when Component is clicked", () => {
     renderMenu();
     fireEvent.click(screen.getByText("Component"));
-    expect(onOpenComponentPicker).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith("component");
   });
 
-  it("opens the component picker on Enter when the Component item is active", () => {
+  it("calls onSelect with 'component' on Enter when the Component item is active", () => {
     renderMenu();
     // Component sits at index 3 (after the first three block items).
     for (let i = 0; i < 3; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
     fireEvent.keyDown(document, { key: "Enter" });
-    expect(onOpenComponentPicker).toHaveBeenCalledOnce();
+    expect(onSelect).toHaveBeenCalledWith("component");
   });
 
   // -------------------------------------------------------------------------
@@ -306,12 +299,7 @@ describe("SlashMenu", () => {
     // Change query so filtered list updates.
     act(() => {
       rerender(
-        <SlashMenu
-          query="p"
-          onSelect={onSelect}
-          onOpenComponentPicker={onOpenComponentPicker}
-          onDismiss={onDismiss}
-        />,
+        <SlashMenu query="p" onSelect={onSelect} onDismiss={onDismiss} />,
       );
     });
     const items = screen.getAllByRole("option");

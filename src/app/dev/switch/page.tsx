@@ -41,9 +41,11 @@ export default function SwitchPreviewPage() {
           <Field.Hint>caption label · caption hint</Field.Hint>
         </Field>
         <Field size="sm">
-          <Switch defaultChecked />
-          <Field.Label>Small label</Field.Label>
-          <Field.Hint>caption label · caption hint</Field.Hint>
+          <Field.Frame>
+            <Switch defaultChecked />
+            <Field.Label>Small label</Field.Label>
+            <Field.Hint>caption label · caption hint</Field.Hint>
+          </Field.Frame>
         </Field>
 
         {/* Per-part overrides: the field size sets a coordinated default, each
