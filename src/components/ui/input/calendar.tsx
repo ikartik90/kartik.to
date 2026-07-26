@@ -23,6 +23,7 @@ import {
   type WeekdayKey,
 } from "@/utils/calendar-month";
 import { Field, useField, type FieldSearchProps } from "./field";
+import { Button } from "@/components/ui/button";
 
 // ---------------------------------------------------------------------------
 // Calendar — the composable grid behind the Date input's popover.
@@ -30,9 +31,9 @@ import { Field, useField, type FieldSearchProps } from "./field";
 //   <Calendar value={date} onValueChange={setDate}>
 //     <Field.Search />
 //     <Calendar.Period>
-//       <Field.Action><ChevronLeft/></Field.Action>
+//       <Button variant="icon"><ChevronLeft/></Button>
 //       <Calendar.Heading />
-//       <Field.Action><ChevronRight/></Field.Action>
+//       <Button variant="icon"><ChevronRight/></Button>
 //     </Calendar.Period>
 //     <Calendar.Week><Calendar.Day/></Calendar.Week>     {/* one template, cloned per weekday */}
 //     <Calendar.Grid><Calendar.Date/></Calendar.Grid>    {/* one template, cloned per day     */}
@@ -40,8 +41,8 @@ import { Field, useField, type FieldSearchProps } from "./field";
 //
 // The root owns Temporal month math + selection and hands each part what it
 // needs through context; `Week`/`Grid` clone their single child template once
-// per header/day cell, injecting the cell. `Period` clones its two Field.Action
-// children into prev/next. Every day cell surfaces its state (aria-selected,
+// per header/day cell, injecting the cell. `Period` clones its two icon-`Button`
+// chevron children into prev/next. Every day cell surfaces its state (aria-selected,
 // data-state=today, data-outside, :disabled) AND identity (data-weekday,
 // data-weekend) as attributes, so the look is fully re-skinnable off selectors.
 // ---------------------------------------------------------------------------
@@ -274,7 +275,7 @@ function CalendarRoot({
 export type CalendarPeriodProps = HTMLAttributes<HTMLDivElement>;
 
 /**
- * The `‹ month year ›` header. Clones its Field.Action children in order — the
+ * The `‹ month year ›` header. Clones its icon-`Button` children in order — the
  * first drives the previous month, the second the next — so the chevron buttons
  * stay generic and this part owns the wiring.
  */
@@ -282,7 +283,7 @@ function CalendarPeriod({ className, children, ...rest }: CalendarPeriodProps) {
   const { styles, prevMonth, nextMonth } = useCalendar("Calendar.Period");
   const items = Children.toArray(children);
   const isAction = (c: ReactNode): c is ReactElement =>
-    isValidElement(c) && c.type === Field.Action;
+    isValidElement(c) && c.type === Button;
 
   const wired = items.map((child, i) => {
     if (!isAction(child)) return child;
@@ -291,7 +292,7 @@ function CalendarPeriod({ className, children, ...rest }: CalendarPeriodProps) {
       onClick?: () => void;
       "aria-label"?: string;
     }>;
-    // First Field.Action drives the previous month, the second the next.
+    // First chevron drives the previous month, the second the next.
     const isPrev = items.slice(0, i).filter(isAction).length === 0;
     return cloneElement(el, {
       className: cx(styles.nav, el.props.className),
@@ -426,9 +427,9 @@ function CalendarDate({ cell, className, children, ...rest }: CalendarDateProps)
 
 /**
  * Compound calendar. `Calendar` is the root/context; the parts read it and stay
- * dumb. `Field.Search`/`Field.Action` (from field.tsx) compose in as the search
- * row and the month chevrons. Surface it as `Field.Calendar` from the Date-input
- * assembly when that lands.
+ * dumb. `Field.Search` (from field.tsx) and a pair of icon `Button` chevrons
+ * compose in as the search row and the month steppers. Surface it as
+ * `Field.Calendar` from the Date-input assembly when that lands.
  */
 export const Calendar = Object.assign(CalendarRoot, {
   Period: CalendarPeriod,

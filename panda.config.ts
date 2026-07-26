@@ -1683,10 +1683,10 @@ export default defineConfig({
           defaultVariants: { align: "center" },
         }),
 
-        socialTooltip: defineRecipe({
-          className: "social-tooltip",
+        tooltip: defineRecipe({
+          className: "tooltip",
           description:
-            "Social link hover tooltip — Figma node 389:318 (20px tall, 4px padding/gap).",
+            "Cursor-following hover tooltip shared by the social links, Button and Link — Figma node 389:318 (20px tall, 4px padding/gap, a leading label ∣ hairline ∣ trailing 14px glyph). Positioned imperatively (fixed + a ref that tracks the pointer), so it carries no anchor of its own.",
           base: {
             position: "fixed",
             zIndex: 50,
@@ -1719,13 +1719,33 @@ export default defineConfig({
               opacity: 0,
               filter: "blur(1px)",
             },
+            // Shown by its host toggling `data-visible` on the element itself
+            // (`.tooltip[data-visible]` outspecifies the base `.tooltip` within
+            // @layer recipes — no unlayered override needed). The cursor trails
+            // the box by its offset, so `pointer-events: auto` never intercepts
+            // the pointer yet lets an interactive tooltip (the email copy) be hit.
+            "&[data-visible]": {
+              opacity: 1,
+              visibility: "visible",
+              pointerEvents: "auto",
+              filter: "blur(0)",
+            },
+            // A composed trailing glyph is tooltip-sized (14px) and tracks the
+            // label colour — no per-icon className needed.
+            "& svg": {
+              flexShrink: 0,
+              width: "token(sizes.tooltipIcon)",
+              height: "token(sizes.tooltipIcon)",
+            },
+            "& svg path[stroke]": { stroke: "currentColor" },
+            "& svg path[fill]": { fill: "currentColor" },
           },
         }),
 
-        socialTooltipIcon: defineRecipe({
-          className: "social-tooltip-icon",
+        tooltipIcon: defineRecipe({
+          className: "tooltip-icon",
           description:
-            "Icons inside social link tooltips — fixed 14px size, never shrinks.",
+            "Icons inside tooltips — fixed 14px size, never shrinks. For icons that need an explicit class (the social copy/check crossfade layers); a bare tooltip glyph is already sized by the `tooltip` recipe's `& svg`.",
           base: {
             flexShrink: 0,
             width: "token(sizes.tooltipIcon)",

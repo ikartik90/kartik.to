@@ -8,7 +8,6 @@ import {
   useId,
   useRef,
   useState,
-  type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type LabelHTMLAttributes,
@@ -261,56 +260,6 @@ function FieldHint({ children, type, className, ...rest }: FieldHintProps) {
   );
 }
 
-export type FieldActionProps = ButtonHTMLAttributes<HTMLButtonElement>;
-
-// Interactive trailing/utility button — the counterpart to the decorative
-// Adornment. Being a real <button> it keeps its own focus and is excluded from
-// the frame's focus-forwarding (see FieldFrame's `closest(...button...)`), so it
-// never steals a padding-click meant for the control. Reused for the calendar's
-// month chevrons (Calendar.Period) and future clear/reveal toggles.
-const fieldActionClass = css({
-  display: "grid",
-  placeItems: "center",
-  flexShrink: 0,
-  // Sized to the calendar's column pitch so the chevrons sit on the same grid
-  // as the day cells (Figma 563:2714/563:2718 — a 24px hit target, 20px glyph).
-  width: "token(sizes.calendarDay)",
-  height: "token(sizes.calendarDay)",
-  borderRadius: "sm",
-  border: "none",
-  background: "transparent",
-  appearance: "none",
-  color: "inherit",
-  cursor: "pointer",
-  transition: "background-color 150ms ease, color 150ms ease",
-  "&:hover": { backgroundColor: "bg.itemHover" },
-  "&:disabled": {
-    opacity: 0.4,
-    cursor: "not-allowed",
-    "&:hover": { backgroundColor: "transparent" },
-  },
-  "& svg": {
-    width: "token(spacing.xxl)",
-    height: "token(spacing.xxl)",
-    display: "block",
-  },
-  "& svg path[stroke]": { stroke: "currentColor" },
-  "& svg path[fill]": { fill: "currentColor" },
-});
-
-const FieldAction = forwardRef<HTMLButtonElement, FieldActionProps>(
-  function FieldAction({ className, type, ...rest }, ref) {
-    return (
-      <button
-        ref={ref}
-        type={type ?? "button"}
-        className={cx(fieldActionClass, className)}
-        {...rest}
-      />
-    );
-  },
-);
-
 export interface FieldSearchProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
   /** Controlled query. */
@@ -359,15 +308,14 @@ const FieldSearch = forwardRef<HTMLInputElement, FieldSearchProps>(
  * bare `<Icon aria-hidden />` children — the `frame` recipe sizes and tints them
  * (leading before the control, trailing after it); no wrapper part. The Switch
  * plugs into the same context as an alternative control (see switch.tsx), reusing
- * Label + Hint; Action (interactive button) and Search (type-ahead input) are the
- * shared pieces the Calendar composes. Compose these directly for bespoke fields,
- * or use the flat-prop assemblies for the common case.
+ * Label + Hint; Search (type-ahead input) is the shared type-ahead the Calendar
+ * composes (its month chevrons are plain icon `Button`s). Compose these directly
+ * for bespoke fields, or use the flat-prop assemblies for the common case.
  */
 export const Field = Object.assign(FieldRoot, {
   Label: FieldLabel,
   Frame: FieldFrame,
   Control: FieldControl,
   Hint: FieldHint,
-  Action: FieldAction,
   Search: FieldSearch,
 });

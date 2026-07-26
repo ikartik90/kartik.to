@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FC, type RefObject, type SVGProps } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FC, type RefObject, type SVGProps } from "react";
 import CheckIcon from "@/assets/icons/check.svg";
 import CopyIcon from "@/assets/icons/copy.svg";
 import EmailIcon from "@/assets/icons/email.svg";
@@ -8,15 +8,12 @@ import GotoIcon from "@/assets/icons/goto.svg";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import OctocatIcon from "@/assets/icons/octocat.svg";
 import TwitterIcon from "@/assets/icons/twitter.svg";
-import { getCursorTooltipPosition } from "@/data/cursor";
+import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { css, cx } from "../../styled-system/css";
-import {
-  menuIcon,
-  socialTooltip,
-  socialTooltipIcon,
-} from "../../styled-system/recipes";
+import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
 import { SocialIconShader } from "./social-icon-shader";
-import { buttonRecipe } from "./ui/button-recipe";
+import { Button } from "./ui/button";
+import { Link } from "./ui/link";
 
 const COPY_SUCCESS_MS = 2000;
 const EMAIL_COPY_TEXT = "ikartik90@gmail.com";
@@ -59,7 +56,7 @@ const SOCIAL_ITEMS = [
 type SocialItem = (typeof SOCIAL_ITEMS)[number];
 
 const triggerIconStyle = menuIcon();
-const tooltipIconStyle = socialTooltipIcon();
+const tooltipIconStyle = tooltipIcon();
 const TOOLTIP_ICON_VIEWBOX = "0 0 20 20";
 
 function TooltipIcon({ Icon }: { Icon: FC<SVGProps<SVGSVGElement>> }) {
@@ -279,7 +276,7 @@ function SocialTooltip({
 
   const tooltipProps = {
     "data-social-tooltip": true,
-    className: socialTooltip(),
+    className: tooltip(),
     "aria-hidden": true as const,
     onMouseEnter: onPointerEnter,
     onMouseLeave: onPointerLeave,
@@ -395,52 +392,18 @@ function SocialLinkItem({
 }) {
   const [triggerHovered, setTriggerHovered] = useState(false);
   const [tooltipHovered, setTooltipHovered] = useState(false);
-  const tooltipRef = useRef<HTMLElement | null>(null);
-  const pointerRef = useRef({ x: 0, y: 0 });
-  const positionRafRef = useRef(0);
   const tooltipVisible =
     (triggerHovered || tooltipHovered || copySuccess) && !tooltipDismissed;
-
-  const positionTooltip = useCallback(() => {
-    positionRafRef.current = 0;
-    const el = tooltipRef.current;
-    if (!el) return;
-    const { left, top } = getCursorTooltipPosition(
-      pointerRef.current.x,
-      pointerRef.current.y,
-    );
-    el.style.left = left;
-    el.style.top = top;
-  }, []);
-
-  const scheduleTooltipPosition = useCallback(() => {
-    if (!positionRafRef.current) {
-      positionRafRef.current = requestAnimationFrame(positionTooltip);
-    }
-  }, [positionTooltip]);
-
-  useEffect(() => {
-    if (!tooltipVisible) return;
-
-    function onPointerMove(event: PointerEvent) {
-      pointerRef.current = { x: event.clientX, y: event.clientY };
-      scheduleTooltipPosition();
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      if (positionRafRef.current) cancelAnimationFrame(positionRafRef.current);
-      positionRafRef.current = 0;
-    };
-  }, [tooltipVisible, scheduleTooltipPosition]);
+  // Cursor-following positioning is the shared engine now (Button/Link use it
+  // too); this component keeps only its bespoke copy/goto/email-morph content
+  // and its own visibility state.
+  const { ref: tooltipRef, seed } = useCursorTooltip(tooltipVisible);
 
   const triggerLabel =
     item.action === "copy" && copySuccess ? EMAIL_COPIED_LABEL : item.label;
 
   function handleTriggerMouseEnter(event: React.MouseEvent) {
-    pointerRef.current = { x: event.clientX, y: event.clientY };
-    positionTooltip();
+    seed(event.clientX, event.clientY);
     setTriggerHovered(true);
     onMouseEnter();
   }
@@ -475,29 +438,28 @@ function SocialLinkItem({
       onMouseLeave={handleTriggerMouseLeave}
     >
       {item.action === "link" ? (
-        <a
+        <Link
           href={item.href}
+          variant="icon"
           aria-label={item.label}
-          className={buttonRecipe({ variant: "icon" })}
           target="_blank"
           rel="noopener noreferrer"
           onClick={onDismiss}
         >
           {icon}
-        </a>
+        </Link>
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="icon"
           aria-label={triggerLabel}
           aria-live="polite"
-          className={buttonRecipe({ variant: "icon" })}
           onClick={(event) => {
             event.preventDefault();
             onEmailTriggerClick();
           }}
         >
           {icon}
-        </button>
+        </Button>
       )}
       <SocialTooltip
         item={item}

@@ -5,6 +5,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../../styled-system/css";
 import { Calendar } from "@/components/ui/input/calendar";
 import { Field } from "@/components/ui/input/field";
+import { Button } from "@/components/ui/button";
 import { parseCalendarDate } from "@/utils/calendar-date";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
@@ -44,13 +45,13 @@ export default function CalendarPreviewPage() {
         >
           <Field.Search placeholder="Type a date…" />
           <Calendar.Period>
-            <Field.Action>
+            <Button variant="icon">
               <ChevronLeftIcon />
-            </Field.Action>
+            </Button>
             <Calendar.Heading />
-            <Field.Action>
+            <Button variant="icon">
               <ChevronRightIcon />
-            </Field.Action>
+            </Button>
           </Calendar.Period>
           <Calendar.Week>
             <Calendar.Day />
@@ -72,13 +73,13 @@ export default function CalendarPreviewPage() {
           // today={Temporal.PlainDate.from("2026-12-11")}
         >
           <Calendar.Period>
-            <Field.Action>
+            <Button variant="icon">
               <ChevronLeftIcon />
-            </Field.Action>
+            </Button>
             <Calendar.Heading />
-            <Field.Action>
+            <Button variant="icon">
               <ChevronRightIcon />
-            </Field.Action>
+            </Button>
           </Calendar.Period>
           <Calendar.Week>
             <Calendar.Day

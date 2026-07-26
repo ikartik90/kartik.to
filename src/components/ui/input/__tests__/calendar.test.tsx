@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { Calendar } from "../calendar";
 import { Field } from "../field";
+import { Button } from "@/components/ui/button";
 import { parseCalendarDate } from "@/utils/calendar-date";
 
 const TODAY = Temporal.PlainDate.from("2026-12-11");
@@ -20,9 +21,9 @@ function calendarTree(
     <Calendar today={TODAY} queryParser={queryParser ?? undefined} {...props}>
       <Field.Search placeholder="Type a date…" />
       <Calendar.Period>
-        <Field.Action>‹</Field.Action>
+        <Button variant="icon">‹</Button>
         <Calendar.Heading />
-        <Field.Action>›</Field.Action>
+        <Button variant="icon">›</Button>
       </Calendar.Period>
       <Calendar.Week>
         <Calendar.Day />
@@ -262,9 +263,9 @@ describe("search", () => {
             onKeyDown={onKeyDown}
           />
           <Calendar.Period>
-            <Field.Action>‹</Field.Action>
+            <Button variant="icon">‹</Button>
             <Calendar.Heading />
-            <Field.Action>›</Field.Action>
+            <Button variant="icon">›</Button>
           </Calendar.Period>
           <Calendar.Week>
             <Calendar.Day />
@@ -355,9 +356,9 @@ describe("custom queryParser", () => {
         >
           <Field.Search />
           <Calendar.Period>
-            <Field.Action>‹</Field.Action>
+            <Button variant="icon">‹</Button>
             <Calendar.Heading />
-            <Field.Action>›</Field.Action>
+            <Button variant="icon">›</Button>
           </Calendar.Period>
           <Calendar.Week>
             <Calendar.Day />
