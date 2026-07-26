@@ -327,6 +327,14 @@ body {
   filter: blur(0);
 }
 
+/* The social icons prove hover with the WebGL shader alone — suppress the
+   `action` recipe's icon-variant hover fill for these triggers only. Unlayered
+   so it beats the recipe's `@layer utilities` `:hover` deterministically (a
+   same-layer css() override would be order-dependent). Focus ring is untouched. */
+[data-social-trigger]:hover {
+  background-color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
