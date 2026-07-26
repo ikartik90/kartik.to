@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type FC, type RefObject, type SVGProps } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FC,
+  type RefObject,
+  type SVGProps,
+} from "react";
 import CheckIcon from "@/assets/icons/check.svg";
 import CopyIcon from "@/assets/icons/copy.svg";
 import EmailIcon from "@/assets/icons/email.svg";
@@ -22,7 +30,7 @@ const EMAIL_COPIED_LABEL = "Copied";
 const SOCIAL_ITEMS = [
   {
     id: "github",
-    label: "GitHub Profile",
+    label: "GitHub",
     href: "https://github.com/ikartik90",
     Icon: OctocatIcon,
     maskSrc: "/social-shader-masks/octocat.svg",
@@ -30,7 +38,7 @@ const SOCIAL_ITEMS = [
   },
   {
     id: "twitter",
-    label: "X Profile",
+    label: "Follow me",
     href: "https://twitter.com/ikartik90",
     Icon: TwitterIcon,
     maskSrc: "/social-shader-masks/twitter.svg",
@@ -38,7 +46,7 @@ const SOCIAL_ITEMS = [
   },
   {
     id: "linkedin",
-    label: "LinkedIn Profile",
+    label: "LinkedIn",
     href: "https://linkedin.com/in/ikartik90",
     Icon: LinkedInIcon,
     maskSrc: "/social-shader-masks/linkedin.svg",
@@ -46,7 +54,7 @@ const SOCIAL_ITEMS = [
   },
   {
     id: "email",
-    label: "Email Address",
+    label: "Email address",
     Icon: EmailIcon,
     maskSrc: "/social-shader-masks/email.svg",
     action: "copy",
@@ -57,16 +65,12 @@ type SocialItem = (typeof SOCIAL_ITEMS)[number];
 
 const triggerIconStyle = menuIcon();
 const tooltipIconStyle = tooltipIcon();
-const TOOLTIP_ICON_VIEWBOX = "0 0 20 20";
 
+// The icons already ship a `viewBox="0 0 20 20"` and svgr preserves it
+// (removeViewBox:false), so CSS-sizing to 14px scales them — no viewBox override.
 function TooltipIcon({ Icon }: { Icon: FC<SVGProps<SVGSVGElement>> }) {
   return (
-    <Icon
-      viewBox={TOOLTIP_ICON_VIEWBOX}
-      className={tooltipIconStyle}
-      data-social-tooltip-icon
-      aria-hidden
-    />
+    <Icon className={tooltipIconStyle} data-social-tooltip-icon aria-hidden />
   );
 }
 
@@ -142,10 +146,7 @@ function EmailTooltipLabel({
     >
       <span
         ref={defaultRef}
-        className={cx(
-          emailLabelLayerStyle,
-          copied && copyActionIconExitStyle,
-        )}
+        className={cx(emailLabelLayerStyle, copied && copyActionIconExitStyle)}
       >
         {defaultLabel}
       </span>
@@ -166,7 +167,6 @@ function CopyActionIcon({ copied }: { copied: boolean }) {
   return (
     <span className={copyActionIconSlotStyle} aria-hidden>
       <CopyIcon
-        viewBox={TOOLTIP_ICON_VIEWBOX}
         className={cx(
           tooltipIconStyle,
           copyActionIconLayerStyle,
@@ -176,7 +176,6 @@ function CopyActionIcon({ copied }: { copied: boolean }) {
         data-copy-action-icon="copy"
       />
       <CheckIcon
-        viewBox={TOOLTIP_ICON_VIEWBOX}
         className={cx(
           tooltipIconStyle,
           copyActionIconLayerStyle,
@@ -445,6 +444,9 @@ function SocialLinkItem({
           target="_blank"
           rel="noopener noreferrer"
           onClick={onDismiss}
+          // The WebGL shader IS the hover state — no background chip behind it
+          // (see the [data-social-trigger] rule in globals.css).
+          data-social-trigger
         >
           {icon}
         </Link>
@@ -457,6 +459,7 @@ function SocialLinkItem({
             event.preventDefault();
             onEmailTriggerClick();
           }}
+          data-social-trigger
         >
           {icon}
         </Button>

@@ -53,7 +53,7 @@ export const actionRecipe = cva({
         alignItems: "center",
         justifyContent: "center",
         // Space a leading icon from the label when a text button composes both.
-        gap: "sm",
+        gap: "md",
         height: "token(spacing.4xl)",
         // Floor a short label (Cancel / OK) to a substantial chip; a longer
         // label grows past it since the width is fit-content.

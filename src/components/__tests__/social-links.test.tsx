@@ -27,24 +27,24 @@ describe("SocialLinks", () => {
   it("renders icon triggers with labels and tooltip text", () => {
     render(<SocialLinks />);
 
-    expect(screen.getByRole("link", { name: "GitHub Profile" })).toBeDefined();
-    expect(screen.getByRole("link", { name: "X Profile" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "GitHub" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Follow me" })).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "LinkedIn Profile" }),
+      screen.getByRole("link", { name: "LinkedIn" }),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Email Address" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Email address" })).toBeDefined();
 
     expect(
       document.querySelector("[data-social-tooltip]")?.textContent,
     ).toBeDefined();
-    expect(screen.getAllByText("GitHub Profile").length).toBeGreaterThanOrEqual(
+    expect(screen.getAllByText("GitHub").length).toBeGreaterThanOrEqual(
       1,
     );
-    expect(screen.getAllByText("X Profile").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Follow me").length).toBeGreaterThanOrEqual(1);
     expect(
-      screen.getAllByText("LinkedIn Profile").length,
+      screen.getAllByText("LinkedIn").length,
     ).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Email Address").length).toBeGreaterThanOrEqual(
+    expect(screen.getAllByText("Email address").length).toBeGreaterThanOrEqual(
       1,
     );
   });
@@ -67,10 +67,10 @@ describe("SocialLinks", () => {
 
     const emailItem = Array.from(
       document.querySelectorAll("[data-social-link-item]"),
-    ).find((item) => item.querySelector('button[aria-label="Email Address"]'));
+    ).find((item) => item.querySelector('button[aria-label="Email address"]'));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Email Address" }));
+      fireEvent.click(screen.getByRole("button", { name: "Email address" }));
     });
 
     expect(writeText).toHaveBeenCalledWith("ikartik90@gmail.com");
@@ -90,7 +90,7 @@ describe("SocialLinks", () => {
 
     const emailItem = Array.from(
       document.querySelectorAll("[data-social-link-item]"),
-    ).find((item) => item.textContent?.includes("Email Address"));
+    ).find((item) => item.textContent?.includes("Email address"));
     const emailTooltip = emailItem?.querySelector<HTMLButtonElement>(
       "[data-social-tooltip]",
     );
@@ -106,7 +106,7 @@ describe("SocialLinks", () => {
     ).toBeTruthy();
     expect(screen.getAllByText("Copied").length).toBeGreaterThanOrEqual(1);
 
-    fireEvent.mouseEnter(screen.getByRole("link", { name: "GitHub Profile" }));
+    fireEvent.mouseEnter(screen.getByRole("link", { name: "GitHub" }));
     expect(emailItem?.getAttribute("data-copy-success")).toBeNull();
     expect(emailItem?.getAttribute("data-tooltip-dismissed")).toBe("");
 
@@ -130,7 +130,7 @@ describe("SocialLinks", () => {
       0,
     );
 
-    const githubLink = screen.getByRole("link", { name: "GitHub Profile" });
+    const githubLink = screen.getByRole("link", { name: "GitHub" });
     fireEvent.mouseEnter(githubLink);
 
     const shader = githubLink.querySelector("[data-social-icon-shader]");
