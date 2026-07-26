@@ -23,6 +23,11 @@ export const actionRecipe = cva({
     border: "none",
     appearance: "none",
     textDecoration: "none",
+    // Hug the content — never stretch to fill. A flex item's display is
+    // blockified (inline-flex → flex), so a flex-column / grid parent's default
+    // `stretch` would otherwise pull the control across the cross axis; a
+    // definite `fit-content` width opts out. Ignored by the inline `link` variant.
+    width: "fit-content",
     transition:
       "transform 100ms ease, background-color 150ms ease, color 150ms ease",
     _active: { transform: "scale(0.97)" },
@@ -50,11 +55,14 @@ export const actionRecipe = cva({
         // Space a leading icon from the label when a text button composes both.
         gap: "sm",
         height: "token(spacing.4xl)",
-        paddingInline: "md",
+        // Floor a short label (Cancel / OK) to a substantial chip; a longer
+        // label grows past it since the width is fit-content.
+        minWidth: "token(spacing.5xl)",
+        paddingInline: "lg",
         borderRadius: "md",
         backgroundColor: "bg.button.secondary.default",
         color: "text.body",
-        textStyle: "bodySmall",
+        textStyle: "bodyLarge",
         _hover: { backgroundColor: "bg.button.secondary.hover" },
       },
       icon: {

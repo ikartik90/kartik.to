@@ -1703,7 +1703,7 @@ export default defineConfig({
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
             borderColor: "border.divider",
-            backgroundColor: "bg.button.tertiary.hover",
+            backgroundColor: { base: "neutral.200", _dark: "neutral.800" },
             color: "text.body",
             textStyle: "caption",
             whiteSpace: "nowrap",
