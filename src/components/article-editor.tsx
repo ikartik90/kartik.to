@@ -2480,7 +2480,6 @@ function EditableBlock({
               <div className={editorImageOverlayActionsStyle}>
                 <Button
                   type="button"
-                  variant="secondary"
                   tabIndex={-1}
                   onClick={() => onChangeImage?.()}
                 >

@@ -313,7 +313,10 @@ body {
   }
 }
 
-/* Unlayered — must beat @layer recipes .social-tooltip { opacity: 0 } */
+/* The social tooltip keeps its own hover-driven visibility (the trigger and the
+   tooltip share one hover region on the <li>), rather than the `tooltip` recipe's
+   [data-visible] toggle that Button/Link use. Unlayered so it beats the recipe's
+   base `@layer recipes .tooltip { opacity: 0 }`. */
 [data-social-link-item][data-tooltip-visible]:not([data-tooltip-dismissed])
   [data-social-tooltip],
 [data-social-link-item][data-copy-success]:not([data-tooltip-dismissed])
