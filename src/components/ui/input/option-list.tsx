@@ -73,6 +73,18 @@ type OptionListContextValue = {
   moveActive: (delta: 1 | -1, focus: boolean, loop?: boolean) => void;
   /** Park the highlight on a specific value — pointer-preselect on open. */
   setActiveValue: (value: string | null) => void;
+  /**
+   * Release the highlight as the pointer leaves `value`'s row. No-op unless that
+   * row currently owns the highlight, so a keyboard move elsewhere survives the
+   * pointer wandering off some other row.
+   */
+  clearActive: (value: string) => void;
+  /**
+   * How the highlight last moved. `key` persists (it's what Enter commits) and
+   * scrolls into view; `pointer` is released on pointer-leave and never scrolls
+   * — the row is already under the cursor, so scrolling would fight the user.
+   */
+  activeSource: "pointer" | "key" | null;
   optionId: (value: string) => string;
   listboxId: string;
   labelId: string;
@@ -262,8 +274,28 @@ function OptionListRoot({
     onValueChange?.(value);
   };
 
+  // Pointer highlights are transient (released on leave); keyboard ones stick.
+  // Tracked as state, not a ref: it always changes together with `active`, so
+  // the two land in one render and the scroll effect can depend on it.
+  const [activeSource, setActiveSource] = useState<"pointer" | "key" | null>(
+    null,
+  );
+
+  const setActiveFromPointer = (value: string | null) => {
+    setActiveSource(value == null ? null : "pointer");
+    setActive(value);
+  };
+
+  const clearActive = (value: string) => {
+    // Only the row that currently shows the highlight may release it.
+    if (activeValue !== value) return;
+    setActiveSource(null);
+    setActive(null);
+  };
+
   const moveActive = (delta: 1 | -1, focus: boolean, loop = false) => {
     if (enabled.length === 0) return;
+    setActiveSource("key");
     const from = enabled.findIndex((option) => option.value === activeValue);
     const raw = from + delta;
     const next = loop
@@ -284,7 +316,9 @@ function OptionListRoot({
     activeValue,
     select,
     moveActive,
-    setActiveValue: setActive,
+    setActiveValue: setActiveFromPointer,
+    clearActive,
+    activeSource,
     optionId,
     listboxId: `${uid}-listbox`,
     labelId,
@@ -402,6 +436,7 @@ function OptionListListbox({
     activeValue,
     select,
     setActiveValue,
+    activeSource,
     listboxId,
     hasLabel,
     labelId,
@@ -418,7 +453,11 @@ function OptionListListbox({
   // list. Nudging `scrollTop` directly keeps the scroll contained. No-op when the
   // row is already visible, and in jsdom (where rects are zeroed).
   useEffect(() => {
-    if (!activeValue) return;
+    // Only the keyboard cursor scrolls itself into view. A pointer highlight is
+    // already under the cursor, and releasing one (pointer-leave) falls back to
+    // the selected row — scrolling there would yank the list out from under a
+    // user who had simply moved the mouse away.
+    if (!activeValue || activeSource !== "key") return;
     const list = listRef.current;
     const el = list?.querySelector<HTMLElement>("[data-active]");
     if (!list || !el) return;
@@ -429,7 +468,7 @@ function OptionListListbox({
     } else if (elBox.bottom > listBox.bottom) {
       list.scrollTop += elBox.bottom - listBox.bottom;
     }
-  }, [activeValue]);
+  }, [activeValue, activeSource]);
 
   // externalKeys: arrow/enter arrive at the document (focus is in the editor).
   // Capture them so they drive the highlight and commit before the editor reacts.
@@ -553,10 +592,18 @@ function OptionListOption({
   onClick,
   onMouseDown,
   onPointerEnter,
+  onPointerLeave,
   ...rest
 }: OptionListOptionProps) {
-  const { styles, selected, activeValue, select, setActiveValue, optionId } =
-    useOptionList("OptionList.Option");
+  const {
+    styles,
+    selected,
+    activeValue,
+    select,
+    setActiveValue,
+    clearActive,
+    optionId,
+  } = useOptionList("OptionList.Option");
   const mode = useContainerMode();
   const content = children ?? label ?? value;
 
@@ -601,6 +648,29 @@ function OptionListOption({
       onPointerEnter={(event) => {
         onPointerEnter?.(event);
         if (value != null && !rest.disabled) setActiveValue(value);
+      }}
+      // Release the highlight on the way out, so a row can't stay lit once the
+      // pointer has moved on — into the list's empty space, or off the list
+      // entirely. Sitting on the option itself (not the list) is what catches
+      // the empty-space case, where a list-level leave never fires.
+      onPointerLeave={(event) => {
+        onPointerLeave?.(event);
+        if (value == null) return;
+        // Straight onto a sibling option in THIS list: its own pointerenter
+        // takes over, so don't blank the highlight in between and flicker.
+        // A row in a DIFFERENT list can't hand over — this one must release.
+        const next = event.relatedTarget;
+        const list = event.currentTarget.closest(
+          '[role="listbox"],[role="toolbar"]',
+        );
+        if (
+          next instanceof Element &&
+          list?.contains(next) &&
+          next.closest("[data-value]")
+        ) {
+          return;
+        }
+        clearActive(value);
       }}
       onClick={() => {
         if (value != null) select(value);

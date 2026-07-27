@@ -104,6 +104,21 @@ export default function ButtonPreviewPage() {
         </Specimen>
       </Section>
 
+      <Section title="Emphasis — secondary vs tertiary">
+        <Specimen label="secondary (default) — filled at rest">
+          <Button emphasis="secondary">Save changes</Button>
+        </Specimen>
+        <Specimen label="tertiary — no fill at rest, fills on hover">
+          <Button emphasis="tertiary">Save changes</Button>
+        </Specimen>
+        <Specimen label="tertiary — leading icon + Button.Text">
+          <Button emphasis="tertiary">
+            <SaveIcon />
+            <Button.Text>Save changes</Button.Text>
+          </Button>
+        </Specimen>
+      </Section>
+
       <Section title="Icon buttons — toolbar style (28px)">
         <Specimen label="icon only">
           <Button variant="icon" aria-label="Add block">

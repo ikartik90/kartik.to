@@ -10,12 +10,12 @@ import {
   dialogFooterGroup,
   libraryBody,
   mediaLibrarySidebar,
-  mediaLibraryItem,
   mediaPreviewPane,
   menuIcon,
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { OptionList } from "@/components/ui/input/option-list";
 import { DemoFrame } from "@/components/demo-frame";
 import { DemoComponent } from "@/components/demo-component";
 import { demoComponents } from "@/components/demo/registry";
@@ -30,16 +30,31 @@ import CloseIcon from "@/assets/icons/cross.svg";
 // layout the reader sees — then scales the whole thing down with `transform`
 // (which, unlike `zoom`, leaves the layout box at 960px so those queries are
 // unaffected) to fit the library preview column.
+//
+// HEIGHT is the only fixed constraint (280px, matching the image dialog's
+// preview); the width follows the demo's own aspect ratio and stretches at most
+// to the pane's CONTENT box. So the scale is whichever of the two limits binds
+// first — see `previewScale`.
 const SHOWCASE_WIDTH_PX = 960; // token(sizes.articleShowcase)
-const PREVIEW_WIDTH_PX = 280; // token(sizes.imagePreviewMax)
-const PREVIEW_SCALE = PREVIEW_WIDTH_PX / SHOWCASE_WIDTH_PX;
+const PREVIEW_MAX_HEIGHT_PX = 280; // token(sizes.imagePreviewMax)
 
-/** Clips the scaled stage and collapses to its scaled height (set inline). */
+/** Clips the scaled stage; both its dimensions are set inline from the scale. */
 const previewViewportStyle = css({
-  width: "token(sizes.imagePreviewMax)",
+  maxWidth: "token(spacing.full)",
   flexShrink: 0,
   overflow: "hidden",
 });
+
+/**
+ * The pane's CONTENT width — `clientWidth` includes padding, so subtract it to
+ * match what a percentage max-width (and ResizeObserver's `contentRect`) sees.
+ */
+function contentWidth(el: HTMLElement) {
+  const { paddingLeft, paddingRight } = getComputedStyle(el);
+  return (
+    el.clientWidth - (parseFloat(paddingLeft) || 0) - (parseFloat(paddingRight) || 0)
+  );
+}
 
 /** Full-width showcase stage; scaled down via an inline transform. */
 const showcaseStageStyle = css({
@@ -56,12 +71,15 @@ const demoPreviewStyle = css({
   userSelect: "none",
 });
 
-const labelStyle = css({
+// The sidebar column (`mediaLibrarySidebar`) owns the frame, padding and scroll,
+// so neutralize the OptionList `list` slot's self-contained popover framing —
+// its 4px inset and 7-row max-height cap — and let the list fill the column.
+// Atomic `css()` reliably outranks the recipe slot (utilities cascade layer).
+const libraryListStyle = css({
   flex: "1 1 auto",
-  minWidth: 0,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  minHeight: 0,
+  maxHeight: "none",
+  padding: "none",
 });
 
 const iconStyle = menuIcon();
@@ -83,7 +101,9 @@ export function ComponentInsertDialog({
 }: ComponentInsertDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   const [stageHeight, setStageHeight] = useState(0);
+  const [paneWidth, setPaneWidth] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(
     demoComponents[0]?.id ?? null,
   );
@@ -125,6 +145,30 @@ export function ComponentInsertDialog({
     return () => observer.disconnect();
   }, [open, selectedId]);
 
+  // Track the preview pane's content width — the other half of the scale. The
+  // pane's own width is set by the dialog layout (it fills what the sidebar
+  // leaves), so measuring it can't feed back into the scaled stage inside it.
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) {
+      setPaneWidth(0);
+      return;
+    }
+    const measure = () => setPaneWidth(contentWidth(pane));
+    const observer = new ResizeObserver(measure);
+    observer.observe(pane);
+    measure();
+    return () => observer.disconnect();
+  }, [open]);
+
+  // Fit the 960px stage into the pane: shrink to the 280px height cap, or to the
+  // pane's width, whichever binds first. Both measurements start at 0 (and stay
+  // there in jsdom), so the preview is simply collapsed until they land.
+  const previewScale = Math.min(
+    stageHeight > 0 ? PREVIEW_MAX_HEIGHT_PX / stageHeight : Infinity,
+    paneWidth > 0 ? paneWidth / SHOWCASE_WIDTH_PX : 0,
+  );
+
   function handleInsert() {
     if (!selectedId) return;
     onInsert(selectedId);
@@ -156,31 +200,38 @@ export function ComponentInsertDialog({
         {/* Only mount the (dynamically imported) previews while open. */}
         {open && (
         <>
-        <aside className={mediaLibrarySidebar()} aria-label="Component library">
-          {demoComponents.map((demo) => (
-            <button
-              key={demo.id}
-              type="button"
-              role="option"
-              aria-selected={demo.id === selectedId}
-              className={mediaLibraryItem()}
-              onClick={() => setSelectedId(demo.id)}
+        <div className={mediaLibrarySidebar()}>
+          <OptionList
+            value={selectedId}
+            onValueChange={(value) => setSelectedId(value)}
+            tone="plain"
+          >
+            <OptionList.Listbox
+              className={libraryListStyle}
+              aria-label="Component library"
             >
-              <span className={labelStyle}>{demo.label}</span>
-            </button>
-          ))}
-        </aside>
+              {demoComponents.map((demo) => (
+                <OptionList.Option key={demo.id} value={demo.id}>
+                  {demo.label}
+                </OptionList.Option>
+              ))}
+            </OptionList.Listbox>
+          </OptionList>
+        </div>
 
-        <div className={mediaPreviewPane()}>
+        <div ref={paneRef} className={mediaPreviewPane()}>
           {selected && (
             <div
               className={previewViewportStyle}
-              style={{ height: stageHeight * PREVIEW_SCALE }}
+              style={{
+                width: SHOWCASE_WIDTH_PX * previewScale,
+                height: stageHeight * previewScale,
+              }}
             >
               <div
                 ref={stageRef}
                 className={showcaseStageStyle}
-                style={{ transform: `scale(${PREVIEW_SCALE})` }}
+                style={{ transform: `scale(${previewScale})` }}
               >
                 <DemoFrame
                   aspectRatio={selected.aspectRatio}
@@ -201,7 +252,7 @@ export function ComponentInsertDialog({
 
       <footer className={dialogFooter()}>
         <div className={dialogFooterGroup()}>
-          <Button type="button" onClick={onClose}>
+          <Button type="button" emphasis="tertiary" onClick={onClose}>
             Cancel
           </Button>
         </div>

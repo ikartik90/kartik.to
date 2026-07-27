@@ -63,6 +63,28 @@ describe("ComponentInsertDialog", () => {
     expect(screen.getByTestId("demo-frame")).toBeDefined();
   });
 
+  it("exposes the sidebar as a labelled listbox owning the options", () => {
+    render(<ComponentInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
+    const listbox = screen.getByRole("listbox", { name: "Component library" });
+    // The options must be OWNED by the listbox, not orphaned siblings.
+    expect(
+      listbox.contains(screen.getByRole("option", { name: "Alpha Demo" })),
+    ).toBe(true);
+  });
+
+  it("moves the selection with the arrow keys", async () => {
+    const user = userEvent.setup();
+    render(<ComponentInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
+
+    const first = screen.getByRole("option", { name: "Alpha Demo" });
+    first.focus();
+    await user.keyboard("{ArrowDown}");
+
+    // Arrowing roves focus onto the next option, which Enter/click then commits.
+    const second = screen.getByRole("option", { name: "Beta Demo" });
+    expect(document.activeElement).toBe(second);
+  });
+
   it("offers no delete action and no upload switch", () => {
     render(<ComponentInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();

@@ -6,6 +6,7 @@ import {
   MAX_IMAGE_UPLOAD_BYTES,
   isAllowedImageContentType,
   sanitizeMediaFilename,
+  filenameFromMediaKey,
 } from "../media";
 
 describe("MediaAssetSchema", () => {
@@ -47,5 +48,29 @@ describe("isAllowedImageContentType", () => {
 describe("sanitizeMediaFilename", () => {
   it("strips path segments and unsafe characters", () => {
     expect(sanitizeMediaFilename("../../weird name!.png")).toBe("weird-name-.png");
+  });
+});
+
+describe("filenameFromMediaKey", () => {
+  it("recovers the original filename from a uuid-prefixed key", () => {
+    // randomUUID() itself contains dashes — the split must skip the whole uuid,
+    // not stop at its first dash.
+    expect(
+      filenameFromMediaKey(
+        "media/550e8400-e29b-41d4-a716-446655440000-favicon.png",
+      ),
+    ).toBe("favicon.png");
+  });
+
+  it("keeps dashes that belong to the original filename", () => {
+    expect(
+      filenameFromMediaKey(
+        "media/550e8400-e29b-41d4-a716-446655440000-my-holiday-photo.png",
+      ),
+    ).toBe("my-holiday-photo.png");
+  });
+
+  it("falls back to the whole segment when there is no uuid prefix", () => {
+    expect(filenameFromMediaKey("media/legacy.png")).toBe("legacy.png");
   });
 });

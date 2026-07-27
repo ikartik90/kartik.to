@@ -8,6 +8,8 @@ import {
   DeleteMediaInputSchema,
   MediaAssetSchema,
   UpdateMediaAltInputSchema,
+  UpdateMediaFilenameInputSchema,
+  filenameFromMediaKey,
   sanitizeMediaFilename,
   type MediaAsset,
 } from "@/domain/media";
@@ -18,7 +20,7 @@ import {
   headR2Object,
   listR2MediaKeys,
   publicUrlForKey,
-  updateR2ObjectAlt,
+  updateR2ObjectMetadata,
 } from "@/lib/storage/r2";
 
 async function requireAdmin(): Promise<void> {
@@ -26,12 +28,6 @@ async function requireAdmin(): Promise<void> {
   if (!session?.user?.email || session.user.email !== env.ADMIN_GITHUB_ID) {
     throw new Error("Unauthorized");
   }
-}
-
-function filenameFromKey(key: string): string {
-  const segment = key.slice(MEDIA_PREFIX.length);
-  const dash = segment.indexOf("-");
-  return dash === -1 ? segment : segment.slice(dash + 1);
 }
 
 async function keyToMediaAsset(key: string): Promise<MediaAsset | null> {
@@ -42,7 +38,9 @@ async function keyToMediaAsset(key: string): Promise<MediaAsset | null> {
   return MediaAssetSchema.parse({
     key,
     url,
-    filename: filenameFromKey(key),
+    // The stored name is the source of truth (it survives renaming); the key is
+    // only the fallback for objects uploaded before the name was recorded.
+    filename: head.filename || filenameFromMediaKey(key, MEDIA_PREFIX),
     contentType: head.contentType,
     size: head.size,
     alt: head.alt || undefined,
@@ -74,8 +72,11 @@ export async function createMediaUploadUrl(
   const safeName = sanitizeMediaFilename(filename);
   const key = `${MEDIA_PREFIX}${randomUUID()}-${safeName}`;
 
+  // Record the name alongside the object so it can later be edited without
+  // moving the object (the key is immutable once anything links to it).
   const { uploadUrl, publicUrl } = await createR2UploadUrl(key, contentType, {
     alt: "",
+    filename: safeName,
   });
 
   if (!publicUrl) {
@@ -97,7 +98,32 @@ export async function updateMediaAlt(input: unknown): Promise<MediaAsset> {
     throw new Error("Invalid media key");
   }
 
-  await updateR2ObjectAlt(key, alt);
+  await updateR2ObjectMetadata(key, { alt });
+  const asset = await keyToMediaAsset(key);
+  if (!asset) {
+    throw new Error("Media asset not found");
+  }
+  return asset;
+}
+
+/**
+ * Rename an asset for display. The object KEY (and therefore every URL already
+ * embedded in a published article) is left untouched — only the stored name
+ * changes, so renaming can never break a live image.
+ */
+export async function updateMediaFilename(input: unknown): Promise<MediaAsset> {
+  await requireAdmin();
+
+  if (!env.R2_PUBLIC_BASE_URL) {
+    throw new Error("R2_PUBLIC_BASE_URL is not configured");
+  }
+
+  const { key, filename } = UpdateMediaFilenameInputSchema.parse(input);
+  if (!key.startsWith(MEDIA_PREFIX)) {
+    throw new Error("Invalid media key");
+  }
+
+  await updateR2ObjectMetadata(key, { filename: sanitizeMediaFilename(filename) });
   const asset = await keyToMediaAsset(key);
   if (!asset) {
     throw new Error("Media asset not found");

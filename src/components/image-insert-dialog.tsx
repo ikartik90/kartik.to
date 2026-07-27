@@ -13,7 +13,6 @@ import {
   uploadBodySlot,
   libraryBody,
   mediaLibrarySidebar,
-  mediaLibraryItem,
   mediaPreview,
   mediaPreviewPane,
   mediaMetadataRow,
@@ -24,6 +23,7 @@ import {
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { OptionList } from "@/components/ui/input/option-list";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useImageInsert, type ImageInsertPhase } from "@/hooks/use-image-insert";
 import { formatFileSize, formatImageType } from "@/utils/format-file-size";
@@ -76,13 +76,21 @@ const formatsStyle = css({
   margin: "none",
 });
 
-const filenameStyle = css({
+// The filename reads as plain text until you click it — a bare input with the
+// chrome stripped, exactly like the alt-text field it sits above. `font:
+// inherit` is what keeps it matching the metadata row's caption type, since a
+// form control doesn't inherit typography on its own.
+const filenameFieldStyle = css({
   flex: "1 1 auto",
   minWidth: 0,
+  background: "none",
+  border: "none",
+  padding: "none",
+  font: "inherit",
   color: "text.body",
-  overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  _placeholder: { color: "text.body/50" },
 });
 
 const fileMetaStyle = css({
@@ -120,6 +128,17 @@ const libraryFilenameStyle = css({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+});
+
+// The sidebar column (`mediaLibrarySidebar`) owns the frame, padding and scroll,
+// so neutralize the OptionList `list` slot's self-contained popover framing —
+// its 4px inset and 7-row max-height cap — and let the list fill the column.
+// Atomic `css()` reliably outranks the recipe slot (utilities cascade layer).
+const libraryListStyle = css({
+  flex: "1 1 auto",
+  minHeight: 0,
+  maxHeight: "none",
+  padding: "none",
 });
 
 const errorStyle = css({
@@ -164,6 +183,7 @@ export function ImageInsertDialog({
     selectedKey,
     selectedAsset,
     altText,
+    filenameText,
     uploadProgress,
     isDragOver,
     setIsDragOver,
@@ -174,6 +194,7 @@ export function ImageInsertDialog({
     goToUpload,
     selectAsset,
     updateAltText,
+    updateFilename,
     deleteSelectedAsset,
     getInsertPayload,
   } = useImageInsert({ open, initialPhase });
@@ -248,24 +269,37 @@ export function ImageInsertDialog({
 
       {phase === "library" ? (
         <div className={libraryBody()}>
-          <aside className={mediaLibrarySidebar()} aria-label="Image library">
-            {assets.map((asset) => (
-              <button
-                key={asset.key}
-                type="button"
-                role="option"
-                aria-selected={asset.key === selectedKey}
-                className={mediaLibraryItem()}
-                onClick={() => selectAsset(asset.key)}
+          <div className={mediaLibrarySidebar()}>
+            <OptionList
+              value={selectedKey}
+              onValueChange={selectAsset}
+              tone="plain"
+            >
+              <OptionList.Listbox
+                className={libraryListStyle}
+                aria-label="Image library"
               >
-                <span className={mediaThumbnail()}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={asset.url} alt="" />
-                </span>
-                <span className={libraryFilenameStyle}>{asset.filename}</span>
-              </button>
-            ))}
-          </aside>
+                {assets.map((asset) => (
+                  // `label` carries the searchable/accessible text, since the
+                  // children are rich (thumbnail + filename) rather than a string.
+                  <OptionList.Option
+                    key={asset.key}
+                    value={asset.key}
+                    label={asset.filename}
+                    disabled={isBusy}
+                  >
+                    <span className={mediaThumbnail()}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={asset.url} alt="" />
+                    </span>
+                    <span className={libraryFilenameStyle}>
+                      {asset.filename}
+                    </span>
+                  </OptionList.Option>
+                ))}
+              </OptionList.Listbox>
+            </OptionList>
+          </div>
 
           <div className={mediaPreviewPane()}>
             {selectedAsset && (
@@ -278,9 +312,17 @@ export function ImageInsertDialog({
                   />
                 </figure>
                 <div className={mediaMetadataRow()}>
-                  <span className={filenameStyle}>
-                    {selectedAsset.filename}
-                  </span>
+                  {/* Click the name to rename it — display only; the object key
+                      (and any URL already published) is untouched. */}
+                  <input
+                    type="text"
+                    className={filenameFieldStyle}
+                    value={filenameText}
+                    aria-label="File name"
+                    placeholder="File name"
+                    disabled={isBusy}
+                    onChange={(e) => updateFilename(e.target.value)}
+                  />
                   <span className={fileMetaStyle}>
                     {formatImageType(selectedAsset.contentType)} -{" "}
                     {formatFileSize(selectedAsset.size)}
@@ -391,7 +433,7 @@ export function ImageInsertDialog({
 
       <footer className={dialogFooter()}>
         <div className={dialogFooterGroup()}>
-          <Button type="button" disabled={isBusy} onClick={handleClose}>
+          <Button type="button" emphasis="tertiary" disabled={isBusy} onClick={handleClose}>
             Cancel
           </Button>
           {phase === "library" ? (

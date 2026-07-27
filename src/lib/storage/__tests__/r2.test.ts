@@ -42,7 +42,7 @@ const {
   createR2UploadUrl,
   listR2MediaKeys,
   headR2Object,
-  updateR2ObjectAlt,
+  updateR2ObjectMetadata,
   deleteR2Object,
   publicUrlForKey,
 } = await import("../r2");
@@ -96,10 +96,33 @@ describe("r2 storage helpers", () => {
     });
   });
 
-  it("updateR2ObjectAlt copies in place with metadata replace", async () => {
+  it("headR2Object surfaces the stored filename", async () => {
+    mockSend.mockResolvedValueOnce({
+      ContentLength: 512,
+      ContentType: "image/png",
+      Metadata: { alt: "desc", filename: "favicon.png" },
+    });
+
+    const head = await headR2Object("media/a.png");
+    expect(head.filename).toBe("favicon.png");
+  });
+
+  it("updateR2ObjectMetadata merges rather than clobbering other fields", async () => {
+    // HEAD (existing metadata), then the in-place copy.
+    mockSend.mockResolvedValueOnce({
+      ContentType: "image/png",
+      Metadata: { alt: "keep me", filename: "old.png" },
+    });
     mockSend.mockResolvedValueOnce({});
-    await updateR2ObjectAlt("media/a.png", "new alt");
-    expect(mockSend).toHaveBeenCalledOnce();
+
+    await updateR2ObjectMetadata("media/a.png", { filename: "new.png" });
+
+    const copyInput = mockSend.mock.calls[1][0].input;
+    expect(copyInput.MetadataDirective).toBe("REPLACE");
+    // The untouched field survives...
+    expect(copyInput.Metadata).toEqual({ alt: "keep me", filename: "new.png" });
+    // ...and REPLACE would otherwise reset the content type to a default.
+    expect(copyInput.ContentType).toBe("image/png");
   });
 
   it("deleteR2Object removes the object", async () => {

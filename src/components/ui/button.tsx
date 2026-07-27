@@ -3,10 +3,15 @@
 import { forwardRef, type ButtonHTMLAttributes, type MouseEvent } from "react";
 import { cx } from "../../../styled-system/css";
 import { action } from "../../../styled-system/recipes";
-import { ActionText, useActionTooltip, type ActionVariant } from "./action";
+import {
+  ActionText,
+  useActionTooltip,
+  type ActionVariant,
+  type ActionEmphasis,
+} from "./action";
 import { Tooltip } from "./tooltip";
 
-export type { ActionVariant };
+export type { ActionVariant, ActionEmphasis };
 
 // ---------------------------------------------------------------------------
 // Button — a <button> that ACTS, composed like OptionList.Option: a bare icon
@@ -40,11 +45,19 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * (or bare string) label ⇒ `text`, an icon alone ⇒ `icon`. Set it for `link`.
    */
   variant?: ActionVariant;
+  /**
+   * Fill prominence, independent of `variant` (the shape). `secondary` is the
+   * filled chip; `tertiary` has no resting fill and a subtler hover wash. Left
+   * unset it defaults to `secondary` for text buttons and `tertiary` for icon
+   * buttons.
+   */
+  emphasis?: ActionEmphasis;
 }
 
 function ButtonRoot(
   {
     variant,
+    emphasis,
     className,
     type = "button",
     children,
@@ -57,13 +70,18 @@ function ButtonRoot(
   const { content, hasText, tooltipNode, hasTooltip, show, hide } =
     useActionTooltip(children);
   const resolvedVariant = variant ?? (hasText ? "text" : "icon");
+  const resolvedEmphasis =
+    emphasis ?? (resolvedVariant === "text" ? "secondary" : "tertiary");
 
   return (
     <>
       <button
         ref={ref}
         type={type}
-        className={cx(action({ variant: resolvedVariant }), className)}
+        className={cx(
+          action({ variant: resolvedVariant, emphasis: resolvedEmphasis }),
+          className,
+        )}
         onMouseEnter={(event: MouseEvent<HTMLButtonElement>) => {
           onMouseEnter?.(event);
           if (hasTooltip) show(event.clientX, event.clientY);

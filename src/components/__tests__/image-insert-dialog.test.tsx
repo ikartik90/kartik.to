@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ImageInsertDialog } from "../image-insert-dialog";
 
 const mockDeleteSelectedAsset = vi.fn();
+const mockUpdateFilename = vi.fn();
 
 vi.mock("@/hooks/use-image-insert", () => ({
   useImageInsert: () => ({
@@ -28,6 +29,7 @@ vi.mock("@/hooks/use-image-insert", () => ({
       size: 100,
     },
     altText: "",
+    filenameText: "favicon.png",
     uploadProgress: 0,
     isDragOver: false,
     setIsDragOver: vi.fn(),
@@ -38,6 +40,7 @@ vi.mock("@/hooks/use-image-insert", () => ({
     goToUpload: vi.fn(),
     selectAsset: vi.fn(),
     updateAltText: vi.fn(),
+    updateFilename: mockUpdateFilename,
     deleteSelectedAsset: mockDeleteSelectedAsset,
     getInsertPayload: vi.fn(),
   }),
@@ -73,6 +76,21 @@ describe("ImageInsertDialog", () => {
     expect(screen.getByRole("dialog", { name: "Insert Image" })).toBeDefined();
     await user.click(screen.getByRole("button", { name: "Delete image" }));
     expect(mockDeleteSelectedAsset).toHaveBeenCalledOnce();
+  });
+
+  it("shows the file's own name in an editable field", async () => {
+    const user = userEvent.setup();
+    render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
+
+    const field = screen.getByRole("textbox", { name: "File name" });
+    // The original upload name, not the uuid-stamped storage key.
+    expect((field as HTMLInputElement).value).toBe("favicon.png");
+
+    // Clicking straight into the name lets you edit it, like the alt field.
+    // (The hook is mocked, so the controlled value stays put — what matters is
+    // that the edit is reported.)
+    await user.type(field, "X");
+    expect(mockUpdateFilename).toHaveBeenCalledWith("favicon.pngX");
   });
 
   it("renders change mode title and confirm label", () => {
