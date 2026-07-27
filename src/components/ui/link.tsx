@@ -8,8 +8,8 @@ import {
   type Ref,
 } from "react";
 import { cx } from "../../../styled-system/css";
-import { actionRecipe, type ActionVariant } from "./action-recipe";
-import { ActionText, useActionTooltip } from "./action";
+import { action } from "../../../styled-system/recipes";
+import { ActionText, useActionTooltip, type ActionVariant } from "./action";
 import { Tooltip } from "./tooltip";
 
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ function LinkRoot(
   const asAnchor = external ?? (isExternalHref(href) || target != null);
   // Never ship a target="_blank" without the reverse-tabnabbing guard.
   const safeRel = rel ?? (target === "_blank" ? "noopener noreferrer" : undefined);
-  const classes = cx(actionRecipe({ variant: resolvedVariant }), className);
+  const classes = cx(action({ variant: resolvedVariant }), className);
 
   const handleEnter = (event: MouseEvent<HTMLAnchorElement>) => {
     onMouseEnter?.(event);

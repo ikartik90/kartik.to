@@ -13,9 +13,13 @@ import { Tooltip, TooltipHostContext } from "./tooltip";
 // ---------------------------------------------------------------------------
 // The parts shared by the two actionable primitives — Button (a <button> that
 // ACTS) and Link (an <a>/next-link that NAVIGATES). They render identically and
-// share the `action` recipe (action-recipe.ts); only the root element and its
-// semantics differ, so the label + cursor-following tooltip host live here once.
+// share the `action` recipe (in panda.config.ts); only the root element and its
+// semantics differ, so the shared TYPES + label + cursor-following tooltip host
+// live here once, next to the recipe they pair with.
 // ---------------------------------------------------------------------------
+
+/** The look a Button/Link takes — mirrors the `action` recipe's `variant`. */
+export type ActionVariant = "text" | "icon" | "link";
 
 export interface ActionTextProps {
   children: ReactNode;

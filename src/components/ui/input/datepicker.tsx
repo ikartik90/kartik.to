@@ -141,6 +141,7 @@ export function DatePicker({
           className={datePopover()}
           role="dialog"
           ariaLabel="Choose date"
+          portal
           onDismiss={close}
         >
           <Calendar

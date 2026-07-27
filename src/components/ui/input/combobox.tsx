@@ -146,6 +146,7 @@ function ComboboxRoot({
           className={comboboxPopover()}
           role="dialog"
           ariaLabel="Choose an option"
+          portal
           onDismiss={close}
         >
           <OptionList
