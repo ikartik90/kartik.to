@@ -7,7 +7,6 @@ import {
   dialogHeader,
   dialogTitle,
   dialogFooter,
-  dialogFooterGroup,
   libraryBody,
   mediaLibrarySidebar,
   mediaPreviewPane,
@@ -250,12 +249,12 @@ export function ComponentInsertDialog({
         )}
       </div>
 
+      {/* Two buttons, so the footer's own space-between does the placing — no
+          grouping wrapper (that's for the image dialog, which has a cluster). */}
       <footer className={dialogFooter()}>
-        <div className={dialogFooterGroup()}>
-          <Button type="button" emphasis="tertiary" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
+        <Button type="button" emphasis="tertiary" onClick={onClose}>
+          Cancel
+        </Button>
         <Button type="button" disabled={!selectedId} onClick={handleInsert}>
           Insert Component
         </Button>

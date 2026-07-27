@@ -301,16 +301,22 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-neutral-400) 15%, transparent)",
                 },
               },
-              // Hovered / keyboard-active option row — the item hue at a low
-              // alpha, deliberately lighter than the 15% selected chip so hover
-              // reads as secondary to selection. `hover` follows the neutral
-              // default-tone text; `hoverBrand` follows the brand onBrand text
-              // (Figma 647:2389 default, 629:1419 onBrand — light 10% / dark 5%).
+              // The low-emphasis hover wash, shared by hovered/keyboard-active
+              // option rows, icon buttons and tertiary buttons — so all three
+              // respond identically (`hoverBrand` is its onBrand twin; Figma
+              // 647:2389 default, 629:1419 onBrand).
+              //
+              // Deliberately the SAME value as `bg.default` above and
+              // `bg.button.secondary.default` in both themes, so hovering a
+              // tertiary button lands exactly on the secondary chip. Where this
+              // wash layers over a field surface (an option row on a
+              // `bg.default` list) the two translucent layers stack, so the
+              // hovered row still lifts clear of the list it sits in.
               hover: {
                 value: {
-                  base: "color-mix(in srgb, var(--colors-neutral-600) 10%, transparent)",
+                  base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
                   _dark:
-                    "color-mix(in srgb, var(--colors-neutral-400) 5%, transparent)",
+                    "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
                 },
               },
               hoverBrand: {
