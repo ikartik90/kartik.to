@@ -70,7 +70,7 @@ export default defineConfig({
         colors: {
           neutral: {
             100: { value: "#EEF2F6" },
-            200: { value: "#CFD9E2" },
+            200: { value: "#D8DDE3" },
             300: { value: "#C3CDD7" },
             400: { value: "#A9BFD6" },
             500: { value: "#576675" },
@@ -143,6 +143,16 @@ export default defineConfig({
             itemHover: {
               value:
                 "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+            },
+            // Notice callout fill — a subtle neutral wash a touch lighter than
+            // itemHover so the message reads as inset without competing with the
+            // field surfaces around it (Figma 684:1045 dark 20% / 704:1710 light 15%).
+            notice: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-neutral-500) 20%, transparent)",
+              },
             },
             button: {
               secondary: {
@@ -374,6 +384,97 @@ export default defineConfig({
       },
 
       recipes: {
+        action: defineRecipe({
+          className: "action",
+          description:
+            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link.",
+          base: {
+            cursor: "pointer",
+            border: "none",
+            appearance: "none",
+            textDecoration: "none",
+            // Hug the content — never stretch to fill. A flex item's display is
+            // blockified (inline-flex → flex), so a flex-column / grid parent's
+            // default `stretch` would otherwise pull the control across the cross
+            // axis; a definite `fit-content` width opts out. Ignored by `link`.
+            width: "fit-content",
+            transition:
+              "transform 100ms ease, background-color 150ms ease, color 150ms ease",
+            _active: { transform: "scale(0.97)" },
+            _disabled: {
+              opacity: 0.5,
+              cursor: "not-allowed",
+              pointerEvents: "none",
+            },
+            // Composed icons track the resolved text colour and hold a 20px box.
+            "& svg": {
+              width: "token(spacing.xxl)",
+              height: "token(spacing.xxl)",
+              flexShrink: 0,
+              display: "block",
+            },
+            "& svg path[stroke]": { stroke: "currentColor" },
+            "& svg path[fill]": { fill: "currentColor" },
+          },
+          variants: {
+            variant: {
+              text: {
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                // Space a leading icon from the label when both compose.
+                gap: "md",
+                height: "token(spacing.4xl)",
+                // Floor a short label (Cancel / OK) to a substantial chip; a
+                // longer label grows past it since the width is fit-content.
+                minWidth: "token(spacing.5xl)",
+                paddingInline: "lg",
+                borderRadius: "md",
+                backgroundColor: "bg.button.secondary.default",
+                color: "text.body",
+                textStyle: "bodyLarge",
+                _hover: { backgroundColor: "bg.button.secondary.hover" },
+              },
+              icon: {
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                // Space icon ∣ optional label (the ← Home link) the way the
+                // toolbar chip spaces its glyph and text.
+                gap: "sm",
+                padding: "sm",
+                borderRadius: "sm",
+                color: "inherit",
+                // Matches the toolbar chip for the icon+label case; harmless
+                // for the icon-only majority.
+                textStyle: "bodySmall",
+                backgroundColor: "transparent",
+                _hover: { backgroundColor: "field.bg.hover" },
+                "html[data-keyboard-focus] &:focus-visible": {
+                  boxShadow:
+                    "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+                },
+              },
+              link: {
+                display: "inline",
+                padding: "none",
+                background: "none",
+                color: { base: "brand.pink", _dark: "brand.orange" },
+                textStyle: "bodySmall",
+                textDecoration: "underline",
+                textUnderlineOffset: "3px",
+                verticalAlign: "baseline",
+                _active: { transform: "none" },
+              },
+            },
+          },
+          defaultVariants: { variant: "text" },
+          // Button/Link call action({ variant }) with a runtime value, so every
+          // variant must be emitted statically.
+          staticCss: [{ variant: ["*"] }],
+        }),
+
         inlineCode: defineRecipe({
           className: "inline-code",
           description: "Inline code mark inside article prose.",
@@ -733,6 +834,15 @@ export default defineConfig({
           defaultVariants: {
             aspectRatio: "sm",
           },
+          // DemoFrame selects `aspectRatio`/`logger` at RUNTIME (per registry
+          // entry), so the static extractor only ever sees the default (`sm`).
+          // Every non-default aspect ratio (a `md` 3:2 showcase, `lg`) and its
+          // logger compound must be forced, or the variant class emits nothing
+          // and the area silently falls back to its content-height min-height.
+          staticCss: [
+            { aspectRatio: ["*"] },
+            { aspectRatio: ["*"], logger: ["*"] },
+          ],
         }),
 
         demoFrameDemoMeasure: defineRecipe({
@@ -1827,14 +1937,17 @@ export default defineConfig({
                 {
                   color: "field.text.active",
                 },
-              // Switch archetype: the label sits to the right of the control and
-              // reads as regular text (not the muted field label), and clicking
-              // it toggles — so it takes the pointer cursor.
+              // Switch archetype: the label sits to the right of the control as a
+              // full statement — so it reads as the field family's resting text
+              // (`field.text.default`, matching the input values), not the muted
+              // field label nor the brighter app body text; clicking it toggles,
+              // so it takes the pointer cursor (Figma 684:1133 dark neutral.400 /
+              // light neutral.600).
               "[data-field]:has([role='switch']) &": {
                 gridColumn: 2,
                 gridRow: 1,
                 width: "auto",
-                color: "text.default",
+                color: "field.text.default",
                 cursor: "pointer",
               },
             },
@@ -2501,6 +2614,59 @@ export default defineConfig({
           defaultVariants: { tone: "default", direction: "block" },
           // OptionListRoot calls optionList({ tone, direction }) at runtime.
           staticCss: [{ tone: ["*"], direction: ["*"] }],
+        }),
+
+        notice: defineSlotRecipe({
+          className: "notice",
+          description:
+            "Notice — an inline informational callout: a leading status icon beside a short run of prose on a subtle neutral wash (bg.notice), composed as Notice > Notice.Icon + Notice.Label (Figma 684:1045 dark, 704:1710 light). The root owns the fill, the row layout, and the single `color` source (field.text.default — the field family's resting accent) that the icon and any emphasized runs inherit; the label dials its own body prose back to 75% so the emphasized dates/days it wraps in <strong> read as the salient bits. Purely presentational — no state, no variants — so it stays a Server Component.",
+          slots: ["root", "icon", "label"],
+          base: {
+            root: {
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "xs",
+              width: "token(spacing.full)",
+              paddingInline: "sm",
+              paddingBlock: "md",
+              borderRadius: "sm",
+              backgroundColor: "bg.notice",
+              // One source for the icon + emphasized runs; the label overrides
+              // its own body prose to 75% off this so the <strong> bits pop.
+              color: "field.text.default",
+            },
+            icon: {
+              flexShrink: 0,
+              display: "block",
+              width: "token(spacing.xxl)",
+              height: "token(spacing.xxl)",
+              // A composed icon fills the 20px box and tracks the notice colour
+              // via currentColor (mirrors the action / option recipes).
+              "& svg": {
+                width: "token(spacing.full)",
+                height: "token(spacing.full)",
+                display: "block",
+              },
+              "& svg path[stroke], & svg circle[stroke]": {
+                stroke: "currentColor",
+              },
+              "& svg path[fill], & svg circle[fill]": { fill: "currentColor" },
+            },
+            label: {
+              flex: "1 1 0",
+              minWidth: 0,
+              textStyle: "sidenote",
+              // Body prose sits a step below the accent; the emphasized runs
+              // (dates, weekdays) step back up to full colour + a heavier weight,
+              // matching the Figma's Regular → Semibold shift.
+              color: "field.text.default/75",
+              wordBreak: "break-word",
+              "& :is(strong, b)": {
+                color: "field.text.default",
+                fontWeight: "bold",
+              },
+            },
+          },
         }),
       },
 

@@ -2,8 +2,8 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type MouseEvent } from "react";
 import { cx } from "../../../styled-system/css";
-import { actionRecipe, type ActionVariant } from "./action-recipe";
-import { ActionText, useActionTooltip } from "./action";
+import { action } from "../../../styled-system/recipes";
+import { ActionText, useActionTooltip, type ActionVariant } from "./action";
 import { Tooltip } from "./tooltip";
 
 export type { ActionVariant };
@@ -63,7 +63,7 @@ function ButtonRoot(
       <button
         ref={ref}
         type={type}
-        className={cx(actionRecipe({ variant: resolvedVariant }), className)}
+        className={cx(action({ variant: resolvedVariant }), className)}
         onMouseEnter={(event: MouseEvent<HTMLButtonElement>) => {
           onMouseEnter?.(event);
           if (hasTooltip) show(event.clientX, event.clientY);

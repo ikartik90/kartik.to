@@ -19,6 +19,11 @@ type DemoRegistryEntry = Omit<DemoComponentEntry, "id" | "label">;
 
 /** Add one entry here for each new file in this directory. */
 const registry: Record<string, DemoRegistryEntry> = {
+  "shift-scheduling": {
+    load: async () => (await import("./shift-scheduling")).ShiftScheduling,
+    // 960×640 showcase = 3:2, so it fills the frame at the article width.
+    aspectRatio: "md",
+  },
   "calchemy-demo": {
     load: async () => {
       const mod = await import("./calchemy-demo");

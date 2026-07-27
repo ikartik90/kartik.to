@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { createPortal } from "react-dom";
 import { useDismiss } from "@/hooks/use-dismiss";
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,17 @@ type PopoverProps = {
   ariaLabel?: string;
   /** Dismiss on scroll/resize — for menus anchored to a click-captured rect. */
   dismissOnReflow?: boolean;
+  /**
+   * Render the container in a `document.body` portal so it renders in the true
+   * top stacking context and escapes ancestor clipping/containment — e.g. a
+   * `DemoFrame`, whose `container-type` makes it the containing block for a
+   * `position: fixed` child and whose `overflow: hidden` would otherwise crop
+   * the popover. Only for element-anchored popovers (no `rect`): the anchor-name
+   * lives on an external trigger, so CSS anchor positioning still pins the
+   * popover to it across the portal. A `rect`-anchored popover must stay in flow
+   * (its synthesized anchor is article-relative), so this is ignored there.
+   */
+  portal?: boolean;
   onDismiss: () => void;
   children: React.ReactNode;
 } & (
@@ -66,11 +78,18 @@ export function Popover({
   role,
   ariaLabel,
   dismissOnReflow = false,
+  portal = false,
   onDismiss,
   children,
 }: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   useDismiss({ ref: containerRef, onDismiss, dismissOnReflow });
+
+  const container = (
+    <div ref={containerRef} className={className} role={role} aria-label={ariaLabel}>
+      {children}
+    </div>
+  );
 
   return (
     <>
@@ -93,9 +112,9 @@ export function Popover({
           }}
         />
       )}
-      <div ref={containerRef} className={className} role={role} aria-label={ariaLabel}>
-        {children}
-      </div>
+      {portal && !rect && typeof document !== "undefined"
+        ? createPortal(container, document.body)
+        : container}
     </>
   );
 }
