@@ -9,7 +9,12 @@ import {
 } from "react";
 import { cx } from "../../../styled-system/css";
 import { action } from "../../../styled-system/recipes";
-import { ActionText, useActionTooltip, type ActionVariant } from "./action";
+import {
+  ActionText,
+  useActionTooltip,
+  type ActionVariant,
+  type ActionEmphasis,
+} from "./action";
 import { Tooltip } from "./tooltip";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +51,13 @@ export interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
    */
   variant?: ActionVariant;
   /**
+   * Fill prominence, independent of `variant` (the shape). `secondary` is the
+   * filled chip; `tertiary` has no resting fill and a subtler hover wash. Left
+   * unset it defaults to `secondary` for text links and `tertiary` for icon
+   * links.
+   */
+  emphasis?: ActionEmphasis;
+  /**
    * Force a plain <a> instead of next/link. Auto-detected for absolute /
    * mailto: / tel: hrefs and whenever a `target` is set.
    */
@@ -56,6 +68,7 @@ function LinkRoot(
   {
     href,
     variant,
+    emphasis,
     external,
     className,
     children,
@@ -70,10 +83,15 @@ function LinkRoot(
   const { content, hasText, tooltipNode, hasTooltip, show, hide } =
     useActionTooltip(children);
   const resolvedVariant = variant ?? (hasText ? "text" : "icon");
+  const resolvedEmphasis =
+    emphasis ?? (resolvedVariant === "text" ? "secondary" : "tertiary");
   const asAnchor = external ?? (isExternalHref(href) || target != null);
   // Never ship a target="_blank" without the reverse-tabnabbing guard.
   const safeRel = rel ?? (target === "_blank" ? "noopener noreferrer" : undefined);
-  const classes = cx(action({ variant: resolvedVariant }), className);
+  const classes = cx(
+    action({ variant: resolvedVariant, emphasis: resolvedEmphasis }),
+    className,
+  );
 
   const handleEnter = (event: MouseEvent<HTMLAnchorElement>) => {
     onMouseEnter?.(event);
@@ -121,4 +139,4 @@ export const Link = Object.assign(forwardRef(LinkRoot), {
   Tooltip,
 });
 
-export type { ActionVariant };
+export type { ActionVariant, ActionEmphasis };

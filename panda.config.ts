@@ -37,7 +37,7 @@ export default defineConfig({
           librarySidebar: { value: "200px" },
           imagePreviewMax: { value: "280px" },
           insertDialogHeight: { value: "480px" },
-          dialogFooter: { value: "44px" },
+          dialogFooter: { value: "52px" },
           quoteMark: { value: "52px" },
           tooltipIcon: { value: "14px" },
           // Numbered-list ordinal badge — square at single digit, pill beyond (Figma 413:684/688)
@@ -156,19 +156,22 @@ export default defineConfig({
             },
             button: {
               secondary: {
+                // The same neutral wash in both themes, but lighter in light UI
+                // — on a pale canvas the chip needs far less alpha to read as a
+                // filled surface than it does against the dark one.
                 default: {
-                  value:
-                    "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                  value: {
+                    base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
+                    _dark:
+                      "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                  },
                 },
                 hover: {
-                  value:
-                    "color-mix(in srgb, var(--colors-neutral-500) 50%, transparent)",
-                },
-              },
-              tertiary: {
-                hover: {
-                  value:
-                    "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                  value: {
+                    base: "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                    _dark:
+                      "color-mix(in srgb, var(--colors-neutral-500) 50%, transparent)",
+                  },
                 },
               },
             },
@@ -387,7 +390,7 @@ export default defineConfig({
         action: defineRecipe({
           className: "action",
           description:
-            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link.",
+            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature.",
           base: {
             cursor: "pointer",
             border: "none",
@@ -468,11 +471,37 @@ export default defineConfig({
                 _active: { transform: "none" },
               },
             },
+            // Fill prominence — orthogonal to `variant` (which is the shape).
+            // `secondary` is the filled chip the `text` variant already draws;
+            // `tertiary` drops the resting fill and hovers to the neutral
+            // `field.bg.hover` (see compoundVariants) — the same low-emphasis
+            // wash icon buttons use. Icon buttons are tertiary by nature —
+            // their transparent rest state and `field.bg.hover` live in the
+            // `icon` variant, so emphasis is inert for them.
+            emphasis: {
+              secondary: {},
+              tertiary: {},
+            },
           },
-          defaultVariants: { variant: "text" },
-          // Button/Link call action({ variant }) with a runtime value, so every
-          // variant must be emitted statically.
-          staticCss: [{ variant: ["*"] }],
+          compoundVariants: [
+            {
+              variant: "text",
+              emphasis: "tertiary",
+              // No resting fill, and hover to the neutral `field.bg.hover` — the
+              // same low-emphasis wash icon buttons use — overriding the
+              // secondary hover the `text` variant otherwise supplies. Both land
+              // as atomic utilities (later cascade layer), so they win over the
+              // `text` variant's own fill.
+              css: {
+                backgroundColor: "transparent",
+                _hover: { backgroundColor: "field.bg.hover" },
+              },
+            },
+          ],
+          defaultVariants: { variant: "text", emphasis: "secondary" },
+          // Button/Link call action({ variant, emphasis }) with runtime values,
+          // so every combination must be emitted statically.
+          staticCss: [{ variant: ["*"], emphasis: ["*"] }],
         }),
 
         inlineCode: defineRecipe({
@@ -1011,6 +1040,11 @@ export default defineConfig({
           description: "Shared dialog panel shell.",
           base: {
             backgroundColor: "bg.surface",
+            // The surface owns the text/glyph hue: icon buttons in the header
+            // (close) and body (delete) are `color: inherit`, so without this
+            // they'd fall through to the body default instead of the dialog's
+            // own `text.body` — the colour the title and body copy already use.
+            color: "text.body",
             borderRadius: "md",
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
@@ -1201,7 +1235,8 @@ export default defineConfig({
 
         mediaLibrarySidebar: defineRecipe({
           className: "media-library-sidebar",
-          description: "Image library sidebar in insert-image dialog.",
+          description:
+            "Library sidebar column in the insert dialogs — the frame around an OptionList.Listbox (component list / image list). Owns the width, divider and inset; the listbox inside owns the scrolling, since it keeps its own active row in view by nudging its scrollTop.",
           base: {
             width: "token(sizes.librarySidebar)",
             flexShrink: 0,
@@ -1214,44 +1249,25 @@ export default defineConfig({
             display: "flex",
             flexDirection: "column",
             gap: "none",
-            overflowY: "auto",
-          },
-        }),
-
-        mediaLibraryItem: defineRecipe({
-          className: "media-library-item",
-          description: "Selectable row in the image library sidebar.",
-          base: {
-            display: "flex",
-            alignItems: "center",
-            width: "100%",
-            gap: "md",
-            height: "token(spacing.3xl)",
-            paddingInline: "md",
-            borderRadius: "sm",
-            border: "none",
-            background: "none",
-            cursor: "pointer",
-            textStyle: "bodySmall",
-            color: "text.body",
-            textAlign: "left",
-            "&[aria-selected='true']": {
-              backgroundColor: "bg.itemHover",
-            },
+            minHeight: 0,
+            overflow: "hidden",
           },
         }),
 
         mediaPreview: defineRecipe({
           className: "media-preview",
-          description: "Large image preview in insert-image library view.",
+          description:
+            "Large image preview in insert-image library view. HEIGHT is the only fixed dimension (280px) — the width hugs the image's own aspect ratio and stretches at most to the pane's content box (`maxWidth: 100%` resolves against the flex container's content box, so the pane's padding is excluded). Fixed rather than max height so the metadata rows below hold their position as you switch images; `object-fit: contain` letterboxes anything the width clamp squeezes.",
           base: {
-            width: "token(sizes.imagePreviewMax)",
             height: "token(sizes.imagePreviewMax)",
+            width: "auto",
+            maxWidth: "token(spacing.full)",
             flexShrink: 0,
             margin: "none",
             "& img": {
-              width: "100%",
               height: "100%",
+              width: "auto",
+              maxWidth: "token(spacing.full)",
               objectFit: "contain",
               display: "block",
               borderRadius: "sm",
@@ -1272,7 +1288,7 @@ export default defineConfig({
             alignItems: "center",
             gap: "xs",
             paddingBlock: "md",
-            paddingInline: "sm",
+            paddingInline: "md",
             minWidth: 0,
             minHeight: 0,
             overflowY: "auto",

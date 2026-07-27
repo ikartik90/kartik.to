@@ -412,3 +412,84 @@ describe("externalKeys (slash-menu — focus stays outside the list)", () => {
     expect(activeValue()).toBe("mango"); // jackfruit is disabled, so last enabled is mango
   });
 });
+
+describe("pointer highlight", () => {
+  const activeText = () => document.querySelector("[data-active]")?.textContent;
+  const option = (name: string) => screen.getByRole("option", { name });
+
+  it("moves the highlight onto the hovered option", () => {
+    renderBare();
+    fireEvent.pointerEnter(option("Banana"));
+    expect(activeText()).toBe("Banana");
+  });
+
+  it("releases the highlight when the pointer leaves the option", () => {
+    renderBare();
+    const banana = option("Banana");
+    fireEvent.pointerEnter(banana);
+    expect(activeText()).toBe("Banana");
+
+    // Pointer moves off the row into the list's empty area (relatedTarget is
+    // the list, not another option) — the row must not stay lit.
+    fireEvent.pointerLeave(banana, { relatedTarget: banana.parentElement });
+    expect(activeText()).not.toBe("Banana");
+  });
+
+  it("falls back to the selected row once the pointer leaves", () => {
+    renderBare({ value: "mango" });
+    const banana = option("Banana");
+    fireEvent.pointerEnter(banana);
+    expect(activeText()).toBe("Banana");
+
+    fireEvent.pointerLeave(banana, { relatedTarget: banana.parentElement });
+    expect(activeText()).toBe("Mango");
+  });
+
+  it("hands the highlight straight over when moving between options", () => {
+    renderBare();
+    const banana = option("Banana");
+    const grapes = option("Grapes");
+    fireEvent.pointerEnter(banana);
+    // Leaving straight onto another option: that option's enter takes over, so
+    // the highlight must never blank out in between.
+    fireEvent.pointerLeave(banana, { relatedTarget: grapes });
+    fireEvent.pointerEnter(grapes);
+    expect(activeText()).toBe("Grapes");
+  });
+
+  it("releases the highlight when the pointer crosses into another list", () => {
+    render(
+      <>
+        <Field>{bareTree()}</Field>
+        <Field>
+          <OptionList>
+            <OptionList.Listbox>
+              <OptionList.Option value="edit">Edit</OptionList.Option>
+            </OptionList.Listbox>
+          </OptionList>
+        </Field>
+      </>,
+    );
+    const banana = screen.getByRole("option", { name: "Banana" });
+    const edit = screen.getByRole("option", { name: "Edit" });
+    fireEvent.pointerEnter(banana);
+    expect(banana.hasAttribute("data-active")).toBe(true);
+
+    // A row in a DIFFERENT list carries data-value too, but it cannot take over
+    // this list's highlight — so this row must still release.
+    fireEvent.pointerLeave(banana, { relatedTarget: edit });
+    expect(banana.hasAttribute("data-active")).toBe(false);
+  });
+
+  it("keeps a keyboard highlight when the pointer leaves a different row", () => {
+    renderSearch();
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    expect(activeText()).toBe("Avocado");
+
+    // The pointer was resting elsewhere; leaving that row must not steal the
+    // keyboard's highlight (it's what Enter would commit).
+    const banana = option("Banana");
+    fireEvent.pointerLeave(banana, { relatedTarget: banana.parentElement });
+    expect(activeText()).toBe("Avocado");
+  });
+});

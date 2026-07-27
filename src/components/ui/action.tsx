@@ -21,6 +21,14 @@ import { Tooltip, TooltipHostContext } from "./tooltip";
 /** The look a Button/Link takes — mirrors the `action` recipe's `variant`. */
 export type ActionVariant = "text" | "icon" | "link";
 
+/**
+ * The fill prominence a Button/Link takes — mirrors the recipe's `emphasis`,
+ * orthogonal to `variant` (the shape). `secondary` is the filled chip;
+ * `tertiary` has no resting fill and its own subtler hover wash. `primary` is
+ * intentionally absent until its look is designed.
+ */
+export type ActionEmphasis = "secondary" | "tertiary";
+
 export interface ActionTextProps {
   children: ReactNode;
   className?: string;

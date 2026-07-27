@@ -6,6 +6,7 @@ import {
   deleteMedia,
   listMediaAssets,
   updateMediaAlt,
+  updateMediaFilename,
 } from "@/app/actions/media";
 import {
   isAllowedImageContentType,
@@ -67,11 +68,13 @@ export function useImageInsert({
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [altText, setAltText] = useState("");
+  const [filenameText, setFilenameText] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const altSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedAsset =
     assets.find((asset) => asset.key === selectedKey) ?? null;
@@ -81,6 +84,7 @@ export function useImageInsert({
     setAssets([]);
     setSelectedKey(null);
     setAltText("");
+    setFilenameText("");
     setUploadProgress(0);
     setIsDragOver(false);
     setError(null);
@@ -88,6 +92,10 @@ export function useImageInsert({
     if (altSaveTimer.current) {
       clearTimeout(altSaveTimer.current);
       altSaveTimer.current = null;
+    }
+    if (nameSaveTimer.current) {
+      clearTimeout(nameSaveTimer.current);
+      nameSaveTimer.current = null;
     }
     onReset?.();
   }, [onReset]);
@@ -99,6 +107,7 @@ export function useImageInsert({
     setSelectedKey(key);
     const asset = list.find((item) => item.key === key);
     setAltText(asset?.alt ?? "");
+    setFilenameText(asset?.filename ?? "");
     return list;
   }, []);
 
@@ -214,6 +223,7 @@ export function useImageInsert({
       setSelectedKey(key);
       const asset = assets.find((item) => item.key === key);
       setAltText(asset?.alt ?? "");
+      setFilenameText(asset?.filename ?? "");
     },
     [assets],
   );
@@ -238,6 +248,35 @@ export function useImageInsert({
     [selectedKey],
   );
 
+  /**
+   * Rename for display only — the object key never changes, so URLs already
+   * embedded in published articles keep working. Debounced like the alt text,
+   * and a blank field is left unsaved (the stored name stands) rather than
+   * writing an empty name.
+   */
+  const updateFilename = useCallback(
+    (value: string) => {
+      setFilenameText(value);
+      if (!selectedKey || !value.trim()) return;
+
+      if (nameSaveTimer.current) clearTimeout(nameSaveTimer.current);
+      nameSaveTimer.current = setTimeout(async () => {
+        try {
+          const updated = await updateMediaFilename({
+            key: selectedKey,
+            filename: value.trim(),
+          });
+          setAssets((prev) =>
+            prev.map((item) => (item.key === updated.key ? updated : item)),
+          );
+        } catch {
+          // Non-blocking — the name stays in local state until retry
+        }
+      }, 400);
+    },
+    [selectedKey],
+  );
+
   const deleteSelectedAsset = useCallback(async () => {
     if (!selectedKey) return;
 
@@ -249,6 +288,10 @@ export function useImageInsert({
       clearTimeout(altSaveTimer.current);
       altSaveTimer.current = null;
     }
+    if (nameSaveTimer.current) {
+      clearTimeout(nameSaveTimer.current);
+      nameSaveTimer.current = null;
+    }
 
     try {
       await deleteMedia({ key: keyToDelete });
@@ -257,7 +300,9 @@ export function useImageInsert({
 
       const nextKey = remaining[0]?.key ?? null;
       setSelectedKey(nextKey);
-      setAltText(remaining.find((item) => item.key === nextKey)?.alt ?? "");
+      const nextAsset = remaining.find((item) => item.key === nextKey);
+      setAltText(nextAsset?.alt ?? "");
+      setFilenameText(nextAsset?.filename ?? "");
 
       if (remaining.length === 0) {
         setPhase("upload");
@@ -286,6 +331,7 @@ export function useImageInsert({
     selectedKey,
     selectedAsset,
     altText,
+    filenameText,
     uploadProgress,
     isDragOver,
     setIsDragOver,
@@ -296,6 +342,7 @@ export function useImageInsert({
     goToUpload,
     selectAsset,
     updateAltText,
+    updateFilename,
     deleteSelectedAsset,
     getInsertPayload,
     reset,

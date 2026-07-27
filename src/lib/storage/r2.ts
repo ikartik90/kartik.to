@@ -75,6 +75,8 @@ export interface R2ObjectHead {
   size: number;
   contentType: string;
   alt?: string;
+  /** The original upload name, editable independently of the immutable key. */
+  filename?: string;
 }
 
 export async function headR2Object(key: string): Promise<R2ObjectHead> {
@@ -89,16 +91,33 @@ export async function headR2Object(key: string): Promise<R2ObjectHead> {
     size: response.ContentLength ?? 0,
     contentType: response.ContentType ?? "application/octet-stream",
     alt: response.Metadata?.alt,
+    filename: response.Metadata?.filename,
   };
 }
 
-export async function updateR2ObjectAlt(key: string, alt: string): Promise<void> {
+/**
+ * Patch a subset of an object's user metadata in place. S3/R2 has no partial
+ * metadata update — the only way is a self-copy with `MetadataDirective:
+ * REPLACE`, which swaps the WHOLE metadata map and resets system headers. So
+ * read the current state first and re-send it merged, carrying `ContentType`
+ * across too; otherwise editing the alt text would drop the filename (and
+ * re-serve the image as `application/octet-stream`).
+ */
+export async function updateR2ObjectMetadata(
+  key: string,
+  patch: Record<string, string>,
+): Promise<void> {
+  const current = await r2.send(
+    new HeadObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key }),
+  );
+
   await r2.send(
     new CopyObjectCommand({
       Bucket: env.R2_BUCKET_NAME,
       CopySource: `${env.R2_BUCKET_NAME}/${key}`,
       Key: key,
-      Metadata: { alt },
+      ContentType: current.ContentType,
+      Metadata: { ...current.Metadata, ...patch },
       MetadataDirective: "REPLACE",
     }),
   );

@@ -56,6 +56,42 @@ describe("Button", () => {
     expect(ref.current?.tagName).toBe("BUTTON");
   });
 
+  describe("emphasis", () => {
+    it("defaults a text button to secondary (filled at rest)", () => {
+      render(<Button>Save</Button>);
+      const cls = screen.getByRole("button", { name: "Save" }).className;
+      expect(cls).toContain("emphasis_secondary");
+      expect(cls).not.toContain("emphasis_tertiary");
+    });
+
+    it("drops the resting fill for a tertiary text button", () => {
+      render(<Button emphasis="tertiary">Save</Button>);
+      const cls = screen.getByRole("button", { name: "Save" }).className;
+      expect(cls).toContain("emphasis_tertiary");
+    });
+
+    it("classifies an icon button as tertiary by default", () => {
+      render(
+        <Button variant="icon" aria-label="Close">
+          <svg />
+        </Button>,
+      );
+      const cls = screen.getByRole("button", { name: "Close" }).className;
+      expect(cls).toContain("emphasis_tertiary");
+    });
+
+    it("lets an explicit emphasis override the inferred default", () => {
+      render(
+        <Button variant="icon" emphasis="secondary" aria-label="Close">
+          <svg />
+        </Button>,
+      );
+      const cls = screen.getByRole("button", { name: "Close" }).className;
+      expect(cls).toContain("emphasis_secondary");
+      expect(cls).not.toContain("emphasis_tertiary");
+    });
+  });
+
   describe("Button.Tooltip", () => {
     function iconButton() {
       return (
