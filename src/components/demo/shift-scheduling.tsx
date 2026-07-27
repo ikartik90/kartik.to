@@ -153,10 +153,12 @@ const formStyle = css({
   clipPath: TORN_CLIP,
 });
 
+// No `gap` — the recurrence block carries its own top spacing so that spacing
+// folds away WITH it. A parent gap would survive the collapse and leave a dead
+// band above the bottom rule.
 const fieldsStyle = css({
   display: "flex",
   flexDirection: "column",
-  gap: "lg",
   paddingBlock: "lg",
   borderBlockWidth: "token(spacing.xxs)",
   borderBlockStyle: "solid",
@@ -167,6 +169,78 @@ const rowStyle = css({ display: "flex", gap: "xl" });
 const rowCenterStyle = css({ alignItems: "center" });
 const rowTopStyle = css({ alignItems: "flex-start" });
 const dateFieldStyle = css({ width: "140px", flexShrink: 0 });
+
+// The recurrence block — weekday toolbar, Last Shift, and the Notice — folds
+// away as ONE region when the repeat switch is off, so the form resizes instead
+// of snapping. Three nested elements, each owning one job:
+//
+//   • WRAPPER animates the height. `grid-template-rows: 1fr → 0fr` is the only
+//     cross-browser way to transition to/from an intrinsic size (`height: auto`
+//     needs `interpolate-size`, which is Chromium-only). `display` rides the
+//     same transition under `allow-discrete`, so `none` lands at the very END of
+//     the collapse and `grid` is restored at the START of the expand.
+//   • CLIP supplies the `overflow: hidden` + `min-height: 0` the 0fr row needs to
+//     actually crop its content. Safe for the DatePicker: its calendar portals
+//     to document.body, so no ancestor clips it.
+//   • CONTENT fades and rises 20px, and holds the block's own top spacing.
+//
+// The halves are deliberately offset so neither direction reads as a jump: on
+// exit the content fades first (0→160ms) and the height follows (60→240ms); on
+// entry the height opens first (0→180ms) and the content fades in behind it
+// (80→240ms). Both directions land together at 240ms. The exit-side timings live
+// in the `[data-collapsed='true']` blocks; the base values ARE the entry side.
+//
+// `@starting-style` is what makes the ENTRY animate at all: an element sitting
+// at `display: none` was not rendered on the previous style change, so it has no
+// before-change style and the browser starts NO transitions — the expand snaps
+// back in a single frame. `_starting` supplies that missing origin (collapsed
+// height + faded/raised content). It also fires the first time an element is
+// rendered, i.e. on page load, which would play a spurious open animation on
+// mount — hence the `[data-armed='true']` gate, false until the switch is first
+// touched.
+const recurrenceStyle = css({
+  display: "grid",
+  gridTemplateRows: "1fr",
+  transitionProperty: "grid-template-rows, display",
+  transitionDuration: "180ms",
+  transitionTimingFunction: "ease-out",
+  transitionDelay: "0s",
+  transitionBehavior: "allow-discrete",
+  "&[data-collapsed='true']": {
+    gridTemplateRows: "0fr",
+    display: "none",
+    transitionDelay: "60ms",
+  },
+  _starting: {
+    "&[data-armed='true'][data-collapsed='false']": { gridTemplateRows: "0fr" },
+  },
+});
+
+const recurrenceClipStyle = css({ minHeight: 0, overflow: "hidden" });
+
+const recurrenceContentStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: "lg",
+  paddingBlockStart: "lg",
+  opacity: 1,
+  translate: "0 0",
+  transitionProperty: "opacity, translate",
+  transitionDuration: "160ms",
+  transitionTimingFunction: "ease-out",
+  transitionDelay: "80ms",
+  "[data-collapsed='true'] &": {
+    opacity: 0,
+    translate: "0 -20px",
+    transitionDelay: "0s",
+  },
+  _starting: {
+    "[data-armed='true'][data-collapsed='false'] &": {
+      opacity: 0,
+      translate: "0 -20px",
+    },
+  },
+});
 
 const switchFieldStyle = css({
   display: "flex",
@@ -277,6 +351,9 @@ export function ShiftScheduling() {
   );
   const [repeat, setRepeat] = useState(true);
   const [days, setDays] = useState<Set<WeekdayKey>>(new Set(["tue", "thu"]));
+  // Arms the recurrence block's @starting-style once the switch is first
+  // touched, so the entry animation can't fire on the initial render.
+  const [armed, setArmed] = useState(false);
 
   const toggleDay = (key: WeekdayKey) =>
     setDays((prev) => {
@@ -287,7 +364,11 @@ export function ShiftScheduling() {
     });
 
   const selectedNames = WEEKDAYS.filter((d) => days.has(d.key)).map((d) => d.name);
-  const repeating = repeat && selectedNames.length > 0;
+  // Deliberately NOT gated on `repeat`: the Notice now collapses along with the
+  // rest of the recurrence block, so folding the clause out on `repeat: false`
+  // would only re-flow the sentence under the reader mid-fade. The clause still
+  // drops when the block is VISIBLE but no weekday is selected.
+  const repeating = selectedNames.length > 0;
 
   return (
     <div className={stackStyle}>
@@ -306,67 +387,85 @@ export function ShiftScheduling() {
         <div className={fieldsStyle}>
           <div className={`${rowStyle} ${rowCenterStyle}`}>
             <Field className={dateFieldStyle}>
-              <Field.Label>First Shift</Field.Label>
+              <Field.Label>{repeat ? "First Shift" : "Shift Date"}</Field.Label>
               <DatePicker value={firstShift} onValueChange={setFirstShift} />
               <Field.Hint>dd/mm/yyyy</Field.Hint>
             </Field>
             <div className={switchFieldStyle}>
               <Field size="lg">
-                <Switch checked={repeat} onCheckedChange={setRepeat} />
+                <Switch
+                  checked={repeat}
+                  onCheckedChange={(next) => {
+                    setArmed(true);
+                    setRepeat(next);
+                  }}
+                />
                 <Field.Label>Repeat this shift on other days</Field.Label>
               </Field>
             </div>
           </div>
 
-          <div className={`${rowStyle} ${rowTopStyle}`}>
-            <div className={weekdaysGroupStyle}>
-              <span className={weekdaysLabelStyle}>Repeat Every Week On</span>
-              <div className={weekdaysFrameStyle}>
-                <OptionList direction="inline">
-                  <OptionList.Toolbar
-                    aria-label="Repeat on weekdays"
-                    className={weekdaysToolbarStyle}
-                  >
-                    {WEEKDAYS.map((day, i) => (
-                      <OptionList.Option
-                        key={`${day.key}-${i}`}
-                        pressed={days.has(day.key)}
-                        aria-label={day.name}
-                        className={dayChipStyle}
-                        onClick={() => toggleDay(day.key)}
-                      >
-                        {day.letter}
-                      </OptionList.Option>
-                    ))}
-                  </OptionList.Toolbar>
-                </OptionList>
+          <div
+            className={recurrenceStyle}
+            data-testid="recurrence"
+            data-collapsed={!repeat}
+            data-armed={armed}
+            inert={!repeat}
+          >
+            <div className={recurrenceClipStyle}>
+              <div className={recurrenceContentStyle}>
+                <div className={`${rowStyle} ${rowTopStyle}`}>
+                  <div className={weekdaysGroupStyle}>
+                    <span className={weekdaysLabelStyle}>Repeat Every Week On</span>
+                    <div className={weekdaysFrameStyle}>
+                      <OptionList direction="inline">
+                        <OptionList.Toolbar
+                          aria-label="Repeat on weekdays"
+                          className={weekdaysToolbarStyle}
+                        >
+                          {WEEKDAYS.map((day, i) => (
+                            <OptionList.Option
+                              key={`${day.key}-${i}`}
+                              pressed={days.has(day.key)}
+                              aria-label={day.name}
+                              className={dayChipStyle}
+                              onClick={() => toggleDay(day.key)}
+                            >
+                              {day.letter}
+                            </OptionList.Option>
+                          ))}
+                        </OptionList.Toolbar>
+                      </OptionList>
+                    </div>
+                  </div>
+                  <Field className={dateFieldStyle}>
+                    <Field.Label>Last Shift</Field.Label>
+                    <DatePicker value={lastShift} onValueChange={setLastShift} />
+                    <Field.Hint>dd/mm/yyyy</Field.Hint>
+                  </Field>
+                </div>
+
+                {/* The star of the showcase — a live, self-describing Notice. */}
+                <Notice role="status" aria-live="polite">
+                  <Notice.Icon>
+                    <InfoIcon />
+                  </Notice.Icon>
+                  <Notice.Label>
+                    This shift will start on{" "}
+                    <strong>{firstShift ? formatFull(firstShift) : "—"}</strong>
+                    {repeating && lastShift ? (
+                      <>
+                        {" "}
+                        and repeat every {joinDays(selectedNames)} until{" "}
+                        <strong>{formatFull(lastShift)}</strong>
+                      </>
+                    ) : null}
+                    .
+                  </Notice.Label>
+                </Notice>
               </div>
             </div>
-            <Field className={dateFieldStyle}>
-              <Field.Label>Last Shift</Field.Label>
-              <DatePicker value={lastShift} onValueChange={setLastShift} />
-              <Field.Hint>dd/mm/yyyy</Field.Hint>
-            </Field>
           </div>
-
-          {/* The star of the showcase — a live, self-describing Notice. */}
-          <Notice role="status" aria-live="polite">
-            <Notice.Icon>
-              <InfoIcon />
-            </Notice.Icon>
-            <Notice.Label>
-              This shift will start on{" "}
-              <strong>{firstShift ? formatFull(firstShift) : "—"}</strong>
-              {repeating && lastShift ? (
-                <>
-                  {" "}
-                  and repeat every {joinDays(selectedNames)} until{" "}
-                  <strong>{formatFull(lastShift)}</strong>
-                </>
-              ) : null}
-              .
-            </Notice.Label>
-          </Notice>
         </div>
       </div>
 
