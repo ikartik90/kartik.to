@@ -87,3 +87,112 @@ describe("SidenoteLayer — editor card", () => {
     expect(onExitEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
   });
 });
+
+// Collapse the caret inside `el` at absolute text offset `at` (paragraph breaks
+// count as one character), mirroring where the user would be typing.
+function placeCaret(el: HTMLElement, at: number) {
+  const paragraphs = Array.from(el.children);
+  let index = 0;
+  let column = at;
+  while (index < paragraphs.length - 1 && column > (paragraphs[index].textContent ?? "").length) {
+    column -= (paragraphs[index].textContent ?? "").length + 1;
+    index++;
+  }
+  const host = paragraphs[index] ?? el;
+  const textNode = host.firstChild;
+  const range = document.createRange();
+  if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+    range.setStart(textNode, column);
+  } else {
+    range.setStart(host, 0);
+  }
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
+describe("SidenoteLayer — note paragraphs", () => {
+  function renderEditable(text: string, handlers: Record<string, unknown> = {}) {
+    render(
+      <SidenoteLayer
+        entries={[entry({ text })]}
+        trigger="caret"
+        editable
+        activeId="n1"
+        {...handlers}
+      />,
+    );
+    return screen.getByRole("textbox", { name: "Sidenote 1" });
+  }
+
+  it("renders a stored multi-paragraph note as one element per paragraph", () => {
+    const body = renderEditable("first\nsecond");
+    expect(Array.from(body.children).map((c) => c.textContent)).toEqual([
+      "first",
+      "second",
+    ]);
+  });
+
+  it("splits the note at the caret on Shift+Enter", () => {
+    const onChangeText = vi.fn();
+    const onExitEdit = vi.fn();
+    const body = renderEditable("onetwo", { onChangeText, onExitEdit });
+    placeCaret(body, 3);
+
+    fireEvent.keyDown(body, { key: "Enter", shiftKey: true });
+
+    expect(onChangeText).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "n1" }),
+      "one\ntwo",
+    );
+    expect(Array.from(body.children).map((c) => c.textContent)).toEqual([
+      "one",
+      "two",
+    ]);
+    expect(onExitEdit).not.toHaveBeenCalled();
+  });
+
+  it("appends an empty paragraph when Shift+Enter lands at the end", () => {
+    const onChangeText = vi.fn();
+    const body = renderEditable("note", { onChangeText });
+    placeCaret(body, 4);
+
+    fireEvent.keyDown(body, { key: "Enter", shiftKey: true });
+
+    expect(onChangeText).toHaveBeenCalledWith(expect.anything(), "note\n");
+    expect(body.children).toHaveLength(2);
+  });
+
+  it("exits on a plain Enter without adding a paragraph", () => {
+    const onChangeText = vi.fn();
+    const onExitEdit = vi.fn();
+    const body = renderEditable("note", { onChangeText, onExitEdit });
+    placeCaret(body, 4);
+
+    fireEvent.keyDown(body, { key: "Enter" });
+
+    expect(onExitEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+    expect(onChangeText).not.toHaveBeenCalled();
+    expect(body.children).toHaveLength(1);
+  });
+
+  it("reports typed text with paragraph breaks preserved", () => {
+    const onChangeText = vi.fn();
+    const body = renderEditable("first\nsecond", { onChangeText });
+    body.children[1].textContent = "second edited";
+
+    fireEvent.input(body);
+
+    expect(onChangeText).toHaveBeenCalledWith(
+      expect.anything(),
+      "first\nsecond edited",
+    );
+  });
+
+  it("renders each paragraph in the read-only card", () => {
+    render(<SidenoteLayer entries={[entry({ text: "first\nsecond" })]} />);
+    expect(screen.getByText("first")).toBeDefined();
+    expect(screen.getByText("second")).toBeDefined();
+  });
+});

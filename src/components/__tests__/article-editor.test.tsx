@@ -406,6 +406,17 @@ describe("domToInlineNodes", () => {
     ];
     expect(parse(inlineNodesToHtml(nodes))).toEqual(nodes);
   });
+
+  it("round-trips a multi-paragraph sidenote (paragraph breaks are newlines)", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "annotated",
+        marks: [{ type: "sidenote", id: "n1", text: "first\nsecond" }],
+      },
+    ];
+    expect(parse(inlineNodesToHtml(nodes))).toEqual(nodes);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2612,6 +2623,69 @@ describe("ArticleEditor selection toolbar", () => {
     expect(linkMark && linkMark.type === "link" && linkMark.href).toBe(
       "https://example.com",
     );
+  });
+
+  // --- anchoring across a soft wrap -----------------------------------------
+  // jsdom has no layout, so the browser's client rects are faked: the fragments
+  // a real engine reports for a selection that begins at a wrap boundary — the
+  // space that ends the previous visual line (far right, one line up), then the
+  // glyphs on the next line.
+  const WRAP_TAIL = { left: 900, top: 100, width: 4, height: 20 };
+  const NEXT_LINE = { left: 20, top: 130, width: 8, height: 20 };
+
+  function fakeClientRects(rectsFor: (text: string) => typeof WRAP_TAIL[]) {
+    const original = Range.prototype.getClientRects;
+    Range.prototype.getClientRects = function (this: Range) {
+      const rects = rectsFor(this.toString());
+      return Object.assign([...rects], {
+        item: (i: number) => rects[i] ?? null,
+      }) as unknown as DOMRectList;
+    };
+    return () => {
+      Range.prototype.getClientRects = original;
+    };
+  }
+
+  it("anchors to the first visible glyph when the selection starts at a soft wrap", () => {
+    // The leading space belongs to the previous line, so its rect hangs at the
+    // far right of the line above — the toolbar must ignore it.
+    const restore = fakeClientRects((text) =>
+      text.startsWith(" ") ? [WRAP_TAIL, NEXT_LINE] : [NEXT_LINE],
+    );
+    try {
+      const block = seedParagraph("one two three");
+      block.focus();
+      selectRange(block, 3, 5); // " t" — wrap space + first glyph of the line
+
+      const anchor = document.querySelector(
+        "[data-popover-anchor]",
+      ) as HTMLElement;
+      expect(anchor.style.left).toBe(`${NEXT_LINE.left}px`);
+      expect(anchor.style.top).toBe(`${NEXT_LINE.top}px`);
+    } finally {
+      restore();
+    }
+  });
+
+  it("ignores an empty leading fragment left on the previous line", () => {
+    // A wrap with no space to swallow reports a zero-width fragment instead.
+    const restore = fakeClientRects(() => [
+      { ...WRAP_TAIL, width: 0 },
+      NEXT_LINE,
+    ]);
+    try {
+      const block = seedParagraph("one two three");
+      block.focus();
+      selectRange(block, 4, 7);
+
+      const anchor = document.querySelector(
+        "[data-popover-anchor]",
+      ) as HTMLElement;
+      expect(anchor.style.left).toBe(`${NEXT_LINE.left}px`);
+      expect(anchor.style.top).toBe(`${NEXT_LINE.top}px`);
+    } finally {
+      restore();
+    }
   });
 });
 
