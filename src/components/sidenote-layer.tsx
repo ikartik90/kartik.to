@@ -247,6 +247,116 @@ export function SidenoteLayer({
 }
 
 // ---------------------------------------------------------------------------
+// Note text ↔ DOM.
+//
+// A note is stored as plain text on its mark, with `\n` between paragraphs. In
+// the card each paragraph is its own <div> so the gap between them is a real
+// margin (a `\n` under `white-space: pre-wrap` can't be spaced) — see the
+// sidenoteCardBody recipe. An EMPTY note keeps a childless body so the recipe's
+// `:empty` placeholder still shows.
+// ---------------------------------------------------------------------------
+
+const PARAGRAPH_TAGS = new Set(["DIV", "P"]);
+
+/** Paragraph-aware text of a note body (or of a cloned range fragment). */
+function readNoteText(root: Node): string {
+  const lines: string[] = [];
+  let pending: string | null = null;
+  for (const node of Array.from(root.childNodes)) {
+    const el = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : null;
+    // A lone <br> is the browser's placeholder for an empty line box, not text.
+    if (el?.tagName === "BR") continue;
+    if (el && PARAGRAPH_TAGS.has(el.tagName)) {
+      if (pending !== null) lines.push(pending);
+      pending = null;
+      lines.push(el.textContent ?? "");
+      continue;
+    }
+    pending = (pending ?? "") + (node.textContent ?? "");
+  }
+  if (pending !== null) lines.push(pending);
+  return lines.join("\n");
+}
+
+/** Rebuild a note body's DOM from its text. */
+function renderNoteText(el: HTMLElement, text: string): void {
+  if (text === "") {
+    el.replaceChildren();
+    return;
+  }
+  el.replaceChildren(
+    ...text.split("\n").map((line) => {
+      const paragraph = document.createElement("div");
+      // An empty paragraph needs a <br> to keep its line box (and its caret).
+      if (line) paragraph.textContent = line;
+      else paragraph.appendChild(document.createElement("br"));
+      return paragraph;
+    }),
+  );
+}
+
+/** Text offset of a DOM point in `el`, counting each paragraph break as one char. */
+function offsetOf(el: HTMLElement, node: Node, offset: number): number {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.setEnd(node, offset);
+  return readNoteText(range.cloneContents()).length;
+}
+
+/** The selection as text offsets in `el`, or null if it isn't inside the body. */
+function selectionOffsets(el: HTMLElement): { start: number; end: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) {
+    return null;
+  }
+  return {
+    start: offsetOf(el, range.startContainer, range.startOffset),
+    end: offsetOf(el, range.endContainer, range.endOffset),
+  };
+}
+
+/** Collapse the caret at text offset `at` in a freshly rendered body. */
+function placeCaret(el: HTMLElement, at: number): void {
+  const lines = readNoteText(el).split("\n");
+  let index = 0;
+  let column = at;
+  while (index < lines.length - 1 && column > lines[index].length) {
+    column -= lines[index].length + 1;
+    index++;
+  }
+  const paragraph = el.children[index];
+  const textNode = paragraph?.firstChild;
+  const range = document.createRange();
+  if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+    range.setStart(textNode, Math.min(column, (textNode as Text).length));
+  } else {
+    range.setStart(paragraph ?? el, 0);
+  }
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
+/**
+ * Shift+Enter: break the note into a new paragraph at the caret (replacing any
+ * selected text). Returns the new note text, or null if the caret isn't in the
+ * body. The body is uncontrolled, so the DOM is rebuilt here and the caret
+ * restored just after the break.
+ */
+function splitParagraphAtCaret(el: HTMLElement): string | null {
+  const offsets = selectionOffsets(el);
+  if (!offsets) return null;
+  const text = readNoteText(el);
+  const next = `${text.slice(0, offsets.start)}\n${text.slice(offsets.end)}`;
+  renderNoteText(el, next);
+  placeCaret(el, offsets.start + 1);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // SidenoteBody — the note text. Editable bodies are uncontrolled (seeded via a
 // ref) so React never reconciles the contentEditable children and steals the
 // caret; external changes (undo, another card) re-seed only while unfocused.
@@ -271,13 +381,13 @@ function SidenoteBody({
   onExit,
   onChange,
 }: SidenoteBodyProps) {
-  const ref = useRef<HTMLSpanElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (document.activeElement !== el && el.textContent !== text) {
-      el.textContent = text;
+    if (document.activeElement !== el && readNoteText(el) !== text) {
+      renderNoteText(el, text);
     }
   }, [text]);
 
@@ -311,11 +421,17 @@ function SidenoteBody({
   }, [autoFocus, onAutoFocused]);
 
   if (!editable) {
-    return <span className={bodyClass}>{text}</span>;
+    return (
+      <div className={bodyClass}>
+        {text.split("\n").map((line, i) => (
+          <div key={i}>{line || <br />}</div>
+        ))}
+      </div>
+    );
   }
 
   return (
-    <span
+    <div
       ref={ref}
       className={bodyClass}
       contentEditable
@@ -323,7 +439,18 @@ function SidenoteBody({
       role="textbox"
       aria-label={ariaLabel}
       data-placeholder="Add a note…"
-      onInput={(e) => onChange(e.currentTarget.textContent ?? "")}
+      onInput={(e) => {
+        const el = e.currentTarget;
+        const next = readNoteText(el);
+        // Deleting the last character leaves an empty paragraph (or the
+        // browser's <br>) behind, which would keep the `:empty` placeholder
+        // hidden — drop it so the note reads as empty again.
+        if (next === "" && el.childNodes.length > 0) {
+          el.replaceChildren();
+          if (document.activeElement === el) placeCaret(el, 0);
+        }
+        onChange(next);
+      }}
       onKeyDown={(e) => {
         // Esc exits the card (mirrors the link input) — hand back to the parent
         // to close it and restore the caret to the annotated text.
@@ -331,6 +458,20 @@ function SidenoteBody({
           e.preventDefault();
           e.stopPropagation();
           onExit?.();
+          return;
+        }
+        // Shift+Enter opens a new paragraph inside the note; a plain Enter is
+        // "done" — the text is already committed on every input, so exiting is
+        // all that's left.
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.shiftKey) {
+            onExit?.();
+            return;
+          }
+          const next = splitParagraphAtCaret(e.currentTarget);
+          if (next !== null) onChange(next);
         }
       }}
     />

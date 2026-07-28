@@ -406,6 +406,17 @@ describe("domToInlineNodes", () => {
     ];
     expect(parse(inlineNodesToHtml(nodes))).toEqual(nodes);
   });
+
+  it("round-trips a multi-paragraph sidenote (paragraph breaks are newlines)", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "annotated",
+        marks: [{ type: "sidenote", id: "n1", text: "first\nsecond" }],
+      },
+    ];
+    expect(parse(inlineNodesToHtml(nodes))).toEqual(nodes);
+  });
 });
 
 // ---------------------------------------------------------------------------

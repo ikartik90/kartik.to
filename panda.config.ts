@@ -732,7 +732,7 @@ export default defineConfig({
         sidenoteCardBody: defineRecipe({
           className: "sidenote-card-body",
           description:
-            "Editable/read note body inside a margin-note card. Shows a placeholder while empty and unfocused.",
+            "Editable/read note body inside a margin-note card. Paragraphs are block children separated by 4px (Shift+Enter in the editor). Shows a placeholder while empty and unfocused.",
           base: {
             // inline-block (+ a min width) gives an EMPTY contentEditable a line
             // box so the caret is placeable/visible on click; caretColor makes
@@ -741,6 +741,8 @@ export default defineConfig({
             minWidth: "token(spacing.md)",
             caretColor: "text.default",
             focusVisibleRing: "none",
+            // Each paragraph of a note is a block child; 4px between them.
+            "& > * + *": { marginTop: "sm" },
             "&[data-placeholder]:empty::after": {
               content: "attr(data-placeholder)",
               color: "text.default/40",
