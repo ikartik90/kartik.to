@@ -4168,12 +4168,42 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       typeof range.getClientRects === "function"
         ? Array.from(range.getClientRects())
         : [];
+    // …but skip an EMPTY leading fragment: a range that begins exactly at a
+    // soft-wrap boundary reports a zero-width rect hanging at the end of the
+    // previous line, which would anchor the popover a column-width away from
+    // the text. Collapsed ranges (a caret) are all zero-width — keep those.
     const r =
+      rects.find((rect) => rect.width > 0) ??
       rects[0] ??
       (typeof range.getBoundingClientRect === "function"
         ? range.getBoundingClientRect()
         : { left: 0, top: 0, width: 0, height: 0 });
     return toArticleRect(r, range.startContainer);
+  }
+
+  /**
+   * Anchor rect for a selection, measured from its first VISIBLE glyph.
+   *
+   * Selecting the first character of a wrapped line usually swallows the space
+   * that ends the line ABOVE (the caret at a soft-wrap boundary sits after it),
+   * and that space's client rect hangs at the far right of the previous line —
+   * so the toolbar lands a column away from the highlighted text, or off-screen
+   * entirely when the previous line is scrolled just out of view. Trimming the
+   * leading whitespace before measuring anchors it where the user sees their
+   * selection start.
+   */
+  function selectionAnchorRect(
+    el: HTMLElement,
+    range: Range,
+    offsets: { start: number; end: number },
+  ): ToolbarRect {
+    const text = range.toString();
+    const lead = text.length - text.trimStart().length;
+    if (lead > 0 && lead < text.length) {
+      const trimmed = domRangeForOffsets(el, offsets.start + lead, offsets.end);
+      if (trimmed) return rectFromRange(trimmed);
+    }
+    return rectFromRange(range);
   }
 
   function domRangeForOffsets(
@@ -4254,7 +4284,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       setToolbar({
         mode: "sidenote-view",
         index,
-        rect: rectFromRange(range),
+        rect: selectionAnchorRect(el, range, offsets),
         range: { start: sidenote.start, end: sidenote.end },
         sidenoteId: sidenote.id,
         activeMarks: new Set(),
@@ -4273,7 +4303,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       setToolbar({
         mode: "link-view",
         index,
-        rect: rectFromRange(range),
+        rect: selectionAnchorRect(el, range, offsets),
         range: { start: link.start, end: link.end },
         href: link.href,
         activeMarks: new Set(),
@@ -4300,7 +4330,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       setToolbar({
         mode: "format",
         index,
-        rect: sameSelection ? toolbar.rect : rectFromRange(range),
+        rect: sameSelection
+          ? toolbar.rect
+          : selectionAnchorRect(el, range, offsets),
         range: offsets,
         activeMarks,
       });
