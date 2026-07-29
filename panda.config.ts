@@ -2215,22 +2215,25 @@ export default defineConfig({
         // The calendar grid popover for the Date input. Presentation only — the
         // month math (Temporal) and selection live in `calendar.tsx`. Slots map
         // 1:1 to the compound parts: `search` (Field.Search at the top),
-        // `period`/`heading`/`nav` (the ‹ December 2026 › header, nav = the
-        // Field.Action chevrons), `week`/`weekday` (the S M T… header row), and
-        // `grid`/`date` (the day cells). Date state is keyed off attributes the
-        // cell sets itself — `aria-selected`, `data-state` (today), `data-outside`
-        // (spill days), `:disabled` (out of min/max) — so consumers can restyle
-        // any of them (including `data-weekend`/`data-weekday`) without prop APIs.
+        // `periodList` (the row of months, plus the absolutely-placed `nav`
+        // chevrons that page it), `period` (one month column) built from
+        // `month` (its "July 2026" label), `week`/`weekday` (the S M T… header
+        // row) and `grid`/`date` (the day cells). Date state is keyed off
+        // attributes the cell sets itself — `aria-selected`, `data-state`
+        // (today), `data-outside` (spill days), `:disabled` (out of min/max) —
+        // so consumers can restyle any of them (including
+        // `data-weekend`/`data-weekday`) without prop APIs.
         calendar: defineSlotRecipe({
           className: "calendar",
           description:
-            "Calendar grid: a search field, a ‹ month year › period header, the weekday header row, and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px wide). Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
+            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
           slots: [
             "root",
             "search",
+            "periodList",
             "period",
             "nav",
-            "heading",
+            "month",
             "week",
             "weekday",
             "grid",
@@ -2240,20 +2243,13 @@ export default defineConfig({
             root: {
               display: "flex",
               flexDirection: "column",
-              // The grid's own pitch — 4px between every stacked part.
-              gap: "sm",
               width: "fit-content",
-              // The body inset. The search row bleeds back out of it to sit
-              // flush against the surface's edges (both Figma variants are a
-              // full-bleed search row above an 8px-inset body).
-              padding: "md",
+              // No padding here: the search row is flush to the surface edges
+              // and each `period` carries its own 8px inset, so a 3-month list
+              // has no seam between columns (Figma 715:916).
             },
             search: {
-              width: "calc(token(spacing.full) + token(spacing.md) * 2)",
-              marginInline: "calc(token(spacing.md) * -1)",
-              marginBlockStart: "calc(token(spacing.md) * -1)",
-              // Restores the body's 8px top inset (4px here + the root gap).
-              marginBlockEnd: "sm",
+              width: "token(spacing.full)",
               height: "token(spacing.4xl)",
               paddingInline: "md",
               paddingBlock: "none",
@@ -2269,24 +2265,54 @@ export default defineConfig({
               "&::placeholder": { color: "field.text.placeholder" },
               "&::-webkit-search-cancel-button": { display: "none" },
             },
-            period: {
+            periodList: {
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "sm",
-              // The chevrons are `color: inherit` Field.Actions, so the row owns
-              // their hue; the heading overrides its own.
+              // Months are top-aligned and each is a fixed 208px column, so the
+              // list simply grows 208px per month.
+              alignItems: "flex-start",
+              // The anchor for the two nav chevrons below.
+              position: "relative",
+              // The chevrons are `color: inherit` Buttons, so the list owns
+              // their hue; the month labels override their own.
               color: "field.text.default",
             },
+            period: {
+              display: "flex",
+              flexDirection: "column",
+              // The column's own pitch — 4px between label, weekdays and grid.
+              gap: "sm",
+              padding: "md",
+            },
+            // The chevron's positioned WRAPPER, not the chevron itself. The
+            // button is an `action` recipe, and Panda emits plain recipes into
+            // `@layer recipes` but slot recipes into its `recipes.slots`
+            // sublayer — a parent layer's own rules always beat its sublayers,
+            // so no slot style can override `action`'s `position: relative`
+            // (its hover chip needs it) at any specificity. Wrapping sidesteps
+            // the cascade entirely and keeps the positioning here in the recipe.
             nav: {
+              // Pulled out of the flow and pinned to the list's top corners, so
+              // one pair of chevrons flanks the whole range however many months
+              // it holds — and lands exactly on the first/last month's label row
+              // (Figma 715:921 / 716:1116, inset 8px, aligned to the 28px label).
+              position: "absolute",
+              top: "md",
+              "&[data-nav='prev']": { left: "md" },
+              "&[data-nav='next']": { right: "md" },
+              display: "flex",
               flexShrink: 0,
               // Secondary to the month label — the glyph alone is halved, so the
               // hover chip underneath stays at full strength.
               "& svg": { opacity: 0.5, transition: "opacity 150ms ease" },
               "&:hover svg": { opacity: 1 },
             },
-            heading: {
-              flex: "1 1 auto",
+            month: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              // Matches the chevrons it sits between, so the label row is one
+              // consistent 28px band across the list.
+              height: "token(sizes.toolbarButton)",
               textAlign: "center",
               textStyle: "bodyLarge",
               color: "field.text.default",
@@ -2330,13 +2356,27 @@ export default defineConfig({
               // shares the hover declaration verbatim (here and in `:disabled`
               // below) so previewing a typed date reads exactly like pointing at
               // it, and an uncommittable one stays uncoloured either way.
-              "&:hover, &[data-query]": { backgroundColor: "bg.itemHover" },
+              //
+              // Selected cells opt OUT of the wash rather than merely being
+              // overridden by it: the selection chip and this wash are both
+              // single-attribute rules on the same slot, so which one won came
+              // down to Panda's emission order — and the wash was landing last,
+              // greying out the accent chip the moment you hovered a selected
+              // date, or typed the date you had just committed (the query
+              // survives its own Enter). Selection is the stronger state and
+              // outranks the transient one no matter how the sheet is ordered.
+              "&:is(:hover, [data-query]):not([aria-selected='true'])": {
+                backgroundColor: "bg.itemHover",
+              },
               // Weekend columns recede, matching their header — unless the cell
               // is already carrying today or the selection.
               "&[data-weekend]:not([aria-selected='true'], [data-state='today'], [data-outside])":
                 { opacity: 0.5 },
-              // Spill-over days are blank cells — they hold the column but
-              // render nothing, and drop out of the tab/a11y order with it.
+              // Spill-over days are placeholders: they hold the column and show
+              // their number, but the month that owns the date carries all of
+              // its state, so a spill cell never draws a chip and never takes
+              // the tabstop (see `Calendar.Date`). Hence a flat wash, with
+              // nothing to compose against.
               "&[data-outside]": { opacity: 0.15 },
               // Today — the accent as text only, no chip.
               "&[data-state='today']": { color: "field.text.active" },
@@ -2391,10 +2431,10 @@ export default defineConfig({
                   // (brand orange dark / pink light).
                   "&::placeholder": { color: "field.text.activeMuted" },
                 },
-                // Retints the chevrons, which inherit from the row (Figma
+                // Retints the chevrons, which inherit from the list (Figma
                 // 563:2715/563:2719 — brand stroke at 50%).
-                period: { color: "field.text.active" },
-                heading: { color: "field.text.active" },
+                periodList: { color: "field.text.active" },
+                month: { color: "field.text.active" },
                 weekday: { color: "field.text.active" },
                 date: {
                   color: "field.text.active",

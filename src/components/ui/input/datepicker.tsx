@@ -162,21 +162,23 @@ export function DatePicker({
               defaultValue={display}
               placeholder="Type a date…"
             />
-            <Calendar.Period>
+            <Calendar.PeriodList>
               <Button variant="icon">
                 <ChevronLeftIcon />
               </Button>
-              <Calendar.Heading />
+              <Calendar.Period>
+                <Calendar.Month />
+                <Calendar.Week>
+                  <Calendar.Day />
+                </Calendar.Week>
+                <Calendar.Grid>
+                  <Calendar.Date />
+                </Calendar.Grid>
+              </Calendar.Period>
               <Button variant="icon">
                 <ChevronRightIcon />
               </Button>
-            </Calendar.Period>
-            <Calendar.Week>
-              <Calendar.Day />
-            </Calendar.Week>
-            <Calendar.Grid>
-              <Calendar.Date />
-            </Calendar.Grid>
+            </Calendar.PeriodList>
           </Calendar>
         </Popover>
       )}

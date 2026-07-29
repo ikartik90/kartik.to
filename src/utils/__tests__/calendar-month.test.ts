@@ -3,6 +3,8 @@ import { Temporal } from "@js-temporal/polyfill";
 import {
   WEEKDAY_KEYS,
   buildCalendarMonth,
+  buildCalendarPeriods,
+  monthsBetween,
   weekdayHeader,
 } from "../calendar-month";
 
@@ -48,6 +50,84 @@ describe("buildCalendarMonth", () => {
     const keys = new Set(cells.map((c) => c.key));
     expect(keys.size).toBe(42);
     expect(cells[0].key).toBe(cells[0].date.toString());
+  });
+});
+
+describe("buildCalendarPeriods", () => {
+  it("yields a single month by default", () => {
+    const periods = buildCalendarPeriods(dec2026);
+    expect(periods).toHaveLength(1);
+    expect(periods[0].year).toBe(2026);
+    expect(periods[0].month).toBe(12);
+  });
+
+  it("yields consecutive months starting at the view", () => {
+    const jul2026 = Temporal.PlainDate.from("2026-07-15");
+    const periods = buildCalendarPeriods(jul2026, { months: 3 });
+    expect(periods.map((p) => p.month)).toEqual([7, 8, 9]);
+    expect(periods.every((p) => p.year === 2026)).toBe(true);
+  });
+
+  it("rolls the year over mid-range", () => {
+    const nov2026 = Temporal.PlainDate.from("2026-11-01");
+    const periods = buildCalendarPeriods(nov2026, { months: 3 });
+    expect(periods.map((p) => `${p.year}-${p.month}`)).toEqual([
+      "2026-11",
+      "2026-12",
+      "2027-1",
+    ]);
+  });
+
+  it("builds each month as its own 6×7 grid", () => {
+    const periods = buildCalendarPeriods(dec2026, { months: 2 });
+    for (const period of periods) {
+      expect(period.weeks).toHaveLength(6);
+      expect(period.weeks.flat()).toHaveLength(42);
+    }
+    // Each period is anchored on its OWN month, not the view's.
+    expect(periods[1].weeks.flat().some((c) => c.inCurrentMonth)).toBe(true);
+    expect(
+      periods[1].weeks.flat().filter((c) => c.inCurrentMonth)[0].date.toString(),
+    ).toBe("2027-01-01");
+  });
+
+  it("gives every period a stable, unique key", () => {
+    const periods = buildCalendarPeriods(dec2026, { months: 3 });
+    expect(periods.map((p) => p.key)).toEqual(["2026-12", "2027-01", "2027-02"]);
+  });
+
+  it("threads the week start through to every period", () => {
+    const periods = buildCalendarPeriods(dec2026, {
+      months: 2,
+      weekStartsOn: "mon",
+    });
+    for (const period of periods) {
+      expect(period.weekdays[0].key).toBe("mon");
+      expect(period.weeks[0][0].weekday).toBe("mon");
+    }
+  });
+
+  it("treats a months count below 1 as 1", () => {
+    expect(buildCalendarPeriods(dec2026, { months: 0 })).toHaveLength(1);
+  });
+});
+
+describe("monthsBetween", () => {
+  it("counts whole months, ignoring the day", () => {
+    const from = Temporal.PlainDate.from("2026-07-31");
+    expect(monthsBetween(from, Temporal.PlainDate.from("2026-09-01"))).toBe(2);
+    expect(monthsBetween(from, Temporal.PlainDate.from("2026-07-01"))).toBe(0);
+  });
+
+  it("is signed — a date before the anchor is negative", () => {
+    const from = Temporal.PlainDate.from("2026-07-15");
+    expect(monthsBetween(from, Temporal.PlainDate.from("2026-06-30"))).toBe(-1);
+  });
+
+  it("crosses year boundaries", () => {
+    const from = Temporal.PlainDate.from("2026-11-01");
+    expect(monthsBetween(from, Temporal.PlainDate.from("2027-01-20"))).toBe(2);
+    expect(monthsBetween(from, Temporal.PlainDate.from("2025-11-01"))).toBe(-12);
   });
 });
 

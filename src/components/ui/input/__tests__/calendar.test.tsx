@@ -20,17 +20,19 @@ function calendarTree(
   return (
     <Calendar today={TODAY} queryParser={queryParser ?? undefined} {...props}>
       <Field.Search placeholder="Type a date…" />
-      <Calendar.Period>
+      <Calendar.PeriodList>
         <Button variant="icon">‹</Button>
-        <Calendar.Heading />
+        <Calendar.Period>
+          <Calendar.Month />
+          <Calendar.Week>
+            <Calendar.Day />
+          </Calendar.Week>
+          <Calendar.Grid>
+            <Calendar.Date />
+          </Calendar.Grid>
+        </Calendar.Period>
         <Button variant="icon">›</Button>
-      </Calendar.Period>
-      <Calendar.Week>
-        <Calendar.Day />
-      </Calendar.Week>
-      <Calendar.Grid>
-        <Calendar.Date />
-      </Calendar.Grid>
+      </Calendar.PeriodList>
     </Calendar>
   );
 }
@@ -187,6 +189,166 @@ describe("month navigation", () => {
   });
 });
 
+// A range is the same single Period template cloned per month, so these assert
+// the parts read THEIR month rather than the root's view, and that one chevron
+// press moves the whole range (Figma 715:912).
+describe("multi-month ranges", () => {
+  const tabstops = () =>
+    screen
+      .getAllByRole("gridcell")
+      .filter((c) => c.getAttribute("tabindex") === "0");
+
+  it("clones the one Period template into a grid per month", () => {
+    renderCalendar({ months: 3 });
+    expect(screen.getAllByRole("grid")).toHaveLength(3);
+    expect(screen.getAllByRole("gridcell")).toHaveLength(126); // 3 × 42
+    expect(screen.getAllByRole("columnheader")).toHaveLength(21); // 3 × 7
+  });
+
+  it("labels each period with its own month, not the view's", () => {
+    renderCalendar({ months: 3 });
+    expect(screen.getByText("December 2026")).toBeTruthy();
+    expect(screen.getByText("January 2027")).toBeTruthy();
+    expect(screen.getByText("February 2027")).toBeTruthy();
+  });
+
+  it("pages a whole range at a time", () => {
+    renderCalendar({ months: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "Previous 3 months" }));
+    // Dec–Feb ▸ Sep–Nov: no month carries over between pages.
+    expect(screen.getByText("September 2026")).toBeTruthy();
+    expect(screen.getByText("November 2026")).toBeTruthy();
+    expect(screen.queryByText("December 2026")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next 3 months" }));
+    expect(screen.getByText("December 2026")).toBeTruthy();
+    expect(screen.getByText("February 2027")).toBeTruthy();
+  });
+
+  it("keeps ONE roving tabstop across the range, not one per grid", () => {
+    renderCalendar({ months: 3, value: Temporal.PlainDate.from("2027-01-05") });
+    const stops = tabstops();
+    expect(stops).toHaveLength(1);
+    expect(stops[0].getAttribute("aria-label")).toBe("January 5, 2027");
+  });
+
+  it("does not duplicate the tabstop onto a spill-day twin", () => {
+    // Dec 31 renders twice in a Dec–Jan range: as December's own last day, and
+    // as a spill cell leading January's grid. Only the owning month may hold
+    // the tabstop, or the roving-tabindex contract breaks.
+    renderCalendar({ months: 2, value: Temporal.PlainDate.from("2026-12-31") });
+    expect(
+      screen.getAllByRole("gridcell", { name: "December 31, 2026" }),
+    ).toHaveLength(2);
+    const stops = tabstops();
+    expect(stops).toHaveLength(1);
+    expect(stops[0].hasAttribute("data-outside")).toBe(false);
+  });
+
+  // A spill day is a decorative duplicate of a cell another month already owns,
+  // so it carries no state at all — only the owning month may claim it. Without
+  // this, every boundary date paints its chip twice across the range.
+  it("marks only the owning month's copy as selected", () => {
+    renderCalendar({ months: 2, value: Temporal.PlainDate.from("2026-12-31") });
+    const selected = screen
+      .getAllByRole("gridcell", { name: "December 31, 2026" })
+      .filter((c) => c.getAttribute("aria-selected") === "true");
+    expect(selected).toHaveLength(1);
+    expect(selected[0].hasAttribute("data-outside")).toBe(false);
+  });
+
+  it("marks only the owning month's copy as today", () => {
+    renderCalendar({
+      months: 2,
+      today: Temporal.PlainDate.from("2026-12-31"),
+      value: Temporal.PlainDate.from("2026-12-01"),
+    });
+    const todays = screen
+      .getAllByRole("gridcell")
+      .filter((c) => c.getAttribute("data-state") === "today");
+    expect(todays).toHaveLength(1);
+    expect(todays[0].hasAttribute("data-outside")).toBe(false);
+  });
+
+  it("marks only the owning month's copy as the query", () => {
+    renderCalendar({ months: 2 });
+    fireEvent.input(screen.getByRole("searchbox"), {
+      target: { value: "31/12/2026" },
+    });
+    const marked = screen
+      .getAllByRole("gridcell")
+      .filter((c) => c.hasAttribute("data-query"));
+    expect(marked).toHaveLength(1);
+    expect(marked[0].hasAttribute("data-outside")).toBe(false);
+  });
+
+  it("does not page when the clicked date is already on screen", () => {
+    renderCalendar({ months: 3 });
+    // February is the third visible month — selecting in it must not shuffle
+    // the range out from under the pointer.
+    fireEvent.click(
+      screen.getAllByRole("gridcell", { name: "February 10, 2027" })[0],
+    );
+    expect(screen.getByText("December 2026")).toBeTruthy();
+    expect(screen.getByText("February 2027")).toBeTruthy();
+  });
+
+  it("pages an off-range date into the first slot", () => {
+    renderCalendar({ months: 3 });
+    fireEvent.input(screen.getByRole("searchbox"), {
+      target: { value: "05/06/2027" },
+    });
+    expect(screen.getByText("June 2027")).toBeTruthy();
+    expect(screen.getByText("August 2027")).toBeTruthy();
+    expect(screen.queryByText("May 2027")).toBeNull();
+  });
+
+  it("names the nav for a single month when the range is one", () => {
+    renderCalendar();
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next month" })).toBeTruthy();
+  });
+});
+
+describe("Calendar.Month formatting", () => {
+  function renderMonth(monthFormat?: "full" | "narrow") {
+    return render(
+      <Field>
+        <Calendar today={TODAY}>
+          <Calendar.PeriodList>
+            <Calendar.Period>
+              <Calendar.Month monthFormat={monthFormat} />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+  }
+
+  it("writes the full month name by default", () => {
+    renderMonth();
+    expect(screen.getByText("December 2026")).toBeTruthy();
+  });
+
+  it("abbreviates to three letters when narrow", () => {
+    renderMonth("narrow");
+    expect(screen.getByText("Dec 2026")).toBeTruthy();
+  });
+
+  it("keeps the grid's accessible name unabbreviated", () => {
+    renderMonth("narrow");
+    expect(screen.getByRole("grid").getAttribute("aria-label")).toBe(
+      "December 2026",
+    );
+  });
+});
+
 describe("search", () => {
   const type = (value: string) =>
     fireEvent.input(screen.getByRole("searchbox"), { target: { value } });
@@ -262,17 +424,19 @@ describe("search", () => {
             onValueChange={onValueChange}
             onKeyDown={onKeyDown}
           />
-          <Calendar.Period>
+          <Calendar.PeriodList>
             <Button variant="icon">‹</Button>
-            <Calendar.Heading />
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
             <Button variant="icon">›</Button>
-          </Calendar.Period>
-          <Calendar.Week>
-            <Calendar.Day />
-          </Calendar.Week>
-          <Calendar.Grid>
-            <Calendar.Date />
-          </Calendar.Grid>
+          </Calendar.PeriodList>
         </Calendar>
       </Field>,
     );
@@ -355,17 +519,19 @@ describe("custom queryParser", () => {
           queryParser={queryParser}
         >
           <Field.Search />
-          <Calendar.Period>
+          <Calendar.PeriodList>
             <Button variant="icon">‹</Button>
-            <Calendar.Heading />
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
             <Button variant="icon">›</Button>
-          </Calendar.Period>
-          <Calendar.Week>
-            <Calendar.Day />
-          </Calendar.Week>
-          <Calendar.Grid>
-            <Calendar.Date />
-          </Calendar.Grid>
+          </Calendar.PeriodList>
         </Calendar>
       </Field>,
     );
