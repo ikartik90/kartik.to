@@ -44,23 +44,58 @@ export default function CalendarPreviewPage() {
           // today={Temporal.PlainDate.from("2026-12-11")}
         >
           <Field.Search placeholder="Type a date…" />
-          <Calendar.Period>
+          <Calendar.PeriodList>
             <Button variant="icon">
               <ChevronLeftIcon />
             </Button>
-            <Calendar.Heading />
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
             <Button variant="icon">
               <ChevronRightIcon />
             </Button>
-          </Calendar.Period>
-          <Calendar.Week>
-            <Calendar.Day />
-          </Calendar.Week>
-          <Calendar.Grid>
-            <Calendar.Date />
-          </Calendar.Grid>
+          </Calendar.PeriodList>
         </Calendar>
         <Field.Hint>Pick a day for the trip</Field.Hint>
+      </Field>
+
+      {/* The multi-month range (Figma 715:912): the SAME single Period template,
+          cloned once per month, with one pair of chevrons paging all three at a
+          time. `narrow` shortens the labels to fit the 208px columns. */}
+      <Field>
+        <Field.Label>Stay dates</Field.Label>
+        <Calendar
+          months={3}
+          value={date}
+          onValueChange={setDate}
+          queryParser={parseCalendarDate("DD/MM/YYYY")}
+        >
+          <Field.Search placeholder="Type a date…" />
+          <Calendar.PeriodList>
+            <Button variant="icon">
+              <ChevronLeftIcon />
+            </Button>
+            <Calendar.Period>
+              <Calendar.Month monthFormat="narrow" />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
+            <Button variant="icon">
+              <ChevronRightIcon />
+            </Button>
+          </Calendar.PeriodList>
+        </Calendar>
+        <Field.Hint>Three months at a time</Field.Hint>
       </Field>
 
       {/* Re-skin proof: consumer restyles weekends purely off the data
@@ -72,29 +107,33 @@ export default function CalendarPreviewPage() {
           onValueChange={setDate}
           // today={Temporal.PlainDate.from("2026-12-11")}
         >
-          <Calendar.Period>
+          <Calendar.PeriodList>
             <Button variant="icon">
               <ChevronLeftIcon />
             </Button>
-            <Calendar.Heading />
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day
+                  className={css({
+                    "&[data-weekend]": { color: "bg.selection" },
+                  })}
+                />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date
+                  className={css({
+                    "&[data-weekend]:not([aria-selected='true'])": {
+                      color: "bg.selection",
+                    },
+                  })}
+                />
+              </Calendar.Grid>
+            </Calendar.Period>
             <Button variant="icon">
               <ChevronRightIcon />
             </Button>
-          </Calendar.Period>
-          <Calendar.Week>
-            <Calendar.Day
-              className={css({ "&[data-weekend]": { color: "bg.selection" } })}
-            />
-          </Calendar.Week>
-          <Calendar.Grid>
-            <Calendar.Date
-              className={css({
-                "&[data-weekend]:not([aria-selected='true'])": {
-                  color: "bg.selection",
-                },
-              })}
-            />
-          </Calendar.Grid>
+          </Calendar.PeriodList>
         </Calendar>
       </Field>
     </main>

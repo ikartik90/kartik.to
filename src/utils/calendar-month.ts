@@ -51,6 +51,10 @@ export interface WeekdayHeaderCell {
 export interface CalendarMonth {
   year: number;
   month: number;
+  /** `YYYY-MM` — a stable React key and a natural identity handle. */
+  key: string;
+  /** First-of-month, the anchor every consumer needs for labels and compares. */
+  start: Temporal.PlainDate;
   weeks: CalendarCell[][];
   weekdays: WeekdayHeaderCell[];
 }
@@ -58,6 +62,11 @@ export interface CalendarMonth {
 export interface BuildCalendarMonthOptions {
   /** Which weekday sits in column 0. Defaults to Sunday (matches the design). */
   weekStartsOn?: WeekdayKey;
+}
+
+export interface BuildCalendarPeriodsOptions extends BuildCalendarMonthOptions {
+  /** How many consecutive months to lay out, starting at the view. Min 1. */
+  months?: number;
 }
 
 /** The weekday header row, rotated so `weekStartsOn` lands in column 0. */
@@ -103,7 +112,35 @@ export function buildCalendarMonth(
   return {
     year: view.year,
     month: view.month,
+    key: `${view.year}-${String(view.month).padStart(2, "0")}`,
+    start: firstOfMonth,
     weeks,
     weekdays: weekdayHeader(weekStartsOn),
   };
+}
+
+/**
+ * The `months` consecutive month-grids starting at the one `view` falls in —
+ * what a multi-month calendar pages as a unit. `months: 1` is the single-month
+ * calendar, so this is the only builder the view layer needs.
+ */
+export function buildCalendarPeriods(
+  view: Temporal.PlainDate,
+  { months = 1, ...options }: BuildCalendarPeriodsOptions = {},
+): CalendarMonth[] {
+  const start = view.with({ day: 1 });
+  return Array.from({ length: Math.max(1, months) }, (_, i) =>
+    buildCalendarMonth(start.add({ months: i }), options),
+  );
+}
+
+/**
+ * Signed whole months from `from`'s month to `to`'s month — the day is ignored,
+ * so it answers "how many pages away is this date" rather than "how long until".
+ */
+export function monthsBetween(
+  from: Temporal.PlainDate,
+  to: Temporal.PlainDate,
+): number {
+  return (to.year - from.year) * 12 + (to.month - from.month);
 }
