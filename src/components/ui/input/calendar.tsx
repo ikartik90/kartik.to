@@ -25,7 +25,7 @@ import {
   type WeekdayKey,
 } from "@/utils/calendar-month";
 import { Field, useField, type FieldSearchProps } from "./field";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 
 // ---------------------------------------------------------------------------
 // Calendar — the composable grid behind the Date input's popover.
@@ -327,52 +327,84 @@ function CalendarRoot({
   );
 }
 
+export type CalendarNavDirection = "prev" | "next";
+
+export interface CalendarNavProps extends ButtonProps {
+  children?: ReactNode;
+}
+
+const NAV_VERB: Record<CalendarNavDirection, string> = {
+  prev: "Previous",
+  next: "Next",
+};
+
+/**
+ * Shared body of `Calendar.Prev` / `Calendar.Next`. Each DECLARES its role, so
+ * the calendar never has to infer one: the role is the part you reached for,
+ * not this button's position among its siblings. That's what lets the chevrons
+ * be reordered, or wrapped in a consumer's own chrome at any depth — they read
+ * the root context rather than being cloned by a parent, so they only have to
+ * be somewhere under `<Calendar>`.
+ */
+function CalendarNav({
+  direction,
+  onClick,
+  "aria-label": ariaLabel,
+  children,
+  ...rest
+}: CalendarNavProps & { direction: CalendarNavDirection }) {
+  const part = direction === "prev" ? "Calendar.Prev" : "Calendar.Next";
+  const { styles, months, prevPage, nextPage } = useCalendar(part);
+  const unit = months === 1 ? "month" : `${months} months`;
+
+  // The chevron sits in a positioned wrapper rather than being positioned
+  // itself: it renders a `Button`, and Panda emits plain recipes into a layer
+  // that always beats the `recipes.slots` sublayer a slot style lands in — so
+  // nothing here could override `action`'s own `position: relative`. The
+  // wrapper also carries `data-nav`, which is what a `PeriodList` keys off to
+  // pin it to the matching corner; anywhere else it just sits in the flow.
+  return (
+    <div data-nav={direction} className={styles.nav}>
+      <Button
+        onClick={onClick ?? (direction === "prev" ? prevPage : nextPage)}
+        aria-label={ariaLabel ?? `${NAV_VERB[direction]} ${unit}`}
+        {...rest}
+      >
+        {children}
+      </Button>
+    </div>
+  );
+}
+
+/** Pages the range back one full range. */
+function CalendarPrev(props: CalendarNavProps) {
+  return <CalendarNav direction="prev" {...props} />;
+}
+
+/** Pages the range forward one full range. */
+function CalendarNext(props: CalendarNavProps) {
+  return <CalendarNav direction="next" {...props} />;
+}
+
 export type CalendarPeriodListProps = HTMLAttributes<HTMLDivElement>;
 
 /**
  * The row of months, and the only part that knows how many there are. It clones
- * its single `Calendar.Period` template once per visible month, and wires its
- * icon-`Button` children in order — the first pages back, the second forward —
- * so the chevron buttons stay generic and this part owns the wiring. One pair
- * flanks the WHOLE list rather than any single month — which is why they belong
- * here and not inside a `Period`.
+ * its single `Calendar.Period` template once per visible month and leaves every
+ * other child alone — including the navs, which wire themselves. Dropping a
+ * `Calendar.Prev`/`Calendar.Next` directly in here pins it to the matching
+ * corner, so one pair flanks the WHOLE range rather than any single month.
  */
 function CalendarPeriodList({
   className,
   children,
   ...rest
 }: CalendarPeriodListProps) {
-  const { styles, periods, months, prevPage, nextPage } = useCalendar(
-    "Calendar.PeriodList",
-  );
-  const items = Children.toArray(children);
-  const isAction = (c: ReactNode): c is ReactElement =>
-    isValidElement(c) && c.type === Button;
-  const unit = months === 1 ? "month" : `${months} months`;
+  const { styles, periods } = useCalendar("Calendar.PeriodList");
 
-  const expanded = items.flatMap((child, i) => {
-    if (isAction(child)) {
-      const el = child as ReactElement<{
-        onClick?: () => void;
-        "aria-label"?: string;
-      }>;
-      // First chevron pages back, the second forward.
-      const isPrev = items.slice(0, i).filter(isAction).length === 0;
-      const side = isPrev ? "prev" : "next";
-      // The chevron goes in a positioned wrapper rather than being positioned
-      // itself: it's a `Button`, and no slot style can outrank that recipe (see
-      // the `nav` slot). The wrapper is also what pins it to the list's corner.
-      return (
-        <div key={side} data-nav={side} className={styles.nav}>
-          {cloneElement(el, {
-            onClick: el.props.onClick ?? (isPrev ? prevPage : nextPage),
-            "aria-label":
-              el.props["aria-label"] ??
-              (isPrev ? `Previous ${unit}` : `Next ${unit}`),
-          })}
-        </div>
-      );
-    }
+  // The one child this part does rewrite: `Period` is a TEMPLATE, not a role —
+  // it has to be a direct child because it's stamped out once per month.
+  const expanded = Children.toArray(children).flatMap((child) => {
     if (isValidElement(child) && child.type === CalendarPeriod) {
       const el = child as ReactElement<CalendarPeriodProps>;
       return periods.map((period) =>
@@ -561,6 +593,8 @@ function CalendarDate({ cell, className, children, ...rest }: CalendarDateProps)
  */
 export const Calendar = Object.assign(CalendarRoot, {
   PeriodList: CalendarPeriodList,
+  Prev: CalendarPrev,
+  Next: CalendarNext,
   Period: CalendarPeriod,
   Month: CalendarMonthLabel,
   Week: CalendarWeek,

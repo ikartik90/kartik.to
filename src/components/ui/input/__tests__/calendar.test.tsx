@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { Calendar } from "../calendar";
 import { Field } from "../field";
-import { Button } from "@/components/ui/button";
 import { parseCalendarDate } from "@/utils/calendar-date";
 
 const TODAY = Temporal.PlainDate.from("2026-12-11");
@@ -21,7 +20,7 @@ function calendarTree(
     <Calendar today={TODAY} queryParser={queryParser ?? undefined} {...props}>
       <Field.Search placeholder="Type a date…" />
       <Calendar.PeriodList>
-        <Button variant="icon">‹</Button>
+        <Calendar.Prev>‹</Calendar.Prev>
         <Calendar.Period>
           <Calendar.Month />
           <Calendar.Week>
@@ -31,7 +30,7 @@ function calendarTree(
             <Calendar.Date />
           </Calendar.Grid>
         </Calendar.Period>
-        <Button variant="icon">›</Button>
+        <Calendar.Next>›</Calendar.Next>
       </Calendar.PeriodList>
     </Calendar>
   );
@@ -186,6 +185,118 @@ describe("month navigation", () => {
       .filter((c) => c.getAttribute("tabindex") === "0");
     expect(tabbable).toHaveLength(1);
     expect(tabbable[0].getAttribute("aria-label")).toBe("December 5, 2026");
+  });
+});
+
+// Each nav DECLARES its role, so neither its position among siblings nor its
+// depth in the tree decides what it does — which is what lets a consumer wrap
+// the chevrons in their own chrome.
+describe("nav role declaration", () => {
+  const period = (
+    <Calendar.Period>
+      <Calendar.Month />
+      <Calendar.Week>
+        <Calendar.Day />
+      </Calendar.Week>
+      <Calendar.Grid>
+        <Calendar.Date />
+      </Calendar.Grid>
+    </Calendar.Period>
+  );
+
+  it("reads the role from the part, not the sibling order", () => {
+    // Next FIRST in the DOM: under the old positional wiring this button would
+    // have paged BACKWARDS, because it was the first Button it found.
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <Calendar.PeriodList>
+            <Calendar.Next>›</Calendar.Next>
+            <Calendar.Prev>‹</Calendar.Prev>
+            {period}
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("January 2027")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("December 2026")).toBeTruthy();
+  });
+
+  it("works nested inside a consumer's own facade, outside the list", () => {
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <div>
+            <section>
+              <Calendar.Prev>‹</Calendar.Prev>
+            </section>
+          </div>
+          <Calendar.PeriodList>{period}</Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("November 2026")).toBeTruthy();
+  });
+
+  it("names itself for the size of the range", () => {
+    render(
+      <Field>
+        <Calendar today={TODAY} months={3}>
+          <Calendar.PeriodList>
+            <Calendar.Prev>‹</Calendar.Prev>
+            {period}
+            <Calendar.Next>›</Calendar.Next>
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Previous 3 months" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next 3 months" })).toBeTruthy();
+  });
+
+  it("lets a consumer override the handler and the label", () => {
+    const onClick = vi.fn();
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <Calendar.PeriodList>
+            <Calendar.Prev onClick={onClick} aria-label="Back a month">
+              ‹
+            </Calendar.Prev>
+            {period}
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back a month" }));
+    expect(onClick).toHaveBeenCalledOnce();
+    // The consumer's handler REPLACES the paging, it doesn't run alongside it.
+    expect(screen.getByText("December 2026")).toBeTruthy();
+  });
+
+  it("tags itself so the list can pin it to the right corner", () => {
+    renderCalendar();
+    const prev = screen
+      .getByRole("button", { name: "Previous month" })
+      .closest("[data-nav]");
+    const next = screen
+      .getByRole("button", { name: "Next month" })
+      .closest("[data-nav]");
+    expect(prev?.getAttribute("data-nav")).toBe("prev");
+    expect(next?.getAttribute("data-nav")).toBe("next");
+  });
+
+  it("throws when used outside <Calendar>", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => render(<Calendar.Prev>‹</Calendar.Prev>)).toThrow(
+      /must be used within <Calendar>/,
+    );
+    spy.mockRestore();
   });
 });
 
@@ -425,7 +536,7 @@ describe("search", () => {
             onKeyDown={onKeyDown}
           />
           <Calendar.PeriodList>
-            <Button variant="icon">‹</Button>
+            <Calendar.Prev>‹</Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month />
               <Calendar.Week>
@@ -435,7 +546,7 @@ describe("search", () => {
                 <Calendar.Date />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">›</Button>
+            <Calendar.Next>›</Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
       </Field>,
@@ -520,7 +631,7 @@ describe("custom queryParser", () => {
         >
           <Field.Search />
           <Calendar.PeriodList>
-            <Button variant="icon">‹</Button>
+            <Calendar.Prev>‹</Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month />
               <Calendar.Week>
@@ -530,7 +641,7 @@ describe("custom queryParser", () => {
                 <Calendar.Date />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">›</Button>
+            <Calendar.Next>›</Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
       </Field>,

@@ -2275,6 +2275,16 @@ export default defineConfig({
               // The chevrons are `color: inherit` Buttons, so the list owns
               // their hue; the month labels override their own.
               color: "field.text.default",
+              // Pin a nav dropped DIRECTLY in here to the matching corner, so
+              // one pair flanks the whole range however many months it holds —
+              // landing on the first/last month's label row (Figma 715:921 /
+              // 716:1116, inset 8px, aligned to the 28px label). Scoped to the
+              // list, and to direct children, so the same part nested in a
+              // consumer's own chrome stays in the flow and takes their layout
+              // instead of being yanked to a corner it doesn't belong to.
+              "& > [data-nav]": { position: "absolute", top: "md" },
+              "& > [data-nav='prev']": { left: "md" },
+              "& > [data-nav='next']": { right: "md" },
             },
             period: {
               display: "flex",
@@ -2283,22 +2293,16 @@ export default defineConfig({
               gap: "sm",
               padding: "md",
             },
-            // The chevron's positioned WRAPPER, not the chevron itself. The
-            // button is an `action` recipe, and Panda emits plain recipes into
+            // The chevron's WRAPPER, not the chevron itself. The button is an
+            // `action` recipe, and Panda emits plain recipes into
             // `@layer recipes` but slot recipes into its `recipes.slots`
             // sublayer — a parent layer's own rules always beat its sublayers,
             // so no slot style can override `action`'s `position: relative`
             // (its hover chip needs it) at any specificity. Wrapping sidesteps
             // the cascade entirely and keeps the positioning here in the recipe.
+            // Placement is `periodList`'s business, not this slot's: a nav is
+            // only pinned to a corner when it's dropped in a list (see above).
             nav: {
-              // Pulled out of the flow and pinned to the list's top corners, so
-              // one pair of chevrons flanks the whole range however many months
-              // it holds — and lands exactly on the first/last month's label row
-              // (Figma 715:921 / 716:1116, inset 8px, aligned to the 28px label).
-              position: "absolute",
-              top: "md",
-              "&[data-nav='prev']": { left: "md" },
-              "&[data-nav='next']": { right: "md" },
               display: "flex",
               flexShrink: 0,
               // Secondary to the month label — the glyph alone is halved, so the
