@@ -22,8 +22,8 @@ type DemoRegistryEntry = Omit<DemoComponentEntry, "id" | "label">;
  * share (`shift-form-shell`) are not demos and stay unregistered.
  */
 const registry: Record<string, DemoRegistryEntry> = {
-  "shift-scheduling": {
-    load: async () => (await import("./shift-scheduling")).ShiftScheduling,
+  "shift-scheduling-v1": {
+    load: async () => (await import("./shift-scheduling-v1")).ShiftSchedulingV1,
     // 960×640 showcase = 3:2, so it fills the frame at the article width.
     aspectRatio: "md",
   },

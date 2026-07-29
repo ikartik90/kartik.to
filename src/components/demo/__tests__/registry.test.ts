@@ -5,7 +5,7 @@ describe("demo component registry", () => {
   it("registers every demo, sorted by label with a lazy loader", () => {
     expect(demoComponents.map((demo) => demo.id)).toEqual([
       "calchemy-demo",
-      "shift-scheduling",
+      "shift-scheduling-v1",
       "shift-scheduling-v2",
     ]);
     for (const demo of demoComponents) {
@@ -20,10 +20,10 @@ describe("demo component registry", () => {
     });
   });
 
-  it("resolves shift-scheduling by id", () => {
-    expect(getDemoComponent("shift-scheduling")).toMatchObject({
-      id: "shift-scheduling",
-      label: "Shift Scheduling",
+  it("resolves shift-scheduling-v1 by id", () => {
+    expect(getDemoComponent("shift-scheduling-v1")).toMatchObject({
+      id: "shift-scheduling-v1",
+      label: "Shift Scheduling V1",
     });
   });
 

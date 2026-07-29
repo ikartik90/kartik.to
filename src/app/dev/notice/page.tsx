@@ -2,11 +2,11 @@
 
 import { css } from "../../../../styled-system/css";
 import { DemoFrame } from "@/components/demo-frame";
-import { ShiftScheduling } from "@/components/demo/shift-scheduling";
+import { ShiftSchedulingV1 } from "@/components/demo/shift-scheduling-v1";
 
 // ---------------------------------------------------------------------------
 // Local-only preview for the Notice component in its scheduling showcase. Renders
-// the registered `shift-scheduling` demo through the DemoFrame exactly as the
+// the registered `shift-scheduling-v1` demo through the DemoFrame exactly as the
 // article renderer and the Insert Component overlay do — one source of truth for
 // the showcase, so this page and the embedded demo can never drift.
 // ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ export default function NoticeShowcasePage() {
     <main className={pageStyle}>
       <div className={stageStyle}>
         <DemoFrame aspectRatio="md">
-          <ShiftScheduling />
+          <ShiftSchedulingV1 />
         </DemoFrame>
       </div>
     </main>
