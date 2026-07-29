@@ -17,11 +17,19 @@ export interface DemoComponentEntry {
 
 type DemoRegistryEntry = Omit<DemoComponentEntry, "id" | "label">;
 
-/** Add one entry here for each new file in this directory. */
+/**
+ * Add one entry here for each DEMO in this directory. Modules the demos merely
+ * share (`shift-form-shell`) are not demos and stay unregistered.
+ */
 const registry: Record<string, DemoRegistryEntry> = {
   "shift-scheduling": {
     load: async () => (await import("./shift-scheduling")).ShiftScheduling,
     // 960×640 showcase = 3:2, so it fills the frame at the article width.
+    aspectRatio: "md",
+  },
+  "shift-scheduling-v2": {
+    load: async () => (await import("./shift-scheduling-v2")).ShiftSchedulingV2,
+    // Same 960×640 Figma frame as v1 (723:1952).
     aspectRatio: "md",
   },
   "calchemy-demo": {

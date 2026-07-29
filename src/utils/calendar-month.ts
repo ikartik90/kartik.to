@@ -24,8 +24,12 @@ export const WEEKDAY_KEYS: WeekdayKey[] = [
 
 const WEEKEND: ReadonlySet<WeekdayKey> = new Set<WeekdayKey>(["sat", "sun"]);
 
-/** Temporal `dayOfWeek` is Mon=1…Sun=7; map it into our Sunday-first keys. */
-function weekdayOf(date: Temporal.PlainDate): WeekdayKey {
+/**
+ * Temporal `dayOfWeek` is Mon=1…Sun=7; map it into our Sunday-first keys.
+ * Exported because the `% 7` rotation is the one place ISO's ordering meets
+ * ours — anywhere that re-derives it is a second definition waiting to drift.
+ */
+export function weekdayOf(date: Temporal.PlainDate): WeekdayKey {
   return WEEKDAY_KEYS[date.dayOfWeek % 7];
 }
 
