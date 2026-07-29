@@ -6,6 +6,7 @@ describe("demo component registry", () => {
     expect(demoComponents.map((demo) => demo.id)).toEqual([
       "calchemy-demo",
       "shift-scheduling",
+      "shift-scheduling-v2",
     ]);
     for (const demo of demoComponents) {
       expect(typeof demo.load).toBe("function");
@@ -23,6 +24,13 @@ describe("demo component registry", () => {
     expect(getDemoComponent("shift-scheduling")).toMatchObject({
       id: "shift-scheduling",
       label: "Shift Scheduling",
+    });
+  });
+
+  it("resolves shift-scheduling-v2 by id", () => {
+    expect(getDemoComponent("shift-scheduling-v2")).toMatchObject({
+      id: "shift-scheduling-v2",
+      label: "Shift Scheduling V2",
     });
   });
 

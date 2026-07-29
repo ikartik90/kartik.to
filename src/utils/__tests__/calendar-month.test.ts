@@ -6,6 +6,7 @@ import {
   buildCalendarPeriods,
   monthsBetween,
   weekdayHeader,
+  weekdayOf,
 } from "../calendar-month";
 
 const dec2026 = Temporal.PlainDate.from("2026-12-11");
@@ -150,5 +151,29 @@ describe("weekdayHeader", () => {
     expect(header[0].isWeekend).toBe(true); // sun
     expect(header[6].isWeekend).toBe(true); // sat
     expect(header[1].isWeekend).toBe(false); // mon
+  });
+});
+
+// ISO runs Mon=1…Sun=7; our keys run Sunday-first. The `% 7` rotation between
+// them is the whole function, so the boundary (Sunday) is the case that matters.
+describe("weekdayOf", () => {
+  it("maps every day of a known week to its Sunday-first key", () => {
+    // 2026-12-06 is a Sunday.
+    const sunday = Temporal.PlainDate.from("2026-12-06");
+    const week = Array.from({ length: 7 }, (_, i) =>
+      weekdayOf(sunday.add({ days: i })),
+    );
+    expect(week).toEqual(WEEKDAY_KEYS);
+  });
+
+  it("wraps ISO's Sunday=7 back round to index 0", () => {
+    const sunday = Temporal.PlainDate.from("2026-12-06");
+    expect(sunday.dayOfWeek).toBe(7);
+    expect(weekdayOf(sunday)).toBe("sun");
+  });
+
+  it("agrees with the grid cells built from the same date", () => {
+    const cells = buildCalendarMonth(dec2026).weeks.flat();
+    for (const cell of cells) expect(cell.weekday).toBe(weekdayOf(cell.date));
   });
 });

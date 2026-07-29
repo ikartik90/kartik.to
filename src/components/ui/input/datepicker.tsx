@@ -11,7 +11,6 @@ import {
   parseCalendarDate,
 } from "@/utils/calendar-date";
 import { Popover } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { Field, useField } from "./field";
 import { Calendar } from "./calendar";
 import CalendarIcon from "@/assets/icons/calendar.svg";
@@ -163,9 +162,9 @@ export function DatePicker({
               placeholder="Type a date…"
             />
             <Calendar.PeriodList>
-              <Button variant="icon">
+              <Calendar.Prev>
                 <ChevronLeftIcon />
-              </Button>
+              </Calendar.Prev>
               <Calendar.Period>
                 <Calendar.Month />
                 <Calendar.Week>
@@ -175,9 +174,9 @@ export function DatePicker({
                   <Calendar.Date />
                 </Calendar.Grid>
               </Calendar.Period>
-              <Button variant="icon">
+              <Calendar.Next>
                 <ChevronRightIcon />
-              </Button>
+              </Calendar.Next>
             </Calendar.PeriodList>
           </Calendar>
         </Popover>

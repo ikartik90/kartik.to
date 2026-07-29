@@ -5,7 +5,6 @@ import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../../styled-system/css";
 import { Calendar } from "@/components/ui/input/calendar";
 import { Field } from "@/components/ui/input/field";
-import { Button } from "@/components/ui/button";
 import { parseCalendarDate } from "@/utils/calendar-date";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
@@ -45,9 +44,9 @@ export default function CalendarPreviewPage() {
         >
           <Field.Search placeholder="Type a date…" />
           <Calendar.PeriodList>
-            <Button variant="icon">
+            <Calendar.Prev>
               <ChevronLeftIcon />
-            </Button>
+            </Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month />
               <Calendar.Week>
@@ -57,9 +56,9 @@ export default function CalendarPreviewPage() {
                 <Calendar.Date />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">
+            <Calendar.Next>
               <ChevronRightIcon />
-            </Button>
+            </Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
         <Field.Hint>Pick a day for the trip</Field.Hint>
@@ -78,9 +77,9 @@ export default function CalendarPreviewPage() {
         >
           <Field.Search placeholder="Type a date…" />
           <Calendar.PeriodList>
-            <Button variant="icon">
+            <Calendar.Prev>
               <ChevronLeftIcon />
-            </Button>
+            </Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month monthFormat="narrow" />
               <Calendar.Week>
@@ -90,9 +89,9 @@ export default function CalendarPreviewPage() {
                 <Calendar.Date />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">
+            <Calendar.Next>
               <ChevronRightIcon />
-            </Button>
+            </Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
         <Field.Hint>Three months at a time</Field.Hint>
@@ -108,9 +107,9 @@ export default function CalendarPreviewPage() {
           // today={Temporal.PlainDate.from("2026-12-11")}
         >
           <Calendar.PeriodList>
-            <Button variant="icon">
+            <Calendar.Prev>
               <ChevronLeftIcon />
-            </Button>
+            </Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month />
               <Calendar.Week>
@@ -130,9 +129,9 @@ export default function CalendarPreviewPage() {
                 />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">
+            <Calendar.Next>
               <ChevronRightIcon />
-            </Button>
+            </Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
       </Field>

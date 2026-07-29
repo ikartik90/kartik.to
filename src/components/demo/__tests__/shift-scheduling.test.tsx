@@ -1,7 +1,18 @@
 // @vitest-environment jsdom
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import { describe, it, expect, afterEach } from "vitest";
+import { Temporal } from "@js-temporal/polyfill";
 import { ShiftScheduling } from "../shift-scheduling";
+import {
+  DEFAULT_DATE_FORMAT,
+  formatCalendarDate,
+} from "@/utils/calendar-date";
 
 afterEach(cleanup);
 
@@ -9,6 +20,21 @@ const repeatSwitch = () =>
   screen.getByRole("switch", { name: /repeat this shift on other days/i });
 
 const recurrence = () => screen.getByTestId("recurrence");
+
+// Sunday-first, matching Temporal's `dayOfWeek % 7` (ISO runs Mon=1…Sun=7).
+const WEEKDAY_NAMES = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+]; // prettier-ignore
+
+const weekdayName = (date: Temporal.PlainDate) =>
+  WEEKDAY_NAMES[date.dayOfWeek % 7];
+
+/** The accessible names of the weekday chips currently toggled on. */
+const pressedWeekdays = () =>
+  within(screen.getByRole("toolbar"))
+    .getAllByRole("button")
+    .filter((chip) => chip.getAttribute("aria-pressed") === "true")
+    .map((chip) => chip.getAttribute("aria-label") ?? "");
 
 describe("ShiftScheduling — repeat toggle", () => {
   it("labels the first date field 'First Shift' while repeating", () => {
@@ -75,8 +101,62 @@ describe("ShiftScheduling — repeat toggle", () => {
   // drop the clause it can no longer fill.
   it("drops the Notice's repeat clause when every weekday is deselected", () => {
     render(<ShiftScheduling />);
-    fireEvent.click(screen.getByRole("button", { name: "Tuesday" }));
-    fireEvent.click(screen.getByRole("button", { name: "Thursday" }));
+    const toolbar = within(screen.getByRole("toolbar"));
+    for (const name of pressedWeekdays()) {
+      fireEvent.click(toolbar.getByRole("button", { name }));
+    }
+    expect(pressedWeekdays()).toEqual([]);
     expect(screen.getByRole("status").textContent).not.toContain("repeat every");
+  });
+});
+
+// The form seeds a plausible near-future run off the real clock, so these are
+// derived the same way rather than pinned — a fixed date here would just
+// re-introduce what the component stopped hard-coding.
+describe("ShiftScheduling — default date range", () => {
+  const format = formatCalendarDate(DEFAULT_DATE_FORMAT);
+  const today = Temporal.Now.plainDateISO();
+
+  it("starts the run tomorrow", () => {
+    render(<ShiftScheduling />);
+    expect(screen.getByText(format(today.add({ days: 1 })))).toBeTruthy();
+  });
+
+  it("ends the run a week after that", () => {
+    render(<ShiftScheduling />);
+    expect(screen.getByText(format(today.add({ days: 8 })))).toBeTruthy();
+  });
+
+  it("describes that range in the Notice", () => {
+    render(<ShiftScheduling />);
+    const notice = screen.getByRole("status").textContent ?? "";
+    // "Tuesday, 11 August, 2026" — the Notice's own long form, both ends.
+    expect(notice).toContain(String(today.add({ days: 1 }).day));
+    expect(notice).toContain(String(today.add({ days: 8 }).day));
+  });
+});
+
+describe("ShiftScheduling — default repeat weekday", () => {
+  const firstShift = Temporal.Now.plainDateISO().add({ days: 1 });
+
+  it("pre-selects only the weekday the first shift falls on", () => {
+    render(<ShiftScheduling />);
+    expect(pressedWeekdays()).toEqual([weekdayName(firstShift)]);
+  });
+
+  it("names that weekday in the Notice", () => {
+    render(<ShiftScheduling />);
+    expect(screen.getByRole("status").textContent).toContain(
+      `repeat every ${weekdayName(firstShift)}`,
+    );
+  });
+
+  // Seeded from the opening date, NOT bound to it — the toolbar is the user's
+  // to edit once they are in the form.
+  it("leaves the weekday alone once the user has toggled it", () => {
+    render(<ShiftScheduling />);
+    const toolbar = within(screen.getByRole("toolbar"));
+    fireEvent.click(toolbar.getByRole("button", { name: weekdayName(firstShift) }));
+    expect(pressedWeekdays()).toEqual([]);
   });
 });

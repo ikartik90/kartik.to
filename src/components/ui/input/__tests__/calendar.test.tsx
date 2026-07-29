@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { Calendar } from "../calendar";
 import { Field } from "../field";
-import { Button } from "@/components/ui/button";
 import { parseCalendarDate } from "@/utils/calendar-date";
 
 const TODAY = Temporal.PlainDate.from("2026-12-11");
@@ -21,7 +20,7 @@ function calendarTree(
     <Calendar today={TODAY} queryParser={queryParser ?? undefined} {...props}>
       <Field.Search placeholder="Type a date…" />
       <Calendar.PeriodList>
-        <Button variant="icon">‹</Button>
+        <Calendar.Prev>‹</Calendar.Prev>
         <Calendar.Period>
           <Calendar.Month />
           <Calendar.Week>
@@ -31,7 +30,7 @@ function calendarTree(
             <Calendar.Date />
           </Calendar.Grid>
         </Calendar.Period>
-        <Button variant="icon">›</Button>
+        <Calendar.Next>›</Calendar.Next>
       </Calendar.PeriodList>
     </Calendar>
   );
@@ -186,6 +185,118 @@ describe("month navigation", () => {
       .filter((c) => c.getAttribute("tabindex") === "0");
     expect(tabbable).toHaveLength(1);
     expect(tabbable[0].getAttribute("aria-label")).toBe("December 5, 2026");
+  });
+});
+
+// Each nav DECLARES its role, so neither its position among siblings nor its
+// depth in the tree decides what it does — which is what lets a consumer wrap
+// the chevrons in their own chrome.
+describe("nav role declaration", () => {
+  const period = (
+    <Calendar.Period>
+      <Calendar.Month />
+      <Calendar.Week>
+        <Calendar.Day />
+      </Calendar.Week>
+      <Calendar.Grid>
+        <Calendar.Date />
+      </Calendar.Grid>
+    </Calendar.Period>
+  );
+
+  it("reads the role from the part, not the sibling order", () => {
+    // Next FIRST in the DOM: under the old positional wiring this button would
+    // have paged BACKWARDS, because it was the first Button it found.
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <Calendar.PeriodList>
+            <Calendar.Next>›</Calendar.Next>
+            <Calendar.Prev>‹</Calendar.Prev>
+            {period}
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("January 2027")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("December 2026")).toBeTruthy();
+  });
+
+  it("works nested inside a consumer's own facade, outside the list", () => {
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <div>
+            <section>
+              <Calendar.Prev>‹</Calendar.Prev>
+            </section>
+          </div>
+          <Calendar.PeriodList>{period}</Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("November 2026")).toBeTruthy();
+  });
+
+  it("names itself for the size of the range", () => {
+    render(
+      <Field>
+        <Calendar today={TODAY} months={3}>
+          <Calendar.PeriodList>
+            <Calendar.Prev>‹</Calendar.Prev>
+            {period}
+            <Calendar.Next>›</Calendar.Next>
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Previous 3 months" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next 3 months" })).toBeTruthy();
+  });
+
+  it("lets a consumer override the handler and the label", () => {
+    const onClick = vi.fn();
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <Calendar.PeriodList>
+            <Calendar.Prev onClick={onClick} aria-label="Back a month">
+              ‹
+            </Calendar.Prev>
+            {period}
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back a month" }));
+    expect(onClick).toHaveBeenCalledOnce();
+    // The consumer's handler REPLACES the paging, it doesn't run alongside it.
+    expect(screen.getByText("December 2026")).toBeTruthy();
+  });
+
+  it("tags itself so the list can pin it to the right corner", () => {
+    renderCalendar();
+    const prev = screen
+      .getByRole("button", { name: "Previous month" })
+      .closest("[data-nav]");
+    const next = screen
+      .getByRole("button", { name: "Next month" })
+      .closest("[data-nav]");
+    expect(prev?.getAttribute("data-nav")).toBe("prev");
+    expect(next?.getAttribute("data-nav")).toBe("next");
+  });
+
+  it("throws when used outside <Calendar>", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => render(<Calendar.Prev>‹</Calendar.Prev>)).toThrow(
+      /must be used within <Calendar>/,
+    );
+    spy.mockRestore();
   });
 });
 
@@ -425,7 +536,7 @@ describe("search", () => {
             onKeyDown={onKeyDown}
           />
           <Calendar.PeriodList>
-            <Button variant="icon">‹</Button>
+            <Calendar.Prev>‹</Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month />
               <Calendar.Week>
@@ -435,7 +546,7 @@ describe("search", () => {
                 <Calendar.Date />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">›</Button>
+            <Calendar.Next>›</Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
       </Field>,
@@ -520,7 +631,7 @@ describe("custom queryParser", () => {
         >
           <Field.Search />
           <Calendar.PeriodList>
-            <Button variant="icon">‹</Button>
+            <Calendar.Prev>‹</Calendar.Prev>
             <Calendar.Period>
               <Calendar.Month />
               <Calendar.Week>
@@ -530,7 +641,7 @@ describe("custom queryParser", () => {
                 <Calendar.Date />
               </Calendar.Grid>
             </Calendar.Period>
-            <Button variant="icon">›</Button>
+            <Calendar.Next>›</Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
       </Field>,
@@ -564,3 +675,619 @@ describe("custom queryParser", () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 })
+
+// ---------------------------------------------------------------------------
+// Multiple selection — the second selection mode, plus the two gestures that
+// only exist there: a pointer sweep and its keyboard mirror (Shift+Arrow).
+// ---------------------------------------------------------------------------
+
+/** A `selectionMode="multiple"` tree, no search row. `months` is passthrough. */
+function multiTree(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
+  return (
+    <Field>
+      <Calendar today={TODAY} selectionMode="multiple" {...props}>
+        <Calendar.PeriodList>
+          <Calendar.Prev>‹</Calendar.Prev>
+          <Calendar.Period>
+            <Calendar.Month />
+            <Calendar.Week>
+              <Calendar.Day />
+            </Calendar.Week>
+            <Calendar.Grid>
+              <Calendar.Date />
+            </Calendar.Grid>
+          </Calendar.Period>
+          <Calendar.Next>›</Calendar.Next>
+        </Calendar.PeriodList>
+      </Calendar>
+    </Field>
+  );
+}
+
+const renderMulti = (props: Partial<React.ComponentProps<typeof Calendar>> = {}) =>
+  render(multiTree(props));
+
+/** The OWNED cell for a date (a spill copy carries the same accessible name). */
+function cell(name: string): HTMLButtonElement {
+  const matches = screen.getAllByRole("gridcell", { name });
+  const owned = matches.find((c) => !c.hasAttribute("data-outside"));
+  return (owned ?? matches[0]) as HTMLButtonElement;
+}
+
+const iso = (dates: Temporal.PlainDate[]) => dates.map((d) => d.toString());
+
+/** Every OWNED cell currently marked selected, in chronological (DOM) order. */
+const selected = () =>
+  screen
+    .getAllByRole("gridcell")
+    .filter((c) => c.getAttribute("aria-selected") === "true")
+    .map((c) => c.getAttribute("data-date"));
+
+// jsdom lays nothing out — every getBoundingClientRect is zeroes — so a marquee
+// has nothing to intersect. Give the cells a synthetic grid: 24px cells on a
+// 28px pitch, each month column offset by 250px, mirroring the real 7-column
+// layout closely enough for overlap maths to mean something.
+const CELL = 24;
+const PITCH = 28;
+const MONTH_OFFSET = 250;
+
+function layoutGrids() {
+  screen.getAllByRole("grid").forEach((grid, monthIndex) => {
+    [...grid.children].forEach((cell, i) => {
+      const left = monthIndex * MONTH_OFFSET + (i % 7) * PITCH;
+      const top = Math.floor(i / 7) * PITCH;
+      (cell as HTMLElement).getBoundingClientRect = () =>
+        ({
+          left, top, right: left + CELL, bottom: top + CELL,
+          width: CELL, height: CELL, x: left, y: top,
+          toJSON: () => {},
+        }) as DOMRect;
+    });
+  });
+}
+
+/** The centre point of a date's own cell, in the synthetic layout above. */
+function centre(name: string): { x: number; y: number } {
+  const box = cell(name).getBoundingClientRect();
+  return { x: box.left + CELL / 2, y: box.top + CELL / 2 };
+}
+
+/**
+ * Press on `from`, drag the band to `to`, release. Both are date names; the
+ * band is the rectangle between their cell centres.
+ */
+function marquee(from: string, to: string) {
+  const a = centre(from);
+  const b = centre(to);
+  fireEvent.pointerDown(cell(from), {
+    pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
+  });
+  fireEvent.pointerMove(window, { clientX: b.x, clientY: b.y });
+  fireEvent.pointerUp(window);
+}
+
+describe("multiple selection", () => {
+  it("toggles a date on click and reports the whole selection", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({ onValuesChange });
+
+    fireEvent.click(cell("December 5, 2026"));
+    expect(iso(onValuesChange.mock.calls[0][0])).toEqual(["2026-12-05"]);
+
+    fireEvent.click(cell("December 9, 2026"));
+    expect(iso(onValuesChange.mock.calls[1][0])).toEqual([
+      "2026-12-05",
+      "2026-12-09",
+    ]);
+  });
+
+  it("clicking a selected date deselects it", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({
+      values: [Temporal.PlainDate.from("2026-12-05")],
+      onValuesChange,
+    });
+    fireEvent.click(cell("December 5, 2026"));
+    expect(iso(onValuesChange.mock.calls[0][0])).toEqual([]);
+  });
+
+  it("marks every selected date with aria-selected", () => {
+    renderMulti({
+      values: [
+        Temporal.PlainDate.from("2026-12-05"),
+        Temporal.PlainDate.from("2026-12-09"),
+      ],
+    });
+    expect(cell("December 5, 2026").getAttribute("aria-selected")).toBe("true");
+    expect(cell("December 9, 2026").getAttribute("aria-selected")).toBe("true");
+    expect(cell("December 6, 2026").getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("keeps the returned selection in chronological order", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({
+      values: [Temporal.PlainDate.from("2026-12-20")],
+      onValuesChange,
+    });
+    fireEvent.click(cell("December 3, 2026"));
+    expect(iso(onValuesChange.mock.calls[0][0])).toEqual([
+      "2026-12-03",
+      "2026-12-20",
+    ]);
+  });
+
+  it("never fires the single-select callback", () => {
+    const onValueChange = vi.fn();
+    renderMulti({ onValueChange });
+    fireEvent.click(cell("December 5, 2026"));
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("leaves min/max-disabled dates untoggleable", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({ onValuesChange, min: Temporal.PlainDate.from("2026-12-10") });
+    fireEvent.click(cell("December 5, 2026"));
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
+  it("holds its own selection when uncontrolled", () => {
+    renderMulti({ defaultValues: [Temporal.PlainDate.from("2026-12-05")] });
+    fireEvent.click(cell("December 9, 2026"));
+    expect(cell("December 5, 2026").getAttribute("aria-selected")).toBe("true");
+    expect(cell("December 9, 2026").getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("single selection is unchanged by the new mode", () => {
+  it("still replaces the selection rather than accumulating", () => {
+    const onValueChange = vi.fn();
+    renderCalendar({ onValueChange });
+    fireEvent.click(screen.getByRole("gridcell", { name: "December 5, 2026" }));
+    fireEvent.click(screen.getByRole("gridcell", { name: "December 9, 2026" }));
+    expect(onValueChange).toHaveBeenCalledTimes(2);
+    expect(
+      screen
+        .getByRole("gridcell", { name: "December 5, 2026" })
+        .getAttribute("aria-selected"),
+    ).toBe("false");
+  });
+
+  it("ignores a marquee drag entirely", () => {
+    const onValueChange = vi.fn();
+    renderCalendar({ onValueChange });
+    fireEvent.pointerDown(
+      screen.getByRole("gridcell", { name: "December 5, 2026" }),
+      { pointerType: "mouse", button: 0, clientX: 0, clientY: 0 },
+    );
+    fireEvent.pointerMove(window, { clientX: 200, clientY: 200 });
+    fireEvent.pointerUp(window);
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("marquee drag", () => {
+  // The band is a RECTANGLE, not a trail: what matters is the area between the
+  // press point and the pointer, so a row-spanning drag takes the whole block
+  // rather than the cells a cursor happened to touch.
+  it("toggles every cell the band overlaps, both ends included", () => {
+    renderMulti();
+    layoutGrids();
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08", "2026-12-09"]);
+  });
+
+  it("takes a BLOCK when the band spans rows, not just the cursor's path", () => {
+    renderMulti();
+    layoutGrids();
+    // Dec 7 (Mon) → Dec 15 (Tue): two columns wide, two rows tall.
+    marquee("December 7, 2026", "December 15, 2026");
+    expect(selected()).toEqual([
+      "2026-12-07", "2026-12-08",
+      "2026-12-14", "2026-12-15",
+    ]); // prettier-ignore
+  });
+
+  it("counts a PARTIAL overlap — a band clipping a cell's corner takes it", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
+    });
+    // Creep 1px into the neighbouring cell's box — a sliver, but an overlap.
+    fireEvent.pointerMove(window, { clientX: a.x + PITCH - 1, clientY: a.y });
+    fireEvent.pointerUp(window);
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
+  });
+
+  it("works in every direction — an up-left drag equals its down-right mirror", () => {
+    renderMulti();
+    layoutGrids();
+    marquee("December 9, 2026", "December 7, 2026");
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08", "2026-12-09"]);
+  });
+
+  it("reverts a cell when the band retreats back off it", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    const far = centre("December 9, 2026");
+    const near = centre("December 8, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { clientX: far.x, clientY: far.y });
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08", "2026-12-09"]);
+    // Shrink back: Dec 9 leaves the band and must return to unselected.
+    fireEvent.pointerMove(window, { clientX: near.x, clientY: near.y });
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
+    fireEvent.pointerUp(window);
+  });
+
+  it("toggles AGAINST the selection the drag started from", () => {
+    renderMulti({
+      defaultValues: [
+        Temporal.PlainDate.from("2026-12-07"),
+        Temporal.PlainDate.from("2026-12-08"),
+      ],
+    });
+    layoutGrids();
+    // 7 and 8 were on, so the band turns them off; 9 was off, so it turns on.
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(selected()).toEqual(["2026-12-09"]);
+  });
+
+  it("reports the whole selection once per band change", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({ onValuesChange });
+    layoutGrids();
+    marquee("December 7, 2026", "December 8, 2026");
+    expect(iso(onValuesChange.mock.lastCall![0])).toEqual([
+      "2026-12-07",
+      "2026-12-08",
+    ]);
+  });
+
+  // A band between two distant cells necessarily covers everything BETWEEN
+  // them — that is the whole point of a rectangle over a path. So this drags a
+  // thin band along the top row, which crosses the gap between two month
+  // columns without swallowing the rows beneath.
+  it("spans the months of a multi-month range", () => {
+    renderMulti({ months: 2 });
+    layoutGrids();
+    marquee("December 1, 2026", "January 2, 2027");
+    expect(selected()).toEqual([
+      "2026-12-01", "2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05",
+      "2027-01-01", "2027-01-02",
+    ]); // prettier-ignore
+  });
+
+  it("leaves a press with no movement to the click handler", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
+    });
+    // Under the drag threshold — still a click, so the band never applies.
+    fireEvent.pointerMove(window, { clientX: a.x + 1, clientY: a.y + 1 });
+    fireEvent.pointerUp(window);
+    expect(selected()).toEqual([]);
+    fireEvent.click(cell("December 7, 2026"), { detail: 1 });
+    expect(selected()).toEqual(["2026-12-07"]);
+  });
+
+  it("does not double-toggle via the trailing click after a real drag", () => {
+    renderMulti();
+    layoutGrids();
+    marquee("December 7, 2026", "December 8, 2026");
+    // Press and release shared a cell only in the browser's eyes; the click
+    // still fires and must be swallowed.
+    fireEvent.click(cell("December 7, 2026"), { detail: 1 });
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
+  });
+
+  it("ignores pointer movement after the button is released", () => {
+    renderMulti();
+    layoutGrids();
+    marquee("December 7, 2026", "December 8, 2026");
+    const far = centre("December 16, 2026");
+    fireEvent.pointerMove(window, { clientX: far.x, clientY: far.y });
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
+  });
+
+  it("never takes a min/max-disabled date into the band", () => {
+    renderMulti({ min: Temporal.PlainDate.from("2026-12-08") });
+    layoutGrids();
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(selected()).toEqual(["2026-12-08", "2026-12-09"]);
+  });
+
+  it("never takes a spill-over copy, so a boundary date can't toggle twice", () => {
+    renderMulti({ months: 2 });
+    layoutGrids();
+    // January's first row opens with Dec 27–31 as spill days, so this band
+    // passes straight over them — but their OWNED cells sit further down in
+    // December's own grid, outside the band, so they must stay untouched.
+    marquee("December 1, 2026", "January 2, 2027");
+    const taken = selected();
+    for (const day of ["27", "28", "29", "30", "31"]) {
+      expect(taken).not.toContain(`2026-12-${day}`);
+    }
+  });
+
+  it("does not drag on a touch pointer — tap-to-toggle only", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    const b = centre("December 9, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "touch", clientX: a.x, clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { clientX: b.x, clientY: b.y });
+    fireEvent.pointerUp(window);
+    expect(selected()).toEqual([]);
+    fireEvent.click(cell("December 7, 2026"), { detail: 1 });
+    expect(selected()).toEqual(["2026-12-07"]);
+  });
+
+  it("ignores a non-primary button", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    const b = centre("December 9, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse", button: 2, clientX: a.x, clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { clientX: b.x, clientY: b.y });
+    expect(selected()).toEqual([]);
+  });
+});
+
+describe("dragging from outside a day cell", () => {
+  /** The period list — the grid's grandparent (grid ▸ period ▸ list). */
+  const list = () => screen.getAllByRole("grid")[0].parentElement!.parentElement!;
+
+  /** Press on the LIST itself (a gutter, a label, a short month's tail). */
+  function marqueeFromList(at: { x: number; y: number }, to: string) {
+    const b = centre(to);
+    fireEvent.pointerDown(list(), {
+      pointerType: "mouse",
+      button: 0,
+      clientX: at.x,
+      clientY: at.y,
+    });
+    fireEvent.pointerMove(window, { clientX: b.x, clientY: b.y });
+    fireEvent.pointerUp(window);
+  }
+
+  it("starts a band from empty space in the period list", () => {
+    renderMulti();
+    layoutGrids();
+    // Above and left of the whole grid — no day cell under the press point.
+    marqueeFromList({ x: -20, y: -20 }, "December 1, 2026");
+    expect(selected()).toContain("2026-12-01");
+  });
+
+  it("takes every cell between the empty-space origin and the pointer", () => {
+    renderMulti();
+    layoutGrids();
+    marqueeFromList({ x: -20, y: -20 }, "December 2, 2026");
+    // Dec 1 and 2 sit in the band's first row; Dec 3 is past its right edge.
+    expect(selected()).toEqual(["2026-12-01", "2026-12-02"]);
+  });
+
+  it("does not start a band when the press lands on a nav chevron", () => {
+    renderMulti();
+    layoutGrids();
+    const chevron = screen.getByRole("button", { name: "Previous month" });
+    const to = centre("December 9, 2026");
+    fireEvent.pointerDown(chevron, {
+      pointerType: "mouse",
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    fireEvent.pointerMove(window, { clientX: to.x, clientY: to.y });
+    fireEvent.pointerUp(window);
+    expect(selected()).toEqual([]);
+  });
+});
+
+describe("the drag band", () => {
+  const marqueeEl = () =>
+    document.querySelector("[class*=marquee]") as HTMLElement | null;
+
+  it("is absent until a drag actually starts", () => {
+    renderMulti();
+    layoutGrids();
+    expect(marqueeEl()).toBeNull();
+  });
+
+  it("is drawn between the press point and the pointer while dragging", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    const b = centre("December 9, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse",
+      button: 0,
+      clientX: a.x,
+      clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { clientX: b.x, clientY: b.y });
+
+    const box = marqueeEl();
+    expect(box).not.toBeNull();
+    // jsdom gives the list a zero-origin rect, so list-relative == client here.
+    expect(box!.style.left).toBe(`${Math.min(a.x, b.x)}px`);
+    expect(box!.style.width).toBe(`${Math.abs(b.x - a.x)}px`);
+    expect(box!.style.height).toBe(`${Math.abs(b.y - a.y)}px`);
+    fireEvent.pointerUp(window);
+  });
+
+  it("normalises so an up-left drag draws the same box as its mirror", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 16, 2026");
+    const b = centre("December 7, 2026");
+    fireEvent.pointerDown(cell("December 16, 2026"), {
+      pointerType: "mouse",
+      button: 0,
+      clientX: a.x,
+      clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { clientX: b.x, clientY: b.y });
+
+    const box = marqueeEl();
+    expect(box!.style.left).toBe(`${Math.min(a.x, b.x)}px`);
+    expect(box!.style.top).toBe(`${Math.min(a.y, b.y)}px`);
+    fireEvent.pointerUp(window);
+  });
+
+  it("disappears when the pointer is released", () => {
+    renderMulti();
+    layoutGrids();
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(marqueeEl()).toBeNull();
+  });
+
+  it("stays hidden for a press that never clears the drag threshold", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse",
+      button: 0,
+      clientX: a.x,
+      clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { clientX: a.x + 1, clientY: a.y });
+    expect(marqueeEl()).toBeNull();
+    fireEvent.pointerUp(window);
+  });
+});
+
+describe("keyboard grid navigation", () => {
+  it("moves the roving tabstop with the arrow keys", () => {
+    renderMulti({ values: [Temporal.PlainDate.from("2026-12-09")] });
+    const start = cell("December 9, 2026");
+    expect(start.getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(start, { key: "ArrowRight" });
+    expect(cell("December 10, 2026").getAttribute("tabindex")).toBe("0");
+    expect(cell("December 9, 2026").getAttribute("tabindex")).toBe("-1");
+
+    fireEvent.keyDown(cell("December 10, 2026"), { key: "ArrowDown" });
+    expect(cell("December 17, 2026").getAttribute("tabindex")).toBe("0");
+
+    fireEvent.keyDown(cell("December 17, 2026"), { key: "ArrowUp" });
+    fireEvent.keyDown(cell("December 10, 2026"), { key: "ArrowLeft" });
+    expect(cell("December 9, 2026").getAttribute("tabindex")).toBe("0");
+  });
+
+  it("moves focus to the cell it lands on", () => {
+    renderMulti({ values: [Temporal.PlainDate.from("2026-12-09")] });
+    fireEvent.keyDown(cell("December 9, 2026"), { key: "ArrowRight" });
+    expect(document.activeElement).toBe(cell("December 10, 2026"));
+  });
+
+  it("jumps to the ends of the week with Home / End", () => {
+    renderMulti({ values: [Temporal.PlainDate.from("2026-12-09")] });
+    fireEvent.keyDown(cell("December 9, 2026"), { key: "Home" });
+    expect(cell("December 6, 2026").getAttribute("tabindex")).toBe("0"); // Sunday
+    fireEvent.keyDown(cell("December 6, 2026"), { key: "End" });
+    expect(cell("December 12, 2026").getAttribute("tabindex")).toBe("0"); // Saturday
+  });
+
+  it("pages the range with PageUp / PageDown", () => {
+    renderMulti({ values: [Temporal.PlainDate.from("2026-12-09")] });
+    fireEvent.keyDown(cell("December 9, 2026"), { key: "PageDown" });
+    expect(screen.getByText("January 2027")).toBeTruthy();
+    fireEvent.keyDown(cell("January 9, 2027"), { key: "PageUp" });
+    expect(screen.getByText("December 2026")).toBeTruthy();
+  });
+
+  it("pages the view when an arrow walks off the visible range", () => {
+    renderMulti({ values: [Temporal.PlainDate.from("2026-12-01")] });
+    fireEvent.keyDown(cell("December 1, 2026"), { key: "ArrowUp" });
+    expect(screen.getByText("November 2026")).toBeTruthy();
+    expect(cell("November 24, 2026").getAttribute("tabindex")).toBe("0");
+  });
+
+  it("commits the focused cell on Enter, without a pointer gesture", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({ values: [Temporal.PlainDate.from("2026-12-09")], onValuesChange });
+    // A keyboard-activated button click carries detail 0.
+    fireEvent.click(cell("December 9, 2026"), { detail: 0 });
+    expect(iso(onValuesChange.mock.calls[0][0])).toEqual([]);
+  });
+});
+
+describe("Shift+Arrow — the keyboard mirror of the sweep", () => {
+  it("toggles each date it moves onto, anchor included", () => {
+    renderMulti(); // uncontrolled: `values: []` would pin it empty
+    const start = cell("December 11, 2026"); // today holds the tabstop
+    fireEvent.keyDown(start, { key: "ArrowRight", shiftKey: true });
+    expect(cell("December 11, 2026").getAttribute("aria-selected")).toBe("true");
+    expect(cell("December 12, 2026").getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.keyDown(cell("December 12, 2026"), {
+      key: "ArrowRight",
+      shiftKey: true,
+    });
+    expect(cell("December 13, 2026").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("flips dates back when the run reverses over itself", () => {
+    renderMulti(); // uncontrolled: `values: []` would pin it empty
+    fireEvent.keyDown(cell("December 11, 2026"), {
+      key: "ArrowRight",
+      shiftKey: true,
+    });
+    fireEvent.keyDown(cell("December 12, 2026"), {
+      key: "ArrowLeft",
+      shiftKey: true,
+    });
+    expect(cell("December 11, 2026").getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("stays a plain move in single-selection mode", () => {
+    const onValueChange = vi.fn();
+    renderCalendar({ onValueChange });
+    fireEvent.keyDown(
+      screen.getByRole("gridcell", { name: "December 11, 2026" }),
+      { key: "ArrowRight", shiftKey: true },
+    );
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole("gridcell", { name: "December 12, 2026" })
+        .getAttribute("tabindex"),
+    ).toBe("0");
+  });
+});
+
+describe("defaultView", () => {
+  it("opens on the given month instead of the selection's", () => {
+    renderMulti({
+      months: 3,
+      defaultView: Temporal.PlainDate.from("2026-07-01"),
+      defaultValues: [Temporal.PlainDate.from("2026-08-11")],
+    });
+    // Without it the range would start at the selection (Aug–Oct).
+    expect(screen.getByText("July 2026")).toBeTruthy();
+    expect(screen.getByText("September 2026")).toBeTruthy();
+  });
+
+  it("is only a STARTING view — the chevrons still move off it", () => {
+    renderMulti({ defaultView: Temporal.PlainDate.from("2026-07-01") });
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("August 2026")).toBeTruthy();
+  });
+
+  it("falls back to the selection when absent", () => {
+    renderMulti({ defaultValues: [Temporal.PlainDate.from("2026-08-11")] });
+    expect(screen.getByText("August 2026")).toBeTruthy();
+  });
+});
