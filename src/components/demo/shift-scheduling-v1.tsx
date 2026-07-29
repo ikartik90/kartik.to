@@ -13,8 +13,8 @@ import { weekdayOf, type WeekdayKey } from "@/utils/calendar-month";
 import InfoIcon from "@/assets/icons/info.svg";
 
 // ---------------------------------------------------------------------------
-// Shift Scheduling — the showcase for the Notice primitive, in the context the
-// design gives it: a "Post a Shift" scheduling form (Figma 684:1012 dark /
+// Shift Scheduling v1 — the showcase for the Notice primitive, in the context
+// the design gives it: a "Post a Shift" scheduling form (Figma 684:1012 dark /
 // 704:1605 light). A registry demo, so it renders bare content — the DemoFrame
 // supplies the outer 960×640 bordered canvas surface, and `ShiftFormShell` the
 // wireframe dialog chrome it shares with Shift Scheduling v2. Every part but
@@ -59,15 +59,11 @@ function joinDays(names: string[]): ReactNode {
   ));
 }
 
-// No `gap` — the recurrence block carries its own top spacing so that spacing
-// folds away WITH it. A parent gap would survive the collapse and leave a dead
-// band at the foot of the form.
-const fieldsStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  paddingBlock: "lg",
-});
-
+// The rows sit DIRECTLY on the shell's form surface — no inner wrapper, no
+// inner padding. The shell's block padding is the only inset, and the
+// recurrence block carries its own top spacing so that spacing folds away WITH
+// it (a wrapper gap would survive the collapse and leave a dead band at the
+// foot of the form).
 const rowStyle = css({ display: "flex", gap: "xl" });
 const rowCenterStyle = css({ alignItems: "center" });
 const rowTopStyle = css({ alignItems: "flex-start" });
@@ -187,7 +183,7 @@ const dayChipStyle = css({
   textAlign: "center",
 });
 
-export function ShiftScheduling() {
+export function ShiftSchedulingV1() {
   // The form opens on a plausible near-future run rather than on fixed dates:
   // tomorrow through a week later. Read from the clock ONCE and shared by both
   // seeds, so they can't land on either side of midnight, and lazily so the
@@ -232,88 +228,84 @@ export function ShiftScheduling() {
   return (
     <ShiftFormShell>
       {/* Interactive scheduling section — the real components + the Notice. */}
-      <div className={fieldsStyle}>
-        <div className={`${rowStyle} ${rowCenterStyle}`}>
-          <Field className={dateFieldStyle}>
-            <Field.Label>{repeat ? "First Shift" : "Shift Date"}</Field.Label>
-            <DatePicker value={firstShift} onValueChange={setFirstShift} />
-            <Field.Hint>dd/mm/yyyy</Field.Hint>
+      <div className={`${rowStyle} ${rowCenterStyle}`}>
+        <Field className={dateFieldStyle}>
+          <Field.Label>{repeat ? "First Shift" : "Shift Date"}</Field.Label>
+          <DatePicker value={firstShift} onValueChange={setFirstShift} />
+          <Field.Hint>dd/mm/yyyy</Field.Hint>
+        </Field>
+        <div className={switchFieldStyle}>
+          <Field size="lg">
+            <Switch
+              checked={repeat}
+              onCheckedChange={(next) => {
+                setArmed(true);
+                setRepeat(next);
+              }}
+            />
+            <Field.Label>Repeat this shift on other days</Field.Label>
           </Field>
-          <div className={switchFieldStyle}>
-            <Field size="lg">
-              <Switch
-                checked={repeat}
-                onCheckedChange={(next) => {
-                  setArmed(true);
-                  setRepeat(next);
-                }}
-              />
-              <Field.Label>Repeat this shift on other days</Field.Label>
-            </Field>
-          </div>
         </div>
+      </div>
 
-        <div
-          className={recurrenceStyle}
-          data-testid="recurrence"
-          data-collapsed={!repeat}
-          data-armed={armed}
-          inert={!repeat}
-        >
-          <div className={recurrenceClipStyle}>
-            <div className={recurrenceContentStyle}>
-              <div className={`${rowStyle} ${rowTopStyle}`}>
-                <div className={weekdaysGroupStyle}>
-                  <span className={weekdaysLabelStyle}>
-                    Repeat Every Week On
-                  </span>
-                  <div className={weekdaysFrameStyle}>
-                    <OptionList direction="inline">
-                      <OptionList.Toolbar
-                        aria-label="Repeat on weekdays"
-                        className={weekdaysToolbarStyle}
-                      >
-                        {WEEKDAYS.map((day, i) => (
-                          <OptionList.Option
-                            key={`${day.key}-${i}`}
-                            pressed={days.has(day.key)}
-                            aria-label={day.name}
-                            className={dayChipStyle}
-                            onClick={() => toggleDay(day.key)}
-                          >
-                            {day.letter}
-                          </OptionList.Option>
-                        ))}
-                      </OptionList.Toolbar>
-                    </OptionList>
-                  </div>
+      <div
+        className={recurrenceStyle}
+        data-testid="recurrence"
+        data-collapsed={!repeat}
+        data-armed={armed}
+        inert={!repeat}
+      >
+        <div className={recurrenceClipStyle}>
+          <div className={recurrenceContentStyle}>
+            <div className={`${rowStyle} ${rowTopStyle}`}>
+              <div className={weekdaysGroupStyle}>
+                <span className={weekdaysLabelStyle}>Repeat Every Week On</span>
+                <div className={weekdaysFrameStyle}>
+                  <OptionList direction="inline">
+                    <OptionList.Toolbar
+                      aria-label="Repeat on weekdays"
+                      className={weekdaysToolbarStyle}
+                    >
+                      {WEEKDAYS.map((day, i) => (
+                        <OptionList.Option
+                          key={`${day.key}-${i}`}
+                          pressed={days.has(day.key)}
+                          aria-label={day.name}
+                          className={dayChipStyle}
+                          onClick={() => toggleDay(day.key)}
+                        >
+                          {day.letter}
+                        </OptionList.Option>
+                      ))}
+                    </OptionList.Toolbar>
+                  </OptionList>
                 </div>
-                <Field className={dateFieldStyle}>
-                  <Field.Label>Last Shift</Field.Label>
-                  <DatePicker value={lastShift} onValueChange={setLastShift} />
-                  <Field.Hint>dd/mm/yyyy</Field.Hint>
-                </Field>
               </div>
-
-              {/* The star of the showcase — a live, self-describing Notice. */}
-              <Notice role="status" aria-live="polite">
-                <Notice.Icon>
-                  <InfoIcon />
-                </Notice.Icon>
-                <Notice.Label>
-                  This shift will start on{" "}
-                  <strong>{firstShift ? formatFull(firstShift) : "—"}</strong>
-                  {repeating && lastShift ? (
-                    <>
-                      {" "}
-                      and repeat every {joinDays(selectedNames)} until{" "}
-                      <strong>{formatFull(lastShift)}</strong>
-                    </>
-                  ) : null}
-                  .
-                </Notice.Label>
-              </Notice>
+              <Field className={dateFieldStyle}>
+                <Field.Label>Last Shift</Field.Label>
+                <DatePicker value={lastShift} onValueChange={setLastShift} />
+                <Field.Hint>dd/mm/yyyy</Field.Hint>
+              </Field>
             </div>
+
+            {/* The star of the showcase — a live, self-describing Notice. */}
+            <Notice role="status" aria-live="polite">
+              <Notice.Icon>
+                <InfoIcon />
+              </Notice.Icon>
+              <Notice.Label>
+                This shift will start on{" "}
+                <strong>{firstShift ? formatFull(firstShift) : "—"}</strong>
+                {repeating && lastShift ? (
+                  <>
+                    {" "}
+                    and repeat every {joinDays(selectedNames)} until{" "}
+                    <strong>{formatFull(lastShift)}</strong>
+                  </>
+                ) : null}
+                .
+              </Notice.Label>
+            </Notice>
           </div>
         </div>
       </div>

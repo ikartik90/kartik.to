@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { describe, it, expect, afterEach } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
-import { ShiftScheduling } from "../shift-scheduling";
+import { ShiftSchedulingV1 } from "../shift-scheduling-v1";
 import {
   DEFAULT_DATE_FORMAT,
   formatCalendarDate,
@@ -36,22 +36,22 @@ const pressedWeekdays = () =>
     .filter((chip) => chip.getAttribute("aria-pressed") === "true")
     .map((chip) => chip.getAttribute("aria-label") ?? "");
 
-describe("ShiftScheduling — repeat toggle", () => {
+describe("ShiftSchedulingV1 — repeat toggle", () => {
   it("labels the first date field 'First Shift' while repeating", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(screen.getByText("First Shift")).toBeTruthy();
     expect(screen.queryByText("Shift Date")).toBeNull();
   });
 
   it("relabels the date field to 'Shift Date' when repeat is switched off", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     fireEvent.click(repeatSwitch());
     expect(screen.getByText("Shift Date")).toBeTruthy();
     expect(screen.queryByText("First Shift")).toBeNull();
   });
 
   it("collapses the weekday toolbar, the Last Shift field AND the Notice as one region", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     const region = recurrence();
     expect(region.contains(screen.getByRole("toolbar"))).toBe(true);
     expect(region.contains(screen.getByText("Last Shift"))).toBe(true);
@@ -59,20 +59,20 @@ describe("ShiftScheduling — repeat toggle", () => {
   });
 
   it("keeps the region expanded and interactive while repeating", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(recurrence().getAttribute("data-collapsed")).toBe("false");
     expect(recurrence().hasAttribute("inert")).toBe(false);
   });
 
   it("collapses and inerts the region when repeat is switched off", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     fireEvent.click(repeatSwitch());
     expect(recurrence().getAttribute("data-collapsed")).toBe("true");
     expect(recurrence().hasAttribute("inert")).toBe(true);
   });
 
   it("restores the region and the 'First Shift' label when repeat is switched back on", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     fireEvent.click(repeatSwitch());
     fireEvent.click(repeatSwitch());
     expect(recurrence().getAttribute("data-collapsed")).toBe("false");
@@ -84,7 +84,7 @@ describe("ShiftScheduling — repeat toggle", () => {
   // but that also fires on FIRST render — which would play a spurious open
   // animation on page load. `data-armed` gates it to post-interaction only.
   it("does not arm the entry animation until the switch is first touched", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(recurrence().getAttribute("data-armed")).toBe("false");
     fireEvent.click(repeatSwitch());
     expect(recurrence().getAttribute("data-armed")).toBe("true");
@@ -92,7 +92,7 @@ describe("ShiftScheduling — repeat toggle", () => {
 
   // The Notice fades out WITH the region, so its text must not re-flow mid-exit.
   it("holds the Notice's recurrence sentence steady while the region collapses", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     fireEvent.click(repeatSwitch());
     expect(screen.getByRole("status").textContent).toContain("repeat every");
   });
@@ -100,7 +100,7 @@ describe("ShiftScheduling — repeat toggle", () => {
   // Deselecting every weekday leaves the region VISIBLE, so the sentence must
   // drop the clause it can no longer fill.
   it("drops the Notice's repeat clause when every weekday is deselected", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     const toolbar = within(screen.getByRole("toolbar"));
     for (const name of pressedWeekdays()) {
       fireEvent.click(toolbar.getByRole("button", { name }));
@@ -113,22 +113,22 @@ describe("ShiftScheduling — repeat toggle", () => {
 // The form seeds a plausible near-future run off the real clock, so these are
 // derived the same way rather than pinned — a fixed date here would just
 // re-introduce what the component stopped hard-coding.
-describe("ShiftScheduling — default date range", () => {
+describe("ShiftSchedulingV1 — default date range", () => {
   const format = formatCalendarDate(DEFAULT_DATE_FORMAT);
   const today = Temporal.Now.plainDateISO();
 
   it("starts the run tomorrow", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(screen.getByText(format(today.add({ days: 1 })))).toBeTruthy();
   });
 
   it("ends the run a week after that", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(screen.getByText(format(today.add({ days: 8 })))).toBeTruthy();
   });
 
   it("describes that range in the Notice", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     const notice = screen.getByRole("status").textContent ?? "";
     // "Tuesday, 11 August, 2026" — the Notice's own long form, both ends.
     expect(notice).toContain(String(today.add({ days: 1 }).day));
@@ -136,16 +136,16 @@ describe("ShiftScheduling — default date range", () => {
   });
 });
 
-describe("ShiftScheduling — default repeat weekday", () => {
+describe("ShiftSchedulingV1 — default repeat weekday", () => {
   const firstShift = Temporal.Now.plainDateISO().add({ days: 1 });
 
   it("pre-selects only the weekday the first shift falls on", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(pressedWeekdays()).toEqual([weekdayName(firstShift)]);
   });
 
   it("names that weekday in the Notice", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     expect(screen.getByRole("status").textContent).toContain(
       `repeat every ${weekdayName(firstShift)}`,
     );
@@ -154,7 +154,7 @@ describe("ShiftScheduling — default repeat weekday", () => {
   // Seeded from the opening date, NOT bound to it — the toolbar is the user's
   // to edit once they are in the form.
   it("leaves the weekday alone once the user has toggled it", () => {
-    render(<ShiftScheduling />);
+    render(<ShiftSchedulingV1 />);
     const toolbar = within(screen.getByRole("toolbar"));
     fireEvent.click(toolbar.getByRole("button", { name: weekdayName(firstShift) }));
     expect(pressedWeekdays()).toEqual([]);
