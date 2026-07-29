@@ -1948,9 +1948,18 @@ export default defineConfig({
             cursor: "default",
             textStyle: "bodySmall",
             color: "text.body",
-            // cmdk sets data-selected; slash-menu uses aria-selected on native buttons
+            // cmdk sets data-selected; slash-menu uses aria-selected on native buttons.
+            //
+            // The highlight is `field.bg.hover` — the SAME wash an OptionList row
+            // takes — not `bg.itemHover`. Both are a neutral.500 tint at 25% in
+            // dark, so they were indistinguishable there; but itemHover is a flat
+            // 25% in BOTH themes while the field wash drops to 15% in light, and
+            // on the pale canvas that 10-point gap made the palette's highlight
+            // read as a heavy grey band next to the faint one every other list of
+            // options in the app uses. A menu row and a listbox row are the same
+            // gesture, so they take the same tint.
             "&[data-selected='true'], &[aria-selected='true']": {
-              backgroundColor: "bg.itemHover",
+              backgroundColor: "field.bg.hover",
             },
           },
         }),
