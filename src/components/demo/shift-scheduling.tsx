@@ -61,14 +61,11 @@ function joinDays(names: string[]): ReactNode {
 
 // No `gap` — the recurrence block carries its own top spacing so that spacing
 // folds away WITH it. A parent gap would survive the collapse and leave a dead
-// band above the bottom rule.
+// band at the foot of the form.
 const fieldsStyle = css({
   display: "flex",
   flexDirection: "column",
   paddingBlock: "lg",
-  borderBlockWidth: "token(spacing.xxs)",
-  borderBlockStyle: "solid",
-  borderColor: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
 });
 
 const rowStyle = css({ display: "flex", gap: "xl" });
