@@ -201,6 +201,20 @@ export default defineConfig({
                   "color-mix(in srgb, var(--colors-neutral-500) 25%, var(--colors-neutral-800))",
               },
             },
+            // The marquee drag band's fill — the brand accent at 5%, and its
+            // OWN token rather than the selected chip's `field.bg.active`,
+            // because the band is a transient overlay laid over cells that are
+            // already painting their own 15% selection. It only has to tint the
+            // region, so it sits well under the thing it covers. Both themes
+            // carry the same 5%; the split is here because the ACCENT differs
+            // (pink in light, orange in dark), not the strength.
+            calendarMarquee: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-brand-pink) 5%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-brand-orange) 5%, transparent)",
+              },
+            },
             selection: {
               value: {
                 base: "{colors.brand.orange}",
@@ -2385,11 +2399,11 @@ export default defineConfig({
             // this slot only owns the look. Square corners are deliberate:
             // rounding it would read as a UI chip rather than a geometric tool.
             //
-            // The fill is `field.bg.active`, which IS the brand accent at 15% —
-            // the very token the selected day chip uses — so the band and the
-            // cells it is selecting are literally the same colour, and a chip
-            // already inside the band simply reads as double-strength. The
-            // stroke is that same accent at 50%, which has no token of its own.
+            // Fill and stroke are the same brand accent at different strengths:
+            // the stroke at 50% draws the band's extent, while the fill stays
+            // deliberately faint (`bg.calendarMarquee`, 5%) so it tints the
+            // region without competing with the 15% chips of the cells it is
+            // busy selecting.
             marquee: {
               position: "absolute",
               pointerEvents: "none",
@@ -2398,7 +2412,7 @@ export default defineConfig({
               borderStyle: "solid",
               borderColor:
                 "color-mix(in srgb, var(--colors-field-text-active) 50%, transparent)",
-              backgroundColor: "field.bg.active",
+              backgroundColor: "bg.calendarMarquee",
             },
             date: {
               display: "grid",
