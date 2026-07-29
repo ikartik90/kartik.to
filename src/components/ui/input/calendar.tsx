@@ -6,10 +6,14 @@ import {
   createContext,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type HTMLAttributes,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -56,6 +60,20 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 // at a time. Every day cell surfaces its state (aria-selected, data-state=today,
 // data-outside, :disabled) AND identity (data-weekday, data-weekend) as
 // attributes, so the look is fully re-skinnable off selectors.
+//
+// `selectionMode` picks how many dates can be held at once. `single` (default)
+// is the Date input's picker — one date, and picking replaces it. `multiple`
+// swaps in a toggle model (`values` / `onValuesChange`) and unlocks two
+// gestures that only make sense there:
+//
+//   • DRAG — a marquee. The press point pins one corner of a rectangle and the
+//     cursor is the other; every day cell the rectangle overlaps, by any amount,
+//     is toggled against the selection the drag started from. So the band is
+//     reversible: shrink it back off a cell and that cell reverts. It is pure
+//     geometry over the whole period list, which is why a band can span months
+//     and why it never depends on the path the cursor took.
+//   • Shift+Arrow — a path, since a keyboard caret has no second corner to drag.
+//     A run flips what it steps onto, and reversing over it rubs it out.
 // ---------------------------------------------------------------------------
 
 const MONTH_NAMES = [
@@ -86,10 +104,18 @@ function monthLabel(
 
 type CalendarStyles = ReturnType<typeof calendar>;
 
+/** How many dates the calendar can hold at once. */
+export type CalendarSelectionMode = "single" | "multiple";
+
 type CalendarContextValue = {
   styles: CalendarStyles;
   today: Temporal.PlainDate;
-  selected: Temporal.PlainDate | null;
+  selectionMode: CalendarSelectionMode;
+  /**
+   * The selection as ISO day keys — ONE representation for both modes, so a
+   * cell only ever asks "is my key in here" rather than branching on the mode.
+   */
+  selection: ReadonlySet<string>;
   min?: Temporal.PlainDate;
   max?: Temporal.PlainDate;
   /** First-of-month for the FIRST month of the visible range. */
@@ -100,12 +126,28 @@ type CalendarContextValue = {
   query: Temporal.PlainDate | null;
   /**
    * The single roving-tabindex anchor across the whole range
-   * (query ▸ selected ▸ today ▸ first-of-range).
+   * (keyboard focus ▸ query ▸ earliest selected ▸ today ▸ first-of-range).
    */
   activeDate: Temporal.PlainDate;
   /** One entry per visible month, in order. */
   periods: CalendarMonth[];
+  /** Single-mode commit — replaces the selection. */
   select: (date: Temporal.PlainDate) => void;
+  /** Multiple-mode commit — flips one date in or out. */
+  toggle: (date: Temporal.PlainDate) => void;
+  /** Parks the roving tabstop without touching DOM focus (pointer paths). */
+  anchorFocus: (date: Temporal.PlainDate) => void;
+  /**
+   * Moves the roving tabstop AND DOM focus, paging the range if the date is off
+   * screen. `extend` also toggles what the step lands on — the Shift+Arrow run.
+   */
+  moveFocus: (date: Temporal.PlainDate, extend?: boolean) => void;
+  /** Pins the marquee's first corner at a viewport point and measures the grid. */
+  dragStart: (x: number, y: number, listRect: DOMRect) => void;
+  /** The live drag band, or null when no drag is in flight. */
+  band: CalendarBand | null;
+  /** Did the last drag actually leave its press point? Guards the trailing click. */
+  dragMoved: () => boolean;
   prevPage: () => void;
   nextPage: () => void;
 };
@@ -140,14 +182,108 @@ function isDisabled(
   return false;
 }
 
+/**
+ * Dates as deduplicated, sorted ISO day keys. ISO-8601 sorts lexicographically
+ * in chronological order, so the plain string sort IS the date sort — which is
+ * why the selection can live as keys end to end and only become `PlainDate`s
+ * again on the way out to the consumer.
+ */
+function toKeys(dates: readonly Temporal.PlainDate[] = []): string[] {
+  return [...new Set(dates.map((date) => date.toString()))].sort();
+}
+
+/** How far one arrow key moves, in days. Up/Down are a whole week. */
+const ARROW_DAYS: Record<string, number> = {
+  ArrowLeft: -1,
+  ArrowRight: 1,
+  ArrowUp: -7,
+  ArrowDown: 7,
+};
+
+/**
+ * One marquee drag. The press point pins one corner of a rectangle and the live
+ * pointer is the opposite corner, so the band grows, shrinks and flips
+ * direction with the cursor instead of tracing the path it took to get there.
+ *
+ * `cells` is measured once, at press time: nothing in the grid moves mid-drag
+ * (the range only pages on a chevron or a keyboard nav), so the move handler
+ * stays pure arithmetic over a snapshot instead of hitting layout every frame.
+ *
+ * `base` is the selection the drag started from, and every frame recomputes the
+ * result as `base` XOR "cells the band currently covers" rather than
+ * accumulating flips. That is what makes the band reversible — retreat off a
+ * cell and it returns to exactly the state it had before the drag began.
+ *
+ * `moved` keeps a click a click: until the pointer clears `DRAG_THRESHOLD` no
+ * band is applied, and once it has, the browser's trailing click is swallowed
+ * so the press cell isn't flipped a second time.
+ */
+type CalendarGesture = {
+  originX: number;
+  originY: number;
+  /** The period list's own box, so the band can be drawn in list-relative px. */
+  listRect: DOMRect;
+  cells: { key: string; rect: DOMRect }[];
+  base: string[];
+  moved: boolean;
+  active: boolean;
+};
+
+/** The drag band's box, in period-list-relative pixels. */
+export type CalendarBand = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+/** Pointer slop, in px, before a press is treated as a drag rather than a click. */
+const DRAG_THRESHOLD = 3;
+
+/** Do two boxes overlap at all? Touching edges don't count; any sliver does. */
+function overlaps(
+  rect: DOMRect,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): boolean {
+  return (
+    rect.left < right &&
+    rect.right > left &&
+    rect.top < bottom &&
+    rect.bottom > top
+  );
+}
+
 export interface CalendarProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "onChange"> {
-  /** Controlled selection. */
+  /**
+   * `single` (default) holds one date and picking replaces it — the Date
+   * input's picker. `multiple` holds a set and picking toggles, which is also
+   * what turns on the pointer sweep and Shift+Arrow.
+   */
+  selectionMode?: CalendarSelectionMode;
+  /** Controlled selection — `single` only. */
   value?: Temporal.PlainDate | null;
-  /** Initial selection when uncontrolled. */
+  /** Initial selection when uncontrolled — `single` only. */
   defaultValue?: Temporal.PlainDate | null;
-  /** Fired with the picked date. */
+  /** Fired with the picked date — `single` only. */
   onValueChange?: (date: Temporal.PlainDate) => void;
+  /** Controlled selection — `multiple` only. Order is irrelevant on the way in. */
+  values?: readonly Temporal.PlainDate[];
+  /** Initial selection when uncontrolled — `multiple` only. */
+  defaultValues?: readonly Temporal.PlainDate[];
+  /** Fired with the WHOLE selection after a toggle, in chronological order. */
+  onValuesChange?: (dates: Temporal.PlainDate[]) => void;
+  /**
+   * Which month the range OPENS on. Uncontrolled — the chevrons, a search and
+   * an off-range pick all move on from it freely. Without it the range starts
+   * at the selection, then today; pass it when neither is where the range
+   * should begin (e.g. opening a 3-month range one month BEFORE today, so the
+   * current month sits in the middle).
+   */
+  defaultView?: Temporal.PlainDate;
   /** Lower/upper selectable bounds (inclusive). */
   min?: Temporal.PlainDate;
   max?: Temporal.PlainDate;
@@ -171,21 +307,36 @@ export interface CalendarProps
    * Date input popover's brand-tinted surface (palette inverts).
    */
   tone?: "default" | "onBrand";
+  /**
+   * How the flanking chevrons meet the list's edges. `label` (default) is a
+   * bare chevron on the month label row — right for one month. `edge` gives
+   * each a full-height gradient scrim with the chevron centred in it, which is
+   * what a range WIDER than its frame wants: the fade dissolves the half-cut
+   * outer columns rather than leaving them on a hard crop, and centring suits
+   * chevrons that page the whole run rather than any one month.
+   */
+  navPlacement?: "label" | "edge";
   /** Override "today" — primarily for tests/deterministic rendering. */
   today?: Temporal.PlainDate;
   children: ReactNode;
 }
 
 function CalendarRoot({
+  selectionMode = "single",
   value,
   defaultValue,
   onValueChange,
+  values,
+  defaultValues,
+  onValuesChange,
+  defaultView,
   min,
   max,
   weekStartsOn = "sun",
   months = 1,
   queryParser,
   tone = "default",
+  navPlacement = "label",
   today: todayProp,
   className,
   children,
@@ -197,8 +348,10 @@ function CalendarRoot({
   // (a <div role="group"> is not a labelable `htmlFor` target). Display-only
   // calendars (availability/event/heatmap) are a separate component.
   const { labelId, hasLabel, hintId, hasHint } = useField("Calendar");
-  const styles = calendar({ tone });
+  const styles = calendar({ tone, navPlacement });
   const today = todayProp ?? Temporal.Now.plainDateISO();
+
+  const multiple = selectionMode === "multiple";
 
   const isControlled = value !== undefined;
   const [internal, setInternal] = useState<Temporal.PlainDate | null>(
@@ -206,9 +359,32 @@ function CalendarRoot({
   );
   const selected = isControlled ? (value ?? null) : internal;
 
-  const [view, setView] = useState<Temporal.PlainDate>(() =>
-    (value ?? defaultValue ?? today).with({ day: 1 }),
+  const isMultiControlled = values !== undefined;
+  const [multiInternal, setMultiInternal] = useState<string[]>(() =>
+    toKeys(defaultValues),
   );
+  const multiKeys = isMultiControlled ? toKeys(values) : multiInternal;
+
+  // Both modes collapse to one sorted key list, so everything downstream —
+  // the `aria-selected` test, the roving anchor, the toggle — is mode-blind.
+  const selectionKeys = multiple
+    ? multiKeys
+    : selected
+      ? [selected.toString()]
+      : [];
+  // Rebuilt each render rather than memoised: it holds one key per selected
+  // date, so there is nothing here worth a dependency array.
+  const selection = new Set(selectionKeys);
+
+  // An explicit `defaultView` wins; otherwise the range opens where the
+  // selection is, and failing that on today.
+  const [view, setView] = useState<Temporal.PlainDate>(() => {
+    if (defaultView) return defaultView.with({ day: 1 });
+    const seeded = toKeys(values ?? defaultValues)[0];
+    const seed =
+      value ?? defaultValue ?? (seeded ? Temporal.PlainDate.from(seeded) : null);
+    return (seed ?? today).with({ day: 1 });
+  });
 
   const periods = useMemo(
     () => buildCalendarPeriods(view, { months, weekStartsOn }),
@@ -218,20 +394,36 @@ function CalendarRoot({
   // What the search currently resolves to, if anything — see `goToQuery` below.
   const [query, setQuery] = useState<Temporal.PlainDate | null>(null);
 
+  // Where the keyboard has walked the roving tabstop to. Null until something
+  // moves it, so an untouched calendar still opens on query/selection/today.
+  const [focusDate, setFocusDate] = useState<Temporal.PlainDate | null>(null);
+  // Set only by `moveFocus`, so the effect below moves DOM focus for keyboard
+  // navigation WITHOUT stealing it on mount or on any unrelated re-render.
+  const pendingFocus = useRef(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
   const inView = (d: Temporal.PlainDate) => {
     const offset = monthsBetween(view, d);
     return offset >= 0 && offset < Math.max(1, months);
   };
-  // A resolving query outranks the selection: it's what Enter would commit, so
-  // it's also where a Tab into the grid should land.
+  // Keyboard focus outranks everything — once you've arrowed somewhere, that IS
+  // the tabstop. Below it a resolving query outranks the selection: it's what
+  // Enter would commit, so it's also where a Tab into the grid should land.
+  // In `multiple` mode the earliest selected date in view stands in for "the"
+  // selection (`selectionKeys` is sorted, so `find` is that date).
+  const anchorKey = selectionKeys.find((key) =>
+    inView(Temporal.PlainDate.from(key)),
+  );
   const activeDate =
-    query && inView(query)
-      ? query
-      : selected && inView(selected)
-        ? selected
-        : inView(today)
-          ? today
-          : view;
+    focusDate && inView(focusDate)
+      ? focusDate
+      : query && inView(query)
+        ? query
+        : anchorKey
+          ? Temporal.PlainDate.from(anchorKey)
+          : inView(today)
+            ? today
+            : view;
 
   // Page the range onto `date` only if it isn't already on screen. Clicking a
   // day in the third visible month must not shuffle the grid out from under the
@@ -247,6 +439,175 @@ function CalendarRoot({
     reveal(date);
   };
 
+  const commitKeys = (keys: string[]) => {
+    if (!isMultiControlled) setMultiInternal(keys);
+    onValuesChange?.(keys.map((key) => Temporal.PlainDate.from(key)));
+  };
+
+  // Flips a whole batch in ONE commit. The batch matters: a Shift+Arrow run's
+  // first step has to flip both the cell it left and the one it landed on, and
+  // two sequential `toggle` calls in one handler would each read the same stale
+  // selection, the second dropping the first.
+  const toggleMany = (dates: Temporal.PlainDate[]) => {
+    const allowed = dates.filter((date) => !isDisabled(date, min, max));
+    if (!allowed.length) return;
+    const next = new Set(selectionKeys);
+    for (const date of allowed) {
+      const key = date.toString();
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+    }
+    commitKeys([...next].sort());
+  };
+
+  const toggle = (date: Temporal.PlainDate) => toggleMany([date]);
+
+  // The open marquee. A ref, not state: it is read only inside event handlers,
+  // and re-rendering on every pointer move would buy nothing.
+  const gesture = useRef<CalendarGesture | null>(null);
+  // Mirrors whether a Shift+Arrow run is mid-flight, so the first step of a run
+  // can flip its origin too and later steps only flip what they land on.
+  const keyRun = useRef(false);
+  // Drives the window listeners below. The only reason this is state.
+  const [dragging, setDragging] = useState(false);
+  // The band's box, in list-relative px — state because it is rendered.
+  const [band, setBand] = useState<CalendarBand | null>(null);
+
+  const dragStart = (x: number, y: number, listRect: DOMRect) => {
+    keyRun.current = false;
+    const cells = [
+      ...(rootRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[data-date]:not([data-outside])",
+      ) ?? []),
+    ];
+    gesture.current = {
+      originX: x,
+      originY: y,
+      listRect,
+      // Spill copies are already excluded by the selector, and a date outside
+      // min/max can't be dragged into any more than it can be clicked.
+      cells: cells
+        .filter((cell) => !cell.disabled)
+        .map((cell) => ({
+          key: cell.dataset.date as string,
+          rect: cell.getBoundingClientRect(),
+        })),
+      base: selectionKeys,
+      moved: false,
+      active: true,
+    };
+    setDragging(true);
+  };
+
+  const dragTo = (x: number, y: number) => {
+    const open = gesture.current;
+    if (!open?.active) return;
+    if (!open.moved) {
+      if (
+        Math.abs(x - open.originX) < DRAG_THRESHOLD &&
+        Math.abs(y - open.originY) < DRAG_THRESHOLD
+      )
+        return;
+      open.moved = true;
+    }
+    // Normalised so the band works in every direction — up-left drags give the
+    // same rectangle as down-right ones.
+    const left = Math.min(open.originX, x);
+    const right = Math.max(open.originX, x);
+    const top = Math.min(open.originY, y);
+    const bottom = Math.max(open.originY, y);
+
+    // Drawn relative to the period list, which is the band's positioning
+    // parent. The calendar root clips it, so a drag that runs off the grid
+    // stops at the frame instead of trailing across the page.
+    setBand({
+      left: left - open.listRect.left,
+      top: top - open.listRect.top,
+      width: right - left,
+      height: bottom - top,
+    });
+
+    const next = new Set(open.base);
+    for (const { key, rect } of open.cells) {
+      if (!overlaps(rect, left, top, right, bottom)) continue;
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+    }
+    commitKeys([...next].sort());
+  };
+
+  const dragMoved = () => gesture.current?.moved ?? false;
+
+  // `dragTo` closes over the current selection commit path, so the listeners
+  // below read it through a ref rather than being torn down and rebound on
+  // every render of a drag.
+  const dragToRef = useRef(dragTo);
+  useEffect(() => {
+    dragToRef.current = dragTo;
+  });
+
+  // A drag is tracked on `window`, not on the cells: the band is defined by the
+  // POINTER, so it has to keep updating while the cursor is between cells, over
+  // the chevrons, or outside the calendar altogether — and it has to end
+  // wherever the button is released.
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (event: PointerEvent) =>
+      dragToRef.current(event.clientX, event.clientY);
+    const end = () => {
+      if (gesture.current) gesture.current.active = false;
+      setDragging(false);
+      setBand(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [dragging]);
+
+  const anchorFocus = (date: Temporal.PlainDate) => setFocusDate(date);
+
+  const moveFocus = (date: Temporal.PlainDate, extend = false) => {
+    if (extend && multiple) {
+      // Shift+Arrow stays a PATH, not a rectangle — a keyboard caret has no
+      // second corner to drag, so a run flips what it steps onto. The first
+      // step also flips the cell it left, since you extended FROM there;
+      // reversing back over the run rubs it out again.
+      if (!keyRun.current) {
+        keyRun.current = true;
+        toggleMany([activeDate, date]);
+      } else {
+        toggle(date);
+      }
+    } else {
+      // A plain move closes the run, so the next Shift+Arrow starts fresh
+      // rather than resuming one from minutes ago.
+      keyRun.current = false;
+    }
+    pendingFocus.current = true;
+    setFocusDate(date);
+    reveal(date);
+  };
+
+  // Chase the roving tabstop with real DOM focus after the commit that moved
+  // it — one tick later than `moveFocus`, because paging to an off-range date
+  // means the target cell doesn't exist yet when the key is handled. `view` is
+  // a dependency for exactly that case. The owned copy is the target: a spill
+  // copy carries the same date but never takes the tabstop.
+  useEffect(() => {
+    if (!pendingFocus.current || !focusDate) return;
+    pendingFocus.current = false;
+    rootRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-date="${focusDate.toString()}"]:not([data-outside])`,
+      )
+      ?.focus();
+  }, [focusDate, view]);
+
   // One chevron press moves a whole range, so the months on screen never repeat
   // between pages (Apr–Jun ▸ Jul–Sep, not Apr–Jun ▸ May–Jul).
   const stride = Math.max(1, months);
@@ -254,7 +615,8 @@ function CalendarRoot({
   const ctx: CalendarContextValue = {
     styles,
     today,
-    selected,
+    selectionMode,
+    selection,
     min,
     max,
     view,
@@ -263,6 +625,12 @@ function CalendarRoot({
     activeDate,
     periods,
     select,
+    toggle,
+    anchorFocus,
+    moveFocus,
+    dragStart,
+    dragMoved,
+    band,
     prevPage: () => setView((v) => v.subtract({ months: stride })),
     nextPage: () => setView((v) => v.add({ months: stride })),
   };
@@ -300,6 +668,10 @@ function CalendarRoot({
           el.props.onValueChange?.(raw);
           const date = queryParser?.(raw) ?? null;
           setQuery(date);
+          // Typing hands the roving tabstop back to the query, so a Tab into
+          // the grid lands on what Enter would commit rather than on wherever
+          // the arrow keys were left.
+          setFocusDate(null);
           if (date) reveal(date);
         },
         onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
@@ -315,6 +687,7 @@ function CalendarRoot({
   return (
     <CalendarContext.Provider value={ctx}>
       <div
+        ref={rootRef}
         role="group"
         aria-labelledby={hasLabel ? labelId : undefined}
         aria-describedby={hasHint ? hintId : undefined}
@@ -398,9 +771,11 @@ export type CalendarPeriodListProps = HTMLAttributes<HTMLDivElement>;
 function CalendarPeriodList({
   className,
   children,
+  onPointerDown,
   ...rest
 }: CalendarPeriodListProps) {
-  const { styles, periods } = useCalendar("Calendar.PeriodList");
+  const { styles, periods, selectionMode, dragStart, band } =
+    useCalendar("Calendar.PeriodList");
 
   // The one child this part does rewrite: `Period` is a TEMPLATE, not a role —
   // it has to be a direct child because it's stamped out once per month.
@@ -415,8 +790,40 @@ function CalendarPeriodList({
   });
 
   return (
-    <div className={cx(styles.periodList, className)} {...rest}>
+    <div
+      className={cx(styles.periodList, className)}
+      // The band opens HERE rather than on a day cell, so a drag can begin on
+      // the gutters between months, the month labels, or the empty tail of a
+      // short month — anywhere in the list. A press that lands on a day cell
+      // still bubbles up to this handler, so that case is unchanged.
+      onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
+        onPointerDown?.(event);
+        if (event.defaultPrevented || selectionMode !== "multiple") return;
+        if (event.pointerType === "touch" || event.button !== 0) return;
+        // The chevrons live in this list too, and pressing one pages the range
+        // — that is a button, not the start of a selection.
+        if ((event.target as HTMLElement).closest?.("[data-nav]")) return;
+        dragStart(
+          event.clientX,
+          event.clientY,
+          event.currentTarget.getBoundingClientRect(),
+        );
+      }}
+      {...rest}
+    >
       {expanded}
+      {band ? (
+        <div
+          aria-hidden
+          className={styles.marquee}
+          style={{
+            left: `${band.left}px`,
+            top: `${band.top}px`,
+            width: `${band.width}px`,
+            height: `${band.height}px`,
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -516,7 +923,7 @@ export type CalendarGridProps = HTMLAttributes<HTMLDivElement>;
 
 /** The day grid — clones its single Calendar.Date per day in the 6×7 month. */
 function CalendarGrid({ className, children, ...rest }: CalendarGridProps) {
-  const { styles } = useCalendar("Calendar.Grid");
+  const { styles, selectionMode } = useCalendar("Calendar.Grid");
   const { weeks, start } = usePeriod("Calendar.Grid");
   const template = Children.only(children) as ReactElement<CalendarDateProps>;
   return (
@@ -524,6 +931,9 @@ function CalendarGrid({ className, children, ...rest }: CalendarGridProps) {
       role="grid"
       // Always the full month name, whatever the visible label's `monthFormat`.
       aria-label={monthLabel(start)}
+      // Announced here rather than on the root: `grid` takes
+      // aria-multiselectable, the root's `group` does not.
+      aria-multiselectable={selectionMode === "multiple" || undefined}
       className={cx(styles.grid, className)}
       {...rest}
     >
@@ -545,9 +955,32 @@ export interface CalendarDateProps
  * attributes (aria-selected, data-state, data-outside, data-weekday,
  * data-weekend, disabled) the styling keys off.
  */
-function CalendarDate({ cell, className, children, ...rest }: CalendarDateProps) {
-  const { styles, selected, today, min, max, query, activeDate, select } =
-    useCalendar("Calendar.Date");
+function CalendarDate({
+  cell,
+  className,
+  children,
+  onClick,
+  onKeyDown,
+  onPointerDown,
+  ...rest
+}: CalendarDateProps) {
+  const {
+    styles,
+    selectionMode,
+    selection,
+    today,
+    min,
+    max,
+    query,
+    activeDate,
+    months: stride,
+    select,
+    toggle,
+    anchorFocus,
+    moveFocus,
+    dragMoved,
+  } = useCalendar("Calendar.Date");
+  const { weekdays } = usePeriod("Calendar.Date");
   if (!cell) throw new Error("Calendar.Date must be a child of Calendar.Grid.");
 
   // Across a range, a date on a month boundary renders twice — once for real,
@@ -558,10 +991,16 @@ function CalendarDate({ cell, className, children, ...rest }: CalendarDateProps)
   // constraint on the date itself, and a spill day must stay unclickable when
   // its real counterpart is.
   const owned = cell.inCurrentMonth;
-  const isSelected = owned && selected != null && cell.date.equals(selected);
+  const multiple = selectionMode === "multiple";
+  const isSelected = owned && selection.has(cell.key);
   const isToday = owned && cell.date.equals(today);
   const isQuery = owned && query != null && cell.date.equals(query);
   const disabled = isDisabled(cell.date, min, max);
+  // The same reason a spill copy draws no chip applies to toggling it: one
+  // sweep along a boundary would otherwise flip that date twice, once per
+  // month that renders it. Single-select has no such hazard — picking a spill
+  // day is a useful "jump to next month" — so only `multiple` opts out.
+  const inert = multiple && !owned;
 
   return (
     <button
@@ -569,6 +1008,7 @@ function CalendarDate({ cell, className, children, ...rest }: CalendarDateProps)
       role="gridcell"
       aria-label={`${MONTH_NAMES[cell.date.month - 1]} ${cell.date.day}, ${cell.date.year}`}
       aria-selected={isSelected}
+      data-date={cell.key}
       data-state={isToday ? "today" : undefined}
       data-query={isQuery ? "" : undefined}
       data-outside={cell.inCurrentMonth ? undefined : ""}
@@ -577,7 +1017,69 @@ function CalendarDate({ cell, className, children, ...rest }: CalendarDateProps)
       disabled={disabled}
       tabIndex={owned && cell.date.equals(activeDate) ? 0 : -1}
       className={cx(styles.date, className)}
-      onClick={() => select(cell.date)}
+      onPointerDown={(event: ReactPointerEvent<HTMLButtonElement>) => {
+        onPointerDown?.(event);
+        if (event.defaultPrevented || inert || !multiple) return;
+        // Coarse pointers never drag a band — dragging a finger across the grid
+        // would fight the page's own scroll. Touch stays tap-to-toggle, which
+        // the trailing click below already handles.
+        if (event.pointerType === "touch" || event.button !== 0) return;
+        // Park the roving tabstop here; the DRAG itself is opened by
+        // Calendar.PeriodList, which this event goes on to bubble to. A band is
+        // pointer geometry over the whole list, so it must be able to start on
+        // the gutters and the month labels too — not only on a day cell.
+        anchorFocus(cell.date);
+      }}
+      onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+        onClick?.(event);
+        if (event.defaultPrevented) return;
+        if (!multiple) {
+          select(cell.date);
+          return;
+        }
+        if (inert) return;
+        // `detail` is 0 only for a keyboard-activated button, which is how
+        // Enter/Space stay live even while a drag's own trailing click — fired
+        // when press and release share a cell — has to be swallowed.
+        if (event.detail !== 0 && dragMoved()) return;
+        anchorFocus(cell.date);
+        toggle(cell.date);
+      }}
+      onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
+        onKeyDown?.(event);
+        if (event.defaultPrevented) return;
+
+        const days = ARROW_DAYS[event.key];
+        if (days !== undefined) {
+          event.preventDefault();
+          // Shift makes the move a sweep — the keyboard half of "every date
+          // you cross flips".
+          moveFocus(cell.date.add({ days }), event.shiftKey);
+          return;
+        }
+        // Home/End run to the ends of THIS row, which is a `weekStartsOn`
+        // question — hence the column index off the period's own header order
+        // rather than an assumed Sunday start.
+        if (event.key === "Home" || event.key === "End") {
+          event.preventDefault();
+          const column = weekdays.findIndex((wd) => wd.key === cell.weekday);
+          moveFocus(
+            event.key === "Home"
+              ? cell.date.subtract({ days: column })
+              : cell.date.add({ days: 6 - column }),
+            event.shiftKey,
+          );
+          return;
+        }
+        // Paging moves by a whole RANGE, matching the chevrons, and keeps the
+        // day-of-month — so PageDown/PageUp round-trips back to where you
+        // started (Temporal clamps a short month for you).
+        if (event.key === "PageUp" || event.key === "PageDown") {
+          event.preventDefault();
+          const months = event.key === "PageUp" ? -stride : stride;
+          moveFocus(cell.date.add({ months }));
+        }
+      }}
       {...rest}
     >
       {children ?? cell.day}

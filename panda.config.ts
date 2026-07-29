@@ -45,6 +45,10 @@ export default defineConfig({
           // Calendar day cell — also the weekday header cell and the month
           // chevrons, so the whole grid keeps one column pitch (Figma 563:3377).
           calendarDay: { value: "24px" },
+          // The nav scrim zone flanking a multi-month period list — three day
+          // columns wide (3 × 24), so the fade spans the clipped column plus
+          // enough of its neighbours to read as a gradient (Figma 723:2265).
+          calendarNavZone: { value: "72px" },
           // Option list / combobox popover width. Fixed like the calendar's
           // 208px pitch so a select popover and a date popover read as siblings
           // (Figma 647:2383 option-list, 629:1416 combobox popover).
@@ -180,6 +184,21 @@ export default defineConfig({
               value: {
                 base: "{colors.neutral.200}",
                 _dark: "{colors.neutral.800}",
+              },
+            },
+            // The calendar's OWN surface resolved to one opaque colour —
+            // `field.bg.default` (a translucent neutral) composited over
+            // `surface` above. The multi-month period list's edge scrims fade
+            // the clipped columns out into the surface, so they need it as a
+            // solid gradient stop and can't reuse the translucent token.
+            // Written as that exact composite rather than the hex it lands on,
+            // so it tracks either half if one is ever retuned: in dark that is
+            // 25% #576675 over #2E3338 = #384047, the Figma value (723:2265).
+            calendarScrim: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-neutral-500) 15%, var(--colors-neutral-200))",
+                _dark:
+                  "color-mix(in srgb, var(--colors-neutral-500) 25%, var(--colors-neutral-800))",
               },
             },
             selection: {
@@ -2238,6 +2257,7 @@ export default defineConfig({
             "weekday",
             "grid",
             "date",
+            "marquee",
           ],
           base: {
             root: {
@@ -2270,19 +2290,31 @@ export default defineConfig({
               // Months are top-aligned and each is a fixed 208px column, so the
               // list simply grows 208px per month.
               alignItems: "flex-start",
+              // Centre the run of months, which only bites when the consumer
+              // constrains the calendar NARROWER than its months add up to: the
+              // range then overflows symmetrically and the root's `overflow:
+              // hidden` crops the outer columns evenly, instead of the default
+              // flex-start's all-on-the-right crop. (`safe center` would undo
+              // exactly that — the start-side crop is the point here.)
+              justifyContent: "center",
               // The anchor for the two nav chevrons below.
               position: "relative",
+              // The grid is a drag surface in `multiple` selection, and a drag
+              // that starts on a day cell would otherwise run on to highlight
+              // the month labels it passes. The cells already opt out
+              // individually; this covers the labels and the gaps between them.
+              userSelect: "none",
               // The chevrons are `color: inherit` Buttons, so the list owns
               // their hue; the month labels override their own.
               color: "field.text.default",
-              // Pin a nav dropped DIRECTLY in here to the matching corner, so
-              // one pair flanks the whole range however many months it holds —
-              // landing on the first/last month's label row (Figma 715:921 /
-              // 716:1116, inset 8px, aligned to the 28px label). Scoped to the
-              // list, and to direct children, so the same part nested in a
-              // consumer's own chrome stays in the flow and takes their layout
-              // instead of being yanked to a corner it doesn't belong to.
-              "& > [data-nav]": { position: "absolute", top: "md" },
+              // Pin a nav dropped DIRECTLY in here to the matching edge, so one
+              // pair flanks the whole range however many months it holds
+              // (Figma 715:921 / 716:1116, inset 8px). Scoped to the list, and
+              // to direct children, so the same part nested in a consumer's own
+              // chrome stays in the flow and takes their layout instead of
+              // being yanked to an edge it doesn't belong to. `navPlacement`
+              // below decides how it meets that edge.
+              "& > [data-nav]": { position: "absolute" },
               "& > [data-nav='prev']": { left: "md" },
               "& > [data-nav='next']": { right: "md" },
             },
@@ -2292,6 +2324,10 @@ export default defineConfig({
               // The column's own pitch — 4px between label, weekdays and grid.
               gap: "sm",
               padding: "md",
+              // Hold the 208px pitch even when the list is narrower than its
+              // months: a flex row would otherwise shrink the columns and break
+              // the grid arithmetic rather than letting them overflow and crop.
+              flexShrink: 0,
             },
             // The chevron's WRAPPER, not the chevron itself. The button is an
             // `action` recipe, and Panda emits plain recipes into
@@ -2343,6 +2379,26 @@ export default defineConfig({
               display: "grid",
               gridTemplateColumns: "repeat(7, token(sizes.calendarDay))",
               gap: "sm",
+            },
+            // The drag band drawn while a marquee selection is in progress —
+            // positioned by `Calendar.PeriodList` in list-relative pixels, so
+            // this slot only owns the look. Square corners are deliberate:
+            // rounding it would read as a UI chip rather than a geometric tool.
+            //
+            // The fill is `field.bg.active`, which IS the brand accent at 15% —
+            // the very token the selected day chip uses — so the band and the
+            // cells it is selecting are literally the same colour, and a chip
+            // already inside the band simply reads as double-strength. The
+            // stroke is that same accent at 50%, which has no token of its own.
+            marquee: {
+              position: "absolute",
+              pointerEvents: "none",
+              zIndex: 1,
+              borderWidth: "1px",
+              borderStyle: "solid",
+              borderColor:
+                "color-mix(in srgb, var(--colors-field-text-active) 50%, transparent)",
+              backgroundColor: "field.bg.active",
             },
             date: {
               display: "grid",
@@ -2413,6 +2469,134 @@ export default defineConfig({
           //           │ today/selected drop to neutral to stand out against the
           //           │ brand tint (Figma 631:893 / 631:897).
           variants: {
+            // How the flanking chevrons meet the list's left/right edges.
+            //
+            //   label │ a bare chevron level with the month label row (8px
+            //         │ down). Right for ONE month, where the label row IS the
+            //         │ top of the column and nothing is clipped (Figma
+            //         │ 715:921).
+            //   edge  │ a full-height scrim pinned to each edge, chevron
+            //         │ centred in it (Figma 723:2265 / 716:1116). For a range
+            //         │ wider than its frame: the gradient dissolves the
+            //         │ half-cut outer columns into the surface instead of
+            //         │ letting them end on a hard crop, and the 2px backdrop
+            //         │ blur pushes them behind the chevron. Centring comes
+            //         │ WITH it — across a range the label row belongs to the
+            //         │ months, not to the run, so a chevron parked up there
+            //         │ reads as paging the first month alone.
+            navPlacement: {
+              label: { periodList: { "& > [data-nav]": { top: "md" } } },
+              edge: {
+                periodList: {
+                  "& > [data-nav]": {
+                    top: 0,
+                    height: "token(spacing.full)",
+                    width: "token(sizes.calendarNavZone)",
+                    alignItems: "center",
+                    paddingInline: "sm",
+                    // Being positioned is NOT enough to sit above the grid.
+                    // The weekend and spill-over day cells carry `opacity < 1`,
+                    // which makes each of them a stacking context painted at
+                    // level 0 — the same level as a `z-index: auto` positioned
+                    // element — so DOM order decided, and the navs come BEFORE
+                    // the periods. The outermost column of a clipped range is
+                    // always a weekend one, so precisely the column this scrim
+                    // exists to fade was punching through it, sharp and
+                    // unwashed, and the effect looked like it began an inch in.
+                    //
+                    // Layer order across the whole calendar, all explicit
+                    // because `auto` ties with those opacity cells and lets DOM
+                    // order decide: marquee 1 ▸ nav scrim 2 ▸ frame ring 3.
+                    zIndex: 2,
+                    // No radius of its own: the zone sits flush in the root's
+                    // rounded, clipped box, so the corners are already handled
+                    // — rounding here would only hold the wash back from them.
+                    // Decoration only. The scrim lies OVER the outer columns,
+                    // so without this it would swallow clicks on the dates it
+                    // is merely fading — and break a sweep the moment the
+                    // pointer passed beneath it. The chevron takes its events
+                    // back, and rides above the blur layers.
+                    pointerEvents: "none",
+                    "& > *": { pointerEvents: "auto", zIndex: 1 },
+                    // ── Progressive blur ────────────────────────────────
+                    // CSS has no variable-radius blur, so the ramp is built
+                    // from two stacked backdrop layers, each faded out by its
+                    // own mask over a different distance. Gaussian blurs
+                    // compose in quadrature, so where both are opaque the pair
+                    // reads as √(1.4² + 1.4²) ≈ 2px — the Figma value — and
+                    // where only the longer-reaching one survives it drops
+                    // toward 1px and then to nothing. That is a genuine change
+                    // in blur RADIUS across the zone; a single layer behind an
+                    // alpha ramp would only fade a constant-radius smear in
+                    // and out, which is the thing this replaces.
+                    "&::before, &::after": {
+                      content: '""',
+                      position: "absolute",
+                      inset: 0,
+                      pointerEvents: "none",
+                      // Panda's `backdropFilter` utility emits ONLY
+                      // `-webkit-backdrop-filter`, which Chromium does not
+                      // recognise (`CSS.supports` is false for it, true for
+                      // the standard property) — so the utility alone leaves
+                      // the blur silently absent. The raw key is the one that
+                      // lands; the prefixed spelling stays for older WebKit.
+                      backdropFilter: "blur(1.4px)",
+                      "-webkit-backdrop-filter": "blur(1.4px)",
+                      "backdrop-filter": "blur(1.4px)",
+                    },
+                  },
+                  // Each fades from opaque at its OWN outer edge to nothing
+                  // inward. `transparent` is safe as the far stop even though
+                  // it means transparent BLACK: gradients interpolate in
+                  // PREMULTIPLIED alpha, so the hue of a fully-transparent stop
+                  // never enters the ramp and no grey cast appears.
+                  // Each side is the mirror of the other: opaque wash and
+                  // heaviest blur on its OWN outer edge, both running out to
+                  // nothing inward. The short mask (to 55%) carries the near
+                  // half, the long one (to 100%) carries the tail.
+                  "& > [data-nav='prev']": {
+                    left: 0,
+                    justifyContent: "flex-start",
+                    backgroundImage:
+                      "linear-gradient(to right, token(colors.bg.calendarScrim), transparent)",
+                    "&::before": {
+                      maskImage:
+                        "linear-gradient(to right, #000, transparent 55%)",
+                      "-webkit-mask-image":
+                        "linear-gradient(to right, #000, transparent 55%)",
+                      "mask-image":
+                        "linear-gradient(to right, #000, transparent 55%)",
+                    },
+                    "&::after": {
+                      maskImage: "linear-gradient(to right, #000, transparent)",
+                      "-webkit-mask-image":
+                        "linear-gradient(to right, #000, transparent)",
+                      "mask-image": "linear-gradient(to right, #000, transparent)",
+                    },
+                  },
+                  "& > [data-nav='next']": {
+                    right: 0,
+                    justifyContent: "flex-end",
+                    backgroundImage:
+                      "linear-gradient(to left, token(colors.bg.calendarScrim), transparent)",
+                    "&::before": {
+                      maskImage:
+                        "linear-gradient(to left, #000, transparent 55%)",
+                      "-webkit-mask-image":
+                        "linear-gradient(to left, #000, transparent 55%)",
+                      "mask-image":
+                        "linear-gradient(to left, #000, transparent 55%)",
+                    },
+                    "&::after": {
+                      maskImage: "linear-gradient(to left, #000, transparent)",
+                      "-webkit-mask-image":
+                        "linear-gradient(to left, #000, transparent)",
+                      "mask-image": "linear-gradient(to left, #000, transparent)",
+                    },
+                  },
+                },
+              },
+            },
             tone: {
               default: {
                 // The standalone calendar is a self-contained field surface, so
@@ -2423,8 +2607,24 @@ export default defineConfig({
                   backgroundColor: "field.bg.default",
                   borderRadius: "sm",
                   overflow: "hidden",
-                  boxShadow:
-                    "inset 0 0 0 0.5px var(--colors-field-border-default)",
+                  position: "relative",
+                  // The frame ring, lifted into its OWN layer above the grid
+                  // rather than left as an `inset` box-shadow on the root. An
+                  // inset shadow paints between the background and the
+                  // children, so any child that reaches the edge covers it —
+                  // which is exactly what the `edge` nav scrims do, erasing
+                  // the frame along the 72px they span. Drawn here it always
+                  // closes the frame.
+                  "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    inset: 0,
+                    borderRadius: "inherit",
+                    boxShadow:
+                      "inset 0 0 0 0.5px var(--colors-field-border-default)",
+                    pointerEvents: "none",
+                    zIndex: 3,
+                  },
                 },
               },
               onBrand: {
@@ -2454,9 +2654,9 @@ export default defineConfig({
               },
             },
           },
-          defaultVariants: { tone: "default" },
-          // CalendarRoot calls calendar({ tone }) with a runtime value.
-          staticCss: [{ tone: ["*"] }],
+          defaultVariants: { tone: "default", navPlacement: "label" },
+          // CalendarRoot calls calendar({ tone, navPlacement }) at runtime.
+          staticCss: [{ tone: ["*"], navPlacement: ["*"] }],
         }),
 
         // The option list behind a Combobox — and a stand-alone, always-open
