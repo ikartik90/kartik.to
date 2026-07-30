@@ -112,6 +112,11 @@ type CalendarContextValue = {
   today: Temporal.PlainDate;
   selectionMode: CalendarSelectionMode;
   /**
+   * Are the multi-commit GESTURES live? Already folded in with the mode, so a
+   * consumer of this context asks one question rather than two.
+   */
+  sweep: boolean;
+  /**
    * The selection as ISO day keys — ONE representation for both modes, so a
    * cell only ever asks "is my key in here" rather than branching on the mode.
    */
@@ -264,6 +269,14 @@ export interface CalendarProps
    * what turns on the pointer sweep and Shift+Arrow.
    */
   selectionMode?: CalendarSelectionMode;
+  /**
+   * Whether `multiple` also gets the two gestures that commit MORE than one
+   * date per action — the marquee drag and its keyboard mirror, Shift+Arrow.
+   * Defaults to `true`. Set `false` for a calendar that still holds a set but
+   * takes it strictly one date at a time; clicking (and plain arrow movement)
+   * are unaffected. Ignored in `single` mode, which has no sweep to withdraw.
+   */
+  sweep?: boolean;
   /** Controlled selection — `single` only. */
   value?: Temporal.PlainDate | null;
   /** Initial selection when uncontrolled — `single` only. */
@@ -323,6 +336,7 @@ export interface CalendarProps
 
 function CalendarRoot({
   selectionMode = "single",
+  sweep: sweepProp = true,
   value,
   defaultValue,
   onValueChange,
@@ -352,6 +366,10 @@ function CalendarRoot({
   const today = todayProp ?? Temporal.Now.plainDateISO();
 
   const multiple = selectionMode === "multiple";
+  // The multi-commit gestures. Folded together here so neither the pointer path
+  // nor the keyboard one has to re-check the mode: `single` never had a sweep,
+  // and `sweep={false}` withdraws it from `multiple`.
+  const sweep = multiple && sweepProp;
 
   const isControlled = value !== undefined;
   const [internal, setInternal] = useState<Temporal.PlainDate | null>(
@@ -572,7 +590,7 @@ function CalendarRoot({
   const anchorFocus = (date: Temporal.PlainDate) => setFocusDate(date);
 
   const moveFocus = (date: Temporal.PlainDate, extend = false) => {
-    if (extend && multiple) {
+    if (extend && sweep) {
       // Shift+Arrow stays a PATH, not a rectangle — a keyboard caret has no
       // second corner to drag, so a run flips what it steps onto. The first
       // step also flips the cell it left, since you extended FROM there;
@@ -616,6 +634,7 @@ function CalendarRoot({
     styles,
     today,
     selectionMode,
+    sweep,
     selection,
     min,
     max,
@@ -774,7 +793,7 @@ function CalendarPeriodList({
   onPointerDown,
   ...rest
 }: CalendarPeriodListProps) {
-  const { styles, periods, selectionMode, dragStart, band } =
+  const { styles, periods, sweep, dragStart, band } =
     useCalendar("Calendar.PeriodList");
 
   // The one child this part does rewrite: `Period` is a TEMPLATE, not a role —
@@ -798,7 +817,7 @@ function CalendarPeriodList({
       // still bubbles up to this handler, so that case is unchanged.
       onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
         onPointerDown?.(event);
-        if (event.defaultPrevented || selectionMode !== "multiple") return;
+        if (event.defaultPrevented || !sweep) return;
         if (event.pointerType === "touch" || event.button !== 0) return;
         // The chevrons live in this list too, and pressing one pages the range
         // — that is a button, not the start of a selection.
