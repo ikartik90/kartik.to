@@ -387,9 +387,9 @@ export default defineConfig({
               // Resting label + hint (value @ 50%).
               muted: {
                 value: {
-                  base: "color-mix(in srgb, var(--colors-neutral-600) 50%, transparent)",
+                  base: "color-mix(in srgb, var(--colors-neutral-600) 50%, var(--colors-neutral-200))",
                   _dark:
-                    "color-mix(in srgb, var(--colors-neutral-400) 50%, transparent)",
+                    "color-mix(in srgb, var(--colors-neutral-400) 50%, var(--colors-neutral-800))",
                 },
               },
               // Placeholder text — the neutral accent at 25%, one step fainter
