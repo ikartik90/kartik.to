@@ -11,6 +11,7 @@ import {
   articleStrikethrough,
   articleHighlight,
   articleSidenote,
+  articleSidenoteText,
   articleSidenoteRef,
   articleBlockquote,
   articleBlockquoteBody,
@@ -99,6 +100,7 @@ const underlineClass = articleUnderline();
 const strikethroughClass = articleStrikethrough();
 const highlightClass = articleHighlight();
 const sidenoteClass = articleSidenote();
+const sidenoteTextClass = articleSidenoteText();
 const sidenoteRefClass = articleSidenoteRef();
 
 function isHighlighted(node: InlineNode): boolean {
@@ -194,9 +196,11 @@ export function inlineNodesToHtml(nodes: InlineNode[], base = 0): string {
   while (i < nodes.length) {
     const id = sidenoteIdOf(nodes[i]);
     if (id !== null) {
-      // Wrap a note's contiguous runs in one dotted-underline span carrying the
-      // note id/text (for round-tripping) and a per-note anchor-name (for the
-      // aside card). The trailing <sup> shows the ordinal via data-sidenote-number.
+      // Wrap a note's contiguous runs in one span carrying the note id/text (for
+      // round-tripping) and a per-note anchor-name (for the aside card). Inside
+      // it, the annotated prose gets its own dotted-underline span so the
+      // trailing <sup> — which shows the ordinal via data-sidenote-number — sits
+      // outside the underline and stays on the last word's line.
       const start = i;
       while (i < nodes.length && sidenoteIdOf(nodes[i]) === id) i++;
       const group = nodes.slice(start, i);
@@ -205,7 +209,7 @@ export function inlineNodesToHtml(nodes: InlineNode[], base = 0): string {
         `<span class="${sidenoteClass}" data-sidenote-id="${escapeAttr(id)}"` +
         ` data-sidenote-text="${escapeAttr(sidenoteTextOf(group[0]))}"` +
         ` style="anchor-name:${sidenoteAnchorName(id)}">` +
-        `${inlineRunToHtml(group)}` +
+        `<span class="${sidenoteTextClass}">${inlineRunToHtml(group)}</span>` +
         `<sup class="${sidenoteRefClass}" contenteditable="false" aria-hidden="true"` +
         ` data-sidenote-number="${numberById.get(id)}"></sup>` +
         `</span>`;

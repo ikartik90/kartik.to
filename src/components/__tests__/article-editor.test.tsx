@@ -237,10 +237,13 @@ describe("inlineNodesToHtml", () => {
         marks: [{ type: "sidenote", id: "abc", text: "a note" }],
       },
     ];
-    // base 0 → the block's first note is ordinal 1.
+    // base 0 → the block's first note is ordinal 1. The annotated text sits in
+    // its own underlined span so the ordinal, a plain inline that follows it,
+    // can never be broken onto a line of its own.
     expect(inlineNodesToHtml(nodes)).toBe(
       '<span class="article-sidenote" data-sidenote-id="abc"' +
-        ' data-sidenote-text="a note" style="anchor-name:--sn-abc">term' +
+        ' data-sidenote-text="a note" style="anchor-name:--sn-abc">' +
+        '<span class="article-sidenote-text">term</span>' +
         '<sup class="article-sidenote-ref" contenteditable="false" aria-hidden="true"' +
         ' data-sidenote-number="1"></sup></span>',
     );

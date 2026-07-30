@@ -12,6 +12,7 @@ import {
   articleStrikethrough,
   articleHighlight,
   articleSidenote,
+  articleSidenoteText,
   articleSidenoteRef,
   articleBlockquote,
   articleBlockquoteBody,
@@ -143,8 +144,9 @@ function renderRun(nodes: InlineNode[], base: number): React.ReactNode[] {
 
 /**
  * Render a children array. Contiguous runs sharing a sidenote id are wrapped in
- * one dotted-underline span (carrying the note's anchor-name) with a trailing
- * superscript ordinal; everything else falls through to the highlight-aware run.
+ * one span (carrying the note's anchor-name) holding a dotted-underline span of
+ * the annotated prose followed by the superscript ordinal; everything else falls
+ * through to the highlight-aware run.
  */
 function renderInlineNodes(
   nodes: InlineNode[],
@@ -168,7 +170,12 @@ function renderInlineNodes(
             { anchorName: sidenoteAnchorName(sidenote.id) } as React.CSSProperties
           }
         >
-          {renderRun(nodes.slice(start, i), start)}
+          {/* The annotated prose carries the dotted underline; the ordinal is a
+              sibling, so the underline never runs under it AND the ordinal —
+              a plain inline — cannot be wrapped away from the last word. */}
+          <span className={articleSidenoteText()}>
+            {renderRun(nodes.slice(start, i), start)}
+          </span>
           {/* Ordinal is set at render (SSR) so no number flashes in on hydrate;
               SidenoteLayer keeps it live in the editor. */}
           <sup
