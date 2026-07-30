@@ -680,6 +680,18 @@ describe("ArticleRenderer", () => {
       expect(first.querySelector("sup")).not.toBeNull();
     });
 
+    it("keeps the ordinal outside the underlined text span (so it can't wrap alone)", () => {
+      const { container } = render(<ArticleRenderer content={twoNotes} />);
+      const wrapper = container.querySelector("[data-sidenote-id]") as HTMLElement;
+      const text = wrapper.querySelector(".article-sidenote-text") as HTMLElement;
+      const sup = wrapper.querySelector("sup") as HTMLElement;
+      // All annotated words live in the underlined span; the ordinal follows it
+      // as a plain inline sibling — no atomic inline to break the line against.
+      expect(text.textContent).toBe("this");
+      expect(text.contains(sup)).toBe(false);
+      expect(sup.previousElementSibling).toBe(text);
+    });
+
     it("sets the document-order ordinal on each superscript (data-sidenote-number)", () => {
       const { container } = render(<ArticleRenderer content={twoNotes} />);
       const sups = container.querySelectorAll("[data-sidenote-id] sup");

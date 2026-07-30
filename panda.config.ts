@@ -624,7 +624,18 @@ export default defineConfig({
         articleSidenote: defineRecipe({
           className: "article-sidenote",
           description:
-            "Sidenote annotation mark — the annotated run of prose. A dotted underline signals the margin note; the run also carries an `anchor-name` (set inline, per note) the aside card positions against.",
+            "Sidenote annotation mark — wraps the annotated run of prose plus its ordinal superscript. Carries an `anchor-name` (set inline, per note) the aside card positions against; the dotted underline lives on the inner articleSidenoteText span.",
+          base: {
+            cursor: "default",
+            // Nested marks keep their own colour; only the underline is added.
+            "& :is(strong, b, em, i, u, s, code, a)": { color: "inherit" },
+          },
+        }),
+
+        articleSidenoteText: defineRecipe({
+          className: "article-sidenote-text",
+          description:
+            "The annotated prose inside a sidenote mark — a dotted underline signals the margin note. The underline sits HERE rather than on the wrapper so it never runs beneath the ordinal superscript, which is a sibling of this span (see articleSidenoteRef).",
           base: {
             textDecorationLine: "underline",
             textDecorationStyle: "dotted",
@@ -632,9 +643,6 @@ export default defineConfig({
               "color-mix(in srgb, var(--colors-text-body) 50%, transparent)",
             textDecorationThickness: "token(spacing.xxs)",
             textUnderlineOffset: "token(spacing.xs)",
-            cursor: "default",
-            // Nested marks keep their own colour; only the underline is added.
-            "& :is(strong, b, em, i, u, s, code, a)": { color: "inherit" },
           },
         }),
 
@@ -648,10 +656,14 @@ export default defineConfig({
             fontSize: "0.7em",
             fontWeight: "medium",
             userSelect: "none",
-            // inline-block makes the ref an atomic inline, so the wrapper's
-            // dotted underline is NOT drawn under it — the underline stays
-            // limited to the annotated text, never the ordinal.
-            display: "inline-block",
+            // A PLAIN inline, deliberately: an atomic inline (inline-block)
+            // carries an unconditional soft-wrap opportunity before it, so the
+            // ordinal could be pushed onto a line of its own, orphaned from the
+            // last annotated word. As a non-atomic inline with no whitespace
+            // before it, the digit is part of that word's unbreakable run and
+            // always travels with it. The underline is kept off the ordinal by
+            // scoping it to the sibling articleSidenoteText span instead.
+            display: "inline",
             _after: {
               content: "attr(data-sidenote-number)",
               background: "bg.brandedEmphasis",
