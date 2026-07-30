@@ -98,6 +98,18 @@ test.describe("design system previews", () => {
       const response = await page.goto(`/dev/${route}`);
 
       expect(response?.status()).toBe(200);
+
+      // `200` plus a visible <main> is not proof this is our page — an
+      // interstitial (Vercel's own deployment-protection login, for one)
+      // satisfies both, and an earlier CI run passed all twelve of these
+      // against exactly that. Assert two things only the root layout produces:
+      // its metadata title, and the data-theme the inline pre-paint script
+      // stamps on <html>.
+      await expect(page).toHaveTitle("kartik.to");
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-theme",
+        /^(light|dark)$/,
+      );
       await expect(page.locator("main")).toBeVisible();
       expect(pageFailures).toEqual([]);
     });
