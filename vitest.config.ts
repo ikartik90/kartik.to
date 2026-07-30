@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "path";
 import svgr from "vite-plugin-svgr";
 
@@ -25,6 +25,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
+    // Playwright specs also match the default `*.spec.ts` glob; without this
+    // Vitest picks them up and dies on `@playwright/test`'s runner imports.
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
   resolve: {
     alias: {

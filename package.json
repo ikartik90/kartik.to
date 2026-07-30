@@ -11,7 +11,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
@@ -34,6 +36,7 @@
   },
   "devDependencies": {
     "@pandacss/dev": "^1.11.0",
+    "@playwright/test": "^1.62.1",
     "@svgr/webpack": "^8.1.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

@@ -1,0 +1,227 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# A new push supersedes the run it interrupted — the old preview deployment is
+# already stale, so finishing its tests would only burn minutes.
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  # `prisma generate` resolves `env("DIRECT_URL")` from prisma.config.ts at load
+  # time and refuses to run without it, and `@/lib/env` Zod-parses DATABASE_URL
+  # on import. Nothing in this workflow opens a connection — the preview
+  # deployment Vercel builds is what talks to the real database — so these are
+  # deliberately unreachable placeholders rather than repository secrets.
+  DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+  DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
+
+jobs:
+  static:
+    name: Lint & types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Both are gitignored, so lint and tsc have nothing to resolve until the
+      # generators have run.
+      - name: Generate Prisma client and Panda styled-system
+        run: |
+          npx prisma generate
+          npx panda codegen
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma client and Panda styled-system
+        run: |
+          npx prisma generate
+          npx panda codegen
+
+      - name: Run Vitest
+        run: npm test
+
+  e2e:
+    name: Integration tests
+    # Gated on the cheap checks: a PR that does not compile cannot pass the
+    # browser suite either, and this way it fails in ~1 min instead of ~6.
+    needs: [static, unit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Vercel's GitHub integration records each preview build as a GitHub
+      # Deployment on the head commit, and publishes the assigned URL as
+      # `environment_url` once it succeeds. Reading that is what lets this suite
+      # run against the real artifact without a Vercel API token.
+      - name: Wait for the Vercel preview deployment
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 60); do
+            deployment=$(gh api \
+              "repos/$GITHUB_REPOSITORY/deployments?sha=$SHA&environment=Preview" \
+              --jq '.[0].id // empty')
+
+            if [ -n "$deployment" ]; then
+              # Statuses come back newest first, so element 0 is the current one.
+              deploy_status=$(gh api \
+                "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses" \
+                --jq '(.[0] // {}) | "\(.state // "pending")\t\(.environment_url // "")"')
+              state=${deploy_status%%$'\t'*}
+              url=${deploy_status#*$'\t'}
+
+              case "$state" in
+                success)
+                  if [ -z "$url" ]; then
+                    echo "::error::Vercel reported success but published no preview URL"
+                    exit 1
+                  fi
+                  echo "url=$url" >>"$GITHUB_OUTPUT"
+                  echo "Preview ready: $url"
+                  exit 0
+                  ;;
+                failure | error)
+                  echo "::error::Vercel preview deployment failed for $SHA — the integration suite has nothing to test against"
+                  exit 1
+                  ;;
+              esac
+            fi
+
+            echo "Waiting for the Vercel preview… (attempt $attempt/60)"
+            sleep 10
+          done
+
+          echo "::error::Timed out after 10 minutes waiting for a Vercel preview deployment"
+          exit 1
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run integration tests against the preview
+        env:
+          E2E_BASE_URL: ${{ steps.preview.outputs.url }}
+          # Preview deployments sit behind Vercel Authentication; without this
+          # every request is answered with a redirect to vercel.com/login.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  report-failure:
+    name: Report failure
+    needs: [static, unit, e2e]
+    # `failure()` alone would stay silent when a job is cancelled out from under
+    # a genuine failure elsewhere in the run.
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment the failing checks on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          STATIC: ${{ needs.static.result }}
+          UNIT: ${{ needs.unit.result }}
+          E2E: ${{ needs.e2e.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          icon() {
+            case "$1" in
+              success) echo "✅ passed" ;;
+              failure) echo "❌ failed" ;;
+              cancelled) echo "⚪ cancelled" ;;
+              skipped) echo "⏭️ skipped (an earlier job failed)" ;;
+              *) echo "❔ $1" ;;
+            esac
+          }
+
+          marker="<!-- ci-failure-report -->"
+          body=$(cat <<EOF
+          $marker
+          ### ❌ CI failed — this pull request will not auto-merge
+
+          | Check | Result |
+          | --- | --- |
+          | Lint & types | $(icon "$STATIC") |
+          | Unit tests | $(icon "$UNIT") |
+          | Integration tests (Vercel preview) | $(icon "$E2E") |
+
+          [Inspect the run]($RUN_URL) · a failing integration run uploads a \`playwright-report\` artifact with traces and screenshots.
+
+          Push a fix to this branch and the whole gate re-runs.
+          EOF
+          )
+
+          # Edit the existing report in place so a branch that fails repeatedly
+          # does not bury its own diff under a column of comments.
+          # --slurp folds the paginated pages into one array of pages, so `add`
+          # gives a single flat comment list; without it jq would run per page
+          # and could emit more than one id.
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --slurp \
+            | jq -r --arg marker "$marker" \
+                '(add // []) | map(select(.body | contains($marker))) | .[0].id // empty')
+
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" \
+              -f body="$body" >/dev/null
+            echo "Updated the existing failure report."
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+              -f body="$body" >/dev/null
+            echo "Posted a failure report."
+          fi
