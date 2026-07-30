@@ -8,6 +8,7 @@ import { Field, useField } from "./field";
 import { OptionList, collectOptions, type OptionItem } from "./option-list";
 import ChevronDownIcon from "@/assets/icons/chevron-down.svg";
 import ChevronUpIcon from "@/assets/icons/chevron-up.svg";
+import { WireframeText } from "../wireframe";
 
 // ---------------------------------------------------------------------------
 // Combobox — the Select field's control, the OptionList's DatePicker. Composed
@@ -132,7 +133,7 @@ function ComboboxRoot({
           aria-expanded={open}
           className={cx(styles.control, triggerClass)}
         >
-          {display || placeholder}
+          <WireframeText>{display || placeholder}</WireframeText>
         </button>
         {open ? (
           <ChevronUpIcon aria-hidden />

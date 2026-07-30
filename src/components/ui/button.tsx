@@ -10,6 +10,7 @@ import {
   type ActionEmphasis,
 } from "./action";
 import { Tooltip } from "./tooltip";
+import { WireframeContent } from "./wireframe";
 
 export type { ActionVariant, ActionEmphasis };
 
@@ -92,7 +93,7 @@ function ButtonRoot(
         }}
         {...rest}
       >
-        {content}
+        <WireframeContent>{content}</WireframeContent>
       </button>
       {tooltipNode}
     </>

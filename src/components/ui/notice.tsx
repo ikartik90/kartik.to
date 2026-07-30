@@ -1,6 +1,7 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 import { cx } from "../../../styled-system/css";
 import { notice } from "../../../styled-system/recipes";
+import { WireframeText } from "./wireframe";
 
 // ---------------------------------------------------------------------------
 // Notice — an inline informational callout: a leading status icon beside a
@@ -60,7 +61,7 @@ export interface NoticeLabelProps
 function NoticeLabel({ className, children, ...rest }: NoticeLabelProps) {
   return (
     <p className={cx(notice().label, className)} {...rest}>
-      {children}
+      <WireframeText>{children}</WireframeText>
     </p>
   );
 }

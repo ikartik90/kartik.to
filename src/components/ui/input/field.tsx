@@ -15,6 +15,7 @@ import {
 } from "react";
 import { css, cx } from "../../../../styled-system/css";
 import { field } from "../../../../styled-system/recipes";
+import { Skeleton, WireframeText, useWireframe } from "../wireframe";
 
 type FieldSize = "sm" | "md" | "lg";
 type FieldStyles = ReturnType<typeof field>;
@@ -159,7 +160,7 @@ function FieldLabel({ children, type, className, ...rest }: FieldLabelProps) {
       className={cx(styles.label, type && TEXT_STYLE_OVERRIDE[type], className)}
       {...rest}
     >
-      {children}
+      <WireframeText>{children}</WireframeText>
     </label>
   );
 }
@@ -215,6 +216,24 @@ const FieldControl = forwardRef<HTMLInputElement, FieldControlProps>(
   function FieldControl({ className, ...rest }, forwardedRef) {
     const { controlId, hintId, hasHint, registerControl, styles } =
       useField("Field.Control");
+    const isWireframe = useWireframe() !== null;
+
+    // The one part that cannot keep its element: an <input> holds no children
+    // and no pseudo-element, so there is nowhere to put a bar. Swap it for a
+    // static value slot wearing the same `control` styles — the bar then lands
+    // on exactly the cap height the live value would (Figma 745:4389). Dropping
+    // `data-control` is deliberate: the frame's click-to-focus has nothing to
+    // focus now, and should not pretend otherwise.
+    if (isWireframe) {
+      const stand = rest.placeholder ?? rest.value ?? rest.defaultValue;
+      const text = typeof stand === "string" && stand !== "" ? stand : undefined;
+      return (
+        <span id={controlId} className={cx(styles.control, className)}>
+          <Skeleton width={text ? undefined : "45%"}>{text}</Skeleton>
+        </span>
+      );
+    }
+
     return (
       <input
         ref={(node) => {
@@ -255,7 +274,7 @@ function FieldHint({ children, type, className, ...rest }: FieldHintProps) {
       className={cx(styles.hint, type && TEXT_STYLE_OVERRIDE[type], className)}
       {...rest}
     >
-      {children}
+      <WireframeText>{children}</WireframeText>
     </p>
   );
 }
