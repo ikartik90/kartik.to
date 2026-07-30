@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { OptionList } from "@/components/ui/input/option-list";
+import { Wireframe } from "@/components/ui/wireframe";
 import BoldIcon from "@/assets/icons/bold.svg";
 import ItalicIcon from "@/assets/icons/italic.svg";
 import UnderlineSolidIcon from "@/assets/icons/underline-solid.svg";
@@ -164,6 +165,74 @@ export default function MenuPreviewPage() {
             </OptionList.Listbox>
           </OptionList>
         </div>
+      </section>
+
+      {/* Wireframe: the icon-only toolbar is unchanged — it holds no text, so
+          there is nothing to bar, and a scope that blanket-greyed its subtree
+          would have destroyed it. The slash list beside it keeps every glyph
+          and bars only the labels. */}
+      <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+          Wireframed — an icon toolbar has no text to replace
+        </h2>
+        <Wireframe>
+          <div className={pill}>
+            <OptionList direction="inline">
+              <OptionList.Toolbar aria-label="Format selection">
+                <OptionList.Option aria-label="Bold" pressed>
+                  <BoldIcon aria-hidden />
+                </OptionList.Option>
+                <OptionList.Option aria-label="Italic">
+                  <ItalicIcon aria-hidden />
+                </OptionList.Option>
+                <OptionList.Divider />
+                <OptionList.Option aria-label="Code">
+                  <CodeIcon aria-hidden />
+                </OptionList.Option>
+              </OptionList.Toolbar>
+            </OptionList>
+          </div>
+        </Wireframe>
+      </section>
+
+      <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+          Wireframed slash menu — icons kept, labels barred
+        </h2>
+        <Wireframe>
+          <div className={panel}>
+            <OptionList tone="plain">
+              <OptionList.Listbox aria-label="Insert block">
+                {SLASH.map(({ value, label, Icon }) => (
+                  <OptionList.Option key={value} value={value}>
+                    <Icon aria-hidden />
+                    {label}
+                  </OptionList.Option>
+                ))}
+              </OptionList.Listbox>
+            </OptionList>
+          </div>
+        </Wireframe>
+      </section>
+
+      <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+          Loading slash menu — rows whose labels are not known yet
+        </h2>
+        <Wireframe mode="loading">
+          <div className={panel}>
+            <OptionList tone="plain">
+              <OptionList.Listbox aria-label="Insert block">
+                {SLASH.map(({ value, label, Icon }) => (
+                  <OptionList.Option key={value} value={value}>
+                    <Icon aria-hidden />
+                    {label}
+                  </OptionList.Option>
+                ))}
+              </OptionList.Listbox>
+            </OptionList>
+          </div>
+        </Wireframe>
       </section>
     </main>
   );

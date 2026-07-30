@@ -3,6 +3,9 @@
 import { css } from "../../../../styled-system/css";
 import { Field } from "@/components/ui/input/field";
 import { Checkbox } from "@/components/ui/input/checkbox";
+import { Wireframe } from "@/components/ui/wireframe";
+
+const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
 
 /** Local-only preview route for eyeballing the Checkbox states. */
 export default function CheckboxPreviewPage() {
@@ -52,6 +55,37 @@ export default function CheckboxPreviewPage() {
           <Checkbox disabled />
           <Field.Label>Disabled</Field.Label>
         </Field>
+
+        {/* Wireframe: the 16px box stays a box — only the label and hint become
+            bars (Figma 745:4411). A checkbox with a bar for a label is still
+            recognisably a checkbox, which is the whole point of scoping the
+            treatment to text rather than blanketing the subtree. */}
+        <span className={captionStyle}>placeholder — inert, dimmed</span>
+        <Wireframe>
+          <Field>
+            <Checkbox defaultChecked />
+            <Field.Label>Repeat this shift weekly</Field.Label>
+            <Field.Hint>Stay signed in on this device</Field.Hint>
+          </Field>
+        </Wireframe>
+
+        {/* Interactive: the box still toggles, the text still reads as bars. */}
+        <span className={captionStyle}>interactive — still togglable</span>
+        <Wireframe interactive>
+          <Field>
+            <Checkbox />
+            <Field.Label>Repeat this shift weekly</Field.Label>
+          </Field>
+        </Wireframe>
+
+        <span className={captionStyle}>loading — shimmering</span>
+        <Wireframe mode="loading">
+          <Field>
+            <Checkbox />
+            <Field.Label>Repeat this shift weekly</Field.Label>
+            <Field.Hint>Stay signed in on this device</Field.Hint>
+          </Field>
+        </Wireframe>
       </div>
     </main>
   );

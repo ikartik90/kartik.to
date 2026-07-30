@@ -5,6 +5,8 @@ import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../../styled-system/css";
 import { Calendar } from "@/components/ui/input/calendar";
 import { Field } from "@/components/ui/input/field";
+import { TextInput } from "@/components/ui/input/text-input";
+import { Wireframe } from "@/components/ui/wireframe";
 import { parseCalendarDate } from "@/utils/calendar-date";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
@@ -21,6 +23,9 @@ export default function CalendarPreviewPage() {
         minHeight: "100dvh",
         backgroundColor: "bg.canvas",
         display: "flex",
+        // globals.css sets `main { flex-direction: column }`; state the row
+        // explicitly so the declared flexWrap below is not a no-op.
+        flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         gap: "5xl",
@@ -134,6 +139,38 @@ export default function CalendarPreviewPage() {
             </Calendar.Next>
           </Calendar.PeriodList>
         </Calendar>
+      </Field>
+
+      {/* The Figma composition (745:4382), reproduced: a wireframed form on the
+          left and a LIVE calendar beside it. This is why the treatment is a
+          scope rather than a flag — the calendar is simply a sibling of the
+          wireframe, so it needs no opt-out of its own. A grid of dates barred
+          into grey rectangles would read as noise, not as a calendar. */}
+      <Field>
+        <Field.Label>Wireframed label, live grid</Field.Label>
+        <Wireframe className={css({ marginBottom: "md", width: "208px" })}>
+          <TextInput label="Shift role" placeholder="Select a role" />
+        </Wireframe>
+        <Calendar value={date} onValueChange={setDate}>
+          <Calendar.PeriodList>
+            <Calendar.Prev>
+              <ChevronLeftIcon />
+            </Calendar.Prev>
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
+            <Calendar.Next>
+              <ChevronRightIcon />
+            </Calendar.Next>
+          </Calendar.PeriodList>
+        </Calendar>
+        <Field.Hint>Select one or more dates for this shift</Field.Hint>
       </Field>
     </main>
   );

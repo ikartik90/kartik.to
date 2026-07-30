@@ -5,6 +5,7 @@ import { css } from "../../../../styled-system/css";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/components/ui/link";
 import { Tooltip } from "@/components/ui/tooltip";
+import { Wireframe } from "@/components/ui/wireframe";
 import AddIcon from "@/assets/icons/add.svg";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -173,6 +174,58 @@ export default function ButtonPreviewPage() {
               <OctocatIcon />
             </Link.Tooltip>
           </Link>
+        </Specimen>
+      </Section>
+
+      {/* Wireframed actions. The chip keeps its fill, radius and 40px height —
+          only the label becomes a bar, so the button still reads as a button at
+          its real width. An icon-only button has no text and is left alone. */}
+      <Section title="Wireframe — placeholder">
+        <Specimen label="text button">
+          <Wireframe>
+            <Button>Save changes</Button>
+          </Wireframe>
+        </Specimen>
+        <Specimen label="icon + Button.Text — glyph survives">
+          <Wireframe>
+            <Button>
+              <SaveIcon />
+              <Button.Text>Save changes</Button.Text>
+            </Button>
+          </Wireframe>
+        </Specimen>
+        <Specimen label="tertiary">
+          <Wireframe>
+            <Button emphasis="tertiary">Save changes</Button>
+          </Wireframe>
+        </Specimen>
+        <Specimen label="icon only — nothing to replace">
+          <Wireframe>
+            <Button variant="icon" aria-label="Add block">
+              <AddIcon />
+            </Button>
+          </Wireframe>
+        </Specimen>
+        <Specimen label="link — navigates, still wireframes">
+          <Wireframe>
+            <Link href="/">Back to home</Link>
+          </Wireframe>
+        </Specimen>
+      </Section>
+
+      <Section title="Wireframe — loading, and interactive">
+        <Specimen label="loading — shimmering">
+          <Wireframe mode="loading">
+            <Button>Save changes</Button>
+          </Wireframe>
+        </Specimen>
+        <Specimen label="interactive — still clickable, hover the chip">
+          <Wireframe interactive>
+            <Button>
+              <SaveIcon />
+              <Button.Text>Save changes</Button.Text>
+            </Button>
+          </Wireframe>
         </Specimen>
       </Section>
     </main>
