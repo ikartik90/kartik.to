@@ -1981,7 +1981,7 @@ export default defineConfig({
         field: defineSlotRecipe({
           className: "field",
           description:
-            "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` control flips the same root into a control ∣ label/hint grid (the Switch archetype), detected via `:has` — no prop. Scope: default + active only.",
+            "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` or `role=\"checkbox\"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.",
           slots: ["root", "label", "frame", "control", "hint"],
           base: {
             root: {
@@ -1989,11 +1989,12 @@ export default defineConfig({
               flexDirection: "column",
               alignItems: "stretch",
               width: "token(spacing.full)",
-              // A switch control flips the field from a vertical stack into the
-              // control ∣ label/hint grid — same field, a different archetype,
-              // detected structurally (no prop) the way the active state keys
-              // off :focus-visible. Text inputs never match, so they're unaffected.
-              "&:has([role='switch'])": {
+              // A toggle control — switch or checkbox — flips the field from a
+              // vertical stack into the control ∣ label/hint grid: same field, a
+              // different archetype, detected structurally (no prop) the way the
+              // active state keys off :focus-visible. Text inputs never match,
+              // so they're unaffected.
+              "&:has([role='switch'], [role='checkbox'])": {
                 display: "grid",
                 gridTemplateColumns: "auto 1fr",
                 alignItems: "center",
@@ -2015,13 +2016,13 @@ export default defineConfig({
                 {
                   color: "field.text.active",
                 },
-              // Switch archetype: the label sits to the right of the control as a
+              // Toggle archetype: the label sits to the right of the control as a
               // full statement — so it reads as the field family's resting text
               // (`field.text.default`, matching the input values), not the muted
               // field label nor the brighter app body text; clicking it toggles,
               // so it takes the pointer cursor (Figma 684:1133 dark neutral.400 /
               // light neutral.600).
-              "[data-field]:has([role='switch']) &": {
+              "[data-field]:has([role='switch'], [role='checkbox']) &": {
                 gridColumn: 2,
                 gridRow: 1,
                 width: "auto",
@@ -2121,9 +2122,9 @@ export default defineConfig({
               width: "token(spacing.full)",
               wordBreak: "break-word",
               marginTop: "sm",
-              // Switch archetype: the hint drops under the label (grid row 2),
+              // Toggle archetype: the hint drops under the label (grid row 2),
               // aligned to it rather than stacked with its own top margin.
-              "[data-field]:has([role='switch']) &": {
+              "[data-field]:has([role='switch'], [role='checkbox']) &": {
                 gridColumn: 2,
                 gridRow: 2,
                 width: "auto",
@@ -2144,7 +2145,7 @@ export default defineConfig({
               sm: {
                 label: { textStyle: "caption" },
                 hint: { textStyle: "caption" },
-                root: { "&:has([role='switch'])": { columnGap: "sm" } },
+                root: { "&:has([role='switch'], [role='checkbox'])": { columnGap: "sm" } },
               },
               md: {
                 label: { textStyle: "bodySmall" },
@@ -2264,6 +2265,80 @@ export default defineConfig({
           // value, so the static extractor only sees the default (lg). Force
           // both size variants to be generated.
           staticCss: [{ size: ["*"] }],
+        }),
+
+        // Named `checkboxField` for symmetry with `switchField` above — the two
+        // toggle controls of the field family, both plugging into the shared
+        // `field` recipe as its control slot and reusing its bg/border/text
+        // tokens. The one structural difference: no `size`. The switch ships an
+        // sm/lg pair, the checkbox is drawn at a single geometry (Figma
+        // 757:4635), so the field's `size` scales only the label/hint beside it.
+        checkboxField: defineSlotRecipe({
+          className: "checkbox-field",
+          description:
+            "The box + check of a checkbox — the control slot of a `field`. Off = neutral, on = brand accent (keyed off `aria-checked` on the <button role=checkbox>), reusing the exact tokens the text input and the switch use. Unlike the switch it has no `size`: one geometry — a 20px hit frame around a 16px visual box, the 2px surround keeping the box optically centred on the label's cap-height. The check glyph is the shared 20px `check-small` icon overhanging the box by 2px a side (as drawn), revealed by opacity so it fades rather than pops.",
+          slots: ["control", "box"],
+          base: {
+            control: {
+              // Placed in the field grid the `field` recipe sets up when a
+              // checkbox is present: first column, aligned with the label row.
+              gridColumn: 1,
+              gridRow: 1,
+              position: "relative",
+              flexShrink: 0,
+              display: "block",
+              // The button is the full 20px frame — hit target and layout box;
+              // the `box` slot draws the 16px square centred inside it.
+              width: "token(spacing.xxl)",
+              height: "token(spacing.xxl)",
+              padding: "none",
+              margin: "none",
+              border: "none",
+              background: "none",
+              appearance: "none",
+              cursor: "pointer",
+              _disabled: { cursor: "not-allowed", opacity: 0.5 },
+            },
+            box: {
+              position: "absolute",
+              top: "token(spacing.xs)",
+              left: "token(spacing.xs)",
+              width: "token(spacing.xl)",
+              height: "token(spacing.xl)",
+              borderRadius: "sm",
+              backgroundColor: "field.bg.default",
+              // Same reasoning as the switch track: a 0.5px inset box-shadow
+              // rather than a `border`, so the edge takes no layout and the
+              // absolutely-placed check stays centred on the full 16px interior.
+              boxShadow:
+                "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
+              // The glyph's only colour — it is invisible until checked, so it
+              // needs no off-state tone.
+              color: "field.text.active",
+              transition: "background-color 150ms ease, box-shadow 150ms ease",
+              "[aria-checked='true'] &": {
+                backgroundColor: "field.bg.active",
+                boxShadow:
+                  "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-active)",
+              },
+              // check-small is a 20px icon sat on a 16px box, so it hangs 2px
+              // off every side — the tick lands optically centred at the size
+              // it's drawn at rather than scaled down to fit. SVGR rewrites its
+              // white stroke to currentColor, so the box's `color` tints it.
+              "& > svg": {
+                position: "absolute",
+                top: "calc(token(spacing.xs) * -1)",
+                left: "calc(token(spacing.xs) * -1)",
+                width: "token(spacing.xxl)",
+                height: "token(spacing.xxl)",
+                display: "block",
+                pointerEvents: "none",
+                opacity: 0,
+                transition: "opacity 150ms ease",
+              },
+              "[aria-checked='true'] & > svg": { opacity: 1 },
+            },
+          },
         }),
 
         // The calendar grid popover for the Date input. Presentation only — the
@@ -2606,7 +2681,8 @@ export default defineConfig({
                       maskImage: "linear-gradient(to right, #000, transparent)",
                       "-webkit-mask-image":
                         "linear-gradient(to right, #000, transparent)",
-                      "mask-image": "linear-gradient(to right, #000, transparent)",
+                      "mask-image":
+                        "linear-gradient(to right, #000, transparent)",
                     },
                   },
                   "& > [data-nav='next']": {
@@ -2626,7 +2702,8 @@ export default defineConfig({
                       maskImage: "linear-gradient(to left, #000, transparent)",
                       "-webkit-mask-image":
                         "linear-gradient(to left, #000, transparent)",
-                      "mask-image": "linear-gradient(to left, #000, transparent)",
+                      "mask-image":
+                        "linear-gradient(to left, #000, transparent)",
                     },
                   },
                 },
