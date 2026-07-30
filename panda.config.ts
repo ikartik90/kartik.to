@@ -130,6 +130,11 @@ export default defineConfig({
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
           xl: { value: "{spacing.xl}" },
+          // Pill. `spacing.half` (50%) is the CIRCLE radius — on a box wider
+          // than it is tall it draws an ellipse, not a stadium — so anything
+          // oblong (the skeleton bar) needs a large absolute radius that the
+          // box's own half-height clamps down to.
+          full: { value: "9999px" },
         },
       },
 
@@ -425,7 +430,89 @@ export default defineConfig({
         },
       },
 
+      keyframes: {
+        // The skeleton shimmer — a highlight swept across the bar. Driven by
+        // background-position on an over-wide gradient (see the `skeleton`
+        // recipe) so it composites on the GPU and never reflows.
+        wireframeShimmer: {
+          from: { backgroundPosition: "200% 0" },
+          to: { backgroundPosition: "-200% 0" },
+        },
+      },
+
       recipes: {
+        // The wireframe scope — the provider's root element. It sets no text
+        // treatment itself: turning text into bars is the primitives' job (they
+        // read the React context and render a `Skeleton` in place of their
+        // children), because only the component knows WHICH of its parts are
+        // text. What this recipe owns is what is genuinely scope-wide — the
+        // dimming, the shimmer switch, and the pointer/caret suppression.
+        //
+        // `placeholder` is the demo-layout treatment: the whole block recedes to
+        // 25% (Figma 745:4383) so it reads as furniture behind the one component
+        // actually being demonstrated. `loading` is the real-content-pending
+        // treatment: full strength, plus the shimmer, because the user is meant
+        // to look at it and wait.
+        wireframe: defineRecipe({
+          className: "wireframe",
+          description:
+            "The wireframe/skeleton scope. Wraps any subtree; the text-bearing primitives inside it read the matching React context and swap their text for a `skeleton` bar of the same line box. `mode` picks the intent: `placeholder` dims the block to 25% for demo layouts that present a shape rather than content (Figma 745:4375 / 745:4080), `loading` keeps it at full strength and shimmers while real content is pending. Interactivity and the aria semantics are set by the component, not here — a non-interactive scope is `inert`, a placeholder is `aria-hidden`, a loading scope is `aria-busy`.",
+          base: {
+            // A plain block — the same box the scope renders when it is
+            // disabled, so flipping `enabled` for a loading region never shifts
+            // the layout around it. The bars are drawn from each text node's own
+            // `currentColor`, so the scope needs no colour of its own: light/dark
+            // and the muted-label-vs-default-value two-tone come for free.
+            display: "block",
+          },
+          variants: {
+            // How far the block recedes, as a percentage — orthogonal to `mode`
+            // and to interactivity, so a live wireframe and a shimmering loading
+            // one can each sit at any level. Four steps rather than a free number:
+            // the point is a small set of deliberate depths (background furniture
+            // → foreground subject), not a dial. 25 is the Figma's own recessed
+            // demo block (745:4383); 50 is the default, present but clearly not
+            // the subject; 100 is undimmed, for when the wireframe IS the subject.
+            opacity: {
+              25: { opacity: 0.25 },
+              50: { opacity: 0.5 },
+              75: { opacity: 0.75 },
+              100: { opacity: 1 },
+            },
+            mode: {
+              placeholder: {
+                // Nothing in here is aimed at, even when the scope stays
+                // interactive — a placeholder never advertises a hit target.
+                cursor: "default",
+                "& *": { cursor: "default" },
+              },
+              loading: {
+                "& [data-skeleton]::after": {
+                  // Swap the flat fill for a swept gradient. The highlight is a
+                  // translucent DIP in currentColor rather than a blend toward
+                  // some named surface — so it reads correctly wherever the bar
+                  // happens to sit (on the canvas, inside a field frame, on the
+                  // popover) and in both themes, with whatever is actually
+                  // behind it showing through. That means the flat fill has to
+                  // go, or it would back the dip and defeat it.
+                  backgroundColor: "transparent",
+                  backgroundImage:
+                    "linear-gradient(90deg, currentColor 0%, currentColor 35%, color-mix(in srgb, currentColor 30%, transparent) 50%, currentColor 65%, currentColor 100%)",
+                  backgroundSize: "200% 100%",
+                  animation: "wireframeShimmer 1.6s ease-in-out infinite",
+                },
+                "@media (prefers-reduced-motion: reduce)": {
+                  "& [data-skeleton]::after": { animation: "none" },
+                },
+              },
+            },
+          },
+          defaultVariants: { mode: "placeholder", opacity: 50 },
+          // The provider picks both at runtime, so the static extractor only
+          // ever sees the defaults — force every branch to be generated.
+          staticCss: [{ mode: ["*"], opacity: ["*"] }],
+        }),
+
         action: defineRecipe({
           className: "action",
           description:
@@ -1978,6 +2065,70 @@ export default defineConfig({
       },
 
       slotRecipes: {
+        // One skeleton bar — the thing a text node becomes inside a `wireframe`
+        // scope, and the atom to reach for directly when building a loading
+        // placeholder by hand.
+        //
+        // The geometry is lifted straight from the Figma "Line Height Wrapper"
+        // (745:4385 / 745:4389 / 745:4393): the bar sits centred in the line box
+        // of the text it replaced, at that font's CAP HEIGHT — 11px in a 24px
+        // label box, 12px in a 28px input box, 9px in a 20px hint box. That is
+        // one rule, not a per-textStyle table: `height: 1cap`. Because the box
+        // is the real line box and the width comes from the real (visually
+        // hidden) string, a wireframed component occupies exactly the space the
+        // live one does — swapping between them shifts nothing.
+        skeleton: defineSlotRecipe({
+          className: "skeleton",
+          description:
+            "A single skeleton bar standing in for a run of text. `root` reproduces the replaced text's line box (the string stays in the DOM under `text`, hidden with `visibility` so it still measures) and paints the bar as an ::after at `1cap` — the font's cap height, matching the Figma bars at every text style without a lookup table. The fill is `currentColor`, so the bar inherits the tone of the text it replaced: a muted `field.label` bar and a default-toned value bar come out two-tone exactly as drawn, in both themes, with no tokens of its own. `lines` stacks several for copy that has no text yet.",
+          slots: ["root", "text", "lines"],
+          base: {
+            root: {
+              position: "relative",
+              // Inline-block so the box hugs the string it replaced — that is
+              // what makes the bar the width of the real text.
+              display: "inline-block",
+              maxWidth: "token(spacing.full)",
+              verticalAlign: "top",
+              "&::after": {
+                content: '""',
+                position: "absolute",
+                insetInline: 0,
+                top: "50%",
+                transform: "translateY(-50%)",
+                // Cap height. `cap` is the exact unit for this; the em fallback
+                // is the same ratio for the sans in use, for older engines.
+                height: "0.7em",
+                borderRadius: "token(radii.full)",
+                backgroundColor: "currentcolor",
+                pointerEvents: "none",
+              },
+              "@supports (height: 1cap)": {
+                "&::after": { height: "1cap" },
+              },
+            },
+            text: {
+              // `visibility` rather than `color: transparent`: it keeps the box
+              // measuring (so the bar gets its width) while dropping the glyphs
+              // AND the string from the accessibility tree — and, unlike a
+              // transparent colour, it leaves the root's own `currentColor`
+              // intact for the bar to paint with.
+              visibility: "hidden",
+              userSelect: "none",
+            },
+            lines: {
+              display: "flex",
+              flexDirection: "column",
+              width: "token(spacing.full)",
+              "& > [data-skeleton]": { display: "block", width: "100%" },
+              // The ragged last line every real paragraph has.
+              "& > [data-skeleton]:last-child:not(:only-child)": {
+                width: "65%",
+              },
+            },
+          },
+        }),
+
         field: defineSlotRecipe({
           className: "field",
           description:

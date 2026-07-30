@@ -16,6 +16,7 @@ import {
   type ActionEmphasis,
 } from "./action";
 import { Tooltip } from "./tooltip";
+import { WireframeContent } from "./wireframe";
 
 // ---------------------------------------------------------------------------
 // Link — an <a>/next-link that NAVIGATES, the sibling of Button (button.tsx).
@@ -115,7 +116,7 @@ function LinkRoot(
           onMouseLeave={handleLeave}
           {...rest}
         >
-          {content}
+          <WireframeContent>{content}</WireframeContent>
         </a>
       ) : (
         <NextLink
@@ -126,7 +127,7 @@ function LinkRoot(
           onMouseLeave={handleLeave}
           {...rest}
         >
-          {content}
+          <WireframeContent>{content}</WireframeContent>
         </NextLink>
       )}
       {tooltipNode}

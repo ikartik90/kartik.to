@@ -3,6 +3,9 @@
 import { css } from "../../../../styled-system/css";
 import { Field } from "@/components/ui/input/field";
 import { Switch } from "@/components/ui/input/switch";
+import { Wireframe } from "@/components/ui/wireframe";
+
+const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
 
 /** Local-only preview route for eyeballing the Switch sizes/states. */
 export default function SwitchPreviewPage() {
@@ -60,6 +63,49 @@ export default function SwitchPreviewPage() {
           <Field.Label type="subheading">sm label, lg switch override</Field.Label>
           <Field.Hint>caption hint, large track</Field.Hint>
         </Field>
+
+        {/* Wireframe: the track and thumb are geometry, not text, so they render
+            as themselves — including the on-state accent. The bars track the
+            field size, because they take the line box of the label and hint the
+            `field` recipe sized. */}
+        <span className={captionStyle}>placeholder — lg then sm</span>
+        <Wireframe
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "3xl",
+            alignItems: "start",
+          })}
+        >
+          <Field size="lg">
+            <Switch defaultChecked />
+            <Field.Label>Large label</Field.Label>
+            <Field.Hint>bodyLarge label · bodySmall hint</Field.Hint>
+          </Field>
+          <Field size="sm">
+            <Switch />
+            <Field.Label>Small label</Field.Label>
+            <Field.Hint>caption label · caption hint</Field.Hint>
+          </Field>
+        </Wireframe>
+
+        <span className={captionStyle}>interactive — still flips</span>
+        <Wireframe interactive>
+          <Field size="lg">
+            <Switch />
+            <Field.Label>Large label</Field.Label>
+            <Field.Hint>bodyLarge label · bodySmall hint</Field.Hint>
+          </Field>
+        </Wireframe>
+
+        <span className={captionStyle}>loading — shimmering</span>
+        <Wireframe mode="loading">
+          <Field size="lg">
+            <Switch defaultChecked />
+            <Field.Label>Large label</Field.Label>
+            <Field.Hint>bodyLarge label · bodySmall hint</Field.Hint>
+          </Field>
+        </Wireframe>
       </div>
     </main>
   );

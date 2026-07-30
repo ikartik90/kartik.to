@@ -22,6 +22,7 @@ import { cx } from "../../../../styled-system/css";
 import { optionList } from "../../../../styled-system/recipes";
 import { filterOptions, type OptionItem } from "@/utils/option-filter";
 import { Field, useOptionalField, type FieldSearchProps } from "./field";
+import { WireframeContent } from "../wireframe";
 
 // ---------------------------------------------------------------------------
 // OptionList — the composable listbox behind a Combobox, and a stand-alone,
@@ -605,7 +606,7 @@ function OptionListOption({
     optionId,
   } = useOptionList("OptionList.Option");
   const mode = useContainerMode();
-  const content = children ?? label ?? value;
+  const content = <WireframeContent>{children ?? label ?? value}</WireframeContent>;
 
   if (mode === "toolbar") {
     return (

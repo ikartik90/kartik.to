@@ -1,4 +1,5 @@
 import { cva, cx } from "../../../styled-system/css";
+import { WireframeText } from "./wireframe";
 
 export type TypographyType =
   | "title"
@@ -80,7 +81,7 @@ export function Typography({
 }: TypographyProps) {
   return (
     <Tag className={cx(typographyStyles({ type }), className)} {...rest}>
-      {children}
+      <WireframeText>{children}</WireframeText>
     </Tag>
   );
 }

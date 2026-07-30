@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { Tooltip, TooltipHostContext } from "./tooltip";
+import { WireframeText } from "./wireframe";
 
 // ---------------------------------------------------------------------------
 // The parts shared by the two actionable primitives — Button (a <button> that
@@ -36,7 +37,11 @@ export interface ActionTextProps {
 
 /** The visible label of a text Button/Link (`Button.Text` / `Link.Text`). */
 export function ActionText({ children, className }: ActionTextProps) {
-  return <span className={className}>{children}</span>;
+  return (
+    <span className={className}>
+      <WireframeText>{children}</WireframeText>
+    </span>
+  );
 }
 
 const isActionText = (node: ReactNode) =>

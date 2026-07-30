@@ -1224,6 +1224,52 @@ describe("keyboard grid navigation", () => {
   });
 });
 
+// `sweep={false}` keeps the toggle model but withdraws the two GESTURES that
+// commit more than one date per action, so a multiple-selection calendar can
+// still be strictly one-at-a-time.
+describe("sweep={false} — multiple selection, one date per action", () => {
+  it("still toggles on click, in and out", () => {
+    const onValuesChange = vi.fn();
+    renderMulti({ sweep: false, onValuesChange });
+
+    fireEvent.click(cell("December 5, 2026"));
+    expect(iso(onValuesChange.mock.calls[0][0])).toEqual(["2026-12-05"]);
+
+    fireEvent.click(cell("December 9, 2026"));
+    expect(iso(onValuesChange.mock.calls[1][0])).toEqual([
+      "2026-12-05",
+      "2026-12-09",
+    ]);
+  });
+
+  it("does not open a marquee — a drag across the grid selects nothing", () => {
+    renderMulti({ sweep: false });
+    layoutGrids();
+
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(selected()).toEqual([]);
+  });
+
+  it("withdraws Shift+Arrow too, so the keyboard cannot sweep either", () => {
+    renderMulti({ sweep: false });
+    fireEvent.keyDown(cell("December 11, 2026"), {
+      key: "ArrowRight",
+      shiftKey: true,
+    });
+    expect(selected()).toEqual([]);
+    // The caret still MOVES — only the range-extend is withdrawn.
+    expect(cell("December 12, 2026").getAttribute("tabindex")).toBe("0");
+  });
+
+  it("leaves the sweep on by default", () => {
+    renderMulti();
+    layoutGrids();
+
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(selected().length).toBeGreaterThan(1);
+  });
+});
+
 describe("Shift+Arrow — the keyboard mirror of the sweep", () => {
   it("toggles each date it moves onto, anchor included", () => {
     renderMulti(); // uncontrolled: `values: []` would pin it empty

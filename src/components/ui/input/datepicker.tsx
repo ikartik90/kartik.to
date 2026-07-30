@@ -16,6 +16,7 @@ import { Calendar } from "./calendar";
 import CalendarIcon from "@/assets/icons/calendar.svg";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
+import { WireframeText } from "../wireframe";
 
 // ---------------------------------------------------------------------------
 // DatePicker — the Date field's control, composed INTO a <Field> exactly like
@@ -130,7 +131,7 @@ export function DatePicker({
           aria-expanded={open}
           className={cx(styles.control, triggerClass)}
         >
-          {display || placeholder}
+          <WireframeText>{display || placeholder}</WireframeText>
         </button>
         <CalendarIcon aria-hidden />
       </Field.Frame>
