@@ -42,10 +42,14 @@ jobs:
 
           echo "Branch '$BASE' requires $required status check(s)."
 
-          if [ "$(gh pr view "$PR" --json autoMergeRequest --jq '.autoMergeRequest != null')" = "true" ]; then
+          # --repo on every `gh pr` call: this job deliberately skips checkout
+          # (it needs no source), and without a local git remote to infer from,
+          # gh exits with "failed to run git: not a git repository".
+          if [ "$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+                    --json autoMergeRequest --jq '.autoMergeRequest != null')" = "true" ]; then
             echo "Auto-merge is already armed on #$PR."
             exit 0
           fi
 
-          gh pr merge "$PR" --squash --auto
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto
           echo "Armed auto-merge on #$PR — it will merge once every required check is green."
