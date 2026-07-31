@@ -1,5 +1,26 @@
 import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 
+/**
+ * The column every list marker occupies — a fixed 24px box centring whatever
+ * ink the marker draws (a dot, a check/cross disc, an ordinal pill), on the
+ * first text line via `marginBlockStart` of (28px bodyLarge line box - 24) / 2.
+ *
+ * Fixed so the prose column starts at the same x for every list style; the ink
+ * inside is free to be any size, which is why the visible gap between a marker
+ * and its text varies with the marker while the column does not.
+ */
+const markerAlignmentBox = {
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "token(sizes.listMarker)",
+  minWidth: "token(sizes.listMarker)",
+  marginBlockStart: "xs",
+  userSelect: "none",
+  pointerEvents: "none",
+} as const;
+
 export default defineConfig({
   presets: [],
   preflight: true,
@@ -1646,23 +1667,41 @@ export default defineConfig({
           },
         }),
 
+        listMarkerBox: defineRecipe({
+          className: "list-marker-box",
+          description:
+            "Alignment box for a numbered-list ordinal — the shared 24px marker column centring the `listMarker` pill inside it, exactly as `listBulletIcon` centres a `listBulletCircle`. The pill is narrower than the column and grows with its digit count, so it needs a fixed box around it or a numbered list's prose column would sit left of a bulleted one's. `width` is PINNED rather than left to `minWidth`: a 3+ digit pill outgrows 24px, and on min-width alone only that one item's column would widen, leaving the prose ragged down its own list. Pinned, such a pill overhangs the column instead — symmetrically, since it is centred — eating into the 8px gap rather than moving the text.",
+          base: {
+            ...markerAlignmentBox,
+            width: "token(sizes.listMarker)",
+          },
+        }),
+
         listMarker: defineRecipe({
           className: "list-marker",
           description:
-            "Numbered-list ordinal badge — gradient pill with theme-flipped digits; square at single digit, widens for zero-padded multi-digit ordinals.",
+            "Numbered-list ordinal badge — 16px gradient pill with theme-flipped caption digits; circular at a single digit, widening for zero-padded multi-digit ordinals. Sized off `spacing.xl` to match the 16px check/cross disc. Vertical placement belongs to its `listMarkerBox` wrapper, not here.",
           base: {
             flexShrink: 0,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            height: "token(sizes.listMarker)",
-            minWidth: "token(sizes.listMarker)",
-            marginBlockStart: "xs",
-            paddingInline: "sm",
+            height: "token(spacing.xl)",
+            minWidth: "token(spacing.xl)",
+            paddingInline: "xs",
+            // Optical centring for the digits, as `padding-block-end` (a centred
+            // flex item shifts up by HALF the padding, so this is twice the
+            // offset). Centring aligns the font's CONTENT AREA — ascent plus
+            // descent — but digits have no descender, so their ink sits low by
+            // `(ascent - descent)/2 - (inkAscent - inkDescent)/2`; measured in
+            // Switzer at 12px that is (12-3)/2 - (7.875-0.159)/2 = 0.642px, i.e.
+            // 0.0535em. In `em` so it tracks the font size; it would only need
+            // re-measuring if the typeface changed.
+            paddingBlockEnd: "0.107em",
             borderRadius: "lg",
             background: "bg.brandedEmphasis",
             color: "text.listMarker",
-            textStyle: "bodyLarge",
+            textStyle: "caption",
             fontWeight: "medium",
             textAlign: "center",
             whiteSpace: "nowrap",
@@ -1674,17 +1713,9 @@ export default defineConfig({
         listBullet: defineRecipe({
           className: "list-bullet",
           description:
-            "Bulleted-list marker — 10px circular gradient dot centered on the first text line, within the same footprint as the numbered ordinal badge.",
+            "Bulleted-list marker — 10px circular gradient dot centered on the first text line, within the shared `markerAlignmentBox` footprint every list style uses.",
           base: {
-            flexShrink: 0,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "token(sizes.listMarker)",
-            minWidth: "token(sizes.listMarker)",
-            marginBlockStart: "xs",
-            userSelect: "none",
-            pointerEvents: "none",
+            ...markerAlignmentBox,
             "&::before": {
               content: '""',
               display: "block",
@@ -1699,18 +1730,8 @@ export default defineConfig({
         listBulletIcon: defineRecipe({
           className: "list-bullet-icon",
           description:
-            "Check/cross bulleted-list marker — the 24px alignment box (matching the dot and the numbered ordinal, so content stays aligned across list styles) centring a `listBulletCircle` glyph.",
-          base: {
-            flexShrink: 0,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "token(sizes.listMarker)",
-            minWidth: "token(sizes.listMarker)",
-            marginBlockStart: "xs",
-            userSelect: "none",
-            pointerEvents: "none",
-          },
+            "Check/cross bulleted-list marker — the shared `markerAlignmentBox` (matching the dot and the numbered ordinal, so content stays aligned across list styles) centring a `listBulletCircle` glyph.",
+          base: { ...markerAlignmentBox },
         }),
 
         listBulletCircle: defineRecipe({

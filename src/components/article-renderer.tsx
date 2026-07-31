@@ -23,6 +23,7 @@ import {
   articleSubheadingCaption,
   articleList,
   articleListItemShell,
+  listMarkerBox,
   listMarker,
   listBullet,
   listBulletIcon,
@@ -353,8 +354,10 @@ function renderNumberedList(
           className={articleListItemShell()}
           value={numbering[i]?.ordinal}
         >
-          <span className={listMarker()} aria-hidden>
-            {numbering[i]?.label ?? String(i + 1)}
+          <span className={listMarkerBox()} aria-hidden>
+            <span className={listMarker()}>
+              {numbering[i]?.label ?? String(i + 1)}
+            </span>
           </span>
           <span className={articleListItemContent()}>
             {renderInlineNodes(item.children, numberOf)}
