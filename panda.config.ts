@@ -282,7 +282,7 @@ export default defineConfig({
               value: {
                 base: "linear-gradient(135deg, {colors.brand.orange} 0%, {colors.brand.pink} 60%)",
                 _dark:
-                  "linear-gradient(135deg, {colors.brand.pink} 40%, {colors.brand.orange} 100%)",
+                  "linear-gradient(135deg, {colors.brand.pink} 0%, {colors.brand.orange} 60%)",
               },
             },
           },
