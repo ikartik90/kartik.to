@@ -1,13 +1,28 @@
 // @vitest-environment jsdom
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { ShiftSchedulingV0 } from "../shift-scheduling-v0";
 
 afterEach(cleanup);
 
-// Derived from the real clock the same way the component is — pinning a date
-// here would only re-pin what the demo deliberately leaves live.
+// The CLOCK is frozen, not the expectations: every date below is still derived
+// from `Temporal.Now` exactly as the component derives it (Calendar reads the
+// clock at render), so this doesn't re-pin what the demo leaves live — it just
+// stops the suite depending on which day it runs. It has to be frozen at module
+// scope, since TODAY is read here at import time. Only `Date` is faked, so
+// React's and testing-library's timers stay real.
+//
+// The anchor is deliberately mid-month AND a Monday: these tests reach up to
+// two days forward, and on a month-end TODAY those reaches land on a date the
+// grid doesn't own as a selectable cell (only as an outside spill copy), while
+// a late-week TODAY pushes them into the next row and out of the marquee's
+// same-row band. That is the bug this replaced — it fired only on the 30th/31st,
+// and so only in CI, which runs UTC ahead of local.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+afterAll(() => vi.useRealTimers());
+
 const TODAY = Temporal.Now.plainDateISO();
 
 const FULL_MONTHS = [

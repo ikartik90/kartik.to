@@ -226,6 +226,17 @@ export default defineConfig({
                 _dark: "{colors.brand.pink}",
               },
             },
+            // Prose highlight (<mark>) fill — the brand accent at 15%, paired
+            // with `text.highlight` (the same accent at full strength). Same
+            // strength in both themes; only the hue flips (pink in light,
+            // orange in dark), matching border.focusRing / field.bg.active.
+            highlight: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
+              },
+            },
             // Always a gradient — use with `background`, not `backgroundColor`
             brandedEmphasis: {
               value: {
@@ -269,6 +280,14 @@ export default defineConfig({
             },
             selection: {
               value: "{colors.neutral.900}",
+            },
+            // Text inside a prose highlight — the brand accent at full
+            // strength over its own 15% wash (`bg.highlight`).
+            highlight: {
+              value: {
+                base: "{colors.brand.pink}",
+                _dark: "{colors.brand.orange}",
+              },
             },
           },
 
@@ -693,10 +712,10 @@ export default defineConfig({
         articleHighlight: defineRecipe({
           className: "article-highlight",
           description:
-            "Highlight mark (<mark>) inside article prose — brand gradient behind fixed neutral.600 text.",
+            "Highlight mark (<mark>) inside article prose — the brand accent at 15% behind the accent at full strength (pink in light, orange in dark). Flat colour, not the brand gradient, so the marked text stays legible as prose rather than reading as a badge.",
           base: {
-            background: "bg.brandedEmphasis",
-            color: "neutral.900",
+            backgroundColor: "bg.highlight",
+            color: "text.highlight",
             paddingInline: "xxs",
             paddingBlock: "xxs",
             boxDecorationBreak: "clone",

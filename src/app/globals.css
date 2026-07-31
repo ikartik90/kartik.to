@@ -67,6 +67,19 @@ body {
 }
 
 @layer base {
+  /* Text selection reads exactly like the prose highlight (articleHighlight):
+     the brand accent at 15% behind the accent at full strength — pink in light,
+     orange in dark. Deliberately the SAME two tokens, so retuning the highlight
+     retunes the selection with it. `::selection` only honours a handful of
+     properties (color, background-color, text-decoration/shadow), which is why
+     the padding and box-decoration-break of the <mark> have no counterpart here.
+     Selecting text that is ALREADY highlighted stacks 15% over 15% (~28%) —
+     still legible, since both layers carry the same hue and text colour. */
+  ::selection {
+    background-color: var(--colors-bg-highlight);
+    color: var(--colors-text-highlight);
+  }
+
   :where(
       a,
       button,

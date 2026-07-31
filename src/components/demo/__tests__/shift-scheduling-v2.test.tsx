@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { ShiftSchedulingV2 } from "../shift-scheduling-v2";
 
@@ -8,7 +8,24 @@ afterEach(cleanup);
 
 // The demo reads the real clock, so every expectation is DERIVED from it the
 // same way the component is — asserting fixed dates here would only re-pin what
-// the component deliberately stopped pinning, and would rot on a given day.
+// the component deliberately stopped pinning. What IS pinned is the clock those
+// derivations read, which keeps the deriving intact while stopping the suite
+// from rotting on a given day. It has to be frozen at module scope, since TODAY
+// is read here at import time; the component reads it later, at mount (the lazy
+// `openingMonth` initialiser), so it sees the same frozen date. Only `Date` is
+// faked, so React's and testing-library's timers stay real.
+//
+// The anchor is deliberately mid-month AND a Monday: these tests reach up to
+// two days forward, and on a month-end TODAY those reaches cross into the next
+// month COLUMN — the marquee then sweeps a band across the 250px gap between
+// grids and takes an unrelated run of cells (this suite failed with a July 10th
+// block selected for a July 31 → August 2 drag). A late-week TODAY breaks the
+// same-row assumption the same way. It fired only on the 30th/31st, and so only
+// in CI, which runs UTC ahead of local.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+afterAll(() => vi.useRealTimers());
+
 const TODAY = Temporal.Now.plainDateISO();
 // One month back, first-of-month: where the three-month range opens.
 const OPENING = TODAY.subtract({ months: 1 }).with({ day: 1 });
