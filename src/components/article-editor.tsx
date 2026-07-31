@@ -21,6 +21,7 @@ import {
   articleHeadingShell,
   articleSubheadingCaption,
   articleListItemShell,
+  listMarkerBox,
   listMarker,
   listBullet,
   listBulletIcon,
@@ -1159,22 +1160,11 @@ const editorHrWrapperStyle = css({
 
 // List item content — contentEditable mechanics + shared prose recipe.
 const editorListItemContentStyle = cx(editableBaseStyle, articleListItemContent());
-// The ordinal badge is a real button in the editor so it can open the numbering
-// popover — reset the native button chrome and re-enable pointer events (the
-// read-only `listMarker` recipe disables them).
-const editorListMarkerButtonStyle = cx(
-  listMarker(),
-  css({
-    appearance: "none",
-    border: "none",
-    pointerEvents: "auto",
-    cursor: "pointer",
-  }),
-);
-// The bullet marker is also a button (opens the bullet-style popover). The dot
-// variant reuses `listBullet`; the check/cross variants reuse `listBulletIcon`
-// (the 24px alignment box). Both are transparent buttons — the gradient lives
-// on the inner `listBulletCircle`, not the button.
+// Every marker is a real button in the editor so it can open its popover —
+// reset the native chrome and re-enable pointer events (the read-only recipes
+// disable them). The button is always the 24px alignment BOX; the gradient ink
+// lives on the inner `listMarker` pill / `listBulletCircle` disc, never on the
+// button itself. The dot is the exception: `listBullet` draws its own ink.
 const bulletButtonReset = css({
   appearance: "none",
   border: "none",
@@ -1183,6 +1173,8 @@ const bulletButtonReset = css({
   pointerEvents: "auto",
   cursor: "pointer",
 });
+const editorListMarkerButtonStyle = cx(listMarkerBox(), bulletButtonReset);
+const editorListMarkerPillStyle = listMarker();
 const editorListBulletButtonStyle = cx(listBullet(), bulletButtonReset);
 const editorListBulletIconButtonStyle = cx(listBulletIcon(), bulletButtonReset);
 const editorListBulletCircleStyle = listBulletCircle();
@@ -2613,7 +2605,7 @@ function EditableBlock({
               onMarkerClick?.(e.currentTarget.getBoundingClientRect())
             }
           >
-            {markerLabel}
+            <span className={editorListMarkerPillStyle}>{markerLabel}</span>
           </button>
         ) : (
           <button
