@@ -1,0 +1,55 @@
+name: Auto-merge
+
+# Arms GitHub's native auto-merge. GitHub — not this workflow — performs the
+# merge, and only once every check required by the branch ruleset has reported
+# success (CI's three jobs plus Vercel's own deployment check). Pushing to main
+# is what triggers Vercel's production deploy, so no deploy step belongs here.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  arm:
+    name: Arm auto-merge
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          # Without required status checks there is nothing for auto-merge to
+          # wait on, and GitHub merges the pull request the moment it is armed —
+          # the exact opposite of a gate. Refuse to arm rather than let a
+          # misconfigured branch turn this into an unconditional merge button.
+          required=$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE" \
+            --jq '[.[] | select(.type == "required_status_checks")
+                       | .parameters.required_status_checks[]?.context] | length')
+
+          if [ "$required" -eq 0 ]; then
+            echo "::error::Branch '$BASE' has no required status checks, so auto-merge would merge immediately. Add a ruleset requiring the CI jobs and the Vercel check before relying on this workflow."
+            exit 1
+          fi
+
+          echo "Branch '$BASE' requires $required status check(s)."
+
+          # --repo on every `gh pr` call: this job deliberately skips checkout
+          # (it needs no source), and without a local git remote to infer from,
+          # gh exits with "failed to run git: not a git repository".
+          if [ "$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+                    --json autoMergeRequest --jq '.autoMergeRequest != null')" = "true" ]; then
+            echo "Auto-merge is already armed on #$PR."
+            exit 0
+          fi
+
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto
+          echo "Armed auto-merge on #$PR — it will merge once every required check is green."
