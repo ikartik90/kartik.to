@@ -236,22 +236,6 @@ export default defineConfig({
                 _dark: "{colors.neutral.800}",
               },
             },
-            // Body of the blockquote mark. Same value as `bg.highlight`, but
-            // its own token — unrelated surfaces that happen to coincide.
-            quoteMark: {
-              value: {
-                base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
-                _dark:
-                  "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
-              },
-            },
-            // The 1px edge inside that body, so the glyph reads as a lit shape.
-            quoteMarkEdge: {
-              value: {
-                base: "{colors.brand.pink}",
-                _dark: "{colors.brand.orange}",
-              },
-            },
             surface: {
               value: {
                 base: "{colors.neutral.200}",
@@ -1516,7 +1500,7 @@ export default defineConfig({
         articleBlockquoteMark: defineRecipe({
           className: "article-blockquote-mark",
           description:
-            "Quote mark (52×52) — a `bg.quoteMark` body (the brand accent at 15%) with a 1px `bg.quoteMarkEdge` inner edge running inside its contour, each a mask off the same blockquote glyph path. Two layers because one mask can only reveal one colour, and both are PSEUDO-ELEMENTS rather than one being the element itself: a mask clips its element's descendants too, so a fill mask on the box would have cut away the outer half of the stroke drawn inside it. As siblings they clip independently, and ::after paints over ::before, putting the outline on top of the body. The glyph's lean is drawn into the artwork, so no CSS rotation here.",
+            "Quote mark (52×52) — a `bg.brandedEmphasis` body at 15% with a 1px full-strength inner edge of that same gradient running inside its contour, each a mask off the same blockquote glyph path. Two layers because one mask can only reveal one colour, and both are PSEUDO-ELEMENTS rather than one being the element itself: a mask clips its element's descendants too, so a fill mask on the box would have cut away the outer half of the stroke drawn inside it. As siblings they clip independently, and ::after paints over ::before, putting the outline on top of the body. The glyph's lean is drawn into the artwork, so no CSS rotation here.",
           base: {
             position: "relative",
             width: "token(sizes.quoteMark)",
@@ -1534,8 +1518,16 @@ export default defineConfig({
               WebkitMaskRepeat: "no-repeat",
               WebkitMaskPosition: "center",
             },
+            // Both layers paint the SAME gradient over the same box, so the
+            // edge is the full-strength version of the ramp the body is washing
+            // out — the two stay in register at every point of the glyph.
+            // `opacity` rather than a second 15% gradient token: duplicating
+            // the stops would let the copy drift if `bg.brandedEmphasis` is
+            // retuned, and multiplying a fully opaque layer by 0.15 is the same
+            // result as authoring the stops at 15% alpha.
             "&::before": {
-              backgroundColor: "bg.quoteMark",
+              background: "bg.brandedEmphasis",
+              opacity: 0.15,
               maskImage: QUOTE_GLYPH_FILL_MASK,
               WebkitMaskImage: QUOTE_GLYPH_FILL_MASK,
             },
@@ -1543,7 +1535,7 @@ export default defineConfig({
             // inside the glyph. An inset `box-shadow` can't do this: it draws
             // on the element's BOX, not along the masked contour.
             "&::after": {
-              backgroundColor: "bg.quoteMarkEdge",
+              background: "bg.brandedEmphasis",
               maskImage: `${QUOTE_GLYPH_STROKE_MASK}, ${QUOTE_GLYPH_FILL_MASK}`,
               maskComposite: "intersect",
               WebkitMaskImage: `${QUOTE_GLYPH_STROKE_MASK}, ${QUOTE_GLYPH_FILL_MASK}`,
