@@ -340,9 +340,15 @@ describe("ArticleRenderer", () => {
       expect(
         container.querySelectorAll(".list-bullet-icon .list-bullet-circle"),
       ).toHaveLength(2);
+      // The glyph is painted by the circle itself (a masked pseudo-element, so
+      // the brand gradient can reach it) — which shape it is rides on the
+      // recipe variant, not on a child <svg>.
       expect(
-        container.querySelectorAll(".list-bullet-circle svg"),
-      ).toHaveLength(2);
+        container.querySelectorAll(".list-bullet-circle--glyph_check"),
+      ).toHaveLength(1);
+      expect(
+        container.querySelectorAll(".list-bullet-circle--glyph_cross"),
+      ).toHaveLength(1);
       expect(container.querySelectorAll(".list-bullet")).toHaveLength(1);
     });
 
