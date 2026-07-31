@@ -1,6 +1,19 @@
 import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 
 /**
+ * The check / cross bullet glyphs (src/assets/icons/check-small.svg,
+ * cross-small.svg) as mask images, so the brand gradient can be painted through
+ * them — same device as the blockquote mark. Both are stroke-only paths, and a
+ * mask reads alpha, so the stroke is what survives; keep `fill='none'` or the
+ * glyph masks as a filled blob. Kept in sync with the .svg files by hand.
+ */
+const CHECK_GLYPH_MASK =
+  "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.05994 10.1813L9.14253 12.6249L12.9396 7.62488' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
+
+const CROSS_GLYPH_MASK =
+  "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.5 7.5L7.5 12.5M12.5 12.5L7.5 7.5' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
+
+/**
  * The column every list marker occupies — a fixed 24px box centring whatever
  * ink the marker draws (a dot, a check/cross disc, an ordinal pill), on the
  * first text line via `marginBlockStart` of (28px bodyLarge line box - 24) / 2.
@@ -79,6 +92,9 @@ export default defineConfig({
           optionRow: { value: "32px" },
           // Bulleted-list dot diameter
           listBullet: { value: "8px" },
+          // Check/cross bullet glyph — deliberately larger than the 16px chip
+          // it sits in, so it overhangs the way the source icons do.
+          listBulletGlyph: { value: "20px" },
           // Selection toolbar icon button (Figma 422:834 — 28px square)
           toolbarButton: { value: "28px" },
           // Margin-note card in the aside column, and its offset to the right of
@@ -205,6 +221,17 @@ export default defineConfig({
                 },
               },
             },
+            // The chip behind a list marker's ink — one step off canvas, so the
+            // brand gradient now sitting IN the digits/glyph is what carries the
+            // colour and the chip only has to separate it from the page. Matches
+            // `surface` today but kept separate: a dialog-surface retune should
+            // not resize the contrast a 16px marker depends on.
+            listMarker: {
+              value: {
+                base: "{colors.neutral.200}",
+                _dark: "{colors.neutral.800}",
+              },
+            },
             // One step elevated from canvas — used for dialog/surface backgrounds
             surface: {
               value: {
@@ -290,14 +317,6 @@ export default defineConfig({
             // Only readable over bg.brandedEmphasis (the gradient) — same in both themes
             brandedEmphasis: {
               value: "{colors.neutral.900}",
-            },
-            // Numbered-list ordinal digits over the gradient badge — inverted per
-            // theme (light digits in light UI, dark digits in dark UI) per Figma.
-            listMarker: {
-              value: {
-                base: "{colors.neutral.100}",
-                _dark: "{colors.neutral.900}",
-              },
             },
             selection: {
               value: "{colors.neutral.900}",
@@ -1699,8 +1718,17 @@ export default defineConfig({
             // re-measuring if the typeface changed.
             paddingBlockEnd: "0.107em",
             borderRadius: "lg",
-            background: "bg.brandedEmphasis",
-            color: "text.listMarker",
+            // TWO background layers with different clips: the brand gradient
+            // clipped to the glyphs, and a flat `bg.listMarker` layer clipped to
+            // the padding box behind them. It has to be one element's two layers
+            // — a pseudo-element can't supply the chip, because background-clip
+            // text paints the digits in the BACKGROUND layer, which any child
+            // (even at z-index -1) would cover. Same device as `articleLink`.
+            backgroundImage:
+              "token(colors.bg.brandedEmphasis), linear-gradient(token(colors.bg.listMarker) 0 0)",
+            backgroundClip: "text, padding-box",
+            WebkitBackgroundClip: "text, padding-box",
+            WebkitTextFillColor: "transparent",
             textStyle: "caption",
             fontWeight: "medium",
             textAlign: "center",
@@ -1737,8 +1765,9 @@ export default defineConfig({
         listBulletCircle: defineRecipe({
           className: "list-bullet-circle",
           description:
-            "The 16×16 gradient circle inside a check/cross bullet marker (Figma 476:278 check, 474:38 cross) — holds the 20px glyph, which overflows slightly and inherits `text.listMarker` via currentColor so it theme-flips like the ordinal digits.",
+            "The 16×16 circle inside a check/cross bullet marker (Figma 476:278 check, 474:38 cross) — a flat `bg.listMarker` chip holding a brand-gradient glyph, which overflows it slightly. The glyph is a masked pseudo-element rather than an inline SVG: those icons paint with `stroke=\"currentColor\"`, and currentColor can only ever be a flat colour, so a gradient has to arrive the way the blockquote mark's does — filling a box that the glyph's alpha masks to shape. Pick the shape with the `glyph` variant; the renderer and editor pass it instead of a child icon.",
           base: {
+            position: "relative",
             flexShrink: 0,
             display: "inline-flex",
             alignItems: "center",
@@ -1746,8 +1775,40 @@ export default defineConfig({
             width: "token(spacing.xl)",
             height: "token(spacing.xl)",
             borderRadius: "token(spacing.half)",
-            background: "bg.brandedEmphasis",
-            color: "text.listMarker",
+            backgroundColor: "bg.listMarker",
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: "token(sizes.listBulletGlyph)",
+              height: "token(sizes.listBulletGlyph)",
+              transform: "translate(-50%, -50%)",
+              background: "bg.brandedEmphasis",
+              maskSize: "contain",
+              maskRepeat: "no-repeat",
+              maskPosition: "center",
+              WebkitMaskSize: "contain",
+              WebkitMaskRepeat: "no-repeat",
+              WebkitMaskPosition: "center",
+              pointerEvents: "none",
+            },
+          },
+          variants: {
+            glyph: {
+              check: {
+                "&::after": {
+                  maskImage: CHECK_GLYPH_MASK,
+                  WebkitMaskImage: CHECK_GLYPH_MASK,
+                },
+              },
+              cross: {
+                "&::after": {
+                  maskImage: CROSS_GLYPH_MASK,
+                  WebkitMaskImage: CROSS_GLYPH_MASK,
+                },
+              },
+            },
           },
         }),
 

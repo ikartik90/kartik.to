@@ -70,8 +70,6 @@ import {
   computeListNumbering,
   type ListMarkerStyle,
 } from "@/utils/list-numbering";
-import CheckSmallIcon from "@/assets/icons/check-small.svg";
-import CrossSmallIcon from "@/assets/icons/cross-small.svg";
 import { SidenoteLayer } from "@/components/sidenote-layer";
 import {
   collectSidenotes,
@@ -1177,8 +1175,13 @@ const editorListMarkerButtonStyle = cx(listMarkerBox(), bulletButtonReset);
 const editorListMarkerPillStyle = listMarker();
 const editorListBulletButtonStyle = cx(listBullet(), bulletButtonReset);
 const editorListBulletIconButtonStyle = cx(listBulletIcon(), bulletButtonReset);
-const editorListBulletCircleStyle = listBulletCircle();
-const editorBulletGlyphStyle = menuIcon();
+// Resolved STATICALLY, per variant — see the note in article-renderer.tsx:
+// Panda's extractor only reads literal call sites, so passing the marker
+// through as a variable emits no CSS for either glyph in a production build.
+const editorBulletCircleClass = {
+  check: listBulletCircle({ glyph: "check" }),
+  cross: listBulletCircle({ glyph: "cross" }),
+} as const;
 const editorListItemShellStyle = articleListItemShell();
 
 /** Numbered (`list_item`) and bulleted (`bullet_list_item`) list entries share
@@ -2623,13 +2626,7 @@ function EditableBlock({
             }
           >
             {block.type === "bullet_list_item" && block.marker && (
-              <span className={editorListBulletCircleStyle}>
-                {block.marker === "check" ? (
-                  <CheckSmallIcon className={editorBulletGlyphStyle} aria-hidden />
-                ) : (
-                  <CrossSmallIcon className={editorBulletGlyphStyle} aria-hidden />
-                )}
-              </span>
+              <span className={editorBulletCircleClass[block.marker]} />
             )}
           </button>
         )}

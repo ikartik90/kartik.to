@@ -28,7 +28,6 @@ import {
   listBullet,
   listBulletIcon,
   listBulletCircle,
-  menuIcon,
   articleListItemContent,
   articleMetric,
   articleMetricCaption,
@@ -44,8 +43,6 @@ import {
   computeListNumbering,
   type ListItemNumbering,
 } from "@/utils/list-numbering";
-import CheckSmallIcon from "@/assets/icons/check-small.svg";
-import CrossSmallIcon from "@/assets/icons/cross-small.svg";
 import { SidenoteLayer } from "@/components/sidenote-layer";
 import { collectSidenotes, sidenoteAnchorName } from "@/utils/sidenotes";
 import type { Document } from "@/domain/post";
@@ -368,6 +365,15 @@ function renderNumberedList(
   );
 }
 
+// Both glyph variants resolved STATICALLY. Panda's JIT extractor reads literal
+// call sites, so `listBulletCircle({ glyph: item.marker })` emits no CSS for
+// either variant — the mask never ships and the glyph renders blank in a
+// production build, while dev looks fine.
+const BULLET_CIRCLE_CLASS = {
+  check: listBulletCircle({ glyph: "check" }),
+  cross: listBulletCircle({ glyph: "cross" }),
+} as const;
+
 function renderBulletList(
   items: BulletListItemNode[],
   key: React.Key,
@@ -379,13 +385,7 @@ function renderBulletList(
         <li key={i} className={articleListItemShell()}>
           {item.marker ? (
             <span className={listBulletIcon()} aria-hidden>
-              <span className={listBulletCircle()}>
-                {item.marker === "check" ? (
-                  <CheckSmallIcon className={menuIcon()} />
-                ) : (
-                  <CrossSmallIcon className={menuIcon()} />
-                )}
-              </span>
+              <span className={BULLET_CIRCLE_CLASS[item.marker]} />
             </span>
           ) : (
             <span className={listBullet()} aria-hidden />

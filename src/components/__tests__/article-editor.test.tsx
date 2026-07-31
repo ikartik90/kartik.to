@@ -3249,9 +3249,13 @@ describe("ArticleEditor bullet popover", () => {
     fireEvent.click(screen.getByLabelText("Checked list"));
 
     expect(markerOf(0)).toBe("check");
-    // The marker button now renders a glyph (svg) instead of the bare dot.
+    // The marker button now renders a glyph circle instead of the bare dot.
+    // The glyph is masked onto the circle so the brand gradient can reach it,
+    // so the shape shows up as a recipe variant rather than a child <svg>.
     expect(
-      document.querySelector("[data-bullet-marker] svg"),
+      document.querySelector(
+        "[data-bullet-marker] .list-bullet-circle--glyph_check",
+      ),
     ).not.toBeNull();
   });
 
@@ -3269,7 +3273,9 @@ describe("ArticleEditor bullet popover", () => {
     fireEvent.click(screen.getByLabelText("Bulleted list"));
 
     expect(markerOf(0)).toBeUndefined();
-    expect(document.querySelector("[data-bullet-marker] svg")).toBeNull();
+    expect(
+      document.querySelector("[data-bullet-marker] .list-bullet-circle"),
+    ).toBeNull();
   });
 
   it("styles bullets per-item (one check, one default)", () => {
