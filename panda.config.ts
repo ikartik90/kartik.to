@@ -1,11 +1,9 @@
 import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 
 /**
- * The check / cross bullet glyphs (src/assets/icons/check-small.svg,
- * cross-small.svg) as mask images, so the brand gradient can be painted through
- * them — same device as the blockquote mark. Both are stroke-only paths, and a
- * mask reads alpha, so the stroke is what survives; keep `fill='none'` or the
- * glyph masks as a filled blob. Kept in sync with the .svg files by hand.
+ * check-small.svg / cross-small.svg as masks, so the brand gradient can be
+ * painted through them. A mask reads alpha: keep `fill='none'` or the glyph
+ * masks as a filled blob instead of its stroke. Hand-synced with the .svg files.
  */
 const CHECK_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.05994 10.1813L9.14253 12.6249L12.9396 7.62488' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
@@ -14,19 +12,13 @@ const CROSS_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.5 7.5L7.5 12.5M12.5 12.5L7.5 7.5' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 
 /**
- * The blockquote glyph (src/assets/icons/blockquote.svg, inlined) as two mask
- * images off the SAME path — one its body, one its contour — so the mark can be
- * a translucent brand wash with a solid edge running inside it. A mask reads
- * alpha, so `fill='white'` gives the body and `fill='none' stroke='white'`
- * gives the contour; painting both means two layers, since one mask can only
- * reveal one colour. The glyph's lean is drawn into the artwork, not CSS.
+ * blockquote.svg as two masks off the SAME path — `fill` gives the body,
+ * `stroke` the contour — so the mark can be a translucent wash with a solid
+ * edge inside it. Two layers, because one mask reveals one colour. The glyph's
+ * lean is drawn into the artwork, not CSS.
  *
- * The path's bounding box is 5.06…46.68 x 8.6…45.03 inside the 52 viewBox, so
- * the stroke's outer half stays clear of the edges regardless.
- *
- * NOTE: this is a COPY of the .svg, not a reference to it — nothing imports
- * that file. Re-inline the path here whenever the artwork changes, or the two
- * silently drift.
+ * NOTE: a COPY of the .svg, not a reference — nothing imports that file.
+ * Re-inline the path whenever the artwork changes or the two silently drift.
  */
 const QUOTE_GLYPH_PATH =
   "M10.9494 8.65295C11.8225 8.41923 12.7194 8.93811 12.9533 9.81116C13.0483 10.1658 13.0219 10.5421 12.8772 10.8795C11.447 14.2114 11.3904 18.3371 12.7082 23.2555C15.3871 22.5377 18.0665 21.82 20.7453 21.1022C21.8548 20.8051 22.9949 21.4635 23.2922 22.5729L27.5989 38.6461C27.8962 39.7557 27.2378 40.8957 26.1282 41.193L12.0647 44.9615C10.9551 45.2589 9.81415 44.6005 9.51683 43.4908C8.26072 38.803 7.00438 34.1152 5.74827 29.4274C3.05655 19.3817 8.94032 9.1913 10.9494 8.65295ZM33.053 9.151C33.7647 8.96045 34.496 9.38266 34.6867 10.0944C34.7642 10.3835 34.7422 10.6903 34.6242 10.9655C33.4584 13.6815 33.4122 17.0449 34.4866 21.0543C36.6703 20.4692 38.8546 19.8836 41.0383 19.2985C41.9427 19.0564 42.8721 19.5934 43.1145 20.4977L46.6252 33.6002C46.8675 34.5047 46.3305 35.434 45.426 35.6764L33.9621 38.7487C33.0576 38.991 32.1274 38.454 31.885 37.5494C30.8611 33.7282 29.8376 29.9068 28.8137 26.0856C26.6195 17.8966 31.4152 9.58985 33.053 9.151Z";
@@ -37,9 +29,8 @@ const quoteGlyphMask = (paint: string) =>
 const QUOTE_GLYPH_FILL_MASK = quoteGlyphMask("fill='white'");
 
 /**
- * Stroked at 2px — DOUBLE the 1px inner edge it is used to draw. An SVG stroke
- * straddles its path, so intersecting this with the body mask discards the
- * outer half and leaves exactly 1px lying inside the contour.
+ * Stroked at 2px — DOUBLE the 1px edge it draws. An SVG stroke straddles its
+ * path, so intersecting with the body mask discards the outer half.
  */
 const QUOTE_GLYPH_STROKE_MASK = quoteGlyphMask(
   "fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'",
@@ -47,12 +38,9 @@ const QUOTE_GLYPH_STROKE_MASK = quoteGlyphMask(
 
 /**
  * The column every list marker occupies — a fixed 24px box centring whatever
- * ink the marker draws (a dot, a check/cross disc, an ordinal pill), on the
- * first text line via `marginBlockStart` of (28px bodyLarge line box - 24) / 2.
- *
- * Fixed so the prose column starts at the same x for every list style; the ink
- * inside is free to be any size, which is why the visible gap between a marker
- * and its text varies with the marker while the column does not.
+ * ink the marker draws, on the first text line via `marginBlockStart` of
+ * (28px bodyLarge line box - 24) / 2. Fixed so the prose column starts at the
+ * same x for every list style, whatever size the ink inside happens to be.
  */
 const markerAlignmentBox = {
   flexShrink: 0,
@@ -75,9 +63,7 @@ export default defineConfig({
 
   conditions: {
     extend: {
-      // @starting-style is not a built-in Panda condition — defined here for transition entry states
       starting: "@starting-style",
-      // Extend default `dark` to also respond to [data-theme="dark"] on <html>
       dark: '.dark &, [data-theme="dark"] &',
       demoFrameNarrow: "@container demoFrame (max-width: 760px)",
       demoFrameCompact: "@container demoFrame (max-width: 535px)",
@@ -85,7 +71,6 @@ export default defineConfig({
   },
 
   theme: {
-    // Replace default breakpoints with design system breakpoints (mobile-first)
     breakpoints: {
       md: "820px",
       lg: "1200px",
@@ -94,7 +79,6 @@ export default defineConfig({
     extend: {
       tokens: {
         sizes: {
-          // Text column width — prose elements inside <article> are capped here
           articleContent: { value: "640px" },
           dialogSm: { value: "480px" },
           listingCardWidth: { value: "304px" },
@@ -106,35 +90,28 @@ export default defineConfig({
           dialogFooter: { value: "52px" },
           quoteMark: { value: "52px" },
           tooltipIcon: { value: "14px" },
-          // Numbered-list ordinal badge — square at single digit, pill beyond (Figma 413:684/688)
+          // Square at a single digit, pill beyond (Figma 413:684/688).
           listMarker: { value: "24px" },
-          // Calendar day cell — also the weekday header cell and the month
-          // chevrons, so the whole grid keeps one column pitch (Figma 563:3377).
+          // Also the weekday header cell and the month chevrons, so the whole
+          // grid keeps one column pitch (Figma 563:3377).
           calendarDay: { value: "24px" },
-          // The nav scrim zone flanking a multi-month period list — three day
-          // columns wide (3 × 24), so the fade spans the clipped column plus
-          // enough of its neighbours to read as a gradient (Figma 723:2265).
+          // Three day columns (3 × 24), so the fade spans the clipped column
+          // plus enough of its neighbours to read as a gradient (Figma 723:2265).
           calendarNavZone: { value: "72px" },
-          // Option list / combobox popover width. Fixed like the calendar's
-          // 208px pitch so a select popover and a date popover read as siblings
-          // (Figma 647:2383 option-list, 629:1416 combobox popover).
+          // Fixed like the calendar's 208px pitch, so a select popover and a
+          // date popover read as siblings (Figma 647:2383, 629:1416).
           optionListWidth: { value: "208px" },
-          // One option row — the list-item hit target (24px line + 2×4 inset),
-          // also the empty-state row height (Figma 647:2387).
+          // Option row hit target: 24px line + 2×4 inset (Figma 647:2387).
           optionRow: { value: "32px" },
-          // Bulleted-list dot diameter
           listBullet: { value: "8px" },
-          // Check/cross bullet glyph — deliberately larger than the 16px chip
-          // it sits in, so it overhangs the way the source icons do.
+          // Larger than the 16px chip it sits in, so it overhangs the way the
+          // source icons do.
           listBulletGlyph: { value: "20px" },
-          // Selection toolbar icon button (Figma 422:834 — 28px square)
           toolbarButton: { value: "28px" },
-          // Margin-note card in the aside column, and its offset to the right of
-          // the annotated text (per spec: 100px right of the text content).
           sidenoteWidth: { value: "320px" },
+          // Per spec: 100px right of the text content.
           sidenoteOffset: { value: "100px" },
-          // Centred (stacked) fallback: content-column width minus this inset,
-          // floored at the min width.
+          // Centred (stacked) fallback: content-column width minus this inset.
           sidenoteStackedInset: { value: "80px" },
           sidenoteMinWidth: { value: "320px" },
           sidenoteMaxWidth: { value: "480px" },
@@ -175,7 +152,6 @@ export default defineConfig({
           bold: { value: "550" },
         },
 
-        // Named spacing scale — used for padding, margin, gap, border-radius, border-width
         spacing: {
           none: { value: "0px" },
           "3xs": { value: "0.5px" },
@@ -193,16 +169,15 @@ export default defineConfig({
           full: { value: "100%" },
         },
 
-        // Border-radius scale — values mirror spacing for concentric radius compliance
+        // Mirrors spacing, for concentric radius compliance.
         radii: {
           sm: { value: "{spacing.sm}" },
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
           xl: { value: "{spacing.xl}" },
-          // Pill. `spacing.half` (50%) is the CIRCLE radius — on a box wider
-          // than it is tall it draws an ellipse, not a stadium — so anything
-          // oblong (the skeleton bar) needs a large absolute radius that the
-          // box's own half-height clamps down to.
+          // Pill. `spacing.half` (50%) is the CIRCLE radius — on an oblong box
+          // it draws an ellipse, not a stadium — so anything that can widen
+          // needs a large absolute radius the box's half-height clamps down.
           full: { value: "9999px" },
         },
       },
@@ -222,9 +197,9 @@ export default defineConfig({
               value:
                 "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
             },
-            // Notice callout fill — a subtle neutral wash a touch lighter than
-            // itemHover so the message reads as inset without competing with the
-            // field surfaces around it (Figma 684:1045 dark 20% / 704:1710 light 15%).
+            // A touch lighter than itemHover, so the message reads as inset
+            // without competing with the fields around it (Figma 684:1045 dark
+            // 20% / 704:1710 light 15%).
             notice: {
               value: {
                 base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
@@ -234,9 +209,8 @@ export default defineConfig({
             },
             button: {
               secondary: {
-                // The same neutral wash in both themes, but lighter in light UI
-                // — on a pale canvas the chip needs far less alpha to read as a
-                // filled surface than it does against the dark one.
+                // Lighter in light UI — on a pale canvas the chip needs far
+                // less alpha to read as a filled surface.
                 default: {
                   value: {
                     base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
@@ -253,20 +227,17 @@ export default defineConfig({
                 },
               },
             },
-            // The chip behind a list marker's ink — one step off canvas, so the
-            // brand gradient now sitting IN the digits/glyph is what carries the
-            // colour and the chip only has to separate it from the page. Matches
-            // `surface` today but kept separate: a dialog-surface retune should
-            // not resize the contrast a 16px marker depends on.
+            // The chip behind a list marker's ink. Matches `surface` today but
+            // kept separate: a dialog-surface retune should not resize the
+            // contrast a 16px marker depends on.
             listMarker: {
               value: {
                 base: "{colors.neutral.200}",
                 _dark: "{colors.neutral.800}",
               },
             },
-            // Body of the blockquote quote mark — the brand accent at 15%, the
-            // same wash `bg.highlight` uses on prose. Its own token because the
-            // two are unrelated surfaces that happen to share a recipe.
+            // Body of the blockquote mark. Same value as `bg.highlight`, but
+            // its own token — unrelated surfaces that happen to coincide.
             quoteMark: {
               value: {
                 base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
@@ -274,30 +245,24 @@ export default defineConfig({
                   "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
               },
             },
-            // The 1px inner edge running inside that body — the same accent at
-            // full strength, so the glyph reads as a lit shape rather than a
-            // flat wash.
+            // The 1px edge inside that body, so the glyph reads as a lit shape.
             quoteMarkEdge: {
               value: {
                 base: "{colors.brand.pink}",
                 _dark: "{colors.brand.orange}",
               },
             },
-            // One step elevated from canvas — used for dialog/surface backgrounds
             surface: {
               value: {
                 base: "{colors.neutral.200}",
                 _dark: "{colors.neutral.800}",
               },
             },
-            // The calendar's OWN surface resolved to one opaque colour —
-            // `field.bg.default` (a translucent neutral) composited over
-            // `surface` above. The multi-month period list's edge scrims fade
-            // the clipped columns out into the surface, so they need it as a
-            // solid gradient stop and can't reuse the translucent token.
-            // Written as that exact composite rather than the hex it lands on,
-            // so it tracks either half if one is ever retuned: in dark that is
-            // 25% #576675 over #2E3338 = #384047, the Figma value (723:2265).
+            // `field.bg.default` composited over `surface` — the calendar's own
+            // surface as ONE opaque colour, which the edge scrims need as a
+            // solid gradient stop. Written as the composite rather than the hex
+            // so it tracks either half: dark is 25% #576675 over #2E3338 =
+            // #384047, the Figma value (723:2265).
             calendarScrim: {
               value: {
                 base: "color-mix(in srgb, var(--colors-neutral-500) 15%, var(--colors-neutral-200))",
@@ -305,13 +270,8 @@ export default defineConfig({
                   "color-mix(in srgb, var(--colors-neutral-500) 25%, var(--colors-neutral-800))",
               },
             },
-            // The marquee drag band's fill — the brand accent at 5%, and its
-            // OWN token rather than the selected chip's `field.bg.active`,
-            // because the band is a transient overlay laid over cells that are
-            // already painting their own 15% selection. It only has to tint the
-            // region, so it sits well under the thing it covers. Both themes
-            // carry the same 5%; the split is here because the ACCENT differs
-            // (pink in light, orange in dark), not the strength.
+            // The marquee drag band's fill — 5%, not the selected chip's 15%,
+            // because it is laid OVER cells already painting their selection.
             calendarMarquee: {
               value: {
                 base: "color-mix(in srgb, var(--colors-brand-pink) 5%, transparent)",
@@ -325,10 +285,7 @@ export default defineConfig({
                 _dark: "{colors.brand.pink}",
               },
             },
-            // Prose highlight (<mark>) fill — the brand accent at 15%, paired
-            // with `text.highlight` (the same accent at full strength). Same
-            // strength in both themes; only the hue flips (pink in light,
-            // orange in dark), matching border.focusRing / field.bg.active.
+            // Prose highlight (<mark>) fill, paired with `text.highlight`.
             highlight: {
               value: {
                 base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
@@ -372,8 +329,6 @@ export default defineConfig({
             selection: {
               value: "{colors.neutral.900}",
             },
-            // Text inside a prose highlight — the brand accent at full
-            // strength over its own 15% wash (`bg.highlight`).
             highlight: {
               value: {
                 base: "{colors.brand.pink}",
@@ -412,11 +367,10 @@ export default defineConfig({
             },
           },
 
-          // Text-input family (TextInput, and the forthcoming Select/Date inputs
-          // that share the same frame). Resting greys are neutral.600 (light) /
-          // neutral.400 (dark); the `active` accent is the brand hue — pink in
-          // light, orange in dark, matching border.focusRing. bg/border are
-          // translucent mixes so the frame reads as a subtle fill (Figma 586:876).
+          // The text-input family, shared by every input that uses the same
+          // frame. `active` is the brand hue, matching border.focusRing;
+          // bg/border are translucent mixes so the frame reads as a subtle
+          // fill (Figma 586:876).
           field: {
             bg: {
               default: {
@@ -433,15 +387,16 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
                 },
               },
-              // Opaque covering surface for the Date input's calendar popover —
-              // it sits over the field, so it can't be translucent like `active`
-              // (Figma 631:894 dark / 631:898 light).
+              // Opaque, because the popover COVERS the field it belongs to and
+              // so can't be translucent like `active` (Figma 631:894/631:898).
               popover: {
-                value: { base: "#f2c9de", _dark: "#41362e" },
+                value: {
+                  base: "{colors.brand.rosemilk}",
+                  _dark: "{colors.brand.rust}",
+                },
               },
-              // Selected chip inside that popover — the resting text colour at
-              // 15%, so it reads neutral against the brand-tinted surface
-              // (Figma 563:2726 dark / 563:2767 light).
+              // Selected chip inside that popover — neutral, so it reads
+              // against the brand-tinted surface (Figma 563:2726/563:2767).
               selected: {
                 value: {
                   base: "color-mix(in srgb, var(--colors-neutral-600) 15%, transparent)",
@@ -449,17 +404,12 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-neutral-400) 15%, transparent)",
                 },
               },
-              // The low-emphasis hover wash, shared by hovered/keyboard-active
-              // option rows, icon buttons and tertiary buttons — so all three
-              // respond identically (`hoverBrand` is its onBrand twin; Figma
-              // 647:2389 default, 629:1419 onBrand).
-              //
-              // Deliberately the SAME value as `bg.default` above and
-              // `bg.button.secondary.default` in both themes, so hovering a
-              // tertiary button lands exactly on the secondary chip. Where this
-              // wash layers over a field surface (an option row on a
-              // `bg.default` list) the two translucent layers stack, so the
-              // hovered row still lifts clear of the list it sits in.
+              // The low-emphasis hover wash — option rows, icon buttons and
+              // tertiary buttons all take it (`hoverBrand` is its onBrand twin;
+              // Figma 647:2389, 629:1419). Deliberately the SAME value as
+              // `bg.default` and `bg.button.secondary.default`, so a tertiary
+              // hover lands exactly on the secondary chip; over a field surface
+              // the two translucent layers stack and the row still lifts.
               hover: {
                 value: {
                   base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
@@ -507,10 +457,8 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-neutral-400) 50%, var(--colors-neutral-800))",
                 },
               },
-              // Placeholder text — the neutral accent at 25%, one step fainter
-              // than `muted` so an empty field reads as clearly unfilled without
-              // dragging labels/hints (which stay `muted`) down with it. The
-              // brand-surface counterpart is `activeMuted` (also 25%).
+              // One step fainter than `muted`, so an empty field reads as
+              // unfilled without dragging labels/hints down with it.
               placeholder: {
                 value: {
                   base: "color-mix(in srgb, var(--colors-neutral-600) 25%, transparent)",
@@ -525,9 +473,7 @@ export default defineConfig({
                   _dark: "{colors.brand.orange}",
                 },
               },
-              // Secondary/placeholder text on a brand-tinted surface — the
-              // active accent dialled back to 25% (the brand-surface counterpart
-              // of `muted`, e.g. the Date popover search placeholder).
+              // `placeholder`'s counterpart on a brand-tinted surface.
               activeMuted: {
                 value: {
                   base: "color-mix(in srgb, var(--colors-brand-pink) 25%, transparent)",
@@ -541,9 +487,8 @@ export default defineConfig({
       },
 
       keyframes: {
-        // The skeleton shimmer — a highlight swept across the bar. Driven by
-        // background-position on an over-wide gradient (see the `skeleton`
-        // recipe) so it composites on the GPU and never reflows.
+        // Driven by background-position on an over-wide gradient (see the
+        // `skeleton` recipe) so it composites on the GPU and never reflows.
         wireframeShimmer: {
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
@@ -551,38 +496,24 @@ export default defineConfig({
       },
 
       recipes: {
-        // The wireframe scope — the provider's root element. It sets no text
-        // treatment itself: turning text into bars is the primitives' job (they
-        // read the React context and render a `Skeleton` in place of their
-        // children), because only the component knows WHICH of its parts are
-        // text. What this recipe owns is what is genuinely scope-wide — the
-        // dimming, the shimmer switch, and the pointer/caret suppression.
-        //
-        // `placeholder` is the demo-layout treatment: the whole block recedes to
-        // 25% (Figma 745:4383) so it reads as furniture behind the one component
-        // actually being demonstrated. `loading` is the real-content-pending
-        // treatment: full strength, plus the shimmer, because the user is meant
-        // to look at it and wait.
+        // The wireframe scope — the provider's root element. Turning text into
+        // bars is the primitives' job (only the component knows WHICH of its
+        // parts are text); this owns what is genuinely scope-wide — the
+        // dimming, the shimmer switch, the pointer suppression.
         wireframe: defineRecipe({
           className: "wireframe",
           description:
             "The wireframe/skeleton scope. Wraps any subtree; the text-bearing primitives inside it read the matching React context and swap their text for a `skeleton` bar of the same line box. `mode` picks the intent: `placeholder` dims the block to 25% for demo layouts that present a shape rather than content (Figma 745:4375 / 745:4080), `loading` keeps it at full strength and shimmers while real content is pending. Interactivity and the aria semantics are set by the component, not here — a non-interactive scope is `inert`, a placeholder is `aria-hidden`, a loading scope is `aria-busy`.",
           base: {
-            // A plain block — the same box the scope renders when it is
-            // disabled, so flipping `enabled` for a loading region never shifts
-            // the layout around it. The bars are drawn from each text node's own
-            // `currentColor`, so the scope needs no colour of its own: light/dark
-            // and the muted-label-vs-default-value two-tone come for free.
+            // The same box the scope renders when disabled, so flipping
+            // `enabled` never shifts the layout around it. Bars draw from each
+            // text node's own `currentColor`, so this needs no colour.
             display: "block",
           },
           variants: {
-            // How far the block recedes, as a percentage — orthogonal to `mode`
-            // and to interactivity, so a live wireframe and a shimmering loading
-            // one can each sit at any level. Four steps rather than a free number:
-            // the point is a small set of deliberate depths (background furniture
-            // → foreground subject), not a dial. 25 is the Figma's own recessed
-            // demo block (745:4383); 50 is the default, present but clearly not
-            // the subject; 100 is undimmed, for when the wireframe IS the subject.
+            // Four deliberate depths (background furniture → foreground
+            // subject), not a free dial. 25 is the Figma's recessed demo block
+            // (745:4383); 100 is for when the wireframe IS the subject.
             opacity: {
               25: { opacity: 0.25 },
               50: { opacity: 0.5 },
@@ -591,20 +522,17 @@ export default defineConfig({
             },
             mode: {
               placeholder: {
-                // Nothing in here is aimed at, even when the scope stays
-                // interactive — a placeholder never advertises a hit target.
+                // A placeholder never advertises a hit target, even when the
+                // scope stays interactive.
                 cursor: "default",
                 "& *": { cursor: "default" },
               },
               loading: {
                 "& [data-skeleton]::after": {
-                  // Swap the flat fill for a swept gradient. The highlight is a
-                  // translucent DIP in currentColor rather than a blend toward
-                  // some named surface — so it reads correctly wherever the bar
-                  // happens to sit (on the canvas, inside a field frame, on the
-                  // popover) and in both themes, with whatever is actually
-                  // behind it showing through. That means the flat fill has to
-                  // go, or it would back the dip and defeat it.
+                  // The highlight is a translucent DIP in currentColor, not a
+                  // blend toward a named surface, so it reads correctly
+                  // wherever the bar sits. The flat fill has to go, or it would
+                  // back the dip and defeat it.
                   backgroundColor: "transparent",
                   backgroundImage:
                     "linear-gradient(90deg, currentColor 0%, currentColor 35%, color-mix(in srgb, currentColor 30%, transparent) 50%, currentColor 65%, currentColor 100%)",
@@ -618,8 +546,7 @@ export default defineConfig({
             },
           },
           defaultVariants: { mode: "placeholder", opacity: 50 },
-          // The provider picks both at runtime, so the static extractor only
-          // ever sees the defaults — force every branch to be generated.
+          // Runtime variant values — force every branch to be emitted.
           staticCss: [{ mode: ["*"], opacity: ["*"] }],
         }),
 
@@ -632,10 +559,9 @@ export default defineConfig({
             border: "none",
             appearance: "none",
             textDecoration: "none",
-            // Hug the content — never stretch to fill. A flex item's display is
-            // blockified (inline-flex → flex), so a flex-column / grid parent's
-            // default `stretch` would otherwise pull the control across the cross
-            // axis; a definite `fit-content` width opts out. Ignored by `link`.
+            // Hug the content. A flex item's display is blockified, so a
+            // flex-column / grid parent's `stretch` would otherwise pull the
+            // control across the cross axis; `fit-content` opts out.
             width: "fit-content",
             transition:
               "transform 100ms ease, background-color 150ms ease, color 150ms ease",
@@ -664,8 +590,7 @@ export default defineConfig({
                 // Space a leading icon from the label when both compose.
                 gap: "md",
                 height: "token(spacing.4xl)",
-                // Floor a short label (Cancel / OK) to a substantial chip; a
-                // longer label grows past it since the width is fit-content.
+                // Floor a short label (Cancel / OK) to a substantial chip.
                 minWidth: "token(spacing.5xl)",
                 paddingInline: "lg",
                 borderRadius: "md",
@@ -679,14 +604,12 @@ export default defineConfig({
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                // Space icon ∣ optional label (the ← Home link) the way the
-                // toolbar chip spaces its glyph and text.
+                // Space icon ∣ optional label (the ← Home link).
                 gap: "sm",
                 padding: "sm",
                 borderRadius: "sm",
                 color: "inherit",
-                // Matches the toolbar chip for the icon+label case; harmless
-                // for the icon-only majority.
+                // For the icon+label case; harmless for the icon-only majority.
                 textStyle: "bodySmall",
                 backgroundColor: "transparent",
                 _hover: { backgroundColor: "field.bg.hover" },
@@ -707,13 +630,10 @@ export default defineConfig({
                 _active: { transform: "none" },
               },
             },
-            // Fill prominence — orthogonal to `variant` (which is the shape).
-            // `secondary` is the filled chip the `text` variant already draws;
-            // `tertiary` drops the resting fill and hovers to the neutral
-            // `field.bg.hover` (see compoundVariants) — the same low-emphasis
-            // wash icon buttons use. Icon buttons are tertiary by nature —
-            // their transparent rest state and `field.bg.hover` live in the
-            // `icon` variant, so emphasis is inert for them.
+            // Fill prominence — orthogonal to `variant` (the shape). Both are
+            // empty here: `secondary` is what `text` already draws, and
+            // `tertiary` is applied by the compound below. Inert for `icon`,
+            // which is tertiary by nature.
             emphasis: {
               secondary: {},
               tertiary: {},
@@ -723,11 +643,8 @@ export default defineConfig({
             {
               variant: "text",
               emphasis: "tertiary",
-              // No resting fill, and hover to the neutral `field.bg.hover` — the
-              // same low-emphasis wash icon buttons use — overriding the
-              // secondary hover the `text` variant otherwise supplies. Both land
-              // as atomic utilities (later cascade layer), so they win over the
-              // `text` variant's own fill.
+              // Overrides the secondary fill/hover the `text` variant supplies:
+              // both land as atomic utilities (later cascade layer), so they win.
               css: {
                 backgroundColor: "transparent",
                 _hover: { backgroundColor: "field.bg.hover" },
@@ -735,8 +652,7 @@ export default defineConfig({
             },
           ],
           defaultVariants: { variant: "text", emphasis: "secondary" },
-          // Button/Link call action({ variant, emphasis }) with runtime values,
-          // so every combination must be emitted statically.
+          // Runtime variant values — force every branch to be emitted.
           staticCss: [{ variant: ["*"], emphasis: ["*"] }],
         }),
 
@@ -757,18 +673,15 @@ export default defineConfig({
           description:
             "Hyperlink inside article prose. The underline is drawn as two stacked background bars, not text-decoration, so the hover state can be the brand gradient (text-decoration-color can't be a gradient): a neutral color-mix bar (text.body @ 50%) with the brandedEmphasis gradient layered on top, hidden at rest and grown in on hover. box-decoration-break:clone repeats the bars on each line of a wrapped link.",
           base: {
-            // No text-decoration at all — the underline is the background bars
-            // below; textDecorationLine:none suppresses the browser's default
-            // <a> underline.
+            // The underline is the background bars below, so suppress the UA's.
             textDecorationLine: "none",
             color: "text.default",
             paddingBottom: "xs",
             backgroundImage:
               "token(colors.bg.brandedEmphasis), linear-gradient(color-mix(in srgb, var(--colors-text-body) 50%, transparent), color-mix(in srgb, var(--colors-text-body) 50%, transparent))",
             backgroundRepeat: "no-repeat",
-            // Anchored to the bottom of the padding box (2px below the line box)
-            // so the gradient grows upward to exactly cover the neutral bar on
-            // hover. 1px thick (spacing.xxs).
+            // Bottom-anchored, so the gradient grows upward to exactly cover
+            // the neutral bar on hover.
             backgroundPosition: "0 100%",
             backgroundSize: "100% 0, 100% token(spacing.xxs)",
             WebkitBoxDecorationBreak: "clone",
@@ -855,11 +768,8 @@ export default defineConfig({
             userSelect: "none",
             // A PLAIN inline, deliberately: an atomic inline (inline-block)
             // carries an unconditional soft-wrap opportunity before it, so the
-            // ordinal could be pushed onto a line of its own, orphaned from the
-            // last annotated word. As a non-atomic inline with no whitespace
-            // before it, the digit is part of that word's unbreakable run and
-            // always travels with it. The underline is kept off the ordinal by
-            // scoping it to the sibling articleSidenoteText span instead.
+            // ordinal could be orphaned onto a line of its own. Non-atomic, it
+            // travels with the last annotated word.
             display: "inline",
             _after: {
               content: "attr(data-sidenote-number)",
@@ -878,10 +788,8 @@ export default defineConfig({
             "Margin note, CSS-anchored via anchor() and revealed only when its annotation is active (caret in the editor; hover/click in the reader). `side` (default): 100px right of the text-content column (via the --sidenote-rail anchor) and 2px above the annotated line. `stacked` (no room): centred on the content column, 4px below/above the line with flip-block — like the slash menu. Vertical/default anchor is the annotation's --sn-<id> (set inline via --sn-anchor).",
           base: {
             // Fixed (not absolute) so anchor()'s flip-block fallback measures
-            // overflow against the VIEWPORT — anchor positioning keeps the card
-            // pinned to its annotation as the page scrolls. Absolute would size
-            // the fallback against the tall <article> (always room below) and
-            // never flip above.
+            // overflow against the VIEWPORT. Absolute would measure against the
+            // tall <article> — always room below — and never flip above.
             position: "fixed",
             zIndex: 40,
             positionAnchor: "var(--sn-anchor)",
@@ -905,9 +813,9 @@ export default defineConfig({
             transitionProperty: "opacity, visibility",
             transitionDuration: "120ms",
             transitionTimingFunction: "ease-out",
-            // allow-discrete so `visibility` flips to visible at the START of the
-            // reveal (not after 120ms) — otherwise the card stays unfocusable for
-            // a frame and the Edit auto-focus lands on nothing.
+            // allow-discrete so `visibility` flips at the START of the reveal —
+            // otherwise the card is unfocusable and Edit auto-focus lands on
+            // nothing.
             transitionBehavior: "allow-discrete",
             "&[data-active='true']": {
               opacity: 1,
@@ -916,21 +824,17 @@ export default defineConfig({
             },
           },
           variants: {
-            // Horizontal geometry (`left`/`width`) is driven by inline styles the
-            // SidenoteLayer computes from the rail's measured rect — it's
-            // scroll-invariant (the content column's x-edges don't move on
-            // vertical scroll) and avoids a SECOND named-anchor query, which
-            // WebKit/Safari doesn't resolve (only the element's default
-            // `position-anchor` works there; `anchor(--sidenote-rail …)` and
-            // `anchor-size()` silently fail). Vertical stays CSS-anchored to the
-            // annotation (`--sn-anchor`, the default anchor) so it tracks scroll.
+            // Horizontal geometry (`left`/`width`) comes from inline styles
+            // SidenoteLayer computes: it is scroll-invariant, and it avoids a
+            // SECOND named-anchor query, which WebKit silently fails (only the
+            // default `position-anchor` resolves there). Vertical stays
+            // CSS-anchored to `--sn-anchor` so it tracks scroll.
             placement: {
               side: {
                 top: "anchor(top)",
                 marginTop: "calc(-1 * token(spacing.md))",
               },
-              // Centred on the content column (left computed inline); 4px
-              // below/above the line with flip-block.
+              // Centred on the content column (left computed inline).
               stacked: {
                 translate: "-50% 0",
                 top: "anchor(bottom)",
@@ -976,14 +880,12 @@ export default defineConfig({
           description:
             "Editable/read note body inside a margin-note card. Paragraphs are block children separated by 4px (Shift+Enter in the editor). Shows a placeholder while empty and unfocused.",
           base: {
-            // inline-block (+ a min width) gives an EMPTY contentEditable a line
-            // box so the caret is placeable/visible on click; caretColor makes
-            // it explicit rather than relying on `auto`.
+            // inline-block + a min width gives an EMPTY contentEditable a line
+            // box, so the caret is placeable on click.
             display: "inline-block",
             minWidth: "token(spacing.md)",
             caretColor: "text.default",
             focusVisibleRing: "none",
-            // Each paragraph of a note is a block child; 4px between them.
             "& > * + *": { marginTop: "sm" },
             "&[data-placeholder]:empty::after": {
               content: "attr(data-placeholder)",
@@ -1087,12 +989,9 @@ export default defineConfig({
               },
             },
           },
-          // A logger frame drops `aspect-ratio` (its height = demo area + footer),
-          // so reserve the aspect-ratio height as a CSS floor via container-query
-          // units (the frame is `container-type: inline-size`). This keeps the
-          // frame at full height from SSR — no client-measured jump — while
-          // content taller than the floor still grows it (height: auto). cqw
-          // factor = ratioHeight / ratioWidth.
+          // A logger frame drops `aspect-ratio`, so reserve that height as a
+          // floor in container-query units — full height from SSR, no
+          // client-measured jump. cqw factor = ratioHeight / ratioWidth.
           compoundVariants: [
             {
               logger: true,
@@ -1113,11 +1012,8 @@ export default defineConfig({
           defaultVariants: {
             aspectRatio: "sm",
           },
-          // DemoFrame selects `aspectRatio`/`logger` at RUNTIME (per registry
-          // entry), so the static extractor only ever sees the default (`sm`).
-          // Every non-default aspect ratio (a `md` 3:2 showcase, `lg`) and its
-          // logger compound must be forced, or the variant class emits nothing
-          // and the area silently falls back to its content-height min-height.
+          // Runtime variant values — force every branch, compounds included, or
+          // the area silently falls back to its content-height min-height.
           staticCss: [
             { aspectRatio: ["*"] },
             { aspectRatio: ["*"], logger: ["*"] },
@@ -1290,10 +1186,8 @@ export default defineConfig({
           description: "Shared dialog panel shell.",
           base: {
             backgroundColor: "bg.surface",
-            // The surface owns the text/glyph hue: icon buttons in the header
-            // (close) and body (delete) are `color: inherit`, so without this
-            // they'd fall through to the body default instead of the dialog's
-            // own `text.body` — the colour the title and body copy already use.
+            // The surface owns the glyph hue: the header/body icon buttons are
+            // `color: inherit` and would otherwise fall through to the app body.
             color: "text.body",
             borderRadius: "md",
             borderWidth: "token(spacing.3xs)",
@@ -1645,11 +1539,9 @@ export default defineConfig({
               maskImage: QUOTE_GLYPH_FILL_MASK,
               WebkitMaskImage: QUOTE_GLYPH_FILL_MASK,
             },
-            // The inner edge: the 2px stroke INTERSECTED with the body, which
-            // keeps only the half of it that falls inside the glyph. An inset
-            // `box-shadow` cannot do this — it draws on the element's box, so
-            // once the box is masked to the glyph it would surface only where
-            // the glyph meets the box edges, not along its contour.
+            // The 2px stroke INTERSECTED with the body, keeping only the half
+            // inside the glyph. An inset `box-shadow` can't do this: it draws
+            // on the element's BOX, not along the masked contour.
             "&::after": {
               backgroundColor: "bg.quoteMarkEdge",
               maskImage: `${QUOTE_GLYPH_STROKE_MASK}, ${QUOTE_GLYPH_FILL_MASK}`,
@@ -1690,9 +1582,8 @@ export default defineConfig({
             textStyle: "caption",
             width: "fit-content",
             wordBreak: "break-word",
-            // Only clip the gradient into the glyphs once there is text — an
-            // empty editor field keeps its normal placeholder colour instead of
-            // turning the placeholder transparent.
+            // Only clip once there is text, or an empty editor field turns its
+            // own placeholder transparent.
             "&:not(:empty):not([data-empty])": {
               background: "bg.brandedEmphasis",
               backgroundClip: "text",
@@ -1775,22 +1666,17 @@ export default defineConfig({
             height: "token(spacing.xl)",
             minWidth: "token(spacing.xl)",
             paddingInline: "xs",
-            // Optical centring for the digits, as `padding-block-end` (a centred
-            // flex item shifts up by HALF the padding, so this is twice the
-            // offset). Centring aligns the font's CONTENT AREA — ascent plus
-            // descent — but digits have no descender, so their ink sits low by
-            // `(ascent - descent)/2 - (inkAscent - inkDescent)/2`; measured in
-            // Switzer at 12px that is (12-3)/2 - (7.875-0.159)/2 = 0.642px, i.e.
-            // 0.0535em. In `em` so it tracks the font size; it would only need
-            // re-measuring if the typeface changed.
+            // Optical centring: flex centring aligns the font's CONTENT AREA,
+            // but digits have no descender, so their ink sits low by 0.642px in
+            // Switzer at 12px = 0.0535em. Doubled here, since a centred flex
+            // item shifts up by HALF its padding. Re-measure only if the
+            // typeface changes.
             paddingBlockEnd: "0.107em",
             borderRadius: "lg",
-            // TWO background layers with different clips: the brand gradient
-            // clipped to the glyphs, and a flat `bg.listMarker` layer clipped to
-            // the padding box behind them. It has to be one element's two layers
-            // — a pseudo-element can't supply the chip, because background-clip
-            // text paints the digits in the BACKGROUND layer, which any child
-            // (even at z-index -1) would cover. Same device as `articleLink`.
+            // TWO layers on ONE element: the gradient clipped to the glyphs,
+            // the chip clipped to the padding box. A pseudo-element can't
+            // supply the chip — `background-clip: text` paints the digits in
+            // the BACKGROUND layer, which any child would cover.
             backgroundImage:
               "token(colors.bg.brandedEmphasis), linear-gradient(token(colors.bg.listMarker) 0 0)",
             backgroundClip: "text, padding-box",
@@ -1926,8 +1812,7 @@ export default defineConfig({
             width: "fit-content",
             maxWidth: "full",
             wordBreak: "break-word",
-            // Clip the gradient into the glyphs only once there is text — an empty
-            // editor field keeps its normal placeholder colour.
+            // Only clip once there is text (see articleSubheadingCaption).
             "&:not(:empty):not([data-empty])": {
               background: "bg.brandedEmphasis",
               backgroundClip: "text",
@@ -2016,20 +1901,15 @@ export default defineConfig({
             display: "flex",
             flexDirection: "column",
             overflow: "visible",
-            // No internal padding — the OptionList.Listbox's own 4px inset is the
-            // only gap between the panel edge and the rows (its root collapses via
-            // the `plain` tone, so the listbox sits directly in this popover).
+            // No internal padding — the listbox's own 4px inset is the only gap
+            // to the rows (its root collapses via the `plain` tone).
             boxShadow:
               "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
           },
         }),
 
-        // The Date input's calendar popover — positioned to COVER the trigger
-        // frame (top/left of the anchor, at least its width) rather than sit
-        // below it, so the popover's search row lands over the collapsed value
-        // (Figma 563:2486). Anchor-name `--date-popover` is set on the frame only
-        // while open, so exactly one element carries it. Opaque tinted surface +
-        // brand inset border.
+        // Anchor-name `--date-popover` is set on the frame only while open, so
+        // exactly one element ever carries it (Figma 563:2486).
         datePopover: defineRecipe({
           className: "date-popover",
           description:
@@ -2051,11 +1931,8 @@ export default defineConfig({
           },
         }),
 
-        // The Combobox input's option-list popover — the Select counterpart to
-        // datePopover. Same covering behaviour (anchored over the trigger frame
-        // via `--combobox-popover`, opaque brand-tinted surface + brand inset
-        // border), but sized to the option list: at least `optionListWidth`, and
-        // never narrower than the trigger (Figma 629:1416 dark / 630:1702 light).
+        // The Select counterpart to datePopover, sized to the option list
+        // (Figma 629:1416 dark / 630:1702 light).
         comboboxPopover: defineRecipe({
           className: "combobox-popover",
           description:
@@ -2094,7 +1971,7 @@ export default defineConfig({
             alignItems: "center",
             gap: "sm",
             // Hug the options — also overrides the `article > *` width rule
-            // (@layer base) that would otherwise stretch it to the text column.
+            // (@layer base) that would stretch it to the text column.
             width: "max-content",
             maxWidth: "min(100vw, token(sizes.articleContent))",
             height: "token(spacing.4xl)",
@@ -2153,19 +2030,16 @@ export default defineConfig({
               opacity: 0,
               filter: "blur(1px)",
             },
-            // Shown by its host toggling `data-visible` on the element itself
-            // (`.tooltip[data-visible]` outspecifies the base `.tooltip` within
-            // @layer recipes — no unlayered override needed). The cursor trails
-            // the box by its offset, so `pointer-events: auto` never intercepts
-            // the pointer yet lets an interactive tooltip (the email copy) be hit.
+            // Shown by its host toggling `data-visible`. The cursor trails the
+            // box by its offset, so `pointer-events: auto` never intercepts the
+            // pointer yet still lets an interactive tooltip be hit.
             "&[data-visible]": {
               opacity: 1,
               visibility: "visible",
               pointerEvents: "auto",
               filter: "blur(0)",
             },
-            // A composed trailing glyph is tooltip-sized (14px) and tracks the
-            // label colour — no per-icon className needed.
+            // A composed trailing glyph, sized and tinted with no className.
             "& svg": {
               flexShrink: 0,
               width: "token(sizes.tooltipIcon)",
@@ -2215,16 +2089,12 @@ export default defineConfig({
             cursor: "default",
             textStyle: "bodySmall",
             color: "text.body",
-            // cmdk sets data-selected; slash-menu uses aria-selected on native buttons.
+            // cmdk sets data-selected; the slash menu uses aria-selected.
             //
-            // The highlight is `field.bg.hover` — the SAME wash an OptionList row
-            // takes — not `bg.itemHover`. Both are a neutral.500 tint at 25% in
-            // dark, so they were indistinguishable there; but itemHover is a flat
-            // 25% in BOTH themes while the field wash drops to 15% in light, and
-            // on the pale canvas that 10-point gap made the palette's highlight
-            // read as a heavy grey band next to the faint one every other list of
-            // options in the app uses. A menu row and a listbox row are the same
-            // gesture, so they take the same tint.
+            // `field.bg.hover`, not `bg.itemHover`: the two match in dark, but
+            // itemHover stays a flat 25% in light where the field wash drops to
+            // 15%, which read as a heavy grey band beside every other option
+            // list. A menu row and a listbox row are the same gesture.
             "&[data-selected='true'], &[aria-selected='true']": {
               backgroundColor: "field.bg.hover",
             },
@@ -2233,18 +2103,11 @@ export default defineConfig({
       },
 
       slotRecipes: {
-        // One skeleton bar — the thing a text node becomes inside a `wireframe`
-        // scope, and the atom to reach for directly when building a loading
-        // placeholder by hand.
-        //
-        // The geometry is lifted straight from the Figma "Line Height Wrapper"
-        // (745:4385 / 745:4389 / 745:4393): the bar sits centred in the line box
-        // of the text it replaced, at that font's CAP HEIGHT — 11px in a 24px
-        // label box, 12px in a 28px input box, 9px in a 20px hint box. That is
-        // one rule, not a per-textStyle table: `height: 1cap`. Because the box
-        // is the real line box and the width comes from the real (visually
-        // hidden) string, a wireframed component occupies exactly the space the
-        // live one does — swapping between them shifts nothing.
+        // One skeleton bar — what a text node becomes inside a `wireframe`
+        // scope. The Figma "Line Height Wrapper" (745:4385/4389/4393) draws it
+        // at the font's CAP HEIGHT in every text style, which is one rule
+        // rather than a per-textStyle table: `height: 1cap`. Box and width both
+        // come from the real text, so swapping live ↔ wireframed shifts nothing.
         skeleton: defineSlotRecipe({
           className: "skeleton",
           description:
@@ -2253,8 +2116,8 @@ export default defineConfig({
           base: {
             root: {
               position: "relative",
-              // Inline-block so the box hugs the string it replaced — that is
-              // what makes the bar the width of the real text.
+              // Hugs the string it replaced, which is what gives the bar the
+              // width of the real text.
               display: "inline-block",
               maxWidth: "token(spacing.full)",
               verticalAlign: "top",
@@ -2264,8 +2127,7 @@ export default defineConfig({
                 insetInline: 0,
                 top: "50%",
                 transform: "translateY(-50%)",
-                // Cap height. `cap` is the exact unit for this; the em fallback
-                // is the same ratio for the sans in use, for older engines.
+                // The em fallback is the same ratio for the sans in use.
                 height: "0.7em",
                 borderRadius: "token(radii.full)",
                 backgroundColor: "currentcolor",
@@ -2276,11 +2138,9 @@ export default defineConfig({
               },
             },
             text: {
-              // `visibility` rather than `color: transparent`: it keeps the box
-              // measuring (so the bar gets its width) while dropping the glyphs
-              // AND the string from the accessibility tree — and, unlike a
-              // transparent colour, it leaves the root's own `currentColor`
-              // intact for the bar to paint with.
+              // `visibility`, not `color: transparent`: it keeps the box
+              // measuring, drops the string from the a11y tree, and leaves the
+              // root's `currentColor` intact for the bar to paint with.
               visibility: "hidden",
               userSelect: "none",
             },
@@ -2308,11 +2168,9 @@ export default defineConfig({
               flexDirection: "column",
               alignItems: "stretch",
               width: "token(spacing.full)",
-              // A toggle control — switch or checkbox — flips the field from a
-              // vertical stack into the control ∣ label/hint grid: same field, a
-              // different archetype, detected structurally (no prop) the way the
-              // active state keys off :focus-visible. Text inputs never match,
-              // so they're unaffected.
+              // A toggle control flips the field from a vertical stack into the
+              // control ∣ label/hint grid — detected structurally, no prop, the
+              // way the active state keys off :focus-visible.
               "&:has([role='switch'], [role='checkbox'])": {
                 display: "grid",
                 gridTemplateColumns: "auto 1fr",
@@ -2328,19 +2186,15 @@ export default defineConfig({
               wordBreak: "break-word",
               cursor: "default",
               transition: "color 150ms ease",
-              // Active tracks the control's focus from the field root, so the
-              // label (a sibling above the frame) recolors even though it sits
-              // outside the shell.
+              // Tracked from the field ROOT, so the label recolors even though
+              // it sits outside the frame.
               "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &":
                 {
                   color: "field.text.active",
                 },
-              // Toggle archetype: the label sits to the right of the control as a
-              // full statement — so it reads as the field family's resting text
-              // (`field.text.default`, matching the input values), not the muted
-              // field label nor the brighter app body text; clicking it toggles,
-              // so it takes the pointer cursor (Figma 684:1133 dark neutral.400 /
-              // light neutral.600).
+              // Toggle archetype: the label is a full statement beside the
+              // control, so it reads as resting field text rather than a muted
+              // label, and clicking it toggles (Figma 684:1133).
               "[data-field]:has([role='switch'], [role='checkbox']) &": {
                 gridColumn: 2,
                 gridRow: 1,
@@ -2359,14 +2213,12 @@ export default defineConfig({
               borderWidth: "token(spacing.3xs)",
               borderStyle: "solid",
               overflow: "hidden",
-              // Clicking the frame's dead padding focuses the control, so it
-              // should read as a text field.
+              // Clicking the frame's dead padding focuses the control.
               cursor: "text",
               backgroundColor: "field.bg.default",
               borderColor: "field.border.default",
-              // Frame `color` is the single source for the leading icon and the
-              // control (both `color: inherit`); the active selector flips all
-              // three at once.
+              // The single source for the leading icon and the control (both
+              // `color: inherit`); the active selector flips all three at once.
               color: "field.text.default",
               transition:
                 "background-color 150ms ease, border-color 150ms ease, color 150ms ease",
@@ -2376,22 +2228,17 @@ export default defineConfig({
                   borderColor: "field.border.active",
                   color: "field.text.active",
                 },
-              // Keyboard focus draws the ring on the shell (as the command
-              // palette does for its input row) so it hugs the whole field,
-              // icon included, rather than the raw input. Inset so the frame's
-              // overflow:hidden can't clip it; width/colour match the app-wide
-              // keyboard ring in globals.css.
+              // The ring goes on the shell so it hugs the whole field, icon
+              // included. Inset, so the frame's overflow:hidden can't clip it;
+              // width/colour match the app-wide ring in globals.css.
               "html[data-keyboard-focus] [data-field]:has([data-control]:focus-visible) &":
                 {
                   boxShadow:
                     "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
                 },
-              // Icons compose straight into the frame — a leading `<Icon/>` before
-              // the control, or a trailing one after it (the Date/Select triggers).
-              // A fixed 20px box that inherits the frame's colour (so it tracks the
-              // active accent) and is non-interactive, so clicks fall through to the
-              // frame's focus-forward / open target. `> svg` keeps it off any icon
-              // that might live inside the control itself.
+              // Icons compose straight into the frame, leading or trailing:
+              // fixed box, frame colour, non-interactive so clicks fall through
+              // to the frame. `> svg` keeps this off icons inside the control.
               "& > svg": {
                 flexShrink: 0,
                 width: "token(spacing.xxl)",
@@ -2415,23 +2262,18 @@ export default defineConfig({
               color: "inherit",
               transition: "color 150ms ease",
               caretColor: "field.text.active",
-              // Placeholder text — the native input's `::placeholder` and the
-              // Select/Date trigger's `[data-placeholder]` sentinel share one
-              // rule. Resting is the neutral placeholder tone; when the field
-              // goes active (control focus-visible, or an open trigger's
-              // aria-expanded) it tracks the label / value / leading icon into
-              // the accent via `activeMuted` (the brand-surface counterpart of
-              // the placeholder tone, same 25%) rather than staying stranded in
-              // neutral grey against the now brand-tinted frame.
+              // The native `::placeholder` and the Select/Date trigger's
+              // `[data-placeholder]` sentinel share one rule. On active it
+              // follows the rest of the field into the accent, rather than
+              // staying stranded in grey on a brand-tinted frame.
               "&::placeholder, &[data-placeholder]": {
                 color: "field.text.placeholder",
               },
               "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &::placeholder, [data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &[data-placeholder]":
                 { color: "field.text.activeMuted" },
-              // The UA outline is already reset app-wide (globals.css). The
-              // app-wide keyboard ring, however, targets the raw <input>, which
-              // this frame's overflow:hidden clips into an awkward inner
-              // rectangle — suppress it so the frame can carry the ring instead.
+              // The app-wide keyboard ring targets the raw <input>, which this
+              // frame's overflow:hidden clips into an awkward inner rectangle.
+              // Suppress it; the frame carries the ring instead.
               "html[data-keyboard-focus] &:focus-visible": {
                 boxShadow: "none",
               },
@@ -2441,8 +2283,8 @@ export default defineConfig({
               width: "token(spacing.full)",
               wordBreak: "break-word",
               marginTop: "sm",
-              // Toggle archetype: the hint drops under the label (grid row 2),
-              // aligned to it rather than stacked with its own top margin.
+              // Toggle archetype: the hint drops under the label, aligned to it
+              // rather than stacked with its own top margin.
               "[data-field]:has([role='switch'], [role='checkbox']) &": {
                 gridColumn: 2,
                 gridRow: 2,
@@ -2451,14 +2293,11 @@ export default defineConfig({
               },
             },
           },
-          // Size scales the field as a coordinated set — label, value, hint,
-          // and frame height move together in proportion, so you get a "small
-          // field" or a "large field" rather than a mismatched label over a
-          // normal input. `md` is the Figma default (586:876); `lg` steps each
-          // part up one text style and the frame up 8px so the value's taller
-          // line-height keeps the same 6px vertical inset. `sm` is the compact
-          // step used by the switch archetype (caption label + hint, tighter
-          // column gap); text inputs stay on md/lg.
+          // Label, value, hint and frame height move together, so you get a
+          // "small field" rather than a mismatched label over a normal input.
+          // `md` is the Figma default (586:876); `lg` steps each part up one
+          // text style and the frame up 8px, holding the same 6px vertical
+          // inset. `sm` is the compact step the toggle archetype uses.
           variants: {
             size: {
               sm: {
@@ -2487,19 +2326,14 @@ export default defineConfig({
             },
           },
           defaultVariants: { size: "md" },
-          // FieldRoot calls field({ size }) with a runtime value, so the static
-          // extractor only sees the default (md) — force sm/lg to be generated
-          // too, else their label/hint/frame styles silently render nothing.
+          // Runtime variant values — force every branch to be emitted.
           staticCss: [{ size: ["*"] }],
         }),
 
-        // Named `switchField` (not `switch` — a reserved word breaks the
-        // generated `export const switch`). Just the toggle visual now: the
-        // track + thumb. The surrounding layout (control ∣ label/hint grid) and
-        // the label/hint typography come from the shared `field` recipe, which
-        // the Switch plugs into as its control — so this recipe owns only what
-        // is switch-specific. Track = `field.bg/border.*`, thumb =
-        // `field.text.*`, keyed off `aria-checked` (Figma 607:1166).
+        // Named `switchField`, not `switch` — a reserved word breaks the
+        // generated `export const switch`. Owns only the track + thumb; the
+        // surrounding grid and the label/hint come from `field`, which the
+        // Switch plugs into as its control (Figma 607:1166).
         switchField: defineSlotRecipe({
           className: "switch-field",
           description:
@@ -2507,8 +2341,7 @@ export default defineConfig({
           slots: ["control", "thumb"],
           base: {
             control: {
-              // Placed in the field grid the `field` recipe sets up when a
-              // switch is present: first column, aligned with the label row.
+              // First column of the grid `field` sets up for a toggle.
               gridColumn: 1,
               gridRow: 1,
               position: "relative",
@@ -2518,17 +2351,13 @@ export default defineConfig({
               margin: "none",
               appearance: "none",
               cursor: "pointer",
-              // Pill: 12px ≥ half of either track height, so both sizes read
-              // fully rounded.
+              // 12px ≥ half of either track height, so both sizes read as pills.
               borderRadius: "lg",
               backgroundColor: "field.bg.default",
-              // The 0.5px edge is an inset box-shadow, NOT a `border`: with
-              // box-sizing:border-box a real border is subtracted from the
-              // interior (24→23px), and the absolutely-positioned thumb is
-              // offset from the padding edge (inside the border), so top:4 lands
-              // 4.5px above / 3.5px below — visibly off-centre. A box-shadow
-              // takes no layout, so the interior stays the full 24px and the
-              // thumb's 4+16+4 insets centre it exactly on both axes.
+              // An inset box-shadow, NOT a `border`: a real border is
+              // subtracted from the interior (24→23px) and the thumb is offset
+              // from the padding edge, so top:4 would land 4.5px above / 3.5px
+              // below. A shadow takes no layout, so 4+16+4 centres exactly.
               boxShadow:
                 "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
               transition: "background-color 150ms ease, box-shadow 150ms ease",
@@ -2584,18 +2413,14 @@ export default defineConfig({
             },
           },
           defaultVariants: { size: "lg" },
-          // The Switch component calls switchField({ size }) with a runtime
-          // value, so the static extractor only sees the default (lg). Force
-          // both size variants to be generated.
+          // Runtime variant values — force every branch to be emitted.
           staticCss: [{ size: ["*"] }],
         }),
 
-        // Named `checkboxField` for symmetry with `switchField` above — the two
-        // toggle controls of the field family, both plugging into the shared
-        // `field` recipe as its control slot and reusing its bg/border/text
-        // tokens. The one structural difference: no `size`. The switch ships an
-        // sm/lg pair, the checkbox is drawn at a single geometry (Figma
-        // 757:4635), so the field's `size` scales only the label/hint beside it.
+        // The other toggle control of the field family (see `switchField`).
+        // Structural difference: no `size` — the checkbox is drawn at a single
+        // geometry (Figma 757:4635), so the field's `size` scales only the
+        // label/hint beside it.
         checkboxField: defineSlotRecipe({
           className: "checkbox-field",
           description:
@@ -2603,15 +2428,14 @@ export default defineConfig({
           slots: ["control", "box"],
           base: {
             control: {
-              // Placed in the field grid the `field` recipe sets up when a
-              // checkbox is present: first column, aligned with the label row.
+              // First column of the grid `field` sets up for a toggle.
               gridColumn: 1,
               gridRow: 1,
               position: "relative",
               flexShrink: 0,
               display: "block",
-              // The button is the full 20px frame — hit target and layout box;
-              // the `box` slot draws the 16px square centred inside it.
+              // The full 20px frame — hit target and layout box; the `box` slot
+              // draws the 16px square centred inside it.
               width: "token(spacing.xxl)",
               height: "token(spacing.xxl)",
               padding: "none",
@@ -2630,13 +2454,11 @@ export default defineConfig({
               height: "token(spacing.xl)",
               borderRadius: "sm",
               backgroundColor: "field.bg.default",
-              // Same reasoning as the switch track: a 0.5px inset box-shadow
-              // rather than a `border`, so the edge takes no layout and the
-              // absolutely-placed check stays centred on the full 16px interior.
+              // Inset box-shadow, not a `border` — same reasoning as the switch
+              // track.
               boxShadow:
                 "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
-              // The glyph's only colour — it is invisible until checked, so it
-              // needs no off-state tone.
+              // The glyph is invisible until checked, so it needs no off tone.
               color: "field.text.active",
               transition: "background-color 150ms ease, box-shadow 150ms ease",
               "[aria-checked='true'] &": {
@@ -2644,10 +2466,9 @@ export default defineConfig({
                 boxShadow:
                   "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-active)",
               },
-              // check-small is a 20px icon sat on a 16px box, so it hangs 2px
-              // off every side — the tick lands optically centred at the size
-              // it's drawn at rather than scaled down to fit. SVGR rewrites its
-              // white stroke to currentColor, so the box's `color` tints it.
+              // A 20px icon on a 16px box, so it hangs 2px off every side —
+              // drawn at its own size rather than scaled down to fit. SVGR
+              // rewrites its stroke to currentColor, so `color` above tints it.
               "& > svg": {
                 position: "absolute",
                 top: "calc(token(spacing.xs) * -1)",
@@ -2664,17 +2485,8 @@ export default defineConfig({
           },
         }),
 
-        // The calendar grid popover for the Date input. Presentation only — the
-        // month math (Temporal) and selection live in `calendar.tsx`. Slots map
-        // 1:1 to the compound parts: `search` (Field.Search at the top),
-        // `periodList` (the row of months, plus the absolutely-placed `nav`
-        // chevrons that page it), `period` (one month column) built from
-        // `month` (its "July 2026" label), `week`/`weekday` (the S M T… header
-        // row) and `grid`/`date` (the day cells). Date state is keyed off
-        // attributes the cell sets itself — `aria-selected`, `data-state`
-        // (today), `data-outside` (spill days), `:disabled` (out of min/max) —
-        // so consumers can restyle any of them (including
-        // `data-weekend`/`data-weekday`) without prop APIs.
+        // Presentation only — the month math (Temporal) and selection live in
+        // `calendar.tsx`. Slots map 1:1 to the compound parts.
         calendar: defineSlotRecipe({
           className: "calendar",
           description:
@@ -2697,9 +2509,8 @@ export default defineConfig({
               display: "flex",
               flexDirection: "column",
               width: "fit-content",
-              // No padding here: the search row is flush to the surface edges
-              // and each `period` carries its own 8px inset, so a 3-month list
-              // has no seam between columns (Figma 715:916).
+              // No padding: the search row is flush and each `period` carries
+              // its own inset, so a 3-month list has no seam (Figma 715:916).
             },
             search: {
               width: "token(spacing.full)",
@@ -2720,33 +2531,26 @@ export default defineConfig({
             },
             periodList: {
               display: "flex",
-              // Months are top-aligned and each is a fixed 208px column, so the
-              // list simply grows 208px per month.
               alignItems: "flex-start",
-              // Centre the run of months, which only bites when the consumer
-              // constrains the calendar NARROWER than its months add up to: the
-              // range then overflows symmetrically and the root's `overflow:
-              // hidden` crops the outer columns evenly, instead of the default
-              // flex-start's all-on-the-right crop. (`safe center` would undo
-              // exactly that — the start-side crop is the point here.)
+              // Only bites when the consumer constrains the calendar NARROWER
+              // than its months add up to: the range then overflows
+              // symmetrically and the root's `overflow: hidden` crops both
+              // outer columns evenly, rather than all on the right. (`safe
+              // center` would undo exactly that — the start-side crop is the
+              // point.)
               justifyContent: "center",
-              // The anchor for the two nav chevrons below.
+              // Anchors the nav chevrons below.
               position: "relative",
-              // The grid is a drag surface in `multiple` selection, and a drag
-              // that starts on a day cell would otherwise run on to highlight
-              // the month labels it passes. The cells already opt out
-              // individually; this covers the labels and the gaps between them.
+              // A `multiple`-selection drag starting on a day cell would
+              // otherwise run on and highlight the month labels it passes.
               userSelect: "none",
-              // The chevrons are `color: inherit` Buttons, so the list owns
-              // their hue; the month labels override their own.
+              // The chevrons are `color: inherit`, so the list owns their hue.
               color: "field.text.default",
               // Pin a nav dropped DIRECTLY in here to the matching edge, so one
-              // pair flanks the whole range however many months it holds
-              // (Figma 715:921 / 716:1116, inset 8px). Scoped to the list, and
-              // to direct children, so the same part nested in a consumer's own
-              // chrome stays in the flow and takes their layout instead of
-              // being yanked to an edge it doesn't belong to. `navPlacement`
-              // below decides how it meets that edge.
+              // pair flanks the whole range however many months it holds (Figma
+              // 715:921 / 716:1116). Scoped to direct children, so the same
+              // part nested in a consumer's own chrome stays in the flow.
+              // `navPlacement` decides how it meets that edge.
               "& > [data-nav]": { position: "absolute" },
               "& > [data-nav='prev']": { left: "md" },
               "& > [data-nav='next']": { right: "md" },
@@ -2754,28 +2558,24 @@ export default defineConfig({
             period: {
               display: "flex",
               flexDirection: "column",
-              // The column's own pitch — 4px between label, weekdays and grid.
               gap: "sm",
               padding: "md",
-              // Hold the 208px pitch even when the list is narrower than its
-              // months: a flex row would otherwise shrink the columns and break
-              // the grid arithmetic rather than letting them overflow and crop.
+              // Hold the 208px pitch when the list is narrower than its months:
+              // a flex row would otherwise shrink the columns and break the
+              // grid arithmetic rather than letting them overflow and crop.
               flexShrink: 0,
             },
-            // The chevron's WRAPPER, not the chevron itself. The button is an
-            // `action` recipe, and Panda emits plain recipes into
-            // `@layer recipes` but slot recipes into its `recipes.slots`
-            // sublayer — a parent layer's own rules always beat its sublayers,
-            // so no slot style can override `action`'s `position: relative`
-            // (its hover chip needs it) at any specificity. Wrapping sidesteps
-            // the cascade entirely and keeps the positioning here in the recipe.
-            // Placement is `periodList`'s business, not this slot's: a nav is
-            // only pinned to a corner when it's dropped in a list (see above).
+            // The chevron's WRAPPER, not the chevron itself. Panda emits plain
+            // recipes into `@layer recipes` but slot recipes into its
+            // `recipes.slots` sublayer, and a parent layer always beats its
+            // sublayers — so no slot style can override the button's own
+            // `action` styles at any specificity. Wrapping sidesteps the
+            // cascade. Placement is `periodList`'s business, not this slot's.
             nav: {
               display: "flex",
               flexShrink: 0,
-              // Secondary to the month label — the glyph alone is halved, so the
-              // hover chip underneath stays at full strength.
+              // The glyph alone is halved, so the hover chip underneath stays
+              // at full strength.
               "& svg": { opacity: 0.5, transition: "opacity 150ms ease" },
               "&:hover svg": { opacity: 1 },
             },
@@ -2784,7 +2584,7 @@ export default defineConfig({
               alignItems: "center",
               justifyContent: "center",
               // Matches the chevrons it sits between, so the label row is one
-              // consistent 28px band across the list.
+              // consistent band across the list.
               height: "token(sizes.toolbarButton)",
               textAlign: "center",
               textStyle: "bodyLarge",
@@ -2804,8 +2604,7 @@ export default defineConfig({
               textStyle: "bodySmall",
               color: "field.text.default",
               userSelect: "none",
-              // Saturday/Sunday recede — the header's half of the same rule the
-              // weekend day cells carry.
+              // The header's half of the rule the weekend day cells carry.
               "&[data-weekend]": { opacity: 0.5 },
             },
             grid: {
@@ -2813,16 +2612,11 @@ export default defineConfig({
               gridTemplateColumns: "repeat(7, token(sizes.calendarDay))",
               gap: "sm",
             },
-            // The drag band drawn while a marquee selection is in progress —
-            // positioned by `Calendar.PeriodList` in list-relative pixels, so
-            // this slot only owns the look. Square corners are deliberate:
-            // rounding it would read as a UI chip rather than a geometric tool.
-            //
-            // Fill and stroke are the same brand accent at different strengths:
-            // the stroke at 50% draws the band's extent, while the fill stays
-            // deliberately faint (`bg.calendarMarquee`, 5%) so it tints the
-            // region without competing with the 15% chips of the cells it is
-            // busy selecting.
+            // The drag band, positioned by `Calendar.PeriodList` in
+            // list-relative pixels; this slot owns only the look. Square
+            // corners are deliberate — rounding reads as a UI chip rather than
+            // a geometric tool. The stroke draws the extent; the fill stays
+            // faint so it can't compete with the cells it is selecting.
             marquee: {
               position: "absolute",
               pointerEvents: "none",
@@ -2845,37 +2639,30 @@ export default defineConfig({
               userSelect: "none",
               transition:
                 "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
-              // `data-query` is the search's pending target — Enter's date. It
-              // shares the hover declaration verbatim (here and in `:disabled`
-              // below) so previewing a typed date reads exactly like pointing at
-              // it, and an uncommittable one stays uncoloured either way.
+              // `data-query` is the search's pending target — Enter's date — and
+              // shares the hover declaration verbatim, so previewing a typed
+              // date reads exactly like pointing at it.
               //
-              // Selected cells opt OUT of the wash rather than merely being
-              // overridden by it: the selection chip and this wash are both
-              // single-attribute rules on the same slot, so which one won came
-              // down to Panda's emission order — and the wash was landing last,
-              // greying out the accent chip the moment you hovered a selected
-              // date, or typed the date you had just committed (the query
-              // survives its own Enter). Selection is the stronger state and
-              // outranks the transient one no matter how the sheet is ordered.
+              // Selected cells opt OUT rather than being overridden: both are
+              // single-attribute rules on one slot, so the winner came down to
+              // Panda's emission order, and the wash landed last — greying out
+              // the accent chip the moment you hovered a selected date.
               "&:is(:hover, [data-query]):not([aria-selected='true'])": {
                 backgroundColor: "bg.itemHover",
               },
               // Weekend columns recede, matching their header — unless the cell
-              // is already carrying today or the selection.
+              // already carries today or the selection.
               "&[data-weekend]:not([aria-selected='true'], [data-state='today'], [data-outside])":
                 { opacity: 0.5 },
-              // Spill-over days are placeholders: they hold the column and show
-              // their number, but the month that owns the date carries all of
-              // its state, so a spill cell never draws a chip and never takes
-              // the tabstop (see `Calendar.Date`). Hence a flat wash, with
-              // nothing to compose against.
+              // Spill-over days hold the column and show their number, but the
+              // month that owns the date carries all of its state — so a spill
+              // cell never draws a chip and never takes the tabstop (see
+              // `Calendar.Date`), and needs nothing to compose against.
               "&[data-outside]": { opacity: 0.15 },
               // Today — the accent as text only, no chip.
               "&[data-state='today']": { color: "field.text.active" },
-              // Selected — the accent as a translucent chip; today's colour
-              // survives underneath it, so the two compose without a special
-              // case (a selected today reads exactly as selected).
+              // Selected — today's colour survives underneath, so a selected
+              // today composes without a special case.
               "&[aria-selected='true']": {
                 backgroundColor: "field.bg.active",
                 color: "field.text.active",
@@ -2891,32 +2678,16 @@ export default defineConfig({
               },
             },
           },
-          // `tone` is a palette swap over the shared geometry above — which half
-          // of the calendar reads brand, and who owns the surface.
-          //
-          //   default │ its OWN framed surface (field.bg/border.default, 208px);
-          //           │ dates neutral, today/selected brand (Figma 644:1678 dark
-          //           │ / 644:1681 light).
-          //   onBrand │ dropped INTO the Date popover, which owns the surface
-          //           │ (`datePopover`); the palette inverts — dates read brand,
-          //           │ today/selected drop to neutral to stand out against the
-          //           │ brand tint (Figma 631:893 / 631:897).
           variants: {
             // How the flanking chevrons meet the list's left/right edges.
-            //
-            //   label │ a bare chevron level with the month label row (8px
-            //         │ down). Right for ONE month, where the label row IS the
-            //         │ top of the column and nothing is clipped (Figma
-            //         │ 715:921).
-            //   edge  │ a full-height scrim pinned to each edge, chevron
-            //         │ centred in it (Figma 723:2265 / 716:1116). For a range
-            //         │ wider than its frame: the gradient dissolves the
-            //         │ half-cut outer columns into the surface instead of
-            //         │ letting them end on a hard crop, and the 2px backdrop
-            //         │ blur pushes them behind the chevron. Centring comes
-            //         │ WITH it — across a range the label row belongs to the
-            //         │ months, not to the run, so a chevron parked up there
-            //         │ reads as paging the first month alone.
+            // `label` is a bare chevron level with the month label row — right
+            // for ONE month, where nothing is clipped (Figma 715:921). `edge`
+            // is a full-height scrim pinned to each edge (Figma 723:2265 /
+            // 716:1116), for a range wider than its frame: the gradient
+            // dissolves the half-cut outer columns instead of letting them end
+            // on a hard crop. Centring comes WITH it — across a range the label
+            // row belongs to the months, so a chevron parked up there reads as
+            // paging the first month alone.
             navPlacement: {
               label: { periodList: { "& > [data-nav]": { top: "md" } } },
               edge: {
@@ -2927,41 +2698,30 @@ export default defineConfig({
                     width: "token(sizes.calendarNavZone)",
                     alignItems: "center",
                     paddingInline: "sm",
-                    // Being positioned is NOT enough to sit above the grid.
-                    // The weekend and spill-over day cells carry `opacity < 1`,
-                    // which makes each of them a stacking context painted at
-                    // level 0 — the same level as a `z-index: auto` positioned
-                    // element — so DOM order decided, and the navs come BEFORE
-                    // the periods. The outermost column of a clipped range is
-                    // always a weekend one, so precisely the column this scrim
-                    // exists to fade was punching through it, sharp and
-                    // unwashed, and the effect looked like it began an inch in.
+                    // Being positioned is NOT enough to sit above the grid: the
+                    // weekend and spill-over cells carry `opacity < 1`, making
+                    // each a stacking context painted at level 0 — the same as
+                    // `z-index: auto` — so DOM order decided, and the navs come
+                    // first. Precisely the outermost column this scrim exists
+                    // to fade was punching through it, sharp and unwashed.
                     //
-                    // Layer order across the whole calendar, all explicit
-                    // because `auto` ties with those opacity cells and lets DOM
-                    // order decide: marquee 1 ▸ nav scrim 2 ▸ frame ring 3.
+                    // Explicit layer order across the calendar, since `auto`
+                    // ties with those cells: marquee 1 ▸ scrim 2 ▸ ring 3.
                     zIndex: 2,
-                    // No radius of its own: the zone sits flush in the root's
-                    // rounded, clipped box, so the corners are already handled
-                    // — rounding here would only hold the wash back from them.
-                    // Decoration only. The scrim lies OVER the outer columns,
-                    // so without this it would swallow clicks on the dates it
-                    // is merely fading — and break a sweep the moment the
-                    // pointer passed beneath it. The chevron takes its events
-                    // back, and rides above the blur layers.
+                    // The scrim lies OVER the outer columns, so without this it
+                    // would swallow clicks on the dates it is merely fading.
+                    // The chevron takes its own events back below.
                     pointerEvents: "none",
                     "& > *": { pointerEvents: "auto", zIndex: 1 },
                     // ── Progressive blur ────────────────────────────────
-                    // CSS has no variable-radius blur, so the ramp is built
-                    // from two stacked backdrop layers, each faded out by its
-                    // own mask over a different distance. Gaussian blurs
-                    // compose in quadrature, so where both are opaque the pair
-                    // reads as √(1.4² + 1.4²) ≈ 2px — the Figma value — and
-                    // where only the longer-reaching one survives it drops
-                    // toward 1px and then to nothing. That is a genuine change
-                    // in blur RADIUS across the zone; a single layer behind an
-                    // alpha ramp would only fade a constant-radius smear in
-                    // and out, which is the thing this replaces.
+                    // CSS has no variable-radius blur, so the ramp is two
+                    // stacked backdrop layers, each masked out over a different
+                    // distance. Gaussian blurs compose in quadrature: where
+                    // both are opaque the pair reads as √(1.4² + 1.4²) ≈ 2px
+                    // (the Figma value), and where only the longer one survives
+                    // it drops toward 1px. That is a real change in blur
+                    // RADIUS; one layer behind an alpha ramp would only fade a
+                    // constant-radius smear in and out.
                     "&::before, &::after": {
                       content: '""',
                       position: "absolute",
@@ -2969,24 +2729,20 @@ export default defineConfig({
                       pointerEvents: "none",
                       // Panda's `backdropFilter` utility emits ONLY
                       // `-webkit-backdrop-filter`, which Chromium does not
-                      // recognise (`CSS.supports` is false for it, true for
-                      // the standard property) — so the utility alone leaves
-                      // the blur silently absent. The raw key is the one that
-                      // lands; the prefixed spelling stays for older WebKit.
+                      // recognise — so the utility alone leaves the blur
+                      // silently absent. The raw key is the one that lands;
+                      // the prefixed spelling stays for older WebKit.
                       backdropFilter: "blur(1.4px)",
                       "-webkit-backdrop-filter": "blur(1.4px)",
                       "backdrop-filter": "blur(1.4px)",
                     },
                   },
-                  // Each fades from opaque at its OWN outer edge to nothing
-                  // inward. `transparent` is safe as the far stop even though
-                  // it means transparent BLACK: gradients interpolate in
-                  // PREMULTIPLIED alpha, so the hue of a fully-transparent stop
-                  // never enters the ramp and no grey cast appears.
-                  // Each side is the mirror of the other: opaque wash and
-                  // heaviest blur on its OWN outer edge, both running out to
-                  // nothing inward. The short mask (to 55%) carries the near
-                  // half, the long one (to 100%) carries the tail.
+                  // Mirrored sides: opaque wash and heaviest blur on each one's
+                  // OWN outer edge, running out to nothing inward. The short
+                  // mask (55%) carries the near half, the long one the tail.
+                  // `transparent` is safe as the far stop even though it means
+                  // transparent BLACK — gradients interpolate in PREMULTIPLIED
+                  // alpha, so no grey cast enters the ramp.
                   "& > [data-nav='prev']": {
                     left: 0,
                     justifyContent: "flex-start",
@@ -3032,24 +2788,24 @@ export default defineConfig({
                 },
               },
             },
+            // Which half of the calendar reads brand, and who owns the surface.
+            // `default` is self-framed, dates neutral and today/selected brand
+            // (Figma 644:1678/644:1681); `onBrand` drops into the Date popover,
+            // which owns the surface, and inverts (Figma 631:893/631:897).
             tone: {
               default: {
-                // The standalone calendar is a self-contained field surface, so
-                // it draws its own fill + inset ring rather than leaning on
-                // whatever it was dropped on. Edge as box-shadow, not border, so
-                // it takes no layout and the 208px arithmetic still holds.
+                // Self-contained field surface: its own fill + inset ring. Edge
+                // as box-shadow, not border, so it takes no layout and the
+                // 208px arithmetic still holds.
                 root: {
                   backgroundColor: "field.bg.default",
                   borderRadius: "sm",
                   overflow: "hidden",
                   position: "relative",
-                  // The frame ring, lifted into its OWN layer above the grid
-                  // rather than left as an `inset` box-shadow on the root. An
-                  // inset shadow paints between the background and the
-                  // children, so any child that reaches the edge covers it —
-                  // which is exactly what the `edge` nav scrims do, erasing
-                  // the frame along the 72px they span. Drawn here it always
-                  // closes the frame.
+                  // The frame ring in its OWN layer above the grid, not an
+                  // `inset` box-shadow on the root: an inset shadow paints
+                  // between the background and the children, so the `edge` nav
+                  // scrims erased the frame along the 72px they span.
                   "&::after": {
                     content: '""',
                     position: "absolute",
@@ -3066,21 +2822,18 @@ export default defineConfig({
                 search: {
                   color: "field.text.active",
                   borderBottomColor: "field.border.active",
-                  // Placeholder reads as the accent at 25%, not neutral muted
-                  // (brand orange dark / pink light).
                   "&::placeholder": { color: "field.text.activeMuted" },
                 },
                 // Retints the chevrons, which inherit from the list (Figma
-                // 563:2715/563:2719 — brand stroke at 50%).
+                // 563:2715/563:2719).
                 periodList: { color: "field.text.active" },
                 month: { color: "field.text.active" },
                 weekday: { color: "field.text.active" },
                 date: {
                   color: "field.text.active",
-                  // Today loses the accent and reads neutral (on this surface
-                  // the accent IS the background).
+                  // Today reads neutral — on this surface the accent IS the
+                  // background.
                   "&[data-state='today']": { color: "field.text.default" },
-                  // Selected = neutral chip against the brand surface.
                   "&[aria-selected='true']": {
                     backgroundColor: "field.bg.selected",
                     color: "field.text.default",
@@ -3090,22 +2843,14 @@ export default defineConfig({
             },
           },
           defaultVariants: { tone: "default", navPlacement: "label" },
-          // CalendarRoot calls calendar({ tone, navPlacement }) at runtime.
+          // Runtime variant values — force every branch to be emitted.
           staticCss: [{ tone: ["*"], navPlacement: ["*"] }],
         }),
 
-        // The option list behind a Combobox — and a stand-alone, always-open
-        // select when used on its own. Presentation only; the filtering and
-        // selection live in `option-list.tsx`. Slots: `search` (the optional
-        // Field.Search filter row at the top), `list` (the scrollable
-        // `role=listbox` container), `option` (one `role=option` button), and
-        // `empty` (the no-matches row). Option state is keyed off attributes the
-        // button sets itself — `aria-selected`, `data-active` (roving/keyboard
-        // highlight), `:disabled` — so the look is re-skinnable off selectors.
-        // `tone` mirrors the calendar: `default` is a self-framed neutral
-        // surface with a brand selected chip (Figma 647:1947/2045); `onBrand` is
-        // the Combobox popover's inverse — options read brand, the selected chip
-        // drops to neutral to stand out on the brand tint (Figma 629:1416/630:1702).
+        // The option list behind a Combobox, and a stand-alone always-open
+        // select on its own. Presentation only; filtering and selection live in
+        // `option-list.tsx`. `tone` mirrors the calendar's (Figma
+        // 647:1947/2045 default, 629:1416/630:1702 onBrand).
         optionList: defineSlotRecipe({
           className: "option-list",
           description:
@@ -3119,10 +2864,8 @@ export default defineConfig({
               borderRadius: "sm",
               overflow: "hidden",
             },
-            // A full-width Field.Search dressed as the filter row — same look as
-            // the calendar's search slot (40px, 8px inset, a field-border rule
-            // under it), but no negative-margin bleed since the root has no
-            // padding of its own.
+            // A full-width Field.Search dressed as the filter row — the same
+            // look as the calendar's search slot.
             search: {
               flexShrink: 0,
               width: "token(spacing.full)",
@@ -3144,14 +2887,13 @@ export default defineConfig({
             list: {
               display: "flex",
               flexDirection: "column",
-              // Rows abut directly — each is its own 32px hit target, so no gap.
+              // Rows abut directly — each is its own hit target.
               gap: "none",
               padding: "sm",
               overflowX: "hidden",
               overflowY: "auto",
-              // 7 full rows + a ~12px peek of the next, so the half-row signals
-              // there's more to scroll (7 × 32 + 8px top/bottom padding + a 12px
-              // peek = 244px — Figma 647:2386).
+              // 7 full rows + a ~12px peek, so the half-row signals there is
+              // more to scroll (Figma 647:2386).
               maxHeight:
                 "calc(7 * token(sizes.optionRow) + 2 * token(spacing.sm) + token(spacing.lg))",
             },
@@ -3162,10 +2904,9 @@ export default defineConfig({
               gap: "md",
               width: "token(spacing.full)",
               flexShrink: 0,
-              // Hug the content — the 4px inset alone defines the row/chip box
-              // (Figma 647:2387 `p-[4px]`); no fixed height, so an icon-only
-              // toolbar chip is 20px + 8px = 28px and a text row is its line-box
-              // + 8px, rather than everything forced to a 32px track.
+              // The inset alone defines the row/chip box (Figma 647:2387) — no
+              // fixed height, so an icon-only toolbar chip comes out 28px and a
+              // text row its line-box + 8px, rather than all forced to 32px.
               padding: "sm",
               borderRadius: "sm",
               border: "none",
@@ -3180,8 +2921,7 @@ export default defineConfig({
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              // A composed leading icon: fixed 20px box, inherits the row colour
-              // (so it tracks selected/active) via currentColor.
+              // A composed leading icon, tracking the row colour.
               "& svg": {
                 width: "token(spacing.xxl)",
                 height: "token(spacing.xxl)",
@@ -3192,19 +2932,16 @@ export default defineConfig({
               "& svg path[fill]": { fill: "currentColor" },
               transition:
                 "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
-              // `data-active` is the roving/keyboard highlight; it shares the
-              // hover declaration verbatim so arrowing onto a row reads exactly
-              // like pointing at it (and a disabled row stays uncoloured either
-              // way, mirroring the calendar's day cells). The `:not` excludes the
-              // selected row: it's the default roving highlight, so it carries
-              // BOTH `data-active` and `aria-selected` — without the guard the
-              // neutral hover tint would win over the brand selected chip (equal
-              // specificity → atomic-CSS order decides), leaving selection grey.
+              // `data-active` is the roving/keyboard highlight, sharing the
+              // hover declaration so arrowing onto a row reads like pointing at
+              // it. The `:not` guards the selected row, which is the default
+              // roving target and so carries BOTH attributes — without it the
+              // neutral hover tint wins over the brand chip (equal specificity
+              // → atomic-CSS order decides) and selection reads grey.
               "&:hover:not([aria-selected='true']):not([aria-pressed='true']), &[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
                 { backgroundColor: "field.bg.hover" },
-              // The single "on" state — a listbox's selected row and a toolbar's
-              // pressed toggle share the brand chip (full-converge: one item skin
-              // whether the row is picked or the toggle is on).
+              // One "on" state: a selected row and a pressed toggle share the
+              // brand chip.
               "&[aria-selected='true'], &[aria-pressed='true']": {
                 backgroundColor: "field.bg.active",
                 color: "field.text.active",
@@ -3228,8 +2965,7 @@ export default defineConfig({
               color: "field.text.muted",
               userSelect: "none",
             },
-            // Separates option groups (Menu.Group's old divider). Block = a
-            // horizontal hairline; the inline variant flips it vertical.
+            // Separates option groups; the inline variant flips it vertical.
             divider: {
               flexShrink: 0,
               backgroundColor: "border.divider",
@@ -3240,9 +2976,8 @@ export default defineConfig({
           variants: {
             tone: {
               default: {
-                // Self-contained field surface — its own fill + inset ring, like
-                // the calendar's default tone (edge as a box-shadow so it takes
-                // no layout and the width arithmetic holds).
+                // Self-contained field surface, like the calendar's default
+                // tone — edge as a box-shadow so the width arithmetic holds.
                 root: {
                   backgroundColor: "field.bg.default",
                   boxShadow:
@@ -3250,8 +2985,8 @@ export default defineConfig({
                 },
               },
               onBrand: {
-                // Dropped INTO the Combobox popover, which owns the surface — so
-                // the root just fills it and the palette inverts.
+                // The Combobox popover owns the surface, so the root just
+                // fills it and the palette inverts.
                 root: { width: "token(spacing.full)" },
                 search: {
                   color: "field.text.active",
@@ -3260,12 +2995,10 @@ export default defineConfig({
                 },
                 option: {
                   color: "field.text.active",
-                  // Same selected-row guard as the base tone (see there): keep the
-                  // neutral selected chip from being overridden by the brand hover
-                  // tint on the row that is both highlighted and selected.
+                  // Same selected-row guard as the base tone (see there).
                   "&:hover:not([aria-selected='true']):not([aria-pressed='true']), &[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
                     { backgroundColor: "field.bg.hoverBrand" },
-                  // On (selected or pressed) = neutral chip against the brand surface.
+                  // Neutral chip against the brand surface.
                   "&[aria-selected='true'], &[aria-pressed='true']": {
                     backgroundColor: "field.bg.selected",
                     color: "field.text.default",
@@ -3280,20 +3013,18 @@ export default defineConfig({
               },
               plain: {
                 // For a menu whose Popover already owns the surface (the slash
-                // menu). The neutral sibling of onBrand — but here the root also
-                // COLLAPSES (display:contents), so the listbox sits directly in the
-                // popover with no wrapper div and no inset of its own; the list's
-                // 4px padding is the only gap. Keeps the default option palette.
+                // menu): the neutral sibling of onBrand, but the root also
+                // COLLAPSES, so the listbox sits directly in the popover and
+                // the list's own padding is the only gap.
                 root: { display: "contents" },
               },
             },
             direction: {
-              // Block (default) is the vertical list already encoded in the base.
+              // The vertical list is already encoded in the base.
               block: {},
-              // Inline is a row — toolbars and horizontal single-selects. The
-              // root collapses (display:contents) so the options sit directly in
-              // the consumer's frame (e.g. selectionPopover), which owns the pill
-              // surface; the option becomes a content-width chip.
+              // A row — toolbars and horizontal single-selects. The root
+              // collapses so the options sit directly in the consumer's frame
+              // (e.g. selectionPopover), which owns the pill surface.
               inline: {
                 root: { display: "contents" },
                 list: {
@@ -3315,7 +3046,7 @@ export default defineConfig({
             },
           },
           defaultVariants: { tone: "default", direction: "block" },
-          // OptionListRoot calls optionList({ tone, direction }) at runtime.
+          // Runtime variant values — force every branch to be emitted.
           staticCss: [{ tone: ["*"], direction: ["*"] }],
         }),
 
@@ -3334,8 +3065,8 @@ export default defineConfig({
               paddingBlock: "md",
               borderRadius: "sm",
               backgroundColor: "bg.notice",
-              // One source for the icon + emphasized runs; the label overrides
-              // its own body prose to 75% off this so the <strong> bits pop.
+              // One source for the icon + emphasized runs; the label dials its
+              // own body prose back off this so the <strong> bits pop.
               color: "field.text.default",
             },
             icon: {
@@ -3343,8 +3074,6 @@ export default defineConfig({
               display: "block",
               width: "token(spacing.xxl)",
               height: "token(spacing.xxl)",
-              // A composed icon fills the 20px box and tracks the notice colour
-              // via currentColor (mirrors the action / option recipes).
               "& svg": {
                 width: "token(spacing.full)",
                 height: "token(spacing.full)",
@@ -3360,8 +3089,8 @@ export default defineConfig({
               minWidth: 0,
               textStyle: "sidenote",
               // Body prose sits a step below the accent; the emphasized runs
-              // (dates, weekdays) step back up to full colour + a heavier weight,
-              // matching the Figma's Regular → Semibold shift.
+              // step back up to full colour and weight (the Figma's Regular →
+              // Semibold shift).
               color: "field.text.default/75",
               wordBreak: "break-word",
               "& :is(strong, b)": {
