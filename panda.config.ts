@@ -14,6 +14,38 @@ const CROSS_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.5 7.5L7.5 12.5M12.5 12.5L7.5 7.5' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 
 /**
+ * The blockquote glyph (src/assets/icons/blockquote.svg, inlined) as two mask
+ * images off the SAME path — one its body, one its contour — so the mark can be
+ * a translucent brand wash with a solid edge running inside it. A mask reads
+ * alpha, so `fill='white'` gives the body and `fill='none' stroke='white'`
+ * gives the contour; painting both means two layers, since one mask can only
+ * reveal one colour. The glyph's lean is drawn into the artwork, not CSS.
+ *
+ * The path's bounding box is 5.06…46.68 x 8.6…45.03 inside the 52 viewBox, so
+ * the stroke's outer half stays clear of the edges regardless.
+ *
+ * NOTE: this is a COPY of the .svg, not a reference to it — nothing imports
+ * that file. Re-inline the path here whenever the artwork changes, or the two
+ * silently drift.
+ */
+const QUOTE_GLYPH_PATH =
+  "M10.9494 8.65295C11.8225 8.41923 12.7194 8.93811 12.9533 9.81116C13.0483 10.1658 13.0219 10.5421 12.8772 10.8795C11.447 14.2114 11.3904 18.3371 12.7082 23.2555C15.3871 22.5377 18.0665 21.82 20.7453 21.1022C21.8548 20.8051 22.9949 21.4635 23.2922 22.5729L27.5989 38.6461C27.8962 39.7557 27.2378 40.8957 26.1282 41.193L12.0647 44.9615C10.9551 45.2589 9.81415 44.6005 9.51683 43.4908C8.26072 38.803 7.00438 34.1152 5.74827 29.4274C3.05655 19.3817 8.94032 9.1913 10.9494 8.65295ZM33.053 9.151C33.7647 8.96045 34.496 9.38266 34.6867 10.0944C34.7642 10.3835 34.7422 10.6903 34.6242 10.9655C33.4584 13.6815 33.4122 17.0449 34.4866 21.0543C36.6703 20.4692 38.8546 19.8836 41.0383 19.2985C41.9427 19.0564 42.8721 19.5934 43.1145 20.4977L46.6252 33.6002C46.8675 34.5047 46.3305 35.434 45.426 35.6764L33.9621 38.7487C33.0576 38.991 32.1274 38.454 31.885 37.5494C30.8611 33.7282 29.8376 29.9068 28.8137 26.0856C26.6195 17.8966 31.4152 9.58985 33.053 9.151Z";
+
+const quoteGlyphMask = (paint: string) =>
+  `url("data:image/svg+xml,%3Csvg width='52' height='52' viewBox='0 0 52 52' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${QUOTE_GLYPH_PATH}' ${paint}/%3E%3C/svg%3E")`;
+
+const QUOTE_GLYPH_FILL_MASK = quoteGlyphMask("fill='white'");
+
+/**
+ * Stroked at 2px — DOUBLE the 1px inner edge it is used to draw. An SVG stroke
+ * straddles its path, so intersecting this with the body mask discards the
+ * outer half and leaves exactly 1px lying inside the contour.
+ */
+const QUOTE_GLYPH_STROKE_MASK = quoteGlyphMask(
+  "fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'",
+);
+
+/**
  * The column every list marker occupies — a fixed 24px box centring whatever
  * ink the marker draws (a dot, a check/cross disc, an ordinal pill), on the
  * first text line via `marginBlockStart` of (28px bodyLarge line box - 24) / 2.
@@ -230,6 +262,25 @@ export default defineConfig({
               value: {
                 base: "{colors.neutral.200}",
                 _dark: "{colors.neutral.800}",
+              },
+            },
+            // Body of the blockquote quote mark — the brand accent at 15%, the
+            // same wash `bg.highlight` uses on prose. Its own token because the
+            // two are unrelated surfaces that happen to share a recipe.
+            quoteMark: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
+              },
+            },
+            // The 1px inner edge running inside that body — the same accent at
+            // full strength, so the glyph reads as a lit shape rather than a
+            // flat wash.
+            quoteMarkEdge: {
+              value: {
+                base: "{colors.brand.pink}",
+                _dark: "{colors.brand.orange}",
               },
             },
             // One step elevated from canvas — used for dialog/surface backgrounds
@@ -1571,25 +1622,41 @@ export default defineConfig({
         articleBlockquoteMark: defineRecipe({
           className: "article-blockquote-mark",
           description:
-            "Quote mark (52×52) drawn as the brand gradient, masked to the blockquote glyph so it theme-flips with the gradient token.",
+            "Quote mark (52×52) — a `bg.quoteMark` body (the brand accent at 15%) with a 1px `bg.quoteMarkEdge` inner edge running inside its contour, each a mask off the same blockquote glyph path. Two layers because one mask can only reveal one colour, and both are PSEUDO-ELEMENTS rather than one being the element itself: a mask clips its element's descendants too, so a fill mask on the box would have cut away the outer half of the stroke drawn inside it. As siblings they clip independently, and ::after paints over ::before, putting the outline on top of the body. The glyph's lean is drawn into the artwork, so no CSS rotation here.",
           base: {
+            position: "relative",
             width: "token(sizes.quoteMark)",
             height: "token(sizes.quoteMark)",
             flexShrink: 0,
             pointerEvents: "none",
-            // The gradient fills the box; the blockquote glyph (src/assets/icons/
-            // blockquote.svg, inlined) masks it to shape via its alpha channel.
-            background: "bg.brandedEmphasis",
-            maskImage:
-              "url(\"data:image/svg+xml,%3Csvg width='52' height='52' viewBox='0 0 52 52' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14.5596 8.32031C15.4635 8.32031 16.1963 9.05306 16.1963 9.95703C16.1962 10.3244 16.073 10.6811 15.8457 10.9697C13.6019 13.8179 12.4805 17.7879 12.4805 22.8799H20.7998C21.9485 22.8799 22.8799 23.8112 22.8799 24.96V41.5996C22.8799 42.7484 21.9486 43.6797 20.7998 43.6797H6.24023C5.09148 43.6797 4.16016 42.7484 4.16016 41.5996V27.04C4.16016 16.6408 12.4789 8.32146 14.5596 8.32031ZM39.5195 8.32031C40.4235 8.32031 41.1572 9.05306 41.1572 9.95703C41.1572 10.3244 41.033 10.6811 40.8057 10.9697C38.5619 13.8179 37.4404 17.788 37.4404 22.8799H45.7598C46.9085 22.8799 47.8398 23.8112 47.8398 24.96V41.5996C47.8398 42.7484 46.9085 43.6797 45.7598 43.6797H31.2002C30.0514 43.6797 29.1201 42.7484 29.1201 41.5996V27.04C29.1201 16.6408 37.4388 8.32156 39.5195 8.32031Z' fill='white'/%3E%3C/svg%3E\")",
-            maskSize: "contain",
-            maskRepeat: "no-repeat",
-            maskPosition: "center",
-            WebkitMaskImage:
-              "url(\"data:image/svg+xml,%3Csvg width='52' height='52' viewBox='0 0 52 52' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14.5596 8.32031C15.4635 8.32031 16.1963 9.05306 16.1963 9.95703C16.1962 10.3244 16.073 10.6811 15.8457 10.9697C13.6019 13.8179 12.4805 17.7879 12.4805 22.8799H20.7998C21.9485 22.8799 22.8799 23.8112 22.8799 24.96V41.5996C22.8799 42.7484 21.9486 43.6797 20.7998 43.6797H6.24023C5.09148 43.6797 4.16016 42.7484 4.16016 41.5996V27.04C4.16016 16.6408 12.4789 8.32146 14.5596 8.32031ZM39.5195 8.32031C40.4235 8.32031 41.1572 9.05306 41.1572 9.95703C41.1572 10.3244 41.033 10.6811 40.8057 10.9697C38.5619 13.8179 37.4404 17.788 37.4404 22.8799H45.7598C46.9085 22.8799 47.8398 23.8112 47.8398 24.96V41.5996C47.8398 42.7484 46.9085 43.6797 45.7598 43.6797H31.2002C30.0514 43.6797 29.1201 42.7484 29.1201 41.5996V27.04C29.1201 16.6408 37.4388 8.32156 39.5195 8.32031Z' fill='white'/%3E%3C/svg%3E\")",
-            WebkitMaskSize: "contain",
-            WebkitMaskRepeat: "no-repeat",
-            WebkitMaskPosition: "center",
+            "&::before, &::after": {
+              content: '""',
+              position: "absolute",
+              inset: "0",
+              maskSize: "contain",
+              maskRepeat: "no-repeat",
+              maskPosition: "center",
+              WebkitMaskSize: "contain",
+              WebkitMaskRepeat: "no-repeat",
+              WebkitMaskPosition: "center",
+            },
+            "&::before": {
+              backgroundColor: "bg.quoteMark",
+              maskImage: QUOTE_GLYPH_FILL_MASK,
+              WebkitMaskImage: QUOTE_GLYPH_FILL_MASK,
+            },
+            // The inner edge: the 2px stroke INTERSECTED with the body, which
+            // keeps only the half of it that falls inside the glyph. An inset
+            // `box-shadow` cannot do this — it draws on the element's box, so
+            // once the box is masked to the glyph it would surface only where
+            // the glyph meets the box edges, not along its contour.
+            "&::after": {
+              backgroundColor: "bg.quoteMarkEdge",
+              maskImage: `${QUOTE_GLYPH_STROKE_MASK}, ${QUOTE_GLYPH_FILL_MASK}`,
+              maskComposite: "intersect",
+              WebkitMaskImage: `${QUOTE_GLYPH_STROKE_MASK}, ${QUOTE_GLYPH_FILL_MASK}`,
+              WebkitMaskComposite: "source-in",
+            },
           },
         }),
 
@@ -1600,7 +1667,7 @@ export default defineConfig({
             textStyle: "quote",
             color: "text.default",
             wordBreak: "break-word",
-            paddingBlockStart: "xl",
+            paddingBlockStart: "lg",
           },
         }),
 
@@ -2233,7 +2300,7 @@ export default defineConfig({
         field: defineSlotRecipe({
           className: "field",
           description:
-            "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` or `role=\"checkbox\"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.",
+            'Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The \'Active\' state is CSS-driven off the control\'s focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role="switch"` or `role="checkbox"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.',
           slots: ["root", "label", "frame", "control", "hint"],
           base: {
             root: {
@@ -2397,7 +2464,11 @@ export default defineConfig({
               sm: {
                 label: { textStyle: "caption" },
                 hint: { textStyle: "caption" },
-                root: { "&:has([role='switch'], [role='checkbox'])": { columnGap: "sm" } },
+                root: {
+                  "&:has([role='switch'], [role='checkbox'])": {
+                    columnGap: "sm",
+                  },
+                },
               },
               md: {
                 label: { textStyle: "bodySmall" },
