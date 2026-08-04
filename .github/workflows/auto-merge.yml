@@ -5,23 +5,19 @@ name: Auto-merge
 # success (CI's three jobs plus Vercel's own deployment check). Pushing to main
 # is what triggers Vercel's production deploy, so no deploy step belongs here.
 #
-# WHO arms it decides who GitHub records as the merger, and that has one
-# consequence worth the secret this needs. Armed with GITHUB_TOKEN, the merge
-# lands as `app/github-actions`, and two things silently stop working: the
-# repository's "Automatically delete head branches" setting does not fire, and
-# neither does any workflow listening for the merge, because events triggered
-# by GITHUB_TOKEN do not start workflow runs. That is why every merged branch
-# here stayed standing and every deletion in the repository's history was done
-# by hand. Arming with a PAT makes the merge the user's own, so the built-in
-# deletion fires and no branch-cleanup workflow is needed at all.
+# Merged head branches are NOT deleted automatically, and that is accepted
+# rather than unnoticed. Arming with GITHUB_TOKEN makes GitHub record the
+# merge as `app/github-actions`, and the repository's "Automatically delete
+# head branches" setting does not fire for that actor — nor does any workflow
+# listening for the merge, because events triggered by GITHUB_TOKEN start no
+# workflow runs at all. Both halves have the same cause, so no workflow can
+# route around it; #45 tried and never ran once.
 #
-# AUTO_MERGE_TOKEN is a fine-grained PAT scoped to this repository with
-# Contents: read & write and Pull requests: read & write. PATs expire — when
-# this one does, arming falls back to GITHUB_TOKEN and the job warns rather
-# than failing. An unarmed pull request is a nuisance; a repository that
-# cannot merge is an outage. The gate is unaffected either way: the ruleset
-# has no bypass actors, so a PAT-armed merge still waits on every required
-# check exactly as before.
+# The two fixes that would work each cost more than the problem. A PAT (#46,
+# reverted here) makes the merge the user's own and the built-in deletion
+# fires — but it expires, and its expiry degrades silently into exactly the
+# behaviour below. A scheduled sweep needs no secret but adds a workflow to
+# maintain. Branches are deleted by hand after merging instead.
 on:
   pull_request:
     branches: [main]
@@ -39,18 +35,11 @@ jobs:
     steps:
       - name: Enable auto-merge
         env:
-          GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN || github.token }}
-          # The token itself is masked in expressions, so ask a boolean instead
-          # of testing GH_TOKEN's contents in the shell.
-          HAS_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           BASE: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-
-          if [ "$HAS_PAT" != "true" ]; then
-            echo "::warning::AUTO_MERGE_TOKEN is unset or expired — arming as GITHUB_TOKEN. The pull request will still merge under the same required checks, but GitHub will record the merge as app/github-actions and will NOT delete the head branch. See the comment at the top of this workflow."
-          fi
 
           # Without required status checks there is nothing for auto-merge to
           # wait on, and GitHub merges the pull request the moment it is armed —
