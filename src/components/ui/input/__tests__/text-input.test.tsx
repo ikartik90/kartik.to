@@ -22,6 +22,30 @@ describe("TextInput", () => {
     expect(document.getElementById(describedBy!)?.textContent).toBe("Hint text");
   });
 
+  // The assembly used to hardcode the field's default size, so `sm` was
+  // unreachable without dropping down to the compound parts. Assert the prop
+  // reaches every slot — a size that scales the label but not the frame is the
+  // exact mismatch the recipe's size variant exists to prevent.
+  it("forwards size to every field slot", () => {
+    render(<TextInput label="Label" hint="Hint text" size="sm" />);
+    const control = screen.getByRole("textbox");
+    expect(control.className).toContain("field__control--size_sm");
+    expect(control.parentElement?.className).toContain("field__frame--size_sm");
+    expect(screen.getByText("Label").className).toContain(
+      "field__label--size_sm",
+    );
+    expect(screen.getByText("Hint text").className).toContain(
+      "field__hint--size_sm",
+    );
+  });
+
+  it("stays on the medium field when no size is given", () => {
+    render(<TextInput label="Label" />);
+    expect(screen.getByRole("textbox").className).toContain(
+      "field__control--size_md",
+    );
+  });
+
   it("omits aria-describedby when there is no hint", () => {
     render(<TextInput label="Label" />);
     expect(

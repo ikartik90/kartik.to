@@ -28,6 +28,7 @@ type FieldStyles = ReturnType<typeof field>;
  * outside the scale.
  */
 export type FieldTextStyle =
+  | "fineprint"
   | "caption"
   | "sidenote"
   | "bodySmall"
@@ -38,6 +39,7 @@ export type FieldTextStyle =
 // is invisible to Panda's static extractor and would emit no CSS, so each
 // override utility is spelled out here (mirrors the recipe's staticCss trick).
 const TEXT_STYLE_OVERRIDE: Record<FieldTextStyle, string> = {
+  fineprint: css({ textStyle: "fineprint" }),
   caption: css({ textStyle: "caption" }),
   sidenote: css({ textStyle: "sidenote" }),
   bodySmall: css({ textStyle: "bodySmall" }),
@@ -86,8 +88,8 @@ export function useOptionalField(): FieldContextValue | null {
 export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
   /**
    * Scales the field as a set — label/hint typography (and, for text inputs, the
-   * frame; for switches, the track geometry via the control). `md` is the text
-   * default; switches use `sm` or `lg`.
+   * frame; for switches, the track geometry via the control). `md` is the
+   * default; `sm` and `lg` step the whole set down / up together.
    */
   size?: FieldSize;
   children: ReactNode;

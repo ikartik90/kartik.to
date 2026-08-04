@@ -54,6 +54,20 @@ export default function TextInputPreviewPage() {
         />
       </div>
 
+      <div className={columnStyle}>
+        <span className={captionStyle}>size — sm / md / lg</span>
+        {(["sm", "md", "lg"] as const).map((size) => (
+          <TextInput
+            key={size}
+            size={size}
+            label="Label"
+            hint="Hint text"
+            iconBefore={<CalendarIcon />}
+            defaultValue="11/12/2026"
+          />
+        ))}
+      </div>
+
       {/* The Figma case (745:4383): the field keeps its frame, border and
           leading icon; only the label / value / hint become bars, each sitting
           in the line box of the text it replaced. */}

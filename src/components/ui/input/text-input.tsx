@@ -1,10 +1,15 @@
 "use client";
 
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
-import { Field } from "./field";
+import { Field, type FieldProps } from "./field";
 
 export interface TextInputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "children"> {
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "children" | "size"> {
+  /**
+   * Scales label, value, hint and frame as a set — `sm` (28px frame) through
+   * `lg`. Forwarded straight to the field root; see {@link FieldProps.size}.
+   */
+  size?: FieldProps["size"];
   /** Label rendered above the input and associated with it. */
   label?: ReactNode;
   /** Helper text below the input, linked to the control via aria-describedby. */
@@ -26,11 +31,11 @@ export interface TextInputProps
  */
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   function TextInput(
-    { label, hint, iconBefore, className, ...inputProps },
+    { label, hint, iconBefore, className, size, ...inputProps },
     ref,
   ) {
     return (
-      <Field className={className}>
+      <Field className={className} size={size}>
         {label != null && <Field.Label>{label}</Field.Label>}
         <Field.Frame>
           {iconBefore}

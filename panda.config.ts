@@ -2244,7 +2244,7 @@ export default defineConfig({
         field: defineSlotRecipe({
           className: "field",
           description:
-            'Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The \'Active\' state is CSS-driven off the control\'s focus (`[data-control]:focus-visible`) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role="switch"` or `role="checkbox"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.',
+            'Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The \'Active\' state is CSS-driven off the control\'s engagement (`:focus-visible`, a slider\'s plain `:focus`, or an open trigger\'s `aria-expanded` — see the label slot) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role="switch"` or `role="checkbox"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.',
           slots: ["root", "label", "frame", "control", "hint"],
           base: {
             root: {
@@ -2272,7 +2272,24 @@ export default defineConfig({
               transition: "color 150ms ease",
               // Tracked from the field ROOT, so the label recolors even though
               // it sits outside the frame.
-              "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &":
+              //
+              // The selector is a UNION because each control archetype signals
+              // engagement differently, and `:focus-visible` alone does not
+              // cover them all:
+              //   • text inputs — `:focus-visible`, which the spec makes always
+              //     match on a keyboard-editable element, click or tab.
+              //   • the Date/Select trigger — `aria-expanded`, so an open
+              //     popover keeps its field lit.
+              //   • the Slider — plain `:focus`. Its control is a <div>, which
+              //     matches `:focus-visible` on a PROGRAMMATIC focus (what the
+              //     track's pointerdown does) only while the browser's last
+              //     interaction was the keyboard. Click any button first and
+              //     the modality flips to pointer, so the field would stay
+              //     resting through an entire drag. Text inputs never show this
+              //     because of the rule above.
+              // The keyboard ring below stays on `:focus-visible` alone — that
+              // one IS meant to be keyboard-only.
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus, [data-control][aria-expanded='true']) &":
                 {
                   color: "field.text.active",
                 },
@@ -2306,7 +2323,7 @@ export default defineConfig({
               color: "field.text.default",
               transition:
                 "background-color 150ms ease, border-color 150ms ease, color 150ms ease",
-              "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &":
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus, [data-control][aria-expanded='true']) &":
                 {
                   backgroundColor: "field.bg.active",
                   borderColor: "field.border.active",
@@ -2353,7 +2370,7 @@ export default defineConfig({
               "&::placeholder, &[data-placeholder]": {
                 color: "field.text.placeholder",
               },
-              "[data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &::placeholder, [data-field]:has([data-control]:focus-visible, [data-control][aria-expanded='true']) &[data-placeholder]":
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus, [data-control][aria-expanded='true']) &::placeholder, [data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus, [data-control][aria-expanded='true']) &[data-placeholder]":
                 { color: "field.text.activeMuted" },
               // The app-wide keyboard ring targets the raw <input>, which this
               // frame's overflow:hidden clips into an awkward inner rectangle.
@@ -2381,12 +2398,21 @@ export default defineConfig({
           // "small field" rather than a mismatched label over a normal input.
           // `md` is the Figma default (586:876); `lg` steps each part up one
           // text style and the frame up 8px, holding the same 6px vertical
-          // inset. `sm` is the compact step the toggle archetype uses.
+          // inset. `sm` steps every part down one — 12/20 label, 14/24 value,
+          // `fineprint` hint — into a 28px frame. Its 8px padding and gap come
+          // from the base and deliberately do NOT shrink: at 28px tall that
+          // horizontal rhythm is what keeps the value off the border.
           variants: {
             size: {
               sm: {
-                label: { textStyle: "caption" },
-                hint: { textStyle: "caption" },
+                label: { textStyle: "sidenote" },
+                control: { textStyle: "bodySmall" },
+                hint: { textStyle: "fineprint" },
+                // 20 + 8: no single spacing token lands on 28, and the sum
+                // mirrors how `lg` derives its own height from `4xl` + `md`.
+                frame: {
+                  height: "calc(token(spacing.xxl) + token(spacing.md))",
+                },
                 root: {
                   "&:has([role='switch'], [role='checkbox'])": {
                     columnGap: "sm",
@@ -2567,6 +2593,118 @@ export default defineConfig({
               "[aria-checked='true'] & > svg": { opacity: 1 },
             },
           },
+        }),
+
+        // The third control archetype of the field family, after the text input
+        // and the toggles: a ruler and a numeric readout sharing one frame
+        // (Figma 842:7179). It owns NO surface of its own — the 28px shell, its
+        // fill, border and focus accent are the `field` recipe's `frame` at
+        // `size="sm"`, and the 8px padding + 8px gap the frame already carries
+        // place the track, separator and readout at exactly the drawn offsets.
+        // So this recipe is only the marks inside: ruler ticks and separator on
+        // the border token (the same hairline the frame's own edge uses), the
+        // thumb and readout on `currentColor` — which the frame flips to the
+        // brand accent on focus, so the whole active state comes for free.
+        sliderField: defineSlotRecipe({
+          className: "slider-field",
+          description:
+            "The ruler + thumb + numeric readout of a slider — the control slot of a `field`, drawn inside the shared `frame` rather than bringing a surface of its own. `track` is the focusable `role=\"slider\"` element (full frame height, so the hit target is the whole strip, not the 4px rule); `tick` marks the evenly spaced stops as 1px hairlines on `field.border.*`; `thumb` is the 4×20 pill at the current value; `separator` is the 0.5px rule dividing the ruler from the `output` readout. Thumb and readout paint in `currentColor` so the frame's resting → active colour shift carries them, exactly as it carries a leading icon. Like the checkbox, the geometry is drawn at ONE size (Figma 842:7179); `size` scales only the readout's type, so it keeps step with the field's label and hint.",
+          slots: ["track", "tick", "thumb", "separator", "output"],
+          base: {
+            track: {
+              position: "relative",
+              flex: "1 1 0",
+              minWidth: 0,
+              // Full height rather than the 4px of the rule: the whole strip is
+              // the drag target, so a grab anywhere in the frame lands on the
+              // slider instead of the frame's dead padding.
+              alignSelf: "stretch",
+              cursor: "pointer",
+              // Claim the horizontal pan gesture — without it a touch drag
+              // scrolls the page instead of moving the thumb.
+              touchAction: "none",
+              // `_disabled` covers [aria-disabled=true] as well as :disabled,
+              // which is what a <div role="slider"> can actually carry.
+              _disabled: { cursor: "not-allowed", opacity: 0.5 },
+            },
+            // Ticks and thumb are both centred on the track's midline and on
+            // their own value, so they share the same centring transform and
+            // differ only in size and colour.
+            tick: {
+              position: "absolute",
+              top: "token(spacing.half)",
+              transform: "translate(-50%, -50%)",
+              width: "token(spacing.xxs)",
+              height: "token(spacing.sm)",
+              // Rounds the 1px hairline's ends, matching the round cap the
+              // drawn vector has.
+              borderRadius: "full",
+              backgroundColor: "field.border.default",
+              pointerEvents: "none",
+              transition: "background-color 150ms ease",
+              // The frame's own border goes accent on focus; the hairlines drawn
+              // inside it follow, keyed off the same selector the `field` recipe
+              // uses so the whole field flips in one step.
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &": {
+                backgroundColor: "field.border.active",
+              },
+            },
+            thumb: {
+              position: "absolute",
+              top: "token(spacing.half)",
+              transform: "translate(-50%, -50%)",
+              width: "token(spacing.sm)",
+              height: "token(spacing.xxl)",
+              borderRadius: "full",
+              // The frame owns the resting → active colour for everything it
+              // contains; the thumb rides it like the leading icon does.
+              backgroundColor: "currentColor",
+              pointerEvents: "none",
+            },
+            separator: {
+              alignSelf: "stretch",
+              flexShrink: 0,
+              width: "token(spacing.3xs)",
+              backgroundColor: "field.border.default",
+              transition: "background-color 150ms ease",
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &": {
+                backgroundColor: "field.border.active",
+              },
+            },
+            output: {
+              flexShrink: 0,
+              // The drawn readout is 28px wide; a MIN width rather than a fixed
+              // one, so a longer value (a negative, or a 0.25 step) grows the
+              // readout instead of being clipped by the frame's overflow.
+              minWidth: "calc(token(spacing.xxl) + token(spacing.md))",
+              textAlign: "right",
+              color: "inherit",
+              // The readout changes on every drag frame; proportional digits
+              // would make the number shuffle horizontally as it counts.
+              fontVariantNumeric: "tabular-nums",
+              userSelect: "none",
+              // The readout sits OUTSIDE the track, so the track's own dimming
+              // can't reach it — without this a disabled slider greys its ruler
+              // and leaves the value at full strength.
+              "[data-field]:has([role='slider'][aria-disabled='true']) &": {
+                opacity: 0.5,
+              },
+            },
+          },
+          variants: {
+            // Only the readout's type: the ruler is drawn at one geometry (the
+            // checkbox's bargain), so a bigger field grows label, hint and value
+            // around an unchanged rule. Mirrors the `field` recipe's control.
+            size: {
+              sm: { output: { textStyle: "bodySmall" } },
+              md: { output: { textStyle: "bodyLarge" } },
+              lg: { output: { textStyle: "subheading" } },
+            },
+          },
+          defaultVariants: { size: "sm" },
+          // Slider calls sliderField({ size }) with the field's runtime size, so
+          // the extractor only sees the default — force all three.
+          staticCss: [{ size: ["*"] }],
         }),
 
         // Presentation only — the month math (Temporal) and selection live in
@@ -3686,6 +3824,20 @@ export default defineConfig({
             fontWeight: "{fontWeights.base}",
             fontSize: "0.875rem",
             lineHeight: "1.72",
+          },
+        },
+        // The smallest step in the scale — 10/16, below `caption`/`sidenote`.
+        // Reserved for the subordinate line that must not compete with the
+        // value it annotates: the small field's hint. Carries the same 0.5%
+        // tracking the rest of the sub-14px family does, since tight glyphs
+        // need the extra air to stay legible at this size.
+        fineprint: {
+          value: {
+            fontFamily: "{fonts.switzer}",
+            fontWeight: "{fontWeights.base}",
+            fontSize: "0.625rem",
+            lineHeight: "1.6",
+            letterSpacing: "0.5%",
           },
         },
         inlineCode: {

@@ -43,7 +43,7 @@ export default function CheckboxPreviewPage() {
         <Field size="sm">
           <Checkbox />
           <Field.Label>Small label</Field.Label>
-          <Field.Hint>caption label · caption hint</Field.Hint>
+          <Field.Hint>sidenote label · fineprint hint</Field.Hint>
         </Field>
         <Field size="lg">
           <Checkbox defaultChecked />

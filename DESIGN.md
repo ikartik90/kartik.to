@@ -124,6 +124,11 @@ tokens:
       lineHeight: 1.67
       letterSpacing: 0.5%
 
+    fineprint:
+      fontSize: 0.625rem
+      lineHeight: 1.6
+      letterSpacing: 0.5%
+
     commandItem:
       fontSize: 0.875rem
       lineHeight: 1.5rem
