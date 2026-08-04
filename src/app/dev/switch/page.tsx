@@ -41,13 +41,13 @@ export default function SwitchPreviewPage() {
         <Field size="sm">
           <Switch />
           <Field.Label>Small label</Field.Label>
-          <Field.Hint>caption label · caption hint</Field.Hint>
+          <Field.Hint>sidenote label · fineprint hint</Field.Hint>
         </Field>
         <Field size="sm">
           <Field.Frame>
             <Switch defaultChecked />
             <Field.Label>Small label</Field.Label>
-            <Field.Hint>caption label · caption hint</Field.Hint>
+            <Field.Hint>sidenote label · fineprint hint</Field.Hint>
           </Field.Frame>
         </Field>
 
@@ -61,7 +61,7 @@ export default function SwitchPreviewPage() {
         <Field size="sm">
           <Switch size="lg" defaultChecked />
           <Field.Label type="subheading">sm label, lg switch override</Field.Label>
-          <Field.Hint>caption hint, large track</Field.Hint>
+          <Field.Hint>fineprint hint, large track</Field.Hint>
         </Field>
 
         {/* Wireframe: the track and thumb are geometry, not text, so they render
@@ -85,7 +85,7 @@ export default function SwitchPreviewPage() {
           <Field size="sm">
             <Switch />
             <Field.Label>Small label</Field.Label>
-            <Field.Hint>caption label · caption hint</Field.Hint>
+            <Field.Hint>sidenote label · fineprint hint</Field.Hint>
           </Field>
         </Wireframe>
 
