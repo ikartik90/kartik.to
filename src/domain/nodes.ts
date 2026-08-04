@@ -143,6 +143,29 @@ export const ImageNodeSchema = z.object({
   caption: z.string().optional(),
 });
 
+// A set of related images authored as ONE block. The editor exposes exactly
+// this many slots (a 3×2 grid), so the cap is the layout, not an arbitrary
+// limit; the reader shows the first three and folds the rest into a surplus
+// badge. Items are ordered, and index 0 is the featured image by definition —
+// "feature this one" is a move-to-front, not a flag, so the order alone
+// determines the layout and there is no second source of truth to keep in sync.
+export const COLLECTION_MAX_ITEMS = 6;
+
+// Structurally an image node minus its discriminant, so the two stay in
+// lockstep as the image schema grows (alt/caption additions land on both).
+export const CollectionItemSchema = ImageNodeSchema.omit({ type: true });
+
+export type CollectionItem = z.infer<typeof CollectionItemSchema>;
+
+// `items` may be empty: removing images one by one has to pass through zero,
+// and a minimum would make the document unparseable mid-edit. `caption` is the
+// block's own caption, alongside the per-item captions shown in the lightbox.
+export const CollectionNodeSchema = z.object({
+  type: z.literal("collection"),
+  items: z.array(CollectionItemSchema).max(COLLECTION_MAX_ITEMS),
+  caption: z.string().optional(),
+});
+
 export const ComponentNodeSchema = z.object({
   type: z.literal("component"),
   componentId: z.string().min(1),
@@ -175,6 +198,7 @@ export type BlockNode =
   | z.infer<typeof CodeBlockNodeSchema>
   | z.infer<typeof HorizontalRuleNodeSchema>
   | z.infer<typeof ImageNodeSchema>
+  | z.infer<typeof CollectionNodeSchema>
   | z.infer<typeof ComponentNodeSchema>
   | z.infer<typeof MetricNodeSchema>;
 
@@ -187,6 +211,7 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   CodeBlockNodeSchema,
   HorizontalRuleNodeSchema,
   ImageNodeSchema,
+  CollectionNodeSchema,
   ComponentNodeSchema,
   MetricNodeSchema,
 ]);

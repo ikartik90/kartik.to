@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { BlockNodeSchema, MarkSchema, TextNodeSchema } from "../nodes";
+import {
+  BlockNodeSchema,
+  COLLECTION_MAX_ITEMS,
+  MarkSchema,
+  TextNodeSchema,
+} from "../nodes";
 import {
   CreatePostInputSchema,
   DocumentSchema,
@@ -259,6 +264,47 @@ describe("BlockNodeSchema", () => {
         children: [{ type: "text", text: "$377k" }],
       }).success,
     ).toBe(true);
+  });
+
+  it("accepts a collection node with items and a block caption", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "collection",
+        items: [
+          { src: "/uploads/a.jpg", alt: "A", caption: "First" },
+          { src: "/uploads/b.jpg" },
+        ],
+        caption: "Field notes",
+      }).success,
+    ).toBe(true);
+  });
+
+  // The editor can empty a collection slot by slot; a minimum would make the
+  // document unparseable mid-edit.
+  it("accepts a collection node with no items", () => {
+    expect(
+      BlockNodeSchema.safeParse({ type: "collection", items: [] }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a collection node past COLLECTION_MAX_ITEMS", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "collection",
+        items: Array.from({ length: COLLECTION_MAX_ITEMS + 1 }, (_, i) => ({
+          src: `/uploads/${i}.jpg`,
+        })),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a collection item without a src", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "collection",
+        items: [{ alt: "No source" }],
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects an unknown block type", () => {
