@@ -146,8 +146,14 @@ describe("SlashMenu", () => {
 
   it("calls onSelect with 'component' on Enter when the Component item is active", () => {
     renderMenu();
-    // Component sits at index 3 (after the first three block items).
-    for (let i = 0; i < 3; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
+    // Derived, not hardcoded — the menu grows, and an off-by-one here would
+    // silently assert about whichever item moved into that slot.
+    const steps = screen
+      .getAllByRole("option")
+      .findIndex((item) => item.textContent === "Component");
+    for (let i = 0; i < steps; i++) {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+    }
     fireEvent.keyDown(document, { key: "Enter" });
     expect(onSelect).toHaveBeenCalledWith("component");
   });
@@ -250,8 +256,11 @@ describe("SlashMenu", () => {
 
   it("wraps from last item to first when pressing ArrowDown", () => {
     renderMenu();
-    // Move down past the last item (10 items total → 10 presses wraps back to 0).
-    for (let i = 0; i < 10; i++) fireEvent.keyDown(document, { key: "ArrowDown" });
+    // One press per item walks off the end and back to the top.
+    const count = screen.getAllByRole("option").length;
+    for (let i = 0; i < count; i++) {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+    }
     const items = screen.getAllByRole("option");
     expect(items[0].hasAttribute("data-active")).toBe(true);
     expect(items[items.length - 1].hasAttribute("data-active")).toBe(false);

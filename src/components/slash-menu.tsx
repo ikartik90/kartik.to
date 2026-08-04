@@ -6,6 +6,7 @@ import { OptionList } from "@/components/ui/input/option-list";
 import SubheadingIcon from "@/assets/icons/subheading.svg";
 import ParagraphIcon from "@/assets/icons/paragraph.svg";
 import MediaIcon from "@/assets/icons/media.svg";
+import CollectionIcon from "@/assets/icons/collection.svg";
 import ComponentIcon from "@/assets/icons/component.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import CodeIcon from "@/assets/icons/code.svg";
@@ -18,15 +19,16 @@ import MetricIcon from "@/assets/icons/metric.svg";
 // Types
 // ---------------------------------------------------------------------------
 
-// `media` and `component` are menu vocabulary, not terminal blocks: selecting
-// either commits the block type and hands off to a dialog (image picker /
-// Insert Component overlay) that fills the remaining field (src / componentId).
-// Both ride the same onSelect(type) channel as every other item — the editor
-// decides which types need a follow-up dialog.
+// `media`, `collection` and `component` are menu vocabulary, not terminal
+// blocks: selecting one commits the block type and hands off to a dialog (image
+// picker / Insert Component overlay) that fills the remaining field (src /
+// items / componentId). All three ride the same onSelect(type) channel as every
+// other item — the editor decides which types need a follow-up dialog.
 export type SlashMenuBlockType =
   | "heading"
   | "paragraph"
   | "media"
+  | "collection"
   | "component"
   | "blockquote"
   | "list_item"
@@ -64,6 +66,7 @@ const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "heading", label: "Sub-heading", Icon: SubheadingIcon },
   { type: "paragraph", label: "Paragraph", Icon: ParagraphIcon },
   { type: "media", label: "Media", Icon: MediaIcon },
+  { type: "collection", label: "Collection", Icon: CollectionIcon },
   { type: "component", label: "Component", Icon: ComponentIcon },
   { type: "blockquote", label: "Quote", Icon: QuoteIcon },
   { type: "list_item", label: "Numbered List", Icon: NumberedListIcon },
