@@ -421,6 +421,53 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector("figcaption")).toBeNull();
     });
 
+    it("renders a collection with the block's own caption", () => {
+      render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "collection",
+              items: [
+                { src: "https://example.com/1.png", alt: "First" },
+                { src: "https://example.com/2.png", alt: "Second" },
+              ],
+              caption: "Collection caption text",
+            },
+          ])}
+        />,
+      );
+      expect(screen.getByRole("img", { name: "First" })).toBeDefined();
+      expect(screen.getByRole("img", { name: "Second" })).toBeDefined();
+      expect(screen.getByText("Collection caption text")).toBeDefined();
+    });
+
+    it("folds a collection past three images into a surplus badge", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "collection",
+              items: Array.from({ length: 5 }, (_, i) => ({
+                src: `https://example.com/${i}.png`,
+                alt: `Image ${i}`,
+              })),
+            },
+          ])}
+        />,
+      );
+      // Scoped to this render — the suite shares a document, and earlier cases
+      // leave their own images behind in it.
+      expect(within(container).getAllByRole("img")).toHaveLength(3);
+      expect(within(container).getByText("+2 Images")).toBeDefined();
+    });
+
+    it("renders nothing for a collection with no images", () => {
+      const { container } = render(
+        <ArticleRenderer content={doc([{ type: "collection", items: [] }])} />,
+      );
+      expect(container.querySelector("figure")).toBeNull();
+    });
+
     it("renders a component inside a figure with caption", async () => {
       const { container } = render(
         <ArticleRenderer

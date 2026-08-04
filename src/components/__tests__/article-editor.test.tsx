@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import React, { type ReactNode } from "react";
-import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  act,
+  within,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   inlineNodesToHtml,
@@ -45,6 +52,7 @@ vi.mock("@/components/slash-menu", () => ({
       <button onClick={() => onSelect("heading")}>heading</button>
       <button onClick={() => onSelect("paragraph")}>paragraph</button>
       <button onClick={() => onSelect("media")}>media</button>
+      <button onClick={() => onSelect("collection")}>collection</button>
       <button onClick={() => onSelect("list_item")}>list_item</button>
       <button onClick={() => onSelect("bullet_list_item")}>bullet_list_item</button>
       <button onClick={onDismiss}>dismiss</button>
@@ -53,19 +61,48 @@ vi.mock("@/components/slash-menu", () => ({
   slashMenuHasResults: () => true,
 }));
 
+// Two instances are mounted (single-image and collection); only one is ever
+// open, and `data-selection-mode` is what tells them apart in assertions.
 vi.mock("@/components/image-insert-dialog", () => ({
   ImageInsertDialog: ({
     open,
     mode,
+    selectionMode,
+    maxSelection,
     onClose,
+    onInsert,
   }: {
     open: boolean;
     mode?: "insert" | "change";
+    selectionMode?: "single" | "multiple";
+    maxSelection?: number;
     onClose: () => void;
+    onInsert: (payload: never) => void;
   }) =>
     open ? (
-      <div data-testid="image-dialog" data-mode={mode ?? "insert"}>
+      <div
+        data-testid="image-dialog"
+        data-mode={mode ?? "insert"}
+        data-selection-mode={selectionMode ?? "single"}
+        data-max-selection={maxSelection}
+      >
         <button onClick={onClose}>close</button>
+        <button
+          onClick={() =>
+            onInsert(
+              (selectionMode === "multiple"
+                ? [
+                    { src: "https://cdn/1.png" },
+                    { src: "https://cdn/2.png" },
+                    { src: "https://cdn/3.png" },
+                    { src: "https://cdn/4.png" },
+                  ]
+                : { src: "https://cdn/1.png" }) as never,
+            )
+          }
+        >
+          insert
+        </button>
       </div>
     ) : null,
 }));
@@ -3282,5 +3319,231 @@ describe("ArticleEditor bullet popover", () => {
     seed([bullet("one", "check"), bullet("two")]);
     expect(markerOf(0)).toBe("check");
     expect(markerOf(1)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Collection block
+// ---------------------------------------------------------------------------
+
+describe("ArticleEditor collection block", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  const collectionPost = (items: { src: string; caption?: string }[]) => ({
+    id: "collection-post",
+    slug: "collection-post",
+    title: "Collection Post",
+    category: "ARTICLE" as const,
+    content: {
+      type: "doc" as const,
+      content: [
+        { type: "collection" as const, items },
+        {
+          type: "paragraph" as const,
+          children: [{ type: "text" as const, text: "" }],
+        },
+      ],
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const blocks = () => useEditorStore.getState().document.content;
+  const collection = () => {
+    const block = blocks()[0];
+    if (block.type !== "collection") throw new Error("expected a collection");
+    return block;
+  };
+  const toolbarFor = (index: number) =>
+    screen.getByRole("toolbar", { name: `Image ${index + 1} actions` });
+
+  it("opens the picker in multi-select from the slash menu", () => {
+    render(<ArticleEditor />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    openSlashMenuOnBlock(block);
+    fireEvent.click(screen.getByText("collection"));
+
+    const dialog = screen.getByTestId("image-dialog");
+    expect(dialog.getAttribute("data-selection-mode")).toBe("multiple");
+    expect(dialog.getAttribute("data-max-selection")).toBe("6");
+    // The trigger block waits as an empty paragraph until images arrive.
+    expect(blocks()[0].type).toBe("paragraph");
+    expect(block.textContent).toBe("");
+  });
+
+  it("writes the picked batch as one collection, in order", () => {
+    render(<ArticleEditor />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    openSlashMenuOnBlock(block);
+    fireEvent.click(screen.getByText("collection"));
+    fireEvent.click(screen.getByText("insert"));
+
+    expect(collection().items.map((i) => i.src)).toEqual([
+      "https://cdn/1.png",
+      "https://cdn/2.png",
+      "https://cdn/3.png",
+      "https://cdn/4.png",
+    ]);
+    // A figure can't hold a caret, so a paragraph must follow it.
+    expect(blocks()).toHaveLength(2);
+    expect(blocks()[1].type).toBe("paragraph");
+  });
+
+  it("shows every slot, filled or not", () => {
+    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    expect(screen.getAllByRole("toolbar")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Add Image" })).toHaveLength(5);
+  });
+
+  it("moves a featured image to the front, shifting the rest", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+      />,
+    );
+    fireEvent.click(
+      within(toolbarFor(2)).getByRole("button", { name: "Feature image" }),
+    );
+    expect(collection().items.map((i) => i.src)).toEqual(["c", "a", "b"]);
+  });
+
+  it("removes one image and leaves the block behind", () => {
+    render(
+      <ArticleEditor initialPost={collectionPost([{ src: "a" }, { src: "b" }])} />,
+    );
+    fireEvent.click(
+      within(toolbarFor(0)).getByRole("button", { name: "Remove image" }),
+    );
+    expect(collection().items.map((i) => i.src)).toEqual(["b"]);
+
+    fireEvent.click(
+      within(toolbarFor(0)).getByRole("button", { name: "Remove image" }),
+    );
+    expect(collection().items).toEqual([]);
+  });
+
+  it("caps the picker at the remaining capacity when adding", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Add Image" })[0]);
+    expect(
+      screen.getByTestId("image-dialog").getAttribute("data-max-selection"),
+    ).toBe("3");
+  });
+
+  it("appends without passing the cap", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([
+          { src: "a" },
+          { src: "b" },
+          { src: "c" },
+          { src: "d" },
+        ])}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Add Image" })[0]);
+    fireEvent.click(screen.getByText("insert"));
+
+    expect(collection().items.map((i) => i.src)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "https://cdn/1.png",
+      "https://cdn/2.png",
+    ]);
+  });
+
+  it("replaces one slot, keeping the caption written for it", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([
+          { src: "a" },
+          { src: "b", caption: "Kept" },
+        ])}
+      />,
+    );
+    fireEvent.click(
+      within(toolbarFor(1)).getByRole("button", { name: "Replace image" }),
+    );
+    const dialog = screen.getByTestId("image-dialog");
+    expect(dialog.getAttribute("data-mode")).toBe("change");
+    expect(dialog.getAttribute("data-max-selection")).toBe("1");
+
+    fireEvent.click(screen.getByText("insert"));
+    expect(collection().items[1]).toEqual({
+      src: "https://cdn/1.png",
+      caption: "Kept",
+    });
+  });
+
+  it("stores a per-image caption from the cell toolbar", () => {
+    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    fireEvent.click(
+      within(toolbarFor(0)).getByRole("button", { name: "Edit image caption" }),
+    );
+    const field = screen.getByRole("textbox", { name: "Image caption" });
+    fireEvent.change(field, { target: { value: "A view" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    expect(collection().items[0].caption).toBe("A view");
+  });
+
+  it("stores the block's own caption separately from the images'", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([{ src: "a", caption: "Per image" }])}
+      />,
+    );
+    const figcaption = document.querySelector("figcaption") as HTMLElement;
+    figcaption.textContent = "Whole set";
+    fireEvent.input(figcaption);
+
+    expect(collection().caption).toBe("Whole set");
+    expect(collection().items[0].caption).toBe("Per image");
+  });
+
+  it("deletes the whole block on Backspace over the grid", () => {
+    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    const grid = document.querySelector("[data-showcase-media]") as HTMLElement;
+    grid.focus();
+    fireEvent.keyDown(grid, { key: "Backspace" });
+
+    expect(blocks().every((b) => b.type !== "collection")).toBe(true);
+  });
+
+  // The grid root owns the figure's caret keys, but it also CONTAINS the cell
+  // toolbars and the caption field — whose Enter and Backspace must stay theirs.
+  it("leaves the block alone when a key comes from inside a cell", () => {
+    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    fireEvent.click(
+      within(toolbarFor(0)).getByRole("button", { name: "Edit image caption" }),
+    );
+    const field = screen.getByRole("textbox", { name: "Image caption" });
+    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.keyDown(field, { key: "Backspace" });
+
+    expect(blocks()[0].type).toBe("collection");
+    expect(blocks()).toHaveLength(2);
+  });
+
+  it("navigates from the grid into the block caption with ArrowDown", () => {
+    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    const grid = document.querySelector("[data-showcase-media]") as HTMLElement;
+    grid.focus();
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+
+    expect(document.activeElement?.tagName.toLowerCase()).toBe("figcaption");
   });
 });

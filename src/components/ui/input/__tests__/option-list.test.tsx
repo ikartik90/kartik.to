@@ -199,7 +199,34 @@ describe("selection", () => {
     const onValueChange = vi.fn();
     renderBare({ onValueChange });
     fireEvent.click(screen.getByRole("option", { name: "Banana" }));
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("banana");
+    expect(onValueChange).toHaveBeenCalledOnce();
+    expect(onValueChange.mock.calls[0][0]).toBe("banana");
+  });
+
+  // Multi-select consumers decide their own policy (toggle vs replace) from the
+  // modifier keys, so the originating event has to reach them.
+  it("hands onValueChange the originating event, modifiers intact", () => {
+    const onValueChange = vi.fn();
+    renderBare({ onValueChange });
+    fireEvent.click(screen.getByRole("option", { name: "Banana" }), {
+      shiftKey: true,
+    });
+    expect(onValueChange.mock.calls[0][1]?.shiftKey).toBe(true);
+  });
+
+  it("calls a consumer's own onClick on a listbox option", () => {
+    const onClick = vi.fn();
+    render(
+      <OptionList>
+        <OptionList.Listbox>
+          <OptionList.Option value="apple" onClick={onClick}>
+            Apple
+          </OptionList.Option>
+        </OptionList.Listbox>
+      </OptionList>,
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Apple" }));
+    expect(onClick).toHaveBeenCalledOnce();
   });
 
   it("updates the selection when uncontrolled", () => {
@@ -218,6 +245,49 @@ describe("selection", () => {
     renderBare({ onValueChange });
     fireEvent.click(screen.getByRole("option", { name: "Jackfruit" }));
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("multi-selection (selectedValues)", () => {
+  it("marks every member of the set as selected", () => {
+    renderBare({ selectedValues: ["apple", "mango"] });
+    for (const name of ["Apple", "Mango"]) {
+      expect(
+        screen.getByRole("option", { name }).getAttribute("aria-selected"),
+      ).toBe("true");
+    }
+    expect(
+      screen.getByRole("option", { name: "Banana" }).getAttribute("aria-selected"),
+    ).toBe("false");
+  });
+
+  it("announces the listbox as multi-selectable", () => {
+    renderBare({ selectedValues: ["apple"] });
+    expect(
+      screen.getByRole("listbox").getAttribute("aria-multiselectable"),
+    ).toBe("true");
+  });
+
+  // `value` keeps working — it degrades from "the selection" to "the anchor",
+  // the row the highlight and any single-target side panel follow.
+  it("leaves the anchor out of the painted selection when it is not a member", () => {
+    renderBare({ value: "grapes", selectedValues: ["apple"] });
+    expect(
+      screen.getByRole("option", { name: "Grapes" }).getAttribute("aria-selected"),
+    ).toBe("false");
+    expect(
+      screen.getByRole("option", { name: "Apple" }).getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  it("stays single-select, and single-selectable, without the prop", () => {
+    renderBare({ value: "grapes" });
+    expect(
+      screen.getByRole("option", { name: "Grapes" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("listbox").getAttribute("aria-multiselectable"),
+    ).toBeNull();
   });
 });
 
@@ -335,7 +405,8 @@ describe("keyboard from the search", () => {
     renderSearch({ onValueChange });
     arrow("ArrowDown"); // Avocado
     enter();
-    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("avocado");
+    expect(onValueChange).toHaveBeenCalledOnce();
+    expect(onValueChange.mock.calls[0][0]).toBe("avocado");
   });
 
   it("re-resolves the highlight to the first survivor after a fresh query", () => {
@@ -402,7 +473,7 @@ describe("externalKeys (slash-menu — focus stays outside the list)", () => {
     const onValueChange = renderExternal();
     pressDoc("ArrowDown"); // apple -> avocado
     pressDoc("Enter");
-    expect(onValueChange).toHaveBeenCalledWith("avocado");
+    expect(onValueChange.mock.calls[0][0]).toBe("avocado");
   });
 
   it("wraps with loop — ArrowUp from the first lands on the last enabled option", () => {

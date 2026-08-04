@@ -1,8 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { css } from "../../styled-system/css";
-import { menuIcon } from "../../styled-system/recipes";
+import { inlineEditRow, menuIcon } from "../../styled-system/recipes";
 import { selectionPopover } from "../../styled-system/recipes";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { OptionList } from "@/components/ui/input/option-list";
@@ -84,54 +83,9 @@ const toolbarClass = selectionPopover();
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
 
-const linkRowStyle = css({
-  display: "flex",
-  flex: "1 0 0",
-  minWidth: 0,
-  alignItems: "center",
-  gap: "md",
-  height: "token(spacing.4xl)",
-  paddingInline: "lg",
-});
-
-const linkInputStyle = css({
-  flex: "1 0 0",
-  minWidth: 0,
-  background: "transparent",
-  border: "none",
-  color: "text.default",
-  textStyle: "bodySmall",
-  focusVisibleRing: "none",
-  _placeholder: { color: "text.default/40" },
-});
-
-const hotkeyHintStyle = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "sm",
-  flexShrink: 0,
-});
-
-const hotkeyKeyStyle = css({
-  display: "flex",
-  alignItems: "center",
-  paddingInline: "sm",
-  height: "token(spacing.xxl)",
-  borderRadius: "sm",
-  borderWidth: "token(spacing.3xs)",
-  borderStyle: "solid",
-  borderColor: "border.divider",
-  backgroundColor: "bg.itemHover",
-  color: "text.default",
-  textStyle: "caption",
-  whiteSpace: "nowrap",
-});
-
-const hotkeyLabelStyle = css({
-  color: "text.default/50",
-  textStyle: "caption",
-  whiteSpace: "nowrap",
-});
+// The link editor's row is the shared inline-edit shell — the collection's
+// caption editor takes over its cell toolbar the same way.
+const editRow = inlineEditRow();
 
 // ---------------------------------------------------------------------------
 // Component
@@ -180,7 +134,7 @@ export function SelectionToolbar({
         ariaLabel="Edit link"
         onDismiss={onDismiss}
       >
-        <div className={linkRowStyle}>
+        <div className={editRow.root}>
           <LinkIcon className={iconStyle} aria-hidden />
           <input
             ref={inputRef}
@@ -188,7 +142,7 @@ export function SelectionToolbar({
             inputMode="url"
             placeholder="https://..."
             aria-label="Link URL"
-            className={linkInputStyle}
+            className={editRow.input}
             value={href}
             onChange={(e) => setHref(e.target.value)}
             onKeyDown={(e) => {
@@ -199,9 +153,9 @@ export function SelectionToolbar({
               }
             }}
           />
-          <div className={hotkeyHintStyle} aria-hidden>
-            <span className={hotkeyKeyStyle}>Esc</span>
-            <span className={hotkeyLabelStyle}>to exit</span>
+          <div className={editRow.hint} aria-hidden>
+            <span className={editRow.hintKey}>Esc</span>
+            <span className={editRow.hintLabel}>to exit</span>
           </div>
         </div>
       </Popover>

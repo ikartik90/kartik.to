@@ -19,10 +19,27 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type ImageInsertPhase = "upload" | "uploading" | "library";
 
+export type ImageSelectionMode = "single" | "multiple";
+
 export interface UseImageInsertOptions {
   open: boolean;
   initialPhase?: ImageInsertPhase;
+  /**
+   * `multiple` turns the library into a batch picker — the collection block
+   * takes several images in one pass. `selectedKey` keeps its meaning either
+   * way, but in `multiple` it stops being "the selection" and becomes the
+   * ANCHOR: the last row touched, and so the one the metadata panel edits and
+   * the delete button acts on.
+   */
+  selectionMode?: ImageSelectionMode;
+  /** Hard cap on a multiple selection — the collection's remaining capacity. */
+  maxSelection?: number;
   onReset?: () => void;
+}
+
+export interface ImageInsertPayload {
+  src: string;
+  alt?: string;
 }
 
 function uploadFileWithProgress(
@@ -62,11 +79,17 @@ function uploadFileWithProgress(
 export function useImageInsert({
   open,
   initialPhase = "upload",
+  selectionMode = "single",
+  maxSelection = Number.POSITIVE_INFINITY,
   onReset,
 }: UseImageInsertOptions) {
+  const isMultiple = selectionMode === "multiple";
   const [phase, setPhase] = useState<ImageInsertPhase>("upload");
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // ORDERED, not a Set: the order images are picked in becomes the order of the
+  // collection, and its first entry becomes the featured image.
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [altText, setAltText] = useState("");
   const [filenameText, setFilenameText] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -83,6 +106,7 @@ export function useImageInsert({
     setPhase("upload");
     setAssets([]);
     setSelectedKey(null);
+    setSelectedKeys([]);
     setAltText("");
     setFilenameText("");
     setUploadProgress(0);
@@ -100,16 +124,30 @@ export function useImageInsert({
     onReset?.();
   }, [onReset]);
 
-  const refreshLibrary = useCallback(async (selectKey?: string) => {
-    const list = await listMediaAssets();
-    setAssets(list);
-    const key = selectKey ?? list[0]?.key ?? null;
-    setSelectedKey(key);
-    const asset = list.find((item) => item.key === key);
-    setAltText(asset?.alt ?? "");
-    setFilenameText(asset?.filename ?? "");
-    return list;
-  }, []);
+  const refreshLibrary = useCallback(
+    async (selectKey?: string) => {
+      const list = await listMediaAssets();
+      setAssets(list);
+      const key = selectKey ?? list[0]?.key ?? null;
+      setSelectedKey(key);
+      // An image uploaded mid-batch JOINS the batch rather than replacing it —
+      // "upload one more" is the natural way to finish a collection. Only an
+      // explicit key does this; the bare refresh that opens the library is just
+      // parking the anchor and must not select anything.
+      if (isMultiple && selectKey) {
+        setSelectedKeys((prev) =>
+          prev.includes(selectKey) || prev.length >= maxSelection
+            ? prev
+            : [...prev, selectKey],
+        );
+      }
+      const asset = list.find((item) => item.key === key);
+      setAltText(asset?.alt ?? "");
+      setFilenameText(asset?.filename ?? "");
+      return list;
+    },
+    [isMultiple, maxSelection],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -218,14 +256,54 @@ export function useImageInsert({
     setError(null);
   }, []);
 
-  const selectAsset = useCallback(
-    (key: string) => {
+  /** Move the anchor to `key` and load its metadata into the editable fields. */
+  const anchorOn = useCallback(
+    (key: string | null) => {
       setSelectedKey(key);
       const asset = assets.find((item) => item.key === key);
       setAltText(asset?.alt ?? "");
       setFilenameText(asset?.filename ?? "");
     },
     [assets],
+  );
+
+  /** A plain click: this image, and only this image. */
+  const selectAsset = useCallback(
+    (key: string) => {
+      anchorOn(key);
+      if (isMultiple) setSelectedKeys([key]);
+    },
+    [anchorOn, isMultiple],
+  );
+
+  /**
+   * A modified click: add or drop one image, leaving the rest of the batch
+   * alone. Deselecting always works — only ADDING can hit the cap — so a full
+   * selection is still editable rather than stuck.
+   */
+  const toggleAsset = useCallback(
+    (key: string) => {
+      if (selectedKeys.includes(key)) {
+        const next = selectedKeys.filter((item) => item !== key);
+        setSelectedKeys(next);
+        // Park the anchor on what's left, so the metadata panel keeps showing
+        // something the batch still contains.
+        anchorOn(next.at(-1) ?? key);
+        return;
+      }
+      // The anchor moves even on a refused click — you pointed at the row, so
+      // it should respond; the error is what explains the refusal.
+      anchorOn(key);
+      if (selectedKeys.length >= maxSelection) {
+        setError(
+          `You can select up to ${maxSelection} image${maxSelection === 1 ? "" : "s"}`,
+        );
+        return;
+      }
+      setError(null);
+      setSelectedKeys([...selectedKeys, key]);
+    },
+    [anchorOn, maxSelection, selectedKeys],
   );
 
   const updateAltText = useCallback(
@@ -297,6 +375,8 @@ export function useImageInsert({
       await deleteMedia({ key: keyToDelete });
       const remaining = assets.filter((item) => item.key !== keyToDelete);
       setAssets(remaining);
+      // A deleted object can't stay in a batch that's about to be inserted.
+      setSelectedKeys((prev) => prev.filter((key) => key !== keyToDelete));
 
       const nextKey = remaining[0]?.key ?? null;
       setSelectedKey(nextKey);
@@ -314,13 +394,27 @@ export function useImageInsert({
     }
   }, [assets, selectedKey]);
 
-  const getInsertPayload = useCallback(() => {
+  const getInsertPayload = useCallback((): ImageInsertPayload | null => {
     if (!selectedAsset) return null;
     return {
       src: selectedAsset.url,
       alt: altText.trim() || undefined,
     };
   }, [selectedAsset, altText]);
+
+  /**
+   * The whole batch, in the order it was picked. Alt text comes from each
+   * stored asset — except the ANCHOR, whose alt field may still be mid-debounce
+   * (400ms) and therefore newer in local state than in `assets`.
+   */
+  const getInsertPayloads = useCallback((): ImageInsertPayload[] => {
+    return selectedKeys.flatMap((key) => {
+      const asset = assets.find((item) => item.key === key);
+      if (!asset) return [];
+      const alt = key === selectedKey ? altText : (asset.alt ?? "");
+      return [{ src: asset.url, alt: alt.trim() || undefined }];
+    });
+  }, [selectedKeys, assets, selectedKey, altText]);
 
   const isBusy = phase === "uploading" || isDeleting;
 
@@ -329,6 +423,7 @@ export function useImageInsert({
     assets,
     hasLibraryImages: assets.length > 0,
     selectedKey,
+    selectedKeys,
     selectedAsset,
     altText,
     filenameText,
@@ -341,10 +436,12 @@ export function useImageInsert({
     openLibrary,
     goToUpload,
     selectAsset,
+    toggleAsset,
     updateAltText,
     updateFilename,
     deleteSelectedAsset,
     getInsertPayload,
+    getInsertPayloads,
     reset,
   };
 }

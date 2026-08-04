@@ -63,6 +63,8 @@ import {
   ImageInsertDialog,
   type ImageDialogMode,
 } from "@/components/image-insert-dialog";
+import type { ImageInsertPayload } from "@/hooks/use-image-insert";
+import { CollectionGrid } from "@/components/collection-grid";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { NumberToolbar } from "@/components/number-toolbar";
 import { BulletToolbar, type BulletStyle } from "@/components/bullet-toolbar";
@@ -82,8 +84,21 @@ import { Button } from "@/components/ui/button";
 import { typographyStyles } from "@/components/ui/typography";
 import TrashIcon from "@/assets/icons/trash.svg";
 import type { Post, Document, PostCategory } from "@/domain/post";
-import type { BlockNode, InlineNode, Mark, CodeLanguage } from "@/domain/nodes";
-import { CodeLanguageSchema } from "@/domain/nodes";
+import type {
+  BlockNode,
+  CollectionItem,
+  InlineNode,
+  Mark,
+  CodeLanguage,
+} from "@/domain/nodes";
+import { CodeLanguageSchema, COLLECTION_MAX_ITEMS } from "@/domain/nodes";
+import {
+  appendItems,
+  featureItem,
+  removeItem,
+  replaceItem,
+  setItemCaption,
+} from "@/utils/collection-items";
 import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
 
 // ---------------------------------------------------------------------------
@@ -910,6 +925,7 @@ export function findSidenoteRangeAt(
 function isBlockEmpty(block: BlockNode): boolean {
   if (block.type === "horizontal_rule") return false;
   if (block.type === "image") return false;
+  if (block.type === "collection") return false;
   if (block.type === "component") return false;
   if (block.type === "code_block") {
     return block.children.every((c) => !c.text.trim());
@@ -1246,6 +1262,14 @@ interface EditableBlockProps {
   onShiftArrowDown?: () => void;
   /** Open the image library to replace the current image. */
   onChangeImage?: () => void;
+  /** Open the image library to add images to this collection. */
+  onCollectionAdd?: () => void;
+  /** Open the image library to swap out one collection slot. */
+  onCollectionReplace?: (itemIndex: number) => void;
+  /** Move a collection item to the front, making it the featured image. */
+  onCollectionFeature?: (itemIndex: number) => void;
+  /** Drop one image from the collection, freeing its slot. */
+  onCollectionRemove?: (itemIndex: number) => void;
   /** Insert an empty paragraph immediately before this block. */
   onInsertParagraphBefore?: () => void;
   /** Insert an empty paragraph after this block, or focus the trailing one. */
@@ -1285,6 +1309,10 @@ function EditableBlock({
   onShiftArrowUp,
   onShiftArrowDown,
   onChangeImage,
+  onCollectionAdd,
+  onCollectionReplace,
+  onCollectionFeature,
+  onCollectionRemove,
   onInsertParagraphBefore,
   onInsertParagraphAfter,
   onInsertListItemBefore,
@@ -1448,6 +1476,13 @@ function EditableBlock({
 
   const handleShowcaseMediaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
+      // These keys mean "navigate away from this figure", which only makes
+      // sense when the figure ITSELF has focus. A collection's grid root also
+      // contains buttons and a caption field, and their Enter/Backspace must
+      // not bubble up and be read as "insert a paragraph above" or "delete the
+      // whole block". (A no-op for the image block, whose <img> has no
+      // children to bubble from.)
+      if (e.target !== e.currentTarget) return;
       switch (e.key) {
         case "ArrowUp":
           if (!e.shiftKey) {
@@ -1501,7 +1536,13 @@ function EditableBlock({
   // Non-editable blocks (horizontal_rule, image) have no editable children —
   // skip innerHTML sync to avoid wiping their rendered content.
   useEffect(() => {
-    if (block.type === "horizontal_rule" || block.type === "image" || block.type === "component") return;
+    if (
+      block.type === "horizontal_rule" ||
+      block.type === "image" ||
+      block.type === "collection" ||
+      block.type === "component"
+    )
+      return;
     const el = contentRef.current;
     if (!el || document.activeElement === el) return;
     const html =
@@ -1518,6 +1559,7 @@ function EditableBlock({
   useEffect(() => {
     if (
       block.type !== "image" &&
+      block.type !== "collection" &&
       block.type !== "component" &&
       block.type !== "blockquote" &&
       block.type !== "heading" &&
@@ -2007,6 +2049,7 @@ function EditableBlock({
     (e: React.FormEvent<HTMLElement>) => {
       if (
         block.type !== "image" &&
+        block.type !== "collection" &&
         block.type !== "component" &&
         block.type !== "blockquote" &&
         block.type !== "heading" &&
@@ -2513,6 +2556,60 @@ function EditableBlock({
   }
 
   // ---------------------------------------------------------------------------
+  // Collection block — a grid of images with an editable block caption
+  //
+  // The grid ROOT takes the showcase-media contract, so a collection navigates
+  // exactly like a single image: ArrowUp escapes upward, ArrowDown drops into
+  // the caption, Enter inserts a paragraph above, Backspace deletes the block.
+  // The per-cell toolbars come after it in DOM order, so Tab still reaches them.
+  // ---------------------------------------------------------------------------
+
+  if (block.type === "collection") {
+    const showcaseMediaProps = {
+      tabIndex: 0 as const,
+      "data-showcase-media": "",
+      ref: showcaseMediaCallbackRef as React.Ref<HTMLDivElement>,
+      onFocus: () => setIsShowcaseMediaFocused(true),
+      onBlur: () => setIsShowcaseMediaFocused(false),
+      onKeyDown: handleShowcaseMediaKeyDown,
+    };
+
+    return (
+      <figure
+        ref={combinedRef as React.RefCallback<HTMLElement>}
+        className={editorShowcaseStyle}
+        data-block-index={blockIndex}
+        data-showcase-block=""
+      >
+        <CollectionGrid
+          items={block.items}
+          rootProps={showcaseMediaProps}
+          onFeature={(i) => onCollectionFeature?.(i)}
+          onReplace={(i) => onCollectionReplace?.(i)}
+          onRemove={(i) => onCollectionRemove?.(i)}
+          onAddImage={() => onCollectionAdd?.()}
+          // Per-item captions are ordinary edits, so they ride `onChange`'s
+          // history debounce like every other caption in the editor.
+          onEditCaption={(i, caption) =>
+            onChange({ ...block, items: setItemCaption(block.items, i, caption) })
+          }
+        />
+        <figcaption
+          ref={captionRef}
+          className={editorCaptionStyle}
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Add caption..."
+          data-block-index={blockIndex}
+          data-empty={!block.caption?.trim() ? "" : undefined}
+          onInput={handleCaptionInput}
+          onKeyDown={handleCaptionKeyDown}
+        />
+      </figure>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Component block
   // ---------------------------------------------------------------------------
 
@@ -2741,6 +2838,7 @@ function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
   if (
     last.type === "horizontal_rule" ||
     last.type === "image" ||
+    last.type === "collection" ||
     last.type === "component" ||
     last.type === "code_block" ||
     isListItemType(last.type)
@@ -2768,7 +2866,12 @@ function hasSyntheticTrailingParagraph(
   index: number,
 ): boolean {
   const block = blocks[index];
-  if (block.type !== "image" && block.type !== "component") return false;
+  if (
+    block.type !== "image" &&
+    block.type !== "collection" &&
+    block.type !== "component"
+  )
+    return false;
   if (index !== blocks.length - 2) return false;
   return isBlockEmpty(blocks[index + 1]);
 }
@@ -3209,6 +3312,15 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
   >(null);
   const [componentDialogOpen, setComponentDialogOpen] = useState(false);
   const [componentDialogBlockIndex, setComponentDialogBlockIndex] = useState<
+    number | null
+  >(null);
+  const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
+  const [collectionDialogBlockIndex, setCollectionDialogBlockIndex] = useState<
+    number | null
+  >(null);
+  // Which slot the picker is filling: `null` means "add to the end" (a fresh
+  // collection, or the Add Image CTA), a number means "swap this one out".
+  const [collectionDialogTarget, setCollectionDialogTarget] = useState<
     number | null
   >(null);
 
@@ -3722,7 +3834,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const prevBlock = blocks[index - 1];
 
     // Non-text predecessor (HR, image) — just delete it, keep current block
-    if (prevBlock.type === "horizontal_rule" || prevBlock.type === "image" || prevBlock.type === "component") {
+    if (
+      prevBlock.type === "horizontal_rule" ||
+      prevBlock.type === "image" ||
+      prevBlock.type === "collection" ||
+      prevBlock.type === "component"
+    ) {
       updateBlocks([...blocks.slice(0, index - 1), ...blocks.slice(index)]);
       cancelHistoryDebounce();
       pushHistoryNow();
@@ -3767,7 +3884,12 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const nextBlock = blocks[index + 1];
 
     // Non-text successor (HR, image) — just delete it, keep current block
-    if (nextBlock.type === "horizontal_rule" || nextBlock.type === "image" || nextBlock.type === "component") {
+    if (
+      nextBlock.type === "horizontal_rule" ||
+      nextBlock.type === "image" ||
+      nextBlock.type === "collection" ||
+      nextBlock.type === "component"
+    ) {
       updateBlocks([...blocks.slice(0, index + 1), ...blocks.slice(index + 2)]);
       cancelHistoryDebounce();
       pushHistoryNow();
@@ -3977,6 +4099,97 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     setComponentDialogBlockIndex(null);
   }
 
+  // --- Collection ---------------------------------------------------------
+  //
+  // Feature / remove / replace go through the editor rather than riding the
+  // block's own `onChange`, because `updateBlock` DEBOUNCES history: a reorder
+  // or a deletion that coalesced with adjacent caption typing would make undo
+  // land somewhere the author never was. Each is committed as one clean step.
+  // Per-item captions stay on the debounce, like every other caption here.
+
+  /** How many more images the block at `index` can still take. */
+  function collectionCapacity(index: number | null): number {
+    if (index === null) return COLLECTION_MAX_ITEMS;
+    const block = blocks[index];
+    return block?.type === "collection"
+      ? COLLECTION_MAX_ITEMS - block.items.length
+      : COLLECTION_MAX_ITEMS;
+  }
+
+  function updateCollection(
+    blockIndex: number,
+    items: CollectionItem[],
+  ) {
+    const block = blocks[blockIndex];
+    if (block?.type !== "collection") return;
+    const next = [...blocks];
+    next[blockIndex] = { ...block, items };
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
+  function openCollectionPicker(blockIndex: number, target: number | null) {
+    setCollectionDialogBlockIndex(blockIndex);
+    setCollectionDialogTarget(target);
+    setCollectionDialogOpen(true);
+  }
+
+  function handleCollectionDialogClose() {
+    setCollectionDialogOpen(false);
+    setCollectionDialogBlockIndex(null);
+    setCollectionDialogTarget(null);
+  }
+
+  function handleCollectionInsert(payloads: ImageInsertPayload[]) {
+    const blockIndex = collectionDialogBlockIndex;
+    if (blockIndex === null || payloads.length === 0) return;
+
+    const existing = blocks[blockIndex];
+    const next = [...blocks];
+
+    if (existing?.type !== "collection") {
+      // The slash-menu path: the trigger block is still the paragraph
+      // placeholder, so this is where the collection actually comes into being.
+      next[blockIndex] = {
+        type: "collection",
+        items: payloads.slice(0, COLLECTION_MAX_ITEMS),
+      };
+    } else if (collectionDialogTarget === null) {
+      next[blockIndex] = {
+        ...existing,
+        items: appendItems(existing.items, payloads),
+      };
+    } else {
+      next[blockIndex] = {
+        ...existing,
+        items: replaceItem(existing.items, collectionDialogTarget, payloads[0]),
+      };
+    }
+
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+
+    const wasNew = existing?.type !== "collection";
+    handleCollectionDialogClose();
+
+    setTimeout(() => {
+      if (wasNew) {
+        // A fresh block can't take a caret — land in the trailing paragraph
+        // withTrailingParagraph guarantees below it.
+        const el = blockRefs.current[blockIndex + 1];
+        if (el) focusBlockAtStart(el);
+        return;
+      }
+      const figure = blockRefs.current[blockIndex];
+      const media = figure?.querySelector(
+        "[data-showcase-media]",
+      ) as HTMLElement | null;
+      media?.focus();
+    }, 0);
+  }
+
   function handleSlashSelect(type: SlashMenuBlockType) {
     if (!slashAnchor) return;
     const { index, el } = slashAnchor;
@@ -3987,9 +4200,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const keptChildren = stripSlashTrigger(domToInlineNodes(el));
     syncFocusedBlockDom(el, keptChildren, type, sidenoteBaseList[index]);
 
-    // Media and Component are both deferred insertions: replace the trigger
-    // block with a paragraph placeholder, then hand off to a dialog that fills
-    // the remaining field (src / componentId) before the real block is written.
+    // Media, Collection and Component are deferred insertions: replace the
+    // trigger block with a paragraph placeholder, then hand off to a dialog
+    // that fills the remaining field (src / items / componentId) before the
+    // real block is written.
     if (type === "media") {
       const next = [...blocks];
       next[index] = { type: "paragraph", children: keptChildren };
@@ -3998,6 +4212,17 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       setImageDialogMode("insert");
       setImageDialogBlockIndex(index);
       setImageDialogOpen(true);
+      return;
+    }
+
+    if (type === "collection") {
+      const next = [...blocks];
+      next[index] = { type: "paragraph", children: keptChildren };
+      updateBlocks(next);
+
+      setCollectionDialogBlockIndex(index);
+      setCollectionDialogTarget(null);
+      setCollectionDialogOpen(true);
       return;
     }
 
@@ -4911,9 +5136,32 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           onChangeImage={
             block.type === "image" ? () => handleChangeImage(i) : undefined
           }
+          onCollectionAdd={
+            block.type === "collection"
+              ? () => openCollectionPicker(i, null)
+              : undefined
+          }
+          onCollectionReplace={
+            block.type === "collection"
+              ? (itemIndex) => openCollectionPicker(i, itemIndex)
+              : undefined
+          }
+          onCollectionFeature={
+            block.type === "collection"
+              ? (itemIndex) =>
+                  updateCollection(i, featureItem(block.items, itemIndex))
+              : undefined
+          }
+          onCollectionRemove={
+            block.type === "collection"
+              ? (itemIndex) =>
+                  updateCollection(i, removeItem(block.items, itemIndex))
+              : undefined
+          }
           onInsertParagraphBefore={() => insertParagraphBefore(i)}
           onInsertParagraphAfter={
             block.type === "image" ||
+            block.type === "collection" ||
             block.type === "component" ||
             block.type === "metric" ||
             block.type === "blockquote"
@@ -5032,6 +5280,25 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         initialPhase={imageDialogMode === "change" ? "library" : "upload"}
         onClose={handleImageDialogClose}
         onInsert={handleImageInsert}
+      />
+
+      {/* A second instance rather than a shared one: the two dialogs differ in
+          selection mode and payload shape, and `useImageInsert` early-returns
+          on `!open`, so the closed one costs nothing and never double-fetches
+          the library. Replacing a single slot is `maxSelection: 1` rather than
+          single-select, so the payload stays one shape either way. */}
+      <ImageInsertDialog
+        open={collectionDialogOpen}
+        mode={collectionDialogTarget === null ? "insert" : "change"}
+        initialPhase="library"
+        selectionMode="multiple"
+        maxSelection={
+          collectionDialogTarget === null
+            ? collectionCapacity(collectionDialogBlockIndex)
+            : 1
+        }
+        onClose={handleCollectionDialogClose}
+        onInsert={handleCollectionInsert}
       />
 
       <ComponentInsertDialog

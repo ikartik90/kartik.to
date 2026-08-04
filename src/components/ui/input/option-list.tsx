@@ -15,6 +15,7 @@ import {
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -59,14 +60,35 @@ import { WireframeContent } from "../wireframe";
 
 type OptionListStyles = ReturnType<typeof optionList>;
 
+/**
+ * Whatever picked an option: a click on the row, Enter from the search or the
+ * list, or the document-level keydown `externalKeys` captures. The union exists
+ * so `shiftKey`/`metaKey`/`ctrlKey` are readable on EVERY path — a multi-select
+ * policy that only worked for the mouse would be a keyboard-accessibility hole.
+ */
+export type OptionSelectEvent =
+  | ReactMouseEvent
+  | KeyboardEvent<Element>
+  | globalThis.KeyboardEvent;
+
 type OptionListContextValue = {
   styles: OptionListStyles;
   /** Values that pass the current filter — what `Options` renders. */
   filteredValues: Set<string>;
   selected: string | null;
+  /**
+   * Presentational multi-selection. When present it, not `selected`, decides
+   * which rows paint as picked — see {@link OptionListProps.selectedValues}.
+   */
+  selectedSet: ReadonlySet<string> | null;
   /** The single highlighted option (query/hover/arrow ▸ selected ▸ first). */
   activeValue: string | null;
-  select: (value: string) => void;
+  /**
+   * Commit an option. The originating event rides along so a consumer can read
+   * its modifier keys — that is how a multi-select list tells "toggle this one"
+   * from "make this the whole selection".
+   */
+  select: (value: string, event?: OptionSelectEvent) => void;
   /**
    * Move the highlight by ±1 enabled option; `focus` roves real button focus,
    * `loop` wraps around the ends (the slash menu's externalKeys navigation).
@@ -181,8 +203,23 @@ export interface OptionListProps
   value?: string | null;
   /** Initial selection when uncontrolled. */
   defaultValue?: string | null;
-  /** Fired with the picked option's `value`. */
-  onValueChange?: (value: string) => void;
+  /**
+   * Every value to paint as selected — the multi-selection form. Presentational
+   * only: the list reports which rows are picked and announces itself as
+   * multi-selectable, but the POLICY (does a click toggle, replace, or refuse
+   * past a cap?) stays with the consumer, which reads the modifier keys off the
+   * event `onValueChange` hands it.
+   *
+   * With this set, `value` degrades from "the selection" to "the ANCHOR": the
+   * row the keyboard highlight resolves to, and the one a single-target side
+   * panel should follow. Leave it undefined for ordinary single-select.
+   */
+  selectedValues?: ReadonlyArray<string> | ReadonlySet<string>;
+  /**
+   * Fired with the picked option's `value`, plus the click/keypress that picked
+   * it — read `shiftKey`/`metaKey` off it to branch a multi-select policy.
+   */
+  onValueChange?: (value: string, event?: OptionSelectEvent) => void;
   /**
    * How a dropped-in `Field.Search`'s query narrows the options. Defaults to a
    * case-insensitive label substring match ({@link filterOptions}); pass your
@@ -210,6 +247,7 @@ export interface OptionListProps
 function OptionListRoot({
   value,
   defaultValue,
+  selectedValues,
   onValueChange,
   filter = filterOptions,
   emptyLabel = "No results",
@@ -234,6 +272,15 @@ function OptionListRoot({
   const isControlled = value !== undefined;
   const [internal, setInternal] = useState<string | null>(defaultValue ?? null);
   const selected = isControlled ? (value ?? null) : internal;
+
+  // Accept either form so a consumer holding an ORDERED array (insertion order
+  // is meaningful when the selection becomes a list) needn't build a Set itself.
+  const selectedSet = useMemo(() => {
+    if (!selectedValues) return null;
+    return selectedValues instanceof Set
+      ? (selectedValues as ReadonlySet<string>)
+      : new Set(selectedValues as ReadonlyArray<string>);
+  }, [selectedValues]);
 
   const [query, setQuery] = useState("");
   // What the last arrow/hover moved to — outranks the selection as the highlight
@@ -268,11 +315,11 @@ function OptionListRoot({
   const optionId = (value: string) =>
     `${uid}-opt-${value.replace(/[^\w-]/g, "_")}`;
 
-  const select = (value: string) => {
+  const select = (value: string, event?: OptionSelectEvent) => {
     const option = filtered.find((option) => option.value === value);
     if (!option || option.disabled) return;
     if (!isControlled) setInternal(value);
-    onValueChange?.(value);
+    onValueChange?.(value, event);
   };
 
   // Pointer highlights are transient (released on leave); keyboard ones stick.
@@ -314,6 +361,7 @@ function OptionListRoot({
     styles,
     filteredValues,
     selected,
+    selectedSet,
     activeValue,
     select,
     moveActive,
@@ -341,7 +389,7 @@ function OptionListRoot({
       moveActive(-1, false);
     } else if (event.key === "Enter" && activeValue) {
       event.preventDefault();
-      select(activeValue);
+      select(activeValue, event);
     }
   };
 
@@ -436,6 +484,7 @@ function OptionListListbox({
     moveActive,
     activeValue,
     select,
+    selectedSet,
     setActiveValue,
     activeSource,
     listboxId,
@@ -490,7 +539,7 @@ function OptionListListbox({
           if (activeValue) {
             event.preventDefault();
             event.stopPropagation();
-            select(activeValue);
+            select(activeValue, event);
           }
           break;
       }
@@ -540,6 +589,9 @@ function OptionListListbox({
       ref={listRef}
       role="listbox"
       id={listboxId}
+      // Only claimed when the consumer actually runs a multi-selection — an
+      // ordinary single-select list must keep announcing itself as one.
+      aria-multiselectable={selectedSet ? true : undefined}
       aria-labelledby={hasLabel ? labelId : undefined}
       aria-describedby={hasHint ? hintId : undefined}
       className={cx(styles.list, className)}
@@ -599,6 +651,7 @@ function OptionListOption({
   const {
     styles,
     selected,
+    selectedSet,
     activeValue,
     select,
     setActiveValue,
@@ -630,7 +683,11 @@ function OptionListOption({
     );
   }
 
-  const isSelected = value === selected;
+  // In multi-selection the set is the authority and `selected` is only the
+  // anchor, which may well not be a member (you can point at a row without
+  // picking it) — so it must not leak into the painted state.
+  const isSelected =
+    value != null && selectedSet ? selectedSet.has(value) : value === selected;
   const isActive = value === activeValue;
   return (
     <button
@@ -673,8 +730,13 @@ function OptionListOption({
         }
         clearActive(value);
       }}
-      onClick={() => {
-        if (value != null) select(value);
+      // The consumer's own handler runs FIRST and unconditionally — it used to
+      // be swallowed here, which is what made modifier-click policies
+      // impossible — then the click commits as usual, carrying the event so
+      // that policy can read its modifiers.
+      onClick={(event) => {
+        onClick?.(event);
+        if (value != null) select(value, event);
       }}
     >
       {content}

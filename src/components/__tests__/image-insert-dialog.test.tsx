@@ -6,28 +6,32 @@ import { ImageInsertDialog } from "../image-insert-dialog";
 
 const mockDeleteSelectedAsset = vi.fn();
 const mockUpdateFilename = vi.fn();
+const mockSelectAsset = vi.fn();
+const mockToggleAsset = vi.fn();
+const mockGetInsertPayload = vi.fn();
+const mockGetInsertPayloads = vi.fn();
 
-vi.mock("@/hooks/use-image-insert", () => ({
-  useImageInsert: () => ({
+const asset = (name: string) => ({
+  key: `media/${name}.png`,
+  url: `https://cdn/${name}.png`,
+  filename: `${name}.png`,
+  contentType: "image/png",
+  size: 100,
+});
+
+/** Per-test overrides merged over the default hook shape. */
+let hookState: Record<string, unknown> = {};
+/** What the dialog asked the hook for — how the selection mode is threaded. */
+let hookOptions: { selectionMode?: string; maxSelection?: number } | undefined;
+
+function defaultHook() {
+  return {
     phase: "library",
-    assets: [
-      {
-        key: "media/a.png",
-        url: "https://cdn/a.png",
-        filename: "a.png",
-        contentType: "image/png",
-        size: 100,
-      },
-    ],
+    assets: [asset("a")],
     hasLibraryImages: true,
     selectedKey: "media/a.png",
-    selectedAsset: {
-      key: "media/a.png",
-      url: "https://cdn/a.png",
-      filename: "a.png",
-      contentType: "image/png",
-      size: 100,
-    },
+    selectedKeys: [],
+    selectedAsset: asset("a"),
     altText: "",
     filenameText: "favicon.png",
     uploadProgress: 0,
@@ -38,15 +42,27 @@ vi.mock("@/hooks/use-image-insert", () => ({
     processFile: vi.fn(),
     openLibrary: vi.fn(),
     goToUpload: vi.fn(),
-    selectAsset: vi.fn(),
+    selectAsset: mockSelectAsset,
+    toggleAsset: mockToggleAsset,
     updateAltText: vi.fn(),
     updateFilename: mockUpdateFilename,
     deleteSelectedAsset: mockDeleteSelectedAsset,
-    getInsertPayload: vi.fn(),
-  }),
+    getInsertPayload: mockGetInsertPayload,
+    getInsertPayloads: mockGetInsertPayloads,
+  };
+}
+
+vi.mock("@/hooks/use-image-insert", () => ({
+  useImageInsert: (options: { selectionMode?: string }) => {
+    hookOptions = options;
+    return { ...defaultHook(), ...hookState };
+  },
 }));
 
 beforeEach(() => {
+  hookState = {};
+  hookOptions = undefined;
+  vi.clearAllMocks();
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
   ) {
@@ -107,5 +123,103 @@ describe("ImageInsertDialog", () => {
     expect(screen.getByRole("dialog", { name: "Change Image" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Change Image" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Change Image" })).toBeDefined();
+  });
+});
+
+describe("ImageInsertDialog (multi-select)", () => {
+  function renderMultiple(maxSelection = 6) {
+    const onInsert = vi.fn();
+    render(
+      <ImageInsertDialog
+        open
+        initialPhase="library"
+        selectionMode="multiple"
+        maxSelection={maxSelection}
+        onClose={vi.fn()}
+        onInsert={onInsert}
+      />,
+    );
+    return onInsert;
+  }
+
+  it("asks the hook for a capped multiple selection", () => {
+    renderMultiple();
+    expect(hookOptions?.selectionMode).toBe("multiple");
+    expect(hookOptions?.maxSelection).toBe(6);
+  });
+
+  it("titles itself for the plural", () => {
+    renderMultiple();
+    expect(screen.getByRole("heading", { name: "Insert Images" })).toBeDefined();
+  });
+
+  it("replaces the selection on a plain click", async () => {
+    const user = userEvent.setup();
+    renderMultiple();
+    await user.click(screen.getByRole("option", { name: "a.png" }));
+    expect(mockSelectAsset).toHaveBeenCalledWith("media/a.png");
+    expect(mockToggleAsset).not.toHaveBeenCalled();
+  });
+
+  it("toggles one image on a shift-click", async () => {
+    const user = userEvent.setup();
+    renderMultiple();
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByRole("option", { name: "a.png" }));
+    await user.keyboard("{/Shift}");
+    expect(mockToggleAsset).toHaveBeenCalledWith("media/a.png");
+    expect(mockSelectAsset).not.toHaveBeenCalled();
+  });
+
+  it("paints every selected row, not just the anchor", () => {
+    hookState = {
+      assets: [asset("a"), asset("b"), asset("c")],
+      selectedKeys: ["media/a.png", "media/c.png"],
+      selectedKey: "media/b.png",
+    };
+    renderMultiple();
+    const selected = screen
+      .getAllByRole("option")
+      .filter((el) => el.getAttribute("aria-selected") === "true")
+      .map((el) => el.textContent);
+    expect(selected).toEqual(["a.png", "c.png"]);
+  });
+
+  it("counts the selection and pluralizes the confirm button", () => {
+    hookState = {
+      assets: [asset("a"), asset("b")],
+      selectedKeys: ["media/a.png", "media/b.png"],
+    };
+    renderMultiple();
+    expect(screen.getByText("2 of 6 selected")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Insert 2 Images" })).toBeDefined();
+  });
+
+  it("uses the singular for one image", () => {
+    hookState = { selectedKeys: ["media/a.png"] };
+    renderMultiple();
+    expect(screen.getByRole("button", { name: "Insert 1 Image" })).toBeDefined();
+  });
+
+  it("refuses to confirm an empty selection", () => {
+    renderMultiple();
+    const confirm = screen.getByRole("button", { name: /^Insert \d+ Image/ });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("hands onInsert the batch, in selection order", async () => {
+    const user = userEvent.setup();
+    hookState = { selectedKeys: ["media/b.png", "media/a.png"] };
+    mockGetInsertPayloads.mockReturnValue([
+      { src: "https://cdn/b.png" },
+      { src: "https://cdn/a.png" },
+    ]);
+    const onInsert = renderMultiple();
+
+    await user.click(screen.getByRole("button", { name: "Insert 2 Images" }));
+    expect(onInsert).toHaveBeenCalledWith([
+      { src: "https://cdn/b.png" },
+      { src: "https://cdn/a.png" },
+    ]);
   });
 });

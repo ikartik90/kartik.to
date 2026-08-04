@@ -25,7 +25,11 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { OptionList } from "@/components/ui/input/option-list";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { useImageInsert, type ImageInsertPhase } from "@/hooks/use-image-insert";
+import {
+  useImageInsert,
+  type ImageInsertPayload,
+  type ImageInsertPhase,
+} from "@/hooks/use-image-insert";
 import { formatFileSize, formatImageType } from "@/utils/format-file-size";
 import CloseIcon from "@/assets/icons/cross.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -141,6 +145,13 @@ const libraryListStyle = css({
   padding: "none",
 });
 
+const selectionCountStyle = css({
+  textStyle: "caption",
+  color: "text.body/50",
+  margin: "none",
+  fontVariantNumeric: "tabular-nums",
+});
+
 const errorStyle = css({
   textStyle: "caption",
   color: "brand.pink",
@@ -157,21 +168,44 @@ const ACCEPT = "image/png,image/svg+xml,image/webp,image/jpeg,image/gif";
 
 export type ImageDialogMode = "insert" | "change";
 
-export interface ImageInsertDialogProps {
+interface ImageInsertDialogBaseProps {
   open: boolean;
   mode?: ImageDialogMode;
   initialPhase?: ImageInsertPhase;
   onClose: () => void;
-  onInsert: (payload: { src: string; alt?: string }) => void;
 }
 
-export function ImageInsertDialog({
-  open,
-  mode = "insert",
-  initialPhase = "upload",
-  onClose,
-  onInsert,
-}: ImageInsertDialogProps) {
+/**
+ * Single- and multi-select are one dialog but two contracts: the payload shape
+ * follows the selection mode, so the union makes a mismatched `onInsert` a type
+ * error rather than a runtime surprise.
+ */
+export type ImageInsertDialogProps = ImageInsertDialogBaseProps &
+  (
+    | {
+        selectionMode?: "single";
+        maxSelection?: never;
+        onInsert: (payload: ImageInsertPayload) => void;
+      }
+    | {
+        selectionMode: "multiple";
+        /** How many more images the target will take. */
+        maxSelection?: number;
+        onInsert: (payloads: ImageInsertPayload[]) => void;
+      }
+  );
+
+export function ImageInsertDialog(props: ImageInsertDialogProps) {
+  const {
+    open,
+    mode = "insert",
+    initialPhase = "upload",
+    onClose,
+    selectionMode = "single",
+  } = props;
+  const isMultiple = selectionMode === "multiple";
+  const maxSelection = (isMultiple ? props.maxSelection : undefined) ?? 6;
+
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const altFieldRef = useRef<HTMLTextAreaElement>(null);
@@ -181,6 +215,7 @@ export function ImageInsertDialog({
     assets,
     hasLibraryImages,
     selectedKey,
+    selectedKeys,
     selectedAsset,
     altText,
     filenameText,
@@ -193,14 +228,30 @@ export function ImageInsertDialog({
     openLibrary,
     goToUpload,
     selectAsset,
+    toggleAsset,
     updateAltText,
     updateFilename,
     deleteSelectedAsset,
     getInsertPayload,
-  } = useImageInsert({ open, initialPhase });
+    getInsertPayloads,
+  } = useImageInsert({
+    open,
+    initialPhase,
+    selectionMode,
+    ...(isMultiple ? { maxSelection } : {}),
+  });
 
-  const title = mode === "change" ? "Change Image" : "Insert Image";
-  const confirmLabel = mode === "change" ? "Change Image" : "Insert Image";
+  const selectedCount = selectedKeys.length;
+  const title = isMultiple
+    ? "Insert Images"
+    : mode === "change"
+      ? "Change Image"
+      : "Insert Image";
+  const confirmLabel = isMultiple
+    ? `Insert ${selectedCount} Image${selectedCount === 1 ? "" : "s"}`
+    : mode === "change"
+      ? "Change Image"
+      : "Insert Image";
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -225,9 +276,15 @@ export function ImageInsertDialog({
   }
 
   function handleInsert() {
-    const payload = getInsertPayload();
-    if (!payload) return;
-    onInsert(payload);
+    if (props.selectionMode === "multiple") {
+      const payloads = getInsertPayloads();
+      if (payloads.length === 0) return;
+      props.onInsert(payloads);
+    } else {
+      const payload = getInsertPayload();
+      if (!payload) return;
+      props.onInsert(payload);
+    }
     onClose();
   }
 
@@ -272,7 +329,18 @@ export function ImageInsertDialog({
           <div className={mediaLibrarySidebar()}>
             <OptionList
               value={selectedKey}
-              onValueChange={selectAsset}
+              selectedValues={isMultiple ? selectedKeys : undefined}
+              // A plain click means "just this one"; a modified click adds or
+              // drops a single image. Shift is what the brief asked for; ⌘/Ctrl
+              // is the same gesture on every desktop file list, and treating it
+              // differently here would only surprise people.
+              onValueChange={(key, event) => {
+                const modified =
+                  !!event &&
+                  (event.shiftKey || event.metaKey || event.ctrlKey);
+                if (isMultiple && modified) toggleAsset(key);
+                else selectAsset(key);
+              }}
               tone="plain"
             >
               <OptionList.Listbox
@@ -304,6 +372,14 @@ export function ImageInsertDialog({
           <div className={mediaPreviewPane()}>
             {selectedAsset && (
               <>
+                {/* The pane below edits ONE image — the anchor, i.e. whichever
+                    row you touched last. This line is what keeps that honest
+                    when the batch is larger than what's on screen. */}
+                {isMultiple && (
+                  <p className={selectionCountStyle} aria-live="polite">
+                    {selectedCount} of {maxSelection} selected
+                  </p>
+                )}
                 <figure className={mediaPreview()}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -453,7 +529,11 @@ export function ImageInsertDialog({
         </div>
         <Button
           type="button"
-          disabled={isBusy || phase !== "library" || !selectedKey}
+          disabled={
+            isBusy ||
+            phase !== "library" ||
+            (isMultiple ? selectedCount === 0 : !selectedKey)
+          }
           onClick={handleInsert}
         >
           {confirmLabel}
