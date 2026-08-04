@@ -79,7 +79,7 @@ describe("ShiftSchedulingV0", () => {
     // Its own label and hint stay real text — the calendar is the subject.
     expect(screen.getByText("Scheduling Calendar")).toBeTruthy();
     expect(
-      screen.getByText(/Select one or more dates/i).querySelector(
+      screen.getByText(/Select one or more shift dates/i).querySelector(
         "[data-skeleton]",
       ),
     ).toBeNull();

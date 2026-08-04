@@ -164,9 +164,7 @@ export function ShiftSchedulingV0() {
               </Calendar.Next>
             </Calendar.PeriodList>
           </Calendar>
-          <Field.Hint>
-            Select one or more dates for which you want to schedule this shift
-          </Field.Hint>
+          <Field.Hint>Select one or more shift dates</Field.Hint>
         </Field>
       </div>
     </ShiftFormShell>

@@ -97,7 +97,8 @@ export function ShiftSchedulingV2() {
           </Calendar.PeriodList>
         </Calendar>
         <Field.Hint>
-          Click on a date or drag across multiple dates to toggle selection
+          Drag across multiple dates or click on a shift date to toggle
+          selection
         </Field.Hint>
       </Field>
     </ShiftFormShell>
