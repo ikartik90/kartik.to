@@ -39,6 +39,7 @@ import {
   horizontalRule,
 } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
+import { CollectionShowcase } from "@/components/collection-showcase";
 import {
   computeListNumbering,
   type ListItemNumbering,
@@ -285,6 +286,21 @@ function renderBlockNode(
             className={articleImg()}
             loading="lazy"
           />
+          {node.caption && (
+            <Typography tag="figcaption" type="caption">
+              {node.caption}
+            </Typography>
+          )}
+        </figure>
+      );
+
+    case "collection":
+      // An emptied collection is legal in the schema (the editor removes
+      // images one at a time) but has nothing to publish.
+      if (node.items.length === 0) return null;
+      return (
+        <figure key={index} className={articleShowcase()}>
+          <CollectionShowcase items={node.items} />
           {node.caption && (
             <Typography tag="figcaption" type="caption">
               {node.caption}
