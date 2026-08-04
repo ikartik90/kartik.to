@@ -1,0 +1,58 @@
+name: Delete merged branch
+
+# The repository has "Automatically delete head branches" enabled, but that
+# setting does not fire for the merges auto-merge.yml arms: GitHub completes
+# those on behalf of the workflow's GITHUB_TOKEN (they show up as merged by
+# `app/github-actions`), and the built-in deletion does not run for that actor.
+# Every branch this repo has actually lost was deleted by hand afterwards —
+# anywhere from seconds to a day later — so the tidy-up happened only when
+# somebody remembered. This does it on the merge itself.
+#
+# Deliberately a separate workflow rather than a step in auto-merge.yml: that
+# one runs on `opened`/`synchronize` and has finished long before the merge it
+# arms ever happens. This is the other end of the same story.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    name: Delete merged branch
+    # `closed` covers abandoned pull requests too, and their branches are not
+    # ours to bin — the author may still be working on one.
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the head branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          # A branch that is the base of another open pull request must stay:
+          # deleting it would close that pull request and throw away its diff.
+          dependents=$(gh pr list --repo "$GITHUB_REPOSITORY" --base "$HEAD_REF" \
+            --state open --json number --jq 'length')
+
+          if [ "$dependents" -ne 0 ]; then
+            echo "::notice::'$HEAD_REF' is the base of $dependents open pull request(s) — leaving it."
+            exit 0
+          fi
+
+          # Already gone is a success, not a failure: the built-in setting may
+          # have won the race, or somebody deleted it by hand between the merge
+          # and this run. Only a real error should fail the job.
+          if ! git ls-remote --exit-code --heads \
+                 "https://github.com/$GITHUB_REPOSITORY" "$HEAD_REF" >/dev/null 2>&1; then
+            echo "::notice::'$HEAD_REF' is already deleted."
+            exit 0
+          fi
+
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$HEAD_REF"
+          echo "Deleted '$HEAD_REF'."
