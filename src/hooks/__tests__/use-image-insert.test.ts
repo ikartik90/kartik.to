@@ -118,3 +118,129 @@ describe("useImageInsert", () => {
     expect(result.current.selectedKey).toBe("media/b.png");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Multi-selection — the collection block picks several images at once
+// ---------------------------------------------------------------------------
+
+describe("useImageInsert (selectionMode: multiple)", () => {
+  const asset = (name: string) => ({
+    key: `media/${name}.png`,
+    url: `https://cdn/${name}.png`,
+    filename: `${name}.png`,
+    contentType: "image/png",
+    size: 100,
+  });
+
+  const LIBRARY = [asset("a"), asset("b"), asset("c")];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListMediaAssets.mockResolvedValue(LIBRARY);
+  });
+
+  async function openMultiple(maxSelection = 6) {
+    const view = renderHook(() =>
+      useImageInsert({ open: true, selectionMode: "multiple", maxSelection }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    return view;
+  }
+
+  it("starts with nothing selected", async () => {
+    const { result } = await openMultiple();
+    expect(result.current.selectedKeys).toEqual([]);
+  });
+
+  it("replaces the whole selection on a plain select", async () => {
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+    act(() => result.current.selectAsset("media/c.png"));
+    expect(result.current.selectedKeys).toEqual(["media/c.png"]);
+  });
+
+  it("adds then removes on toggle, and moves the anchor with it", async () => {
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+    expect(result.current.selectedKeys).toEqual(["media/a.png", "media/b.png"]);
+    expect(result.current.selectedKey).toBe("media/b.png");
+
+    act(() => result.current.toggleAsset("media/a.png"));
+    expect(result.current.selectedKeys).toEqual(["media/b.png"]);
+  });
+
+  it("refuses to select past maxSelection and says why", async () => {
+    const { result } = await openMultiple(2);
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+    act(() => result.current.toggleAsset("media/c.png"));
+
+    expect(result.current.selectedKeys).toEqual(["media/a.png", "media/b.png"]);
+    expect(result.current.error).toMatch(/2/);
+  });
+
+  it("still lets you deselect when full", async () => {
+    const { result } = await openMultiple(2);
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+    expect(result.current.selectedKeys).toEqual(["media/a.png"]);
+  });
+
+  // Click order IS collection order — the first image picked becomes the
+  // featured one, so the payloads must not fall back to library order.
+  it("returns payloads in selection order", async () => {
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/c.png"));
+    act(() => result.current.toggleAsset("media/a.png"));
+
+    expect(result.current.getInsertPayloads()).toEqual([
+      { src: "https://cdn/c.png", alt: undefined },
+      { src: "https://cdn/a.png", alt: undefined },
+    ]);
+  });
+
+  it("carries each asset's stored alt text", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      { ...asset("a"), alt: "An A" },
+      asset("b"),
+    ]);
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+
+    expect(result.current.getInsertPayloads()).toEqual([
+      { src: "https://cdn/a.png", alt: "An A" },
+      { src: "https://cdn/b.png", alt: undefined },
+    ]);
+  });
+
+  // The alt field debounces its save by 400ms, so the asset in state can still
+  // be stale at the moment Insert is pressed — the anchor's live draft wins.
+  it("prefers the anchor's in-flight alt draft over the stored value", async () => {
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.updateAltText("Just typed"));
+
+    expect(result.current.getInsertPayloads()[0].alt).toBe("Just typed");
+  });
+
+  it("drops a deleted image from the selection", async () => {
+    mockDeleteMedia.mockResolvedValue(undefined);
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/a.png"));
+    // Toggling makes b the anchor, so it is what the delete button acts on.
+    act(() => result.current.toggleAsset("media/b.png"));
+
+    await act(async () => {
+      await result.current.deleteSelectedAsset();
+    });
+
+    expect(mockDeleteMedia).toHaveBeenCalledWith({ key: "media/b.png" });
+    expect(result.current.selectedKeys).toEqual(["media/a.png"]);
+  });
+});
