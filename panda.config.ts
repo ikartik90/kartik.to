@@ -167,6 +167,12 @@ export default defineConfig({
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
           xl: { value: "{spacing.xl}" },
+          // Collection tiles, which round harder than the standalone article
+          // image at `xl`: across a 12px-gutter grid a 16px corner reads as a
+          // seam rather than a gap, and the featured tile is big enough to
+          // carry the extra curvature without looking like a button
+          // (Figma 829:6922).
+          xxl: { value: "{spacing.xxl}" },
           // Pill. `spacing.half` (50%) is the CIRCLE radius — on a box wider
           // than it is tall it draws an ellipse, not a stadium — so anything
           // oblong (the skeleton bar) needs a large absolute radius that the
@@ -237,6 +243,35 @@ export default defineConfig({
               value: {
                 base: "{colors.neutral.200}",
                 _dark: "{colors.neutral.800}",
+              },
+            },
+            // `surface` at 75%, for a chip that floats ON an image rather than
+            // on the app's own background — the collection's surplus badge. It
+            // pairs with a backdrop blur: the translucency is what lets the
+            // photo read through, and the blur is what keeps the label legible
+            // over whatever happens to be under it (Figma 829:6913 light
+            // rgba(216,221,227,.75) / 831:6972 dark rgba(46,51,56,.75) — the
+            // same two neutrals `surface` resolves to).
+            surfaceGlass: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-neutral-200) 75%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-neutral-800) 75%, transparent)",
+              },
+            },
+            // The wash laid over a photo while its controls are up. It INVERTS
+            // with the theme — dark ink in light UI, light ink in dark — which
+            // looks backwards until you notice what floats on it: the toolbar
+            // is `surface`, so light UI needs a dark wash under a pale pill and
+            // dark UI a pale wash under a dark one. Matching the theme instead
+            // would sink the toolbar into its own scrim. Same inversion, same
+            // reason, as `border.imageOutline` (Figma 828:6838 rgba(31,33,35,.5)
+            // / 828:6548 rgba(238,242,246,.5)).
+            imageScrim: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-neutral-900) 50%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-neutral-100) 50%, transparent)",
               },
             },
             // The calendar's OWN surface resolved to one opaque colour —
@@ -1231,6 +1266,63 @@ export default defineConfig({
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
             borderColor: "border.divider",
+          },
+        }),
+
+        // The "Add Image" call to action filling an unused collection slot. A
+        // real button, so it takes the OptionList row's state ladder — the same
+        // gesture (pick this thing) should look the same whether it's a 32px
+        // row or a 312px cell. Two differences from that slot, both deliberate:
+        //
+        //   • It has a RESTING fill (`bg.itemHover`, Figma 828:6860/827:6511 —
+        //     the same 25% neutral in both themes). An option row can rest
+        //     transparent because the list around it frames it; an empty cell
+        //     has nothing to sit in, so the fill IS what makes the slot legible
+        //     as a slot. Hover then lifts to the secondary button's hover wash,
+        //     which is the only neutral above it in both themes.
+        //   • No `:not([aria-selected])` guards on the hover rule. Those exist
+        //     in `optionList` because a selected row is ALSO the roving
+        //     highlight and the two states collide on one element; nothing here
+        //     is ever selected or pressed, so there is nothing to guard against.
+        collectionEmptyCell: defineRecipe({
+          className: "collection-empty-cell",
+          description:
+            "Add Image CTA occupying an empty collection slot in the editor — OptionList's state ladder (rest ▸ hover ▸ active ▸ keyboard focus) scaled up to a grid cell (Figma 828:6860 light / 827:6511 dark).",
+          base: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "sm",
+            width: "token(spacing.full)",
+            height: "token(spacing.full)",
+            borderRadius: "xxl",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
+            backgroundColor: "bg.itemHover",
+            appearance: "none",
+            color: "field.text.default",
+            textStyle: "bodySmall",
+            cursor: "pointer",
+            userSelect: "none",
+            transition:
+              "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
+            "& svg": {
+              width: "token(spacing.xxl)",
+              height: "token(spacing.xxl)",
+              flexShrink: 0,
+              display: "block",
+            },
+            "& svg path[stroke]": { stroke: "currentColor" },
+            "& svg path[fill]": { fill: "currentColor" },
+            "&:hover": { backgroundColor: "bg.button.secondary.hover" },
+            "&:active": {
+              backgroundColor: "field.bg.active",
+              color: "field.text.active",
+            },
+            "html[data-keyboard-focus] &:focus-visible": {
+              boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+            },
           },
         }),
 
@@ -3035,6 +3127,447 @@ export default defineConfig({
         // surface with a brand selected chip (Figma 647:1947/2045); `onBrand` is
         // the Combobox popover's inverse — options read brand, the selected chip
         // drops to neutral to stand out on the brand tint (Figma 629:1416/630:1702).
+        // A single-field editor that takes over a floating toolbar's interior:
+        // leading glyph ▸ chrome-stripped input ▸ "Esc to exit" key-cap. Two
+        // toolbars share it — the selection toolbar's link editor (Figma
+        // 422:833) and a collection cell's caption editor (828:6870) — because
+        // they are the same gesture: the buttons step aside, one value is
+        // typed, Enter commits. The row owns no surface of its own; the pill
+        // around it does, and this fills it edge to edge.
+        inlineEditRow: defineSlotRecipe({
+          className: "inline-edit-row",
+          description:
+            "Inline single-field editor that replaces a floating toolbar's buttons — leading icon, bare input, and an Esc hint. Shared by the link editor and the collection caption editor.",
+          slots: ["root", "input", "hint", "hintKey", "hintLabel"],
+          base: {
+            root: {
+              display: "flex",
+              // Fill the pill, and stay shrinkable — the input's default
+              // intrinsic width would otherwise push the toolbar wider than
+              // the cell it is centred in.
+              flex: "1 0 0",
+              minWidth: 0,
+              alignItems: "center",
+              gap: "md",
+              height: "token(spacing.4xl)",
+              paddingInline: "lg",
+            },
+            input: {
+              flex: "1 0 0",
+              minWidth: 0,
+              background: "transparent",
+              border: "none",
+              color: "text.default",
+              textStyle: "bodySmall",
+              // The pill is the focus indicator; a ring inside it would read as
+              // a second, nested control.
+              focusVisibleRing: "none",
+              _placeholder: { color: "text.default/40" },
+            },
+            hint: {
+              display: "flex",
+              alignItems: "center",
+              gap: "sm",
+              flexShrink: 0,
+            },
+            hintKey: {
+              display: "flex",
+              alignItems: "center",
+              paddingInline: "sm",
+              height: "token(spacing.xxl)",
+              borderRadius: "sm",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              backgroundColor: "bg.itemHover",
+              color: "text.default",
+              textStyle: "caption",
+              whiteSpace: "nowrap",
+            },
+            hintLabel: {
+              color: "text.default/50",
+              textStyle: "caption",
+              whiteSpace: "nowrap",
+            },
+          },
+        }),
+
+        // The collection's tile grid, in BOTH the editor and the reader — one
+        // recipe, because the tile itself (radius, hairline, cover crop) is the
+        // same object in both and only the arrangement differs.
+        //
+        //   uniform  │ editor: every slot shown, filled or not, so the 6-image
+        //            │ cap is visible rather than merely enforced (828:6837).
+        //   featured │ reader, 3+ images: the first spans the 2×2 block and the
+        //            │ next two stack in column 3 (829:6911).
+        //   pair     │ reader, exactly 2: equal 1:1 tiles. The featured
+        //   single   │ reader, 0–1: one tile at its NATURAL ratio, i.e. exactly
+        //            │ what a lone `image` block looks like. The reader has no
+        //            │ empty slots to draw, so a collection too small for the
+        //            │ skeleton splits evenly instead of leaving holes.
+        //
+        // `aspectRatio` lives on the ROOT for the two-row layouts (a 3:2 box
+        // divided by `1fr` rows) and on the CELL for `pair` (two squares whose
+        // height follows their own width), so the grid never needs a measured
+        // height.
+        collectionGrid: defineSlotRecipe({
+          className: "collection-grid",
+          description:
+            "Collection tile grid — a 3×2 slot grid in the editor, and in the reader a featured 2×2 with two stacked tiles (3+ images), an equal pair (2), or a single natural-ratio tile (0–1). Figma 828:6837/826:6501 editor, 829:6911/828:6658 reader.",
+          slots: [
+            "root",
+            "cell",
+            "tile",
+            "image",
+            "surplus",
+            "surplusDivider",
+            "surplusLabel",
+          ],
+          base: {
+            root: {
+              display: "grid",
+              gap: "lg",
+              width: "token(spacing.full)",
+              maxWidth: "token(sizes.articleShowcase)",
+            },
+            cell: {
+              position: "relative",
+              overflow: "hidden",
+              borderRadius: "xxl",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              // The tile that carries the surplus badge turns into its own 2×2
+              // grid purely to park the badge in the bottom-right quadrant at
+              // quarter size; the photo leaves the flow so the grid positions
+              // nothing but the badge (Figma 829:6912). The badge is a SIBLING
+              // of the photo's button, never nested inside it — one interactive
+              // control may not contain another, and the two open different
+              // images anyway.
+              "&[data-surplus]": {
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+                padding: "sm",
+                gap: "sm",
+                "& > [data-collection-tile]": { position: "absolute", inset: 0 },
+              },
+            },
+            tile: {
+              display: "block",
+              width: "token(spacing.full)",
+              height: "token(spacing.full)",
+              padding: "none",
+              border: "none",
+              background: "none",
+              appearance: "none",
+              cursor: "zoom-in",
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+              },
+            },
+            image: {
+              display: "block",
+              width: "token(spacing.full)",
+              height: "token(spacing.full)",
+              objectFit: "cover",
+            },
+            surplus: {
+              gridColumn: 2,
+              gridRow: 2,
+              justifySelf: "stretch",
+              alignSelf: "stretch",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "sm",
+              minWidth: 0,
+              paddingBlock: "sm",
+              paddingInline: "md",
+              borderRadius: "xxl",
+              borderWidth: "token(spacing.xxs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              backgroundColor: "bg.surfaceGlass",
+              color: "field.text.default",
+              cursor: "zoom-in",
+              appearance: "none",
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+              },
+              // The photo beside it is absolutely positioned, so it paints in
+              // the positioned layer — above ANY static sibling, however late
+              // in the DOM. The badge has to join that layer to sit on top of
+              // the image it is captioning.
+              position: "relative",
+              zIndex: 1,
+              // Panda's `backdropFilter` utility emits ONLY the -webkit- form,
+              // which Chromium does not recognise, so the blur silently never
+              // lands. The raw key is the one that works; the prefixed
+              // spelling stays for older WebKit. (Same workaround as the
+              // calendar's edge scrims.)
+              backdropFilter: "blur(6px)",
+              "-webkit-backdrop-filter": "blur(6px)",
+              "backdrop-filter": "blur(6px)",
+              "& svg": {
+                width: "token(spacing.xxl)",
+                height: "token(spacing.xxl)",
+                flexShrink: 0,
+                display: "block",
+              },
+              "& svg path[stroke]": { stroke: "currentColor" },
+              "& svg path[fill]": { fill: "currentColor" },
+            },
+            surplusDivider: {
+              flexShrink: 0,
+              width: "token(spacing.xxs)",
+              height: "token(sizes.toolbarButton)",
+              backgroundColor: "border.divider",
+            },
+            surplusLabel: {
+              textStyle: "bodyLarge",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            },
+          },
+          variants: {
+            layout: {
+              uniform: {
+                root: {
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+                  aspectRatio: "3 / 2",
+                },
+              },
+              featured: {
+                root: {
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+                  aspectRatio: "3 / 2",
+                  // Positional rather than a `data-featured` hook: index 0 IS
+                  // the featured image in this model, so the selector and the
+                  // data agree by construction.
+                  "& > *:first-child": { gridColumn: "1 / 3", gridRow: "1 / 3" },
+                },
+              },
+              pair: {
+                root: { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" },
+                cell: { aspectRatio: "1" },
+              },
+              single: {
+                root: { gridTemplateColumns: "minmax(0, 1fr)" },
+                // No crop for a lone image: it should look exactly like the
+                // `image` block it stands in for, not a 3:2 slice of itself.
+                tile: { height: "auto" },
+                image: { height: "auto" },
+              },
+            },
+          },
+          defaultVariants: { layout: "featured" },
+          // Both consumers pick `layout` at runtime from the item count.
+          staticCss: [{ layout: ["*"] }],
+        }),
+
+        // The controls that surface over a filled collection cell on hover.
+        //
+        // Reveal is pure CSS off the cell — no hover state in React — and keys
+        // on `:focus-within` as well, so tabbing into the buttons brings them
+        // up. `opacity: 0` (rather than `display: none` or unmounting) is what
+        // makes that possible: a transparent element is still focusable.
+        //
+        // The fade lives on the scrim and the pill INDIVIDUALLY, never on the
+        // root that holds them. An element with `opacity < 1` is a Backdrop
+        // Root, so a fading wrapper leaves the scrim's `backdrop-filter` with
+        // an empty backdrop to sample: the blur simply would not paint until
+        // the wrapper settled at exactly 1, snapping on at the end of the
+        // transition instead of easing in with the wash. Fading the scrim
+        // itself is fine — an element's own opacity composites AFTER its
+        // backdrop filter, so the blur ramps up with it.
+        //
+        // The pill deliberately does NOT reuse `selectionPopover`. That recipe
+        // is `position: fixed` anchored to `anchor(top)` with a flip fallback —
+        // it exists to float ABOVE a target, while this one is centred INSIDE
+        // one. Only the chrome is shared, and Figma drops even the hairline and
+        // the drop shadow here: the scrim already separates the pill from the
+        // photo, so elevation would be doing a job that is already done.
+        collectionCellOverlay: defineSlotRecipe({
+          className: "collection-cell-overlay",
+          description:
+            "Hover/focus-revealed scrim and control pill over a filled collection cell in the editor (Figma 828:6838 light / 828:6548 dark). The caption editor takes the pill's place as a sidenote-style card.",
+          slots: ["root", "scrim", "toolbar", "captionCard", "captionField"],
+          base: {
+            // Carries no opacity of its own — see the note above. It only
+            // positions the two layers and keeps the invisible pill from
+            // swallowing pointer events over the photo (keyboard focus is
+            // unaffected by `pointer-events`, so tabbing in still works).
+            root: {
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              placeItems: "center",
+              pointerEvents: "none",
+              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
+                { pointerEvents: "auto" },
+            },
+            // The wash AND a light defocus of the photo under it, so the pill
+            // is the sharp thing in the cell without the picture beneath it
+            // dissolving — at 4px the image stays recognisably itself and just
+            // stops competing for the eye.
+            //
+            // Panda's `backdropFilter` utility emits ONLY the -webkit- form,
+            // which Chromium does not recognise, so the raw key is the one that
+            // actually lands; the prefixed spelling stays for older WebKit.
+            scrim: {
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "bg.imageScrim",
+              backdropFilter: "blur(4px)",
+              "-webkit-backdrop-filter": "blur(4px)",
+              "backdrop-filter": "blur(4px)",
+              opacity: 0,
+              transition: "opacity 150ms ease",
+              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
+                { opacity: 1 },
+            },
+            toolbar: {
+              position: "relative",
+              zIndex: 1,
+              opacity: 0,
+              transition: "opacity 150ms ease",
+              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
+                { opacity: 1 },
+              display: "flex",
+              alignItems: "center",
+              gap: "sm",
+              height: "token(spacing.4xl)",
+              paddingInline: "md",
+              borderRadius: "md",
+              backgroundColor: "bg.surface",
+              overflow: "hidden",
+              width: "max-content",
+              maxWidth: "calc(100% - token(spacing.lg) * 2)",
+            },
+            // The caption editor takes the toolbar's PLACE but not its shape:
+            // it is a margin note for the picture, so it wears the sidenote
+            // card's clothes — the same column of body text over an "Esc to
+            // exit" hint, on the same surface at the same 8px inset — rather
+            // than the 40px control pill the buttons live in. The chrome is
+            // restated rather than reusing `sidenoteCard`, which is
+            // `position: fixed` with CSS anchor positioning and its own
+            // reveal; only the surface is shared, exactly as with
+            // `selectionPopover` above.
+            captionCard: {
+              position: "relative",
+              zIndex: 1,
+              opacity: 0,
+              transition: "opacity 150ms ease",
+              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
+                { opacity: 1 },
+              display: "flex",
+              flexDirection: "column",
+              gap: "sm",
+              padding: "md",
+              borderRadius: "md",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              backgroundColor: "bg.surface",
+              boxShadow:
+                "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+              color: "text.default",
+              width: "calc(100% - token(spacing.lg) * 2)",
+              maxWidth: "token(sizes.sidenoteMaxWidth)",
+            },
+            // A one-line caption, so a real <input> rather than the sidenote's
+            // contentEditable body (which exists only because a note can hold
+            // several paragraphs) — same type, same caret, same placeholder
+            // wash, no focus ring of its own since the card is the focus.
+            captionField: {
+              width: "token(spacing.full)",
+              minWidth: 0,
+              background: "transparent",
+              border: "none",
+              padding: "none",
+              textStyle: "sidenote",
+              color: "text.default",
+              caretColor: "text.default",
+              focusVisibleRing: "none",
+              _placeholder: { color: "text.default/40" },
+            },
+          },
+        }),
+
+        // The reader's enlarged-image view.
+        //
+        // The size rule — "natural size, or 85vh/85vw, whichever is smaller" —
+        // needs no JavaScript branch on orientation. With both maxima in play
+        // and the natural width set inline, `width: auto` resolves to exactly
+        // min(natural, 85vw, 85vh × ratio): a tall image is caught by the
+        // height cap, a wide one by the width cap, and a small one by neither.
+        collectionLightbox: defineSlotRecipe({
+          className: "collection-lightbox",
+          description:
+            "Enlarged collection image — clamped to its natural size or 85% of the viewport, whichever is smaller, with the item's caption beneath.",
+          slots: ["panel", "figure", "image", "caption"],
+          base: {
+            panel: {
+              background: "transparent",
+              border: "none",
+              padding: "none",
+              overflow: "visible",
+              maxWidth: "none",
+              maxHeight: "none",
+              // A modal <dialog> is focusable, and this one holds focus on
+              // ITSELF — it has no focusable children to hand off to, and it
+              // needs the focus to receive the arrow keys. So the moment you
+              // press one, `:focus-visible` matches and the UA paints its
+              // default ring around a panel that is transparent and hugs the
+              // photo, which reads as a border drawn on the image.
+              //
+              // globals.css's outline reset doesn't cover it: that list is
+              // `a, button, input, select, textarea, summary, [tabindex]` and a
+              // modal dialog is focusable without matching any of them. Every
+              // other dialog in the app escapes this only because focus lands
+              // on a child instead.
+              //
+              // Suppressing it costs no affordance — the dialog is a container,
+              // not a control, so the ring marks nothing you could activate.
+              focusVisibleRing: "none",
+            },
+            figure: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "md",
+              margin: "none",
+            },
+            image: {
+              display: "block",
+              // BOTH auto, so the two maxima below scale the image on its own
+              // aspect ratio instead of cropping or stretching its box. The
+              // component narrows `maxWidth` to the natural width once the
+              // image has loaded, which is the third term of the size rule.
+              width: "auto",
+              height: "auto",
+              maxWidth: "85vw",
+              // Leave the caption room to sit under the image without pushing
+              // the pair past the viewport.
+              maxHeight: "calc(85vh - token(spacing.4xl))",
+              objectFit: "contain",
+              borderRadius: "xxl",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+            },
+            caption: {
+              maxWidth: "85vw",
+              textAlign: "center",
+              textWrap: "pretty",
+            },
+          },
+        }),
+
         optionList: defineSlotRecipe({
           className: "option-list",
           description:
