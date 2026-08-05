@@ -96,6 +96,7 @@ import {
   appendItems,
   featureItem,
   removeItem,
+  swapItems,
   replaceItem,
   setItemCaption,
 } from "@/utils/collection-items";
@@ -1270,6 +1271,8 @@ interface EditableBlockProps {
   onCollectionFeature?: (itemIndex: number) => void;
   /** Drop one image from the collection, freeing its slot. */
   onCollectionRemove?: (itemIndex: number) => void;
+  /** Exchange two collection slots — a tile dragged onto another. */
+  onCollectionReorder?: (from: number, to: number) => void;
   /** Insert an empty paragraph immediately before this block. */
   onInsertParagraphBefore?: () => void;
   /** Insert an empty paragraph after this block, or focus the trailing one. */
@@ -1313,6 +1316,7 @@ function EditableBlock({
   onCollectionReplace,
   onCollectionFeature,
   onCollectionRemove,
+  onCollectionReorder,
   onInsertParagraphBefore,
   onInsertParagraphAfter,
   onInsertListItemBefore,
@@ -2587,6 +2591,7 @@ function EditableBlock({
           onFeature={(i) => onCollectionFeature?.(i)}
           onReplace={(i) => onCollectionReplace?.(i)}
           onRemove={(i) => onCollectionRemove?.(i)}
+          onReorder={(from, to) => onCollectionReorder?.(from, to)}
           onAddImage={() => onCollectionAdd?.()}
           // Per-item captions are ordinary edits, so they ride `onChange`'s
           // history debounce like every other caption in the editor.
@@ -5156,6 +5161,11 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
             block.type === "collection"
               ? (itemIndex) =>
                   updateCollection(i, removeItem(block.items, itemIndex))
+              : undefined
+          }
+          onCollectionReorder={
+            block.type === "collection"
+              ? (from, to) => updateCollection(i, swapItems(block.items, from, to))
               : undefined
           }
           onInsertParagraphBefore={() => insertParagraphBefore(i)}

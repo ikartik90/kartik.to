@@ -3402,7 +3402,7 @@ describe("ArticleEditor collection block", () => {
     expect(screen.getAllByRole("button", { name: "Add Image" })).toHaveLength(5);
   });
 
-  it("moves a featured image to the front, shifting the rest", () => {
+  it("swaps a featured image with the one it replaces", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
@@ -3411,7 +3411,79 @@ describe("ArticleEditor collection block", () => {
     fireEvent.click(
       within(toolbarFor(2)).getByRole("button", { name: "Feature image" }),
     );
-    expect(collection().items.map((i) => i.src)).toEqual(["c", "a", "b"]);
+    // "b" never moves — only the two slots that traded places change.
+    expect(collection().items.map((i) => i.src)).toEqual(["c", "b", "a"]);
+  });
+
+  // Reordering runs on pointer events, not the drag-and-drop API, and resolves
+  // the tile under the pointer from the cells' own rects — so jsdom, which lays
+  // nothing out, needs those stated. A row of 100px cells at the origin.
+  function dragCell(from: number, to: number) {
+    const cells = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-collection-cell]"),
+    );
+    cells.forEach((cell, index) => {
+      const left = index * 100;
+      const at = () =>
+        ({
+          left,
+          top: 0,
+          width: 100,
+          height: 100,
+          right: left + 100,
+          bottom: 100,
+          x: left,
+          y: 0,
+          toJSON: () => "",
+        }) as DOMRect;
+      cell.getBoundingClientRect = at;
+      cell.querySelector("img")!.getBoundingClientRect = at;
+    });
+
+    const at = (index: number) => ({ clientX: index * 100 + 50, clientY: 50 });
+    const send = (type: string, target: Element, point: ReturnType<typeof at>) => {
+      // jsdom implements no PointerEvent; React dispatches on the type, so a
+      // MouseEvent carrying the pointer fields reaches the handlers.
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        ...point,
+      });
+      Object.defineProperty(event, "pointerId", { value: 1 });
+      fireEvent(target, event);
+    };
+
+    send("pointerdown", cells[from].querySelector("img")!, at(from));
+    send("pointermove", cells[from], at(to));
+    send("pointerup", cells[from], at(to));
+  }
+
+  it("swaps two slots when a tile is dragged onto another", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+      />,
+    );
+    dragCell(1, 2);
+    expect(collection().items.map((i) => i.src)).toEqual(["a", "c", "b"]);
+  });
+
+  // Dropping into the first cell is the same state change as pressing Feature.
+  it("features an image dragged into the first cell", () => {
+    render(
+      <ArticleEditor
+        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+      />,
+    );
+    dragCell(2, 0);
+
+    expect(collection().items.map((i) => i.src)).toEqual(["c", "b", "a"]);
+    expect(
+      within(toolbarFor(0))
+        .getByRole("button", { name: "Feature image" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("removes one image and leaves the block behind", () => {

@@ -9,6 +9,7 @@ import {
   removeItem,
   replaceItem,
   setItemCaption,
+  swapItems,
 } from "../collection-items";
 
 const items = (...srcs: string[]): CollectionItem[] =>
@@ -20,21 +21,54 @@ const srcs = (list: CollectionItem[]) => list.map((item) => item.src);
 // featureItem
 // ---------------------------------------------------------------------------
 
-describe("featureItem", () => {
-  it("moves the item to the front and shifts the rest right", () => {
-    expect(srcs(featureItem(items("a", "b", "c", "d"), 3))).toEqual([
-      "d",
+describe("swapItems", () => {
+  it("exchanges two slots and leaves the rest alone", () => {
+    expect(srcs(swapItems(items("a", "b", "c", "d"), 1, 3))).toEqual([
       "a",
-      "b",
+      "d",
       "c",
+      "b",
     ]);
   });
 
-  it("preserves the relative order of the items it displaces", () => {
-    expect(srcs(featureItem(items("a", "b", "c", "d", "e"), 2))).toEqual([
+  it("is symmetric", () => {
+    const list = items("a", "b", "c");
+    expect(srcs(swapItems(list, 0, 2))).toEqual(srcs(swapItems(list, 2, 0)));
+  });
+
+  it("is a no-op onto itself", () => {
+    expect(srcs(swapItems(items("a", "b"), 1, 1))).toEqual(["a", "b"]);
+  });
+
+  it("ignores an out-of-range index on either side", () => {
+    expect(srcs(swapItems(items("a", "b"), 0, 9))).toEqual(["a", "b"]);
+    expect(srcs(swapItems(items("a", "b"), -1, 1))).toEqual(["a", "b"]);
+  });
+
+  it("does not mutate its input", () => {
+    const original = items("a", "b", "c");
+    swapItems(original, 0, 2);
+    expect(srcs(original)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("featureItem", () => {
+  // Featuring SWAPS with slot 0 rather than moving to the front: it disturbs
+  // exactly two cells instead of re-laying-out everything in between.
+  it("exchanges the item with whatever is currently featured", () => {
+    expect(srcs(featureItem(items("a", "b", "c", "d"), 3))).toEqual([
+      "d",
+      "b",
       "c",
       "a",
+    ]);
+  });
+
+  it("leaves every slot it did not touch exactly where it was", () => {
+    expect(srcs(featureItem(items("a", "b", "c", "d", "e"), 2))).toEqual([
+      "c",
       "b",
+      "a",
       "d",
       "e",
     ]);
