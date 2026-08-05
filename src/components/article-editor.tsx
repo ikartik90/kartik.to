@@ -98,6 +98,7 @@ import {
   removeItem,
   swapItems,
   replaceItem,
+  setItemBackgroundEffect,
   setItemCaption,
 } from "@/utils/collection-items";
 import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
@@ -2597,6 +2598,15 @@ function EditableBlock({
           // history debounce like every other caption in the editor.
           onEditCaption={(i, caption) =>
             onChange({ ...block, items: setItemCaption(block.items, i, caption) })
+          }
+          // Rides `onChange`'s history debounce like the captions do — a slider
+          // drag emits a value per frame, and one undo step per frame would
+          // bury every other edit in the article's history.
+          onSetBackgroundEffect={(i, effect) =>
+            onChange({
+              ...block,
+              items: setItemBackgroundEffect(block.items, i, effect),
+            })
           }
         />
         <figcaption

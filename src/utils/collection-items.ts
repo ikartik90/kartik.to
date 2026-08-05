@@ -1,4 +1,8 @@
-import { COLLECTION_MAX_ITEMS, type CollectionItem } from "@/domain/nodes";
+import {
+  COLLECTION_MAX_ITEMS,
+  type BackgroundEffect,
+  type CollectionItem,
+} from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // Collection item algebra
@@ -77,6 +81,29 @@ export function setItemCaption(
     if (i !== index) return item;
     const { caption: _dropped, ...rest } = item;
     return trimmed ? { ...rest, caption: trimmed } : rest;
+  });
+}
+
+/**
+ * Sets — or, with `undefined`, removes — the Paper shader painted behind one
+ * image. Like a blank caption, "no effect" is the ABSENT key rather than a
+ * stored `undefined`, so a collection nobody has styled serializes exactly as
+ * it did before the feature existed.
+ *
+ * The effect is replaced wholesale, never merged: the panel edits a complete
+ * parameter set and hands back a complete one, so a partial write here could
+ * only ever mean a bug upstream.
+ */
+export function setItemBackgroundEffect(
+  items: readonly CollectionItem[],
+  index: number,
+  effect: BackgroundEffect | undefined,
+): CollectionItem[] {
+  if (!inRange(items, index)) return [...items];
+  return items.map((item, i) => {
+    if (i !== index) return item;
+    const { backgroundEffect: _dropped, ...rest } = item;
+    return effect ? { ...rest, backgroundEffect: effect } : rest;
   });
 }
 

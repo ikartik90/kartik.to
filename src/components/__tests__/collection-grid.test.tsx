@@ -10,8 +10,24 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
-import { COLLECTION_MAX_ITEMS, type CollectionItem } from "@/domain/nodes";
+import {
+  COLLECTION_MAX_ITEMS,
+  DEFAULT_BACKGROUND_EFFECT,
+  type CollectionItem,
+} from "@/domain/nodes";
 import { swapItems } from "@/utils/collection-items";
+// StaticMeshGradient is WebGL; jsdom can't run it. Stand it in with a marker
+// element carrying the colours, so a test can assert what was rendered.
+vi.mock("@paper-design/shaders-react", () => ({
+  StaticMeshGradient: ({ colors, className }: { colors: string[]; className?: string }) => (
+    // The <canvas> is part of the contract, not decoration: the drag preview
+    // snapshots it to carry the gradient with the picture.
+    <div data-background-effect="" data-colors={colors.join(",")} className={className}>
+      <canvas />
+    </div>
+  ),
+}));
+
 import { CollectionGrid } from "../collection-grid";
 
 afterEach(() => cleanup());
@@ -31,6 +47,7 @@ function setupLive(list: CollectionItem[]) {
     onReplace: vi.fn(),
     onRemove: vi.fn(),
     onAddImage: vi.fn(),
+    onSetBackgroundEffect: vi.fn(),
   };
   function Harness() {
     const [current, setCurrent] = useState(list);
@@ -54,6 +71,7 @@ function setup(list: CollectionItem[]) {
     onRemove: vi.fn(),
     onAddImage: vi.fn(),
     onReorder: vi.fn(),
+    onSetBackgroundEffect: vi.fn(),
   };
   render(<CollectionGrid items={list} {...handlers} />);
   return { ...handlers, user: userEvent.setup() };
@@ -887,6 +905,7 @@ describe("CollectionGrid caption editing", () => {
         onRemove={vi.fn()}
         onAddImage={vi.fn()}
         onReorder={vi.fn()}
+        onSetBackgroundEffect={vi.fn()}
       />,
     );
     await userEvent.setup().click(
@@ -902,6 +921,7 @@ describe("CollectionGrid caption editing", () => {
         onRemove={vi.fn()}
         onAddImage={vi.fn()}
         onReorder={vi.fn()}
+        onSetBackgroundEffect={vi.fn()}
       />,
     );
 
@@ -919,6 +939,7 @@ describe("CollectionGrid caption editing", () => {
       onRemove: vi.fn(),
       onAddImage: vi.fn(),
       onReorder: vi.fn(),
+      onSetBackgroundEffect: vi.fn(),
     };
     const { rerender } = render(<CollectionGrid items={list} {...props} />);
     await userEvent.setup().click(
@@ -947,6 +968,7 @@ describe("CollectionGrid slot identity", () => {
       onRemove: vi.fn(),
       onAddImage: vi.fn(),
       onReorder: vi.fn(),
+      onSetBackgroundEffect: vi.fn(),
     };
     const { rerender } = render(
       <CollectionGrid items={items("a", "b", "c")} {...props} />,
@@ -960,5 +982,253 @@ describe("CollectionGrid slot identity", () => {
     expect(document.contains(slot0)).toBe(true);
     // The node stayed; only what it shows changed.
     expect(cells()[0].querySelector("img")!.getAttribute("src")).toBe("c");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Background effect
+// ---------------------------------------------------------------------------
+
+const effectButton = (index: number) =>
+  within(toolbarFor(index)).getByRole("button", { name: "Background effect" });
+
+const panel = () =>
+  screen.queryByRole("dialog", { name: "Background properties" });
+
+describe("CollectionGrid background effect", () => {
+  it("offers the control on every filled cell", () => {
+    setup(items("a", "b"));
+    expect(effectButton(0)).toBeDefined();
+    expect(effectButton(1)).toBeDefined();
+  });
+
+  // Reaching for the button IS the request for an effect — the panel edits a
+  // gradient, so opening it onto nothing would be a blank form.
+  it("turns the effect on and opens the panel in one click", async () => {
+    const { user, onSetBackgroundEffect } = setup(items("a", "b"));
+    expect(panel()).toBeNull();
+
+    await user.click(effectButton(1));
+
+    expect(onSetBackgroundEffect).toHaveBeenCalledExactlyOnceWith(
+      1,
+      DEFAULT_BACKGROUND_EFFECT,
+    );
+    expect(panel()).not.toBeNull();
+  });
+
+  it("does not re-apply the defaults over an effect the image already has", async () => {
+    const tuned = { ...DEFAULT_BACKGROUND_EFFECT, rotation: 90 };
+    const { user, onSetBackgroundEffect } = setup([
+      { src: "a", backgroundEffect: tuned },
+    ]);
+
+    await user.click(effectButton(0));
+
+    expect(onSetBackgroundEffect).not.toHaveBeenCalled();
+    expect(panel()).not.toBeNull();
+  });
+
+  // The panel is the editor for that picture now; a scrim blurring the very
+  // gradient being tuned would defeat the preview.
+  it("stands the cell's overlay down and anchors the panel to it", async () => {
+    const { user } = setup(items("a", "b"));
+    await user.click(effectButton(1));
+
+    expect(cells()[1].hasAttribute("data-effect-open")).toBe(true);
+    expect(cells()[1].hasAttribute("data-effect-anchor")).toBe(true);
+    // Exactly one anchor, or CSS anchor resolution silently picks the last in
+    // tree order and the panel opens beside the wrong picture.
+    expect(
+      document.querySelectorAll("[data-effect-anchor]"),
+    ).toHaveLength(1);
+    expect(cells()[0].hasAttribute("data-effect-open")).toBe(false);
+  });
+
+  // The toolbar stands down while the panel is open, so the button that opened
+  // it cannot be the way back — the header's close is.
+  it("closes from the header without taking the effect away", async () => {
+    const { user, onSetBackgroundEffect } = setup([
+      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+    ]);
+    await user.click(effectButton(0));
+    expect(panel()).not.toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: "Close background properties" }),
+    );
+
+    expect(panel()).toBeNull();
+    expect(onSetBackgroundEffect).not.toHaveBeenCalled();
+    // The gradient is a property of the picture, not of the panel.
+    expect(document.querySelectorAll("[data-background-effect]")).toHaveLength(1);
+  });
+
+  it("closes on Escape", async () => {
+    const { user } = setup([
+      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+    ]);
+    await user.click(effectButton(0));
+
+    await user.keyboard("{Escape}");
+
+    expect(panel()).toBeNull();
+    expect(cells()[0].hasAttribute("data-effect-open")).toBe(false);
+  });
+
+  it("reads pressed only for an image that actually has an effect", () => {
+    setup([{ src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT }, { src: "b" }]);
+    expect(effectButton(0).getAttribute("aria-pressed")).toBe("true");
+    expect(effectButton(1).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("clears the effect and closes when removed from the panel", async () => {
+    const { user, onSetBackgroundEffect } = setup([
+      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+    ]);
+    await user.click(effectButton(0));
+
+    await user.click(
+      screen.getByRole("button", { name: /Remove Background Effect/i }),
+    );
+
+    expect(onSetBackgroundEffect).toHaveBeenCalledExactlyOnceWith(0, undefined);
+    expect(panel()).toBeNull();
+  });
+
+  it("paints the gradient behind an image that has one, and only that image", () => {
+    setup([
+      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+      { src: "b" },
+    ]);
+    const layers = document.querySelectorAll("[data-background-effect]");
+    expect(layers).toHaveLength(1);
+    expect(cells()[0].querySelector("[data-background-effect]")).not.toBeNull();
+  });
+
+  // Both editors stand where the toolbar stands — two open on one picture
+  // would be two claims on it.
+  it("replaces an open caption editor rather than stacking on it", async () => {
+    const { user } = setup(items("a"));
+    await user.click(
+      within(toolbarFor(0)).getByRole("button", { name: "Edit image caption" }),
+    );
+    expect(screen.queryByRole("textbox", { name: "Image caption" })).not.toBeNull();
+
+    // The caption card stands WHERE the toolbar stands, so the effect button
+    // is only reachable again once the card is dismissed. Escape discards.
+    await user.type(
+      screen.getByRole("textbox", { name: "Image caption" }),
+      "{Escape}",
+    );
+    await user.click(effectButton(0));
+
+    expect(screen.queryByRole("textbox", { name: "Image caption" })).toBeNull();
+    expect(panel()).not.toBeNull();
+  });
+
+  // Featuring, removing and reordering all move an image between slots; a
+  // stored index would leave the panel retuning whichever picture slid in.
+  it("follows its image when the collection is reordered", async () => {
+    const seeded: CollectionItem[] = [
+      { src: "a" },
+      { src: "b", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+    ];
+    const props = {
+      onFeature: vi.fn(),
+      onEditCaption: vi.fn(),
+      onReplace: vi.fn(),
+      onRemove: vi.fn(),
+      onAddImage: vi.fn(),
+      onReorder: vi.fn(),
+      onSetBackgroundEffect: vi.fn(),
+    };
+    const { rerender } = render(<CollectionGrid items={seeded} {...props} />);
+    await userEvent.setup().click(effectButton(1));
+
+    rerender(<CollectionGrid items={[seeded[1], seeded[0]]} {...props} />);
+
+    expect(cells()[0].hasAttribute("data-effect-open")).toBe(true);
+    expect(cells()[1].hasAttribute("data-effect-open")).toBe(false);
+  });
+
+  it("closes itself when its image is removed", async () => {
+    const seeded: CollectionItem[] = [
+      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+      { src: "b" },
+    ];
+    const props = {
+      onFeature: vi.fn(),
+      onEditCaption: vi.fn(),
+      onReplace: vi.fn(),
+      onRemove: vi.fn(),
+      onAddImage: vi.fn(),
+      onReorder: vi.fn(),
+      onSetBackgroundEffect: vi.fn(),
+    };
+    const { rerender } = render(<CollectionGrid items={seeded} {...props} />);
+    await userEvent.setup().click(effectButton(0));
+    expect(panel()).not.toBeNull();
+
+    rerender(<CollectionGrid items={[seeded[1]]} {...props} />);
+    expect(panel()).toBeNull();
+  });
+});
+
+describe("CollectionGrid background effect travels with the photo", () => {
+  const preview = () =>
+    document.body.querySelector<HTMLElement>(
+      '[class*="collection-grid__dragPreview"]',
+    );
+
+  beforeEach(() => {
+    // jsdom's canvas has no 2D/WebGL backend, so the readback is stubbed. What
+    // matters to this component is only that a snapshot is taken and painted.
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,SNAPSHOT",
+    );
+  });
+
+  // The clone is a bare <img>, and a cloned <canvas> is blank — so without an
+  // explicit snapshot the picture leaves its gradient behind in the cell and
+  // flies as a transparent cut-out.
+  it("paints the gradient onto the clone that rides the cursor", () => {
+    setup([{ src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT }, { src: "b" }]);
+    layOutCells();
+    const source = press(0, centreOf(0));
+    pointer("pointermove", source, { clientX: 60, clientY: 50 });
+
+    expect(preview()!.style.backgroundImage).toContain("SNAPSHOT");
+    // Exactly the photo's own box, so the two line up pixel for pixel.
+    expect(preview()!.style.backgroundSize).toBe("100% 100%");
+
+    pointer("pointerup", source, centreOf(0));
+  });
+
+  it("carries nothing extra for a photo with no effect", () => {
+    setup(items("a", "b"));
+    layOutCells();
+    const source = press(0, centreOf(0));
+    pointer("pointermove", source, { clientX: 60, clientY: 50 });
+
+    expect(preview()!.style.backgroundImage).toBe("");
+
+    pointer("pointerup", source, centreOf(0));
+  });
+
+  // A readback is the one part of the drag that depends on the GPU. Losing it
+  // must cost the gradient, never the gesture.
+  it("still drags when the snapshot cannot be read", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(() => {
+      throw new Error("context lost");
+    });
+    const { onReorder } = setup([
+      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+      { src: "b" },
+    ]);
+
+    drag(0, 1);
+
+    expect(onReorder).toHaveBeenCalledExactlyOnceWith(0, 1);
   });
 });

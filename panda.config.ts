@@ -115,6 +115,14 @@ export default defineConfig({
           sidenoteStackedInset: { value: "80px" },
           sidenoteMinWidth: { value: "320px" },
           sidenoteMaxWidth: { value: "480px" },
+          // Background-effect panel geometry (Figma 845:7223). The panel width
+          // is DERIVED from the row — label + gap + field + the panel's own
+          // inset — so the three can never drift out of agreement.
+          effectRowLabel: { value: "80px" },
+          effectRowField: { value: "220px" },
+          // The opacity readout, matching the slider's numeric output so the
+          // two field types line up down the right edge of the panel.
+          effectColorOpacity: { value: "60px" },
         },
 
         colors: {
@@ -3169,6 +3177,7 @@ export default defineConfig({
             "cell",
             "tile",
             "image",
+            "backgroundEffect",
             "dragPreview",
             "surplus",
             "surplusDivider",
@@ -3284,15 +3293,22 @@ export default defineConfig({
               // BOTH live on the pseudo-element, and the ring has to. An inset
               // box-shadow paints on the cell's own background, which its
               // <img> child then covers completely — the ring was being drawn
-              // and immediately painted over. A positioned ::after is above
-              // the image, so it can carry the wash and the ring together.
+              // and immediately painted over. A ::after carrying the wash and
+              // the ring together sits above the photo instead.
               // (Also why not `opacity` on the cell: that would drag the ring
               // down with it, when the point is to veil the OUTGOING photo
               // while the marker stays at full strength on top of it.)
+              //
+              // Being positioned is NOT enough to clear the photo, though it
+              // was until the background effect arrived: the gradient has to
+              // fill the cell, so the photo was lifted to `z-index: 1` to stay
+              // over it, and this marker went under the picture it marks. Top
+              // rung of the cell's ladder — see the `backgroundEffect` slot.
               "&[data-drop-target]::after": {
                 content: '""',
                 position: "absolute",
                 inset: 0,
+                zIndex: 3,
                 borderRadius: "inherit",
                 backgroundColor: "field.bg.active",
                 boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
@@ -3351,6 +3367,52 @@ export default defineConfig({
               scale: "1",
               rotate: "0deg",
               transition: "scale 100ms ease, rotate 100ms ease",
+              // Middle rung of the cell's paint ladder — see `backgroundEffect`
+              // below for the whole of it. Without a z-index the shader, which
+              // must be positioned to fill the cell, would cover the photo
+              // entirely: a positioned element always paints over a static
+              // sibling however late in the DOM that sibling comes.
+              position: "relative",
+              zIndex: 1,
+            },
+            // The gradient painted behind a photo whose background effect is
+            // on. The image stays `cover`, so this shows only where the picture
+            // is itself transparent — which is exactly the case it exists for: a
+            // screenshot of UI exported on a transparent canvas.
+            //
+            // Sized by the CELL rather than by the photo. The photo is a
+            // cropped fill of the cell, so anchoring the gradient to it would
+            // shift the ground every time the crop changed.
+            //
+            // THE CELL'S PAINT LADDER. All three rungs are stated explicitly
+            // because introducing this one forced the other two: a positioned
+            // element outranks every static sibling, so the moment the gradient
+            // needed `position: absolute` the photo had to be lifted over it,
+            // and lifting the photo silently sank the editor's hover scrim
+            // (which is `z-index: auto`) underneath the picture it blurs. The
+            // toolbar survived that regression only by carrying a z-index of
+            // its own, which made the bug read as "the blur disappeared but the
+            // controls are fine". Keep them in step:
+            //
+            //   0  backgroundEffect — the ground
+            //   1  image            — the picture
+            //   2  overlay root     — the editor's scrim and controls
+            //      (in `collectionCellOverlay`, which must outrank the image)
+            //   3  cell's ::after   — the drop-target wash and ring
+            //
+            // Rungs 2 and 3 were both written as `auto` and both sank under the
+            // photo the moment rung 1 was raised. Neither is optional: every
+            // positioned child of a cell has to name its rung, because "it is
+            // positioned, so it is on top" stops being true as soon as ONE
+            // sibling carries a z-index.
+            backgroundEffect: {
+              position: "absolute",
+              inset: 0,
+              zIndex: 0,
+              borderRadius: "inherit",
+              // Decoration under the picture — the cell beneath it owns the
+              // press that starts a reorder, and the tile above it owns clicks.
+              pointerEvents: "none",
             },
             // The photo that rides the cursor while you reorder — a clone the
             // editor appends to the body and positions itself. This is the
@@ -3423,9 +3485,9 @@ export default defineConfig({
               // lands. The raw key is the one that works; the prefixed
               // spelling stays for older WebKit. (Same workaround as the
               // calendar's edge scrims.)
-              backdropFilter: "blur(6px)",
-              "-webkit-backdrop-filter": "blur(6px)",
-              "backdrop-filter": "blur(6px)",
+              backdropFilter: "blur(token(spacing.md))",
+              "-webkit-backdrop-filter": "blur(token(spacing.md))",
+              "backdrop-filter": "blur(token(spacing.md))",
               "& svg": {
                 width: "token(spacing.xxl)",
                 height: "token(spacing.xxl)",
@@ -3526,11 +3588,24 @@ export default defineConfig({
               display: "grid",
               placeItems: "center",
               pointerEvents: "none",
+              // Top rung of the cell's paint ladder (see `collectionGrid`'s
+              // `backgroundEffect` slot). The photo sits at `z-index: 1` so it
+              // clears the gradient behind it, which means an overlay left at
+              // `auto` paints UNDERNEATH the picture it is supposed to wash and
+              // blur. Raising the whole overlay — rather than the scrim alone —
+              // keeps the scrim and the controls in one layer, in DOM order.
+              //
+              // Safe for the scrim's `backdrop-filter`: a stacking context made
+              // by `z-index` is not a Backdrop Root (only opacity, filter, mask
+              // and friends are), so the blur still samples the photo below.
+              // Verified in the browser, not assumed.
+              zIndex: 2,
             },
-            // The wash AND a light defocus of the photo under it, so the pill
-            // is the sharp thing in the cell without the picture beneath it
-            // dissolving — at 4px the image stays recognisably itself and just
-            // stops competing for the eye.
+            // The wash AND a defocus of the photo under it, so the pill is the
+            // sharp thing in the cell. One radius (`spacing.md`) is shared by
+            // every backdrop blur in the app — this scrim, the reader's surplus
+            // badge and the dialog backdrop — so "blurred behind glass" reads
+            // as one material rather than three strengths of the same idea.
             //
             // Panda's `backdropFilter` utility emits ONLY the -webkit- form,
             // which Chromium does not recognise, so the raw key is the one that
@@ -3549,9 +3624,9 @@ export default defineConfig({
               // reason.
               borderRadius: "xxl",
               backgroundColor: "bg.imageScrim",
-              backdropFilter: "blur(4px)",
-              "-webkit-backdrop-filter": "blur(4px)",
-              "backdrop-filter": "blur(4px)",
+              backdropFilter: "blur(token(spacing.md))",
+              "-webkit-backdrop-filter": "blur(token(spacing.md))",
+              "backdrop-filter": "blur(token(spacing.md))",
               opacity: 0,
               transition: "opacity 150ms ease",
               "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
@@ -3573,10 +3648,32 @@ export default defineConfig({
               // the press lifts the cell's clip in the same frame so the photo
               // can tilt out of its slot, and a scrim still dissolving over a
               // picture that has left is the wrong thing in the wrong place.
-              // Out instantly, back in on the base transition once the state
-              // clears — grabbing is abrupt, letting go is not.
+              // Out instantly, back in once the state clears — grabbing is
+              // abrupt, letting go is not.
               "[data-collection-grid][data-reordering] [data-collection-cell] &":
                 { opacity: 0, transition: "none" },
+              // ...and in the cell a photo is FLYING INTO, it comes back over
+              // the length of that flight rather than the shorter hover fade,
+              // so the blur arrives exactly as the photo settles into the slot
+              // instead of finishing early and waiting for it. Duration and
+              // curve match `LANDING_MS` / `LANDING_EASE` in
+              // `collection-grid.tsx`. Never conflicts with the rule above:
+              // `data-landing` is set in the same commit that clears
+              // `data-reordering`, so the two are never on together.
+              "[data-collection-cell][data-landing] &": {
+                transition: "opacity 280ms ease-out",
+              },
+              // Out entirely while this cell's background-effect panel is open.
+              // The panel IS the editor for that picture now, and the scrim
+              // blurs the very gradient the panel is tuning — you would be
+              // adjusting a preview you cannot see. No transition: the swap
+              // between the two editors should read as one taking over from
+              // the other, not as a crossfade.
+              "[data-collection-cell][data-effect-open] &": {
+                opacity: 0,
+                pointerEvents: "none",
+                transition: "none",
+              },
             },
             toolbar: {
               position: "relative",
@@ -3590,9 +3687,24 @@ export default defineConfig({
               // Down for the whole reorder, fading back in once the dropped
               // photo has landed — see the scrim's note for why it lives here
               // and why the selector is written this way.
-              // Out at once, back in on the base transition — see the scrim.
+              // Out at once, back in when the state clears — see the scrim.
               "[data-collection-grid][data-reordering] [data-collection-cell] &":
                 { opacity: 0, pointerEvents: "none", transition: "none" },
+              // Paced to the flight in the cell being landed in — see the scrim.
+              "[data-collection-cell][data-landing] &": {
+                transition: "opacity 280ms ease-out",
+              },
+              // Out entirely while this cell's background-effect panel is open.
+              // The panel IS the editor for that picture now, and the scrim
+              // blurs the very gradient the panel is tuning — you would be
+              // adjusting a preview you cannot see. No transition: the swap
+              // between the two editors should read as one taking over from
+              // the other, not as a crossfade.
+              "[data-collection-cell][data-effect-open] &": {
+                opacity: 0,
+                pointerEvents: "none",
+                transition: "none",
+              },
               display: "flex",
               alignItems: "center",
               gap: "sm",
@@ -3620,9 +3732,24 @@ export default defineConfig({
               transition: "opacity 150ms ease",
               "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
                 { opacity: 1, pointerEvents: "auto" },
-              // Out at once, back in on the base transition — see the scrim.
+              // Out at once, back in when the state clears — see the scrim.
               "[data-collection-grid][data-reordering] [data-collection-cell] &":
                 { opacity: 0, pointerEvents: "none", transition: "none" },
+              // Paced to the flight in the cell being landed in — see the scrim.
+              "[data-collection-cell][data-landing] &": {
+                transition: "opacity 280ms ease-out",
+              },
+              // Out entirely while this cell's background-effect panel is open.
+              // The panel IS the editor for that picture now, and the scrim
+              // blurs the very gradient the panel is tuning — you would be
+              // adjusting a preview you cannot see. No transition: the swap
+              // between the two editors should read as one taking over from
+              // the other, not as a crossfade.
+              "[data-collection-cell][data-effect-open] &": {
+                opacity: 0,
+                pointerEvents: "none",
+                transition: "none",
+              },
               display: "flex",
               flexDirection: "column",
               gap: "sm",
@@ -3657,6 +3784,205 @@ export default defineConfig({
           },
         }),
 
+        // A colour as TWO editable parts inside one field frame — the swatch,
+        // the six hex digits, and an opacity percentage — divided by the same
+        // hairlines the slider uses, so a column of colour rows and slider rows
+        // reads as one set of controls (Figma 872:7296).
+        //
+        // The `#` is drawn by the field, never typed: `sanitizeHex` strips it
+        // wherever it lands, so pasting `#FFAB6F` and typing `FFAB6F` agree.
+        //
+        // Both inputs carry `data-control`, not just the hex one. The `field`
+        // recipe lights the whole frame off `:has([data-control]:focus-visible)`,
+        // so without it the frame would stay resting while the opacity input
+        // held focus — the one field in the panel that looked inactive while
+        // being edited. Only the hex input takes the field's `id`, since a
+        // label may point at exactly one control.
+        colorField: defineSlotRecipe({
+          className: "color-field",
+          description:
+            "Colour input — a live swatch, a six-digit hex input and a 0–100 opacity input, divided by hairlines inside the shared `field` frame (Figma 872:7296). The swatch composites the colour over a checkerboard so a partial opacity reads as partial rather than as a lighter colour.",
+          slots: ["swatch", "swatchFill", "separator", "hex", "opacity"],
+          base: {
+            // The checkerboard. Without it a 0% colour is indistinguishable
+            // from a 100% one that happens to match the field fill, and the
+            // opacity input would be editing something invisible.
+            swatch: {
+              position: "relative",
+              flexShrink: 0,
+              width: "token(spacing.xl)",
+              height: "token(spacing.xl)",
+              borderRadius: "sm",
+              overflow: "hidden",
+              backgroundColor: "field.bg.default",
+              backgroundImage:
+                "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)",
+              backgroundSize: "token(spacing.md) token(spacing.md)",
+              // A hairline of its own: a pale colour on a pale field would
+              // otherwise have no edge at all.
+              boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+            },
+            // The colour itself, over the checker. A separate layer rather than
+            // a background on the swatch, because the checker occupies the
+            // background and the two have to composite.
+            swatchFill: { position: "absolute", inset: 0 },
+            separator: {
+              alignSelf: "stretch",
+              flexShrink: 0,
+              width: "token(spacing.3xs)",
+              backgroundColor: "field.border.default",
+              transition: "background-color 150ms ease",
+              "[data-field]:has([data-control]:focus-visible) &": {
+                backgroundColor: "field.border.active",
+              },
+            },
+            hex: {
+              flex: "1 1 0",
+              minWidth: 0,
+              // Digits only, and they change as you type — proportional figures
+              // would make the value shuffle horizontally mid-edit.
+              fontVariantNumeric: "tabular-nums",
+              textTransform: "uppercase",
+            },
+            opacity: {
+              flex: "0 0 auto",
+              width: "token(sizes.effectColorOpacity)",
+              textAlign: "right",
+              fontVariantNumeric: "tabular-nums",
+            },
+          },
+        }),
+
+        // The properties panel for an image's background effect — a header, a
+        // column of label ∣ control rows, and the remove action (Figma 845:7223).
+        //
+        // Anchored to the CELL being edited and fixed rather than absolute, for
+        // the same reason the slash menu is: `position-try-fallbacks` measures
+        // overflow against the viewport, and against a containing block taller
+        // than the viewport there is always "room", so the flip never fires.
+        // `flip-inline` is what puts the panel on a right-column cell's left.
+        backgroundEffectPanel: defineSlotRecipe({
+          className: "background-effect-panel",
+          description:
+            "Static-mesh-gradient properties panel for a collection image — anchored beside the cell being edited via CSS anchor(), flipping to its other side when there is no room. A dialog header over a column of label ∣ field rows, closing with a full-width remove action (Figma 845:7223).",
+          slots: ["root", "header", "title", "body", "footer"],
+          base: {
+            root: {
+              position: "fixed",
+              zIndex: 50,
+              positionAnchor: "--background-effect-panel",
+              // Beside the cell, top edges aligned — the panel is taller than
+              // most cells, so centring it would push the head off screen.
+              left: "anchor(right)",
+              top: "anchor(top)",
+              // A right-column cell has no room beside it, so the panel slides
+              // to the cell's other side and still points at its picture.
+              positionTryFallbacks: "flip-inline",
+              // ...and when NEITHER side has room (a narrow window), the second
+              // inset lets it shift inwards rather than run off the screen —
+              // the same mechanism as the block axis below. It overlaps the
+              // grid at that point, which is the lesser failure: an overlapping
+              // panel can still be read and closed, one bleeding off-screen
+              // cannot.
+              right: "token(spacing.xl)",
+              justifySelf: "start",
+              marginInline: "xl",
+              // The BLOCK axis is handled without `position-try`, deliberately.
+              //
+              // The panel is taller than a grid cell, so anchoring its top to a
+              // cell in the collection's second row already runs it off the
+              // bottom of the screen — that is the common case, not an edge
+              // one. A `@position-try` fallback releasing the top edge was the
+              // obvious answer and does NOT work here: measured in Chrome, an
+              // anchored box whose height comes from its content (with a
+              // scrollable child) simply never adopts the fallback, while an
+              // otherwise identical box with a fixed height does.
+              //
+              // These three lines do the whole job with no fallback at all:
+              //   • a second inset gives the box an inset-modified containing
+              //     block, so it SHIFTS up to fit rather than hanging off the
+              //     bottom;
+              //   • `align-self: start` keeps it shrink-wrapped to its content
+              //     instead of stretching to fill that box;
+              //   • the cap then only has to know the VIEWPORT, never where the
+              //     anchor sits — which is precisely what a plain `max-height`
+              //     can express and is why this works where the fallback did
+              //     not. It is also what finally gives `body` something to
+              //     scroll inside.
+              bottom: "token(spacing.xl)",
+              alignSelf: "start",
+              // The shift clamps to the VIEWPORT, not to the `bottom` inset, so
+              // a panel pushed all the way up ends flush against the screen
+              // edge. The margin is what it actually keeps clear.
+              marginBlock: "xl",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              width: "max-content",
+              // See the block-axis note above. `dvh` rather than `vh` so a
+              // mobile browser's collapsing toolbar doesn't leave the panel
+              // taller than the space actually on screen.
+              maxHeight: "calc(100dvh - 2 * token(spacing.xl))",
+              borderRadius: "lg",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              backgroundColor: "bg.surface",
+              boxShadow:
+                "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+              overflow: "hidden",
+            },
+            header: {
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "md",
+              height: "token(spacing.4xl)",
+              paddingInline: "lg",
+              borderBottomWidth: "token(spacing.3xs)",
+              borderBottomStyle: "solid",
+              borderBottomColor: "border.divider",
+            },
+            title: { color: "field.text.muted", whiteSpace: "nowrap" },
+            // Every row IS a `Field`, relaid from the field's own vertical
+            // stack into a label ∣ control grid. Done here rather than with a
+            // wrapper and a bare <span> label so each control keeps its native
+            // `htmlFor`/`id` association — fifteen rows of hand-written
+            // `aria-label` would be fifteen chances to mislabel a slider.
+            //
+            // Stacked labels were the alternative and are not viable: at 15
+            // parameters the panel would stand twice as tall as the picture it
+            // describes.
+            body: {
+              display: "flex",
+              flexDirection: "column",
+              gap: "md",
+              padding: "lg",
+              overflowY: "auto",
+              "& [data-field]": {
+                display: "grid",
+                gridTemplateColumns:
+                  "token(sizes.effectRowLabel) token(sizes.effectRowField)",
+                alignItems: "center",
+                columnGap: "md",
+                width: "max-content",
+              },
+              // The label is a column of the grid now, so it must not also
+              // stretch to the field's full width the way the stacked one does.
+              "& [data-field] > label": { width: "auto" },
+            },
+            // The remove action spans the panel (Figma 880:1898) — it acts on
+            // the whole effect the rows above describe, so it reads as their
+            // footer rather than as one more control in the column.
+            footer: {
+              display: "flex",
+              paddingTop: "sm",
+              "& > button": { flex: "1 1 0", justifyContent: "center" },
+            },
+          },
+        }),
+
         // The reader's enlarged-image view.
         //
         // The size rule — "natural size, or 85vh/85vw, whichever is smaller" —
@@ -3668,7 +3994,7 @@ export default defineConfig({
           className: "collection-lightbox",
           description:
             "Enlarged collection image — clamped to its natural size or 85% of the viewport, whichever is smaller, with the item's caption beneath.",
-          slots: ["panel", "figure", "image", "caption"],
+          slots: ["panel", "figure", "frame", "backgroundEffect", "image", "caption"],
           base: {
             panel: {
               background: "transparent",
@@ -3701,6 +4027,23 @@ export default defineConfig({
               gap: "md",
               margin: "none",
             },
+            // Wraps the image so the gradient has a box to fill. It cannot fill
+            // the FIGURE — that column also holds the caption, and the ground
+            // would run out behind the text. `flex` (not block) so the wrapper
+            // shrink-wraps whatever size the image's own maxima resolve to.
+            frame: {
+              position: "relative",
+              display: "flex",
+              minWidth: 0,
+              borderRadius: "xxl",
+              overflow: "hidden",
+            },
+            backgroundEffect: {
+              position: "absolute",
+              inset: 0,
+              zIndex: 0,
+              pointerEvents: "none",
+            },
             image: {
               display: "block",
               // BOTH auto, so the two maxima below scale the image on its own
@@ -3718,6 +4061,10 @@ export default defineConfig({
               borderWidth: "token(spacing.3xs)",
               borderStyle: "solid",
               borderColor: "border.divider",
+              // Above the gradient behind it — see the grid's `image` slot for
+              // why a positioned sibling would otherwise win.
+              position: "relative",
+              zIndex: 1,
             },
             caption: {
               maxWidth: "85vw",

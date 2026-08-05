@@ -16,12 +16,20 @@ import {
   inlineEditRow,
 } from "../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
-import { COLLECTION_MAX_ITEMS, type CollectionItem } from "@/domain/nodes";
+import { BackgroundEffectLayer } from "@/components/background-effect";
+import { BackgroundEffectPanel } from "@/components/background-effect-panel";
+import {
+  COLLECTION_MAX_ITEMS,
+  DEFAULT_BACKGROUND_EFFECT,
+  type BackgroundEffect,
+  type CollectionItem,
+} from "@/domain/nodes";
 import { collectionItemAlt } from "@/utils/collection-items";
 import AddIcon from "@/assets/icons/add.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import FeatureIcon from "@/assets/icons/feature.svg";
 import ReplaceIcon from "@/assets/icons/replace.svg";
+import ShaderIcon from "@/assets/icons/shader.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +99,11 @@ export interface CollectionGridProps {
   onAddImage: () => void;
   /** Exchange two slots — dragging one tile onto another. */
   onReorder: (from: number, to: number) => void;
+  /** Sets, retunes or (with `undefined`) clears an image's background effect. */
+  onSetBackgroundEffect: (
+    index: number,
+    effect: BackgroundEffect | undefined,
+  ) => void;
 }
 
 export function CollectionGrid({
@@ -102,6 +115,7 @@ export function CollectionGrid({
   onRemove,
   onAddImage,
   onReorder,
+  onSetBackgroundEffect,
 }: CollectionGridProps) {
   // Keyed on the image, NOT the slot. Featuring an image moves it to another
   // cell and removing one slides its neighbours along, so a stored index would
@@ -112,9 +126,19 @@ export function CollectionGrid({
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // The image whose background-effect panel is open, keyed on `src` for the
+  // same reason the caption editor is: featuring, removing and reordering all
+  // move an image between slots, and a stored index would strand the panel on
+  // whatever took that slot — retuning the wrong picture's gradient.
+  const [effectSrc, setEffectSrc] = useState<string | null>(null);
+
   const editingIndex = editingSrc
     ? items.findIndex((item) => item.src === editingSrc)
     : -1;
+  const effectIndex = effectSrc
+    ? items.findIndex((item) => item.src === effectSrc)
+    : -1;
+  const effectItem = effectIndex === -1 ? null : items[effectIndex];
 
   useEffect(() => {
     if (editingIndex !== -1) inputRef.current?.select();
@@ -128,6 +152,30 @@ export function CollectionGrid({
   function commit(index: number) {
     setEditingSrc(null);
     onEditCaption(index, draft.trim() || undefined);
+  }
+
+  /**
+   * Opens the background-effect panel for a slot — or closes it, if that slot's
+   * panel is the one already open.
+   *
+   * Turning the effect ON is part of opening. The panel edits a gradient, so it
+   * has to have one to edit; asking for an extra click to "add" before anything
+   * appears would make the first interaction a blank form. Reaching for the
+   * button IS the request for an effect, and Remove is the way back.
+   */
+  function toggleEffectPanel(index: number) {
+    const item = items[index];
+    if (effectSrc === item.src) {
+      setEffectSrc(null);
+      return;
+    }
+    // The caption card stands where the toolbar stands; the panel replaces
+    // both. Two editors open on one picture would be two claims on it.
+    setEditingSrc(null);
+    setEffectSrc(item.src);
+    if (!item.backgroundEffect) {
+      onSetBackgroundEffect(index, DEFAULT_BACKGROUND_EFFECT);
+    }
   }
 
   // ---- Reordering -------------------------------------------------------
@@ -198,6 +246,8 @@ export function CollectionGrid({
     originX: number;
     originY: number;
     img: HTMLImageElement;
+    /** The cell being lifted — carries the shader canvas the clone snapshots. */
+    cell: HTMLElement;
     /**
      * The photo's box as it was AT THE PRESS, before the press scaled it.
      *
@@ -249,6 +299,36 @@ export function CollectionGrid({
     node.className = gridStyles.dragPreview;
     node.style.width = `${rect.width}px`;
     node.style.height = `${rect.height}px`;
+    // Carry the background effect with the picture.
+    //
+    // It cannot be cloned: `cloneNode` copies the <canvas> ELEMENT and not its
+    // drawing buffer, so a cloned shader is a blank rectangle. It cannot be
+    // re-rendered either — the preview is imperative DOM parented to the body,
+    // with no React tree to mount a second shader into.
+    //
+    // So it is flattened to a still and painted as the clone's BACKGROUND,
+    // which is exactly the relationship it has in the cell: the photo's own
+    // transparent pixels reveal the gradient behind it. `100% 100%` rather than
+    // `cover` because the canvas and the photo fill the same box, so they map
+    // one to one — and the still then stretches with the clone as it flies into
+    // its new slot.
+    //
+    // Snapshotting a static shader is lossless (there is only ever one frame),
+    // and it happens BEFORE `setDragIndex` marks the cell, while the canvas is
+    // still on screen. Guarded because a readback is the one part of this that
+    // depends on the GPU: a lost context returns nothing, and a photo that
+    // drags without its ground beats a drag that throws.
+    const gradient = held.cell.querySelector<HTMLCanvasElement>(
+      "[data-background-effect] canvas",
+    );
+    if (gradient) {
+      try {
+        node.style.backgroundImage = `url("${gradient.toDataURL()}")`;
+        node.style.backgroundSize = "100% 100%";
+      } catch {
+        // Nothing to carry — the photo travels on its own.
+      }
+    }
     node.style.translate = translateFor(clientX, clientY);
     // The same anchor the in-grid photo was scaling about, so the handover
     // keeps the pixel under the cursor exactly where it was.
@@ -435,6 +515,7 @@ export function CollectionGrid({
   );
 
   return (
+    <>
     <div
       {...rootProps}
       className={gridStyles.root}
@@ -497,6 +578,14 @@ export function CollectionGrid({
             data-drop-target={dropIndex === index ? "" : undefined}
             data-arriving={arrivingIndex === index ? "" : undefined}
             data-landing={landing?.target === index ? "" : undefined}
+            // Stands the overlay down while this cell's properties panel is
+            // open: the panel is the editor for this picture now, and a scrim
+            // blurring the very gradient being tuned would defeat the preview.
+            data-effect-open={effectIndex === index ? "" : undefined}
+            // The panel's CSS anchor (→ `--background-effect-panel` in
+            // globals.css). Set on exactly ONE cell at a time — with two,
+            // anchor resolution silently picks the last in tree order.
+            data-effect-anchor={effectIndex === index ? "" : undefined}
             onPointerDown={(event) => {
               if (event.button !== 0) return;
               // The photo is the handle. A press that lands on the controls
@@ -514,6 +603,7 @@ export function CollectionGrid({
                 originX: event.clientX,
                 originY: event.clientY,
                 img: img as HTMLImageElement,
+                cell: event.currentTarget,
                 rect,
               };
               // Acknowledge the press immediately — before we know whether a
@@ -577,6 +667,15 @@ export function CollectionGrid({
             // scroll, a window losing focus — ends the gesture like any other.
             onPointerCancel={endDrag}
           >
+            {/* Behind the photo, so it shows through wherever the picture is
+                transparent. Before it in the DOM as well as beneath it in the
+                stack — see the recipe's `backgroundEffect` slot. */}
+            {item.backgroundEffect && (
+              <BackgroundEffectLayer
+                effect={item.backgroundEffect}
+                className={gridStyles.backgroundEffect}
+              />
+            )}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={item.src}
@@ -590,6 +689,9 @@ export function CollectionGrid({
               index={index}
               featured={index === 0}
               editing={index === editingIndex}
+              hasEffect={Boolean(item.backgroundEffect)}
+              effectOpen={effectIndex === index}
+              onToggleEffect={() => toggleEffectPanel(index)}
               draft={draft}
               inputRef={inputRef}
               onDraftChange={setDraft}
@@ -614,6 +716,32 @@ export function CollectionGrid({
         ),
       )}
     </div>
+
+    {/* A SIBLING of the grid, not a child of the cell it edits. The grid root
+        carries the editor's showcase-media contract — tabindex and caret key
+        handling — and a panel full of inputs inside it would put every
+        keystroke through that handler. It is `position: fixed` and anchored to
+        the cell, so it takes no space here and needs none. */}
+    {effectItem && (
+      <BackgroundEffectPanel
+        // Remounted per image, so a panel reopened on another picture starts
+        // from that picture's values rather than the previous one's drafts.
+        key={effectItem.src}
+        // Falls back to the defaults rather than waiting for the item to come
+        // back carrying them. Opening the panel already emitted them upwards,
+        // but that is a ROUND TRIP through the parent, and gating the panel on
+        // it made the first click appear to do nothing whenever the parent was
+        // slow to echo — or, for a consumer that only observes, forever.
+        effect={effectItem.backgroundEffect ?? DEFAULT_BACKGROUND_EFFECT}
+        onChange={(effect) => onSetBackgroundEffect(effectIndex, effect)}
+        onRemove={() => {
+          setEffectSrc(null);
+          onSetBackgroundEffect(effectIndex, undefined);
+        }}
+        onDismiss={() => setEffectSrc(null)}
+      />
+    )}
+    </>
   );
 }
 
@@ -625,6 +753,9 @@ interface CellOverlayProps {
   index: number;
   featured: boolean;
   editing: boolean;
+  hasEffect: boolean;
+  effectOpen: boolean;
+  onToggleEffect: () => void;
   draft: string;
   inputRef: Ref<HTMLInputElement>;
   onDraftChange: (value: string) => void;
@@ -640,6 +771,9 @@ function CellOverlay({
   index,
   featured,
   editing,
+  hasEffect,
+  effectOpen,
+  onToggleEffect,
   draft,
   inputRef,
   onDraftChange,
@@ -719,6 +853,18 @@ function CellOverlay({
               onClick={onStartEditing}
             >
               <EditIcon aria-hidden />
+            </OptionList.Option>
+            {/* Pressed while the image HAS an effect, not merely while the
+                panel is open — the button reports the picture's state, and the
+                panel closing does not take the gradient away. (It is also
+                never visible while its own panel is open: the overlay stands
+                down for that cell.) */}
+            <OptionList.Option
+              aria-label="Background effect"
+              pressed={hasEffect || effectOpen}
+              onClick={onToggleEffect}
+            >
+              <ShaderIcon aria-hidden />
             </OptionList.Option>
             <OptionList.Option aria-label="Replace image" onClick={onReplace}>
               <ReplaceIcon aria-hidden />
