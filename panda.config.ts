@@ -3237,13 +3237,30 @@ export default defineConfig({
               // the cell masking them. Raised at the same time, or the next
               // cell in source order paints over the part that now overhangs.
               "&[data-pressed]": { overflow: "visible", zIndex: 1 },
-              "&[data-pressed] > img": {
-                scale: "0.94",
-                // Tilts about the same anchor, so the picture pivots around the
-                // hand rather than swinging past it.
-                rotate: "2deg",
-                transformOrigin: "var(--press-origin, center)",
-              },
+              // The photo AND the ground it sits on. They are siblings rather
+              // than one nested pair — the gradient fills the CELL, so that a
+              // change of crop cannot shift it — which means the press has to
+              // name both or the picture shrinks off its own background and the
+              // artifact appears to lift away from the thing it is standing on.
+              //
+              // The same values, the same anchor, no `transform-box` juggling:
+              // both fill the identical box, so one `--press-origin` (a point
+              // measured inside that box) lands on the same pixel in each and
+              // they scale and turn as one card.
+              //
+              // This is also what the drag clone already does — its background
+              // is a snapshot of this gradient, so the whole clone carries the
+              // press. Missing it here made the two halves of one gesture
+              // disagree: nothing moved until the drag threshold, and then the
+              // gradient snapped into the tilt it should already have been in.
+              "&[data-pressed] > img, &[data-pressed] > [data-background-effect]":
+                {
+                  scale: "0.94",
+                  // Tilts about the same anchor, so the picture pivots around
+                  // the hand rather than swinging past it.
+                  rotate: "2deg",
+                  transformOrigin: "var(--press-origin, center)",
+                },
               borderWidth: "token(spacing.3xs)",
               borderStyle: "solid",
               borderColor: "border.divider",
@@ -3409,10 +3426,20 @@ export default defineConfig({
               position: "absolute",
               inset: 0,
               zIndex: 0,
+              // Its OWN corners, not the cell's clip — a pressed cell sets
+              // `overflow: visible` so the picture can tilt out of its slot,
+              // and anything relying on that clip squares off the moment the
+              // press lands. Same reason the photo carries its radius.
               borderRadius: "inherit",
               // Decoration under the picture — the cell beneath it owns the
               // press that starts a reorder, and the tile above it owns clicks.
               pointerEvents: "none",
+              // Matches the photo's, so the two ease into the press together.
+              // Without it the ground would snap to 0.94 while the picture
+              // standing on it took 100ms to get there.
+              scale: "1",
+              rotate: "0deg",
+              transition: "scale 100ms ease, rotate 100ms ease",
             },
             // The photo that rides the cursor while you reorder — a clone the
             // editor appends to the body and positions itself. This is the
