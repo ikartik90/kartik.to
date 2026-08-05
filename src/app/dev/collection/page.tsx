@@ -9,6 +9,7 @@ import {
   featureItem,
   removeItem,
   setItemCaption,
+  swapItems,
 } from "@/utils/collection-items";
 
 // Six freely-usable photographs at mixed aspect ratios — enough to exercise the
@@ -62,6 +63,7 @@ export default function CollectionPreviewPage() {
         <CollectionGrid
           items={items}
           onFeature={(i) => setItems(featureItem(items, i))}
+          onReorder={(from, to) => setItems(swapItems(items, from, to))}
           onRemove={(i) => setItems(removeItem(items, i))}
           onEditCaption={(i, caption) =>
             setItems(setItemCaption(items, i, caption))

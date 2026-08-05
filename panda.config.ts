@@ -512,6 +512,14 @@ export default defineConfig({
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
         },
+        // The photo displaced by a reorder, appearing in the slot the dragged
+        // one just left. It has no journey to show — it was never picked up —
+        // so it resolves in place rather than sliding in from somewhere it
+        // never was.
+        collectionArrive: {
+          from: { opacity: 0 },
+          to: { opacity: 1 },
+        },
       },
 
       recipes: {
@@ -3161,6 +3169,7 @@ export default defineConfig({
             "cell",
             "tile",
             "image",
+            "dragPreview",
             "surplus",
             "surplusDivider",
             "surplusLabel",
@@ -3171,14 +3180,126 @@ export default defineConfig({
               gap: "lg",
               width: "token(spacing.full)",
               maxWidth: "token(sizes.articleShowcase)",
+              // Reordering is a pointer gesture rather than a native drag, so
+              // the two things a native drag would have handled are stated
+              // here: the cursor for the whole grip, and the selection that a
+              // press-and-sweep across the editor would otherwise start.
+              "&[data-reordering]": { cursor: "grabbing", userSelect: "none" },
             },
             cell: {
               position: "relative",
               overflow: "hidden",
               borderRadius: "xxl",
+              // Editor cells only — the reader's tiles carry `zoom-in` on the
+              // button that opens the lightbox.
+              "&[data-collection-cell]": { cursor: "grab" },
+              // Pressing a photo answers the hand the way pressing a button
+              // does, over the same 100ms as `action`'s `_active` — but at
+              // TWICE its travel: 0.94 against the button's 0.97. A deliberate
+              // divergence, not an oversight. A 40px control only has to twitch
+              // to be felt; a 312px tile moving 3% still reads as sitting
+              // still, because what registers is the shift against the tile's
+              // own size, not the absolute pixels.
+              //
+              // KEEP IN STEP with `dragPreview`'s `&[data-carried]` below — the
+              // clone takes this exact gesture over mid-press, and any gap
+              // between the two shows up as the photo flinching at the moment
+              // the drag begins. The two cannot share a custom property: the
+              // clone is parented to <body>, outside this subtree.
+              //
+              // On POINTER DOWN, not when the drag threshold is crossed: the
+              // grid has to acknowledge the press before it knows whether a
+              // drag is coming, or holding a photo feels like holding nothing.
+              //
+              // Scoped to the direct <img> so it never reaches the controls
+              // laid over it — and a press that LANDS on those controls never
+              // sets this state at all, since the toolbar is not a drag handle.
+              // Scaled ABOUT the point the hand landed on, which the component
+              // supplies as `--press-origin` on the cell. Shrinking about the
+              // centre slides the picture away from the cursor, so the pixel
+              // you pressed is no longer the pixel you are holding; anchoring
+              // there keeps it under the pointer. `center` only as a fallback,
+              // for a state somehow set without a coordinate.
+              // A pressed cell stops clipping, so the picture can tilt out of
+              // its slot instead of being sliced off along the edge it is
+              // turning past. Safe to drop the clip here because the photo
+              // carries the SAME `borderRadius` itself (see the `image` slot),
+              // so the rounded corners are the photo's own and survive without
+              // the cell masking them. Raised at the same time, or the next
+              // cell in source order paints over the part that now overhangs.
+              "&[data-pressed]": { overflow: "visible", zIndex: 1 },
+              "&[data-pressed] > img": {
+                scale: "0.94",
+                // Tilts about the same anchor, so the picture pivots around the
+                // hand rather than swinging past it.
+                rotate: "2deg",
+                transformOrigin: "var(--press-origin, center)",
+              },
               borderWidth: "token(spacing.3xs)",
               borderStyle: "solid",
               borderColor: "border.divider",
+              // No transition anywhere in here on purpose. Reordering is a
+              // direct-manipulation gesture: the slot empties the instant you
+              // lift the photo and is full again the instant you let go, with
+              // nothing easing in behind it. Anything that fades reads as the
+              // grid catching up with you rather than tracking you.
+              // Reordering (editor only). The tile being CARRIED empties out
+              // entirely and leaves a dashed outline of the slot: you are
+              // holding that photo, so the grid should show the hole it came
+              // from rather than a ghost of it still sitting there. Dashed
+              // rather than the solid hairline an occupied tile wears, so a
+              // vacated slot reads as temporary — and 1px rather than the
+              // usual 0.5px, since a half-pixel dash barely renders.
+              "&[data-dragging]": {
+                borderStyle: "dashed",
+                borderWidth: "token(spacing.xxs)",
+                borderColor: "field.border.default",
+                "& > *": { opacity: 0 },
+              },
+              // NOTE: the cell a photo is flying into carries `data-landing`,
+              // but it is NOT styled here and must not be. Hiding its photo for
+              // the length of the flight left a hole to see the page background
+              // through — the very flash this was meant to avoid. The component
+              // keeps that cell showing the photo it held BEFORE the swap
+              // instead, so the slot is never empty and the incoming picture is
+              // never in two places. The attribute is the marker the grid reads
+              // to know a flight is still in the air.
+              //
+              // The other half of a swap. The dragged photo TRAVELS into the
+              // cell you dropped it on, because you carried it there and the
+              // eye should be able to follow it home. The photo it displaced
+              // has no such journey — nobody moved it — so sliding it across
+              // the grid would animate a trip that never happened. It fades up
+              // in the slot instead, in step with the flight landing.
+              // Duration and curve match the flight's `LANDING_MS` /
+              // `LANDING_EASE` in `collection-grid.tsx` — the two halves of a
+              // swap have to come to rest together.
+              "&[data-arriving] > *": {
+                animation: "collectionArrive 280ms ease-out",
+              },
+              // The tile about to RECEIVE it says so twice: a brand wash laid
+              // over the photo, and the accent ring — the same one focus uses,
+              // because both answer "this is the thing you are acting on".
+              //
+              // BOTH live on the pseudo-element, and the ring has to. An inset
+              // box-shadow paints on the cell's own background, which its
+              // <img> child then covers completely — the ring was being drawn
+              // and immediately painted over. A positioned ::after is above
+              // the image, so it can carry the wash and the ring together.
+              // (Also why not `opacity` on the cell: that would drag the ring
+              // down with it, when the point is to veil the OUTGOING photo
+              // while the marker stays at full strength on top of it.)
+              "&[data-drop-target]::after": {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                backgroundColor: "field.bg.active",
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+                // Decoration only — it lies over the whole tile, and the drop
+                // events belong to the cell beneath it.
+                pointerEvents: "none",
+              },
               // The tile that carries the surplus badge turns into its own 2×2
               // grid purely to park the badge in the bottom-right quadrant at
               // quarter size; the photo leaves the flow so the grid positions
@@ -3213,6 +3334,60 @@ export default defineConfig({
               width: "token(spacing.full)",
               height: "token(spacing.full)",
               objectFit: "cover",
+              // Redundant in the grid — the cell already clips to this radius —
+              // but NOT on the clone the editor carries while reordering. That
+              // rides the cursor parented to the body, outside the cell doing
+              // the clipping, so without a radius of its own the thing in hand
+              // would be a hard-cornered rectangle where the design is round.
+              borderRadius: "xxl",
+              // The press feedback the editor's cell drives above. Stated here
+              // because the transition belongs to the thing that moves; the
+              // reader never sets the state, so it costs it nothing.
+              //
+              // `scale` and `rotate` are the INDEPENDENT transform properties,
+              // never `transform` itself — the drag preview writes `translate`
+              // on every pointer move, and a transition covering `transform`
+              // would be a transition on the pointer tracking too.
+              scale: "1",
+              rotate: "0deg",
+              transition: "scale 100ms ease, rotate 100ms ease",
+            },
+            // The photo that rides the cursor while you reorder — a clone the
+            // editor appends to the body and positions itself. This is the
+            // whole reason the gesture is built on pointer events instead of
+            // the drag-and-drop API: a real element keeps its transparent
+            // corners (a native drag bitmap composites onto white) and vanishes
+            // the instant you let go (a native one animates itself home).
+            // `left`/`top` stay at zero and movement goes through `transform`,
+            // so tracking the pointer never touches layout. Size and position
+            // are the only things set inline, because only they are dynamic.
+            dragPreview: {
+              position: "fixed",
+              left: 0,
+              top: 0,
+              zIndex: 60,
+              pointerEvents: "none",
+              objectFit: "cover",
+              borderRadius: "xxl",
+              // Position rides the INDEPENDENT `translate` property, and the
+              // press feedback below rides `scale`, precisely so they do not
+              // share `transform`. A transition on `transform` would be a
+              // transition on the pointer tracking too, and the photo would
+              // swim after the cursor instead of sticking to it.
+              translate: "0 0",
+              // Born already carrying the press, with NO transition to play:
+              // the photo was scaled down on pointer down, back when it was
+              // still in its cell, and the clone takes over mid-press. Easing
+              // it down again here would pop it up to full size first.
+              //
+              // Must equal the cell's `&[data-pressed] > img` scale AND tilt
+              // above — this is the same press, on a second element.
+              "&[data-carried]": { scale: "0.94", rotate: "2deg" },
+              willChange: "translate, scale, rotate",
+              // Lifted off the grid, so it reads as being held rather than
+              // lying in a slot.
+              boxShadow:
+                "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 24%, transparent)",
             },
             surplus: {
               gridColumn: 2,
@@ -3340,17 +3515,17 @@ export default defineConfig({
           slots: ["root", "scrim", "toolbar", "captionCard", "captionField"],
           base: {
             // Carries no opacity of its own — see the note above. It only
-            // positions the two layers and keeps the invisible pill from
-            // swallowing pointer events over the photo (keyboard focus is
-            // unaffected by `pointer-events`, so tabbing in still works).
+            // positions the two layers, and it stays inert THROUGHOUT: the
+            // photo underneath is the drag handle for reordering, so nothing
+            // laid over it may take the press. Only the controls themselves
+            // opt back in, below. (Keyboard focus is unaffected by
+            // `pointer-events`, so tabbing in still works.)
             root: {
               position: "absolute",
               inset: 0,
               display: "grid",
               placeItems: "center",
               pointerEvents: "none",
-              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
-                { pointerEvents: "auto" },
             },
             // The wash AND a light defocus of the photo under it, so the pill
             // is the sharp thing in the cell without the picture beneath it
@@ -3363,6 +3538,16 @@ export default defineConfig({
             scrim: {
               position: "absolute",
               inset: 0,
+              // Its OWN corners, not the cell's clip.
+              //
+              // A pressed cell stops clipping so the photo can tilt out of its
+              // slot, and a scrim that had been relying on that clip for its
+              // rounded corners squares off the instant the press lands —
+              // visible as the wash overflowing the cell's radius for the
+              // moment it takes to fade. Nothing here may depend on being
+              // masked by the cell; the photo carries its radius for the same
+              // reason.
+              borderRadius: "xxl",
               backgroundColor: "bg.imageScrim",
               backdropFilter: "blur(4px)",
               "-webkit-backdrop-filter": "blur(4px)",
@@ -3371,14 +3556,43 @@ export default defineConfig({
               transition: "opacity 150ms ease",
               "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
                 { opacity: 1 },
+              // Down for the whole reorder, and back up once the dropped photo
+              // has landed.
+              //
+              // Stated on the scrim itself rather than on the overlay root for
+              // two reasons: the blur survives (a root below full opacity is a
+              // BACKDROP ROOT, leaving its descendant's `backdrop-filter`
+              // nothing to sample), and it FADES both ways using the transition
+              // this slot already owns instead of snapping.
+              //
+              // The extra `[data-collection-cell]` is specificity, not reach:
+              // without it this ties with the `:hover` rule above and would be
+              // decided by source order alone.
+              //
+              // `transition: none` makes this leave AT ONCE rather than fading:
+              // the press lifts the cell's clip in the same frame so the photo
+              // can tilt out of its slot, and a scrim still dissolving over a
+              // picture that has left is the wrong thing in the wrong place.
+              // Out instantly, back in on the base transition once the state
+              // clears — grabbing is abrupt, letting go is not.
+              "[data-collection-grid][data-reordering] [data-collection-cell] &":
+                { opacity: 0, transition: "none" },
             },
             toolbar: {
               position: "relative",
               zIndex: 1,
               opacity: 0,
               transition: "opacity 150ms ease",
+              // Takes pointer events only once it is actually visible — the
+              // rest of the cell stays a drag handle.
               "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
-                { opacity: 1 },
+                { opacity: 1, pointerEvents: "auto" },
+              // Down for the whole reorder, fading back in once the dropped
+              // photo has landed — see the scrim's note for why it lives here
+              // and why the selector is written this way.
+              // Out at once, back in on the base transition — see the scrim.
+              "[data-collection-grid][data-reordering] [data-collection-cell] &":
+                { opacity: 0, pointerEvents: "none", transition: "none" },
               display: "flex",
               alignItems: "center",
               gap: "sm",
@@ -3405,7 +3619,10 @@ export default defineConfig({
               opacity: 0,
               transition: "opacity 150ms ease",
               "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
-                { opacity: 1 },
+                { opacity: 1, pointerEvents: "auto" },
+              // Out at once, back in on the base transition — see the scrim.
+              "[data-collection-grid][data-reordering] [data-collection-cell] &":
+                { opacity: 0, pointerEvents: "none", transition: "none" },
               display: "flex",
               flexDirection: "column",
               gap: "sm",

@@ -23,19 +23,35 @@ const inRange = (items: readonly CollectionItem[], index: number) =>
   Number.isInteger(index) && index >= 0 && index < items.length;
 
 /**
- * Moves `index` to the front, shifting the items it passes one slot right and
- * leaving everything after it untouched — so featuring an image reorders the
- * collection as little as the "featured image is always first" rule allows.
+ * Exchanges two slots. This is the ONE reordering primitive the grid needs:
+ * dragging a tile onto another swaps the pair, and featuring an image is the
+ * same move with slot 0 as the destination.
+ *
+ * Swapping rather than splice-and-shift is what keeps the grid legible while
+ * you rearrange it — two cells change and every other one stays where your eye
+ * left it, instead of the whole tail sliding along by one.
+ */
+export function swapItems(
+  items: readonly CollectionItem[],
+  a: number,
+  b: number,
+): CollectionItem[] {
+  const next = [...items];
+  if (!inRange(items, a) || !inRange(items, b) || a === b) return next;
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
+}
+
+/**
+ * Makes `index` the featured image by exchanging it with slot 0 — index 0 IS
+ * the featured position, so there is no flag to set, and dropping a tile into
+ * the first cell reaches this same state by the same route.
  */
 export function featureItem(
   items: readonly CollectionItem[],
   index: number,
 ): CollectionItem[] {
-  if (!inRange(items, index)) return [...items];
-  const next = [...items];
-  const [featured] = next.splice(index, 1);
-  next.unshift(featured);
-  return next;
+  return swapItems(items, index, 0);
 }
 
 export function removeItem(
