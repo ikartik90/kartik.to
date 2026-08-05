@@ -81,9 +81,9 @@ export default function ButtonPreviewPage() {
         <p className={introStyle}>
           <code>Button</code> acts, <code>Link</code> navigates — both share the
           one <code>action</code> recipe. Text buttons hug their content with an
-          80px floor and a fixed 40px height; icon buttons match the toolbar
-          chip. Hover an icon button for its cursor tooltip, and tab through to
-          see the keyboard focus rings.
+          80px floor and a fixed 40px height (32px at <code>size=&quot;sm&quot;</code>);
+          icon buttons match the toolbar chip. Hover an icon button for its
+          cursor tooltip, and tab through to see the keyboard focus rings.
         </p>
       </header>
 
@@ -102,6 +102,29 @@ export default function ButtonPreviewPage() {
         </Specimen>
         <Specimen label="disabled">
           <Button disabled>Delete draft</Button>
+        </Specimen>
+      </Section>
+
+      <Section title="Size — md (40px) vs sm (32px)">
+        <Specimen label="md (default)">
+          <Button>Save changes</Button>
+        </Specimen>
+        <Specimen label="sm — 32px, bodySmall, 8px inset">
+          <Button size="sm">Save changes</Button>
+        </Specimen>
+        <Specimen label="sm — leading icon + Button.Text">
+          <Button size="sm">
+            <SaveIcon />
+            <Button.Text>Save changes</Button.Text>
+          </Button>
+        </Specimen>
+        <Specimen label="sm — tertiary, size is orthogonal to emphasis">
+          <Button size="sm" emphasis="tertiary">
+            Save changes
+          </Button>
+        </Specimen>
+        <Specimen label="sm — short, still floored to 80px">
+          <Button size="sm">OK</Button>
         </Specimen>
       </Section>
 
