@@ -157,7 +157,7 @@ export function BackgroundEffectPanel({
         ))}
 
         <div className={styles.footer}>
-          <Button emphasis="tertiary" onClick={onRemove}>
+          <Button emphasis="tertiary" size="sm" onClick={onRemove}>
             <RemoveShaderIcon aria-hidden />
             <Button.Text>Remove Background Effect</Button.Text>
           </Button>

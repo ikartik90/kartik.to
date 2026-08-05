@@ -8,11 +8,12 @@ import {
   useActionTooltip,
   type ActionVariant,
   type ActionEmphasis,
+  type ActionSize,
 } from "./action";
 import { Tooltip } from "./tooltip";
 import { WireframeContent } from "./wireframe";
 
-export type { ActionVariant, ActionEmphasis };
+export type { ActionVariant, ActionEmphasis, ActionSize };
 
 // ---------------------------------------------------------------------------
 // Button — a <button> that ACTS, composed like OptionList.Option: a bare icon
@@ -35,7 +36,8 @@ export type { ActionVariant, ActionEmphasis };
 // The look comes from the shared `action` recipe: a `Button.Text` (or bare
 // string) child ⇒ the 40px/8px `text` chip; an icon alone ⇒ the 28px `icon`
 // chip that matches a toolbar button. Pass `variant` only to override that
-// inference — notably `variant="link"` for the inline underlined affordance.
+// inference — notably `variant="link"` for the inline underlined affordance;
+// `size="sm"` takes that text chip down to 32px / `bodySmall`.
 // The accessible name stays on the button (`aria-label`); the tooltip is
 // decorative. Its sibling twin that navigates is `Link` (link.tsx).
 // ---------------------------------------------------------------------------
@@ -53,12 +55,19 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * buttons.
    */
   emphasis?: ActionEmphasis;
+  /**
+   * The chip's scale, independent of both axes above. `md` (default) is the
+   * 40px `bodyLarge` chip; `sm` is the 32px `bodySmall` one. Applies to the
+   * `text` shape — an icon button is always the toolbar chip.
+   */
+  size?: ActionSize;
 }
 
 function ButtonRoot(
   {
     variant,
     emphasis,
+    size = "md",
     className,
     type = "button",
     children,
@@ -80,7 +89,7 @@ function ButtonRoot(
         ref={ref}
         type={type}
         className={cx(
-          action({ variant: resolvedVariant, emphasis: resolvedEmphasis }),
+          action({ variant: resolvedVariant, emphasis: resolvedEmphasis, size }),
           className,
         )}
         onMouseEnter={(event: MouseEvent<HTMLButtonElement>) => {

@@ -92,6 +92,33 @@ describe("Button", () => {
     });
   });
 
+  describe("size", () => {
+    it("defaults a text button to md (the 40px chip)", () => {
+      render(<Button>Save</Button>);
+      const cls = screen.getByRole("button", { name: "Save" }).className;
+      expect(cls).toContain("size_md");
+      expect(cls).not.toContain("size_sm");
+    });
+
+    it("takes the 32px chip at size=sm", () => {
+      render(<Button size="sm">Save</Button>);
+      const cls = screen.getByRole("button", { name: "Save" }).className;
+      expect(cls).toContain("size_sm");
+      expect(cls).not.toContain("size_md");
+    });
+
+    it("keeps the size independent of emphasis", () => {
+      render(
+        <Button size="sm" emphasis="tertiary">
+          Save
+        </Button>,
+      );
+      const cls = screen.getByRole("button", { name: "Save" }).className;
+      expect(cls).toContain("size_sm");
+      expect(cls).toContain("emphasis_tertiary");
+    });
+  });
+
   describe("Button.Tooltip", () => {
     function iconButton() {
       return (

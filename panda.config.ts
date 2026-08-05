@@ -588,7 +588,7 @@ export default defineConfig({
         action: defineRecipe({
           className: "action",
           description:
-            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature.",
+            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature. `size` is the third axis, and applies to the `text` chip: `md` is the 40px/`bodyLarge` default, `sm` a 32px/`bodySmall` chip on an 8px inline inset (the option row's pitch).",
           base: {
             cursor: "pointer",
             border: "none",
@@ -673,6 +673,15 @@ export default defineConfig({
               secondary: {},
               tertiary: {},
             },
+            // The chip's scale — the third axis, orthogonal to both of the
+            // above. Empty for the same reason `emphasis` is: `md` is what
+            // `text` already draws, and `sm` is applied by the compound below.
+            // Inert for `icon` (one toolbar size) and `link` (inline text that
+            // takes the surrounding line box, not a box of its own).
+            size: {
+              md: {},
+              sm: {},
+            },
           },
           compoundVariants: [
             {
@@ -685,10 +694,27 @@ export default defineConfig({
                 _hover: { backgroundColor: "field.bg.hover" },
               },
             },
+            {
+              variant: "text",
+              size: "sm",
+              // Same override mechanic as the tertiary compound above — atomic
+              // utilities in a later layer beat the `text` variant's own height
+              // and text style.
+              css: {
+                height: "token(spacing.3xl)",
+                // Tightened from the 40px chip's 12px: at 32px the wider inset
+                // reads as a stretched pill rather than a smaller button. The
+                // 8px gap between a leading icon and the label is ALREADY what
+                // `text` sets (`gap: md`) and deliberately does not shrink —
+                // one inset all the way round the content.
+                paddingInline: "md",
+                textStyle: "bodySmall",
+              },
+            },
           ],
-          defaultVariants: { variant: "text", emphasis: "secondary" },
+          defaultVariants: { variant: "text", emphasis: "secondary", size: "md" },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ variant: ["*"], emphasis: ["*"] }],
+          staticCss: [{ variant: ["*"], emphasis: ["*"], size: ["*"] }],
         }),
 
         inlineCode: defineRecipe({

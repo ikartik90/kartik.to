@@ -30,6 +30,14 @@ export type ActionVariant = "text" | "icon" | "link";
  */
 export type ActionEmphasis = "secondary" | "tertiary";
 
+/**
+ * The scale a Button/Link takes — mirrors the recipe's `size`, orthogonal to
+ * both `variant` (the shape) and `emphasis` (the fill). `md` is the 40px chip;
+ * `sm` is the 32px one. Only the `text` shape has two sizes: an icon button is
+ * always the toolbar chip, and a link is inline text.
+ */
+export type ActionSize = "md" | "sm";
+
 export interface ActionTextProps {
   children: ReactNode;
   className?: string;
