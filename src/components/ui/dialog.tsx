@@ -52,7 +52,14 @@ const dialogRecipe = cva({
     // Backdrop — closed/exit state
     "&::backdrop": {
       opacity: 0,
-      backdropFilter: "blur(2px)",
+      // The blur deliberately does NOT live here. Panda's `backdropFilter`
+      // utility emits ONLY the -webkit- form, which Chromium does not
+      // recognise, and the raw `backdrop-filter` key that the config's recipes
+      // use as the workaround is rejected by the stricter typing on this call.
+      // A declaration here would therefore be inert in Chromium while looking
+      // authoritative — the worst of both. It lives in ONE place instead, the
+      // `dialog::backdrop` rule in globals.css, which can write both
+      // spellings. Everything else about the backdrop is fine to state here.
       backgroundColor: "bg.canvas/50",
       transitionProperty: "opacity, display, overlay",
       transitionDuration: "80ms",

@@ -136,11 +136,68 @@ export const HorizontalRuleNodeSchema = z.object({
   type: z.literal("horizontal_rule"),
 });
 
+// ---------------------------------------------------------------------------
+// Background effect — a Paper `StaticMeshGradient` painted BEHIND an image.
+//
+// For screenshots of UI that don't fill their frame: the gradient gives the
+// artifact a ground to sit on instead of dead space. It is `Static`, so it
+// renders one frame and stops — there is no animation to pause and nothing for
+// `prefers-reduced-motion` to object to.
+//
+// Every field carries the shader's own default, so an effect stored by an older
+// build still parses once a parameter is added here — `{}` is a complete,
+// valid effect. Ranges are the shader's documented uniform ranges, not
+// invented: a value outside them is silently clamped by the GPU, which would
+// make the slider lie about what it is doing.
+// ---------------------------------------------------------------------------
+
+/** The shader's own ceiling — `u_colors` is a `vec4[10]`. */
+export const BACKGROUND_EFFECT_MAX_COLORS = 10;
+
+// 8-digit only. The opacity is part of the colour rather than a sibling field,
+// so there is exactly one place a colour's alpha can live and no way for the
+// two to disagree. See `@/utils/color-value`.
+const BackgroundColorSchema = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{8}$/, "Expected an #RRGGBBAA colour");
+
+export const BackgroundEffectSchema = z.object({
+  colors: z
+    .array(BackgroundColorSchema)
+    .min(1)
+    .max(BACKGROUND_EFFECT_MAX_COLORS)
+    .default(["#FFAB6FFF", "#FF4D97FF"]),
+  /** Colour-spot placement seed, not a position — the whole field re-rolls. */
+  positions: z.number().min(0).max(100).default(2),
+  waveX: z.number().min(0).max(1).default(1),
+  waveXShift: z.number().min(0).max(1).default(0.6),
+  waveY: z.number().min(0).max(1).default(1),
+  waveYShift: z.number().min(0).max(1).default(0.21),
+  /** 0 = hard stripes, 0.5 = smooth, 1 = fully gradual. */
+  mixing: z.number().min(0).max(1).default(0.93),
+  grainMixer: z.number().min(0).max(1).default(0),
+  grainOverlay: z.number().min(0).max(1).default(0),
+  scale: z.number().min(0.01).max(4).default(1),
+  rotation: z.number().min(0).max(360).default(270),
+  offsetX: z.number().min(-1).max(1).default(0),
+  offsetY: z.number().min(-1).max(1).default(0),
+});
+
+export type BackgroundEffect = z.infer<typeof BackgroundEffectSchema>;
+
+/** What a freshly enabled effect starts as — the shader's defaults, brand-coloured. */
+export const DEFAULT_BACKGROUND_EFFECT: BackgroundEffect =
+  BackgroundEffectSchema.parse({});
+
 export const ImageNodeSchema = z.object({
   type: z.literal("image"),
   src: z.string(),
   alt: z.string().optional(),
   caption: z.string().optional(),
+  // Absent means no effect; there is no `false`. Lives on the IMAGE node rather
+  // than on the collection item so a standalone image block inherits it for
+  // free — `CollectionItemSchema` is this schema minus its discriminant.
+  backgroundEffect: BackgroundEffectSchema.optional(),
 });
 
 // A set of related images authored as ONE block. The editor exposes exactly

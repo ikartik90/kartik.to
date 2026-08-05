@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { COLLECTION_MAX_ITEMS, type CollectionItem } from "@/domain/nodes";
+import {
+  COLLECTION_MAX_ITEMS,
+  DEFAULT_BACKGROUND_EFFECT,
+  type CollectionItem,
+} from "@/domain/nodes";
 import {
   appendItems,
   collectionItemAlt,
@@ -8,6 +12,7 @@ import {
   featureItem,
   removeItem,
   replaceItem,
+  setItemBackgroundEffect,
   setItemCaption,
   swapItems,
 } from "../collection-items";
@@ -242,5 +247,62 @@ describe("collectionLayout", () => {
 
   it("treats an empty reader collection as a single tile", () => {
     expect(collectionLayout(0, "reader")).toBe("single");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setItemBackgroundEffect
+// ---------------------------------------------------------------------------
+
+describe("setItemBackgroundEffect", () => {
+  it("attaches an effect to the addressed slot only", () => {
+    const next = setItemBackgroundEffect(
+      items("a", "b"),
+      1,
+      DEFAULT_BACKGROUND_EFFECT,
+    );
+    expect(next[0].backgroundEffect).toBeUndefined();
+    expect(next[1].backgroundEffect).toEqual(DEFAULT_BACKGROUND_EFFECT);
+  });
+
+  it("replaces an existing effect rather than merging into it", () => {
+    const seeded = setItemBackgroundEffect(
+      items("a"),
+      0,
+      DEFAULT_BACKGROUND_EFFECT,
+    );
+    const next = setItemBackgroundEffect(seeded, 0, {
+      ...DEFAULT_BACKGROUND_EFFECT,
+      rotation: 90,
+    });
+    expect(next[0].backgroundEffect?.rotation).toBe(90);
+  });
+
+  it("drops the KEY entirely when cleared, not just its value", () => {
+    const seeded = setItemBackgroundEffect(
+      items("a"),
+      0,
+      DEFAULT_BACKGROUND_EFFECT,
+    );
+    const cleared = setItemBackgroundEffect(seeded, 0, undefined);
+    expect("backgroundEffect" in cleared[0]).toBe(false);
+  });
+
+  it("leaves the rest of the item alone", () => {
+    const list: CollectionItem[] = [{ src: "a", alt: "A", caption: "C" }];
+    const next = setItemBackgroundEffect(list, 0, DEFAULT_BACKGROUND_EFFECT);
+    expect(next[0]).toMatchObject({ src: "a", alt: "A", caption: "C" });
+  });
+
+  it("is a no-op for an index outside the collection", () => {
+    const list = items("a", "b");
+    expect(setItemBackgroundEffect(list, 5, DEFAULT_BACKGROUND_EFFECT)).toEqual(list);
+    expect(setItemBackgroundEffect(list, -1, DEFAULT_BACKGROUND_EFFECT)).toEqual(list);
+  });
+
+  it("never mutates the array it is given", () => {
+    const list = items("a");
+    setItemBackgroundEffect(list, 0, DEFAULT_BACKGROUND_EFFECT);
+    expect(list[0].backgroundEffect).toBeUndefined();
   });
 });

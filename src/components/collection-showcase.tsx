@@ -5,6 +5,7 @@ import {
   collectionGrid,
   collectionLightbox,
 } from "../../styled-system/recipes";
+import { BackgroundEffectLayer } from "@/components/background-effect";
 import { Dialog } from "@/components/ui/dialog";
 import { Typography } from "@/components/ui/typography";
 import type { CollectionItem } from "@/domain/nodes";
@@ -58,6 +59,15 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
               className={styles.cell}
               data-surplus={carriesSurplus ? "" : undefined}
             >
+              {/* Sibling of the tile button, not a child of it: the gradient
+                  fills the CELL, and the tile is only the photo's hit target —
+                  in a surplus cell that button is inset to a quadrant. */}
+              {item.backgroundEffect && (
+                <BackgroundEffectLayer
+                  effect={item.backgroundEffect}
+                  className={styles.backgroundEffect}
+                />
+              )}
               <button
                 type="button"
                 data-collection-tile=""
@@ -179,6 +189,16 @@ function CollectionLightbox({
           so its open state can be driven rather than remounted. */}
       {item && index !== null && (
         <figure className={lightboxStyles.figure}>
+          {/* The frame shrink-wraps the image so the gradient has a box to
+              fill. It cannot fill the figure — that column also holds the
+              caption, and the ground would run on behind the text. */}
+          <div className={lightboxStyles.frame}>
+          {item.backgroundEffect && (
+            <BackgroundEffectLayer
+              effect={item.backgroundEffect}
+              className={lightboxStyles.backgroundEffect}
+            />
+          )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             // Keyed so stepping swaps the element rather than mutating one —
@@ -204,6 +224,7 @@ function CollectionLightbox({
               setMeasured({ index, width: event.currentTarget.naturalWidth })
             }
           />
+          </div>
           {item.caption && (
             <Typography
               tag="figcaption"

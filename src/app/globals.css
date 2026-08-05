@@ -138,8 +138,8 @@ body {
   }
 
   dialog::backdrop {
-    -webkit-backdrop-filter: blur(2px);
-    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(var(--spacing-md));
+    backdrop-filter: blur(var(--spacing-md));
   }
 
   [data-site-header] {
@@ -265,6 +265,15 @@ body {
      instead carry their `anchor-name` inline via Popover's `anchorName` prop. */
   [data-slash-anchor] {
     anchor-name: --slash-menu;
+  }
+
+  /* Background-effect panel anchor — see the backgroundEffectPanel recipe. Set
+     on the collection cell being edited, and only while its panel is open, so
+     exactly one element ever carries the name (as the date popover does). With
+     two, anchor resolution would silently pick the last in tree order and the
+     panel would open beside the wrong picture. */
+  [data-effect-anchor] {
+    anchor-name: --background-effect-panel;
   }
 
   /* Sidenote rail — an invisible, out-of-flow box spanning the text-content
