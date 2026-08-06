@@ -26,6 +26,7 @@ import {
   type BackgroundEffect,
   type CollectionItem,
 } from "@/domain/nodes";
+import { useImageTransparency } from "@/hooks/use-image-transparency";
 import { collectionItemAlt } from "@/utils/collection-items";
 import AddIcon from "@/assets/icons/add.svg";
 import FeatureIcon from "@/assets/icons/feature.svg";
@@ -63,24 +64,104 @@ const DRAG_THRESHOLD = 4;
  * two halves of a swap settle together. Kept in step with the
  * `collectionArrive` keyframe's duration in `panda.config.ts`.
  *
- * Not shorter. At 150ms this covered nine frames, the first of which already
- * crossed a third of the distance — no easing is legible in that, however
- * strongly the curve decelerates, and the move reads as a snap.
+ * THIS is the snappiness knob, not the curve. The travel's spring
+ * (`LANDING_TRANSLATE_EASE_X`) is written in percentages, so this number alone
+ * decides whether its overshoot is a flick or a wobble — and at 280ms it was a
+ * wobble. The source spring resolves inside the first 35% of its own length, so
+ * running the rescaled form over 280ms stretched the bounce 2.86× against what
+ * the curve describes — at 96ms it was only just reaching the top of its
+ * overshoot, where it now has one behind it and is nearly at rest.
+ *
+ * It also lands the release exactly on top of the press. The cell's photo
+ * scales under a finger over `100ms ease` (see the `image` slot in
+ * `panda.config.ts`), so letting go over the same 100ms makes the two halves of
+ * the same gesture symmetrical rather than merely similar.
+ *
+ * The note this replaces said "not shorter than 280ms", on the grounds that a
+ * DECELERATE curve has nothing legible left after its first few frames. A
+ * spring is not subject to that: what carries it is an overshoot, which is a
+ * change of direction and reads in two frames where a slowing-down needs many.
  */
-const LANDING_MS = 280;
+const LANDING_MS = 100;
 
 /**
- * Plain `ease-out`: leaves at speed, because the photo was already moving with
- * the pointer and stopping dead to start again would read as a second, separate
- * animation, then decelerates evenly into the slot.
+ * Everything about the landing EXCEPT the travel: the press letting go, and the
+ * box resizing into the slot it is joining. Plain `ease-out`, the easing the
+ * rest of the system's transitions use — these are settling gestures with
+ * nowhere to overshoot to.
  *
  * Deliberately not one of the aggressive decelerate curves. Measured over this
  * distance, `cubic-bezier(0.05, 0.7, 0.1, 1)` put 62% of the travel in the
  * first 10% of the time and 95% in the first half — which reads as a snap
  * followed by an imperceptible crawl, i.e. less legible than the gentler curve,
- * not more. This is also the easing the rest of the system's transitions use.
+ * not more.
  */
 const LANDING_EASE = "ease-out";
+
+/**
+ * The curve the dropped photo TRAVELS on horizontally — `translate`, and
+ * nothing else. Its vertical twin is `LANDING_TRANSLATE_EASE_Y`, and the two
+ * differing is what bends the drop into an arc rather than a straight line.
+ *
+ * A spring: it crosses nine tenths of the distance in the first fifth of the
+ * time, overshoots the slot by 12%, and settles back through one small
+ * undershoot. That overshoot is what exempts it from the objection recorded on
+ * `LANDING_EASE` above, rather than contradicting it. A front-loaded DECELERATE
+ * curve is illegible because everything after the first few frames is an
+ * imperceptible crawl towards a target it has effectively already reached; a
+ * spring spends those same frames moving VISIBLY, in the other direction.
+ * Snappy and legible are the same mechanism here, not a trade between them.
+ *
+ * `translate` ALONE, in an animation of its own, because past 1 this curve
+ * means "further than the target". On position that is a photo sliding a little
+ * past its slot and coming back. On `width`/`height` it would be a card
+ * swelling bigger than the slot it is landing in, and on `boxShadow` it is not
+ * even meaningful — there is nothing past `none`.
+ *
+ * The stops are the source curve's, rescaled by 1/0.35. The source is flat at 1
+ * from 35% to 100%, and the flight is what tells the grid to COMMIT the swap
+ * (see `settleInto`) — so carrying that tail would put a third of a second of
+ * dead time between the photo touching down and the photo it displaced fading
+ * up in the slot it vacated. Rescaled, the flight ends when the motion does.
+ *
+ *   source: linear(0, 0.029 0.8%, 0.13 1.8%, 0.908 7.2%, 1.051 9.1%,
+ *                  1.112 11.2%, 1.116 12.2%, 1.106 13.4%, 1.007 19.5%,
+ *                  0.987 23.1%, 1.001 35%, 1)
+ *
+ * Measured against `LANDING_MS`: the photo is on its slot at 24ms, 11% past it
+ * at 36ms, back through it by 60ms and still by 100ms. That is the source curve
+ * run verbatim over 280ms, give or take the 2ms of rounding 98 up to 100.
+ *
+ * The rescale is a change of units, never of motion — `rescaled @ D` and
+ * `source @ D/0.35` are the same animation — so this curve and `LANDING_MS` are
+ * ONE setting in two halves. Retime at `LANDING_MS`, never here.
+ */
+const LANDING_TRANSLATE_EASE_X =
+  "linear(0, 0.029 2.29%, 0.13 5.14%, 0.908 20.57%, 1.051 26%, 1.112 32%, 1.116 34.86%, 1.106 38.29%, 1.007 55.71%, 0.987 66%, 1)";
+
+/**
+ * The vertical half of the travel, and it LEADS. This curve puts 62% of the
+ * descent into the first tenth of the flight, where the spring has managed
+ * 38% — and that mismatch IS the curve in the path: the photo falls towards
+ * its row before it has finished crossing to it, so it arcs instead of running
+ * the diagonal. Measured against the spring: vertical is up to 32% ahead
+ * through the first sixth, the two cross at ~17%, and the horizontal then
+ * overtakes and overshoots. As motion, it drops in, swings across, and settles
+ * back.
+ *
+ * The pairing is chosen, not inherited. Plain `ease-out` is far too slow off
+ * the line here — the same gap peaks at 66% and the other way about, so the
+ * photo travels most of the way ACROSS before it has meaningfully begun to
+ * descend, which stops reading as a curve and starts reading as an L. This one
+ * front-loads hard enough to stay a bow.
+ *
+ * And the SPRING is the horizontal one, deliberately. The overshoot has to go
+ * somewhere, and vertically there is nowhere for it to go: the grid is two rows
+ * inside a prose column, so a photo dropped in the top row would swing up over
+ * the heading and back. Across, the overshoot spends itself over the grid's own
+ * cells. Swapping which axis springs is these two constants trading places.
+ */
+const LANDING_TRANSLATE_EASE_Y = "cubic-bezier(0.05, 0.7, 0.1, 1)";
 
 export interface CollectionGridProps {
   items: CollectionItem[];
@@ -131,6 +212,14 @@ export function CollectionGrid({
     ? items.findIndex((item) => item.src === propertiesSrc)
     : -1;
   const propertiesItem = propertiesIndex === -1 ? null : items[propertiesIndex];
+
+  // Which of these pictures you can see through. A transparent screenshot with
+  // no gradient behind it is standing on the page, and on a dark theme a dark
+  // screenshot exported on a transparent canvas simply is not there — nothing
+  // on screen distinguishes "the picture has no background" from "the slot is
+  // empty" or "the upload failed". The checkerboard is what says it, in the
+  // vocabulary every image editor already uses for it.
+  const transparentSrcs = useImageTransparency(items.map((item) => item.src));
 
   /**
    * Opens the properties panel for a slot — or closes it, if that slot's panel
@@ -189,6 +278,29 @@ export function CollectionGrid({
   } | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  /**
+   * The pointer is sitting where a drag left it, and has not been moved since.
+   *
+   * A drag ends with the cursor over the photo you dropped — necessarily, that
+   * is what dropping it there means. `:hover` cannot tell that apart from
+   * reaching for the picture, so without this the controls come up the instant
+   * you let go, as an answer to a question nobody asked. The cursor's position
+   * is DESCRIBING the gesture that just finished, not requesting anything.
+   *
+   * So the overlay stays down until the pointer moves — and moving it is the
+   * whole ask, not travelling any particular distance. Cleared by the keyboard
+   * too, since the suppression is blunt enough to hide a toolbar you had tabbed
+   * into.
+   */
+  const [pointerIdle, setPointerIdle] = useState(false);
+  /**
+   * Where it came to rest, so a `pointermove` dispatched at the position the
+   * pointer already occupies — which is a move in name only — does not count as
+   * one. Written from `lastPoint` rather than from an event, so the three ways a
+   * drag can end (release, cancel, Escape) all arm this the same way.
+   */
+  const restPoint = useRef<{ x: number; y: number } | null>(null);
+  const lastPoint = useRef({ x: 0, y: 0 });
   // The slot a swap has just filled — the one the dragged photo left behind.
   const [arrivingIndex, setArrivingIndex] = useState<number | null>(null);
   const arriveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -325,6 +437,7 @@ export function CollectionGrid({
   };
 
   const moveDrag = (clientX: number, clientY: number) => {
+    lastPoint.current = { x: clientX, y: clientY };
     if (preview.current) {
       preview.current.style.translate = translateFor(clientX, clientY);
     }
@@ -371,17 +484,53 @@ export function CollectionGrid({
     settling.current?.remove();
     settling.current = node;
     setLanding({ target, cover, vacated });
-    const flight = node.animate(
+
+    // Read BEFORE either animation starts — once one is running with
+    // `fill: forwards`, the computed values are the animation's own.
+    const held = getComputedStyle(node);
+    const from = {
+      translate: node.style.translate,
+      scale: held.scale || "1",
+      rotate: held.rotate || "0deg",
+    };
+
+    // THREE animations over the same 280ms — two for the travel, one axis
+    // each, and one for everything that merely settles (the press releasing,
+    // the box resizing into its new slot).
+    //
+    // The travel is split because `translate` is ONE property taking two
+    // values, so a single animation can only ease both axes identically, which
+    // is a straight line by construction. `composite: "add"` is what gets round
+    // that: each animation contributes a DELTA that is summed onto the
+    // underlying inline `translate` the drag left behind, rather than replacing
+    // it, so `base + dx·easeX(t) + dy·easeY(t)` is a curve whenever the two
+    // easings disagree. (Same trick, different lever, as the disjoint property
+    // sets that let the settle below carry its own easing.)
+    //
+    // Deltas, therefore, not destinations: the keyframes are what to ADD, and
+    // the photo's current position is the base they add to.
+    const [fromX, fromY] = from.translate
+      .split(" ")
+      .map((value) => parseFloat(value) || 0);
+    const travel = (dx: number, dy: number, easing: string) =>
+      node.animate([{ translate: "0px 0px" }, { translate: `${dx}px ${dy}px` }], {
+        duration: LANDING_MS,
+        easing,
+        fill: "forwards",
+        composite: "add",
+      });
+
+    const flight = travel(to.left - fromX, 0, LANDING_TRANSLATE_EASE_X);
+    travel(0, to.top - fromY, LANDING_TRANSLATE_EASE_Y);
+    node.animate(
       [
         {
-          translate: node.style.translate,
-          scale: getComputedStyle(node).scale || "1",
-          rotate: getComputedStyle(node).rotate || "0deg",
+          scale: from.scale,
+          rotate: from.rotate,
           width: node.style.width,
           height: node.style.height,
         },
         {
-          translate: `${to.left}px ${to.top}px`,
           // Released, so the press feedback lets go as it settles — it has to
           // land at full size and square to sit flush with the photo already
           // in the slot.
@@ -452,6 +601,14 @@ export function CollectionGrid({
   // `pointercancel` both land here, so a press that never became a drag still
   // lets the photo back up to full size.
   const endDrag = () => {
+    // Only a gesture that actually TRAVELLED parks the cursor somewhere it was
+    // not put deliberately. A press that never became a drag leaves it exactly
+    // where the hand placed it, so the hover it is sitting in is the one it
+    // asked for and must not be taken away.
+    if (dragIndexRef.current !== null) {
+      restPoint.current = { ...lastPoint.current };
+      setPointerIdle(true);
+    }
     pending.current = null;
     dragIndexRef.current = null;
     preview.current?.remove();
@@ -472,6 +629,31 @@ export function CollectionGrid({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [dragIndex]);
+
+  // Waiting to be asked for. Bound only while the overlay is actually being
+  // held down, so the ordinary case pays for no document listeners at all.
+  //
+  // On the DOCUMENT rather than the grid: leaving the grid entirely is a move
+  // like any other, and the next thing that should happen is the overlay
+  // behaving normally — not staying suppressed until the pointer wanders back.
+  useEffect(() => {
+    if (!pointerIdle) return;
+    const wake = () => setPointerIdle(false);
+    const onPointerMove = (event: PointerEvent) => {
+      const rest = restPoint.current;
+      if (rest && event.clientX === rest.x && event.clientY === rest.y) return;
+      wake();
+    };
+    document.addEventListener("pointermove", onPointerMove);
+    // Focus is discrete, so React flushes this synchronously and the overlay is
+    // up in the same frame the toolbar takes focus — no frame of a focused
+    // control nobody can see.
+    document.addEventListener("focusin", wake);
+    return () => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("focusin", wake);
+    };
+  }, [pointerIdle]);
 
   // Unmounting mid-gesture (an undo that drops the block, say) must not leave a
   // photo parented to the body — whether it is still in hand or mid-flight.
@@ -506,16 +688,23 @@ export function CollectionGrid({
       // is only ever set for a press that landed on the picture — one that
       // lands on the toolbar is a press on the toolbar, and leaves it alone.
       //
-      // And it ends AT THE RELEASE, not when the photo finishes travelling.
-      // Deliberately: the blur then has the whole flight to come up, so it is
-      // already on the cell when the photo touches down. Holding it until the
-      // landing instead put the two in the wrong order — the photo arrived
-      // bare and the blur washed over it a beat later, which reads as a glitch
-      // on the thing you just dropped. The clone flies over the restored
-      // overlay and lands beneath it, which is where it belongs anyway.
+      // And it ends AT THE RELEASE, not when the photo finishes travelling —
+      // but what comes back at the release is only the RIGHT to be hovered.
+      // `data-pointer-idle` below then holds the overlay down until the pointer
+      // is moved, so in practice nothing washes over a photo mid-flight unless
+      // the hand is already reaching for it.
+      //
+      // (This used to be the whole story, on the reasoning that releasing early
+      // gave the blur the length of the flight to fade up, so it was on the
+      // cell as the photo touched down. That was answering "when may the
+      // overlay return?" with a time, when the honest answer is a gesture.)
       data-reordering={
         pressed !== null || dragIndex !== null ? "" : undefined
       }
+      // The cursor is where the drag left it and has not moved since, so
+      // nothing has been asked for — see `pointerIdle`. Stands the overlay down
+      // over whichever cell it happens to be sitting on.
+      data-pointer-idle={pointerIdle ? "" : undefined}
     >
       {slots.map((item, index) =>
         item ? (
@@ -656,6 +845,17 @@ export function CollectionGrid({
               src={item.src}
               alt={collectionItemAlt(item)}
               className={gridStyles.image}
+              // The checkerboard, which is the photo's OWN background rather
+              // than a layer behind it — see the recipe's `image` slot. So it
+              // is the exclusive alternative to a gradient and not a companion
+              // to one: a background box paints over any sibling behind it, and
+              // a picture that has been given a ground does not need one
+              // offered.
+              data-checkered={
+                !item.backgroundEffect && transparentSrcs.has(item.src)
+                  ? ""
+                  : undefined
+              }
               // Images are draggable by default, and that native drag would
               // hijack the pointer gesture with the very bitmap this avoids.
               draggable={false}
