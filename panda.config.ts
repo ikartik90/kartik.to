@@ -115,11 +115,18 @@ export default defineConfig({
           sidenoteStackedInset: { value: "80px" },
           sidenoteMinWidth: { value: "320px" },
           sidenoteMaxWidth: { value: "480px" },
-          // Background-effect panel geometry (Figma 845:7223). The panel width
-          // is DERIVED from the row — label + gap + field + the panel's own
-          // inset — so the three can never drift out of agreement.
-          effectRowLabel: { value: "80px" },
-          effectRowField: { value: "220px" },
+          // Properties-panel geometry (Figma 845:7223). A control row is
+          // label ∣ field, and the panel's WIDTH is derived from it below —
+          // one row, one panel, so the two can never drift out of agreement.
+          propertyRowLabel: { value: "80px" },
+          propertyRowField: { value: "220px" },
+          // 12 + 80 + 8 + 220 + 12 — the row plus the control panel's own
+          // inset on both sides. Written out rather than hard-coded at 332px
+          // so widening a field widens the panel with it.
+          propertiesPanelWidth: {
+            value:
+              "calc({sizes.propertyRowLabel} + {sizes.propertyRowField} + {spacing.md} + 2 * {spacing.lg})",
+          },
           // The opacity readout, matching the slider's numeric output so the
           // two field types line up down the right edge of the panel.
           effectColorOpacity: { value: "60px" },
@@ -527,6 +534,26 @@ export default defineConfig({
         collectionArrive: {
           from: { opacity: 0 },
           to: { opacity: 1 },
+        },
+        // The properties panel arriving from the edge it is docked to. It
+        // travels by its OWN width (`100%`, not a viewport unit), so the panel
+        // starts exactly off-screen whatever it happens to be that wide — and
+        // `translate` rather than `transform` leaves the transform property
+        // free for anything the panel's contents want to do.
+        //
+        // Opacity rides along so the shadow doesn't sweep across the page
+        // ahead of the panel; the global `prefers-reduced-motion` reset in
+        // globals.css collapses the whole thing to a cut.
+        propertiesPanelIn: {
+          from: { translate: "100% 0", opacity: 0 },
+          to: { translate: "0 0", opacity: 1 },
+        },
+        // ...and leaving the same way it came. A panel that slides in and then
+        // simply vanishes reads as two different objects; the return journey
+        // is what makes the edge it went back to legible.
+        propertiesPanelOut: {
+          from: { translate: "0 0", opacity: 1 },
+          to: { translate: "100% 0", opacity: 0 },
         },
       },
 
@@ -3623,11 +3650,21 @@ export default defineConfig({
         // one. Only the chrome is shared, and Figma drops even the hairline and
         // the drop shadow here: the scrim already separates the pill from the
         // photo, so elevation would be doing a job that is already done.
+        // The cell whose properties panel is open is NOT a special case here,
+        // deliberately. Standing the scrim down for it — so the gradient being
+        // tuned is not blurred behind a wash — left the toolbar floating on a
+        // bare photo, which reads as the overlay half-drawn; pinning both up
+        // instead means editing a gradient you can only see through a blur.
+        // Leaving the whole overlay on hover resolves both: while you are
+        // actually working in the panel the pointer is over THERE and the cell
+        // is unwashed, and when you come back to the cell you get the same
+        // complete overlay every other cell gives you, with the properties
+        // button lit.
         collectionCellOverlay: defineSlotRecipe({
           className: "collection-cell-overlay",
           description:
-            "Hover/focus-revealed scrim and control pill over a filled collection cell in the editor (Figma 828:6838 light / 828:6548 dark). The caption editor takes the pill's place as a sidenote-style card.",
-          slots: ["root", "scrim", "toolbar", "captionCard", "captionField"],
+            "Hover/focus-revealed scrim and control pill over a filled collection cell in the editor (Figma 828:6697 dark / 828:6838 light). Everything the pill cannot say in five buttons — caption, background — is edited in the docked `propertiesPanel`, which stands the whole overlay down while it is open.",
+          slots: ["root", "scrim", "toolbar"],
           base: {
             // Carries no opacity of its own — see the note above. It only
             // positions the two layers, and it stays inert THROUGHOUT: the
@@ -3716,17 +3753,6 @@ export default defineConfig({
               "[data-collection-cell][data-landing] &": {
                 transition: "opacity 280ms ease-out",
               },
-              // Out entirely while this cell's background-effect panel is open.
-              // The panel IS the editor for that picture now, and the scrim
-              // blurs the very gradient the panel is tuning — you would be
-              // adjusting a preview you cannot see. No transition: the swap
-              // between the two editors should read as one taking over from
-              // the other, not as a crossfade.
-              "[data-collection-cell][data-effect-open] &": {
-                opacity: 0,
-                pointerEvents: "none",
-                transition: "none",
-              },
             },
             toolbar: {
               position: "relative",
@@ -3747,17 +3773,6 @@ export default defineConfig({
               "[data-collection-cell][data-landing] &": {
                 transition: "opacity 280ms ease-out",
               },
-              // Out entirely while this cell's background-effect panel is open.
-              // The panel IS the editor for that picture now, and the scrim
-              // blurs the very gradient the panel is tuning — you would be
-              // adjusting a preview you cannot see. No transition: the swap
-              // between the two editors should read as one taking over from
-              // the other, not as a crossfade.
-              "[data-collection-cell][data-effect-open] &": {
-                opacity: 0,
-                pointerEvents: "none",
-                transition: "none",
-              },
               display: "flex",
               alignItems: "center",
               gap: "sm",
@@ -3768,71 +3783,6 @@ export default defineConfig({
               overflow: "hidden",
               width: "max-content",
               maxWidth: "calc(100% - token(spacing.lg) * 2)",
-            },
-            // The caption editor takes the toolbar's PLACE but not its shape:
-            // it is a margin note for the picture, so it wears the sidenote
-            // card's clothes — the same column of body text over an "Esc to
-            // exit" hint, on the same surface at the same 8px inset — rather
-            // than the 40px control pill the buttons live in. The chrome is
-            // restated rather than reusing `sidenoteCard`, which is
-            // `position: fixed` with CSS anchor positioning and its own
-            // reveal; only the surface is shared, exactly as with
-            // `selectionPopover` above.
-            captionCard: {
-              position: "relative",
-              zIndex: 1,
-              opacity: 0,
-              transition: "opacity 150ms ease",
-              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
-                { opacity: 1, pointerEvents: "auto" },
-              // Out at once, back in when the state clears — see the scrim.
-              "[data-collection-grid][data-reordering] [data-collection-cell] &":
-                { opacity: 0, pointerEvents: "none", transition: "none" },
-              // Paced to the flight in the cell being landed in — see the scrim.
-              "[data-collection-cell][data-landing] &": {
-                transition: "opacity 280ms ease-out",
-              },
-              // Out entirely while this cell's background-effect panel is open.
-              // The panel IS the editor for that picture now, and the scrim
-              // blurs the very gradient the panel is tuning — you would be
-              // adjusting a preview you cannot see. No transition: the swap
-              // between the two editors should read as one taking over from
-              // the other, not as a crossfade.
-              "[data-collection-cell][data-effect-open] &": {
-                opacity: 0,
-                pointerEvents: "none",
-                transition: "none",
-              },
-              display: "flex",
-              flexDirection: "column",
-              gap: "sm",
-              padding: "md",
-              borderRadius: "md",
-              borderWidth: "token(spacing.3xs)",
-              borderStyle: "solid",
-              borderColor: "border.divider",
-              backgroundColor: "bg.surface",
-              boxShadow:
-                "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
-              color: "text.default",
-              width: "calc(100% - token(spacing.lg) * 2)",
-              maxWidth: "token(sizes.sidenoteMaxWidth)",
-            },
-            // A one-line caption, so a real <input> rather than the sidenote's
-            // contentEditable body (which exists only because a note can hold
-            // several paragraphs) — same type, same caret, same placeholder
-            // wash, no focus ring of its own since the card is the focus.
-            captionField: {
-              width: "token(spacing.full)",
-              minWidth: 0,
-              background: "transparent",
-              border: "none",
-              padding: "none",
-              textStyle: "sidenote",
-              color: "text.default",
-              caretColor: "text.default",
-              focusVisibleRing: "none",
-              _placeholder: { color: "text.default/40" },
             },
           },
         }),
@@ -3914,78 +3864,90 @@ export default defineConfig({
         // overflow against the viewport, and against a containing block taller
         // than the viewport there is always "room", so the flip never fires.
         // `flip-inline` is what puts the panel on a right-column cell's left.
-        backgroundEffectPanel: defineSlotRecipe({
-          className: "background-effect-panel",
+        // The properties panel — a docked inspector for whatever is being
+        // edited (Figma 845:7223).
+        //
+        // Docked to the viewport's right edge rather than anchored beside its
+        // subject, which is what the background-effect panel it replaces did.
+        // At fifteen rows that panel already stood taller than the cell it
+        // pointed at, so "beside" degenerated into "shifted up until it fits"
+        // and the relationship it was buying stopped reading. A docked panel
+        // makes no such promise: it is always in the same place, and it can
+        // grow to hold anything without ever choosing between fitting on
+        // screen and pointing at its subject.
+        //
+        // The whole thing is one shape nested three deep — a 40px header strip
+        // over a body: the panel (header ∣ sections), each section (header ∣
+        // control panel), and the rows inside that. Only the SECTIONS scroll,
+        // never the panel, so the title stays put however much is open below
+        // it.
+        propertiesPanel: defineSlotRecipe({
+          className: "properties-panel",
           description:
-            "Static-mesh-gradient properties panel for a collection image — anchored beside the cell being edited via CSS anchor(), flipping to its other side when there is no room. A dialog header over a column of label ∣ field rows, closing with a full-width remove action (Figma 845:7223).",
-          slots: ["root", "header", "title", "body", "footer"],
+            "Docked properties inspector — full viewport height at the right edge, sliding in from it. A fixed header over a scrolling column of sections, each a header strip whose add/remove button mounts and unmounts its control panel (Figma 845:7223).",
+          slots: [
+            "root",
+            "header",
+            "title",
+            "section",
+            "sectionHeader",
+            "sectionTitle",
+            "controlPanel",
+            "text",
+            // Last, so its `animation` overrides `root`'s: the two are both
+            // single classes on the same element, and the tie is broken by the
+            // order Panda emits the slots in — which is this order.
+            "exiting",
+          ],
           base: {
             root: {
               position: "fixed",
               zIndex: 50,
-              positionAnchor: "--background-effect-panel",
-              // Beside the cell, top edges aligned — the panel is taller than
-              // most cells, so centring it would push the head off screen.
-              left: "anchor(right)",
-              top: "anchor(top)",
-              // A right-column cell has no room beside it, so the panel slides
-              // to the cell's other side and still points at its picture.
-              positionTryFallbacks: "flip-inline",
-              // ...and when NEITHER side has room (a narrow window), the second
-              // inset lets it shift inwards rather than run off the screen —
-              // the same mechanism as the block axis below. It overlaps the
-              // grid at that point, which is the lesser failure: an overlapping
-              // panel can still be read and closed, one bleeding off-screen
-              // cannot.
-              right: "token(spacing.xl)",
-              justifySelf: "start",
-              marginInline: "xl",
-              // The BLOCK axis is handled without `position-try`, deliberately.
-              //
-              // The panel is taller than a grid cell, so anchoring its top to a
-              // cell in the collection's second row already runs it off the
-              // bottom of the screen — that is the common case, not an edge
-              // one. A `@position-try` fallback releasing the top edge was the
-              // obvious answer and does NOT work here: measured in Chrome, an
-              // anchored box whose height comes from its content (with a
-              // scrollable child) simply never adopts the fallback, while an
-              // otherwise identical box with a fixed height does.
-              //
-              // These three lines do the whole job with no fallback at all:
-              //   • a second inset gives the box an inset-modified containing
-              //     block, so it SHIFTS up to fit rather than hanging off the
-              //     bottom;
-              //   • `align-self: start` keeps it shrink-wrapped to its content
-              //     instead of stretching to fill that box;
-              //   • the cap then only has to know the VIEWPORT, never where the
-              //     anchor sits — which is precisely what a plain `max-height`
-              //     can express and is why this works where the fallback did
-              //     not. It is also what finally gives `body` something to
-              //     scroll inside.
-              bottom: "token(spacing.xl)",
-              alignSelf: "start",
-              // The shift clamps to the VIEWPORT, not to the `bottom` inset, so
-              // a panel pushed all the way up ends flush against the screen
-              // edge. The margin is what it actually keeps clear.
-              marginBlock: "xl",
+              // Full viewport height, flush to the edge: both block insets, so
+              // the panel needs no height of its own and no dvh arithmetic to
+              // survive a mobile browser's collapsing toolbar.
+              insetBlock: 0,
+              insetInlineEnd: 0,
               display: "flex",
               flexDirection: "column",
               alignItems: "stretch",
-              width: "max-content",
-              // See the block-axis note above. `dvh` rather than `vh` so a
-              // mobile browser's collapsing toolbar doesn't leave the panel
-              // taller than the space actually on screen.
-              maxHeight: "calc(100dvh - 2 * token(spacing.xl))",
-              borderRadius: "lg",
-              borderWidth: "token(spacing.3xs)",
-              borderStyle: "solid",
-              borderColor: "border.divider",
+              width: "token(sizes.propertiesPanelWidth)",
+              // On a phone the derived width is wider than the screen. Capping
+              // it keeps the panel on screen; the control rows inside then
+              // scroll horizontally rather than being clipped away.
+              maxWidth: "100vw",
+              // No radius, and a border on ONE side. The panel is docked, not
+              // floating — rounding corners that sit flush against the edge of
+              // the screen would draw two slivers of page either side of it.
+              borderInlineStartWidth: "token(spacing.3xs)",
+              borderInlineStartStyle: "solid",
+              borderInlineStartColor: "border.divider",
               backgroundColor: "bg.surface",
               boxShadow:
                 "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
-              overflow: "hidden",
+              // The panel IS the scroll container — there is no inner body to
+              // scroll, because the structure is a header and then sections,
+              // full stop. What keeps the title in place is `position: sticky`
+              // on the header, not a wrapper the consumer would have to
+              // remember to put its sections inside.
+              //
+              // Both axes, because the control rows have a fixed width the
+              // panel is derived from: on a viewport narrower than that the
+              // rows have to be reachable sideways rather than clipped off.
+              overflow: "auto",
+              // The page behind is a document the panel is editing — reaching
+              // the end of the sections should not start scrolling it away.
+              overscrollBehavior: "contain",
+              animation: "propertiesPanelIn 200ms ease-out",
             },
             header: {
+              // Stays put over the sections travelling under it. It needs its
+              // own fill for that — the root's is behind the scrolled content,
+              // not between it and the header.
+              position: "sticky",
+              insetBlockStart: 0,
+              zIndex: 1,
+              backgroundColor: "bg.surface",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
@@ -3996,42 +3958,130 @@ export default defineConfig({
               borderBottomWidth: "token(spacing.3xs)",
               borderBottomStyle: "solid",
               borderBottomColor: "border.divider",
+              // The whole strip is one ink, stated ONCE here (Figma 845:7232).
+              // The buttons in it are `action`'s icon variant, which paints in
+              // `currentColor` precisely so a toolbar decides its own ink —
+              // left alone they inherit the page's `text.default` and read a
+              // step brighter than the title beside them.
+              color: "text.body",
             },
-            title: { color: "field.text.muted", whiteSpace: "nowrap" },
-            // Every row IS a `Field`, relaid from the field's own vertical
-            // stack into a label ∣ control grid. Done here rather than with a
-            // wrapper and a bare <span> label so each control keeps its native
-            // `htmlFor`/`id` association — fifteen rows of hand-written
-            // `aria-label` would be fifteen chances to mislabel a slider.
-            //
-            // Stacked labels were the alternative and are not viable: at 15
-            // parameters the panel would stand twice as tall as the picture it
-            // describes.
-            body: {
+            title: {
+              minWidth: 0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            },
+            section: {
+              // Sections are content-sized and the panel scrolls; letting them
+              // flex would share the panel's height out between them instead,
+              // shrinking a long control list to fit.
+              flexShrink: 0,
               display: "flex",
               flexDirection: "column",
+              alignItems: "stretch",
+              borderBottomWidth: "token(spacing.3xs)",
+              borderBottomStyle: "solid",
+              borderBottomColor: "border.divider",
+            },
+            sectionHeader: {
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "md",
+              height: "token(spacing.4xl)",
+              paddingInline: "lg",
+              // One ink for the strip — see the panel header above. The add /
+              // remove button and the section's own icon both take it.
+              color: "text.body",
+            },
+            sectionTitle: {
+              display: "flex",
+              alignItems: "center",
+              gap: "sm",
+              minWidth: 0,
+              "& svg": {
+                width: "token(spacing.xxl)",
+                height: "token(spacing.xxl)",
+                flexShrink: 0,
+                display: "block",
+              },
+              "& svg path[stroke]": { stroke: "currentColor" },
+              "& svg path[fill]": { fill: "currentColor" },
+            },
+            // Every labelled row IS a `Field`, relaid from the field's own
+            // vertical stack into a label ∣ control grid. Done here rather
+            // than with a wrapper and a bare <span> label so each control
+            // keeps its native `htmlFor`/`id` association — fifteen rows of
+            // hand-written `aria-label` would be fifteen chances to mislabel a
+            // slider.
+            //
+            // Stacked labels were the alternative and are not viable: at 15
+            // parameters the background section alone would stand twice as
+            // tall as the picture it describes.
+            //
+            // A descendant selector rather than a class on the field root,
+            // because both are the same specificity as the `field` recipe's
+            // own root and which one won would come down to layer order.
+            controlPanel: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
               gap: "md",
               padding: "lg",
-              overflowY: "auto",
-              "& [data-field]": {
+              "& [data-property-control]": {
                 display: "grid",
                 gridTemplateColumns:
-                  "token(sizes.effectRowLabel) token(sizes.effectRowField)",
+                  "token(sizes.propertyRowLabel) token(sizes.propertyRowField)",
                 alignItems: "center",
                 columnGap: "md",
                 width: "max-content",
               },
               // The label is a column of the grid now, so it must not also
               // stretch to the field's full width the way the stacked one does.
-              "& [data-field] > label": { width: "auto" },
+              "& [data-property-control] > label": { width: "auto" },
             },
-            // The remove action spans the panel (Figma 880:1898) — it acts on
-            // the whole effect the rows above describe, so it reads as their
-            // footer rather than as one more control in the column.
-            footer: {
-              display: "flex",
-              paddingTop: "sm",
-              "& > button": { flex: "1 1 0", justifyContent: "center" },
+            // Prose that fills its control panel — a caption, a note — rather
+            // than a value sitting in a labelled row, so it wears no field
+            // frame at all: the section header above it is the label, and a
+            // box drawn round the only thing in the panel would be chrome
+            // describing nothing.
+            text: {
+              width: "token(spacing.full)",
+              minWidth: 0,
+              margin: "none",
+              background: "transparent",
+              border: "none",
+              padding: "none",
+              textStyle: "sidenote",
+              // The panel's ink, not the article's. This is a property being
+              // edited in an inspector, and `text.default` is a step brighter
+              // than everything around it (Figma 885:2249).
+              color: "text.body",
+              caretColor: "text.body",
+              focusVisibleRing: "none",
+              // Never a scrollbar of its own: it grows with what is typed and
+              // the panel it sits in does the scrolling. A second scroll
+              // region nested in the first is a second place to lose your
+              // position. `rows` carries the floor where `field-sizing` is
+              // unsupported.
+              resize: "none",
+              fieldSizing: "content",
+              overflow: "hidden",
+              _placeholder: { color: "text.body/40" },
+            },
+            // Composed onto `root` for the length of the closing slide. It has
+            // to be a class rather than a data attribute because the element
+            // is the shared Popover's, and `className` is the one hook the
+            // shell gives us onto it.
+            //
+            // `forwards` so the panel HOLDS off-screen at the end instead of
+            // snapping back into view for the frame between the animation
+            // finishing and React unmounting it. Inert throughout — it is on
+            // its way out and must not swallow the click that follows.
+            exiting: {
+              animation: "propertiesPanelOut 200ms ease-in forwards",
+              pointerEvents: "none",
             },
           },
         }),

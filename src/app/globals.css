@@ -267,15 +267,6 @@ body {
     anchor-name: --slash-menu;
   }
 
-  /* Background-effect panel anchor — see the backgroundEffectPanel recipe. Set
-     on the collection cell being edited, and only while its panel is open, so
-     exactly one element ever carries the name (as the date popover does). With
-     two, anchor resolution would silently pick the last in tree order and the
-     panel would open beside the wrong picture. */
-  [data-effect-anchor] {
-    anchor-name: --background-effect-panel;
-  }
-
   /* Sidenote rail — an invisible, out-of-flow box spanning the text-content
      column (640px, centred in the article). SidenoteLayer measures its rect to
      place each card horizontally (100px right of the column's right edge when

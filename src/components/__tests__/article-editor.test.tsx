@@ -3560,14 +3560,17 @@ describe("ArticleEditor collection block", () => {
     });
   });
 
-  it("stores a per-image caption from the cell toolbar", () => {
+  it("stores a per-image caption from the properties panel", () => {
     render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
     fireEvent.click(
-      within(toolbarFor(0)).getByRole("button", { name: "Edit image caption" }),
+      within(toolbarFor(0)).getByRole("button", { name: "Image properties" }),
     );
-    const field = screen.getByRole("textbox", { name: "Image caption" });
-    fireEvent.change(field, { target: { value: "A view" } });
-    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Add caption" }));
+    // Live, not a form: the caption is stored as it is typed, with no Enter to
+    // remember and nothing to lose by clicking away.
+    fireEvent.change(screen.getByRole("textbox", { name: "Image caption" }), {
+      target: { value: "A view" },
+    });
 
     expect(collection().items[0].caption).toBe("A view");
   });
@@ -3596,15 +3599,14 @@ describe("ArticleEditor collection block", () => {
   });
 
   // The grid root owns the figure's caret keys, but it also CONTAINS the cell
-  // toolbars and the caption field — whose Enter and Backspace must stay theirs.
+  // toolbars — whose own Enter and Backspace must stay theirs.
   it("leaves the block alone when a key comes from inside a cell", () => {
     render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
-    fireEvent.click(
-      within(toolbarFor(0)).getByRole("button", { name: "Edit image caption" }),
-    );
-    const field = screen.getByRole("textbox", { name: "Image caption" });
-    fireEvent.keyDown(field, { key: "Enter" });
-    fireEvent.keyDown(field, { key: "Backspace" });
+    const button = within(toolbarFor(0)).getByRole("button", {
+      name: "Image properties",
+    });
+    fireEvent.keyDown(button, { key: "Enter" });
+    fireEvent.keyDown(button, { key: "Backspace" });
 
     expect(blocks()[0].type).toBe("collection");
     expect(blocks()).toHaveLength(2);

@@ -13,23 +13,24 @@ import {
   collectionCellOverlay,
   collectionEmptyCell,
   collectionGrid,
-  inlineEditRow,
 } from "../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
 import { BackgroundEffectLayer } from "@/components/background-effect";
-import { BackgroundEffectPanel } from "@/components/background-effect-panel";
+import { MediaPropertiesPanel } from "@/components/media-properties-panel";
+import {
+  PROPERTIES_TRIGGER_ATTR,
+  type PropertiesPanelHandle,
+} from "@/components/ui/properties-panel";
 import {
   COLLECTION_MAX_ITEMS,
-  DEFAULT_BACKGROUND_EFFECT,
   type BackgroundEffect,
   type CollectionItem,
 } from "@/domain/nodes";
 import { collectionItemAlt } from "@/utils/collection-items";
 import AddIcon from "@/assets/icons/add.svg";
-import EditIcon from "@/assets/icons/edit.svg";
 import FeatureIcon from "@/assets/icons/feature.svg";
+import PropertiesIcon from "@/assets/icons/slider.svg";
 import ReplaceIcon from "@/assets/icons/replace.svg";
-import ShaderIcon from "@/assets/icons/shader.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
@@ -48,9 +49,6 @@ import TrashIcon from "@/assets/icons/trash.svg";
 
 const gridStyles = collectionGrid({ layout: "uniform" });
 const emptyCellStyle = collectionEmptyCell();
-// Only the Esc key-cap is borrowed from the inline-edit row — the caption card
-// owns its own surface and field, and the hint is identical wherever it appears.
-const editRow = inlineEditRow();
 
 /**
  * How far a press has to travel before it counts as a drag rather than a click.
@@ -117,65 +115,44 @@ export function CollectionGrid({
   onReorder,
   onSetBackgroundEffect,
 }: CollectionGridProps) {
-  // Keyed on the image, NOT the slot. Featuring an image moves it to another
-  // cell and removing one slides its neighbours along, so a stored index would
-  // strand the open field on whatever took that slot. Pinning to `src` makes
-  // "the editor follows its image" and "the editor closes when its image is
-  // gone" fall out of a plain lookup, with no effect to keep them in sync.
-  const [editingSrc, setEditingSrc] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  // The image whose properties panel is open, keyed on the IMAGE and not on
+  // the slot. Featuring an image moves it to another cell and removing one
+  // slides its neighbours along, so a stored index would strand the open panel
+  // on whatever took that slot — captioning or retuning the wrong picture.
+  // Pinning to `src` makes "the panel follows its image" and "the panel closes
+  // when its image is gone" fall out of a plain lookup, with no effect to keep
+  // them in sync.
+  const [propertiesSrc, setPropertiesSrc] = useState<string | null>(null);
+  // Closing goes through the PANEL, never through this state directly — see
+  // `togglePropertiesPanel`.
+  const propertiesPanelRef = useRef<PropertiesPanelHandle>(null);
 
-  // The image whose background-effect panel is open, keyed on `src` for the
-  // same reason the caption editor is: featuring, removing and reordering all
-  // move an image between slots, and a stored index would strand the panel on
-  // whatever took that slot — retuning the wrong picture's gradient.
-  const [effectSrc, setEffectSrc] = useState<string | null>(null);
-
-  const editingIndex = editingSrc
-    ? items.findIndex((item) => item.src === editingSrc)
+  const propertiesIndex = propertiesSrc
+    ? items.findIndex((item) => item.src === propertiesSrc)
     : -1;
-  const effectIndex = effectSrc
-    ? items.findIndex((item) => item.src === effectSrc)
-    : -1;
-  const effectItem = effectIndex === -1 ? null : items[effectIndex];
-
-  useEffect(() => {
-    if (editingIndex !== -1) inputRef.current?.select();
-  }, [editingIndex]);
-
-  function startEditing(index: number) {
-    setEditingSrc(items[index].src);
-    setDraft(items[index].caption ?? "");
-  }
-
-  function commit(index: number) {
-    setEditingSrc(null);
-    onEditCaption(index, draft.trim() || undefined);
-  }
+  const propertiesItem = propertiesIndex === -1 ? null : items[propertiesIndex];
 
   /**
-   * Opens the background-effect panel for a slot — or closes it, if that slot's
-   * panel is the one already open.
+   * Opens the properties panel for a slot — or closes it, if that slot's panel
+   * is the one already open.
    *
-   * Turning the effect ON is part of opening. The panel edits a gradient, so it
-   * has to have one to edit; asking for an extra click to "add" before anything
-   * appears would make the first interaction a blank form. Reaching for the
-   * button IS the request for an effect, and Remove is the way back.
+   * Opening applies NOTHING. The panel's sections each own their property, and
+   * adding one is a click inside the panel: reaching for this button is a
+   * request to SEE the properties of a picture, which must not be the same
+   * gesture as giving it a gradient it didn't have.
+   *
+   * Closing ASKS the panel rather than dropping it from the tree. Clearing
+   * this state unmounts it on the spot, which takes its closing slide with it
+   * — the panel arrives from the edge of the screen and would simply blink
+   * out. It calls back when it has finished leaving.
    */
-  function toggleEffectPanel(index: number) {
+  function togglePropertiesPanel(index: number) {
     const item = items[index];
-    if (effectSrc === item.src) {
-      setEffectSrc(null);
+    if (propertiesSrc === item.src) {
+      propertiesPanelRef.current?.dismiss();
       return;
     }
-    // The caption card stands where the toolbar stands; the panel replaces
-    // both. Two editors open on one picture would be two claims on it.
-    setEditingSrc(null);
-    setEffectSrc(item.src);
-    if (!item.backgroundEffect) {
-      onSetBackgroundEffect(index, DEFAULT_BACKGROUND_EFFECT);
-    }
+    setPropertiesSrc(item.src);
   }
 
   // ---- Reordering -------------------------------------------------------
@@ -578,14 +555,12 @@ export function CollectionGrid({
             data-drop-target={dropIndex === index ? "" : undefined}
             data-arriving={arrivingIndex === index ? "" : undefined}
             data-landing={landing?.target === index ? "" : undefined}
-            // Stands the overlay down while this cell's properties panel is
-            // open: the panel is the editor for this picture now, and a scrim
-            // blurring the very gradient being tuned would defeat the preview.
-            data-effect-open={effectIndex === index ? "" : undefined}
-            // The panel's CSS anchor (→ `--background-effect-panel` in
-            // globals.css). Set on exactly ONE cell at a time — with two,
-            // anchor resolution silently picks the last in tree order.
-            data-effect-anchor={effectIndex === index ? "" : undefined}
+            // Which picture the open panel is editing. The overlay is NOT
+            // styled off it — see the `collectionCellOverlay` recipe for why
+            // the open cell behaves like every other one — but the state is
+            // worth surfacing on the element it is about rather than living
+            // only inside this component.
+            data-properties-open={propertiesIndex === index ? "" : undefined}
             onPointerDown={(event) => {
               if (event.button !== 0) return;
               // The photo is the handle. A press that lands on the controls
@@ -688,16 +663,8 @@ export function CollectionGrid({
             <CellOverlay
               index={index}
               featured={index === 0}
-              editing={index === editingIndex}
-              hasEffect={Boolean(item.backgroundEffect)}
-              effectOpen={effectIndex === index}
-              onToggleEffect={() => toggleEffectPanel(index)}
-              draft={draft}
-              inputRef={inputRef}
-              onDraftChange={setDraft}
-              onStartEditing={() => startEditing(index)}
-              onCommit={() => commit(index)}
-              onCancel={() => setEditingSrc(null)}
+              propertiesOpen={propertiesIndex === index}
+              onToggleProperties={() => togglePropertiesPanel(index)}
               onFeature={() => onFeature(index)}
               onReplace={() => onReplace(index)}
               onRemove={() => onRemove(index)}
@@ -720,25 +687,22 @@ export function CollectionGrid({
     {/* A SIBLING of the grid, not a child of the cell it edits. The grid root
         carries the editor's showcase-media contract — tabindex and caret key
         handling — and a panel full of inputs inside it would put every
-        keystroke through that handler. It is `position: fixed` and anchored to
-        the cell, so it takes no space here and needs none. */}
-    {effectItem && (
-      <BackgroundEffectPanel
+        keystroke through that handler. It docks to the viewport (and portals
+        to the body to get there), so it takes no space here and needs none. */}
+    {propertiesItem && (
+      <MediaPropertiesPanel
+        ref={propertiesPanelRef}
         // Remounted per image, so a panel reopened on another picture starts
-        // from that picture's values rather than the previous one's drafts.
-        key={effectItem.src}
-        // Falls back to the defaults rather than waiting for the item to come
-        // back carrying them. Opening the panel already emitted them upwards,
-        // but that is a ROUND TRIP through the parent, and gating the panel on
-        // it made the first click appear to do nothing whenever the parent was
-        // slow to echo — or, for a consumer that only observes, forever.
-        effect={effectItem.backgroundEffect ?? DEFAULT_BACKGROUND_EFFECT}
-        onChange={(effect) => onSetBackgroundEffect(effectIndex, effect)}
-        onRemove={() => {
-          setEffectSrc(null);
-          onSetBackgroundEffect(effectIndex, undefined);
-        }}
-        onDismiss={() => setEffectSrc(null)}
+        // from that picture's values rather than the previous one's drafts —
+        // and its sections re-derive which of them are open.
+        key={propertiesItem.src}
+        caption={propertiesItem.caption}
+        onCaptionChange={(caption) => onEditCaption(propertiesIndex, caption)}
+        effect={propertiesItem.backgroundEffect}
+        onEffectChange={(effect) =>
+          onSetBackgroundEffect(propertiesIndex, effect)
+        }
+        onDismiss={() => setPropertiesSrc(null)}
       />
     )}
     </>
@@ -752,16 +716,9 @@ export function CollectionGrid({
 interface CellOverlayProps {
   index: number;
   featured: boolean;
-  editing: boolean;
-  hasEffect: boolean;
-  effectOpen: boolean;
-  onToggleEffect: () => void;
-  draft: string;
-  inputRef: Ref<HTMLInputElement>;
-  onDraftChange: (value: string) => void;
-  onStartEditing: () => void;
-  onCommit: () => void;
-  onCancel: () => void;
+  /** Whether THIS cell's properties panel is the one currently open. */
+  propertiesOpen: boolean;
+  onToggleProperties: () => void;
   onFeature: () => void;
   onReplace: () => void;
   onRemove: () => void;
@@ -770,63 +727,14 @@ interface CellOverlayProps {
 function CellOverlay({
   index,
   featured,
-  editing,
-  hasEffect,
-  effectOpen,
-  onToggleEffect,
-  draft,
-  inputRef,
-  onDraftChange,
-  onStartEditing,
-  onCommit,
-  onCancel,
+  propertiesOpen,
+  onToggleProperties,
   onFeature,
   onReplace,
   onRemove,
 }: CellOverlayProps) {
   const styles = collectionCellOverlay();
   const label = `Image ${index + 1}`;
-
-  // The caption editor stands WHERE the toolbar stands, but is a card rather
-  // than a pill — a margin note on the picture, wearing the sidenote's clothes.
-  if (editing) {
-    return (
-      <div className={styles.root}>
-        <div className={styles.scrim} aria-hidden />
-        <div className={styles.captionCard}>
-          <input
-            ref={inputRef}
-            type="text"
-            aria-label="Image caption"
-            placeholder="Add caption..."
-            className={styles.captionField}
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
-            // Leaving the field commits. Losing a caption you just typed to a
-            // stray click elsewhere is a worse failure than committing one you
-            // were unsure about — Escape is the way to discard.
-            onBlur={onCommit}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onCommit();
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                // Stop the editor's block-level Escape handling: this key press
-                // belongs to the field it is closing.
-                event.stopPropagation();
-                onCancel();
-              }
-            }}
-          />
-          <div className={editRow.hint} aria-hidden>
-            <span className={editRow.hintKey}>Esc</span>
-            <span className={editRow.hintLabel}>to exit</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.root}>
@@ -848,23 +756,29 @@ function CellOverlay({
               <FeatureIcon aria-hidden />
             </OptionList.Option>
             <OptionList.Divider />
+            {/* ONE button for everything about the picture that isn't an
+                action on the picture. Caption and background each had their
+                own before, which put two editors on a five-button pill and
+                made "add a caption" and "add a gradient" look like different
+                KINDS of thing; they are both properties, and the panel is
+                where properties are.
+
+                Pressed while its own panel is OPEN — the state it reports is
+                the panel's, not the picture's. It is the way back out as well
+                as in, so it has to look held down while it is holding
+                something open, and the toolbar deliberately stays live over a
+                cell being edited (only the scrim stands down) so the button
+                can be pressed again to close.
+
+                Marked as the panel's trigger so that second press actually
+                closes it — see PROPERTIES_TRIGGER_ATTR. */}
             <OptionList.Option
-              aria-label="Edit image caption"
-              onClick={onStartEditing}
+              {...PROPERTIES_TRIGGER_ATTR}
+              aria-label="Image properties"
+              pressed={propertiesOpen}
+              onClick={onToggleProperties}
             >
-              <EditIcon aria-hidden />
-            </OptionList.Option>
-            {/* Pressed while the image HAS an effect, not merely while the
-                panel is open — the button reports the picture's state, and the
-                panel closing does not take the gradient away. (It is also
-                never visible while its own panel is open: the overlay stands
-                down for that cell.) */}
-            <OptionList.Option
-              aria-label="Background effect"
-              pressed={hasEffect || effectOpen}
-              onClick={onToggleEffect}
-            >
-              <ShaderIcon aria-hidden />
+              <PropertiesIcon aria-hidden />
             </OptionList.Option>
             <OptionList.Option aria-label="Replace image" onClick={onReplace}>
               <ReplaceIcon aria-hidden />

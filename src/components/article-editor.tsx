@@ -1483,8 +1483,8 @@ function EditableBlock({
     (e: React.KeyboardEvent<HTMLElement>) => {
       // These keys mean "navigate away from this figure", which only makes
       // sense when the figure ITSELF has focus. A collection's grid root also
-      // contains buttons and a caption field, and their Enter/Backspace must
-      // not bubble up and be read as "insert a paragraph above" or "delete the
+      // contains the per-cell toolbars, and their Enter/Backspace must not
+      // bubble up and be read as "insert a paragraph above" or "delete the
       // whole block". (A no-op for the image block, whose <img> has no
       // children to bubble from.)
       if (e.target !== e.currentTarget) return;
