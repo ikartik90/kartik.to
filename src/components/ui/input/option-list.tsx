@@ -21,6 +21,11 @@ import {
 } from "react";
 import { cx } from "../../../../styled-system/css";
 import { optionList } from "../../../../styled-system/recipes";
+import {
+  getInputModality,
+  getPointerPosition,
+  useInputModality,
+} from "@/hooks/use-input-modality";
 import { filterOptions, type OptionItem } from "@/utils/option-filter";
 import { Field, useOptionalField, type FieldSearchProps } from "./field";
 import { WireframeContent } from "../wireframe";
@@ -240,6 +245,12 @@ export interface OptionListProps
    * the root collapses so its behavior container sits in the consumer's frame.
    */
   direction?: "block" | "inline";
+  /**
+   * How tall the list may grow. `scroll` (default) caps it at 7 rows and a
+   * half-row peek — right for a long list you browse. `content` lets it hug its
+   * rows so a menu that fits shows itself whole, bounded only by the viewport.
+   */
+  fit?: "scroll" | "content";
   /** A behavior container (`OptionList.Listbox` / `OptionList.Toolbar`) and an optional Field.Search. */
   children: ReactNode;
 }
@@ -253,6 +264,7 @@ function OptionListRoot({
   emptyLabel = "No results",
   direction = "block",
   tone = "default",
+  fit,
   className,
   children,
   ...rest
@@ -266,7 +278,7 @@ function OptionListRoot({
   const hasLabel = field?.hasLabel ?? false;
   const hintId = field?.hintId ?? "";
   const hasHint = field?.hasHint ?? false;
-  const styles = optionList({ tone, direction });
+  const styles = optionList({ tone, direction, fit });
   const uid = useId();
 
   const isControlled = value !== undefined;
@@ -330,11 +342,21 @@ function OptionListRoot({
   );
 
   const setActiveFromPointer = (value: string | null) => {
+    // Whoever the user last actually used owns the highlight. A pointer event
+    // fired while the keyboard is live did not come from the user reaching for
+    // the mouse — the engine synthesises enter/leave whenever the list scrolls
+    // or opens under a stationary cursor — so it must not move the cursor the
+    // keyboard is driving. See {@link getInputModality}.
+    if (getInputModality() !== "pointer") return;
     setActiveSource(value == null ? null : "pointer");
     setActive(value);
   };
 
   const clearActive = (value: string) => {
+    // Same rule in reverse: a synthesized leave must not blank a keyboard
+    // highlight. A leave the user really performed comes with pointer motion,
+    // which makes the pointer live before it arrives.
+    if (getInputModality() !== "pointer") return;
     // Only the row that currently shows the highlight may release it.
     if (activeValue !== value) return;
     setActiveSource(null);
@@ -446,22 +468,6 @@ export interface OptionListListboxProps extends HTMLAttributes<HTMLDivElement> {
   loop?: boolean;
 }
 
-// Module-level pointer tracker — captured before a menu mounts so an
-// `externalKeys` listbox can preselect the option already under the cursor when
-// it opens (ported from the old Menu ListboxController).
-let pointerX = -1;
-let pointerY = -1;
-if (typeof document !== "undefined") {
-  document.addEventListener(
-    "mousemove",
-    (event) => {
-      pointerX = event.clientX;
-      pointerY = event.clientY;
-    },
-    { passive: true },
-  );
-}
-
 /**
  * The scrollable `role="listbox"` — renders just the `OptionList.Option`s that
  * pass the current filter (in authored order), or the empty row when none do.
@@ -549,18 +555,36 @@ function OptionListListbox({
       document.removeEventListener("keydown", handle, { capture: true });
   }, [externalKeys, loop, moveActive, activeValue, select]);
 
-  // externalKeys: preselect the option already under the pointer when it opens.
+  // The context is rebuilt every render, so `setActiveValue` cannot be a
+  // dependency below — depending on it re-ran the preselect on EVERY render,
+  // which is what made an arrow key move the highlight and then snap it back
+  // under the cursor a frame later.
+  const setActiveValueRef = useRef(setActiveValue);
   useEffect(() => {
-    if (!externalKeys || typeof document.elementFromPoint !== "function") return;
+    setActiveValueRef.current = setActiveValue;
+  });
+
+  // externalKeys: park the highlight on the option under the pointer — but only
+  // while the POINTER is the live input modality. A menu opened by typing `/`
+  // belongs to the keyboard, and preselecting whatever the cursor happens to be
+  // parked over is exactly the hijack this guards against. Re-runs when the
+  // modality flips, so the first real mouse move claims the row underneath even
+  // if the pointer never crosses a row boundary.
+  const modality = useInputModality();
+  useEffect(() => {
+    if (!externalKeys || modality !== "pointer") return;
+    if (typeof document.elementFromPoint !== "function") return;
+    const pointer = getPointerPosition();
+    if (!pointer) return;
     const raf = requestAnimationFrame(() => {
       const value = document
-        .elementFromPoint(pointerX, pointerY)
+        .elementFromPoint(pointer.x, pointer.y)
         ?.closest<HTMLElement>("[data-value]")
         ?.getAttribute("data-value");
-      if (value) setActiveValue(value);
+      if (value) setActiveValueRef.current(value);
     });
     return () => cancelAnimationFrame(raf);
-  }, [externalKeys, setActiveValue]);
+  }, [externalKeys, modality]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);

@@ -4,10 +4,12 @@ import {
   fireEvent,
   cleanup,
   within,
+  act,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OptionList, type OptionListProps } from "../option-list";
 import { Field } from "../field";
+import { resetInputModality } from "@/hooks/use-input-modality";
 import type { OptionItem } from "@/utils/option-filter";
 
 const OPTIONS: OptionItem[] = [
@@ -58,7 +60,12 @@ const renderSearch = (props?: ListProps) =>
 const type = (value: string) =>
   fireEvent.input(screen.getByRole("combobox"), { target: { value } });
 
-afterEach(cleanup);
+// Input modality is module-level (it tracks the real device), so a keypress in
+// one test would otherwise leak into the next one's hover expectations.
+afterEach(() => {
+  cleanup();
+  resetInputModality();
+});
 
 describe("field wiring", () => {
   it("renders standalone with no <Field> (toolbar / slash-menu case)", () => {
@@ -561,6 +568,115 @@ describe("pointer highlight", () => {
     // keyboard's highlight (it's what Enter would commit).
     const banana = option("Banana");
     fireEvent.pointerLeave(banana, { relatedTarget: banana.parentElement });
+    expect(activeText()).toBe("Avocado");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Input modality — whichever device the user last actually used owns the
+// highlight. A menu opened by typing `/` belongs to the keyboard until the
+// pointer genuinely moves, so a cursor that merely happens to be parked over
+// the menu cannot trap the selection under it.
+// ---------------------------------------------------------------------------
+
+describe("input modality", () => {
+  const activeText = () => document.querySelector("[data-active]")?.textContent;
+  const option = (name: string) => screen.getByRole("option", { name });
+  const movePointer = (x: number, y: number) =>
+    fireEvent.pointerMove(document, { clientX: x, clientY: y });
+
+  it("ignores hover while the keyboard is the live modality", () => {
+    renderBare();
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    fireEvent.pointerEnter(option("Banana"));
+    expect(activeText()).not.toBe("Banana");
+  });
+
+  it("hands the highlight back to hover once the pointer really moves", () => {
+    renderBare();
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    fireEvent.pointerEnter(option("Banana"));
+    expect(activeText()).not.toBe("Banana");
+
+    movePointer(30, 30);
+    fireEvent.pointerEnter(option("Banana"));
+    expect(activeText()).toBe("Banana");
+  });
+
+  // Arrowing a row into view scrolls the list under a pointer that never moved,
+  // and the engine fires a pointer-leave for the row it dragged out from under
+  // the cursor. Acting on it would blank the highlight the keyboard just set.
+  it("does not let a stationary pointer release a keyboard highlight", () => {
+    renderSearch();
+    movePointer(30, 30);
+    fireEvent.pointerEnter(option("Banana"));
+    expect(activeText()).toBe("Banana");
+
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    expect(activeText()).toBe("Grapes");
+
+    fireEvent.pointerLeave(option("Grapes"), { relatedTarget: null });
+    expect(activeText()).toBe("Grapes");
+  });
+});
+
+describe("externalKeys — opening under the cursor", () => {
+  const activeText = () => document.querySelector("[data-active]")?.textContent;
+
+  function renderExternal() {
+    render(
+      <OptionList onValueChange={vi.fn()}>
+        <OptionList.Listbox externalKeys loop>
+          {optionEls()}
+        </OptionList.Listbox>
+      </OptionList>,
+    );
+  }
+
+  /**
+   * The menu opens over `label`'s row — what `elementFromPoint` would find.
+   * jsdom has no `elementFromPoint` (it needs layout), and the preselect bails
+   * when it is missing, so this has to be installed BEFORE the list renders.
+   * The lookup is deferred to call time, when the rows exist.
+   */
+  function pointerRestingOn(label: string) {
+    document.elementFromPoint = vi.fn(() =>
+      screen.queryByRole("option", { name: label }),
+    ) as unknown as typeof document.elementFromPoint;
+  }
+
+  const frame = () =>
+    act(async () => {
+      await new Promise(requestAnimationFrame);
+    });
+
+  it("preselects the row under the cursor when the pointer is the live modality", async () => {
+    fireEvent.pointerMove(document, { clientX: 30, clientY: 30 });
+    pointerRestingOn("Grapes");
+    renderExternal();
+    await frame();
+    expect(activeText()).toBe("Grapes");
+  });
+
+  it("leaves the highlight alone when the menu was opened from the keyboard", async () => {
+    fireEvent.keyDown(document, { key: "/" });
+    pointerRestingOn("Grapes");
+    renderExternal();
+    await frame();
+    expect(activeText()).toBe("Apple");
+  });
+
+  // The reported bug: arrowing moved the highlight, the re-render re-ran the
+  // preselect, and the next frame snapped it straight back under the cursor —
+  // so the menu felt stuck wherever the mouse happened to be.
+  it("does not snap back under the cursor on the next arrow key", async () => {
+    fireEvent.keyDown(document, { key: "/" });
+    pointerRestingOn("Grapes");
+    renderExternal();
+    await frame();
+
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    await frame();
     expect(activeText()).toBe("Avocado");
   });
 });

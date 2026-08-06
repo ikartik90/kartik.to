@@ -4268,7 +4268,19 @@ export default defineConfig({
               // roving target and so carries BOTH attributes — without it the
               // neutral hover tint wins over the brand chip (equal specificity
               // → atomic-CSS order decides) and selection reads grey.
-              "&:hover:not([aria-selected='true']):not([aria-pressed='true']), &[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
+              "&[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
+                { backgroundColor: "field.bg.hover" },
+              // The bare :hover tint, split out so it can be gated on the live
+              // input modality. A LISTBOX row only tints while the pointer is
+              // the live device: a cursor parked over a menu opened with `/`
+              // would otherwise paint a second lit row beside the one the
+              // keyboard is driving, and the two are indistinguishable. A
+              // TOOLBAR has no roving highlight, so nothing there can conflict
+              // and hover always tints. Gated on `:not(…='keyboard')` so the
+              // pre-input state, where the attribute is absent, still hovers.
+              // `:where()` contributes no specificity, so both selectors keep
+              // exactly the weight the single combined rule used to have.
+              ":where([role='toolbar']) &:hover:not([aria-selected='true']):not([aria-pressed='true']), :where(html:not([data-input-modality='keyboard'])) &:hover:not([aria-selected='true']):not([aria-pressed='true'])":
                 { backgroundColor: "field.bg.hover" },
               // One "on" state: a selected row and a pressed toggle share the
               // brand chip.
@@ -4325,8 +4337,14 @@ export default defineConfig({
                 },
                 option: {
                   color: "field.text.active",
-                  // Same selected-row guard as the base tone (see there).
-                  "&:hover:not([aria-selected='true']):not([aria-pressed='true']), &[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
+                  // Same selected-row guard, and the same split of the roving
+                  // highlight from the modality-gated :hover, as the base tone
+                  // (see there). This override has to repeat the split: left
+                  // combined, its ungated :hover would outrank the base rule
+                  // and keep tinting the row under a parked cursor.
+                  "&[data-active]:not([aria-selected='true']):not([aria-pressed='true'])":
+                    { backgroundColor: "field.bg.hoverBrand" },
+                  ":where([role='toolbar']) &:hover:not([aria-selected='true']):not([aria-pressed='true']), :where(html:not([data-input-modality='keyboard'])) &:hover:not([aria-selected='true']):not([aria-pressed='true'])":
                     { backgroundColor: "field.bg.hoverBrand" },
                   // Neutral chip against the brand surface.
                   "&[aria-selected='true'], &[aria-pressed='true']": {
@@ -4347,6 +4365,22 @@ export default defineConfig({
                 // COLLAPSES, so the listbox sits directly in the popover and
                 // the list's own padding is the only gap.
                 root: { display: "contents" },
+              },
+            },
+            // How tall the scroll box may grow.
+            //   scroll  — the base cap: 7 full rows plus a half-row peek that
+            //             signals there is more to reach. Right for a long,
+            //             browsable list (the Combobox's fruit list).
+            //   content — hug the rows, so a menu that FITS shows itself whole
+            //             instead of inventing a scrollbar it doesn't need
+            //             (the slash menu, whose 11 commands are the whole
+            //             vocabulary — seeing them all is the point). Still
+            //             bounded by the viewport, so a list taller than the
+            //             screen stays scrollable rather than running off it.
+            fit: {
+              scroll: {},
+              content: {
+                list: { maxHeight: "calc(100dvh - token(spacing.5xl))" },
               },
             },
             direction: {
@@ -4375,9 +4409,9 @@ export default defineConfig({
               },
             },
           },
-          defaultVariants: { tone: "default", direction: "block" },
+          defaultVariants: { tone: "default", direction: "block", fit: "scroll" },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ tone: ["*"], direction: ["*"] }],
+          staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"] }],
         }),
 
         notice: defineSlotRecipe({
