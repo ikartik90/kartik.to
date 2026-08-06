@@ -47,6 +47,12 @@ type PopoverProps = {
   /** Dismiss on scroll/resize — for menus anchored to a click-captured rect. */
   dismissOnReflow?: boolean;
   /**
+   * CSS selector for the trigger that opened this popover, exempted from the
+   * outside-pointerdown dismiss so a toggling trigger can close it. See
+   * {@link useDismiss}.
+   */
+  ignoreSelector?: string;
+  /**
    * Render the container in a `document.body` portal so it renders in the true
    * top stacking context and escapes ancestor clipping/containment — e.g. a
    * `DemoFrame`, whose `container-type` makes it the containing block for a
@@ -78,12 +84,13 @@ export function Popover({
   role,
   ariaLabel,
   dismissOnReflow = false,
+  ignoreSelector,
   portal = false,
   onDismiss,
   children,
 }: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  useDismiss({ ref: containerRef, onDismiss, dismissOnReflow });
+  useDismiss({ ref: containerRef, onDismiss, dismissOnReflow, ignoreSelector });
 
   const container = (
     <div ref={containerRef} className={className} role={role} aria-label={ariaLabel}>

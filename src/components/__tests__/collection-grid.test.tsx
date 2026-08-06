@@ -5,6 +5,7 @@ import {
   cleanup,
   within,
   fireEvent,
+  waitFor,
   act,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -820,137 +821,6 @@ describe("CollectionGrid", () => {
   });
 });
 
-describe("CollectionGrid caption editing", () => {
-  async function startEditing(list: CollectionItem[], index: number) {
-    const ctx = setup(list);
-    await ctx.user.click(
-      within(toolbarFor(index)).getByRole("button", {
-        name: "Edit image caption",
-      }),
-    );
-    return ctx;
-  }
-
-  it("swaps the toolbar's buttons for a caption field", async () => {
-    await startEditing(items("a", "b"), 0);
-    expect(screen.getByRole("textbox", { name: "Image caption" })).toBeDefined();
-    // Only the edited cell loses its buttons; the other toolbar is untouched.
-    expect(screen.getAllByRole("toolbar")).toHaveLength(1);
-  });
-
-  it("seeds the field with the caption already written", async () => {
-    const ctx = setup([{ src: "a", caption: "Existing" }]);
-    await ctx.user.click(
-      screen.getByRole("button", { name: "Edit image caption" }),
-    );
-    expect(
-      (screen.getByRole("textbox", { name: "Image caption" }) as HTMLInputElement)
-        .value,
-    ).toBe("Existing");
-  });
-
-  it("commits on Enter and closes the field", async () => {
-    const { user, onEditCaption } = await startEditing(items("a"), 0);
-    await user.type(
-      screen.getByRole("textbox", { name: "Image caption" }),
-      "A caption{Enter}",
-    );
-    expect(onEditCaption).toHaveBeenCalledExactlyOnceWith(0, "A caption");
-    expect(screen.queryByRole("textbox", { name: "Image caption" })).toBeNull();
-  });
-
-  it("stores a cleared caption as nothing at all", async () => {
-    const ctx = setup([{ src: "a", caption: "Existing" }]);
-    await ctx.user.click(
-      screen.getByRole("button", { name: "Edit image caption" }),
-    );
-    await ctx.user.clear(screen.getByRole("textbox", { name: "Image caption" }));
-    await ctx.user.keyboard("{Enter}");
-    expect(ctx.onEditCaption).toHaveBeenCalledExactlyOnceWith(0, undefined);
-  });
-
-  it("discards the draft on Escape", async () => {
-    const { user, onEditCaption } = await startEditing(items("a"), 0);
-    await user.type(
-      screen.getByRole("textbox", { name: "Image caption" }),
-      "Never mind{Escape}",
-    );
-    expect(onEditCaption).not.toHaveBeenCalled();
-    expect(screen.queryByRole("textbox", { name: "Image caption" })).toBeNull();
-  });
-
-  // Clicking away is a commit, not a cancel — losing typing to a stray click
-  // is the worse failure.
-  it("commits on blur", async () => {
-    const { user, onEditCaption } = await startEditing(items("a"), 0);
-    await user.type(
-      screen.getByRole("textbox", { name: "Image caption" }),
-      "Typed then left",
-    );
-    await user.tab();
-    expect(onEditCaption).toHaveBeenCalledExactlyOnceWith(0, "Typed then left");
-  });
-
-  // The editor is pinned to the IMAGE, not the slot: featuring it mid-edit
-  // moves it to another cell, and removing it must not strand the field on
-  // whatever slides into that slot.
-  it("follows its image when the collection is reordered", async () => {
-    const list = items("a", "b");
-    const { rerender } = render(
-      <CollectionGrid
-        items={list}
-        onFeature={vi.fn()}
-        onEditCaption={vi.fn()}
-        onReplace={vi.fn()}
-        onRemove={vi.fn()}
-        onAddImage={vi.fn()}
-        onReorder={vi.fn()}
-        onSetBackgroundEffect={vi.fn()}
-      />,
-    );
-    await userEvent.setup().click(
-      within(toolbarFor(1)).getByRole("button", { name: "Edit image caption" }),
-    );
-
-    rerender(
-      <CollectionGrid
-        items={items("b", "a")}
-        onFeature={vi.fn()}
-        onEditCaption={vi.fn()}
-        onReplace={vi.fn()}
-        onRemove={vi.fn()}
-        onAddImage={vi.fn()}
-        onReorder={vi.fn()}
-        onSetBackgroundEffect={vi.fn()}
-      />,
-    );
-
-    // "b" is now slot 0, so slot 1 ("a") keeps its buttons and slot 0 edits.
-    expect(screen.getByRole("toolbar", { name: "Image 2 actions" })).toBeDefined();
-    expect(screen.queryByRole("toolbar", { name: "Image 1 actions" })).toBeNull();
-  });
-
-  it("closes itself when its image is removed", async () => {
-    const list = items("a", "b");
-    const props = {
-      onFeature: vi.fn(),
-      onEditCaption: vi.fn(),
-      onReplace: vi.fn(),
-      onRemove: vi.fn(),
-      onAddImage: vi.fn(),
-      onReorder: vi.fn(),
-      onSetBackgroundEffect: vi.fn(),
-    };
-    const { rerender } = render(<CollectionGrid items={list} {...props} />);
-    await userEvent.setup().click(
-      within(toolbarFor(1)).getByRole("button", { name: "Edit image caption" }),
-    );
-
-    rerender(<CollectionGrid items={items("a")} {...props} />);
-    expect(screen.queryByRole("textbox", { name: "Image caption" })).toBeNull();
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Slot identity
 // ---------------------------------------------------------------------------
@@ -986,81 +856,78 @@ describe("CollectionGrid slot identity", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Background effect
+// Properties panel
+//
+// The grid owns WHICH picture the panel is addressing and when it is up; what
+// the panel contains is media-properties-panel.test.tsx's business.
 // ---------------------------------------------------------------------------
 
-const effectButton = (index: number) =>
-  within(toolbarFor(index)).getByRole("button", { name: "Background effect" });
+const propertiesButton = (index: number) =>
+  within(toolbarFor(index)).getByRole("button", { name: "Image properties" });
 
-const panel = () =>
-  screen.queryByRole("dialog", { name: "Background properties" });
+const panel = () => screen.queryByRole("dialog", { name: "Media properties" });
 
-describe("CollectionGrid background effect", () => {
+const panelProps = () => ({
+  onFeature: vi.fn(),
+  onEditCaption: vi.fn(),
+  onReplace: vi.fn(),
+  onRemove: vi.fn(),
+  onAddImage: vi.fn(),
+  onReorder: vi.fn(),
+  onSetBackgroundEffect: vi.fn(),
+});
+
+describe("CollectionGrid properties panel", () => {
   it("offers the control on every filled cell", () => {
     setup(items("a", "b"));
-    expect(effectButton(0)).toBeDefined();
-    expect(effectButton(1)).toBeDefined();
+    expect(propertiesButton(0)).toBeDefined();
+    expect(propertiesButton(1)).toBeDefined();
   });
 
-  // Reaching for the button IS the request for an effect — the panel edits a
-  // gradient, so opening it onto nothing would be a blank form.
-  it("turns the effect on and opens the panel in one click", async () => {
-    const { user, onSetBackgroundEffect } = setup(items("a", "b"));
+  // Asking to SEE a picture's properties must not be the same gesture as
+  // giving it a caption or a gradient it did not have. Adding one is a click
+  // inside the panel, on the section that owns it.
+  it("opens without touching the picture", async () => {
+    const { user, onSetBackgroundEffect, onEditCaption } = setup(items("a", "b"));
     expect(panel()).toBeNull();
 
-    await user.click(effectButton(1));
+    await user.click(propertiesButton(1));
 
-    expect(onSetBackgroundEffect).toHaveBeenCalledExactlyOnceWith(
-      1,
-      DEFAULT_BACKGROUND_EFFECT,
-    );
     expect(panel()).not.toBeNull();
-  });
-
-  it("does not re-apply the defaults over an effect the image already has", async () => {
-    const tuned = { ...DEFAULT_BACKGROUND_EFFECT, rotation: 90 };
-    const { user, onSetBackgroundEffect } = setup([
-      { src: "a", backgroundEffect: tuned },
-    ]);
-
-    await user.click(effectButton(0));
-
     expect(onSetBackgroundEffect).not.toHaveBeenCalled();
-    expect(panel()).not.toBeNull();
+    expect(onEditCaption).not.toHaveBeenCalled();
   });
 
   // The panel is the editor for that picture now; a scrim blurring the very
   // gradient being tuned would defeat the preview.
-  it("stands the cell's overlay down and anchors the panel to it", async () => {
+  it("stands the addressed cell's overlay down, and only that one", async () => {
     const { user } = setup(items("a", "b"));
-    await user.click(effectButton(1));
+    await user.click(propertiesButton(1));
 
-    expect(cells()[1].hasAttribute("data-effect-open")).toBe(true);
-    expect(cells()[1].hasAttribute("data-effect-anchor")).toBe(true);
-    // Exactly one anchor, or CSS anchor resolution silently picks the last in
-    // tree order and the panel opens beside the wrong picture.
+    expect(cells()[1].hasAttribute("data-properties-open")).toBe(true);
+    expect(cells()[0].hasAttribute("data-properties-open")).toBe(false);
     expect(
-      document.querySelectorAll("[data-effect-anchor]"),
+      document.querySelectorAll("[data-properties-open]"),
     ).toHaveLength(1);
-    expect(cells()[0].hasAttribute("data-effect-open")).toBe(false);
   });
 
   // The toolbar stands down while the panel is open, so the button that opened
   // it cannot be the way back — the header's close is.
-  it("closes from the header without taking the effect away", async () => {
-    const { user, onSetBackgroundEffect } = setup([
-      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+  it("closes from the header without taking anything away", async () => {
+    const { user, onSetBackgroundEffect, onEditCaption } = setup([
+      { src: "a", caption: "A note", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
     ]);
-    await user.click(effectButton(0));
-    expect(panel()).not.toBeNull();
+    await user.click(propertiesButton(0));
 
     await user.click(
-      screen.getByRole("button", { name: "Close background properties" }),
+      screen.getByRole("button", { name: "Close properties panel" }),
     );
 
-    expect(panel()).toBeNull();
+    // The panel plays its closing slide before the grid drops it.
+    await waitFor(() => expect(panel()).toBeNull());
     expect(onSetBackgroundEffect).not.toHaveBeenCalled();
-    // The gradient is a property of the picture, not of the panel.
+    expect(onEditCaption).not.toHaveBeenCalled();
+    // Both are properties of the picture, not of the panel.
     expect(document.querySelectorAll("[data-background-effect]")).toHaveLength(1);
   });
 
@@ -1068,32 +935,72 @@ describe("CollectionGrid background effect", () => {
     const { user } = setup([
       { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
     ]);
-    await user.click(effectButton(0));
+    await user.click(propertiesButton(0));
 
     await user.keyboard("{Escape}");
 
-    expect(panel()).toBeNull();
-    expect(cells()[0].hasAttribute("data-effect-open")).toBe(false);
+    await waitFor(() => expect(panel()).toBeNull());
+    expect(cells()[0].hasAttribute("data-properties-open")).toBe(false);
   });
 
-  it("reads pressed only for an image that actually has an effect", () => {
-    setup([{ src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT }, { src: "b" }]);
-    expect(effectButton(0).getAttribute("aria-pressed")).toBe("true");
-    expect(effectButton(1).getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("clears the effect and closes when removed from the panel", async () => {
-    const { user, onSetBackgroundEffect } = setup([
-      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+  // What it reports is the PANEL's state, not the picture's — a picture that
+  // has a caption but no panel open leaves the button unlit, because the
+  // button is the way in and out of the panel and nothing else.
+  it("reads pressed only while its own panel is open", async () => {
+    const { user } = setup([
+      {
+        src: "a",
+        caption: "A note",
+        backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+      },
+      { src: "b" },
     ]);
-    await user.click(effectButton(0));
+    expect(propertiesButton(0).getAttribute("aria-pressed")).toBe("false");
 
-    await user.click(
-      screen.getByRole("button", { name: /Remove Background Effect/i }),
-    );
+    await user.click(propertiesButton(1));
 
-    expect(onSetBackgroundEffect).toHaveBeenCalledExactlyOnceWith(0, undefined);
-    expect(panel()).toBeNull();
+    expect(propertiesButton(1).getAttribute("aria-pressed")).toBe("true");
+    expect(propertiesButton(0).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  // The dismiss runs on POINTERDOWN and the toggle on the click after it, so
+  // without exempting the trigger the button could only ever open: it would
+  // find the panel already dismissed and put it straight back.
+  it("closes the panel when its own button is pressed again", async () => {
+    const { user } = setup(items("a", "b"));
+    await user.click(propertiesButton(1));
+    expect(panel()).not.toBeNull();
+
+    await user.click(propertiesButton(1));
+
+    await waitFor(() => expect(panel()).toBeNull());
+  });
+
+  // Closing has to go through the PANEL, not through the grid's own state:
+  // dropping it from the tree on the click takes the closing slide with it.
+  it("asks the panel to leave rather than yanking it", async () => {
+    const { user } = setup(items("a", "b"));
+    await user.click(propertiesButton(1));
+
+    await user.click(propertiesButton(1));
+
+    // Still mounted, mid-slide, and no longer in the way.
+    expect(panel()).not.toBeNull();
+    expect(panel()!.className).toMatch(/properties-panel__exiting/);
+    await waitFor(() => expect(panel()).toBeNull());
+  });
+
+  // Same mechanism, the other way: the press lands on another cell's trigger,
+  // so the panel moves to that picture rather than closing and re-opening.
+  it("moves to another image when that image's button is pressed", async () => {
+    const { user } = setup(items("a", "b"));
+    await user.click(propertiesButton(0));
+
+    await user.click(propertiesButton(1));
+
+    expect(panel()).not.toBeNull();
+    expect(cells()[1].hasAttribute("data-properties-open")).toBe(true);
+    expect(cells()[0].hasAttribute("data-properties-open")).toBe(false);
   });
 
   it("paints the gradient behind an image that has one, and only that image", () => {
@@ -1106,50 +1013,21 @@ describe("CollectionGrid background effect", () => {
     expect(cells()[0].querySelector("[data-background-effect]")).not.toBeNull();
   });
 
-  // Both editors stand where the toolbar stands — two open on one picture
-  // would be two claims on it.
-  it("replaces an open caption editor rather than stacking on it", async () => {
-    const { user } = setup(items("a"));
-    await user.click(
-      within(toolbarFor(0)).getByRole("button", { name: "Edit image caption" }),
-    );
-    expect(screen.queryByRole("textbox", { name: "Image caption" })).not.toBeNull();
-
-    // The caption card stands WHERE the toolbar stands, so the effect button
-    // is only reachable again once the card is dismissed. Escape discards.
-    await user.type(
-      screen.getByRole("textbox", { name: "Image caption" }),
-      "{Escape}",
-    );
-    await user.click(effectButton(0));
-
-    expect(screen.queryByRole("textbox", { name: "Image caption" })).toBeNull();
-    expect(panel()).not.toBeNull();
-  });
-
   // Featuring, removing and reordering all move an image between slots; a
-  // stored index would leave the panel retuning whichever picture slid in.
+  // stored index would leave the panel captioning whichever picture slid in.
   it("follows its image when the collection is reordered", async () => {
     const seeded: CollectionItem[] = [
       { src: "a" },
       { src: "b", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
     ];
-    const props = {
-      onFeature: vi.fn(),
-      onEditCaption: vi.fn(),
-      onReplace: vi.fn(),
-      onRemove: vi.fn(),
-      onAddImage: vi.fn(),
-      onReorder: vi.fn(),
-      onSetBackgroundEffect: vi.fn(),
-    };
+    const props = panelProps();
     const { rerender } = render(<CollectionGrid items={seeded} {...props} />);
-    await userEvent.setup().click(effectButton(1));
+    await userEvent.setup().click(propertiesButton(1));
 
     rerender(<CollectionGrid items={[seeded[1], seeded[0]]} {...props} />);
 
-    expect(cells()[0].hasAttribute("data-effect-open")).toBe(true);
-    expect(cells()[1].hasAttribute("data-effect-open")).toBe(false);
+    expect(cells()[0].hasAttribute("data-properties-open")).toBe(true);
+    expect(cells()[1].hasAttribute("data-properties-open")).toBe(false);
   });
 
   it("closes itself when its image is removed", async () => {
@@ -1157,21 +1035,41 @@ describe("CollectionGrid background effect", () => {
       { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
       { src: "b" },
     ];
-    const props = {
-      onFeature: vi.fn(),
-      onEditCaption: vi.fn(),
-      onReplace: vi.fn(),
-      onRemove: vi.fn(),
-      onAddImage: vi.fn(),
-      onReorder: vi.fn(),
-      onSetBackgroundEffect: vi.fn(),
-    };
+    const props = panelProps();
     const { rerender } = render(<CollectionGrid items={seeded} {...props} />);
-    await userEvent.setup().click(effectButton(0));
+    await userEvent.setup().click(propertiesButton(0));
     expect(panel()).not.toBeNull();
 
     rerender(<CollectionGrid items={[seeded[1]]} {...props} />);
     expect(panel()).toBeNull();
+  });
+
+  // The index the panel edits is resolved from the image it was opened on, so
+  // an edit has to land on that picture and not on the slot it happens to
+  // occupy.
+  it("routes a caption typed in the panel to the addressed image", async () => {
+    const { user, onEditCaption } = setup(items("a", "b"));
+    await user.click(propertiesButton(1));
+
+    await user.click(screen.getByRole("button", { name: "Add caption" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Image caption" }),
+      "Hi",
+    );
+
+    expect(onEditCaption).toHaveBeenLastCalledWith(1, "Hi");
+  });
+
+  it("routes a background added in the panel to the addressed image", async () => {
+    const { user, onSetBackgroundEffect } = setup(items("a", "b"));
+    await user.click(propertiesButton(1));
+
+    await user.click(screen.getByRole("button", { name: "Add background" }));
+
+    expect(onSetBackgroundEffect).toHaveBeenCalledExactlyOnceWith(
+      1,
+      DEFAULT_BACKGROUND_EFFECT,
+    );
   });
 });
 
