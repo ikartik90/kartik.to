@@ -115,8 +115,10 @@ export function slashMenuHasResults(
 // `externalKeys` keeps focus in the editor: ArrowUp/Down/Enter are captured at
 // the document to drive the highlight and commit, and the option under the
 // pointer is preselected on open. `tone="plain"` because the slashMenuPopover
-// owns the surface. Element-anchored: the editor sets `data-slash-anchor`
-// (→ `--slash-menu`) and the recipe positions against it.
+// owns the surface. `fit="content"` because the menu IS the vocabulary — the
+// shared 7-row cap belongs to lists you browse, not to one you read whole.
+// Element-anchored: the editor sets `data-slash-anchor` (→ `--slash-menu`) and
+// the recipe positions against it.
 // ---------------------------------------------------------------------------
 
 export function SlashMenu({
@@ -132,6 +134,7 @@ export function SlashMenu({
     <Popover className={slashMenuPopover()} onDismiss={onDismiss}>
       <OptionList
         tone="plain"
+        fit="content"
         onValueChange={(type) => onSelect(type as SlashMenuBlockType)}
       >
         <OptionList.Listbox externalKeys loop aria-label="Insert block">

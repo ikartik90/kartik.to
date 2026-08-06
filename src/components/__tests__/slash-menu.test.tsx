@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup, act } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { SlashMenu } from "../slash-menu";
+import { resetInputModality } from "@/hooks/use-input-modality";
 import type { SlashMenuBlockType } from "../slash-menu";
 
 vi.mock("@/assets/icons/subheading.svg", () => ({
@@ -81,6 +82,9 @@ describe("SlashMenu", () => {
   afterEach(() => {
     cleanup();
     anchorEl.remove();
+    // Input modality is module-level (it tracks the real device), so an arrow
+    // key in one test would otherwise suppress the next one's hover.
+    resetInputModality();
   });
 
   function renderMenu(props: Partial<React.ComponentProps<typeof SlashMenu>> = {}) {
@@ -282,6 +286,33 @@ describe("SlashMenu", () => {
     const items = screen.getAllByRole("option");
     expect(items[2].hasAttribute("data-active")).toBe(true);
     expect(items[0].hasAttribute("data-active")).toBe(false);
+  });
+
+  // The reported bug, end to end. You type `/` with the mouse already sitting
+  // where the menu is about to appear. The cursor never moves, so every pointer
+  // event that follows is the engine's, not yours — and the arrow keys must own
+  // the highlight until you genuinely reach for the mouse.
+  it("keeps the keyboard in charge when the menu opens under a parked cursor", () => {
+    fireEvent.keyDown(document, { key: "/" });
+    renderMenu();
+    const items = () => screen.getAllByRole("option");
+
+    // The menu materialising under the cursor makes the engine fire an enter
+    // for the row it landed on. That is not the user pointing at anything.
+    fireEvent.pointerEnter(screen.getByText("Media"));
+    expect(items()[2].hasAttribute("data-active")).toBe(false);
+    expect(items()[0].hasAttribute("data-active")).toBe(true);
+
+    // Arrows walk from the keyboard's position, and stay there.
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    expect(items()[1].hasAttribute("data-active")).toBe(true);
+    fireEvent.pointerEnter(screen.getByText("Media"));
+    expect(items()[1].hasAttribute("data-active")).toBe(true);
+
+    // Reaching for the mouse hands control straight back.
+    fireEvent.pointerMove(document, { clientX: 120, clientY: 64 });
+    fireEvent.pointerEnter(screen.getByText("Media"));
+    expect(items()[2].hasAttribute("data-active")).toBe(true);
   });
 
   it("keyboard arrow navigation takes over from the pointer-entered position", () => {
