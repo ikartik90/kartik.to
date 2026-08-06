@@ -64,13 +64,18 @@ const DRAG_THRESHOLD = 4;
  * two halves of a swap settle together. Kept in step with the
  * `collectionArrive` keyframe's duration in `panda.config.ts`.
  *
- * THIS is the snappiness knob, not the curve. The travel's spring
+ * THIS is the snappiness knob, not the curve. The travel's easing
  * (`LANDING_TRANSLATE_EASE_X`) is written in percentages, so this number alone
  * decides whether its overshoot is a flick or a wobble — and at 280ms it was a
- * wobble. The source spring resolves inside the first 35% of its own length, so
- * running the rescaled form over 280ms stretched the bounce 2.86× against what
- * the curve describes — at 96ms it was only just reaching the top of its
- * overshoot, where it now has one behind it and is nearly at rest.
+ * wobble, the bounce stretched nearly 3× against what the curve described.
+ *
+ * Deliberately UNCHANGED when the travel was retuned from a spring to an
+ * elastic curve. Measured at this duration the two land within a millisecond of
+ * each other (arriving at 21ms against 22ms, peaking at 35ms against 34ms), so
+ * the swap is a change of character and not of pace — which is the point, since
+ * this pace is the one that reads as snappy. Running the elastic curve at its
+ * own source timing instead would mean 161ms, and it arrives at 35ms and rests
+ * at 121ms there: recognisably the same motion, noticeably less urgent.
  *
  * It also lands the release exactly on top of the press. The cell's photo
  * scales under a finger over `100ms ease` (see the `image` slot in
@@ -78,9 +83,9 @@ const DRAG_THRESHOLD = 4;
  * the same gesture symmetrical rather than merely similar.
  *
  * The note this replaces said "not shorter than 280ms", on the grounds that a
- * DECELERATE curve has nothing legible left after its first few frames. A
- * spring is not subject to that: what carries it is an overshoot, which is a
- * change of direction and reads in two frames where a slowing-down needs many.
+ * DECELERATE curve has nothing legible left after its first few frames. An
+ * overshooting curve is not subject to that: what carries it is a change of
+ * DIRECTION, which reads in two frames where a slowing-down needs many.
  */
 const LANDING_MS = 100;
 
@@ -103,14 +108,21 @@ const LANDING_EASE = "ease-out";
  * nothing else. Its vertical twin is `LANDING_TRANSLATE_EASE_Y`, and the two
  * differing is what bends the drop into an arc rather than a straight line.
  *
- * A spring: it crosses nine tenths of the distance in the first fifth of the
- * time, overshoots the slot by 12%, and settles back through one small
- * undershoot. That overshoot is what exempts it from the objection recorded on
- * `LANDING_EASE` above, rather than contradicting it. A front-loaded DECELERATE
- * curve is illegible because everything after the first few frames is an
- * imperceptible crawl towards a target it has effectively already reached; a
- * spring spends those same frames moving VISIBLY, in the other direction.
- * Snappy and legible are the same mechanism here, not a trade between them.
+ * ELASTIC: it accelerates into the slot rather than bolting for it, crosses at
+ * a fifth of the way through, overshoots by 9%, and holds that overshoot for a
+ * beat before easing back through a shallow undershoot. That overshoot is what
+ * exempts it from the objection recorded on `LANDING_EASE` above, rather than
+ * contradicting it. A front-loaded DECELERATE curve is illegible because
+ * everything after the first few frames is an imperceptible crawl towards a
+ * target it has effectively already reached; an elastic one spends those same
+ * frames moving VISIBLY, in the other direction. Snappy and legible are the
+ * same mechanism here, not a trade between them.
+ *
+ * It replaces a stiffer spring that reached the slot in a single burst and
+ * overshot 12%. Same envelope to the millisecond at this duration — see
+ * `LANDING_MS` — so what changed is the character of the approach: the photo
+ * now gathers speed into its slot and hangs a moment past it, instead of
+ * snapping there and rebounding.
  *
  * `translate` ALONE, in an animation of its own, because past 1 this curve
  * means "further than the target". On position that is a photo sliding a little
@@ -118,36 +130,41 @@ const LANDING_EASE = "ease-out";
  * swelling bigger than the slot it is landing in, and on `boxShadow` it is not
  * even meaningful — there is nothing past `none`.
  *
- * The stops are the source curve's, rescaled by 1/0.35. The source is flat at 1
- * from 35% to 100%, and the flight is what tells the grid to COMMIT the swap
- * (see `settleInto`) — so carrying that tail would put a third of a second of
- * dead time between the photo touching down and the photo it displaced fading
- * up in the slot it vacated. Rescaled, the flight ends when the motion does.
+ * The stops are the source curve's, rescaled by 1/0.576. The source is flat at
+ * 1 from 57.6% to 100%, and the flight is what tells the grid to COMMIT the
+ * swap (see `settleInto`) — so carrying that tail would leave the photo landed
+ * and the grid waiting, with the photo it displaced not yet fading up in the
+ * slot it vacated. Rescaled, the flight ends when the motion does.
  *
- *   source: linear(0, 0.029 0.8%, 0.13 1.8%, 0.908 7.2%, 1.051 9.1%,
- *                  1.112 11.2%, 1.116 12.2%, 1.106 13.4%, 1.007 19.5%,
- *                  0.987 23.1%, 1.001 35%, 1)
+ *   source: linear(0, 0.029 1.3%, 0.119 2.8%, 0.659 8.7%, 0.871 11.6%,
+ *                  1.009 14.6%, 1.052 16.2%, 1.078 17.9%, 1.088 19.7%,
+ *                  1.085 21.7%, 1.014 31.4%, 0.993 38%, 1.001 57.6%, 1)
  *
- * Measured against `LANDING_MS`: the photo is on its slot at 24ms, 11% past it
- * at 36ms, back through it by 60ms and still by 100ms. That is the source curve
- * run verbatim over 280ms, give or take the 2ms of rounding 98 up to 100.
+ * Measured against `LANDING_MS`: the photo is on its slot at 22ms, 9% past it
+ * at 34ms, and at rest by 75ms.
  *
  * The rescale is a change of units, never of motion — `rescaled @ D` and
- * `source @ D/0.35` are the same animation — so this curve and `LANDING_MS` are
- * ONE setting in two halves. Retime at `LANDING_MS`, never here.
+ * `source @ D/0.576` are the same animation — so this curve and `LANDING_MS`
+ * are ONE setting in two halves. Retime at `LANDING_MS`, never here. And if a
+ * curve is ever swapped in without rescaling its stops, `LANDING_MS` has to
+ * absorb the whole of that curve's own tail or the drop stalls at the end.
  */
 const LANDING_TRANSLATE_EASE_X =
-  "linear(0, 0.029 2.29%, 0.13 5.14%, 0.908 20.57%, 1.051 26%, 1.112 32%, 1.116 34.86%, 1.106 38.29%, 1.007 55.71%, 0.987 66%, 1)";
+  "linear(0, 0.029 2.26%, 0.119 4.86%, 0.659 15.1%, 0.871 20.14%, 1.009 25.35%, 1.052 28.13%, 1.078 31.08%, 1.088 34.2%, 1.085 37.67%, 1.014 54.51%, 0.993 65.97%, 1)";
 
 /**
  * The vertical half of the travel, and it LEADS. This curve puts 62% of the
- * descent into the first tenth of the flight, where the spring has managed
- * 38% — and that mismatch IS the curve in the path: the photo falls towards
+ * descent into the first tenth of the flight, where the elastic one has managed
+ * 39% — and that mismatch IS the curve in the path: the photo falls towards
  * its row before it has finished crossing to it, so it arcs instead of running
- * the diagonal. Measured against the spring: vertical is up to 32% ahead
- * through the first sixth, the two cross at ~17%, and the horizontal then
- * overtakes and overshoots. As motion, it drops in, swings across, and settles
- * back.
+ * the diagonal. Measured against it: vertical is up to 32% ahead through the
+ * first sixth, the two cross at ~18%, and the horizontal then overtakes and
+ * overshoots. As motion, it drops in, swings across, and settles back.
+ *
+ * Left alone when the horizontal was retuned from a spring to an elastic curve,
+ * and checked rather than assumed: the gap peaks at the same 32%, because what
+ * sets it is how fast THIS curve leaves the line (45% inside the first
+ * twentieth) and both horizontals are near nothing that early.
  *
  * The pairing is chosen, not inherited. Plain `ease-out` is far too slow off
  * the line here — the same gap peaks at 66% and the other way about, so the
@@ -155,11 +172,11 @@ const LANDING_TRANSLATE_EASE_X =
  * descend, which stops reading as a curve and starts reading as an L. This one
  * front-loads hard enough to stay a bow.
  *
- * And the SPRING is the horizontal one, deliberately. The overshoot has to go
+ * And the OVERSHOOTING curve is the horizontal one, deliberately. It has to go
  * somewhere, and vertically there is nowhere for it to go: the grid is two rows
  * inside a prose column, so a photo dropped in the top row would swing up over
  * the heading and back. Across, the overshoot spends itself over the grid's own
- * cells. Swapping which axis springs is these two constants trading places.
+ * cells. Swapping which axis carries it is these two constants trading places.
  */
 const LANDING_TRANSLATE_EASE_Y = "cubic-bezier(0.05, 0.7, 0.1, 1)";
 
