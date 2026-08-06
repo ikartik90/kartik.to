@@ -29,9 +29,23 @@ vi.mock("@paper-design/shaders-react", () => ({
   ),
 }));
 
+// Deciding whether a picture is see-through means decoding it and reading a
+// canvas, neither of which jsdom does — and it is the hook's own contract
+// anyway (see `use-image-transparency.test.tsx`). Here the answer is simply
+// declared, so these tests are about what the GRID does with it.
+const { transparentSrcs } = vi.hoisted(() => ({
+  transparentSrcs: new Set<string>(),
+}));
+vi.mock("@/hooks/use-image-transparency", () => ({
+  useImageTransparency: () => transparentSrcs,
+}));
+
 import { CollectionGrid } from "../collection-grid";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  transparentSrcs.clear();
+});
 
 const items = (...srcs: string[]): CollectionItem[] =>
   srcs.map((src) => ({ src }));
@@ -515,24 +529,119 @@ describe("CollectionGrid", () => {
         .animate;
     });
 
+    type Flight = [Array<Record<string, string>>, KeyframeAnimationOptions];
+    const lastFrame = ([frames]: Flight) => frames[frames.length - 1];
+    const xy = (value: string) =>
+      value.split(" ").map((part) => parseFloat(part) || 0);
+
+    /**
+     * Carry the tile at `from` onto the tile at `to`, letting go at a point
+     * that is NOT the target cell's centre.
+     *
+     * `drag()` releases dead centre, which leaves the clone already sitting
+     * exactly over its slot — so both travel deltas come out zero and an
+     * assertion about where the photo ends up cannot fail. Releasing off-centre
+     * gives the flight real distance to cover on both axes.
+     */
+    function dragOffCentre(from: number, to: number) {
+      layOutCells();
+      const start = centreOf(from);
+      const source = press(from, start);
+      // A nudge first, so the press clears the drag threshold.
+      pointer("pointermove", source, { ...start, clientX: start.clientX + 20 });
+      // Then let go short of the target's centre — still inside that cell, so
+      // it is the cell the photo is dropped on, but far enough off centre that
+      // the flight has ground to cover on BOTH axes.
+      const release = {
+        clientX: centreOf(to).clientX - 30,
+        clientY: centreOf(to).clientY - 30,
+      };
+      pointer("pointermove", source, release);
+      pointer("pointerup", source, release);
+      return source;
+    }
+
+    /** Where the three animations between them leave the photo. */
+    function restingPoint() {
+      const [travelX, travelY] = animate.mock.calls as [Flight, Flight];
+      const [baseX, baseY] = xy(previewNode()!.style.translate);
+      const [dx] = xy(lastFrame(travelX).translate);
+      const [, dy] = xy(lastFrame(travelY).translate);
+      return [baseX + dx, baseY + dy];
+    }
+
     it("flies the photo into the cell it was dropped on", () => {
       const { onReorder } = setup(items("a", "b", "c"));
-      drag(2, 0);
+      dragOffCentre(2, 0);
 
       expect(onReorder).toHaveBeenCalledExactlyOnceWith(2, 0);
-      const [frames] = animate.mock.calls[0] as [
-        Array<Record<string, string>>,
-      ];
+
       // Cell 0 sits at the origin in the laid-out grid, so that is where the
-      // photo comes to rest — not the cell it was lifted from.
-      expect(frames[frames.length - 1].translate).toBe("0px 0px");
-      expect(frames[frames.length - 1].width).toBe("100px");
+      // photo comes to rest — not the cell it was lifted from, and not the
+      // off-centre point it was released at. The two axes are animated
+      // separately and both are deltas, so this is the sum of all three
+      // numbers: drop either axis and the photo lands somewhere else.
+      expect(restingPoint()).toEqual([0, 0]);
+
+      const [, , settle] = animate.mock.calls as [Flight, Flight, Flight];
+      expect(lastFrame(settle).width).toBe("100px");
       // And it lets go of the press as it lands, so it sits flush with the
       // photo already in the slot rather than arriving a hair small or askew.
-      expect(frames[frames.length - 1].scale).toBe("1");
-      expect(frames[frames.length - 1].rotate).toBe("0deg");
+      expect(lastFrame(settle).scale).toBe("1");
+      expect(lastFrame(settle).rotate).toBe("0deg");
       // Still on screen, travelling. It leaves when it arrives.
       expect(previewNode()).not.toBeNull();
+    });
+
+    // Three animations, one beat. The travel is split per AXIS because
+    // `translate` is one property taking two values — one animation can only
+    // ease both identically, which is a straight line — and the halves must
+    // ADD rather than replace, or the second silently cancels the first.
+    it("bends the travel by easing each axis on its own", () => {
+      setup(items("a", "b", "c"));
+      dragOffCentre(2, 0);
+      const [travelX, travelY] = animate.mock.calls as [Flight, Flight];
+
+      // Each axis moves its own coordinate and leaves the other at rest.
+      expect(xy(lastFrame(travelX).translate)[1]).toBe(0);
+      expect(xy(lastFrame(travelY).translate)[0]).toBe(0);
+      expect(xy(lastFrame(travelX).translate)[0]).not.toBe(0);
+      expect(xy(lastFrame(travelY).translate)[1]).not.toBe(0);
+
+      // Summed onto the position the drag left behind, not replacing it.
+      expect(travelX[1].composite).toBe("add");
+      expect(travelY[1].composite).toBe("add");
+
+      // Different curves — which is the whole reason the travel is split at
+      // all. Equal easings would be a straight line and one animation.
+      expect(travelX[1].easing).toMatch(/^linear\(/);
+      expect(travelY[1].easing).not.toBe(travelX[1].easing);
+    });
+
+    // The overshoot is a statement about POSITION and nothing else: the same
+    // curve on `width` would swell the card bigger than the slot it is landing
+    // in, and there is nothing past `none` for `boxShadow` to overshoot to.
+    // Disjoint property sets are what let the settle carry its own easing —
+    // and it must stay the same length as the travel, or the card arrives
+    // before it has finished resizing.
+    it("keeps the springing travel off everything that merely settles", () => {
+      setup(items("a", "b", "c"));
+      dragOffCentre(2, 0);
+      const [travelX, travelY, settle] = animate.mock.calls as [
+        Flight,
+        Flight,
+        Flight,
+      ];
+
+      for (const [frames] of [travelX, travelY]) {
+        expect(frames.every((f) => Object.keys(f).join() === "translate")).toBe(
+          true,
+        );
+      }
+      expect(settle[0].some((frame) => "translate" in frame)).toBe(false);
+      expect(settle[1].easing).toBe("ease-out");
+      expect(settle[1].duration).toBe(travelX[1].duration);
+      expect(travelY[1].duration).toBe(travelX[1].duration);
     });
 
     it("hands back to the grid once it lands", () => {
@@ -1073,6 +1182,127 @@ describe("CollectionGrid properties panel", () => {
   });
 });
 
+// The cursor ends a drag wherever the gesture put it. That it happens to be
+// over the photo you just dropped is a fact about where the drag finished, not
+// a request to see that photo's controls — so the overlay waits to be asked.
+describe("CollectionGrid hover after a drop", () => {
+  const idle = () => grid().hasAttribute("data-pointer-idle");
+
+  const movePointer = (at: { clientX: number; clientY: number }) => {
+    const event = new MouseEvent("pointermove", { bubbles: true, ...at });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    fireEvent(document, event);
+  };
+
+  it("holds the overlay down where a drag left the cursor", () => {
+    setup(items("a", "b", "c"));
+    expect(idle()).toBe(false);
+
+    drag(0, 1);
+
+    expect(idle()).toBe(true);
+  });
+
+  it("brings it back as soon as the pointer actually moves", () => {
+    setup(items("a", "b", "c"));
+    drag(0, 1);
+
+    movePointer({ clientX: centreOf(1).clientX + 5, clientY: centreOf(1).clientY });
+
+    expect(idle()).toBe(false);
+  });
+
+  // A pointermove can be dispatched at the position the pointer already
+  // occupies. Nothing moved, so nothing was asked for.
+  it("is not woken by a move that goes nowhere", () => {
+    setup(items("a", "b", "c"));
+    drag(0, 1);
+
+    movePointer(centreOf(1));
+
+    expect(idle()).toBe(true);
+  });
+
+  // Tabbing in is a request in its own right, and the suppression is blunt
+  // enough to hide a focused toolbar if it were left standing.
+  it("gives way to the keyboard", () => {
+    setup(items("a", "b", "c"));
+    drag(0, 1);
+
+    fireEvent.focusIn(toolbarFor(1));
+
+    expect(idle()).toBe(false);
+  });
+
+  // A press that never became a drag leaves the cursor exactly where the hand
+  // put it — the hover it is sitting in is the one it asked for.
+  it("leaves a press that never travelled alone", () => {
+    setup(items("a", "b", "c"));
+    layOutCells();
+    const source = press(0);
+    pointer("pointerup", source, centreOf(0));
+
+    expect(idle()).toBe(false);
+  });
+
+  // Escape, or the system taking the pointer away, ends the gesture without a
+  // drop — but the cursor is still parked wherever the drag abandoned it.
+  it("holds it down for an abandoned drag too", () => {
+    setup(items("a", "b", "c"));
+    layOutCells();
+    const source = press(0);
+    pointer("pointermove", source, { clientX: 250, clientY: 50 });
+    pointer("pointercancel", source, { clientX: 250, clientY: 50 });
+
+    expect(idle()).toBe(true);
+  });
+});
+
+describe("CollectionGrid transparency checkerboard", () => {
+  const imageAt = (index: number) => cells()[index].querySelector("img")!;
+
+  // Without it there is nothing on screen to tell "this picture has no
+  // background" from "this slot is empty" — a transparent screenshot of dark UI
+  // on a dark theme is simply absent.
+  it("stands a see-through picture on a checkerboard", () => {
+    transparentSrcs.add("a");
+    setup(items("a", "b"));
+
+    expect(imageAt(0).dataset.checkered).toBe("");
+  });
+
+  it("leaves an opaque picture alone", () => {
+    setup(items("a", "b"));
+
+    expect(imageAt(0).dataset.checkered).toBeUndefined();
+  });
+
+  // The two grounds are exclusive: a gradient IS the background this picture
+  // was missing, so offering the checkerboard as well would be offering it
+  // twice — and the photo's own background box would paint over the gradient
+  // rather than beside it.
+  it("yields to a background effect", () => {
+    transparentSrcs.add("a");
+    setup([{ src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT }]);
+
+    expect(imageAt(0).dataset.checkered).toBeUndefined();
+    expect(cells()[0].querySelector("[data-background-effect]")).not.toBeNull();
+  });
+
+  // Keyed on the PICTURE, not the slot — the same reason the properties panel
+  // is. A reorder moves the ground with the photo it belongs to.
+  it("follows its picture across a reorder", () => {
+    transparentSrcs.add("a");
+    setupLive(items("a", "b", "c"));
+
+    drag(0, 2);
+
+    expect(imageAt(2).getAttribute("src")).toBe("a");
+    expect(imageAt(2).dataset.checkered).toBe("");
+    expect(imageAt(0).dataset.checkered).toBeUndefined();
+  });
+});
+
 describe("CollectionGrid background effect travels with the photo", () => {
   const preview = () =>
     document.body.querySelector<HTMLElement>(
@@ -1110,6 +1340,21 @@ describe("CollectionGrid background effect travels with the photo", () => {
     pointer("pointermove", source, { clientX: 60, clientY: 50 });
 
     expect(preview()!.style.backgroundImage).toBe("");
+
+    pointer("pointerup", source, centreOf(0));
+  });
+
+  // The checkerboard rides along for free — the clone is a copy of the <img>
+  // that was wearing it, and `cloneNode` keeps the attribute the pattern hangs
+  // off. Asserted so a future clone built from scratch cannot quietly drop it.
+  it("carries the checkerboard onto the clone", () => {
+    transparentSrcs.add("a");
+    setup(items("a", "b"));
+    layOutCells();
+    const source = press(0, centreOf(0));
+    pointer("pointermove", source, { clientX: 60, clientY: 50 });
+
+    expect(preview()!.dataset.checkered).toBe("");
 
     pointer("pointerup", source, centreOf(0));
   });

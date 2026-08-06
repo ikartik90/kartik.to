@@ -37,6 +37,31 @@ const QUOTE_GLYPH_STROKE_MASK = quoteGlyphMask(
 );
 
 /**
+ * The transparency checkerboard — the ground under a picture that has an alpha
+ * channel and no background effect of its own.
+ *
+ * Painted as the PICTURE'S OWN background rather than as a layer behind it,
+ * which the gradient has to be. A background box is the one ground that cannot
+ * come apart from the thing standing on it: it clips to the same corners, and
+ * it takes the editor's press scale and tilt for free, where the shader needed
+ * its own transform rules stated to keep up. It is also why the drag clone gets
+ * this for nothing — the clone IS the <img>, so the checkerboard travels with
+ * it exactly as the gradient's snapshot does.
+ *
+ * Two 8px squares in a 16px tile, from the app's own surfaces rather than the
+ * usual white/grey: on a dark theme a grey checkerboard is a light box behind a
+ * dark picture. `canvas` and `surface` are one neutral step apart in either
+ * theme, which is enough to read as a pattern and not enough to compete with
+ * the artwork it is holding up.
+ */
+const transparencyCheckerboard = {
+  backgroundColor: "bg.canvas",
+  backgroundImage:
+    "conic-gradient(token(colors.bg.surface) 25%, transparent 0 50%, token(colors.bg.surface) 0 75%, transparent 0)",
+  backgroundSize: "token(spacing.xl) token(spacing.xl)",
+} as const;
+
+/**
  * The column every list marker occupies — a fixed 24px box centring whatever
  * ink the marker draws, on the first text line via `marginBlockStart` of
  * (28px bodyLarge line box - 24) / 2. Fixed so the prose column starts at the
@@ -3354,7 +3379,7 @@ export default defineConfig({
               // `LANDING_EASE` in `collection-grid.tsx` — the two halves of a
               // swap have to come to rest together.
               "&[data-arriving] > *": {
-                animation: "collectionArrive 280ms ease-out",
+                animation: "collectionArrive 100ms ease-out",
               },
               // The tile about to RECEIVE it says so twice: a brand wash laid
               // over the photo, and the accent ring — the same one focus uses,
@@ -3444,6 +3469,21 @@ export default defineConfig({
               // sibling however late in the DOM that sibling comes.
               position: "relative",
               zIndex: 1,
+              // The picture is see-through and has no gradient standing behind
+              // it, so it stands on the checkerboard instead. The editor says
+              // which pictures those are (`useImageTransparency`); the reader
+              // never sets this, and a picture WITH a gradient never sets it
+              // either — a photo's background box paints over the layer behind
+              // it, so the two grounds are exclusive by construction as well as
+              // by intent.
+              //
+              // Deliberately NOT a rung of the paint ladder below. A picture
+              // has exactly one ground, so a second layer would only be
+              // something to order against the first; as the photo's own
+              // background box it cannot come apart from the photo at all. That
+              // is also what carries it onto the drag clone, which is a copy of
+              // this <img> — see `dragPreview`.
+              "&[data-checkered]": transparencyCheckerboard,
             },
             // The gradient painted behind a photo whose background effect is
             // on. The image stays `cover`, so this shows only where the picture
@@ -3525,6 +3565,17 @@ export default defineConfig({
               // Must equal the cell's `&[data-pressed] > img` scale AND tilt
               // above — this is the same press, on a second element.
               "&[data-carried]": { scale: "0.94", rotate: "2deg" },
+              // The clone's className is REPLACED with this slot's, so the
+              // checkerboard has to be restated here — but the attribute
+              // driving it survives `cloneNode`, so nothing in the drag has to
+              // know about it. A picture that was standing on its checkerboard
+              // in the cell keeps standing on it in the air, which is the same
+              // deal the gradient gets from its snapshot (and the two never
+              // collide: a picture with a gradient is not marked). Careful with
+              // the ordering — that snapshot is written as an INLINE
+              // `background-image`, which replaces this pattern rather than
+              // layering over it.
+              "&[data-checkered]": transparencyCheckerboard,
               willChange: "translate, scale, rotate",
               // Lifted off the grid, so it reads as being held rather than
               // lying in a slot.
@@ -3742,6 +3793,25 @@ export default defineConfig({
               // abrupt, letting go is not.
               "[data-collection-grid][data-reordering] [data-collection-cell] &":
                 { opacity: 0, transition: "none" },
+              // And it STAYS down once the gesture is over, for as long as the
+              // pointer has not moved. A drag necessarily ends with the cursor
+              // over the photo it dropped, so `:hover` matches the moment the
+              // rule above lets go — reporting where the gesture finished as
+              // though it were a reach for the controls. See `pointerIdle` in
+              // `collection-grid.tsx`.
+              //
+              // The same selector shape as the rule above, and for the same
+              // reason: it has to out-specify `:hover`. Harmless when both
+              // match (a fresh press before the pointer has moved) — they agree
+              // on `opacity`, and only the rule above claims `transition`, so
+              // the press still stands the scrim down instantly.
+              //
+              // No `transition` of its own, deliberately: this state is entered
+              // from an overlay that is ALREADY down, so there is nothing to
+              // animate on the way in, and the fade on the way out should be
+              // the ordinary hover fade.
+              "[data-collection-grid][data-pointer-idle] [data-collection-cell] &":
+                { opacity: 0 },
               // ...and in the cell a photo is FLYING INTO, it comes back over
               // the length of that flight rather than the shorter hover fade,
               // so the blur arrives exactly as the photo settles into the slot
@@ -3751,7 +3821,7 @@ export default defineConfig({
               // `data-landing` is set in the same commit that clears
               // `data-reordering`, so the two are never on together.
               "[data-collection-cell][data-landing] &": {
-                transition: "opacity 280ms ease-out",
+                transition: "opacity 100ms ease-out",
               },
             },
             toolbar: {
@@ -3769,9 +3839,14 @@ export default defineConfig({
               // Out at once, back in when the state clears — see the scrim.
               "[data-collection-grid][data-reordering] [data-collection-cell] &":
                 { opacity: 0, pointerEvents: "none", transition: "none" },
+              // Held down until the pointer moves after a drop — see the
+              // scrim's note. Inert as well as invisible: a control you cannot
+              // see must not be a control you can hit.
+              "[data-collection-grid][data-pointer-idle] [data-collection-cell] &":
+                { opacity: 0, pointerEvents: "none" },
               // Paced to the flight in the cell being landed in — see the scrim.
               "[data-collection-cell][data-landing] &": {
-                transition: "opacity 280ms ease-out",
+                transition: "opacity 100ms ease-out",
               },
               display: "flex",
               alignItems: "center",
