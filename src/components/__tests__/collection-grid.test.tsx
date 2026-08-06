@@ -624,7 +624,7 @@ describe("CollectionGrid", () => {
     // Disjoint property sets are what let the settle carry its own easing —
     // and it must stay the same length as the travel, or the card arrives
     // before it has finished resizing.
-    it("keeps the springing travel off everything that merely settles", () => {
+    it("keeps the overshooting travel off everything that merely settles", () => {
       setup(items("a", "b", "c"));
       dragOffCentre(2, 0);
       const [travelX, travelY, settle] = animate.mock.calls as [
