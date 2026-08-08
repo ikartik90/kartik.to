@@ -130,6 +130,17 @@ const footerStyle = css({
   borderTopWidth: "token(spacing.none)",
 });
 
+// The footer's wireframe block (Figma 902:2466) — a bare rail carrying only the
+// section's side hairlines, so an EMPTY one occupies no height at all. Whatever
+// fills it owns its own padding, because a demo that animates this slot open
+// needs that padding to travel with the content rather than outlive it.
+const footerFillStyle = css({
+  borderStyle: "solid",
+  borderColor: wireBorder,
+  borderInlineWidth: "token(spacing.xxs)",
+  borderBlockWidth: "token(spacing.none)",
+});
+
 const footerWrapStyle = css({
   "&::before": {
     content: '""',
@@ -173,10 +184,17 @@ const wirePrimaryButtonStyle = css({
 export interface ShiftFormShellProps {
   /** The live form surface, between the two wireframe sections. */
   children: ReactNode;
+  /**
+   * Wireframe standing in for the rest of the form, in the footer section
+   * between the torn top shim and the Action Bar (Figma 902:2466). Optional and
+   * zero-height when omitted — v1 uses it as the counterweight that keeps the
+   * dialog one height as its recurrence block folds away.
+   */
+  footerFill?: ReactNode;
 }
 
 /** "Post a Shift" wireframe chrome: header, torn form surface, footer. */
-export function ShiftFormShell({ children }: ShiftFormShellProps) {
+export function ShiftFormShell({ children, footerFill }: ShiftFormShellProps) {
   return (
     <div className={stackStyle}>
       {/* Non-interactive wireframe header — top/side borders, torn bottom shim. */}
@@ -193,6 +211,11 @@ export function ShiftFormShell({ children }: ShiftFormShellProps) {
 
       {/* Non-interactive wireframe footer — bottom/side borders, torn top shim. */}
       <div className={footerWrapStyle}>
+        {footerFill ? (
+          <div className={footerFillStyle} data-testid="footer-fill">
+            {footerFill}
+          </div>
+        ) : null}
         <div className={footerStyle}>
           <span className={wireButtonStyle}>Cancel</span>
           <span className={wirePrimaryButtonStyle}>Post Shift</span>

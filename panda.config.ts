@@ -397,9 +397,18 @@ export default defineConfig({
           },
 
           border: {
+            // A hairline needs more alpha to read on a dark ground than on a
+            // light one, so it steps 25% → 50% exactly as `field.border.default`
+            // does. Held to the SAME pair on purpose: the two are indistinguishable
+            // in light UI, and a divider that stayed at 25% while every input
+            // frame beside it went to 50% would read as a fainter class of rule
+            // in dark only.
             divider: {
-              value:
-                "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+              value: {
+                base: "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-neutral-500) 50%, transparent)",
+              },
             },
             // 10% opacity inset outline for images (interface-design rule 11)
             imageOutline: {
@@ -1082,8 +1091,24 @@ export default defineConfig({
             width: "token(spacing.full)",
             maxWidth: "token(spacing.full)",
             flexShrink: 0,
-            paddingBlockStart: "xxl",
-            paddingBlockEnd: "lg",
+            // Even 20px top and bottom — the 40px `getDemoFrameMinHeight`
+            // reserves for a frame, split in two. The logger variant is the one
+            // case that trims the foot, and it says why.
+            paddingBlock: "xxl",
+            // The same 20px at the sides, but where the block padding is always
+            // spent, this is only ever FELT when the demo is too wide for the
+            // frame. A demo that fits is centred and never reaches the inset:
+            // `demoFrameDemoMeasure` is `fit-content`, and a logger frame's
+            // stretched child is still held by its own max-width. Below that
+            // point the inset is what the demo is clamped to, so a narrow frame
+            // gives it a gutter instead of running it into the edge.
+            //
+            // It costs the height arithmetic nothing: `aspect-ratio` sizes the
+            // BORDER box, and `getDemoFrameMinHeight` counts only the 40px of
+            // block padding, so the ratio-vs-content floor resolves exactly as
+            // before — a squeezed demo simply measures taller, which is the
+            // input that floor already takes.
+            paddingInline: "xxl",
           },
           variants: {
             aspectRatio: {
@@ -1095,6 +1120,11 @@ export default defineConfig({
               true: {
                 height: "auto",
                 aspectRatio: "unset",
+                // A logger footer follows, and `demoLoggerSection` carries an
+                // 8px inset of its own. Trimming the area's foot to 12 lets the
+                // two add back up to 20, so the demo still sits evenly between
+                // the frame's top edge and the logger panel.
+                paddingBlockEnd: "lg",
                 "& > *": {
                   width: "token(spacing.full)",
                   maxWidth: "token(spacing.full)",

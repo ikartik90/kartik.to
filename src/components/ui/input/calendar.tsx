@@ -30,6 +30,8 @@ import {
 } from "@/utils/calendar-month";
 import { Field, useField, type FieldSearchProps } from "./field";
 import { Button, type ButtonProps } from "@/components/ui/button";
+import { Tooltip, TooltipHostContext } from "@/components/ui/tooltip";
+import { useHintTooltip } from "@/hooks/use-hint-tooltip";
 
 // ---------------------------------------------------------------------------
 // Calendar — the composable grid behind the Date input's popover.
@@ -56,8 +58,11 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 // THEIR month rather than the root's — which is what makes one template render
 // April, May and June without any of them taking a prop.
 //
-// `months` (default 1) sets the range size, and the chevrons page a whole range
-// at a time. Every day cell surfaces its state (aria-selected, data-state=today,
+// `months` (default 1) sets the range size, and `step` (default `months`) how
+// far one chevron press moves it — equal by default, so the range PAGES and
+// nothing on screen repeats; `step={1}` on a wider range WALKS it instead,
+// keeping most of the previous view as context. Every day cell surfaces its
+// state (aria-selected, data-state=today,
 // data-outside, :disabled) AND identity (data-weekday, data-weekend) as
 // attributes, so the look is fully re-skinnable off selectors.
 //
@@ -74,6 +79,11 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 //     and why it never depends on the path the cursor took.
 //   • Shift+Arrow — a path, since a keyboard caret has no second corner to drag.
 //     A run flips what it steps onto, and reversing over it rubs it out.
+//
+// Neither gesture is visible in the chrome, so a `Calendar.Tooltip` dropped in
+// the `PeriodList` volunteers the drag: the cursor-following tooltip, shown
+// while the pointer is over the draggable area, withdrawing after a few seconds
+// and for good after the first drag (the consumer writes the copy).
 // ---------------------------------------------------------------------------
 
 const MONTH_NAMES = [
@@ -125,8 +135,8 @@ type CalendarContextValue = {
   max?: Temporal.PlainDate;
   /** First-of-month for the FIRST month of the visible range. */
   view: Temporal.PlainDate;
-  /** How many months the range spans — what one chevron press pages by. */
-  months: number;
+  /** How many months one chevron press moves — NOT the range's width. */
+  step: number;
   /** The date the search currently resolves to — Enter's pending target. */
   query: Temporal.PlainDate | null;
   /**
@@ -304,10 +314,19 @@ export interface CalendarProps
   weekStartsOn?: WeekdayKey;
   /**
    * How many consecutive months the range shows, starting at the view — one
-   * `Calendar.Period` each. The chevrons page a whole range at a time, so
-   * `months={3}` steps Apr–Jun ▸ Jul–Sep. Defaults to 1.
+   * `Calendar.Period` each. Defaults to 1.
    */
   months?: number;
+  /**
+   * How many months one chevron press moves. Defaults to `months`, which PAGES:
+   * the range turns over completely, so nothing on screen repeats
+   * (Apr–Jun ▸ Jul–Sep). Set `step={1}` on a wider range to WALK it instead
+   * (Apr–Jun ▸ May–Jul), which costs a press to cross the same distance but
+   * keeps most of what you were just reading on screen — the right trade when
+   * the months are being compared rather than flipped through. Also sets what
+   * PageUp/PageDown move by, so the keyboard matches the chevrons.
+   */
+  step?: number;
   /**
    * Parses a dropped-in `Field.Search`'s raw query into a date to navigate to
    * (e.g. `parseCalendarDate("DD/MM/YYYY")`). The box stays dumb — it emits the
@@ -326,7 +345,8 @@ export interface CalendarProps
    * each a full-height gradient scrim with the chevron centred in it, which is
    * what a range WIDER than its frame wants: the fade dissolves the half-cut
    * outer columns rather than leaving them on a hard crop, and centring suits
-   * chevrons that page the whole run rather than any one month.
+   * chevrons that belong to the whole run rather than to any one month's
+   * label row.
    */
   navPlacement?: "label" | "edge";
   /** Override "today" — primarily for tests/deterministic rendering. */
@@ -348,6 +368,7 @@ function CalendarRoot({
   max,
   weekStartsOn = "sun",
   months = 1,
+  step: stepProp,
   queryParser,
   tone = "default",
   navPlacement = "label",
@@ -626,9 +647,10 @@ function CalendarRoot({
       ?.focus();
   }, [focusDate, view]);
 
-  // One chevron press moves a whole range, so the months on screen never repeat
-  // between pages (Apr–Jun ▸ Jul–Sep, not Apr–Jun ▸ May–Jul).
-  const stride = Math.max(1, months);
+  // Unset, a chevron press moves a whole range, so the months on screen never
+  // repeat between pages (Apr–Jun ▸ Jul–Sep). `step` decouples the two — how
+  // far the chevrons move is a separate question from how much is on show.
+  const stride = Math.max(1, stepProp ?? months);
 
   const ctx: CalendarContextValue = {
     styles,
@@ -639,7 +661,7 @@ function CalendarRoot({
     min,
     max,
     view,
-    months: stride,
+    step: stride,
     query,
     activeDate,
     periods,
@@ -746,8 +768,10 @@ function CalendarNav({
   ...rest
 }: CalendarNavProps & { direction: CalendarNavDirection }) {
   const part = direction === "prev" ? "Calendar.Prev" : "Calendar.Next";
-  const { styles, months, prevPage, nextPage } = useCalendar(part);
-  const unit = months === 1 ? "month" : `${months} months`;
+  // Named for the distance it MOVES, not the width of the range — a chevron
+  // announcing "Next 3 months" that advances one is worse than no label.
+  const { styles, step, prevPage, nextPage } = useCalendar(part);
+  const unit = step === 1 ? "month" : `${step} months`;
 
   // The chevron sits in a positioned wrapper rather than being positioned
   // itself: it renders a `Button`, and Panda emits plain recipes into a layer
@@ -768,12 +792,12 @@ function CalendarNav({
   );
 }
 
-/** Pages the range back one full range. */
+/** Moves the range back by one `step` (a whole range unless `step` says less). */
 function CalendarPrev(props: CalendarNavProps) {
   return <CalendarNav direction="prev" {...props} />;
 }
 
-/** Pages the range forward one full range. */
+/** Moves the range forward by one `step`. */
 function CalendarNext(props: CalendarNavProps) {
   return <CalendarNav direction="next" {...props} />;
 }
@@ -786,27 +810,60 @@ export type CalendarPeriodListProps = HTMLAttributes<HTMLDivElement>;
  * other child alone — including the navs, which wire themselves. Dropping a
  * `Calendar.Prev`/`Calendar.Next` directly in here pins it to the matching
  * corner, so one pair flanks the WHOLE range rather than any single month.
+ *
+ * It is also the DRAGGABLE area, which is why an optional `Calendar.Tooltip`
+ * dropped in here is the sweep's hint — see `useHintTooltip` below.
  */
 function CalendarPeriodList({
   className,
   children,
   onPointerDown,
+  onMouseEnter,
+  onMouseLeave,
   ...rest
 }: CalendarPeriodListProps) {
   const { styles, periods, sweep, dragStart, band } =
     useCalendar("Calendar.PeriodList");
 
+  // A `Calendar.Tooltip` child is lifted out of the flow and hosted here: this
+  // list IS the draggable area, so pointing at it is exactly the moment the
+  // sweep is worth mentioning. It teaches rather than labels, hence the hint
+  // clocks — a few seconds per hover, and gone for good after the first drag.
+  const items = Children.toArray(children);
+  const hint = items.find(
+    (child) => isValidElement(child) && child.type === Tooltip,
+  );
+  const {
+    ref: hintRef,
+    visible: hintVisible,
+    show: showHint,
+    hide: hideHint,
+    retire: retireHint,
+  } = useHintTooltip();
+  // No hint to give when there is no gesture to teach: `sweep` is already the
+  // folded "can this calendar sweep at all" answer.
+  const hinting = Boolean(hint) && sweep;
+
+  // `band` is non-null only once a press has cleared DRAG_THRESHOLD — which is
+  // precisely "the user dragged". A click never draws one, so it never retires
+  // a hint the user hasn't acted on yet.
+  useEffect(() => {
+    if (band) retireHint();
+  }, [band, retireHint]);
+
   // The one child this part does rewrite: `Period` is a TEMPLATE, not a role —
   // it has to be a direct child because it's stamped out once per month.
-  const expanded = Children.toArray(children).flatMap((child) => {
-    if (isValidElement(child) && child.type === CalendarPeriod) {
-      const el = child as ReactElement<CalendarPeriodProps>;
-      return periods.map((period) =>
-        cloneElement(el, { key: period.key, period }),
-      );
-    }
-    return child;
-  });
+  const expanded = items
+    .filter((child) => child !== hint)
+    .flatMap((child) => {
+      if (isValidElement(child) && child.type === CalendarPeriod) {
+        const el = child as ReactElement<CalendarPeriodProps>;
+        return periods.map((period) =>
+          cloneElement(el, { key: period.key, period }),
+        );
+      }
+      return child;
+    });
 
   return (
     <div
@@ -828,6 +885,15 @@ function CalendarPeriodList({
           event.currentTarget.getBoundingClientRect(),
         );
       }}
+      onMouseEnter={(event: ReactMouseEvent<HTMLDivElement>) => {
+        onMouseEnter?.(event);
+        // Seeded at the cursor so it opens in place, exactly like Button's.
+        if (hinting) showHint(event.clientX, event.clientY);
+      }}
+      onMouseLeave={(event: ReactMouseEvent<HTMLDivElement>) => {
+        onMouseLeave?.(event);
+        if (hinting) hideHint();
+      }}
       {...rest}
     >
       {expanded}
@@ -842,6 +908,14 @@ function CalendarPeriodList({
             height: `${band.height}px`,
           }}
         />
+      ) : null}
+      {hint ? (
+        // A plain sibling: the tooltip box is `position: fixed` and placed by
+        // the ref, so it needs no positioned ancestor and takes no layout slot
+        // in this flex row.
+        <TooltipHostContext.Provider value={{ ref: hintRef, visible: hintVisible }}>
+          {hint}
+        </TooltipHostContext.Provider>
       ) : null}
     </div>
   );
@@ -992,7 +1066,7 @@ function CalendarDate({
     max,
     query,
     activeDate,
-    months: stride,
+    step: stride,
     select,
     toggle,
     anchorFocus,
@@ -1090,9 +1164,9 @@ function CalendarDate({
           );
           return;
         }
-        // Paging moves by a whole RANGE, matching the chevrons, and keeps the
-        // day-of-month — so PageDown/PageUp round-trips back to where you
-        // started (Temporal clamps a short month for you).
+        // Paging moves by the chevrons' own step, and keeps the day-of-month —
+        // so PageDown/PageUp round-trips back to where you started (Temporal
+        // clamps a short month for you).
         if (event.key === "PageUp" || event.key === "PageDown") {
           event.preventDefault();
           const months = event.key === "PageUp" ? -stride : stride;
@@ -1114,6 +1188,7 @@ function CalendarDate({
  */
 export const Calendar = Object.assign(CalendarRoot, {
   PeriodList: CalendarPeriodList,
+  Tooltip,
   Prev: CalendarPrev,
   Next: CalendarNext,
   Period: CalendarPeriod,

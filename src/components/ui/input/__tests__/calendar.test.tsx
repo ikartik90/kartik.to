@@ -1,8 +1,9 @@
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { Calendar } from "../calendar";
 import { Field } from "../field";
+import { Tooltip } from "@/components/ui/tooltip";
 import { parseCalendarDate } from "@/utils/calendar-date";
 
 const TODAY = Temporal.PlainDate.from("2026-12-11");
@@ -185,6 +186,67 @@ describe("month navigation", () => {
       .filter((c) => c.getAttribute("tabindex") === "0");
     expect(tabbable).toHaveLength(1);
     expect(tabbable[0].getAttribute("aria-label")).toBe("December 5, 2026");
+  });
+});
+
+// How far a chevron moves and how much is on show are separate questions. A
+// range that pages a clear screenful never repeats a month, but it also throws
+// away the context it just built; `step` lets a wide range walk instead, so
+// most of what you were reading stays on screen.
+describe("paging step", () => {
+  const range = (props: Partial<React.ComponentProps<typeof Calendar>>) =>
+    render(
+      <Field>
+        <Calendar today={TODAY} months={3} {...props}>
+          <Calendar.PeriodList>
+            <Calendar.Prev>‹</Calendar.Prev>
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
+            <Calendar.Next>›</Calendar.Next>
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+
+  it("pages a whole range at a time by default", () => {
+    range({});
+    expect(screen.getByText("December 2026")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next 3 months" }));
+    // Dec–Feb ▸ Mar–May: nothing on screen repeats.
+    expect(screen.getByText("March 2027")).toBeTruthy();
+    expect(screen.queryByText("December 2026")).toBeNull();
+  });
+
+  it("walks one month at a time when step is 1", () => {
+    range({ step: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    // Dec–Feb ▸ Jan–Mar: two of the three months carry over.
+    expect(screen.getByText("January 2027")).toBeTruthy();
+    expect(screen.getByText("March 2027")).toBeTruthy();
+    expect(screen.queryByText("December 2026")).toBeNull();
+  });
+
+  it("steps back by the same one month", () => {
+    range({ step: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText("December 2026")).toBeTruthy();
+    expect(screen.getByText("February 2027")).toBeTruthy();
+  });
+
+  // The label has to describe what the button DOES, not how wide the range is —
+  // a chevron announcing "Next 3 months" that moves one is worse than no label.
+  it("names the chevrons after the step, not the range", () => {
+    range({ step: 1 });
+    expect(screen.getByRole("button", { name: "Next month" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Next 3 months" })).toBeNull();
   });
 });
 
@@ -1165,6 +1227,135 @@ describe("the drag band", () => {
     fireEvent.pointerMove(window, { clientX: a.x + 1, clientY: a.y });
     expect(marqueeEl()).toBeNull();
     fireEvent.pointerUp(window);
+  });
+});
+
+// A `Tooltip` dropped in the period list is the SWEEP's hint: it teaches the
+// drag, so it withdraws itself after a few seconds and for good once you have
+// actually dragged.
+describe("the sweep hint", () => {
+  const HINT = "Drag to select multiple";
+
+  function renderHinted(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
+    return render(
+      <Field>
+        <Calendar today={TODAY} selectionMode="multiple" {...props}>
+          <Calendar.PeriodList>
+            <Calendar.Tooltip>
+              <Tooltip.Text>{HINT}</Tooltip.Text>
+            </Calendar.Tooltip>
+            <Calendar.Prev>‹</Calendar.Prev>
+            <Calendar.Period>
+              <Calendar.Month />
+              <Calendar.Week>
+                <Calendar.Day />
+              </Calendar.Week>
+              <Calendar.Grid>
+                <Calendar.Date />
+              </Calendar.Grid>
+            </Calendar.Period>
+            <Calendar.Next>›</Calendar.Next>
+          </Calendar.PeriodList>
+        </Calendar>
+      </Field>,
+    );
+  }
+
+  /** The period list — the draggable area the hint describes. */
+  const list = () => screen.getAllByRole("grid")[0].parentElement!.parentElement!;
+  const hint = () => screen.getByText(HINT).parentElement as HTMLElement;
+  const showing = () => hint().hasAttribute("data-visible");
+
+  const enter = () =>
+    fireEvent.mouseEnter(list(), { clientX: 40, clientY: 40 });
+
+  it("renders decoratively, and stays hidden until the pointer arrives", () => {
+    renderHinted();
+    expect(hint().getAttribute("aria-hidden")).toBe("true");
+    expect(showing()).toBe(false);
+  });
+
+  it("appears while the pointer is over the draggable area", () => {
+    renderHinted();
+    enter();
+    expect(showing()).toBe(true);
+  });
+
+  it("follows the cursor, like every other tooltip here", () => {
+    renderHinted();
+    fireEvent.mouseEnter(list(), { clientX: 100, clientY: 200 });
+    // CURSOR_TOOLTIP_OFFSET — the box trails the cursor by (15, 17).
+    expect(hint().style.left).toBe("115px");
+    expect(hint().style.top).toBe("217px");
+  });
+
+  it("withdraws itself after three seconds of pointing", () => {
+    vi.useFakeTimers();
+    try {
+      renderHinted();
+      enter();
+      act(() => vi.advanceTimersByTime(2999));
+      expect(showing()).toBe(true);
+      act(() => vi.advanceTimersByTime(1));
+      expect(showing()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("goes away when the pointer leaves", () => {
+    renderHinted();
+    enter();
+    fireEvent.mouseLeave(list());
+    expect(showing()).toBe(false);
+  });
+
+  it("retires on the first real drag, and never comes back", () => {
+    renderHinted();
+    layoutGrids();
+    enter();
+    expect(showing()).toBe(true);
+
+    marquee("December 7, 2026", "December 9, 2026");
+    expect(showing()).toBe(false);
+
+    // The gesture has been performed — pointing at the grid again teaches
+    // nothing, so the hint stays down.
+    fireEvent.mouseLeave(list());
+    enter();
+    expect(showing()).toBe(false);
+  });
+
+  it("survives a press that never became a drag", () => {
+    renderHinted();
+    layoutGrids();
+    enter();
+    const a = centre("December 7, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
+    });
+    // Inside DRAG_THRESHOLD — a click, not a sweep.
+    fireEvent.pointerMove(window, { clientX: a.x + 1, clientY: a.y });
+    fireEvent.pointerUp(window);
+    expect(showing()).toBe(true);
+  });
+
+  it("stays down when there is no sweep to teach", () => {
+    renderHinted({ sweep: false });
+    enter();
+    expect(showing()).toBe(false);
+  });
+
+  it("stays down in single-selection mode, which never had a sweep", () => {
+    renderHinted({ selectionMode: "single" });
+    enter();
+    expect(showing()).toBe(false);
+  });
+
+  it("leaves a hintless calendar alone", () => {
+    renderMulti();
+    expect(() => fireEvent.mouseEnter(list())).not.toThrow();
+    expect(document.querySelector("[class*=tooltip]")).toBeNull();
   });
 });
 
