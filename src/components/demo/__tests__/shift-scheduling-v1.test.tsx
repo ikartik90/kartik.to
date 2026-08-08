@@ -21,6 +21,10 @@ const repeatSwitch = () =>
 
 const recurrence = () => screen.getByTestId("recurrence");
 
+const repeatCard = () => screen.getByTestId("repeat-card");
+
+const counterweight = () => screen.getByTestId("repeat-counterweight");
+
 // Sunday-first, matching Temporal's `dayOfWeek % 7` (ISO runs Mon=1…Sun=7).
 const WEEKDAY_NAMES = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
@@ -107,6 +111,71 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     }
     expect(pressedWeekdays()).toEqual([]);
     expect(screen.getByRole("status").textContent).not.toContain("repeat every");
+  });
+});
+
+// The recurrence controls are boxed WITH the switch that governs them (Figma
+// 901:2365): the switch is the card's header, a rule separates it from what it
+// turns on, and everything below that rule folds away together.
+describe("ShiftSchedulingV1 — repeating shift card", () => {
+  it("groups the repeat switch and the recurrence region in one card", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(repeatCard().contains(repeatSwitch())).toBe(true);
+    expect(repeatCard().contains(recurrence())).toBe(true);
+  });
+
+  it("keeps the switch out of the region it collapses", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(recurrence().contains(repeatSwitch())).toBe(false);
+  });
+
+  it("stacks the shift date field above the card rather than inside it", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(repeatCard().contains(screen.getByText("First Shift"))).toBe(false);
+  });
+
+  // A rule left hanging under the switch is the obvious way this collapse can
+  // go wrong, so the divider folds away inside the region with everything else.
+  it("folds the card's divider away with the recurrence region", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(recurrence().contains(screen.getByTestId("repeat-divider"))).toBe(
+      true,
+    );
+  });
+});
+
+// Collapsing the recurrence would otherwise shrink the whole dialog, and the
+// DemoFrame centres it — so the switch you just clicked would slide out from
+// under the pointer. A wireframe block in the footer takes back exactly the
+// space the recurrence gave up (Figma 902:2390), holding the dialog's height
+// and the switch's position steady.
+describe("ShiftSchedulingV1 — collapsed counterweight", () => {
+  it("keeps the counterweight folded away while repeating", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(counterweight().getAttribute("data-open")).toBe("false");
+  });
+
+  it("unfolds the counterweight when repeat is switched off", () => {
+    render(<ShiftSchedulingV1 />);
+    fireEvent.click(repeatSwitch());
+    expect(counterweight().getAttribute("data-open")).toBe("true");
+  });
+
+  it("folds it back away when repeat is switched on again", () => {
+    render(<ShiftSchedulingV1 />);
+    fireEvent.click(repeatSwitch());
+    fireEvent.click(repeatSwitch());
+    expect(counterweight().getAttribute("data-open")).toBe("false");
+  });
+
+  // It is scenery standing in for the rest of the form, so it must never take
+  // focus or be read out — the same contract the shell's header and footer keep.
+  it("keeps the counterweight out of the tab order and the a11y tree", () => {
+    render(<ShiftSchedulingV1 />);
+    fireEvent.click(repeatSwitch());
+    const scope = counterweight().firstElementChild;
+    expect(scope?.getAttribute("aria-hidden")).toBe("true");
+    expect(scope?.hasAttribute("inert")).toBe(true);
   });
 });
 

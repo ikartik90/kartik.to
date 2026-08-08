@@ -6,6 +6,7 @@ import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
 import { Field } from "@/components/ui/input/field";
 import { Calendar } from "@/components/ui/input/calendar";
+import { Tooltip } from "@/components/ui/tooltip";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 
@@ -72,12 +73,33 @@ export function ShiftSchedulingV2() {
           onValuesChange={setShifts}
           defaultView={openingMonth}
           months={3}
+          // Walk the range, don't page it. Three months abreast are here to be
+          // compared — a shift run is drawn ACROSS the boundaries — and a
+          // chevron that turned all three over at once threw away the two you
+          // were reading to reach the one you wanted. Stepping by one keeps
+          // them, so the run you just drew is still on screen while you extend
+          // it into the month you brought in.
+          step={1}
           // No `today` override — the accent tracks the real current date.
           // The range is wider than this frame, so the chevrons sit in the
           // gradient scrims that fade the half-cut outer columns away.
           navPlacement="edge"
         >
           <Calendar.PeriodList>
+            {/*
+              The sweep is what this demo exists to show, and a marquee leaves
+              no mark on the chrome to advertise itself — the grid looks like
+              any click-to-toggle calendar until you happen to hold the button
+              down. So the calendar says it once, at the cursor: the tooltip
+              rides in on the hover, withdraws after three seconds, and never
+              returns once a drag has actually happened. The Field.Hint below
+              carries the same instruction permanently, for the pointer that
+              never rests here and for a screen reader — this is the version
+              that arrives while your hand is already on the grid.
+            */}
+            <Calendar.Tooltip>
+              <Tooltip.Text>Drag to select multiple</Tooltip.Text>
+            </Calendar.Tooltip>
             <Calendar.Prev>
               <ChevronLeftIcon />
             </Calendar.Prev>

@@ -137,11 +137,22 @@ describe("ShiftSchedulingV2 — layout", () => {
     }
   });
 
-  it("pages the whole three-month range at once", () => {
+  // The chevrons walk the range rather than paging it: two of the three months
+  // stay on screen, so a run drawn across a boundary is still in view while you
+  // extend it into the month you just brought in.
+  it("advances the window one month per chevron press", () => {
     render(<ShiftSchedulingV2 />);
-    fireEvent.click(screen.getByRole("button", { name: "Next 3 months" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText(monthLabel(OPENING.add({ months: 1 })))).toBeTruthy();
     expect(screen.getByText(monthLabel(OPENING.add({ months: 3 })))).toBeTruthy();
-    expect(screen.getByText(monthLabel(OPENING.add({ months: 5 })))).toBeTruthy();
+    expect(screen.queryByText(monthLabel(OPENING))).toBeNull();
+  });
+
+  it("walks back one month at a time too", () => {
+    render(<ShiftSchedulingV2 />);
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(screen.getByText(monthLabel(OPENING.subtract({ months: 1 })))).toBeTruthy();
+    expect(screen.getByText(monthLabel(OPENING.add({ months: 1 })))).toBeTruthy();
   });
 
   it("keeps the wireframe chrome around the form", () => {
@@ -196,6 +207,27 @@ describe("ShiftSchedulingV2 — selection", () => {
     const taken = selected();
     expect(taken).toContain(first.toString());
     expect(taken).toContain(nextMonth.toString());
+  });
+
+  // The sweep is the demo's whole point and nothing in the chrome shows it, so
+  // the calendar volunteers it at the cursor — until you've done it once.
+  it("offers the drag at the cursor, and drops the offer once you drag", () => {
+    render(<ShiftSchedulingV2 />);
+    layoutGrids();
+    const list = screen.getAllByRole("grid")[0].parentElement!.parentElement!;
+    const tip = screen.getByText("Drag to select multiple")
+      .parentElement as HTMLElement;
+
+    expect(tip.hasAttribute("data-visible")).toBe(false);
+    fireEvent.mouseEnter(list, { clientX: 60, clientY: 80 });
+    expect(tip.hasAttribute("data-visible")).toBe(true);
+
+    marquee(TODAY, TODAY.add({ days: 2 }));
+    expect(tip.hasAttribute("data-visible")).toBe(false);
+
+    fireEvent.mouseLeave(list);
+    fireEvent.mouseEnter(list, { clientX: 60, clientY: 80 });
+    expect(tip.hasAttribute("data-visible")).toBe(false);
   });
 
   it("reverts a date when the band retreats back off it", () => {
