@@ -45,6 +45,16 @@ const cursorStyle = css({
   // slows into where it is going. A pure ease-out would read as thrown.
   transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1), ease",
   "&[data-visible]": { opacity: 1 },
+  // The walk-on is the SAME fade as the withdrawal, played the other way — and
+  // it needs this to happen at all. The tour hands over `point` and `visible`
+  // together, so the arrow is INSERTED already carrying `data-visible`: there is
+  // no before-change style for the browser to start a transition from, and it
+  // paints straight at full opacity. `@starting-style` supplies that missing
+  // origin. Unlike v1's recurrence block this wants no arming flag — the element
+  // exists only for the length of a run, so its first render IS the entrance.
+  _starting: {
+    "&[data-visible]": { opacity: 0 },
+  },
 });
 
 const glyphStyle = css({
