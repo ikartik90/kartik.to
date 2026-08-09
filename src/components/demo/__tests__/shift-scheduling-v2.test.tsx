@@ -74,11 +74,23 @@ function day(date: Temporal.PlainDate): HTMLButtonElement {
     matches[0]) as HTMLButtonElement;
 }
 
-const selected = () =>
-  screen
-    .getAllByRole("gridcell")
+// Read off the `role` attribute the calendar sets rather than through
+// `getAllByRole`, which is the same set of cells by a far dearer route: RTL
+// COMPUTES a role for every node and then tests each for accessible visibility,
+// which in jsdom means a `getComputedStyle` walk per element. `play()` samples
+// the board 120 times over three month grids, so that is ~15,000 role
+// computations per run — enough on its own to push the heaviest case past the
+// suite's per-test budget on a slower machine, which is exactly what it did in
+// CI. The empty check keeps what the role query gave for free: if the calendar
+// is not on screen at all, say so loudly instead of returning "nothing is
+// selected" and letting an assertion pass over a broken render.
+function selected(): (string | null)[] {
+  const cells = [...document.querySelectorAll("[role=gridcell]")];
+  if (!cells.length) throw new Error("selected(): no calendar on screen");
+  return cells
     .filter((c) => c.getAttribute("aria-selected") === "true")
     .map((c) => c.getAttribute("data-date"));
+}
 
 // jsdom lays nothing out, so the marquee has nothing to intersect until the
 // cells are given a synthetic grid: 24px cells on a 28px pitch, each month
@@ -436,7 +448,16 @@ describe("ShiftSchedulingV2 — selection", () => {
   });
 });
 
-describe("ShiftSchedulingV2 — the walkthrough", () => {
+// These cases budget WALL CLOCK for SIMULATED time: each drives some twelve
+// seconds of animation, and the replay case twice that, so the runner's 5s
+// default was never the right unit for them. The explicit ceiling is not there
+// to be approached — the whole file passes under 500ms a case — but to keep a
+// slow machine from timing one out, because of what a timeout does HERE: the
+// abandoned test leaves React's act queue open, every later render in the file
+// mounts into it and is never flushed, and five more cases fail claiming the
+// calendar does not exist. One slow case takes the suite down with five
+// misleading errors on top, and the real one at the bottom.
+describe("ShiftSchedulingV2 — the walkthrough", { timeout: 15_000 }, () => {
   /** Render with a grid the marquee can actually intersect, ready to be seen. */
   function stage() {
     const reveal = scrollIntoView();
