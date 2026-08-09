@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
+import { DemoCursor } from "./demo-cursor";
+import { DemoControls } from "./demo-controls";
 import { Field } from "@/components/ui/input/field";
 import { Calendar } from "@/components/ui/input/calendar";
 import { Combobox } from "@/components/ui/input/combobox";
 import { TextInput } from "@/components/ui/input/text-input";
 import { Checkbox } from "@/components/ui/input/checkbox";
 import { Wireframe } from "@/components/ui/wireframe";
+import { useInView } from "@/hooks/use-in-view";
+import { useDemoCursorTour } from "@/hooks/use-demo-cursor-tour";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 
@@ -37,6 +41,21 @@ import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 // live, at full strength, and fully interactive. That is the composition the
 // Figma shows, and it needs no opt-out of its own — anything outside the
 // wrapper is simply not wireframed.
+//
+// And because the argument is a TEDIUM — one date, one click, four times over —
+// the demo makes it itself. Once the form is properly on screen a stand-in
+// cursor walks in and picks four dates the long way round, then withdraws. It
+// is the real cursor artwork clicking the real day cells, so what you watch is
+// the v0 workflow being performed rather than a video of it, and it plays
+// exactly once: this is the setup for v1 and v2, not a loop to sit and watch.
+// It stands down for a visitor who asked for less motion, for one who has
+// already picked a date, and for one who touches the grid mid-performance.
+//
+// When it is done it CLEARS what it picked, because the walkthrough's whole
+// purpose is to hand the grid over, and handing it over with four dates already
+// on it means the first thing you do is undo someone else's work. The frame's
+// own corner keeps the two controls that follow from that: replay the
+// performance, or reset the board.
 // ---------------------------------------------------------------------------
 
 // The form body: the wireframed field column beside the calendar. The column
@@ -47,6 +66,9 @@ const bodyStyle = css({
   display: "flex",
   alignItems: "flex-start",
   gap: "3xl",
+  // The stage the walkthrough's cursor is placed against, so its points are
+  // plain offsets into this box rather than viewport coordinates.
+  position: "relative",
   // Below the form's comfortable width the two columns stop being side-by-side
   // furniture and just crowd each other — stack them, calendar first, so the
   // live half stays on top.
@@ -86,87 +108,182 @@ const ROLES = [
   { value: "kitchen", label: "Kitchen Hand" },
 ];
 
+/** How many dates the walkthrough picks — enough to feel like work, not a list. */
+const TOUR_DATES = 4;
+
+/**
+ * The dates the walkthrough clicks, given today. Four of them, EVERY OTHER DAY
+ * and starting tomorrow: spaced so the run reads as four separate decisions
+ * rather than a swept range (the range is v2's move, and this frame exists to
+ * show the design that didn't have it), and clear of today so the picked chips
+ * never land on the cell already carrying the accent.
+ *
+ * All four stay inside today's month, because that is the only month the grid
+ * has cells for — a date past its end renders as the next month's spill copy,
+ * which multiple-select deliberately makes inert. So when the month runs out of
+ * room the spacing closes to consecutive days, and failing that the run backs up
+ * to fit.
+ */
+export function planDemoShiftDates(
+  today: Temporal.PlainDate,
+  count = TOUR_DATES,
+): Temporal.PlainDate[] {
+  const lastDay = today.daysInMonth;
+  const stride = today.day + 1 + 2 * (count - 1) <= lastDay ? 2 : 1;
+  const span = stride * (count - 1);
+  const first = Math.max(1, Math.min(today.day + 1, lastDay - span));
+  return Array.from({ length: count }, (_, index) =>
+    today.with({ day: first + index * stride }),
+  );
+}
+
 export function ShiftSchedulingV0() {
   // Opens empty: the demo's live half is the act of picking dates, so a
   // pre-filled one would only be something to clear first (same call as v2).
   const [shifts, setShifts] = useState<Temporal.PlainDate[]>([]);
+  // Read at mount rather than per render (v2 reads its opening month the same
+  // way), so the walkthrough can't have the ground move under it mid-run.
+  const [tourDates] = useState(() =>
+    planDemoShiftDates(Temporal.Now.plainDateISO()),
+  );
+
+  // The form body is what has to be on screen — 70% of IT, not of the frame
+  // around it, which is the difference between "the demo is legible" and "the
+  // demo's border is legible".
+  const stageRef = useRef<HTMLDivElement>(null);
+  const onScreen = useInView(stageRef);
+
+  // The state a run starts from, which here is also the state a finished one
+  // hands back: an empty grid either way.
+  const clear = useCallback(() => setShifts([]), []);
+
+  const cursor = useDemoCursorTour({
+    stageRef,
+    active: onScreen,
+    // Each date is looked up against the DOM the calendar actually rendered, so
+    // one whose cell isn't there to be clicked is simply skipped. An empty plan
+    // calls the whole thing off, which is how the demo declines to perform over
+    // dates the visitor picked first.
+    stops: () =>
+      shifts.length
+        ? []
+        : tourDates.map(
+            (date) => () =>
+              stageRef.current?.querySelector<HTMLButtonElement>(
+                `[data-date="${date}"]:not([data-outside])`,
+              ) ?? null,
+          ),
+    // The walkthrough puts the calendar back the way it found it, so the
+    // visitor's first act isn't undoing someone else's four picks.
+    onComplete: clear,
+    // ...and the same again when the frame scrolls away mid-run, so the board
+    // is clean for the fresh run that starts when it scrolls back.
+    onRewind: clear,
+  });
+
+  // Replay clears first: the tour TOGGLES dates, so running it over a board
+  // that already holds its four picks would rub them all out again.
+  const { replay: replayTour, stop: stopTour } = cursor;
+  const replay = useCallback(() => {
+    clear();
+    replayTour();
+  }, [clear, replayTour]);
+
+  // Reset calls off a performance in flight as well as clearing the board —
+  // otherwise the tour's remaining clicks would put dates straight back.
+  const reset = useCallback(() => {
+    stopTour();
+    clear();
+  }, [stopTour, clear]);
 
   return (
-    <ShiftFormShell>
-      <div className={bodyStyle}>
-        {/* The old form's left column, as a shape. Non-interactive by default,
+    <>
+      <ShiftFormShell>
+        <div className={bodyStyle} ref={stageRef}>
+          {/* The old form's left column, as a shape. Non-interactive by default,
             so nothing here takes focus or invites a click it cannot honour. */}
-        <Wireframe className={fieldColumnStyle} opacity={25}>
-          <Field>
-            <Field.Label>Shift Role</Field.Label>
-            <Combobox placeholder="Select a shift role">
-              {ROLES.map((role) => (
-                <Combobox.Option key={role.value} value={role.value}>
-                  {role.label}
-                </Combobox.Option>
-              ))}
-            </Combobox>
-            <Field.Hint>Required</Field.Hint>
-          </Field>
+          <Wireframe className={fieldColumnStyle} opacity={25}>
+            <Field>
+              <Field.Label>Shift Role</Field.Label>
+              <Combobox placeholder="Select a shift role">
+                {ROLES.map((role) => (
+                  <Combobox.Option key={role.value} value={role.value}>
+                    {role.label}
+                  </Combobox.Option>
+                ))}
+              </Combobox>
+              <Field.Hint>Required</Field.Hint>
+            </Field>
 
-          {/* Composed from the Field primitives rather than the flat-prop
+            {/* Composed from the Field primitives rather than the flat-prop
               TextInput, because this is the one bespoke field here: its label
               and its input want different widths, and the assembly's single
               `className` can only reach the root. */}
-          <Field>
-            <Field.Label>Break Duration (mins)</Field.Label>
-            <Field.Frame className={breakInputStyle}>
-              <Field.Control defaultValue="30 min" />
-            </Field.Frame>
+            <Field>
+              <Field.Label>Break Duration (mins)</Field.Label>
+              <Field.Frame className={breakInputStyle}>
+                <Field.Control defaultValue="30 min" />
+              </Field.Frame>
+            </Field>
+
+            <TextInput
+              label="Additional Notes"
+              defaultValue="Anything the team should know"
+              hint="Visible to everyone rostered on this shift"
+            />
+
+            <Field>
+              <Checkbox />
+              <Field.Label>
+                Notify the team when this shift is posted
+              </Field.Label>
+            </Field>
+          </Wireframe>
+
+          {/* Live, full strength, outside the scope — the one thing in focus. */}
+          <Field className={calendarColumnStyle}>
+            <Field.Label>Scheduling Calendar</Field.Label>
+            <Calendar
+              selectionMode="multiple"
+              values={shifts}
+              onValuesChange={setShifts}
+              // One date per action — no marquee drag, no Shift+Arrow run. Sweeping
+              // a range in a single gesture is v2's move, and the whole point of
+              // this frame is the design that did NOT have it: here you pick days
+              // one at a time, which is exactly the tedium v2 answers.
+              sweep={false}
+              // No `today` override — the accent tracks the real current date.
+            >
+              <Calendar.PeriodList>
+                <Calendar.Prev>
+                  <ChevronLeftIcon />
+                </Calendar.Prev>
+                <Calendar.Period>
+                  <Calendar.Month />
+                  <Calendar.Week>
+                    <Calendar.Day />
+                  </Calendar.Week>
+                  <Calendar.Grid>
+                    <Calendar.Date />
+                  </Calendar.Grid>
+                </Calendar.Period>
+                <Calendar.Next>
+                  <ChevronRightIcon />
+                </Calendar.Next>
+              </Calendar.PeriodList>
+            </Calendar>
+            <Field.Hint>Select one or more shift dates</Field.Hint>
           </Field>
 
-          <TextInput
-            label="Additional Notes"
-            defaultValue="Anything the team should know"
-            hint="Visible to everyone rostered on this shift"
-          />
+          {/* Last, so it paints over the calendar it is pointing at. */}
+          <DemoCursor {...cursor} />
+        </div>
+      </ShiftFormShell>
 
-          <Field>
-            <Checkbox />
-            <Field.Label>Notify the team when this shift is posted</Field.Label>
-          </Field>
-        </Wireframe>
-
-        {/* Live, full strength, outside the scope — the one thing in focus. */}
-        <Field className={calendarColumnStyle}>
-          <Field.Label>Scheduling Calendar</Field.Label>
-          <Calendar
-            selectionMode="multiple"
-            values={shifts}
-            onValuesChange={setShifts}
-            // One date per action — no marquee drag, no Shift+Arrow run. Sweeping
-            // a range in a single gesture is v2's move, and the whole point of
-            // this frame is the design that did NOT have it: here you pick days
-            // one at a time, which is exactly the tedium v2 answers.
-            sweep={false}
-            // No `today` override — the accent tracks the real current date.
-          >
-            <Calendar.PeriodList>
-              <Calendar.Prev>
-                <ChevronLeftIcon />
-              </Calendar.Prev>
-              <Calendar.Period>
-                <Calendar.Month />
-                <Calendar.Week>
-                  <Calendar.Day />
-                </Calendar.Week>
-                <Calendar.Grid>
-                  <Calendar.Date />
-                </Calendar.Grid>
-              </Calendar.Period>
-              <Calendar.Next>
-                <ChevronRightIcon />
-              </Calendar.Next>
-            </Calendar.PeriodList>
-          </Calendar>
-          <Field.Hint>Select one or more shift dates</Field.Hint>
-        </Field>
-      </div>
-    </ShiftFormShell>
+      {/* Outside the shell, so it pins to the FRAME's corner rather than the
+          dialog's — and outside the stage, so pressing one is not mistaken for
+          the visitor reaching into the grid mid-performance. */}
+      <DemoControls onReplay={replay} onReset={reset} />
+    </>
   );
 }

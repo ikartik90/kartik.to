@@ -27,16 +27,44 @@ const registry: Record<string, DemoRegistryEntry> = {
     // The "Old Shift Scheduling" frame (745:4375 light / 745:4080 dark) — the
     // same 960×640 showcase as v1 and v2.
     aspectRatio: "md",
+    // The stand-in cursor its walkthrough performs with. Warmed here so the
+    // arrow is decoded before it is asked to fade in — a first paint that
+    // arrives a frame late is the one thing that would give it away.
+    assets: [
+      {
+        id: "cursor-selection",
+        kind: "image",
+        src: "/cursors/cursor-selection.svg",
+      },
+    ],
   },
   "shift-scheduling-v1": {
     load: async () => (await import("./shift-scheduling-v1")).ShiftSchedulingV1,
     // 960×640 showcase = 3:2, so it fills the frame at the article width.
     aspectRatio: "md",
+    // Its walkthrough performs with the same stand-in cursor v0's does, and
+    // wants it decoded for the same reason.
+    assets: [
+      {
+        id: "cursor-selection",
+        kind: "image",
+        src: "/cursors/cursor-selection.svg",
+      },
+    ],
   },
   "shift-scheduling-v2": {
     load: async () => (await import("./shift-scheduling-v2")).ShiftSchedulingV2,
     // Same 960×640 Figma frame as v1 (723:1952).
     aspectRatio: "md",
+    // Its walkthrough performs with the same stand-in cursor v0's and v1's do,
+    // and wants it decoded for the same reason.
+    assets: [
+      {
+        id: "cursor-selection",
+        kind: "image",
+        src: "/cursors/cursor-selection.svg",
+      },
+    ],
   },
   "calchemy-demo": {
     load: async () => {
