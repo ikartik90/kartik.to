@@ -6,6 +6,7 @@ import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
 import { DemoCursor } from "./demo-cursor";
 import { DemoControls } from "./demo-controls";
+import { DemoInvitation } from "./demo-invitation";
 import { Field } from "@/components/ui/input/field";
 import { Calendar } from "@/components/ui/input/calendar";
 import { Combobox } from "@/components/ui/input/combobox";
@@ -14,6 +15,7 @@ import { Checkbox } from "@/components/ui/input/checkbox";
 import { Wireframe } from "@/components/ui/wireframe";
 import { useInView } from "@/hooks/use-in-view";
 import { useDemoCursorTour } from "@/hooks/use-demo-cursor-tour";
+import { useDemoInvitation } from "@/hooks/use-demo-invitation";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 
@@ -157,6 +159,8 @@ export function ShiftSchedulingV0() {
   // hands back: an empty grid either way.
   const clear = useCallback(() => setShifts([]), []);
 
+  const invitation = useDemoInvitation(stageRef);
+
   const cursor = useDemoCursorTour({
     stageRef,
     active: onScreen,
@@ -174,8 +178,13 @@ export function ShiftSchedulingV0() {
               ) ?? null,
           ),
     // The walkthrough puts the calendar back the way it found it, so the
-    // visitor's first act isn't undoing someone else's four picks.
-    onComplete: clear,
+    // visitor's first act isn't undoing someone else's four picks — and hands
+    // over with the page's invitation, if this is the first run on it to finish
+    // and there is a cursor on screen to put the words beside.
+    onComplete: () => {
+      clear();
+      invitation.offer();
+    },
     // ...and the same again when the frame scrolls away mid-run, so the board
     // is clean for the fresh run that starts when it scrolls back.
     onRewind: clear,
@@ -277,6 +286,7 @@ export function ShiftSchedulingV0() {
 
           {/* Last, so it paints over the calendar it is pointing at. */}
           <DemoCursor {...cursor} />
+          <DemoInvitation {...invitation} />
         </div>
       </ShiftFormShell>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 
 const KEYBOARD_FOCUS_ATTR = "data-keyboard-focus";
 
@@ -21,7 +22,10 @@ export function useKeyboardFocus() {
       }
     }
 
-    function onPointerDown() {
+    // A self-playing demo presses things with a stand-in cursor of its own. The
+    // ring belongs to the visitor's keyboard, and the show cannot take it away.
+    function onPointerDown(event: Event) {
+      if (isSyntheticPointer(event)) return;
       disableKeyboardFocus();
     }
 

@@ -15,6 +15,7 @@ import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
 import { DemoCursor } from "./demo-cursor";
 import { DemoControls } from "./demo-controls";
+import { DemoInvitation } from "./demo-invitation";
 import { Field } from "@/components/ui/input/field";
 import { DatePicker } from "@/components/ui/input/datepicker";
 import { Switch } from "@/components/ui/input/switch";
@@ -25,6 +26,7 @@ import { Notice } from "@/components/ui/notice";
 import { Wireframe } from "@/components/ui/wireframe";
 import { useInView } from "@/hooks/use-in-view";
 import { useDemoCursorTour } from "@/hooks/use-demo-cursor-tour";
+import { useDemoInvitation } from "@/hooks/use-demo-invitation";
 import {
   WEEKDAY_KEYS,
   weekdayOf,
@@ -582,6 +584,8 @@ export function ShiftSchedulingV1() {
     [opening],
   );
 
+  const invitation = useDemoInvitation(stageRef);
+
   const cursor = useDemoCursorTour({
     stageRef,
     active: onScreen,
@@ -624,8 +628,13 @@ export function ShiftSchedulingV1() {
     },
     // A walkthrough that left 25 shifts booked would make the visitor's first
     // act undoing someone else's roster. The card stays open behind it: the
-    // demo hands over a form you can use, not the blank it started from.
-    onComplete: () => restore(true),
+    // demo hands over a form you can use, not the blank it started from — and
+    // with the page's invitation, if this is the first run on it to finish and
+    // there is a cursor on screen to put the words beside.
+    onComplete: () => {
+      restore(true);
+      invitation.offer();
+    },
     // The frame scrolled away mid-run, so nobody is being handed anything —
     // and the two states genuinely differ here. Rewind to the card SHUT, which
     // is what the fresh run on the way back needs in order to open it.
@@ -797,6 +806,7 @@ export function ShiftSchedulingV1() {
         {/* A sibling of the dialog, not a child of the clipped form surface —
           see `stageStyle`. Last, so it paints over what it is pointing at. */}
         <DemoCursor {...cursor} />
+        <DemoInvitation {...invitation} />
       </div>
 
       {/* Outside the shell, so it pins to the FRAME's corner rather than the

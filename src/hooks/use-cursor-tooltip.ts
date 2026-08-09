@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { getCursorTooltipPosition } from "@/data/cursor";
+import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 
 // ---------------------------------------------------------------------------
 // The cursor-following positioning engine shared by every tooltip that trails
@@ -41,6 +42,11 @@ export function useCursorTooltip(visible: boolean) {
     if (!visible) return;
 
     function onPointerMove(event: PointerEvent) {
+      // A self-playing demo drags by dispatching this very event at its OWN
+      // stand-in cursor. This tooltip belongs to whatever the REAL pointer is
+      // resting on — a Replay control the visitor has just pressed, say — so
+      // following the show would tear the label off the thing it names.
+      if (isSyntheticPointer(event)) return;
       pointerRef.current = { x: event.clientX, y: event.clientY };
       schedule();
     }

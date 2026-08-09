@@ -7,6 +7,10 @@ import {
   useState,
   type RefObject,
 } from "react";
+import {
+  isSyntheticPointer,
+  markSyntheticPointer,
+} from "@/utils/synthetic-pointer";
 
 // ---------------------------------------------------------------------------
 // A demo that performs itself once. Given a stage to measure against and a
@@ -105,17 +109,12 @@ export interface DemoCursorSweep {
 export type DemoCursorAction = DemoCursorStop | DemoCursorSweep;
 
 /**
- * Marks the events the tour dispatches itself. A sweep has to fire the exact
- * event the tour otherwise reads as "a real hand just arrived", so without this
- * the walkthrough would abort on its own press.
- *
- * A property rather than `isTrusted`, which would be the honest discriminator
- * in a browser and useless everywhere else: every synthesised event is untrusted,
- * including the ones a test fires to stand in for the visitor.
+ * A pointer event at a viewport point, as close to a real one as the DOM allows
+ * — and MARKED, because a sweep has to fire the exact event the tour otherwise
+ * reads as "a real hand just arrived". Without the mark the walkthrough would
+ * abort on its own press, and every other listener in the app that watches for
+ * the visitor's pointer would take the stand-in cursor for theirs.
  */
-const SYNTHETIC = "__demoCursorTour";
-
-/** A pointer event at a viewport point, as close to a real one as the DOM allows. */
 function pointerEvent(type: string, at: DemoCursorPoint): Event {
   const init = {
     bubbles: true,
@@ -136,11 +135,8 @@ function pointerEvent(type: string, at: DemoCursorPoint): Event {
         // field a drag handler reads except `pointerType`, whose absence reads
         // as "not touch" — which is the answer that matters.
         new MouseEvent(type, init);
-  Object.defineProperty(event, SYNTHETIC, { value: true });
-  return event;
+  return markSyntheticPointer(event);
 }
-
-const isSynthetic = (event: Event) => SYNTHETIC in event;
 
 /**
  * An action's two ends, resolved: `[press, release]`, the second null for a
@@ -331,7 +327,7 @@ export function useDemoCursorTour({
     // bows out rather than fighting a real one for the same grid. Its own
     // gestures are exempt — a sweep fires this very event.
     const yieldStage = (event?: Event) => {
-      if (event && isSynthetic(event)) return;
+      if (event && isSyntheticPointer(event)) return;
       if (cancelled) return;
       cancelled = true;
       // Whatever is on the demo now belongs to whoever reached in for it.

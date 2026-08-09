@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { markSyntheticPointer } from "@/utils/synthetic-pointer";
 import {
   getInputModality,
   getPointerPosition,
@@ -63,6 +64,25 @@ describe("input modality", () => {
     expect(getInputModality()).toBe("pointer");
   });
 
+  // A self-playing demo's stand-in cursor is not a hand reaching for the mouse.
+  // A visitor who started the walkthrough from the keyboard is still driving by
+  // keyboard while it performs.
+  it("does not let a demo's stand-in cursor claim the pointer", () => {
+    fireEvent.pointerMove(document, { clientX: 10, clientY: 10 });
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    for (const type of ["pointermove", "pointerdown"]) {
+      document.dispatchEvent(
+        markSyntheticPointer(
+          new MouseEvent(type, { clientX: 400, clientY: 300, bubbles: true }),
+        ),
+      );
+      expect(getInputModality()).toBe("keyboard");
+    }
+    // Nor does it move where we believe the visitor's pointer to be.
+    expect(getPointerPosition()).toEqual({ x: 10, y: 10 });
+  });
+
   it("treats a press as pointer intent even without movement", () => {
     fireEvent.keyDown(document, { key: "ArrowDown" });
     fireEvent.pointerDown(document, { clientX: 10, clientY: 10 });
@@ -83,6 +103,52 @@ describe("input modality", () => {
   it("records the pointer position, for opening a menu under the cursor", () => {
     fireEvent.pointerMove(document, { clientX: 42, clientY: 7 });
     expect(getPointerPosition()).toEqual({ x: 42, y: 7 });
+  });
+
+  // Anything anchoring to the cursor — a demo's "Try it yourself" invitation —
+  // needs "there is no cursor on screen" to be distinguishable from "here is
+  // where it was before it left".
+  it("forgets where the pointer is once it leaves the window", () => {
+    fireEvent.pointerMove(document, { clientX: 40, clientY: 60 });
+    expect(getPointerPosition()).toEqual({ x: 40, y: 60 });
+
+    fireEvent.pointerLeave(document.documentElement);
+    expect(getPointerPosition()).toBeNull();
+  });
+
+  it("has it back the moment the pointer returns", () => {
+    fireEvent.pointerMove(document, { clientX: 40, clientY: 60 });
+    fireEvent.pointerLeave(document.documentElement);
+    fireEvent.pointerMove(document, { clientX: 12, clientY: 34 });
+
+    expect(getPointerPosition()).toEqual({ x: 12, y: 34 });
+  });
+
+  // Leave/enter are subtree-scoped and do not fire for crossings INSIDE the
+  // subtree — which is the whole reason the root's `pointerleave` is the signal
+  // rather than a `pointerout` with a null `relatedTarget`. These demos mount
+  // and unmount things under the cursor constantly.
+  it("ignores a crossing between elements inside the page", () => {
+    const inner = document.createElement("div");
+    document.body.appendChild(inner);
+    fireEvent.pointerMove(document, { clientX: 40, clientY: 60 });
+
+    fireEvent.pointerLeave(inner);
+
+    expect(getPointerPosition()).toEqual({ x: 40, y: 60 });
+    inner.remove();
+  });
+
+  // The mouse being taken off to another window says nothing about the visitor
+  // reaching for the keyboard.
+  it("does not change the modality when the pointer leaves", () => {
+    fireEvent.pointerMove(document, { clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(document, { clientX: 20, clientY: 20 });
+    expect(getInputModality()).toBe("pointer");
+
+    fireEvent.pointerLeave(document.documentElement);
+
+    expect(getInputModality()).toBe("pointer");
   });
 
   it("marks the document so CSS can gate :hover on the live modality", () => {

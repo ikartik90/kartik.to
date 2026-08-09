@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { markSyntheticPointer } from "@/utils/synthetic-pointer";
 import { useCursorTooltip } from "../use-cursor-tooltip";
 
 // CURSOR_TOOLTIP_OFFSET = { x: 15, y: 17 } — the tooltip trails the cursor by it.
@@ -33,6 +34,35 @@ describe("useCursorTooltip", () => {
     const { result } = renderHook(() => useCursorTooltip(true));
     result.current.ref.current = el;
 
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 300, clientY: 400 });
+    });
+
+    expect(el.style.left).toBe("315px");
+    expect(el.style.top).toBe("417px");
+  });
+
+  it("ignores the moves a self-playing demo dispatches", () => {
+    const el = document.createElement("div");
+    const { result } = renderHook(() => useCursorTooltip(true));
+    result.current.ref.current = el;
+
+    act(() => result.current.seed(100, 200));
+    act(() => {
+      // The demo's stand-in cursor sweeping across its own stage. This tooltip
+      // is labelling whatever the REAL pointer is resting on — the Replay
+      // control that started the walkthrough — so it must not follow.
+      window.dispatchEvent(
+        markSyntheticPointer(
+          new MouseEvent("pointermove", { clientX: 900, clientY: 20 }),
+        ),
+      );
+    });
+
+    expect(el.style.left).toBe("115px");
+    expect(el.style.top).toBe("217px");
+
+    // Still listening, though: the visitor's own pointer moves it as ever.
     act(() => {
       fireEvent.pointerMove(window, { clientX: 300, clientY: 400 });
     });
