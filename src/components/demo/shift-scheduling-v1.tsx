@@ -2,7 +2,9 @@
 
 import {
   Fragment,
+  useCallback,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -11,6 +13,8 @@ import {
 import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
+import { DemoCursor } from "./demo-cursor";
+import { DemoControls } from "./demo-controls";
 import { Field } from "@/components/ui/input/field";
 import { DatePicker } from "@/components/ui/input/datepicker";
 import { Switch } from "@/components/ui/input/switch";
@@ -19,7 +23,13 @@ import { Checkbox } from "@/components/ui/input/checkbox";
 import { OptionList } from "@/components/ui/input/option-list";
 import { Notice } from "@/components/ui/notice";
 import { Wireframe } from "@/components/ui/wireframe";
-import { weekdayOf, type WeekdayKey } from "@/utils/calendar-month";
+import { useInView } from "@/hooks/use-in-view";
+import { useDemoCursorTour } from "@/hooks/use-demo-cursor-tour";
+import {
+  WEEKDAY_KEYS,
+  weekdayOf,
+  type WeekdayKey,
+} from "@/utils/calendar-month";
 import InfoIcon from "@/assets/icons/info.svg";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +48,16 @@ import InfoIcon from "@/assets/icons/info.svg";
 // the controls it governs sit under a rule inside the same box — so the switch
 // visibly owns them, and turning it off collapses the box's contents rather
 // than a loose run of fields floating below it.
+//
+// It opens CLOSED, and once it is properly on screen it opens itself: a
+// stand-in cursor walks in, throws the repeat switch, picks out every other
+// weekday and dates the last shift far enough ahead to book 25 shifts — then
+// clears the run and hands the form over with the card left OPEN, which is the
+// state the design is arguing for. Every click is the real control's (see
+// `planDemoRecurrence` below), and it plays once, standing down for a visitor
+// who asked for less motion, one who has already opened the card, and one who
+// touches the form mid-performance. The frame's corner keeps the two controls
+// that follow: replay it, or clear it.
 // ---------------------------------------------------------------------------
 
 const WEEKDAYS: { key: WeekdayKey; letter: string; name: string }[] = [
@@ -164,6 +184,16 @@ const switchRowStyle = css({ paddingInline: "lg" });
 // rendered, i.e. on page load, which would play a spurious open animation on
 // mount — hence the `[data-armed='true']` gate, false until the switch is first
 // touched.
+//
+// `display: none` is gated on the SAME flag, because the form now opens with the
+// card shut and something has to measure the block it is holding space for: an
+// element at `display: none` reports nothing at all, so the counterweight's
+// reserve would be zero exactly when it is first needed. Before the switch has
+// been touched the region is a rendered `grid` at `0fr` instead — which crops
+// its content to no height rather than removing it, so it measures true while
+// showing nothing. `inert` is what keeps it out of reach either way, so nothing
+// is lost by leaving it in the box. From the first interaction onwards
+// `display: none` applies as before, and `@starting-style` with it.
 const recurrenceStyle = css({
   display: "grid",
   gridTemplateRows: "1fr",
@@ -174,9 +204,9 @@ const recurrenceStyle = css({
   transitionBehavior: "allow-discrete",
   "&[data-collapsed='true']": {
     gridTemplateRows: "0fr",
-    display: "none",
     transitionDelay: "60ms",
   },
+  "&[data-armed='true'][data-collapsed='true']": { display: "none" },
   _starting: {
     "&[data-armed='true'][data-collapsed='false']": { gridTemplateRows: "0fr" },
   },
@@ -254,14 +284,21 @@ const recurrenceBodyStyle = css({
 // this block's height the exact complement at every moment of the transition.
 // The delays are the mirror image of the region's — the block opens on the
 // region's collapse timings and closes on its expand ones.
+//
+// Nothing here animates until the switch has been touched, for the same reason
+// `@starting-style` is gated on it: the reserve arrives from a layout effect,
+// so the FIRST height this block is ever given is a change from zero — and a
+// transition on that plays a spurious 180ms open on page load, before anyone
+// has asked for anything.
 const counterweightStyle = css({
   height: "token(spacing.none)",
   opacity: 0,
   overflow: "hidden",
-  transitionProperty: "height, opacity",
+  transitionProperty: "none",
   transitionDuration: "180ms, 160ms",
   transitionTimingFunction: "ease-out",
   transitionDelay: "0s, 0s",
+  "&[data-armed='true']": { transitionProperty: "height, opacity" },
   "&[data-open='true']": {
     height: "var(--counterweight, 0px)",
     opacity: 1,
@@ -281,11 +318,21 @@ const counterweightStyle = css({
 // checkbox in half. The gap is 0, not `lg`: a minimum gap would be added ON TOP
 // of the free space and bring the cropping straight back, and the two line
 // boxes already hold ~12px of air between their bars without one.
+//
+// It is sized to the RESERVE, not to `100%` of its parent — and that difference
+// is the whole reason the block opens quietly. `space-between` distributes
+// whatever is left over after the content, so a percentage height re-runs that
+// distribution at every frame of the parent's own height transition: the box
+// spends most of the animation shorter than its content (no free space, groups
+// packed) and only in the last fifth does slack appear, dropping the two
+// checkbox rows 24px in a single step right as the block finishes fading in.
+// Pinning the height to the reserve lays the fields out ONCE, at the size they
+// will rest at, so the growing box uncovers them instead of re-flowing them.
 const counterweightFieldsStyle = css({
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  height: "token(spacing.full)",
+  height: "var(--counterweight, 0px)",
   paddingInline: "xl",
   paddingBlockStart: "lg",
   paddingBlockEnd: "sm",
@@ -327,26 +374,119 @@ const dayChipStyle = css({
   textAlign: "center",
 });
 
+// The stage the walkthrough's cursor is placed against. It wraps the whole
+// dialog rather than the form surface, for one hard reason: the surface
+// `clip-path`s its torn edges, and a clip-path makes a stacking context — a
+// cursor inside it could never paint over the date popover it has to point at.
+const stageStyle = css({ position: "relative" });
+
+// ---------------------------------------------------------------------------
+// The walkthrough.
+//
+// v1's argument is that recurrence belongs in a SENTENCE, and a sentence only
+// makes that case once it is saying something worth reading. So the demo builds
+// one: it turns the repeat switch on, picks out every other weekday, and dates
+// the last shift far enough out that the run it has just described comes to 25
+// shifts — a month and a half of roster, from four chips and two dates. Doing
+// that by hand is the work v1 exists to remove, which is why the demo does it
+// FOR you and then puts everything back.
+// ---------------------------------------------------------------------------
+
+/** Shifts the walkthrough builds up to — a roster, not a token pair. */
+const TOUR_SHIFTS = 25;
+/** Every OTHER chip in the S M T W T F S row; four is as many as seven allows. */
+const TOUR_WEEKDAYS = 4;
+/** A beat on the finished sentence before the cursor leaves and it is undone. */
+const TOUR_FINALE_MS = 1800;
+
+export interface DemoRecurrencePlan {
+  /** Weekdays the run repeats on — the first shift's own weekday leads. */
+  weekdays: WeekdayKey[];
+  /** The Last Shift date that closes the run on exactly `shifts` shifts. */
+  lastShift: Temporal.PlainDate;
+}
+
+/**
+ * What the walkthrough is going to build, given the date the run opens on.
+ *
+ * The weekdays alternate ROUND the row from the first shift's own weekday, so
+ * the toolbar ends up reading as a pattern rather than as four arbitrary
+ * presses — and starting on that weekday means the opening date is already
+ * shift one, so the sentence is coherent from the first chip onwards.
+ *
+ * The end date is then found by counting, not by arithmetic on weeks: whatever
+ * `shifts` is asked for and however many weekdays the pattern lands on, the
+ * range closes on the day the count is reached.
+ */
+export function planDemoRecurrence(
+  firstShift: Temporal.PlainDate,
+  shifts = TOUR_SHIFTS,
+): DemoRecurrencePlan {
+  const opening = WEEKDAY_KEYS.indexOf(weekdayOf(firstShift));
+  const weekdays = Array.from(
+    { length: TOUR_WEEKDAYS },
+    (_, index) => WEEKDAY_KEYS[(opening + index * 2) % 7],
+  );
+  const repeats = new Set(weekdays);
+
+  let lastShift = firstShift;
+  let counted = 1;
+  while (counted < shifts) {
+    lastShift = lastShift.add({ days: 1 });
+    if (repeats.has(weekdayOf(lastShift))) counted += 1;
+  }
+  return { weekdays, lastShift };
+}
+
+/** Chevron presses to page a calendar showing `from`'s month over to `to`'s. */
+export function monthsBetween(
+  from: Temporal.PlainDate,
+  to: Temporal.PlainDate,
+): number {
+  return (to.year - from.year) * 12 + (to.month - from.month);
+}
+
+/** The open date popover — portalled to the body, so scoped on the document. */
+const DATE_POPOVER = '[role="dialog"][aria-label="Choose date"]';
+
+const WEEKDAY_NAMES_BY_KEY = new Map(
+  WEEKDAYS.map((day) => [day.key, day.name]),
+);
+
 export function ShiftSchedulingV1() {
   // The form opens on a plausible near-future run rather than on fixed dates:
-  // tomorrow through a week later. Read from the clock ONCE and shared by both
-  // seeds, so they can't land on either side of midnight, and lazily so the
-  // read happens at mount rather than on every render.
+  // tomorrow through a week later. Read from the clock ONCE and shared by every
+  // seed, so they can't land on either side of midnight, and lazily so the read
+  // happens at mount rather than on every render.
   const [today] = useState(() => Temporal.Now.plainDateISO());
-  const [firstShift, setFirstShift] = useState<Temporal.PlainDate | null>(() =>
-    today.add({ days: 1 }),
+  // The opening state, kept in one place because two things need it: the seeds
+  // below, and every reset — which is defined as "put it back to this".
+  const opening = useMemo(() => {
+    const firstShift = today.add({ days: 1 });
+    return {
+      firstShift,
+      lastShift: today.add({ days: 8 }),
+      // The weekday the first shift itself falls on — the one repeat a shift on
+      // that date implies, so the form is already describing something true
+      // rather than an arbitrary pair. A SEED only: re-dating the first shift
+      // later leaves the toolbar alone, because by then the weekdays are the
+      // user's answer and not ours to overwrite.
+      days: [weekdayOf(firstShift)] as WeekdayKey[],
+    };
+  }, [today]);
+
+  const [firstShift, setFirstShift] = useState<Temporal.PlainDate | null>(
+    opening.firstShift,
   );
-  const [lastShift, setLastShift] = useState<Temporal.PlainDate | null>(() =>
-    today.add({ days: 8 }),
+  const [lastShift, setLastShift] = useState<Temporal.PlainDate | null>(
+    opening.lastShift,
   );
-  const [repeat, setRepeat] = useState(true);
-  // Seeded with the weekday the first shift itself falls on — the one repeat a
-  // shift on that date implies, so the form opens already describing something
-  // true rather than an arbitrary pair. Seeded ONLY: re-dating the first shift
-  // later leaves the toolbar alone, because by then the weekdays are the user's
-  // answer and not ours to overwrite.
+  // Closed at rest, because the walkthrough's opening move is to OPEN it — and
+  // a card that folds itself shut the moment the demo starts would read as a
+  // glitch rather than as the first step.
+  const [repeat, setRepeat] = useState(false);
   const [days, setDays] = useState<Set<WeekdayKey>>(
-    () => new Set(firstShift ? [weekdayOf(firstShift)] : []),
+    () => new Set(opening.days),
   );
   // Arms the recurrence block's @starting-style once the switch is first
   // touched, so the entry animation can't fire on the initial render.
@@ -395,140 +535,274 @@ export function ShiftSchedulingV1() {
   // drops when the block is VISIBLE but no weekday is selected.
   const repeating = selectedNames.length > 0;
 
+  // What the walkthrough is going to build. Planned at mount off the same
+  // opening date the form seeds from, so the tour and the form can never
+  // disagree about which day the run starts on.
+  const tour = useMemo(
+    () => planDemoRecurrence(opening.firstShift),
+    [opening.firstShift],
+  );
+
+  const stageRef = useRef<HTMLDivElement>(null);
+  const onScreen = useInView(stageRef);
+
+  /**
+   * Clear the run the walkthrough built and put the dates back.
+   *
+   * `repeating` is the one thing that is NOT simply "as we found it". Resetting
+   * leaves the card OPEN, because open is the state v1 is arguing for — it is
+   * what the Figma draws, and it is the only state in which there is anything
+   * to play with. A reset that shut the card would hand back a form with one
+   * switch in it and make the visitor's first act the same click the
+   * walkthrough just demonstrated.
+   *
+   * Shut is therefore the walkthrough's STARTING position rather than the
+   * demo's resting one, which is why replay is the only caller that asks for
+   * it: the tour's opening move is to throw that switch, and it needs the
+   * switch to have somewhere to go.
+   */
+  const restore = useCallback(
+    (repeating: boolean) => {
+      setRepeat(repeating);
+      setDays(new Set(opening.days));
+      setFirstShift(opening.firstShift);
+      setLastShift(opening.lastShift);
+
+      // Focus is part of what has to be handed back. The date picker returns
+      // it to its trigger as it closes — right for whoever opened the thing,
+      // wrong here, because the walkthrough opened it and the form is left
+      // with the Last Shift field wearing its focused frame as though the
+      // visitor had tabbed in. Only ever gives up focus that is INSIDE the
+      // form: a visitor who pressed Reset is focused on the button, out here,
+      // and that focus is theirs to keep.
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && stageRef.current?.contains(focused))
+        focused.blur();
+    },
+    [opening],
+  );
+
+  const cursor = useDemoCursorTour({
+    stageRef,
+    active: onScreen,
+    finaleMs: TOUR_FINALE_MS,
+    stops: () => {
+      const stage = stageRef.current;
+      // The visitor has already opened the recurrence, or edited its weekdays.
+      // The tour's whole opening move would be undoing that, so it declines —
+      // the same call v0 makes over a calendar that already has dates on it.
+      if (!stage || repeat || days.size !== 1) return [];
+
+      const inStage = (selector: string) => () =>
+        stage.querySelector<HTMLElement>(selector);
+      const inPopover = (selector: string) => () =>
+        document.querySelector<HTMLElement>(`${DATE_POPOVER} ${selector}`);
+
+      // The calendar opens on whatever Last Shift currently reads, so the
+      // chevron presses are counted from there rather than from a fixed month.
+      const shown = lastShift ?? opening.lastShift;
+      const turns = Math.max(0, monthsBetween(shown, tour.lastShift));
+
+      return [
+        // Open the recurrence…
+        inStage('[role="switch"]'),
+        // …fill in the pattern (its first weekday is already the seeded one)…
+        ...tour.weekdays
+          .slice(1)
+          .map((key) =>
+            inStage(
+              `[aria-label="Repeat on weekdays"] [aria-label="${WEEKDAY_NAMES_BY_KEY.get(key)}"]`,
+            ),
+          ),
+        // …then date the end of the run, the long way, through the real picker.
+        inStage('[data-testid="recurrence"] button[aria-haspopup="dialog"]'),
+        ...Array.from({ length: turns }, () =>
+          inPopover('button[aria-label="Next month"]'),
+        ),
+        inPopover(`[data-date="${tour.lastShift}"]:not([data-outside])`),
+      ];
+    },
+    // A walkthrough that left 25 shifts booked would make the visitor's first
+    // act undoing someone else's roster. The card stays open behind it: the
+    // demo hands over a form you can use, not the blank it started from.
+    onComplete: () => restore(true),
+    // The frame scrolled away mid-run, so nobody is being handed anything —
+    // and the two states genuinely differ here. Rewind to the card SHUT, which
+    // is what the fresh run on the way back needs in order to open it.
+    onRewind: () => restore(false),
+  });
+
+  // Replay rewinds to the walkthrough's own starting position — card SHUT, so
+  // its first click has something to open — and every one of its clicks
+  // TOGGLES, so running it over finished work would only take it apart again.
+  const { replay: replayTour, stop: stopTour } = cursor;
+  const replay = useCallback(() => {
+    restore(false);
+    replayTour();
+  }, [restore, replayTour]);
+
+  // Reset calls off a performance in flight as well as clearing the run —
+  // otherwise the tour's remaining clicks would put it straight back.
+  const reset = useCallback(() => {
+    stopTour();
+    restore(true);
+  }, [stopTour, restore]);
+
   return (
-    <ShiftFormShell
-      footerFill={
-        <div
-          className={counterweightStyle}
-          data-testid="repeat-counterweight"
-          data-open={!repeat}
-          style={{ "--counterweight": `${reserve}px` } as CSSProperties}
-        >
-          {/* The rest of the "Post a Shift" form, as a shape — the same
+    <>
+      <div className={stageStyle} ref={stageRef}>
+        <ShiftFormShell
+          footerFill={
+            <div
+              className={counterweightStyle}
+              data-testid="repeat-counterweight"
+              data-open={!repeat}
+              data-armed={armed}
+              style={{ "--counterweight": `${reserve}px` } as CSSProperties}
+            >
+              {/* The rest of the "Post a Shift" form, as a shape — the same
               treatment v0 gives its field column, and for the same reason: the
               point is that the dialog is still the same size, not what these
               particular fields say. `Wireframe` makes the whole block inert and
               aria-hidden, so it is scenery in every sense. */}
-          <Wireframe className={counterweightFieldsStyle} opacity={25}>
-            <TextInput
-              label="Additional Notes"
-              defaultValue="Anything the team should know"
-              hint="Visible to everyone rostered on this shift"
-            />
-            <div className={counterweightChecksStyle}>
-              <Field>
-                <Checkbox />
-                <Field.Label>
-                  Notify the team when this shift is posted
-                </Field.Label>
-              </Field>
-              <Field>
-                <Checkbox />
-                <Field.Label>
-                  Let staff swap this shift with a colleague
-                </Field.Label>
-              </Field>
+              <Wireframe className={counterweightFieldsStyle} opacity={25}>
+                <TextInput
+                  label="Additional Notes"
+                  defaultValue="Anything the team should know"
+                  hint="Visible to everyone rostered on this shift"
+                />
+                <div className={counterweightChecksStyle}>
+                  <Field>
+                    <Checkbox />
+                    <Field.Label>
+                      Notify the team when this shift is posted
+                    </Field.Label>
+                  </Field>
+                  <Field>
+                    <Checkbox />
+                    <Field.Label>
+                      Let staff swap this shift with a colleague
+                    </Field.Label>
+                  </Field>
+                </div>
+              </Wireframe>
             </div>
-          </Wireframe>
-        </div>
-      }
-    >
-      {/* Interactive scheduling section — the real components + the Notice. */}
-      <div className={formStyle}>
-        <Field className={dateFieldStyle}>
-          <Field.Label>{repeat ? "First Shift" : "Shift Date"}</Field.Label>
-          <DatePicker value={firstShift} onValueChange={setFirstShift} />
-          <Field.Hint>dd/mm/yyyy</Field.Hint>
-        </Field>
-
-        <div className={repeatCardStyle} data-testid="repeat-card">
-          <div className={switchRowStyle}>
-            <Field size="lg">
-              <Switch
-                checked={repeat}
-                onCheckedChange={(next) => {
-                  setArmed(true);
-                  setRepeat(next);
-                }}
-              />
-              <Field.Label>Repeat this shift on other days</Field.Label>
+          }
+        >
+          {/* Interactive scheduling section — the real components + the Notice. */}
+          <div className={formStyle}>
+            <Field className={dateFieldStyle}>
+              <Field.Label>{repeat ? "First Shift" : "Shift Date"}</Field.Label>
+              <DatePicker value={firstShift} onValueChange={setFirstShift} />
+              <Field.Hint>dd/mm/yyyy</Field.Hint>
             </Field>
-          </div>
 
-          <div
-            className={recurrenceStyle}
-            data-testid="recurrence"
-            data-collapsed={!repeat}
-            data-armed={armed}
-            inert={!repeat}
-          >
-            <div className={recurrenceClipStyle}>
-              <div className={recurrenceContentStyle} ref={recurrenceContentRef}>
-                <div className={dividerStyle} data-testid="repeat-divider" />
+            <div className={repeatCardStyle} data-testid="repeat-card">
+              <div className={switchRowStyle}>
+                <Field size="lg">
+                  <Switch
+                    checked={repeat}
+                    onCheckedChange={(next) => {
+                      setArmed(true);
+                      setRepeat(next);
+                    }}
+                  />
+                  <Field.Label>Repeat this shift on other days</Field.Label>
+                </Field>
+              </div>
 
-                <div className={recurrenceBodyStyle}>
-                  <div className={rowStyle}>
-                    <div className={weekdaysGroupStyle}>
-                      <span className={weekdaysLabelStyle}>
-                        Repeat Every Week On
-                      </span>
-                      <div className={weekdaysFrameStyle}>
-                        <OptionList direction="inline">
-                          <OptionList.Toolbar
-                            aria-label="Repeat on weekdays"
-                            className={weekdaysToolbarStyle}
-                          >
-                            {WEEKDAYS.map((day, i) => (
-                              <OptionList.Option
-                                key={`${day.key}-${i}`}
-                                pressed={days.has(day.key)}
-                                aria-label={day.name}
-                                className={dayChipStyle}
-                                onClick={() => toggleDay(day.key)}
+              <div
+                className={recurrenceStyle}
+                data-testid="recurrence"
+                data-collapsed={!repeat}
+                data-armed={armed}
+                inert={!repeat}
+              >
+                <div className={recurrenceClipStyle}>
+                  <div
+                    className={recurrenceContentStyle}
+                    ref={recurrenceContentRef}
+                  >
+                    <div
+                      className={dividerStyle}
+                      data-testid="repeat-divider"
+                    />
+
+                    <div className={recurrenceBodyStyle}>
+                      <div className={rowStyle}>
+                        <div className={weekdaysGroupStyle}>
+                          <span className={weekdaysLabelStyle}>
+                            Repeat Every Week On
+                          </span>
+                          <div className={weekdaysFrameStyle}>
+                            <OptionList direction="inline">
+                              <OptionList.Toolbar
+                                aria-label="Repeat on weekdays"
+                                className={weekdaysToolbarStyle}
                               >
-                                {day.letter}
-                              </OptionList.Option>
-                            ))}
-                          </OptionList.Toolbar>
-                        </OptionList>
+                                {WEEKDAYS.map((day, i) => (
+                                  <OptionList.Option
+                                    key={`${day.key}-${i}`}
+                                    pressed={days.has(day.key)}
+                                    aria-label={day.name}
+                                    className={dayChipStyle}
+                                    onClick={() => toggleDay(day.key)}
+                                  >
+                                    {day.letter}
+                                  </OptionList.Option>
+                                ))}
+                              </OptionList.Toolbar>
+                            </OptionList>
+                          </div>
+                        </div>
+                        <Field className={dateFieldStyle}>
+                          <Field.Label>Last Shift</Field.Label>
+                          <DatePicker
+                            value={lastShift}
+                            onValueChange={setLastShift}
+                          />
+                          <Field.Hint>dd/mm/yyyy</Field.Hint>
+                        </Field>
                       </div>
-                    </div>
-                    <Field className={dateFieldStyle}>
-                      <Field.Label>Last Shift</Field.Label>
-                      <DatePicker
-                        value={lastShift}
-                        onValueChange={setLastShift}
-                      />
-                      <Field.Hint>dd/mm/yyyy</Field.Hint>
-                    </Field>
-                  </div>
 
-                  {/* The star of the showcase — a live, self-describing Notice. */}
-                  <Notice role="status" aria-live="polite">
-                    <Notice.Icon>
-                      <InfoIcon />
-                    </Notice.Icon>
-                    <Notice.Label>
-                      This shift will start on{" "}
-                      <strong>
-                        {firstShift ? formatFull(firstShift) : "—"}
-                      </strong>
-                      {repeating && lastShift ? (
-                        <>
-                          {" "}
-                          and repeat every {joinDays(selectedNames)} until{" "}
-                          <strong>{formatFull(lastShift)}</strong>
-                        </>
-                      ) : null}
-                      .
-                    </Notice.Label>
-                  </Notice>
+                      {/* The star of the showcase — a live, self-describing Notice. */}
+                      <Notice role="status" aria-live="polite">
+                        <Notice.Icon>
+                          <InfoIcon />
+                        </Notice.Icon>
+                        <Notice.Label>
+                          This shift will start on{" "}
+                          <strong>
+                            {firstShift ? formatFull(firstShift) : "—"}
+                          </strong>
+                          {repeating && lastShift ? (
+                            <>
+                              {" "}
+                              and repeat every {joinDays(
+                                selectedNames,
+                              )} until <strong>{formatFull(lastShift)}</strong>
+                            </>
+                          ) : null}
+                          .
+                        </Notice.Label>
+                      </Notice>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </ShiftFormShell>
+
+        {/* A sibling of the dialog, not a child of the clipped form surface —
+          see `stageStyle`. Last, so it paints over what it is pointing at. */}
+        <DemoCursor {...cursor} />
       </div>
-    </ShiftFormShell>
+
+      {/* Outside the shell, so it pins to the FRAME's corner rather than the
+          dialog's — and outside the stage, so pressing one is not mistaken for
+          the visitor reaching into the form mid-performance. */}
+      <DemoControls onReplay={replay} onReset={reset} />
+    </>
   );
 }

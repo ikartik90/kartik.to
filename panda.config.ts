@@ -589,6 +589,16 @@ export default defineConfig({
           from: { translate: "0 0", opacity: 1 },
           to: { translate: "100% 0", opacity: 0 },
         },
+        // The ring a demo's stand-in cursor leaves where it clicked. A real
+        // cursor makes no such mark — this one has to, because the pointer is
+        // the only thing on screen that ISN'T under the visitor's hand, and a
+        // press that only dips the arrow by a few pixels reads as a glitch
+        // rather than as a click. It opens from under the cursor's tip and is
+        // gone before the next stop.
+        demoCursorTap: {
+          from: { opacity: 0.6, transform: "scale(0.35)" },
+          to: { opacity: 0, transform: "scale(1)" },
+        },
       },
 
       recipes: {
@@ -773,7 +783,11 @@ export default defineConfig({
               },
             },
           ],
-          defaultVariants: { variant: "text", emphasis: "secondary", size: "md" },
+          defaultVariants: {
+            variant: "text",
+            emphasis: "secondary",
+            size: "md",
+          },
           // Runtime variant values — force every branch to be emitted.
           staticCss: [{ variant: ["*"], emphasis: ["*"], size: ["*"] }],
         }),
@@ -1055,6 +1069,10 @@ export default defineConfig({
             flexDirection: "column",
             alignItems: "center",
             overflow: "hidden",
+            // The containing block for `demoFrameControls` — a demo that
+            // performs itself pins its replay/reset rail to the FRAME's corner,
+            // not to wherever its own content happens to end.
+            position: "relative",
             borderRadius: "xl",
             backgroundColor: "bg.canvas",
             borderWidth: "token(spacing.3xs)",
@@ -1171,6 +1189,67 @@ export default defineConfig({
             width: "fit-content",
             maxWidth: "token(spacing.full)",
             flexShrink: 0,
+          },
+        }),
+
+        demoFrameControls: defineRecipe({
+          className: "demo-frame__controls",
+          description:
+            "The frame's control toolbar — icon buttons on the app's shared toolbar chrome (40px tall, 8px inline padding, bg.surface, hairline; no drop shadow, which is reserved for toolbars that float as popovers), tucked into its bottom-right corner for a demo that performs itself (replay / reset). It belongs to the frame rather than to the demo's own layout, which is why it is placed here: the demo is centred inside the area's 20px padding band and so never reaches this corner. Out of flow, so it costs the frame's content measurement nothing.",
+          base: {
+            position: "absolute",
+            // 8px in, not the 4px the bare rail sat at: the frame's own corner
+            // is `radii.xl`, and 16 − 8 = 8 is exactly the toolbar's own `md`
+            // radius, so the two curves are concentric. A surface tucked 4px
+            // into a 16px corner reads as slipping out of it.
+            right: "md",
+            bottom: "md",
+            // The demo below can carry stacking contexts of its own (any
+            // element with opacity < 1 makes one at level 0), so `auto` would
+            // leave the rail's order to the DOM.
+            zIndex: 1,
+            display: "flex",
+            alignItems: "center",
+            // The shared toolbar metrics: 40px tall on an 8px inline inset with
+            // its controls 4px apart, the same box `selectionPopover` and the
+            // collection pill draw. Written out rather than composed from them
+            // because neither can be borrowed whole — one is `position: fixed`
+            // on a CSS anchor, the other fades in over a photo's scrim — and
+            // this is the third place the chrome is wanted, which is where a
+            // shared skin earns its keep as a stated measurement.
+            gap: "sm",
+            height: "token(spacing.4xl)",
+            paddingInline: "md",
+            width: "max-content",
+            borderRadius: "md",
+            backgroundColor: "bg.surface",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
+            // NO drop shadow, and that is the rule rather than a preference:
+            // in this system the `0 4px 16px` elevation means "this surface is
+            // floating over the page" and belongs to popovers alone — the menu,
+            // slash, date, combobox and selection popovers all carry it, and
+            // every toolbar that is furniture instead goes without (the
+            // collection cell's pill drops it too). This one is fixed in the
+            // frame's own corner and never floats over anything, so the
+            // hairline and the surface do the separating on their own.
+            //
+            // The `overflow: hidden` those carry is deliberately not taken
+            // either. It is there to clip options and dividers that run to the
+            // edge; nothing here reaches one, and the buttons' hover tooltips
+            // are children of this very element — `position: fixed`, so they
+            // escape a clip today, but the clip would be a trap laid for the
+            // first descendant that isn't.
+            // The `icon` action is `color: inherit` — its SURFACE owns the
+            // glyph hue — so a rail that sets nothing inherits `text.default`
+            // off the body. That is prose colour, and prose runs to the far end
+            // of the ramp in dark (neutral.200) while merely sitting heavy in
+            // light (neutral.700): the same omission reads as fine in one theme
+            // and as two glaring white glyphs in the other. This is the pair the
+            // calendar's own chevrons take, so the frame's controls and the
+            // demo's read as one class of control in both themes.
+            color: "field.text.default",
           },
         }),
 
@@ -2368,7 +2447,7 @@ export default defineConfig({
         field: defineSlotRecipe({
           className: "field",
           description:
-            'Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The \'Active\' state is CSS-driven off the control\'s engagement (`:focus-visible`, a slider\'s plain `:focus`, or an open trigger\'s `aria-expanded` — see the label slot) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role="switch"` or `role="checkbox"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.',
+            "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's engagement (`:focus-visible`, a slider's plain `:focus`, or an open trigger's `aria-expanded` — see the label slot) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` or `role=\"checkbox\"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.",
           slots: ["root", "label", "frame", "control", "hint"],
           base: {
             root: {
@@ -2769,9 +2848,10 @@ export default defineConfig({
               // The frame's own border goes accent on focus; the hairlines drawn
               // inside it follow, keyed off the same selector the `field` recipe
               // uses so the whole field flips in one step.
-              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &": {
-                backgroundColor: "field.border.active",
-              },
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &":
+                {
+                  backgroundColor: "field.border.active",
+                },
             },
             thumb: {
               position: "absolute",
@@ -2791,9 +2871,10 @@ export default defineConfig({
               width: "token(spacing.3xs)",
               backgroundColor: "field.border.default",
               transition: "background-color 150ms ease",
-              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &": {
-                backgroundColor: "field.border.active",
-              },
+              "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &":
+                {
+                  backgroundColor: "field.border.active",
+                },
             },
             output: {
               flexShrink: 0,
@@ -3454,7 +3535,10 @@ export default defineConfig({
                 gridTemplateRows: "repeat(2, minmax(0, 1fr))",
                 padding: "sm",
                 gap: "sm",
-                "& > [data-collection-tile]": { position: "absolute", inset: 0 },
+                "& > [data-collection-tile]": {
+                  position: "absolute",
+                  inset: 0,
+                },
               },
             },
             tile: {
@@ -3688,7 +3772,10 @@ export default defineConfig({
                   // Positional rather than a `data-featured` hook: index 0 IS
                   // the featured image in this model, so the selector and the
                   // data agree by construction.
-                  "& > *:first-child": { gridColumn: "1 / 3", gridRow: "1 / 3" },
+                  "& > *:first-child": {
+                    gridColumn: "1 / 3",
+                    gridRow: "1 / 3",
+                  },
                 },
               },
               pair: {
@@ -4202,7 +4289,14 @@ export default defineConfig({
           className: "collection-lightbox",
           description:
             "Enlarged collection image — clamped to its natural size or 85% of the viewport, whichever is smaller, with the item's caption beneath.",
-          slots: ["panel", "figure", "frame", "backgroundEffect", "image", "caption"],
+          slots: [
+            "panel",
+            "figure",
+            "frame",
+            "backgroundEffect",
+            "image",
+            "caption",
+          ],
           base: {
             panel: {
               background: "transparent",
@@ -4514,7 +4608,11 @@ export default defineConfig({
               },
             },
           },
-          defaultVariants: { tone: "default", direction: "block", fit: "scroll" },
+          defaultVariants: {
+            tone: "default",
+            direction: "block",
+            fit: "scroll",
+          },
           // Runtime variant values — force every branch to be emitted.
           staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"] }],
         }),
