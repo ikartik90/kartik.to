@@ -117,6 +117,108 @@ describe("useDemoCursorTour", () => {
     expect(result.current.visible).toBe(false);
   });
 
+  // What the frame's own controls read to know whether a show is on. The
+  // cursor's `visible` cannot answer it: the arrow is off stage through the
+  // opening beat and again for the whole withdrawal, while the run still holds
+  // every click it has made.
+  describe("running", () => {
+    it("is on from the opening beat, before the cursor has walked on", async () => {
+      const { stageRef, plan } = setupStage(3);
+      const { result } = renderHook(() =>
+        useDemoCursorTour({ stageRef, active: true, stops: plan }),
+      );
+
+      expect(result.current.running).toBe(true);
+      await run(200);
+      expect(result.current.visible).toBe(false);
+      expect(result.current.running).toBe(true);
+    });
+
+    it("stays on until the hand-over, the withdrawal included", async () => {
+      const { stageRef, plan } = setupStage(2);
+      let handedOver = false;
+      const { result } = renderHook(() =>
+        useDemoCursorTour({
+          stageRef,
+          active: true,
+          stops: plan,
+          onComplete: () => {
+            handedOver = true;
+          },
+        }),
+      );
+
+      // Sampled finely, because the gap this guards against is one 260ms fade:
+      // the cursor leaves the stage BEFORE the demo puts itself back, so a
+      // frame reading `visible` for this would flash its controls on in there
+      // and off again a quarter of a second later.
+      let offEarly = false;
+      for (let elapsed = 0; elapsed < WHOLE_TOUR_MS; elapsed += 40) {
+        await run(40);
+        if (!result.current.running && !handedOver) offEarly = true;
+      }
+
+      expect(offEarly).toBe(false);
+      expect(handedOver).toBe(true);
+      expect(result.current.running).toBe(false);
+    });
+
+    it("goes off the moment the visitor takes the stage", async () => {
+      const { stageRef, plan, stage } = setupStage(4);
+      const { result } = renderHook(() =>
+        useDemoCursorTour({ stageRef, active: true, stops: plan }),
+      );
+
+      await run(1600);
+      expect(result.current.running).toBe(true);
+      act(() => {
+        stage.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      });
+      expect(result.current.running).toBe(false);
+    });
+
+    it("goes off when the frame leaves the screen mid-performance", async () => {
+      const { stageRef, plan } = setupStage(4);
+      const { result, rerender } = renderHook(
+        ({ active }) => useDemoCursorTour({ stageRef, active, stops: plan }),
+        { initialProps: { active: true } },
+      );
+
+      await run(1600);
+      expect(result.current.running).toBe(true);
+      rerender({ active: false });
+      expect(result.current.running).toBe(false);
+    });
+
+    it("stays off for a plan that called the whole thing off", async () => {
+      const { stageRef } = setupStage(2);
+      const { result } = renderHook(() =>
+        useDemoCursorTour({ stageRef, active: true, stops: () => [] }),
+      );
+
+      await run(WHOLE_TOUR_MS);
+      expect(result.current.running).toBe(false);
+    });
+
+    // Every stop resolved to null, so the cursor never came on — but the run is
+    // over all the same, and a frame left believing otherwise would never offer
+    // its controls again.
+    it("goes off when not one stop resolved", async () => {
+      const { stageRef } = setupStage(2);
+      const { result } = renderHook(() =>
+        useDemoCursorTour({
+          stageRef,
+          active: true,
+          stops: () => [() => null, () => null],
+        }),
+      );
+
+      expect(result.current.running).toBe(true);
+      await run(WHOLE_TOUR_MS);
+      expect(result.current.running).toBe(false);
+    });
+  });
+
   it("puts the cursor on each stop's centre, in stage coordinates", async () => {
     const { stageRef, plan } = setupStage(2);
     const { result } = renderHook(() =>

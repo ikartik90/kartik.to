@@ -397,7 +397,35 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
     expect(day(TODAY).getAttribute("aria-selected")).toBe("false");
   });
 
-  it("resets the board on request, mid-performance included", async () => {
+  // Reset is offered against WORK, and an empty board is already the state it
+  // hands back — so until dates are on it there is nothing to press.
+  it("withholds reset until the board carries something to clear", () => {
+    render(<ShiftSchedulingV0 />);
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+
+    fireEvent.click(day(TODAY));
+    expect(screen.getByRole("button", { name: "Reset Demo" })).toBeTruthy();
+  });
+
+  // ...and "back to how it started" is a moving target while the walkthrough is
+  // still picking, so the offer waits for the performance to be over.
+  it("keeps reset off the rail while the walkthrough is picking", async () => {
+    const reveal = scrollIntoView();
+    render(<ShiftSchedulingV0 />);
+
+    reveal();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_600);
+    });
+    expect(selectedDates().length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+
+    // And it is gone again at the other end, since the run puts the board back.
+    await play();
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+  });
+
+  it("clears the board on request, once the visitor has taken the stage", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV0 />);
 
@@ -407,6 +435,9 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
     });
     expect(selectedDates().length).toBeGreaterThan(0);
 
+    // Touching the calendar stands the show down — which is what hands the
+    // control back, with the picks it had already made still on the board.
+    fireEvent.pointerDown(day(TODAY));
     fireEvent.click(screen.getByRole("button", { name: "Reset Demo" }));
     expect(selectedDates()).toHaveLength(0);
 
@@ -417,6 +448,8 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
 
   it("names both controls for a screen reader and labels them on hover", () => {
     render(<ShiftSchedulingV0 />);
+    // Reset only exists once there is a pick to clear.
+    fireEvent.click(day(TODAY));
     const replay = screen.getByRole("button", { name: "Replay Demo" });
     const reset = screen.getByRole("button", { name: "Reset Demo" });
 

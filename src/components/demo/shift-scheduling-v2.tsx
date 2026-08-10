@@ -303,7 +303,14 @@ export function ShiftSchedulingV2() {
       {/* Outside the shell, so it pins to the FRAME's corner rather than the
           dialog's — and outside the stage, so pressing one is not mistaken for
           the visitor reaching into the grid mid-performance. */}
-      <DemoControls onReplay={replay} onReset={reset} />
+      <DemoControls
+        onReplay={replay}
+        onReset={reset}
+        // An empty grid is already the state reset hands back, so there is
+        // nothing to offer until shifts are drawn on it — and nothing to offer
+        // while the walkthrough is still drawing them.
+        resettable={shifts.length > 0 && !cursor.running}
+      />
     </>
   );
 }

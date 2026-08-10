@@ -69,6 +69,16 @@ export interface DemoCursorTourState {
 }
 
 export interface DemoCursorTour extends DemoCursorTourState {
+  /**
+   * Is a run in flight — from the opening beat right through to the hand-over?
+   *
+   * The cursor's own `visible` is NOT that answer, and the difference is what
+   * this exists for: the arrow is off stage through the opening beat and again
+   * for the whole withdrawal, while the run still holds every click it has
+   * made. Anything the frame offers on the strength of "nothing is performing"
+   * would flash on in those gaps.
+   */
+  running: boolean;
   /** Play it again from the top, cancelling any run in flight. */
   replay: () => void;
   /** Call the run off where it stands, leaving its work committed. */
@@ -258,6 +268,10 @@ export function useDemoCursorTour({
   onRewind,
 }: DemoCursorTourOptions): DemoCursorTour {
   const [state, setState] = useState<DemoCursorTourState>(IDLE);
+  // Kept apart from the cursor's own state rather than folded into it: that
+  // object IS `DemoCursor`'s props, and where the arrow is has nothing to say
+  // about whether a run is on.
+  const [running, setRunning] = useState(false);
   // Read through refs so a consumer can close over fresh state (e.g. "has the
   // visitor already selected something?") without re-triggering this effect.
   const stopsRef = useRef(stops);
@@ -295,6 +309,10 @@ export function useDemoCursorTour({
     if (!stage) return;
     const targets = stopsRef.current();
     if (!targets.length) return;
+
+    // Past every guard, so this IS a run — announced before the opening beat
+    // rather than at the walk-on, since the beat is already part of it.
+    setRunning(true);
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -334,6 +352,7 @@ export function useDemoCursorTour({
       dirty = false;
       clearTimeout(timer);
       release();
+      setRunning(false);
       setState((current) => ({ ...current, pressed: false, visible: false }));
     };
     abortRef.current = yieldStage;
@@ -442,9 +461,14 @@ export function useDemoCursorTour({
         await wait(HOLD_MS);
       }
 
+      if (cancelled) return;
       // Never came on stage: not one stop resolved, so there is nothing to
-      // withdraw from and nothing for the demo to put back.
-      if (cancelled || !at) return;
+      // withdraw from and nothing for the demo to put back — but the run is
+      // over all the same, and has to say so.
+      if (!at) {
+        setRunning(false);
+        return;
+      }
       await wait(finaleRef.current);
 
       if (cancelled) return;
@@ -455,6 +479,10 @@ export function useDemoCursorTour({
       await wait(EXIT_MS);
       if (cancelled) return;
       abortRef.current = null;
+      // Down before the hand-over, not after: `onComplete` is where the demo
+      // puts itself back, and it should land in one render with the news that
+      // the show is over.
+      setRunning(false);
       completeRef.current?.();
     })();
 
@@ -470,9 +498,10 @@ export function useDemoCursorTour({
       // is the first thing you would meet on the way back in — and rewind the
       // demo, because the next thing that happens is a run from the top.
       setState(IDLE);
+      setRunning(false);
       if (dirty) rewindRef.current?.();
     };
   }, [active, stageRef, request]);
 
-  return { ...state, replay, stop };
+  return { ...state, running, replay, stop };
 }
