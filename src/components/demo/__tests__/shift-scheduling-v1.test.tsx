@@ -578,13 +578,18 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     expect(finished.weekdays.sort()).toEqual(PLANNED_NAMES);
   });
 
-  it("resets a performance in flight, clearing the run but not the card", async () => {
+  it("clears the run but not the card, once the visitor has taken the stage", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
     reveal();
-    await advance(1600);
+    // Far enough in for chips to have been pressed — a run to clear.
+    await advance(2600);
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
+    expect(pressedWeekdays().length).toBeGreaterThan(1);
 
+    // Touching the form stands the show down — which is what hands the control
+    // back, with the pattern it had already built still on the form.
+    fireEvent.pointerDown(repeatCard());
     fireEvent.click(screen.getByRole("button", { name: "Reset Demo" }));
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
     expect(pressedWeekdays()).toEqual([weekdayName(FIRST_SHIFT)]);
@@ -613,11 +618,57 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
 
   it("offers replay in the frame's corner with reset inboard of it", () => {
     render(<ShiftSchedulingV1 />);
+    // Reset only exists once there is a pattern to clear.
+    openRepeat();
+    fireEvent.click(
+      within(weekdayToolbar()).getByRole("button", {
+        name: WEEKDAY_NAMES.find((name) => name !== weekdayName(FIRST_SHIFT))!,
+      }),
+    );
     const reset = screen.getByRole("button", { name: "Reset Demo" });
     const replay = screen.getByRole("button", { name: "Replay Demo" });
     expect(
       reset.compareDocumentPosition(replay) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  // Reset is offered against WORK — chips and dates — and NOT against the
+  // switch, which reset never puts back either: it always hands the card over
+  // open. A form still carrying its seeded pattern has nothing to clear,
+  // whichever way that switch happens to be sitting.
+  it("withholds reset until there is a pattern or a date to clear", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+
+    openRepeat();
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+
+    const extra = WEEKDAY_NAMES.find(
+      (name) => name !== weekdayName(FIRST_SHIFT),
+    )!;
+    const chip = within(weekdayToolbar()).getByRole("button", { name: extra });
+    fireEvent.click(chip);
+    expect(screen.getByRole("button", { name: "Reset Demo" })).toBeTruthy();
+
+    // ...and it goes again when the visitor puts the pattern back themselves.
+    fireEvent.click(chip);
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+  });
+
+  // "Back to how it started" is a moving target while the walkthrough is still
+  // building, so the offer waits for the performance to be over — and by then
+  // the run has cleared itself, leaving nothing to offer.
+  it("keeps reset off the rail while the walkthrough is performing", async () => {
+    const reveal = scrollIntoView();
+    render(<ShiftSchedulingV1 />);
+    reveal();
+
+    await advance(2600);
+    expect(pressedWeekdays().length).toBeGreaterThan(1);
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
+
+    await play();
+    expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
   });
 
   it("keeps the stand-in cursor out of the accessibility tree", async () => {

@@ -657,6 +657,24 @@ export function ShiftSchedulingV1() {
     restore(true);
   }, [stopTour, restore]);
 
+  // Is there a run on the form for reset to clear? The DATES and the weekday
+  // pattern answer that, measured against the seed the form opened on.
+  //
+  // The repeat switch is deliberately not part of it, and that is the one thing
+  // worth spelling out: reset does not put the switch back either — it always
+  // hands the card over OPEN, because open is the state v1 is arguing for. So a
+  // switch that had a say here would make the demo dirty in both directions and
+  // for nothing. On load, with the card shut by design, it would offer a reset
+  // whose only effect was opening a card nobody had touched; after a finished
+  // run, with the card left open, it would offer one that changed nothing at
+  // all. What the visitor can actually pile up is chips and dates, and that is
+  // exactly what this reads.
+  const dirty =
+    !firstShift?.equals(opening.firstShift) ||
+    !lastShift?.equals(opening.lastShift) ||
+    days.size !== opening.days.length ||
+    !opening.days.every((key) => days.has(key));
+
   return (
     <>
       <div className={stageStyle} ref={stageRef}>
@@ -812,7 +830,11 @@ export function ShiftSchedulingV1() {
       {/* Outside the shell, so it pins to the FRAME's corner rather than the
           dialog's — and outside the stage, so pressing one is not mistaken for
           the visitor reaching into the form mid-performance. */}
-      <DemoControls onReplay={replay} onReset={reset} />
+      <DemoControls
+        onReplay={replay}
+        onReset={reset}
+        resettable={dirty && !cursor.running}
+      />
     </>
   );
 }

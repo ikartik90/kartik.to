@@ -537,16 +537,34 @@ describe("ShiftSchedulingV2 — the walkthrough", { timeout: 15_000 }, () => {
     expect(cursor?.hasAttribute("data-visible")).toBe(false);
   });
 
+  const controlNames = () =>
+    screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label") ?? "")
+      .filter((name) => /Demo$/.test(name));
+
   it("offers the two controls the performance implies", () => {
     stage();
-    const controls = screen
-      .getAllByRole("button")
-      .filter((button) =>
-        /Demo$/.test(button.getAttribute("aria-label") ?? ""),
-      );
-    expect(controls.map((button) => button.getAttribute("aria-label"))).toEqual(
-      ["Reset Demo", "Replay Demo"],
-    );
+    // Reset is offered against WORK, and an empty grid is already the state it
+    // hands back — so a shift has to be drawn on before there is a pair at all.
+    expect(controlNames()).toEqual(["Replay Demo"]);
+
+    fireEvent.click(day(SHIFT_MONTH.with({ day: 6 })));
+    expect(controlNames()).toEqual(["Reset Demo", "Replay Demo"]);
+  });
+
+  // ...and "back to how it started" is a moving target while the walkthrough is
+  // still drawing, so the offer waits for the performance to be over.
+  it("keeps reset off the rail while the walkthrough is drawing", async () => {
+    const { reveal } = stage();
+    reveal();
+    await advance(2600);
+    expect(selected().length).toBeGreaterThan(0);
+    expect(controlNames()).toEqual(["Replay Demo"]);
+
+    // And gone again at the other end, since the run puts the grid back.
+    await advance(WHOLE_TOUR_MS);
+    expect(controlNames()).toEqual(["Replay Demo"]);
   });
 
   it("replays on request, over a board it clears first", async () => {
@@ -561,12 +579,15 @@ describe("ShiftSchedulingV2 — the walkthrough", { timeout: 15_000 }, () => {
     expect(boardsShown(await play())).toContain(finished());
   });
 
-  it("calls a performance off and clears the board on reset", async () => {
+  it("clears the board on reset, once the visitor has taken the stage", async () => {
     const { reveal } = stage();
     reveal();
     await advance(2600);
     expect(selected().length).toBeGreaterThan(0);
 
+    // Touching the grid stands the show down — which is what hands the control
+    // back, with the shifts it had already drawn still on the board.
+    fireEvent.pointerDown(day(SHIFT_MONTH.with({ day: 6 })));
     fireEvent.click(screen.getByRole("button", { name: "Reset Demo" }));
     expect(selected()).toEqual([]);
     // Off means off: the rest of the plan doesn't land afterwards.
