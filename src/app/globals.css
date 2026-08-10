@@ -13,6 +13,16 @@ body {
 
 body {
   min-height: 100%;
+  /* The page scrolls INSIDE <body> (its own `overflow-x` above makes it the
+     scroll container, not the viewport), so this is what puts a body-portalled
+     popover in the same scrolled coordinate space as the trigger it covers.
+     `position: absolute` against this containing block scrolls with the page in
+     one pass; `position: fixed` has to be re-offset against the scroller every
+     frame from a once-per-frame snapshot, which visibly stutters. See
+     `datePopover` / `comboboxPopover` in panda.config.ts. Safe as a global:
+     every other absolutely positioned element in the app already sits inside a
+     positioned ancestor, and the modal <dialog>s are in the top layer. */
+  position: relative;
   color: var(--colors-text-default);
   background: var(--colors-bg-canvas);
   font-family: var(--fonts-switzer);

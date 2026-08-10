@@ -56,8 +56,9 @@ type PopoverProps = {
    * Render the container in a `document.body` portal so it renders in the true
    * top stacking context and escapes ancestor clipping/containment — e.g. a
    * `DemoFrame`, whose `container-type` makes it the containing block for a
-   * `position: fixed` child and whose `overflow: hidden` would otherwise crop
-   * the popover. Only for element-anchored popovers (no `rect`): the anchor-name
+   * positioned child (absolute as well as fixed — `container-type` implies
+   * `contain: layout`) and whose `overflow: hidden` would otherwise crop the
+   * popover. Only for element-anchored popovers (no `rect`): the anchor-name
    * lives on an external trigger, so CSS anchor positioning still pins the
    * popover to it across the portal. A `rect`-anchored popover must stay in flow
    * (its synthesized anchor is article-relative), so this is ignored there.
