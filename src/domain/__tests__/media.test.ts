@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  ALLOWED_IMAGE_CONTENT_TYPES,
+  ALLOWED_MEDIA_CONTENT_TYPES,
   CreateMediaUploadInputSchema,
   MediaAssetSchema,
   MAX_IMAGE_UPLOAD_BYTES,
-  isAllowedImageContentType,
+  MAX_VIDEO_UPLOAD_BYTES,
+  isAllowedMediaContentType,
+  isVideoContentType,
+  maxUploadBytesFor,
   sanitizeMediaFilename,
   filenameFromMediaKey,
 } from "../media";
@@ -31,17 +34,61 @@ describe("MediaAssetSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts an mp4", () => {
+    const input = CreateMediaUploadInputSchema.parse({
+      filename: "demo.mp4",
+      contentType: "video/mp4",
+      size: 2 * 1024 * 1024,
+    });
+    expect(input.contentType).toBe("video/mp4");
+  });
+
+  // The cap is per FORMAT, not per upload: a clip that would be an absurd
+  // screenshot is an ordinary ten seconds of product demo.
+  it("holds a clip to the video cap, not the image one", () => {
+    const size = MAX_IMAGE_UPLOAD_BYTES + 1;
+    expect(() =>
+      CreateMediaUploadInputSchema.parse({
+        filename: "demo.mp4",
+        contentType: "video/mp4",
+        size,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      CreateMediaUploadInputSchema.parse({
+        filename: "demo.mp4",
+        contentType: "video/mp4",
+        size: MAX_VIDEO_UPLOAD_BYTES + 1,
+      }),
+    ).toThrow();
+  });
 });
 
-describe("isAllowedImageContentType", () => {
+describe("isAllowedMediaContentType", () => {
   it("accepts allowed types", () => {
-    for (const type of ALLOWED_IMAGE_CONTENT_TYPES) {
-      expect(isAllowedImageContentType(type)).toBe(true);
+    for (const type of ALLOWED_MEDIA_CONTENT_TYPES) {
+      expect(isAllowedMediaContentType(type)).toBe(true);
     }
   });
 
   it("rejects unknown types", () => {
-    expect(isAllowedImageContentType("image/bmp")).toBe(false);
+    expect(isAllowedMediaContentType("image/bmp")).toBe(false);
+    expect(isAllowedMediaContentType("video/quicktime")).toBe(false);
+  });
+});
+
+describe("isVideoContentType", () => {
+  it("tells a clip from a picture", () => {
+    expect(isVideoContentType("video/mp4")).toBe(true);
+    expect(isVideoContentType("image/gif")).toBe(false);
+  });
+});
+
+describe("maxUploadBytesFor", () => {
+  it("gives each format its own ceiling", () => {
+    expect(maxUploadBytesFor("video/mp4")).toBe(MAX_VIDEO_UPLOAD_BYTES);
+    expect(maxUploadBytesFor("image/png")).toBe(MAX_IMAGE_UPLOAD_BYTES);
   });
 });
 

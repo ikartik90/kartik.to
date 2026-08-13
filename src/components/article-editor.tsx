@@ -3334,7 +3334,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     number | null
   >(null);
   // Which slot the picker is filling: `null` means "add to the end" (a fresh
-  // collection, or the Add Image CTA), a number means "swap this one out".
+  // collection, or the Add Media CTA), a number means "swap this one out".
   const [collectionDialogTarget, setCollectionDialogTarget] = useState<
     number | null
   >(null);

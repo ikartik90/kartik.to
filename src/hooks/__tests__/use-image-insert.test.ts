@@ -120,6 +120,67 @@ describe("useImageInsert", () => {
 });
 
 // ---------------------------------------------------------------------------
+// What the drop zone will take — the same allow-list and the same per-format
+// ceilings the server enforces, answered here without the round trip.
+// ---------------------------------------------------------------------------
+
+describe("useImageInsert file validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListMediaAssets.mockResolvedValue([]);
+    // Reaching the signing call at all is the proof that the gates let the file
+    // through, and refusing there stops the test short of jsdom's XHR — which
+    // would put a real PUT on the wire.
+    mockCreateMediaUploadUrl.mockRejectedValue(new Error("no upload here"));
+  });
+
+  /** A file of `size` bytes without allocating any of them. */
+  const fileOf = (name: string, type: string, size: number) => {
+    const file = new File(["x"], name, { type });
+    Object.defineProperty(file, "size", { value: size });
+    return file;
+  };
+
+  const drop = async (file: File) => {
+    const { result } = renderHook(() => useImageInsert({ open: true }));
+    await act(async () => {
+      await result.current.processFile(file);
+    });
+    return result;
+  };
+
+  it("refuses a format the library does not take", async () => {
+    const result = await drop(fileOf("clip.mov", "video/quicktime", 1024));
+    expect(result.current.error).toBe("Unsupported file type");
+    expect(mockCreateMediaUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it("takes an mp4", async () => {
+    await drop(fileOf("clip.mp4", "video/mp4", 1024));
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledWith({
+      filename: "clip.mp4",
+      contentType: "video/mp4",
+      size: 1024,
+    });
+  });
+
+  // The ceiling follows the FORMAT. A clip is allowed to be an order larger
+  // than a picture, and a single shared limit would either refuse ordinary
+  // videos or stop being a guard on images.
+  it("holds each format to its own ceiling", async () => {
+    const size = 20 * 1024 * 1024;
+
+    const picture = await drop(fileOf("huge.png", "image/png", size));
+    expect(picture.current.error).toBe("File is too large");
+    expect(mockCreateMediaUploadUrl).not.toHaveBeenCalled();
+
+    const clip = await drop(fileOf("clip.mp4", "video/mp4", size));
+    expect(clip.current.error).not.toBe("File is too large");
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Multi-selection — the collection block picks several images at once
 // ---------------------------------------------------------------------------
 

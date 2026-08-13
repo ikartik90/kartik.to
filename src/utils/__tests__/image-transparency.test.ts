@@ -18,6 +18,15 @@ describe("formatCanCarryAlpha", () => {
     expect(formatCanCarryAlpha("photo.jfif")).toBe(false);
   });
 
+  // A clip has no alpha to find, and `new Image()` could not decode it to look
+  // — so the extension has to answer, or two network loads fail to.
+  it("rules out an mp4 without trying to decode it", () => {
+    expect(formatCanCarryAlpha("demo.mp4")).toBe(false);
+    expect(
+      formatCanCarryAlpha("https://cdn.example.com/media/uuid-demo.MP4?v=2"),
+    ).toBe(false);
+  });
+
   it("allows the formats that carry an alpha channel", () => {
     for (const src of ["a.png", "a.webp", "a.gif", "a.svg", "a.avif"]) {
       expect(formatCanCarryAlpha(src)).toBe(true);

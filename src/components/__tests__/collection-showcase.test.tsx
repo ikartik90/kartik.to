@@ -12,6 +12,10 @@ import { CollectionShowcase } from "../collection-showcase";
 // `showModal()` throws on an already-open dialog. A stub that only toggled the
 // attribute made a real "opens, then immediately closes itself" bug invisible.
 beforeEach(() => {
+  // jsdom has no media stack — `play()` is a not-implemented stub that returns
+  // nothing where a browser returns a promise.
+  HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+  HTMLMediaElement.prototype.pause = vi.fn();
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
   ) {
@@ -187,5 +191,49 @@ describe("CollectionShowcase lightbox", () => {
     );
     await user.click(tiles()[0]);
     expect(screen.getByRole("dialog").hasAttribute("open")).toBe(true);
+  });
+});
+
+describe("CollectionShowcase clips", () => {
+  const clip = { src: "/demo.mp4", alt: "A demo" };
+
+  it("plays an mp4 tile as a video, still under the tile's own button", async () => {
+    const user = userEvent.setup();
+    render(<CollectionShowcase items={[clip]} />);
+
+    const tile = screen.getByRole("button", { name: "A demo" });
+    expect(tile.querySelector("video")).not.toBeNull();
+
+    await user.click(tile);
+    expect(screen.getByRole("dialog").hasAttribute("open")).toBe(true);
+  });
+
+  // The tile is a hit target for the lightbox, so a control strip over it would
+  // eat the click. Full size and alone on a dimmed page, the clip IS the
+  // subject and a reader should be able to stop and scrub it.
+  it("withholds the transport on the tile and offers it in the lightbox", async () => {
+    const user = userEvent.setup();
+    render(<CollectionShowcase items={[clip]} />);
+
+    const tile = screen.getByRole("button", { name: "A demo" });
+    expect(tile.querySelector("video")!.hasAttribute("controls")).toBe(false);
+
+    await user.click(tile);
+    const opened = screen.getByRole("dialog").querySelector("video")!;
+    expect(opened.hasAttribute("controls")).toBe(true);
+  });
+
+  // Same rule the pictures follow — min(intrinsic, 85vw, 85vh) — read off the
+  // only property that reports a clip's own size.
+  it("caps the lightbox at the clip's own width", async () => {
+    const user = userEvent.setup();
+    render(<CollectionShowcase items={[clip]} />);
+    await user.click(screen.getByRole("button", { name: "A demo" }));
+
+    const opened = screen.getByRole("dialog").querySelector("video")!;
+    Object.defineProperty(opened, "videoWidth", { value: 1280 });
+    fireEvent.loadedMetadata(opened);
+
+    expect(opened.style.maxWidth).toBe("min(1280px, 85vw)");
   });
 });

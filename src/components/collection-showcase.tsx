@@ -6,6 +6,7 @@ import {
   collectionLightbox,
 } from "../../styled-system/recipes";
 import { BackgroundEffectLayer } from "@/components/background-effect";
+import { Media } from "@/components/media";
 import { Dialog } from "@/components/ui/dialog";
 import { Typography } from "@/components/ui/typography";
 import type { CollectionItem } from "@/domain/nodes";
@@ -75,8 +76,10 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
                 aria-label={collectionItemAlt(item) || `Image ${index + 1}`}
                 onClick={() => setOpenIndex(index)}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                {/* No transport on a tile: the button around it opens the
+                    lightbox, and a control strip laid over a 300px thumbnail
+                    would swallow the gesture the tile exists for. */}
+                <Media
                   src={item.src}
                   alt={collectionItemAlt(item)}
                   className={styles.image}
@@ -144,7 +147,7 @@ function CollectionLightbox({
     index: number;
     width: number;
   } | null>(null);
-  const naturalWidth = measured?.index === index ? measured.width : null;
+  const intrinsicWidth = measured?.index === index ? measured.width : null;
   const item = index === null ? null : items[index];
 
   // `showModal` (not the `open` attribute) is what buys the focus trap, the
@@ -199,15 +202,18 @@ function CollectionLightbox({
               className={lightboxStyles.backgroundEffect}
             />
           )}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Media
             // Keyed so stepping swaps the element rather than mutating one —
             // otherwise the browser would paint the old bitmap at the new box
-            // until the next decode.
+            // until the next decode. For a clip it is what stops the next one
+            // inheriting the last one's playhead.
             key={index}
             src={item.src}
             alt={collectionItemAlt(item)}
             className={lightboxStyles.image}
+            // One image at full size, alone on a dimmed page — the one place
+            // in the reader where a clip is the subject rather than a tile.
+            controls
             // The whole size rule is min(natural, 85vw, 85vh) — and it lands as
             // three MAX constraints, never a fixed width. With `width`/`height`
             // both auto, a replaced element under two maxima scales down on its
@@ -216,13 +222,11 @@ function CollectionLightbox({
             // instead would let the height cap shrink the BOX while the image
             // letterboxed inside it — a tall photo in a too-wide frame.
             style={
-              naturalWidth
-                ? { maxWidth: `min(${naturalWidth}px, 85vw)` }
+              intrinsicWidth
+                ? { maxWidth: `min(${intrinsicWidth}px, 85vw)` }
                 : undefined
             }
-            onLoad={(event) =>
-              setMeasured({ index, width: event.currentTarget.naturalWidth })
-            }
+            onMeasure={(width) => setMeasured({ index, width })}
           />
           </div>
           {item.caption && (
