@@ -164,6 +164,18 @@ const postActions = vi.hoisted(() => ({
 }));
 vi.mock("@/app/actions/post", () => postActions);
 
+// Stubbed so the collection tests can assert what the editor NEVER calls: a
+// picture is a reference, and dropping the reference must not touch the object
+// the rest of the site may still be pointing at. See the removal test below.
+const mediaActions = vi.hoisted(() => ({
+  listMediaAssets: vi.fn(async () => []),
+  createMediaUploadUrl: vi.fn(),
+  updateMediaAlt: vi.fn(),
+  updateMediaFilename: vi.fn(),
+  deleteMedia: vi.fn(),
+}));
+vi.mock("@/app/actions/media", () => mediaActions);
+
 vi.mock("@/utils/content-sync", () => ({
   notifyContentUpdated: vi.fn(),
   subscribeContentUpdated: () => () => {},
@@ -3399,7 +3411,7 @@ describe("ArticleEditor collection block", () => {
   it("shows every slot, filled or not", () => {
     render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
     expect(screen.getAllByRole("toolbar")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Add Image" })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: "Add Media" })).toHaveLength(5);
   });
 
   it("swaps a featured image with the one it replaces", () => {
@@ -3501,13 +3513,31 @@ describe("ArticleEditor collection block", () => {
     expect(collection().items).toEqual([]);
   });
 
+  it("removes the image from the collection without deleting the stored object", () => {
+    // The cell's trash empties a SLOT, not the bucket. The same picture may be
+    // featured in another collection, embedded in a published article, or about
+    // to be picked again from the library — so the only thing a removal is
+    // allowed to change is this block's `items`. Deleting from R2 is a separate,
+    // deliberate act, and it lives in the media library alone.
+    mediaActions.deleteMedia.mockClear();
+    render(
+      <ArticleEditor initialPost={collectionPost([{ src: "a" }, { src: "b" }])} />,
+    );
+    fireEvent.click(
+      within(toolbarFor(0)).getByRole("button", { name: "Remove image" }),
+    );
+
+    expect(collection().items.map((i) => i.src)).toEqual(["b"]);
+    expect(mediaActions.deleteMedia).not.toHaveBeenCalled();
+  });
+
   it("caps the picker at the remaining capacity when adding", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
       />,
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Add Image" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Add Media" })[0]);
     expect(
       screen.getByTestId("image-dialog").getAttribute("data-max-selection"),
     ).toBe("3");
@@ -3524,7 +3554,7 @@ describe("ArticleEditor collection block", () => {
         ])}
       />,
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Add Image" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Add Media" })[0]);
     fireEvent.click(screen.getByText("insert"));
 
     expect(collection().items.map((i) => i.src)).toEqual([

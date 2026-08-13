@@ -16,6 +16,7 @@ import {
 } from "../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
 import { BackgroundEffectLayer } from "@/components/background-effect";
+import { Media } from "@/components/media";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
 import {
   PROPERTIES_TRIGGER_ATTR,
@@ -39,7 +40,7 @@ import TrashIcon from "@/assets/icons/trash.svg";
 //
 // Every slot is drawn, filled or not, so the six-image cap reads as a shape
 // rather than as an error you discover by hitting it. A filled slot reveals its
-// controls on hover; an empty one is a single "Add Image" button.
+// controls on hover; an empty one is a single "Add Media" button.
 //
 // The component is deliberately stateless about the collection itself: it takes
 // an ordered `items` array and emits intent (feature / caption / replace /
@@ -57,6 +58,14 @@ const emptyCellStyle = collectionEmptyCell();
  * a hand wobbled on it would be unusable.
  */
 const DRAG_THRESHOLD = 4;
+
+/**
+ * The elements a cell can be showing — a photo or a clip (see `Media`). The
+ * gesture treats them identically: whichever one is in the slot is the drag
+ * handle, the box the press is measured against, and the thing that gets
+ * cloned onto the cursor.
+ */
+const MEDIA_TAGS = "img, video";
 
 /**
  * How long the dropped photo takes to travel into the cell it landed on — and
@@ -351,7 +360,8 @@ export function CollectionGrid({
     pointerId: number;
     originX: number;
     originY: number;
-    img: HTMLImageElement;
+    /** The photo or the clip — whichever element the cell is showing. */
+    media: HTMLElement;
     /** The cell being lifted — carries the shader canvas the clone snapshots. */
     cell: HTMLElement;
     /**
@@ -401,10 +411,20 @@ export function CollectionGrid({
     const rect = held.rect;
     grab.current = { x: held.originX - rect.left, y: held.originY - rect.top };
 
-    const node = held.img.cloneNode(true) as HTMLElement;
+    const node = held.media.cloneNode(true) as HTMLElement;
     node.className = gridStyles.dragPreview;
     node.style.width = `${rect.width}px`;
     node.style.height = `${rect.height}px`;
+    // A cloned <video> is a video with nothing playing in it: `cloneNode`
+    // copies attributes, and React never wrote the `muted` one, so the clone
+    // would sit on frame zero while the cell it left goes on playing. Muted and
+    // wound to the same playhead, it takes the performance over mid-frame —
+    // which is the same handover the press does (see `data-carried`).
+    if (node instanceof HTMLVideoElement && held.media instanceof HTMLVideoElement) {
+      node.muted = true;
+      node.currentTime = held.media.currentTime;
+      void node.play()?.catch(() => {});
+    }
     // Carry the background effect with the picture.
     //
     // It cannot be cloned: `cloneNode` copies the <canvas> ELEMENT and not its
@@ -490,7 +510,7 @@ export function CollectionGrid({
     preview.current = null;
 
     const cell = cellNodes.current.get(target);
-    const to = (cell?.querySelector("img") ?? cell)?.getBoundingClientRect();
+    const to = (cell?.querySelector(MEDIA_TAGS) ?? cell)?.getBoundingClientRect();
     if (!to || typeof node.animate !== "function") {
       // Nothing is going to fly, so nothing is held back — the swap simply is
       // what the grid shows from this moment.
@@ -769,21 +789,22 @@ export function CollectionGrid({
             data-properties-open={propertiesIndex === index ? "" : undefined}
             onPointerDown={(event) => {
               if (event.button !== 0) return;
-              // The photo is the handle. A press that lands on the controls
-              // laid over it is a press on those controls, not a grab.
-              const img = (event.target as HTMLElement).closest("img");
-              if (!img) return;
+              // The picture is the handle — a clip as much as a photo. A press
+              // that lands on the controls laid over it is a press on those
+              // controls, not a grab.
+              const media = (event.target as HTMLElement).closest(MEDIA_TAGS);
+              if (!media) return;
               // Measured BEFORE the press below, while the photo is still full
               // size — see `pending`'s `rect` note. It is also what makes the
               // press origin below a point INSIDE the photo rather than a page
               // coordinate.
-              const rect = img.getBoundingClientRect();
+              const rect = media.getBoundingClientRect();
               pending.current = {
                 index,
                 pointerId: event.pointerId,
                 originX: event.clientX,
                 originY: event.clientY,
-                img: img as HTMLImageElement,
+                media: media as HTMLElement,
                 cell: event.currentTarget,
                 rect,
               };
@@ -857,8 +878,10 @@ export function CollectionGrid({
                 className={gridStyles.backgroundEffect}
               />
             )}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {/* A clip in a cell is a tile like any other — no transport, since
+                the cell's own gesture is a press-and-drag and a control strip
+                laid over it would take the grip away. */}
+            <Media
               src={item.src}
               alt={collectionItemAlt(item)}
               className={gridStyles.image}
@@ -895,7 +918,7 @@ export function CollectionGrid({
             onClick={onAddImage}
           >
             <AddIcon aria-hidden />
-            Add Image
+            Add Media
           </button>
         ),
       )}

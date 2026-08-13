@@ -42,6 +42,13 @@ vi.mock("@/hooks/use-image-transparency", () => ({
 
 import { CollectionGrid } from "../collection-grid";
 
+// jsdom ships no media stack, so a cell holding a clip would log a
+// not-implemented error for every `play()` the tile and its drag clone ask for.
+beforeEach(() => {
+  HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+  HTMLMediaElement.prototype.pause = vi.fn();
+});
+
 afterEach(() => {
   cleanup();
   transparentSrcs.clear();
@@ -118,12 +125,16 @@ function rect(left: number, top: number, width = CELL, height = CELL) {
     }) as DOMRect;
 }
 
+/** Whatever a cell is showing — a photo or a clip. Both are drag handles. */
+const mediaIn = (cell: Element) =>
+  cell.querySelector<HTMLElement>("img, video");
+
 function layOutCells() {
   cells().forEach((cell, index) => {
     const at = rect((index % 3) * CELL, Math.floor(index / 3) * CELL);
     cell.getBoundingClientRect = at;
-    const img = cell.querySelector("img");
-    if (img) img.getBoundingClientRect = at;
+    const media = mediaIn(cell);
+    if (media) media.getBoundingClientRect = at;
   });
 }
 
@@ -159,7 +170,7 @@ function pointer(
 /** Press on the tile at `index`, at a point inside it. */
 function press(index: number, at = centreOf(index)) {
   const source = cells()[index];
-  pointer("pointerdown", source.querySelector("img")!, at);
+  pointer("pointerdown", mediaIn(source)!, at);
   return source;
 }
 
@@ -190,19 +201,19 @@ describe("CollectionGrid", () => {
   it("always shows every slot, filled or not", () => {
     setup(items("a", "b"));
     expect(screen.getAllByRole("toolbar")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Add Image" })).toHaveLength(
+    expect(screen.getAllByRole("button", { name: "Add Media" })).toHaveLength(
       COLLECTION_MAX_ITEMS - 2,
     );
   });
 
   it("offers no empty slot once the collection is full", () => {
     setup(items("a", "b", "c", "d", "e", "f"));
-    expect(screen.queryByRole("button", { name: "Add Image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add Media" })).toBeNull();
   });
 
   it("opens the picker from an empty slot", async () => {
     const { user, onAddImage } = setup(items("a"));
-    await user.click(screen.getAllByRole("button", { name: "Add Image" })[0]);
+    await user.click(screen.getAllByRole("button", { name: "Add Media" })[0]);
     expect(onAddImage).toHaveBeenCalledOnce();
   });
 
@@ -1359,6 +1370,26 @@ describe("CollectionGrid background effect travels with the photo", () => {
     pointer("pointerup", source, centreOf(0));
   });
 
+  // The clip has to be wound to the frame it was showing and told to keep
+  // playing, because `cloneNode` copies attributes and React never wrote the
+  // `muted` one — an unmuted clone is one the autoplay policy declines.
+  it("carries a clip mid-frame rather than restarting it", () => {
+    setup(items("a.mp4", "b"));
+    layOutCells();
+    const clip = mediaIn(cells()[0]) as HTMLVideoElement;
+    Object.defineProperty(clip, "currentTime", { value: 4, writable: true });
+
+    const source = press(0, centreOf(0));
+    pointer("pointermove", source, { clientX: 60, clientY: 50 });
+
+    const flying = preview() as HTMLVideoElement;
+    expect(flying.tagName).toBe("VIDEO");
+    expect(flying.muted).toBe(true);
+    expect(flying.currentTime).toBe(4);
+
+    pointer("pointerup", source, centreOf(0));
+  });
+
   // A readback is the one part of the drag that depends on the GPU. Losing it
   // must cost the gradient, never the gesture.
   it("still drags when the snapshot cannot be read", () => {
@@ -1373,5 +1404,34 @@ describe("CollectionGrid background effect travels with the photo", () => {
     drag(0, 1);
 
     expect(onReorder).toHaveBeenCalledExactlyOnceWith(0, 1);
+  });
+});
+
+describe("CollectionGrid clips", () => {
+  // The document records a clip exactly as it records a picture — an `src` and
+  // an `alt` — so the element is chosen off the filename and nothing else.
+  it("shows an mp4 as a video and everything else as a picture", () => {
+    setup(items("demo.mp4", "shot.png"));
+
+    expect(mediaIn(cells()[0])?.tagName).toBe("VIDEO");
+    expect(mediaIn(cells()[1])?.tagName).toBe("IMG");
+  });
+
+  // The picture is the grip, whichever element it is. A cell that could only be
+  // dragged by an <img> would leave a clip stuck in whatever slot it landed in.
+  it("hands a clip the same grip a photo has", () => {
+    const { onReorder } = setup(items("demo.mp4", "b", "c"));
+
+    drag(0, 2);
+
+    expect(onReorder).toHaveBeenCalledExactlyOnceWith(0, 2);
+  });
+
+  // The cell's toolbar sits over the picture, and a clip must not come with a
+  // second set of controls competing with it for the same corner.
+  it("gives a cell's clip no transport of its own", () => {
+    setup(items("demo.mp4"));
+
+    expect(mediaIn(cells()[0])?.hasAttribute("controls")).toBe(false);
   });
 });

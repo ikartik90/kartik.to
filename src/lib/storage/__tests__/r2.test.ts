@@ -67,18 +67,20 @@ describe("r2 storage helpers", () => {
     expect(result.publicUrl).toBe("https://cdn.example.com/media/x.png");
   });
 
-  it("listR2MediaKeys filters to image extensions", async () => {
+  it("listR2MediaKeys filters to media extensions, clips included", async () => {
     mockSend.mockResolvedValueOnce({
       Contents: [
         { Key: "media/a.png" },
         { Key: "media/readme.txt" },
         { Key: "media/b.jpg" },
+        { Key: "media/c.mp4" },
+        { Key: "media/d.mov" },
       ],
       IsTruncated: false,
     });
 
     const keys = await listR2MediaKeys();
-    expect(keys).toEqual(["media/b.jpg", "media/a.png"]);
+    expect(keys).toEqual(["media/c.mp4", "media/b.jpg", "media/a.png"]);
   });
 
   it("headR2Object returns metadata", async () => {

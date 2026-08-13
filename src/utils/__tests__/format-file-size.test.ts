@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatFileSize, formatImageType } from "../format-file-size";
+import { formatFileSize, formatMediaType } from "../format-file-size";
 
 describe("formatFileSize", () => {
   it("formats bytes", () => {
@@ -11,8 +11,12 @@ describe("formatFileSize", () => {
   });
 });
 
-describe("formatImageType", () => {
+describe("formatMediaType", () => {
   it("labels gif types", () => {
-    expect(formatImageType("image/gif")).toBe("GIF Image");
+    expect(formatMediaType("image/gif")).toBe("GIF Image");
+  });
+
+  it("names a clip as a video, not an image", () => {
+    expect(formatMediaType("video/mp4")).toBe("MP4 Video");
   });
 });

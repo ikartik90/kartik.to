@@ -68,9 +68,7 @@ beforeEach(() => {
   ) {
     this.setAttribute("open", "");
   });
-  HTMLDialogElement.prototype.close = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.removeAttribute("open");
   });
 });
@@ -81,15 +79,9 @@ describe("ImageInsertDialog", () => {
   it("renders library delete action when open", async () => {
     const user = userEvent.setup();
 
-    render(
-      <ImageInsertDialog
-        open
-        onClose={vi.fn()}
-        onInsert={vi.fn()}
-      />,
-    );
+    render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
 
-    expect(screen.getByRole("dialog", { name: "Insert Image" })).toBeDefined();
+    expect(screen.getByRole("dialog", { name: "Insert Media" })).toBeDefined();
     await user.click(screen.getByRole("button", { name: "Delete image" }));
     expect(mockDeleteSelectedAsset).toHaveBeenCalledOnce();
   });
@@ -120,9 +112,9 @@ describe("ImageInsertDialog", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: "Change Image" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Change Image" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Change Image" })).toBeDefined();
+    expect(screen.getByRole("dialog", { name: "Change Media" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Change Media" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Change Media" })).toBeDefined();
   });
 });
 
@@ -148,9 +140,9 @@ describe("ImageInsertDialog (multi-select)", () => {
     expect(hookOptions?.maxSelection).toBe(6);
   });
 
-  it("titles itself for the plural", () => {
+  it("titles itself for the batch", () => {
     renderMultiple();
-    expect(screen.getByRole("heading", { name: "Insert Images" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Insert Media" })).toBeDefined();
   });
 
   it("replaces the selection on a plain click", async () => {
@@ -185,25 +177,27 @@ describe("ImageInsertDialog (multi-select)", () => {
     expect(selected).toEqual(["a.png", "c.png"]);
   });
 
-  it("counts the selection and pluralizes the confirm button", () => {
+  it("counts the selection on the confirm button", () => {
     hookState = {
       assets: [asset("a"), asset("b")],
       selectedKeys: ["media/a.png", "media/b.png"],
     };
     renderMultiple();
     expect(screen.getByText("2 of 6 selected")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Insert 2 Images" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Insert 2 Media" })).toBeDefined();
   });
 
-  it("uses the singular for one image", () => {
+  // "Media" is a mass noun, so the count rides along without inflecting the way
+  // "1 Image / 2 Images" did.
+  it("leaves the noun alone for one file", () => {
     hookState = { selectedKeys: ["media/a.png"] };
     renderMultiple();
-    expect(screen.getByRole("button", { name: "Insert 1 Image" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Insert 1 Media" })).toBeDefined();
   });
 
   it("refuses to confirm an empty selection", () => {
     renderMultiple();
-    const confirm = screen.getByRole("button", { name: /^Insert \d+ Image/ });
+    const confirm = screen.getByRole("button", { name: /^Insert \d+ Media/ });
     expect((confirm as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -216,7 +210,7 @@ describe("ImageInsertDialog (multi-select)", () => {
     ]);
     const onInsert = renderMultiple();
 
-    await user.click(screen.getByRole("button", { name: "Insert 2 Images" }));
+    await user.click(screen.getByRole("button", { name: "Insert 2 Media" }));
     expect(onInsert).toHaveBeenCalledWith([
       { src: "https://cdn/b.png" },
       { src: "https://cdn/a.png" },

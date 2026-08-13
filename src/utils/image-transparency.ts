@@ -1,3 +1,5 @@
+import { sourceExtension } from "@/utils/media-source";
+
 // ---------------------------------------------------------------------------
 // Deciding whether a picture has anything behind it to see.
 //
@@ -8,12 +10,17 @@
 // ---------------------------------------------------------------------------
 
 /**
- * The extensions that CANNOT carry an alpha channel, so a picture wearing one
- * is opaque by construction and needs no decoding to prove it. Only JPEG is
- * ever ruled out among the uploads this app accepts (see
- * `ALLOWED_IMAGE_CONTENT_TYPES`); everything else — PNG, WebP, GIF, SVG — can.
+ * The extensions that CANNOT carry an alpha channel, so a source wearing one is
+ * opaque by construction and needs no decoding to prove it. Among the uploads
+ * this app accepts (see `ALLOWED_MEDIA_CONTENT_TYPES`) that is JPEG and MP4 —
+ * everything else, PNG, WebP, GIF and SVG, can.
+ *
+ * MP4 belongs here for a second reason as well as the first: the scan decodes
+ * with `new Image()`, which cannot load a video at all, so leaving a clip out
+ * of this list would spend two failed network round trips to arrive at the
+ * answer the extension already gave.
  */
-const OPAQUE_EXTENSIONS = ["jpg", "jpeg", "jfif", "pjpeg", "pjp"];
+const OPAQUE_EXTENSIONS = ["jpg", "jpeg", "jfif", "pjpeg", "pjp", "mp4"];
 
 /**
  * Alpha at or above this counts as opaque.
@@ -37,11 +44,8 @@ export const ALPHA_OPAQUE_THRESHOLD = 250;
  * drops the feature.
  */
 export function formatCanCarryAlpha(src: string): boolean {
-  const path = src.split(/[?#]/, 1)[0];
-  const file = path.slice(path.lastIndexOf("/") + 1);
-  const dot = file.lastIndexOf(".");
-  if (dot === -1) return true;
-  return !OPAQUE_EXTENSIONS.includes(file.slice(dot + 1).toLowerCase());
+  const extension = sourceExtension(src);
+  return extension === "" || !OPAQUE_EXTENSIONS.includes(extension);
 }
 
 /**

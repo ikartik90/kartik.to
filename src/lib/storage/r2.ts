@@ -20,7 +20,13 @@ const r2 = new S3Client({
 
 export const MEDIA_PREFIX = "media/";
 
-const IMAGE_KEY_PATTERN = /\.(png|jpe?g|gif|webp|svg)$/i;
+/**
+ * What counts as a library object. The bucket is not exclusively the media
+ * library's, so listing filters by extension rather than trusting the prefix —
+ * and the extension is also what the renderer later reads the KIND back off
+ * (see `isVideoSource`), so the two lists have to grow together.
+ */
+const MEDIA_KEY_PATTERN = /\.(png|jpe?g|gif|webp|svg|mp4)$/i;
 
 export function publicUrlForKey(key: string): string | null {
   return env.R2_PUBLIC_BASE_URL ? `${env.R2_PUBLIC_BASE_URL}/${key}` : null;
@@ -58,7 +64,7 @@ export async function listR2MediaKeys(prefix = MEDIA_PREFIX): Promise<string[]> 
     );
 
     for (const item of response.Contents ?? []) {
-      if (item.Key && IMAGE_KEY_PATTERN.test(item.Key)) {
+      if (item.Key && MEDIA_KEY_PATTERN.test(item.Key)) {
         keys.push(item.Key);
       }
     }

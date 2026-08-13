@@ -9,8 +9,8 @@ import {
   updateMediaFilename,
 } from "@/app/actions/media";
 import {
-  isAllowedImageContentType,
-  MAX_IMAGE_UPLOAD_BYTES,
+  isAllowedMediaContentType,
+  maxUploadBytesFor,
   type MediaAsset,
 } from "@/domain/media";
 import { PROGRESS_COMPLETE_HOLD_MS } from "@/components/ui/progress-bar";
@@ -204,12 +204,15 @@ export function useImageInsert({
     async (file: File) => {
       setError(null);
 
-      if (!isAllowedImageContentType(file.type)) {
+      if (!isAllowedMediaContentType(file.type)) {
         setError("Unsupported file type");
         return;
       }
 
-      if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      // The ceiling depends on the format — a clip is allowed to be an order
+      // larger than a picture. Same check the server makes when it signs the
+      // upload; this one exists to answer before the round trip.
+      if (file.size > maxUploadBytesFor(file.type)) {
         setError("File is too large");
         return;
       }

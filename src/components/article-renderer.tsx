@@ -40,6 +40,7 @@ import {
 } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
 import { CollectionShowcase } from "@/components/collection-showcase";
+import { Media } from "@/components/media";
 import {
   computeListNumbering,
   type ListItemNumbering,
@@ -279,12 +280,15 @@ function renderBlockNode(
     case "image":
       return (
         <figure key={index} className={articleShowcase()}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          {/* A clip gets its transport here: this block IS the picture, at the
+              article's full width, so there is no tile reading to protect and
+              a reader who wants to stop a loop should be able to. */}
+          <Media
             src={node.src}
             alt={node.alt ?? ""}
             className={articleImg()}
             loading="lazy"
+            controls
           />
           {node.caption && (
             <Typography tag="figcaption" type="caption">

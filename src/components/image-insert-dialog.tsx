@@ -30,7 +30,9 @@ import {
   type ImageInsertPayload,
   type ImageInsertPhase,
 } from "@/hooks/use-image-insert";
-import { formatFileSize, formatImageType } from "@/utils/format-file-size";
+import { ALLOWED_MEDIA_CONTENT_TYPES } from "@/domain/media";
+import { Media } from "@/components/media";
+import { formatFileSize, formatMediaType } from "@/utils/format-file-size";
 import CloseIcon from "@/assets/icons/cross.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
@@ -160,7 +162,12 @@ const errorStyle = css({
 
 const iconStyle = menuIcon();
 
-const ACCEPT = "image/png,image/svg+xml,image/webp,image/jpeg,image/gif";
+// Built from the allow-list rather than restated, so the file picker cannot
+// drift from what `processFile` and the server will actually take.
+const ACCEPT = ALLOWED_MEDIA_CONTENT_TYPES.join(",");
+
+/** The same list as `ACCEPT`, for the hint under the drop zone. */
+const FORMAT_NAMES = "PNG, SVG, WEBP, JPG, GIF, MP4";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -242,16 +249,11 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
   });
 
   const selectedCount = selectedKeys.length;
-  const title = isMultiple
-    ? "Insert Images"
-    : mode === "change"
-      ? "Change Image"
-      : "Insert Image";
-  const confirmLabel = isMultiple
-    ? `Insert ${selectedCount} Image${selectedCount === 1 ? "" : "s"}`
-    : mode === "change"
-      ? "Change Image"
-      : "Insert Image";
+  // "Media" is the dialog's noun throughout — the library holds clips as well
+  // as stills. It is also a mass noun, so the batch count rides along without
+  // inflecting the way "1 Image / 2 Images" did.
+  const title = mode === "change" ? "Change Media" : "Insert Media";
+  const confirmLabel = isMultiple ? `Insert ${selectedCount} Media` : title;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -357,8 +359,9 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     disabled={isBusy}
                   >
                     <span className={mediaThumbnail()}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={asset.url} alt="" />
+                      {/* The row's own `label` is the accessible name, so the
+                          thumbnail is decorative either way. */}
+                      <Media src={asset.url} alt="" />
                     </span>
                     <span className={libraryFilenameStyle}>
                       {asset.filename}
@@ -381,10 +384,13 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   </p>
                 )}
                 <figure className={mediaPreview()}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  {/* Controls here and not on the thumbnail: this pane is
+                      where you check what you are about to insert, and for a
+                      clip that means being able to scrub it. */}
+                  <Media
                     src={selectedAsset.url}
                     alt={altText || selectedAsset.filename}
+                    controls
                   />
                 </figure>
                 <div className={mediaMetadataRow()}>
@@ -400,7 +406,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     onChange={(e) => updateFilename(e.target.value)}
                   />
                   <span className={fileMetaStyle}>
-                    {formatImageType(selectedAsset.contentType)} -{" "}
+                    {formatMediaType(selectedAsset.contentType)} -{" "}
                     {formatFileSize(selectedAsset.size)}
                   </span>
                 </div>
@@ -496,11 +502,9 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   >
                     browse to upload
                   </Button>{" "}
-                  an image
+                  a file
                 </div>
-                <p className={formatsStyle}>
-                  Supported formats: PNG, SVG, WEBP, JPG, GIF
-                </p>
+                <p className={formatsStyle}>Supported formats: {FORMAT_NAMES}</p>
               </>
             )}
           </div>
@@ -509,16 +513,28 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
 
       <footer className={dialogFooter()}>
         <div className={dialogFooterGroup()}>
-          <Button type="button" emphasis="tertiary" disabled={isBusy} onClick={handleClose}>
+          <Button
+            type="button"
+            size="sm"
+            emphasis="tertiary"
+            disabled={isBusy}
+            onClick={handleClose}
+          >
             Cancel
           </Button>
           {phase === "library" ? (
-            <Button type="button" disabled={isBusy} onClick={goToUpload}>
-              Upload Image...
+            <Button
+              type="button"
+              size="sm"
+              disabled={isBusy}
+              onClick={goToUpload}
+            >
+              Upload Media...
             </Button>
           ) : (
             <Button
               type="button"
+              size="sm"
               disabled={isBusy || !hasLibraryImages}
               className={cx(!hasLibraryImages && hiddenWhenEmptyStyle)}
               onClick={() => void openLibrary()}
@@ -529,6 +545,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
         </div>
         <Button
           type="button"
+          size="sm"
           disabled={
             isBusy ||
             phase !== "library" ||

@@ -112,7 +112,9 @@ export default defineConfig({
           librarySidebar: { value: "200px" },
           imagePreviewMax: { value: "280px" },
           insertDialogHeight: { value: "480px" },
-          dialogFooter: { value: "52px" },
+          // A 32px `sm` action chip on a 6px inset — the row hugs its buttons
+          // rather than framing the taller 40px chip it used to hold.
+          dialogFooter: { value: "44px" },
           quoteMark: { value: "52px" },
           tooltipIcon: { value: "14px" },
           // Square at a single digit, pill beyond (Figma 413:684/688).
@@ -1680,14 +1682,14 @@ export default defineConfig({
         mediaPreview: defineRecipe({
           className: "media-preview",
           description:
-            "Large image preview in insert-image library view. HEIGHT is the only fixed dimension (280px) — the width hugs the image's own aspect ratio and stretches at most to the pane's content box (`maxWidth: 100%` resolves against the flex container's content box, so the pane's padding is excluded). Fixed rather than max height so the metadata rows below hold their position as you switch images; `object-fit: contain` letterboxes anything the width clamp squeezes.",
+            "Large image preview in insert-image library view. HEIGHT is the only fixed dimension (280px) — the width hugs the image's own aspect ratio and stretches at most to the pane's content box (`maxWidth: 100%` resolves against the flex container's content box, so the pane's padding is excluded). Fixed rather than max height so the metadata rows below hold their position as you switch images; `object-fit: contain` letterboxes anything the width clamp squeezes. The library holds clips as well as pictures, so the inner rule names both elements — a <video> is a replaced element with the same box model, and the rule is about the BOX, not about what fills it.",
           base: {
             height: "token(sizes.imagePreviewMax)",
             width: "auto",
             maxWidth: "token(spacing.full)",
             flexShrink: 0,
             margin: "none",
-            "& img": {
+            "& :is(img, video)": {
               height: "100%",
               width: "auto",
               maxWidth: "token(spacing.full)",
@@ -1758,7 +1760,8 @@ export default defineConfig({
 
         mediaThumbnail: defineRecipe({
           className: "media-thumbnail",
-          description: "Small thumbnail in image library sidebar.",
+          description:
+            "Small thumbnail in image library sidebar. Names <video> alongside <img> — a clip's row shows a live thumbnail of itself, filling the same square.",
           base: {
             position: "relative",
             flexShrink: 0,
@@ -1769,7 +1772,7 @@ export default defineConfig({
             borderStyle: "solid",
             borderColor: "border.divider",
             overflow: "hidden",
-            "& img": {
+            "& :is(img, video)": {
               position: "absolute",
               inset: "0",
               width: "100%",
@@ -3425,8 +3428,9 @@ export default defineConfig({
               // grid has to acknowledge the press before it knows whether a
               // drag is coming, or holding a photo feels like holding nothing.
               //
-              // Scoped to the direct <img> so it never reaches the controls
-              // laid over it — and a press that LANDS on those controls never
+              // Scoped to the direct picture — an <img> or a <video>, whichever
+              // the cell is showing (see `Media`) — so it never reaches the
+              // controls laid over it, and a press that LANDS on those never
               // sets this state at all, since the toolbar is not a drag handle.
               // Scaled ABOUT the point the hand landed on, which the component
               // supplies as `--press-origin` on the cell. Shrinking about the
@@ -3458,7 +3462,7 @@ export default defineConfig({
               // press. Missing it here made the two halves of one gesture
               // disagree: nothing moved until the drag threshold, and then the
               // gradient snapped into the tilt it should already have been in.
-              "&[data-pressed] > img, &[data-pressed] > [data-background-effect]":
+              "&[data-pressed] > :is(img, video), &[data-pressed] > [data-background-effect]":
                 {
                   scale: "0.94",
                   // Tilts about the same anchor, so the picture pivots around
