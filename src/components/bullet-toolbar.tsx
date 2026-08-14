@@ -1,6 +1,7 @@
 "use client";
 
-import { selectionPopover } from "../../styled-system/recipes";
+import { selectionPopover, toolbar } from "../../styled-system/recipes";
+import { cx } from "../../styled-system/css";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { OptionList } from "@/components/ui/input/option-list";
 import ContinueBulletingIcon from "@/assets/icons/continue-bulleting.svg";
@@ -28,7 +29,7 @@ interface BulletToolbarProps {
   onDismiss: () => void;
 }
 
-const toolbarClass = selectionPopover({ align: "start" });
+const toolbarClass = cx(toolbar(), selectionPopover({ align: "start" }));
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
 

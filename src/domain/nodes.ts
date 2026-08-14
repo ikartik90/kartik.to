@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -189,6 +190,59 @@ export type BackgroundEffect = z.infer<typeof BackgroundEffectSchema>;
 export const DEFAULT_BACKGROUND_EFFECT: BackgroundEffect =
   BackgroundEffectSchema.parse({});
 
+/**
+ * How the media fills the box it is given (Figma 885:1963).
+ *
+ * Two values rather than the CSS property's five: `cover` crops to fill, and
+ * `contain` fits the whole frame inside. `fill`, `none` and `scale-down` are
+ * left out on purpose — the first distorts the picture and the other two hand
+ * the layout to the source's intrinsic size, which is not a choice a tile grid
+ * can honour.
+ */
+export const MediaFitSchema = z.enum(["cover", "contain"]);
+
+export type MediaFit = z.infer<typeof MediaFitSchema>;
+
+/** What an image that has never been told otherwise does — today's behaviour. */
+export const DEFAULT_MEDIA_FIT: MediaFit = "cover";
+
+/**
+ * The padding slider's grid. The step is the design's (Figma 885:1963); the
+ * ceiling is eleven stops at that step, which is exactly the number of marks
+ * the slider draws — so every tick lands on a value the thumb can actually
+ * stop at, rather than on a ruler that only approximately describes the scale.
+ */
+export const MEDIA_PADDING_STEP = 8;
+export const MEDIA_PADDING_MAX = 80;
+
+/**
+ * The container width a padding value is authored AGAINST.
+ *
+ * Padding is stored as the pixels it should come to in a container this wide,
+ * and rendered as the equivalent PERCENTAGE — so the same picture keeps its
+ * proportions wherever it is shown. A 32px inset chosen while looking at a
+ * 640px article image is 16px in a 320px tile, not a band four times as heavy
+ * relative to the picture inside it.
+ *
+ * 640 because that IS the article's content column (`sizes.articleContent`),
+ * which is the widest a single image is ever drawn and therefore the box the
+ * author is looking at when they choose a number.
+ */
+export const MEDIA_PADDING_REFERENCE = 640;
+
+/**
+ * The corner slider's grid. Applied to the media OBJECT rather than to the box
+ * around it, so it is the picture's own corner that rounds — which only becomes
+ * visible once there is padding to lift it off the container's edge.
+ *
+ * Eleven stops at a 2px step, matching the eleven marks the slider draws. The
+ * ceiling is `radii.xxl` (20px), the roundest corner in the system and the one
+ * a collection tile already uses, so "as round as the tile it sits in" is the
+ * most the control will do.
+ */
+export const MEDIA_RADIUS_STEP = 2;
+export const MEDIA_RADIUS_MAX = 20;
+
 export const ImageNodeSchema = z.object({
   type: z.literal("image"),
   src: z.string(),
@@ -198,6 +252,33 @@ export const ImageNodeSchema = z.object({
   // than on the collection item so a standalone image block inherits it for
   // free — `CollectionItemSchema` is this schema minus its discriminant.
   backgroundEffect: BackgroundEffectSchema.optional(),
+  // Both absent-means-default rather than `.default()`, matching the effect
+  // above. A Zod default would make the PARSED type require them, and every
+  // image literal in `src/data/articles.ts` and the editor's own insert would
+  // have to state a fit and a padding it has no opinion about. Absent is also
+  // the honest record of "this picture predates the control".
+  objectFit: MediaFitSchema.optional(),
+  // Snapped to the slider's own grid, so a document can never hold a padding
+  // the control that wrote it could not have produced. Stored in px AT
+  // `MEDIA_PADDING_REFERENCE` and rendered as a share of the container — see
+  // that constant.
+  padding: z
+    .number()
+    .min(0)
+    .max(MEDIA_PADDING_MAX)
+    .multipleOf(MEDIA_PADDING_STEP)
+    .optional(),
+  // Absent and zero mean DIFFERENT things here, which is why this one is never
+  // dropped for being zero the way `padding` and `objectFit` are: absent is "no
+  // opinion", leaving whatever corner the surface draws (a tile's 20px, an
+  // article image's 16px, a drag clone's), while zero is the author squaring
+  // the object on purpose.
+  borderRadius: z
+    .number()
+    .min(0)
+    .max(MEDIA_RADIUS_MAX)
+    .multipleOf(MEDIA_RADIUS_STEP)
+    .optional(),
 });
 
 // A set of related images authored as ONE block. The editor exposes exactly
@@ -213,6 +294,152 @@ export const COLLECTION_MAX_ITEMS = 6;
 export const CollectionItemSchema = ImageNodeSchema.omit({ type: true });
 
 export type CollectionItem = z.infer<typeof CollectionItemSchema>;
+
+/**
+ * The two layout properties as the style the media element wears — resolved
+ * once, here, because FOUR places render the same picture (the editor's cell,
+ * the reader's tile, the lightbox, the standalone block) and each would
+ * otherwise spell out its own fallback. A picture that cropped in the editor
+ * and letterboxed in the reader would make the panel a guess rather than a
+ * preview, which is the same argument that put `backgroundEffect` on the node.
+ *
+ * Padding rather than an inset on the shader: the gradient is sized by the
+ * BOX and the picture is what shrinks inside it, so whatever is behind the
+ * media — a background effect, the transparency checkerboard — is what fills
+ * the gap. `object-fit` applies to the CONTENT box, so the two compose without
+ * either having to know about the other.
+ *
+ * That padding comes out as a PERCENTAGE, which is the whole scaling rule in
+ * one line: a percentage padding resolves against the containing block's
+ * inline size, so the inset is always the same share of the box and the
+ * browser does the arithmetic on every resize with nothing measured in JS.
+ * All four sides resolve against the WIDTH — that is the CSS rule, not an
+ * oversight, and it is what keeps the band even all the way round instead of
+ * heavier top and bottom on a tile that is taller than it is wide.
+ *
+ * The corner scales with it, for the same reason and by the same reference:
+ * the point of the pair is that a composition authored once REPRODUCES at any
+ * size, and an inset that halved beside a corner that did not would make the
+ * same picture read as a rounder object in a smaller tile. Both are authored
+ * against `MEDIA_PADDING_REFERENCE`.
+ *
+ * The corner cannot use a percentage the way the inset does: percentage
+ * `border-radius` resolves PER AXIS — horizontal radii against width, vertical
+ * against height — so on any non-square photo it draws an ellipse rather than a
+ * circle (the same trap `radii.full` is annotated with). Container query units
+ * are the width-relative length CSS otherwise lacks, which is why the frame
+ * declares itself a container.
+ */
+export type MediaLayout = Pick<
+  CollectionItem,
+  "objectFit" | "padding" | "borderRadius"
+>;
+
+/** Is there anything to lay out at all, or is this picture as it always was? */
+export function hasMediaLayout(media: MediaLayout): boolean {
+  return Boolean(media.padding) || media.borderRadius !== undefined;
+}
+
+/**
+ * The FRAME's style — the padded box the picture sits inside.
+ *
+ * The inset lives here and not on the media element, and that split is
+ * load-bearing rather than tidiness: `border-radius` clips an element's BORDER
+ * box while its content renders in the CONTENT box, so padding and a corner on
+ * the same element means the rounding happens out in the padding where there
+ * are no pixels to round, and the picture stays visibly square. One of the two
+ * has to move, and it is the padding — the corner belongs to the object, which
+ * is what the control says it does.
+ *
+ * It is also the QUERY CONTAINER the corner is measured against — see
+ * `mediaObjectStyle`. That is why the padding sits on an inner box rather than
+ * here: a container's query units resolve against its CONTENT box, so padding
+ * on this element would quietly measure the corner against the already-inset
+ * width and leave it short by twice the inset.
+ *
+ * `display: contents` when there is nothing to apply, so a picture nobody has
+ * touched has no extra box in its layout at all — the frame is free until it
+ * is used.
+ */
+export function mediaFrameStyle(media: MediaLayout): CSSProperties {
+  if (!hasMediaLayout(media)) return { display: "contents" };
+  return {
+    // Declares the box the corner is a share OF. `inline-size` and not `size`:
+    // the height still comes from the contents, which is what a `contain`
+    // picture in an auto-height surface (the article block) depends on.
+    containerType: "inline-size",
+    // Load-bearing, not tidiness. Containment does not apply to a non-atomic
+    // inline box, so on a `<span>`'s default `display: inline` the whole
+    // `container-type` is ignored — silently, and the corner then resolves
+    // against the next container up or the viewport. It looks like the radius
+    // simply came out wrong rather than like a container that was never there.
+    display: "block",
+    width: "100%",
+    height: "100%",
+  };
+}
+
+/**
+ * The INNER box — the inset itself, and the centring a `contain` picture needs
+ * because it sizes to its own content rather than filling.
+ *
+ * Separate from the frame only so the frame's query units measure the full
+ * container; everything else about it could have lived there.
+ */
+export function mediaBoxStyle(media: MediaLayout): CSSProperties {
+  if (!hasMediaLayout(media)) return { display: "contents" };
+  return {
+    // A percentage IS the scaling rule: it resolves against the containing
+    // block's inline size, so the inset is always the same share of the box and
+    // the browser redoes the arithmetic on every resize with nothing measured
+    // in JS. All four sides resolve against the WIDTH — that is the CSS rule,
+    // not an oversight, and it is what keeps the band even all the way round
+    // rather than heavier top and bottom on a tall tile.
+    padding: `${((media.padding ?? 0) / MEDIA_PADDING_REFERENCE) * 100}%`,
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+}
+
+/**
+ * The OBJECT's style — the picture itself.
+ *
+ * `cover` fills the frame, so the element's box IS the picture and a corner on
+ * it rounds what you see. `contain` cannot fill it, so the element is sized to
+ * its own content instead of stretched-and-letterboxed: a letterboxed element
+ * is mostly empty box, and a corner on THAT would again round nothing. Sized to
+ * the picture, the same corner rounds the picture.
+ *
+ * The corner scales with the container, like the inset, so the composition
+ * reproduces at any size instead of looking rounder the smaller it gets. It is
+ * expressed in `cqw` — a share of the frame's width — because that is the only
+ * width-relative LENGTH available: a percentage `border-radius` resolves per
+ * axis and would draw an ellipse on any photo that is not square.
+ *
+ * `100cqw` is the frame's full width, so `R / REFERENCE * 100cqw` is exactly
+ * `R` px at the reference width and half of it at half the width — the same
+ * arithmetic the inset does with its percentage.
+ */
+export function mediaObjectStyle(media: MediaLayout): CSSProperties {
+  const objectFit = media.objectFit ?? DEFAULT_MEDIA_FIT;
+  return {
+    objectFit,
+    ...(hasMediaLayout(media) && objectFit === "contain"
+      ? { width: "auto", height: "auto", maxWidth: "100%", maxHeight: "100%" }
+      : {}),
+    // Omitted entirely when absent, so the surface's own corner survives. A
+    // key set to `undefined` would do the same in React, but stating it makes
+    // the absent/zero distinction visible to anything else reading this.
+    ...(media.borderRadius === undefined
+      ? {}
+      : {
+          borderRadius: `${(media.borderRadius / MEDIA_PADDING_REFERENCE) * 100}cqw`,
+        }),
+  };
+}
 
 // `items` may be empty: removing images one by one has to pass through zero,
 // and a minimum would make the document unparseable mid-edit. `caption` is the

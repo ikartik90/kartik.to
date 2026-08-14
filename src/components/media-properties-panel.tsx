@@ -6,11 +6,18 @@ import {
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
 import { ColorInput } from "@/components/ui/input/color-input";
+import { SegmentedControl } from "@/components/ui/input/segmented-control";
 import { Slider } from "@/components/ui/input/slider";
 import {
   BACKGROUND_EFFECT_MAX_COLORS,
   DEFAULT_BACKGROUND_EFFECT,
+  DEFAULT_MEDIA_FIT,
+  MEDIA_PADDING_MAX,
+  MEDIA_PADDING_STEP,
+  MEDIA_RADIUS_MAX,
+  MEDIA_RADIUS_STEP,
   type BackgroundEffect,
+  type MediaFit,
 } from "@/domain/nodes";
 import EditIcon from "@/assets/icons/edit.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
@@ -69,7 +76,26 @@ const SLIDERS: {
   { key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.01 },
 ];
 
+/**
+ * The two fits the control offers, in the drawn order (Figma 885:1963).
+ * `cover` first because it is the default and the one most pictures want; a
+ * screenshot with its own margins is the case for `contain`.
+ */
+const FITS: { value: MediaFit; label: string }[] = [
+  { value: "cover", label: "Cover" },
+  { value: "contain", label: "Contain" },
+];
+
 export interface MediaPropertiesPanelProps {
+  /** Absent means the default fill — see `mediaLayoutStyle`. */
+  objectFit: MediaFit | undefined;
+  onObjectFitChange: (fit: MediaFit) => void;
+  /** Absent means no padding. */
+  padding: number | undefined;
+  onPaddingChange: (padding: number) => void;
+  /** Absent means the surface's own corner — NOT zero. See `mediaLayoutStyle`. */
+  borderRadius: number | undefined;
+  onBorderRadiusChange: (radius: number) => void;
   caption: string | undefined;
   /** `undefined` clears the caption — what removing the section does. */
   onCaptionChange: (caption: string | undefined) => void;
@@ -83,6 +109,12 @@ export interface MediaPropertiesPanelProps {
 }
 
 export function MediaPropertiesPanel({
+  objectFit,
+  onObjectFitChange,
+  padding,
+  onPaddingChange,
+  borderRadius,
+  onBorderRadiusChange,
   caption,
   onCaptionChange,
   effect,
@@ -135,6 +167,57 @@ export function MediaPropertiesPanel({
       onDismiss={onDismiss}
     >
       <PropertiesPanel.Header>Media Properties</PropertiesPanel.Header>
+
+      {/* First, and headerless: how the picture sits in its frame is not a
+          property you ADD to it — every picture has a fit and an inset whether
+          or not anyone has chosen one, so there is nothing here for an
+          add/remove button to mean. `enabled` is held true rather than
+          defaulted, so the section can never be closed (Figma 885:1963).
+
+          Above Caption because it is about the picture itself; the sections
+          below describe things laid over or behind it. */}
+      <PropertiesPanel.Section enabled>
+        <PropertiesPanel.ControlPanel ariaLabel="Media layout">
+          <PropertiesPanel.Control label="Object Fit">
+            <SegmentedControl
+              options={FITS}
+              value={objectFit ?? DEFAULT_MEDIA_FIT}
+              onValueChange={(value) => onObjectFitChange(value as MediaFit)}
+            />
+          </PropertiesPanel.Control>
+
+          {/* What the picture leaves clear around itself — and therefore how
+              much of whatever stands BEHIND it shows: a background effect
+              fills the box while the picture shrinks inside it, so padding is
+              how you let the gradient out from under a photo that would
+              otherwise cover it entirely. */}
+          <PropertiesPanel.Control label="Padding">
+            <Slider
+              min={0}
+              max={MEDIA_PADDING_MAX}
+              step={MEDIA_PADDING_STEP}
+              value={padding ?? 0}
+              onValueChange={onPaddingChange}
+            />
+          </PropertiesPanel.Control>
+
+          {/* The OBJECT's corner, not the frame's — so it is the picture that
+              rounds, and it only becomes visible once padding has lifted it off
+              the container's edge (with no padding the container's own clip is
+              the corner you see). Reads 0 for a picture that has never set one,
+              which is the honest starting point for that reason: what you would
+              be rounding is not on show yet. */}
+          <PropertiesPanel.Control label="Radius">
+            <Slider
+              min={0}
+              max={MEDIA_RADIUS_MAX}
+              step={MEDIA_RADIUS_STEP}
+              value={borderRadius ?? 0}
+              onValueChange={onBorderRadiusChange}
+            />
+          </PropertiesPanel.Control>
+        </PropertiesPanel.ControlPanel>
+      </PropertiesPanel.Section>
 
       <PropertiesPanel.Section
         defaultEnabled={caption !== undefined}

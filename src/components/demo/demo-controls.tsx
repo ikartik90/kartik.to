@@ -1,6 +1,7 @@
 "use client";
 
-import { demoFrameControls } from "../../../styled-system/recipes";
+import { demoFrameControls, toolbar } from "../../../styled-system/recipes";
+import { cx } from "../../../styled-system/css";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import ReplayIcon from "@/assets/icons/replay.svg";
@@ -64,7 +65,7 @@ export function DemoControls({
       // in the app is labelled the same way, and an unnamed one announces as a
       // bare group.
       aria-label="Demo controls"
-      className={demoFrameControls()}
+      className={cx(toolbar(), demoFrameControls())}
     >
       {/* Replay sits in the corner itself, with Reset inboard of it: replay is
           the offer the demo has just finished making, and reset only means

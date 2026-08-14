@@ -12,6 +12,7 @@ import {
   featureItem,
   removeItem,
   setItemBackgroundEffect,
+  setItemLayout,
   setItemCaption,
   swapItems,
 } from "@/utils/collection-items";
@@ -106,6 +107,7 @@ export default function CollectionPreviewPage() {
           onSetBackgroundEffect={(i, effect) =>
             setItems(setItemBackgroundEffect(items, i, effect))
           }
+          onSetLayout={(i, patch) => setItems(setItemLayout(items, i, patch))}
           onReplace={(i) =>
             setItems(
               items.map((item, index) =>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { css } from "../../../../styled-system/css";
+import { css, cx } from "../../../../styled-system/css";
+import { toolbar } from "../../../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
 import { Wireframe } from "@/components/ui/wireframe";
 import BoldIcon from "@/assets/icons/bold.svg";
@@ -19,21 +20,16 @@ import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 import BulletedListIcon from "@/assets/icons/bulleted-list.svg";
 import MetricIcon from "@/assets/icons/metric.svg";
 
-// A pill that mimics the selectionPopover frame (surface + 40px height + inset)
-// so the inline toolbar renders in the context it ships in.
-const pill = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "sm",
-  height: "token(spacing.4xl)",
-  paddingInline: "md",
-  backgroundColor: "bg.surface",
-  borderRadius: "md",
+// The shared toolbar rail, plus the hairline the floating popover adds to it,
+// so the inline toolbar renders in the context it ships in. `sm` is the same
+// rail shrink-wrapped onto its buttons — 28px, no inset, no gap.
+const edge = css({
   borderWidth: "token(spacing.3xs)",
   borderStyle: "solid",
   borderColor: "border.divider",
-  width: "max-content",
 });
+const pill = cx(toolbar(), edge);
+const pillSmall = cx(toolbar({ size: "sm" }), edge);
 
 // A panel that mimics the slashMenuPopover surface — NO internal padding; the
 // OptionList.Listbox's own 4px inset is the only gap (its plain-tone root
@@ -136,6 +132,51 @@ export default function MenuPreviewPage() {
                 onClick={() => toggle("highlight")}
               >
                 <HighlightIcon aria-hidden />
+              </OptionList.Option>
+              <OptionList.Option
+                aria-label="Code"
+                pressed={marks.has("code")}
+                onClick={() => toggle("code")}
+              >
+                <CodeIcon aria-hidden />
+              </OptionList.Option>
+            </OptionList.Toolbar>
+          </OptionList>
+        </div>
+      </section>
+
+      {/* The same rail at `size="sm"`: 28px tall, no inline inset, no gap, so
+          the chips abut each other and reach its edges. The items go square and
+          the rail keeps the only corner in the box, clipping the row's ends to
+          it — so a pressed chip reads as a filled segment of one continuous
+          bar rather than a rounded pill floating in a rounded box. */}
+      <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+          Small toolbar — size=&quot;sm&quot; (28px, no padding, no gap)
+        </h2>
+        <div className={pillSmall}>
+          <OptionList direction="inline">
+            <OptionList.Toolbar aria-label="Format selection (small)">
+              <OptionList.Option
+                aria-label="Bold"
+                pressed={marks.has("bold")}
+                onClick={() => toggle("bold")}
+              >
+                <BoldIcon aria-hidden />
+              </OptionList.Option>
+              <OptionList.Option
+                aria-label="Italic"
+                pressed={marks.has("italic")}
+                onClick={() => toggle("italic")}
+              >
+                <ItalicIcon aria-hidden />
+              </OptionList.Option>
+              <OptionList.Option
+                aria-label="Underline"
+                pressed={marks.has("underline")}
+                onClick={() => toggle("underline")}
+              >
+                <UnderlineSolidIcon aria-hidden />
               </OptionList.Option>
               <OptionList.Option
                 aria-label="Code"

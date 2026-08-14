@@ -99,6 +99,7 @@ import {
   swapItems,
   replaceItem,
   setItemBackgroundEffect,
+  setItemLayout,
   setItemCaption,
 } from "@/utils/collection-items";
 import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
@@ -2607,6 +2608,10 @@ function EditableBlock({
               ...block,
               items: setItemBackgroundEffect(block.items, i, effect),
             })
+          }
+          // Same debounce, same reason: the padding slider is a drag too.
+          onSetLayout={(i, patch) =>
+            onChange({ ...block, items: setItemLayout(block.items, i, patch) })
           }
         />
         <figcaption

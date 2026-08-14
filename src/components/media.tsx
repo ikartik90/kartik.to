@@ -2,6 +2,12 @@
 
 import { useCallback, type CSSProperties } from "react";
 import { isVideoSource } from "@/utils/media-source";
+import {
+  mediaBoxStyle,
+  mediaFrameStyle,
+  mediaObjectStyle,
+  type MediaLayout,
+} from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // Media — one source, shown with whichever element can show it.
@@ -32,6 +38,17 @@ export interface MediaProps {
   alt: string;
   className?: string;
   style?: CSSProperties;
+  /**
+   * How the picture sits in its box — its fit, its inset, its corner (the
+   * properties panel's top section). Handed here rather than applied by each
+   * caller because it takes TWO elements: a frame that carries the inset and
+   * the object that carries the fit and the corner. See `mediaFrameStyle` for
+   * why they cannot be the same element.
+   *
+   * Costs an untouched picture nothing — the frame collapses to
+   * `display: contents` when there is no layout to apply.
+   */
+  layout?: MediaLayout;
   draggable?: boolean;
   /** Pictures only — a clip decides its own fetching through `preload`. */
   loading?: "lazy" | "eager";
@@ -51,6 +68,7 @@ export function Media({
   alt,
   className,
   style,
+  layout,
   draggable,
   loading = "lazy",
   controls,
@@ -86,23 +104,25 @@ export function Media({
     void node.play()?.catch(() => {});
   }, []);
 
-  if (!isVideoSource(src)) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={alt}
-        className={className}
-        style={style}
-        draggable={draggable}
-        loading={loading}
-        data-checkered={checkered}
-        onLoad={(event) => onMeasure?.(event.currentTarget.naturalWidth)}
-      />
-    );
-  }
+  // The caller's own style still wins — the lightbox's natural-size cap is a
+  // constraint on the picture, not a layout property, so it is applied last.
+  const objectStyle = layout
+    ? { ...mediaObjectStyle(layout), ...style }
+    : style;
 
-  return (
+  const element = !isVideoSource(src) ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      style={objectStyle}
+      draggable={draggable}
+      loading={loading}
+      data-checkered={checkered}
+      onLoad={(event) => onMeasure?.(event.currentTarget.naturalWidth)}
+    />
+  ) : (
     <video
       ref={startPlaying}
       src={src}
@@ -112,7 +132,7 @@ export function Media({
       // "decorative" — it is an element with a broken label.
       aria-label={alt || undefined}
       className={className}
-      style={style}
+      style={objectStyle}
       draggable={draggable}
       controls={controls}
       autoPlay
@@ -123,5 +143,24 @@ export function Media({
       data-checkered={checkered}
       onLoadedMetadata={(event) => onMeasure?.(event.currentTarget.videoWidth)}
     />
+  );
+
+  if (!layout) return element;
+
+  // Two boxes, and the split is not decorative. The OUTER is the query
+  // container the corner is a share of, so it must span the full width — which
+  // is why the inset lives on the INNER one: query units resolve against a
+  // container's content box, so padding out here would measure the corner
+  // against the already-inset width.
+  //
+  // Both collapse to `display: contents` when there is nothing to apply, so an
+  // untouched picture keeps exactly the box it had before this existed, and
+  // turning padding on never restructures the tree.
+  return (
+    <span data-media-frame="" style={mediaFrameStyle(layout)}>
+      <span data-media-box="" style={mediaBoxStyle(layout)}>
+        {element}
+      </span>
+    </span>
   );
 }

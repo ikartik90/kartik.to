@@ -53,6 +53,11 @@ import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 // honest — a collapsed section holds no focusable controls to tab into and no
 // stale values to read back.
 //
+// A section that is ALWAYS on is the same part with its header left off and
+// `enabled` held true (Figma 885:1963) — the properties every picture has,
+// which are not something you add or remove. Its control panel takes an
+// `ariaLabel` instead, since there is no heading left to be named by.
+//
 // The panel knows nothing about what it is inspecting. `Section` owns only
 // whether it is open (uncontrolled by default, like Slider and Switch) and
 // reports the change; what enabling MEANS — applying a default gradient,
@@ -331,11 +336,19 @@ function PropertiesPanelSectionHeader({
 }
 
 export interface PropertiesPanelControlPanelProps {
+  /**
+   * Names the group when its section has no {@link PropertiesPanelSectionHeader}
+   * to be named by — an always-on section, which carries no add/remove control
+   * and so draws no header at all (Figma 885:1963). Omit it whenever there IS a
+   * header: the heading is the visible name, and a second one would win over it.
+   */
+  ariaLabel?: string;
   children: ReactNode;
 }
 
 /** The section's controls — in the DOM only while its section is enabled. */
 function PropertiesPanelControlPanel({
+  ariaLabel,
   children,
 }: PropertiesPanelControlPanelProps) {
   const { styles } = usePanel("PropertiesPanel.ControlPanel");
@@ -347,7 +360,11 @@ function PropertiesPanelControlPanel({
     <div
       id={panelId}
       role="group"
-      aria-labelledby={titleId}
+      // One name or the other, never both and never neither: pointing
+      // `aria-labelledby` at a heading that was never rendered is a group with
+      // a BROKEN name, which reads worse than an unnamed one.
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabel ? undefined : titleId}
       className={styles.controlPanel}
     >
       {children}

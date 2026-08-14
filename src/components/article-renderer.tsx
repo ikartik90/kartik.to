@@ -48,7 +48,11 @@ import {
 import { SidenoteLayer } from "@/components/sidenote-layer";
 import { collectSidenotes, sidenoteAnchorName } from "@/utils/sidenotes";
 import type { Document } from "@/domain/post";
-import type { BlockNode, InlineNode, Mark } from "@/domain/nodes";
+import {
+  type BlockNode,
+  type InlineNode,
+  type Mark,
+} from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // Heading level → Typography tag + type
@@ -287,6 +291,7 @@ function renderBlockNode(
             src={node.src}
             alt={node.alt ?? ""}
             className={articleImg()}
+            layout={node}
             loading="lazy"
             controls
           />

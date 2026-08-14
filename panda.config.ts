@@ -1197,7 +1197,7 @@ export default defineConfig({
         demoFrameControls: defineRecipe({
           className: "demo-frame__controls",
           description:
-            "The frame's control toolbar — icon buttons on the app's shared toolbar chrome (40px tall, 8px inline padding, bg.surface, hairline; no drop shadow, which is reserved for toolbars that float as popovers), tucked into its bottom-right corner for a demo that performs itself (replay / reset). It belongs to the frame rather than to the demo's own layout, which is why it is placed here: the demo is centred inside the area's 20px padding band and so never reaches this corner. Out of flow, so it costs the frame's content measurement nothing.",
+            "The frame's control toolbar — icon buttons on the shared `toolbar` chrome, which it composes with and adds a hairline to (but no drop shadow, which is reserved for toolbars that float as popovers), tucked into its bottom-right corner for a demo that performs itself (replay / reset). It belongs to the frame rather than to the demo's own layout, which is why it is placed here: the demo is centred inside the area's 20px padding band and so never reaches this corner. Out of flow, so it costs the frame's content measurement nothing.",
           base: {
             position: "absolute",
             // 8px in, not the 4px the bare rail sat at: the frame's own corner
@@ -1210,21 +1210,11 @@ export default defineConfig({
             // element with opacity < 1 makes one at level 0), so `auto` would
             // leave the rail's order to the DOM.
             zIndex: 1,
-            display: "flex",
-            alignItems: "center",
-            // The shared toolbar metrics: 40px tall on an 8px inline inset with
-            // its controls 4px apart, the same box `selectionPopover` and the
-            // collection pill draw. Written out rather than composed from them
-            // because neither can be borrowed whole — one is `position: fixed`
-            // on a CSS anchor, the other fades in over a photo's scrim — and
-            // this is the third place the chrome is wanted, which is where a
-            // shared skin earns its keep as a stated measurement.
-            gap: "sm",
-            height: "token(spacing.4xl)",
-            paddingInline: "md",
-            width: "max-content",
-            borderRadius: "md",
-            backgroundColor: "bg.surface",
+            // The box itself — 40px tall on an 8px inline inset with its
+            // controls 4px apart — comes from the `toolbar` recipe this
+            // composes with. It was the third place those metrics were wanted,
+            // which is what finally bought the shared skin; what stays here is
+            // only what the frame's corner adds to it.
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
             borderColor: "border.divider",
@@ -2263,10 +2253,125 @@ export default defineConfig({
           },
         }),
 
+        // The app's shared toolbar chrome: the box a row of icon controls sits
+        // in — a hugging horizontal rail on `bg.surface` with a concentric
+        // corner. Three surfaces drew this and each wrote the metrics out
+        // again (the editor's floating `selectionPopover`, the demo frame's
+        // `demoFrameControls` rail, the collection cell's hover pill); they now
+        // compose this and keep only what is actually theirs — where the rail
+        // is positioned, and whether it is bordered, elevated or clipped. Those
+        // three genuinely differ (one floats on a CSS anchor, one is furniture
+        // in a frame's corner, one fades in over a photo's scrim), which is why
+        // the shared part stops at the box and does not try to be the skin.
+        //
+        // `size` is the whole variant axis, because the numbers that make a
+        // toolbar only ever move together:
+        //   md — the default rail. 40px tall, controls 4px apart on an 8px
+        //        inline inset. 8 + 28px button + 8 = 40, and the button's own
+        //        4px corner + the 4px it is inset from the edge = the rail's
+        //        `md` (8px) radius, so the two curves are concentric.
+        //   sm — the rail shrink-wrapped onto its buttons: 28px tall (exactly
+        //        `sizes.toolbarButton`, so the box IS one button), no inset, no
+        //        gap, and the ITEMS go square so the rail is the only thing in
+        //        the box with a corner. With no inset and no gap there is
+        //        nothing left for a per-item radius to round against — the
+        //        chips abut each other and reach the rail's edge, so rounding
+        //        them would just notch four bites of surface out of every
+        //        seam. One 4px corner on the outside, and the rail clips the
+        //        square ends of the row to it.
+        toolbar: defineRecipe({
+          className: "toolbar",
+          description:
+            "The app's shared toolbar chrome — the horizontal rail a row of controls sits in, with a corner concentric to the buttons inside it. Owns the box only (layout, height, inset, gap, radius, surface); positioning and whether the rail is bordered, elevated or clipped stay with the consumer, since the surfaces that draw it differ on exactly those. `size=md` is the default 40px rail (8px inset, 4px gap, 8px radius) whose buttons keep their own 4px corners; `size=sm` shrink-wraps it onto the buttons at 28px with no inset and no gap, squares the items, and keeps a single 4px corner on the rail itself — which it clips the row to. `tone` picks the ground: `surface` for free-standing chrome, `field` for a rail that is one row of a form (the segmented control). `fit` picks hug-your-contents or fill-your-slot.",
+          base: {
+            display: "flex",
+            alignItems: "center",
+          },
+          variants: {
+            // WHAT the rail is drawn on. `surface` is the free-standing chrome
+            // every floating/furniture toolbar wears; `field` drops it into a
+            // form row as one of the field family's own controls, taking that
+            // family's fill and hairline so a segmented control lines up with
+            // the text inputs and sliders stacked above and below it
+            // (Figma 885:1963).
+            tone: {
+              surface: { backgroundColor: "bg.surface" },
+              field: {
+                backgroundColor: "field.bg.default",
+                // An inset ring rather than a `border`, exactly as the `field`
+                // frame draws its own edge: a real border would eat into the
+                // 28px and leave the rail a pixel shorter than the slider
+                // beside it.
+                boxShadow:
+                  "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
+              },
+            },
+            // Whether the rail sizes to its contents or to its slot. Hugging is
+            // right for chrome that floats or tucks into a corner; filling is
+            // right for a control that is one row of a form and has to agree
+            // with the column its neighbours sit in.
+            fit: {
+              hug: {
+                // Also overrides the `article > *` width rule (@layer base)
+                // that would otherwise stretch it to the text column.
+                width: "max-content",
+              },
+              fill: { flex: "1 1 0", minWidth: 0 },
+            },
+            size: {
+              md: {
+                gap: "sm",
+                height: "token(spacing.4xl)",
+                paddingInline: "md",
+                borderRadius: "md",
+              },
+              sm: {
+                gap: "none",
+                height: "token(sizes.toolbarButton)",
+                paddingInline: "none",
+                borderRadius: "sm",
+                // A rail's own `gap` only spaces its DIRECT children, and half
+                // the toolbars in the app do not lay their buttons out
+                // themselves: they hold an `OptionList.Toolbar`, whose inline
+                // direction owns the 2px between the options. Asking for no gap
+                // has to mean no gap wherever the row is actually laid out,
+                // otherwise `sm` reads as gapless when the buttons are direct
+                // children (the demo frame's rail) and 2px-apart when they come
+                // from an OptionList — the same variant, two different boxes.
+                // Deliberately not `:where()`, which would leave this tied with
+                // the option list's own inline rule and let stylesheet order
+                // decide the winner.
+                // `listbox` as well as `toolbar`: the option list's inline
+                // direction serves both a multi-toggle row and a horizontal
+                // single-select (a segmented control is the latter), and the
+                // rail cannot tell which it was handed.
+                "& :is([role='toolbar'], [role='listbox'])": { gap: "none" },
+                // The items go square: the rail owns the only corner in the
+                // box. Reaches every control the same way the gap rule does,
+                // since a button here may be a direct child (the demo frame's
+                // rail) or an `OptionList.Option` a row down.
+                "& :is(button, [role='button'])": { borderRadius: 0 },
+                // Which makes the clip load-bearing rather than optional — the
+                // end chips are square and would otherwise square off the 4px
+                // corner they sit in. Safe to set here even though
+                // `demoFrameControls` argues against `overflow: hidden` at
+                // `md`: that argument is about not laying a trap for a
+                // descendant that wants out, and the one thing in these rails
+                // that ever wanted out — a hover tooltip — now portals itself
+                // to the body rather than relying on its host not to crop.
+                overflow: "hidden",
+              },
+            },
+          },
+          defaultVariants: { size: "md", tone: "surface", fit: "hug" },
+          // Runtime variant values — force every branch to be emitted.
+          staticCss: [{ size: ["*"], tone: ["*"], fit: ["*"] }],
+        }),
+
         selectionPopover: defineRecipe({
           className: "selection-popover",
           description:
-            "Shared floating popover for the text-selection / link / numbering / bullet menus — anchored above the target via CSS anchor() and flipped below when there's no room (Figma 422:833 selection, 474:74 numbering, 475:204 bullet). `align=center` centres on the target (text selection / link); `align=start` left-aligns to it (list-marker menus).",
+            "Shared floating popover for the text-selection / link / numbering / bullet menus — anchored above the target via CSS anchor() and flipped below when there's no room (Figma 422:833 selection, 474:74 numbering, 475:204 bullet). Composes with `toolbar` for the rail itself and adds only what floating costs: the anchor, the hairline, the elevation, and a clip. `align=center` centres on the target (text selection / link); `align=start` left-aligns to it (list-marker menus).",
           base: {
             position: "fixed",
             zIndex: 50,
@@ -2275,17 +2380,7 @@ export default defineConfig({
             bottom: "anchor(top)",
             marginBottom: "sm",
             positionTryFallbacks: "flip-block",
-            display: "flex",
-            alignItems: "center",
-            gap: "sm",
-            // Hug the options — also overrides the `article > *` width rule
-            // (@layer base) that would stretch it to the text column.
-            width: "max-content",
             maxWidth: "min(100vw, token(sizes.articleContent))",
-            height: "token(spacing.4xl)",
-            paddingInline: "md",
-            backgroundColor: "bg.surface",
-            borderRadius: "md",
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
             borderColor: "border.divider",
@@ -3987,15 +4082,10 @@ export default defineConfig({
               "[data-collection-cell][data-landing] &": {
                 transition: "opacity 100ms ease-out",
               },
-              display: "flex",
-              alignItems: "center",
-              gap: "sm",
-              height: "token(spacing.4xl)",
-              paddingInline: "md",
-              borderRadius: "md",
-              backgroundColor: "bg.surface",
+              // The box — 40px tall, 8px inset, 4px gap, on `bg.surface` — is
+              // the shared `toolbar` recipe this composes with; only the clip
+              // and the cell-relative width cap are the pill's own.
               overflow: "hidden",
-              width: "max-content",
               maxWidth: "calc(100% - token(spacing.lg) * 2)",
             },
           },
@@ -4637,6 +4727,53 @@ export default defineConfig({
           },
           // Runtime variant values — force every branch to be emitted.
           staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"] }],
+        }),
+
+        // A segmented control — one row, every option visible, exactly one on
+        // (Figma 885:1963). Almost all of it is already built: the BOX is the
+        // shared `toolbar` at `size="sm"` on the field tone, and the OPTIONS
+        // are `optionList`'s own, which already draw `field.bg.active` +
+        // `field.text.active` for `aria-selected` and the neutral wash on
+        // hover. So this recipe is only what a segmented control adds to an
+        // inline option list: the row and its items STRETCH, splitting the
+        // frame into equal segments instead of hugging their labels.
+        //
+        // Every declaration here is a property neither `optionList` nor
+        // `toolbar` sets, which is what keeps the composition safe — the three
+        // classes land in the same `@layer recipes` where a tie would be broken
+        // by emission order. That is also why the row fills with `flex-grow` +
+        // `flex-basis` rather than `width`, and why `flex-shrink` is left alone:
+        // the `flex` shorthand would collide with the option's own
+        // `flex-shrink: 0`, and longhands cannot.
+        segmentedControl: defineSlotRecipe({
+          className: "segmented-control",
+          description:
+            "Equal-width segments for a horizontal single-select — the stretch an `OptionList.Listbox` needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the selected chip — already comes from those two recipes.",
+          slots: ["list", "option"],
+          base: {
+            // Stretched as well as grown, and BOTH are needed: the rail centres
+            // its children, so without this the row would sit at its own
+            // content height and a segment stretching to it would stretch to
+            // nothing. The rail's height is definite (28px), so this row is
+            // exactly that, and the segments below inherit a real box to fill.
+            list: { flexGrow: 1, flexBasis: 0, minWidth: 0, alignSelf: "stretch" },
+            option: {
+              flexGrow: 1,
+              flexBasis: 0,
+              minWidth: 0,
+              // A segment's label sits in the middle of its share; an option
+              // row's sits against its leading edge. Same leaf, two jobs.
+              justifyContent: "center",
+              // Take the rail's full height rather than the option's own
+              // 4px + line-box + 4px, which for a 24px line comes to 32 and
+              // leaves the segment standing 2px proud of the 28px rail at
+              // either end — invisible only because the rail clips it. A
+              // stretched segment makes the selected chip's fill exactly the
+              // height of the bar it is a segment OF, which is the whole read
+              // of the control.
+              alignSelf: "stretch",
+            },
+          },
         }),
 
         notice: defineSlotRecipe({

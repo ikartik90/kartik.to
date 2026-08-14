@@ -70,6 +70,7 @@ function setupLive(list: CollectionItem[]) {
     onRemove: vi.fn(),
     onAddImage: vi.fn(),
     onSetBackgroundEffect: vi.fn(),
+    onSetLayout: vi.fn(),
   };
   function Harness() {
     const [current, setCurrent] = useState(list);
@@ -94,6 +95,7 @@ function setup(list: CollectionItem[]) {
     onAddImage: vi.fn(),
     onReorder: vi.fn(),
     onSetBackgroundEffect: vi.fn(),
+    onSetLayout: vi.fn(),
   };
   render(<CollectionGrid items={list} {...handlers} />);
   return { ...handlers, user: userEvent.setup() };
@@ -959,6 +961,7 @@ describe("CollectionGrid slot identity", () => {
       onAddImage: vi.fn(),
       onReorder: vi.fn(),
       onSetBackgroundEffect: vi.fn(),
+    onSetLayout: vi.fn(),
     };
     const { rerender } = render(
       <CollectionGrid items={items("a", "b", "c")} {...props} />,
@@ -995,6 +998,7 @@ const panelProps = () => ({
   onAddImage: vi.fn(),
   onReorder: vi.fn(),
   onSetBackgroundEffect: vi.fn(),
+  onSetLayout: vi.fn(),
 });
 
 describe("CollectionGrid properties panel", () => {

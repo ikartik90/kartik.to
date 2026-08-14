@@ -83,6 +83,10 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
                   src={item.src}
                   alt={collectionItemAlt(item)}
                   className={styles.image}
+                  // The same fit and inset the editor previewed — the whole
+                  // reason both read it off the item rather than deciding
+                  // locally.
+                  layout={item}
                   loading="lazy"
                 />
               </button>
@@ -221,6 +225,14 @@ function CollectionLightbox({
             // wins and no portrait/landscape branch is needed. Pinning `width`
             // instead would let the height cap shrink the BOX while the image
             // letterboxed inside it — a tall photo in a too-wide frame.
+            // The layout properties ride along with the size rule rather than
+            // replacing it. `objectFit` is inert here by construction — width
+            // and height are both auto, so there is no box for the picture to
+            // cover or fit inside and it is always shown whole — but the
+            // padding still reads: the frame shrink-wraps this element, so the
+            // inset grows the box the gradient fills, and the shader appears
+            // as a margin around the picture exactly as it does in a tile.
+            layout={item}
             style={
               intrinsicWidth
                 ? { maxWidth: `min(${intrinsicWidth}px, 85vw)` }
