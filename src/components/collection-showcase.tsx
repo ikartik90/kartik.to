@@ -9,7 +9,11 @@ import { BackgroundEffectLayer } from "@/components/background-effect";
 import { Media } from "@/components/media";
 import { Dialog } from "@/components/ui/dialog";
 import { Typography } from "@/components/ui/typography";
-import type { CollectionItem } from "@/domain/nodes";
+import {
+  mediaGroundStyle,
+  mediaRadiusPx,
+  type CollectionItem,
+} from "@/domain/nodes";
 import {
   collectionItemAlt,
   collectionLayout,
@@ -67,6 +71,8 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
                 <BackgroundEffectLayer
                   effect={item.backgroundEffect}
                   className={styles.backgroundEffect}
+                  // The picture's own corner — the tile draws none of its own.
+                  style={mediaGroundStyle(item)}
                 />
               )}
               <button
@@ -204,6 +210,11 @@ function CollectionLightbox({
             <BackgroundEffectLayer
               effect={item.backgroundEffect}
               className={lightboxStyles.backgroundEffect}
+              // Pixels here, not a share of a container — see `mediaRadiusPx`.
+              // This frame hugs the picture, so it can never be the container a
+              // `cqw` would need, and the ground has to match the corner the
+              // picture beside it is wearing.
+              style={{ borderRadius: mediaRadiusPx(item) }}
             />
           )}
           <Media
@@ -225,19 +236,36 @@ function CollectionLightbox({
             // wins and no portrait/landscape branch is needed. Pinning `width`
             // instead would let the height cap shrink the BOX while the image
             // letterboxed inside it — a tall photo in a too-wide frame.
-            // The layout properties ride along with the size rule rather than
-            // replacing it. `objectFit` is inert here by construction — width
-            // and height are both auto, so there is no box for the picture to
-            // cover or fit inside and it is always shown whole — but the
-            // padding still reads: the frame shrink-wraps this element, so the
-            // inset grows the box the gradient fills, and the shader appears
-            // as a margin around the picture exactly as it does in a tile.
-            layout={item}
-            style={
-              intrinsicWidth
+            //
+            // No `layout`, uniquely among the four surfaces: it is expressed in
+            // SHARES of the box a picture is given, and this is the one surface
+            // with no such box to share out — the frame around this image is
+            // sized BY the image. A percentage inset and a `cqw` corner both
+            // resolve against something indefinite here, and the whole column
+            // collapses to a pixel around a picture that then has nothing to
+            // show. (It did exactly that for every inset picture until this
+            // was written.)
+            //
+            // So the two properties arrive as the pixels they were authored as.
+            // A picture enlarged past the reference width wears an inset and a
+            // corner slightly tighter than the tile it was composed in, which
+            // is the honest trade for a surface that has no width to be a share
+            // of. `objectFit` is inert here by construction — width and height
+            // are both auto, so there is no box to cover or fit inside and the
+            // picture is always shown whole.
+            //
+            // The inset is a MARGIN rather than a padding, so that the ground
+            // behind it still fills the whole card: the gradient is positioned
+            // `inset: 0`, which resolves against the frame's PADDING box, and a
+            // padded frame would hold the gradient back to exactly the picture
+            // it is supposed to be spreading out from under.
+            style={{
+              margin: item.padding ?? 0,
+              borderRadius: mediaRadiusPx(item),
+              ...(intrinsicWidth
                 ? { maxWidth: `min(${intrinsicWidth}px, 85vw)` }
-                : undefined
-            }
+                : {}),
+            }}
             onMeasure={(width) => setMeasured({ index, width })}
           />
           </div>

@@ -124,11 +124,12 @@ export type MediaLayoutPatch = Partial<
  * to `cover` and it serializes as it did before the control existed, instead of
  * accumulating a `"objectFit": "cover"` on every image anyone ever clicked.
  *
- * `borderRadius` is the exception and passes straight through, zero included:
- * there, absent means "leave the surface's own corner" and zero means "square
- * this object", so dropping a zero would silently restore the corner the author
- * had just taken off. It rides in `rest` below rather than being handled — the
- * two named keys are exactly the two with a droppable default.
+ * All three keys work that way now, `borderRadius` included. It used to be the
+ * exception, passing zero straight through, because absent meant "leave the
+ * surface's own corner" and dropping a zero would have restored the corner the
+ * author had just taken off. No surface draws a corner any more
+ * (`DEFAULT_MEDIA_RADIUS`), so zero and absent are the same square picture and
+ * there is nothing left for a stored zero to override.
  */
 export function setItemLayout(
   items: readonly CollectionItem[],
@@ -141,14 +142,17 @@ export function setItemLayout(
     const {
       objectFit: _fit,
       padding: _padding,
+      borderRadius: _radius,
       ...rest
     } = { ...item, ...patch };
     const objectFit = patch.objectFit ?? item.objectFit;
     const padding = patch.padding ?? item.padding;
+    const borderRadius = patch.borderRadius ?? item.borderRadius;
     return {
       ...rest,
       ...(objectFit && objectFit !== DEFAULT_MEDIA_FIT ? { objectFit } : {}),
       ...(padding ? { padding } : {}),
+      ...(borderRadius ? { borderRadius } : {}),
     };
   });
 }

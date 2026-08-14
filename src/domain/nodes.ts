@@ -243,6 +243,17 @@ export const MEDIA_PADDING_REFERENCE = 640;
 export const MEDIA_RADIUS_STEP = 2;
 export const MEDIA_RADIUS_MAX = 20;
 
+/**
+ * What a picture nobody has rounded is: square.
+ *
+ * The corner belongs to the MEDIA, and to nothing else. No surface supplies one
+ * — not the collection cell, not the article block, not the drag clone — which
+ * is what makes the panel's slider a readout of the picture rather than of the
+ * place it happens to be shown. `MEDIA_RADIUS_MAX` is `radii.xxl`, the corner
+ * those surfaces used to draw, so the old look is still one drag away.
+ */
+export const DEFAULT_MEDIA_RADIUS = 0;
+
 export const ImageNodeSchema = z.object({
   type: z.literal("image"),
   src: z.string(),
@@ -268,11 +279,15 @@ export const ImageNodeSchema = z.object({
     .max(MEDIA_PADDING_MAX)
     .multipleOf(MEDIA_PADDING_STEP)
     .optional(),
-  // Absent and zero mean DIFFERENT things here, which is why this one is never
-  // dropped for being zero the way `padding` and `objectFit` are: absent is "no
-  // opinion", leaving whatever corner the surface draws (a tile's 20px, an
-  // article image's 16px, a drag clone's), while zero is the author squaring
-  // the object on purpose.
+  // Absent is zero — square — exactly as it is for `padding`, and it is dropped
+  // for being zero the same way.
+  //
+  // It used to mean "no opinion, leave whatever corner the surface draws", and
+  // the surfaces drew 20px on a tile and 16px on an article image. That made
+  // the panel a liar: a freshly inserted picture read `Radius 0` under a
+  // visibly rounded corner, and there was no number the slider could show that
+  // was true of every surface at once. A corner is now a property of the media
+  // and of nothing else, so the panel's reading is the picture's reading.
   borderRadius: z
     .number()
     .min(0)
@@ -335,9 +350,62 @@ export type MediaLayout = Pick<
   "objectFit" | "padding" | "borderRadius"
 >;
 
-/** Is there anything to lay out at all, or is this picture as it always was? */
+/**
+ * Is there anything to lay out at all, or is this picture as it always was?
+ *
+ * A zero corner answers NO, unlike before: zero is the default now, and — being
+ * written as a plain `0` rather than `0cqw` — it needs no query container to be
+ * zero. So the frame is still free for every picture that has neither an inset
+ * nor a corner.
+ */
 export function hasMediaLayout(media: MediaLayout): boolean {
-  return Boolean(media.padding) || media.borderRadius !== undefined;
+  return Boolean(media.padding) || Boolean(media.borderRadius);
+}
+
+/**
+ * The corner, as the length CSS should draw it.
+ *
+ * Zero comes out as a plain `0`, and everything else as a share of the frame's
+ * width — see `mediaObjectStyle` for why the unit is `cqw`. The zero case is
+ * not merely an optimisation: a square picture is exactly the picture that
+ * renders with no frame around it, and `0cqw` without a container would fall
+ * back to measuring the viewport. Zero is zero anywhere.
+ */
+function mediaRadiusValue(media: MediaLayout): string | number {
+  const radius = media.borderRadius ?? DEFAULT_MEDIA_RADIUS;
+  if (radius === 0) return DEFAULT_MEDIA_RADIUS;
+  return `${(radius / MEDIA_PADDING_REFERENCE) * 100}cqw`;
+}
+
+/**
+ * The GROUND's style — the gradient painted behind a picture.
+ *
+ * It takes the picture's own corner, because the two are one artifact: a
+ * rounded picture over a square ground shows the ground's corners as four
+ * wedges poking out from behind it, which is precisely the case the effect
+ * exists for (a screenshot on a transparent canvas, where the ground is what
+ * you see THROUGH the picture).
+ *
+ * The ground is sized by the surface rather than by the picture, so the surface
+ * showing it has to be the query container — see the `collectionGrid` recipe's
+ * `cell` slot.
+ */
+export function mediaGroundStyle(media: MediaLayout): CSSProperties {
+  return { borderRadius: mediaRadiusValue(media) };
+}
+
+/**
+ * The corner in PIXELS, for a surface that cannot be a query container.
+ *
+ * A container's inline size may not depend on its contents, so a box that
+ * shrink-wraps its picture — the lightbox's frame — can never be one, and a
+ * `cqw` there would silently measure the VIEWPORT instead. Such a surface takes
+ * the authored number as written: a picture enlarged past the reference width
+ * wears a corner slightly tighter than the tile it was authored in, which is
+ * the honest trade for a corner that is right at every OTHER size.
+ */
+export function mediaRadiusPx(media: MediaLayout): number {
+  return media.borderRadius ?? DEFAULT_MEDIA_RADIUS;
 }
 
 /**
@@ -362,7 +430,14 @@ export function hasMediaLayout(media: MediaLayout): boolean {
  * is used.
  */
 export function mediaFrameStyle(media: MediaLayout): CSSProperties {
-  if (!hasMediaLayout(media)) return { display: "contents" };
+  // Only a CORNER needs it. Containment is what makes this box's inline size
+  // independent of its contents, and that is a promise only a surface with a
+  // width of its own can keep: inside a box that shrink-wraps its picture (the
+  // lightbox's frame) the two are circular and BOTH collapse to zero, taking
+  // the picture off the screen entirely. The inset needs no container — a
+  // percentage padding resolves against the containing block — so a picture
+  // that is only inset skips this box and keeps its old one.
+  if (!media.borderRadius) return { display: "contents" };
   return {
     // Declares the box the corner is a share OF. `inline-size` and not `size`:
     // the height still comes from the contents, which is what a `contain`
@@ -430,14 +505,12 @@ export function mediaObjectStyle(media: MediaLayout): CSSProperties {
     ...(hasMediaLayout(media) && objectFit === "contain"
       ? { width: "auto", height: "auto", maxWidth: "100%", maxHeight: "100%" }
       : {}),
-    // Omitted entirely when absent, so the surface's own corner survives. A
-    // key set to `undefined` would do the same in React, but stating it makes
-    // the absent/zero distinction visible to anything else reading this.
-    ...(media.borderRadius === undefined
-      ? {}
-      : {
-          borderRadius: `${(media.borderRadius / MEDIA_PADDING_REFERENCE) * 100}cqw`,
-        }),
+    // ALWAYS stated, zero included. Omitting it is what let each surface round
+    // the picture with a corner of its own — a class the media element was
+    // already wearing — while the panel, reading the media, showed 0. An inline
+    // declaration outranks every one of those classes, so the picture's corner
+    // is the picture's to state and the panel cannot disagree with it.
+    borderRadius: mediaRadiusValue(media),
   };
 }
 

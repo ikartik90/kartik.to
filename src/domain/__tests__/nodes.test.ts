@@ -11,8 +11,11 @@ import {
   MEDIA_PADDING_STEP,
   MEDIA_RADIUS_MAX,
   MEDIA_RADIUS_STEP,
+  DEFAULT_MEDIA_RADIUS,
+  hasMediaLayout,
   mediaBoxStyle,
   mediaFrameStyle,
+  mediaGroundStyle,
   mediaObjectStyle,
 } from "../nodes";
 
@@ -141,10 +144,44 @@ describe("media layout on image nodes", () => {
 });
 
 describe("mediaFrameStyle / mediaObjectStyle", () => {
-  it("costs an untouched picture nothing — both boxes collapse out of the layout", () => {
+  it("costs an untouched picture no BOXES — both collapse out of the layout", () => {
     expect(mediaFrameStyle({})).toEqual({ display: "contents" });
     expect(mediaBoxStyle({})).toEqual({ display: "contents" });
-    expect(mediaObjectStyle({})).toEqual({ objectFit: DEFAULT_MEDIA_FIT });
+  });
+
+  // The corner is the one thing an untouched picture still states, because
+  // stating nothing is what let a surface's own class round it — the panel then
+  // read 0 over a picture drawn with a 20px corner. Absent IS zero here, and
+  // zero is written down.
+  it("states the corner even for an untouched picture, so no surface can supply one", () => {
+    expect(mediaObjectStyle({})).toEqual({
+      objectFit: DEFAULT_MEDIA_FIT,
+      borderRadius: DEFAULT_MEDIA_RADIUS,
+    });
+    expect(DEFAULT_MEDIA_RADIUS).toBe(0);
+  });
+
+  it("reads absent and zero as the same square corner", () => {
+    expect(mediaObjectStyle({ borderRadius: 0 })).toEqual(mediaObjectStyle({}));
+  });
+
+  // Nothing to inset and nothing to round means no frame is needed — a zero
+  // corner needs no query container to be zero.
+  it("wants no boxes for a square, uninset picture", () => {
+    expect(hasMediaLayout({})).toBe(false);
+    expect(hasMediaLayout({ borderRadius: 0 })).toBe(false);
+    expect(hasMediaLayout({ borderRadius: 2 })).toBe(true);
+    expect(hasMediaLayout({ padding: 8 })).toBe(true);
+  });
+
+  // The gradient behind a picture is the same artifact as the picture, so it
+  // takes the same corner. Left square while the picture rounded, its corners
+  // showed as four wedges poking out from behind a transparent PNG.
+  it("gives the ground behind a picture the picture's own corner", () => {
+    expect(mediaGroundStyle({ borderRadius: 20 }).borderRadius).toBe(
+      mediaObjectStyle({ borderRadius: 20 }).borderRadius,
+    );
+    expect(mediaGroundStyle({}).borderRadius).toBe(DEFAULT_MEDIA_RADIUS);
   });
 
   // The frame is the box the corner is a share of, so it must span the FULL
@@ -158,6 +195,21 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
     expect(mediaFrameStyle(media).display).toBe("block");
     expect("padding" in mediaFrameStyle(media)).toBe(false);
     expect(mediaBoxStyle(media).padding).toBe("5%");
+  });
+
+  // A container may not take its inline size from its contents, so a surface
+  // that shrink-wraps its picture — the lightbox's frame — collapses to zero
+  // around one, and the picture goes off the screen with it. Only a corner
+  // needs measuring; an inset is a percentage of the containing block and needs
+  // no container at all.
+  it("claims a query container only for a corner, never merely for an inset", () => {
+    expect(mediaFrameStyle({ padding: 32 })).toEqual({ display: "contents" });
+    expect(mediaFrameStyle({ borderRadius: 0, padding: 32 })).toEqual({
+      display: "contents",
+    });
+    expect(mediaFrameStyle({ borderRadius: 12 }).containerType).toBe("inline-size");
+    // The inset still applies — it just no longer drags a container in with it.
+    expect(mediaBoxStyle({ padding: 32 }).padding).toBe("5%");
   });
 
   // The authored number is px AT THE REFERENCE WIDTH; a percentage is what
@@ -190,15 +242,15 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
       .toBe("100cqw");
     // 20 of 640 — 20px at the reference width, 10px at half of it.
     expect(mediaObjectStyle({ borderRadius: 20 }).borderRadius).toBe("3.125cqw");
-    expect(mediaObjectStyle({ borderRadius: 0 }).borderRadius).toBe("0cqw");
   });
 
-  it("leaves the corner alone unless the picture asked for one", () => {
-    // Absent is NOT zero: an untouched picture keeps whatever corner the
-    // surface showing it draws (a tile's, an article image's, a drag clone's).
-    expect("borderRadius" in mediaObjectStyle({})).toBe(false);
-    // Zero IS a value — it squares the object, overriding that surface.
-    expect(mediaObjectStyle({ borderRadius: 0 }).borderRadius).toBeDefined();
+  // A zero corner is the one value NOT expressed in `cqw`. `0cqw` is also zero,
+  // but only where a container exists to measure it — and a square picture is
+  // exactly the case that renders with no frame around it at all. A plain zero
+  // means the same thing everywhere, the drag clone parented to <body>
+  // included.
+  it("writes a square corner as a plain zero, which needs no container", () => {
+    expect(mediaObjectStyle({ borderRadius: 0 }).borderRadius).toBe(0);
   });
 
   // A `contain` picture cannot fill its frame, so a stretched element would be
@@ -220,9 +272,13 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
     expect("width" in style).toBe(false);
   });
 
-  // Untouched media keeps whatever sizing its surface's own class gives it.
+  // Untouched media keeps whatever sizing its surface's own class gives it —
+  // the corner is the one thing it states regardless (see above).
   it("adds no sizing to an untouched `contain` picture", () => {
-    expect(mediaObjectStyle({ objectFit: "contain" })).toEqual({ objectFit: "contain" });
+    const style = mediaObjectStyle({ objectFit: "contain" });
+    expect(style.objectFit).toBe("contain");
+    expect("width" in style).toBe(false);
+    expect("maxWidth" in style).toBe(false);
   });
 });
 

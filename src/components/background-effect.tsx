@@ -1,6 +1,7 @@
 "use client";
 
 import { StaticMeshGradient } from "@paper-design/shaders-react";
+import type { CSSProperties } from "react";
 import type { BackgroundEffect } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
@@ -30,17 +31,25 @@ const MAX_PIXELS = 1280 * 1280;
 export interface BackgroundEffectLayerProps {
   effect: BackgroundEffect;
   className?: string;
+  /**
+   * The corner to take, which is the PICTURE's — see `mediaGroundStyle`. The
+   * ground and the picture in front of it are one artifact, so a square ground
+   * behind a rounded photo would show as four wedges poking out from behind it.
+   */
+  style?: CSSProperties;
 }
 
 export function BackgroundEffectLayer({
   effect,
   className,
+  style,
 }: BackgroundEffectLayerProps) {
   return (
     <StaticMeshGradient
       aria-hidden
       data-background-effect=""
       className={className}
+      style={style}
       colors={effect.colors}
       positions={effect.positions}
       waveX={effect.waveX}
