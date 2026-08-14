@@ -12,7 +12,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { css, cx } from "../../../styled-system/css";
-import { tooltip } from "../../../styled-system/recipes";
+import {
+  tooltip,
+  type TooltipVariantProps,
+} from "../../../styled-system/recipes";
 
 // ---------------------------------------------------------------------------
 // Tooltip — the cursor-following hover tooltip, same chrome as the social links
@@ -81,7 +84,7 @@ function isTooltipText(node: ReactNode): node is ReactElement {
   return isValidElement(node) && node.type === TooltipText;
 }
 
-export interface TooltipProps {
+export interface TooltipProps extends TooltipVariantProps {
   children: ReactNode;
   className?: string;
 }
@@ -92,7 +95,7 @@ export interface TooltipProps {
  * shape; `aria-hidden` because it's decorative — screen readers get the
  * trigger's `aria-label`.
  */
-function TooltipRoot({ children, className }: TooltipProps) {
+function TooltipRoot({ children, className, ...variants }: TooltipProps) {
   const host = useContext(TooltipHostContext);
   // Portalled only from the second render on. There is no `document` to portal
   // into on the server, and simply branching on that is what CAUSES a mismatch:
@@ -114,7 +117,7 @@ function TooltipRoot({ children, className }: TooltipProps) {
   return createPortal(
     <div
       ref={host?.ref as Ref<HTMLDivElement>}
-      className={cx(tooltip(), className)}
+      className={cx(tooltip(variants), className)}
       data-visible={host?.visible ? "" : undefined}
       aria-hidden
     >

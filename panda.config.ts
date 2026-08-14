@@ -2451,6 +2451,31 @@ export default defineConfig({
             "& svg path[stroke]": { stroke: "currentColor" },
             "& svg path[fill]": { fill: "currentColor" },
           },
+          variants: {
+            // Opt-in, for the tooltip that makes an OFFER rather than naming a
+            // control — the demos' "Try it yourself". Brand type on the opaque
+            // brand surface the popovers already use (rosemilk/rust): the box
+            // covers whatever it is drawn over, so the fill can't be a
+            // translucent brand wash the way an inline emphasis is.
+            tone: {
+              brand: {
+                backgroundColor: { base: "brand.rosemilk", _dark: "brand.rust" },
+                color: { base: "brand.pink", _dark: "brand.orange" },
+                // The bright hue again at 25%, exactly as `field.border.active`
+                // draws a focused frame — a neutral hairline is the one part of
+                // the box that would still read as the default tooltip.
+                borderColor: {
+                  base: "color-mix(in srgb, var(--colors-brand-pink) 25%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-brand-orange) 25%, transparent)",
+                },
+              },
+            },
+          },
+          // The variant reaches the recipe through `Tooltip`'s rest props, which
+          // is a runtime value Panda cannot read statically — without this the
+          // class lands on the box and no rule is ever emitted for it.
+          staticCss: [{ tone: ["*"] }],
         }),
 
         tooltipIcon: defineRecipe({

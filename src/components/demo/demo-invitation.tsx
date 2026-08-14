@@ -26,7 +26,7 @@ export type DemoInvitationProps = DemoInvitationState;
 export function DemoInvitation({ ref, visible }: DemoInvitationProps) {
   return (
     <TooltipHostContext.Provider value={{ ref, visible }}>
-      <Tooltip>
+      <Tooltip tone="brand">
         <Tooltip.Text>Try it yourself</Tooltip.Text>
       </Tooltip>
     </TooltipHostContext.Provider>
