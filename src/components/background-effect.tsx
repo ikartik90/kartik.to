@@ -32,9 +32,10 @@ export interface BackgroundEffectLayerProps {
   effect: BackgroundEffect;
   className?: string;
   /**
-   * The corner to take, which is the PICTURE's — see `mediaGroundStyle`. The
-   * ground and the picture in front of it are one artifact, so a square ground
-   * behind a rounded photo would show as four wedges poking out from behind it.
+   * Anything about the layer a surface has to state at runtime. The corner is
+   * NOT one of them — the ground fills the card it is on, so it takes the
+   * card's corner from its own class, and the picture in front of it wears the
+   * one the properties panel gave it.
    */
   style?: CSSProperties;
 }

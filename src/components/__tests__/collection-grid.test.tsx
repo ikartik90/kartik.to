@@ -1318,6 +1318,58 @@ describe("CollectionGrid transparency checkerboard", () => {
   });
 });
 
+// The cell is a card with a corner of its own (`radii.xxl`) and it CLIPS, so
+// what a picture looks like in the grid depends on whether it reaches that
+// edge. The clone rides the cursor parented to the body, with no cell round it
+// to do any clipping, so it has to answer the same question itself.
+describe("CollectionGrid drag clone corner", () => {
+  const preview = () =>
+    document.body.querySelector<HTMLElement>(
+      '[class*="collection-grid__dragPreview"]',
+    );
+
+  const lift = (index: number) => {
+    layOutCells();
+    const source = press(index, centreOf(index));
+    pointer("pointermove", source, { clientX: 60, clientY: 50 });
+    return source;
+  };
+
+  // Filling its slot, the picture is wearing the CARD's corner — the cell is
+  // what rounds it — so the clone leaves its own class to state that and writes
+  // nothing inline.
+  it("leaves the card's corner to the clone's class for a picture that fills its slot", () => {
+    setup([{ src: "a", borderRadius: 20 }, { src: "b" }]);
+    const source = lift(0);
+
+    expect(preview()!.style.borderRadius).toBe("");
+
+    pointer("pointerup", source, centreOf(0));
+  });
+
+  // Inset, it is not touching that edge, so the corner on screen is the
+  // picture's own — and a `cqw` out here would measure the viewport, so it goes
+  // as pixels against the box the drag has already measured.
+  it("resolves an inset picture's own corner to pixels", () => {
+    setup([{ src: "a", borderRadius: 20, padding: 32 }, { src: "b" }]);
+    const source = lift(0);
+
+    // 20 of 640, against the 100px box `layOutCells` states.
+    expect(preview()!.style.borderRadius).toBe("3.125px");
+
+    pointer("pointerup", source, centreOf(0));
+  });
+
+  it("carries a square inset picture square", () => {
+    setup([{ src: "a", padding: 32 }, { src: "b" }]);
+    const source = lift(0);
+
+    expect(preview()!.style.borderRadius).toBe("0px");
+
+    pointer("pointerup", source, centreOf(0));
+  });
+});
+
 describe("CollectionGrid background effect travels with the photo", () => {
   const preview = () =>
     document.body.querySelector<HTMLElement>(
