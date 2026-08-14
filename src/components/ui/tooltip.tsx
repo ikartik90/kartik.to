@@ -5,10 +5,12 @@ import {
   createContext,
   isValidElement,
   useContext,
+  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
   type Ref,
 } from "react";
+import { createPortal } from "react-dom";
 import { css, cx } from "../../../styled-system/css";
 import { tooltip } from "../../../styled-system/recipes";
 
@@ -18,7 +20,8 @@ import { tooltip } from "../../../styled-system/recipes";
 // visibility of its own: a HOST (Button.Tooltip / Link.Tooltip, which ARE this
 // component) supplies the element ref + `visible` through context, wiring it to
 // the trigger's hover and the `useCursorTooltip` positioner. Because the box is
-// `position: fixed`, the host can render it as a plain sibling of the trigger.
+// `position: fixed` AND portalled, the host can render it as a plain sibling of
+// the trigger and forget about it.
 //
 //   <Button aria-label="Delete">
 //     <TrashIcon />
@@ -27,7 +30,25 @@ import { tooltip } from "../../../styled-system/recipes";
 //       <TrashIcon />
 //     </Button.Tooltip>
 //   </Button>
+//
+// PORTALLED TO THE BODY, always. `position: fixed` buys the right COORDINATES,
+// never the right to be seen: an ancestor still clips its subtree at paint time,
+// and the box is drawn at the VISITOR'S CURSOR — a point on the page at large,
+// routinely outside whatever element it labels. A DemoFrame is the standing
+// example: `overflow: hidden` over a `container-type`, and containment makes it
+// the containing block for a fixed child, so its replay/reset rail's tooltips
+// were positioned perfectly and painted nowhere. The tell is a box with a
+// correct `getBoundingClientRect`, `opacity: 1`, and no pixels.
+//
+// The escape lives here rather than in each host because a host cannot know
+// what it will be dropped inside — a frame, a popover, a clip-path'd surface —
+// and every one of them wants the same answer.
 // ---------------------------------------------------------------------------
+
+/** Never changes after the first client render, so there is nothing to subscribe to. */
+const subscribeNever = () => () => {};
+const onClient = () => true;
+const onServer = () => false;
 
 type TooltipHost = {
   ref: Ref<HTMLElement>;
@@ -73,11 +94,24 @@ export interface TooltipProps {
  */
 function TooltipRoot({ children, className }: TooltipProps) {
   const host = useContext(TooltipHostContext);
+  // Portalled only from the second render on. There is no `document` to portal
+  // into on the server, and simply branching on that is what CAUSES a mismatch:
+  // React hydrates by walking the client tree against the server's markup, and
+  // a first client render that differs from the server's — even to nothing in
+  // place — is the thing it refuses. Rendering null on both passes and moving
+  // in after is the fix, and it costs nothing: the box is decorative, hidden,
+  // and wanted no earlier than the first hover. `useSyncExternalStore` with a
+  // server snapshot of false is the house way of asking this (see
+  // `usePageLoaded`) — false on the server AND through hydration, then true,
+  // with no state write in an effect.
+  const hydrated = useSyncExternalStore(subscribeNever, onClient, onServer);
   const items = Children.toArray(children);
   const label = items.find(isTooltipText);
   const rest = items.filter((child) => !isTooltipText(child));
 
-  return (
+  if (!hydrated) return null;
+
+  return createPortal(
     <div
       ref={host?.ref as Ref<HTMLDivElement>}
       className={cx(tooltip(), className)}
@@ -87,7 +121,8 @@ function TooltipRoot({ children, className }: TooltipProps) {
       {label}
       {rest.length > 0 && <span className={dividerStyle} aria-hidden />}
       {rest}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
