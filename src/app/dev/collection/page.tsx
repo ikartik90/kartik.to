@@ -11,6 +11,7 @@ import {
 import {
   featureItem,
   removeItem,
+  replaceItem,
   setItemBackgroundEffect,
   setItemLayout,
   setItemCaption,
@@ -108,11 +109,16 @@ export default function CollectionPreviewPage() {
             setItems(setItemBackgroundEffect(items, i, effect))
           }
           onSetLayout={(i, patch) => setItems(setItemLayout(items, i, patch))}
+          // Through the real algebra, and with the shape the picker actually
+          // hands over — a source and the new file's own alt, nothing more — so
+          // this route shows what a replacement keeps rather than a local
+          // spread's more generous answer.
           onReplace={(i) =>
             setItems(
-              items.map((item, index) =>
-                index === i ? { ...item, src: PHOTOS[(i + 3) % 6] } : item,
-              ),
+              replaceItem(items, i, {
+                src: PHOTOS[(i + 3) % 6],
+                alt: "Replacement",
+              }),
             )
           }
           onAddImage={() =>

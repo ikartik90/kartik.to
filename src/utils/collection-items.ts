@@ -162,9 +162,34 @@ export function appendItems(
 }
 
 /**
- * Swaps the image in one slot. The caption belongs to the SLOT, not the file —
- * replacing a photo you've already annotated keeps the annotation, unless the
- * incoming item brings one of its own.
+ * Everything that belongs to the SLOT rather than to the file sitting in it:
+ * the annotation, and every property the media panel writes. All of it is work
+ * the author did against that position in the grid — a fit chosen so the tile
+ * crops well, an inset and a corner tuned against its neighbours, a shader
+ * picked to sit behind it — so it outlives the picture it was applied to.
+ *
+ * `src` and `alt` are pointedly NOT here. Those describe the FILE: a new
+ * picture arrives with its own source and its own description, and inheriting
+ * the old one's alt would leave the page announcing a photo it is no longer
+ * showing.
+ */
+const SLOT_OWNED_PROPERTIES = [
+  "caption",
+  "objectFit",
+  "padding",
+  "borderRadius",
+  "backgroundEffect",
+] as const satisfies readonly (keyof CollectionItem)[];
+
+/**
+ * Swaps the media in one slot, keeping everything the author applied to that
+ * slot — see `SLOT_OWNED_PROPERTIES` — unless the incoming item states a value
+ * of its own, which wins.
+ *
+ * Absence is tested rather than falsiness, because two of these carry a
+ * meaningful zero: `borderRadius: 0` is a deliberately squared object, not a
+ * missing corner, and a truthiness check would quietly restore the rounding the
+ * author had just taken off.
  */
 export function replaceItem(
   items: readonly CollectionItem[],
@@ -174,7 +199,13 @@ export function replaceItem(
   if (!inRange(items, index)) return [...items];
   return items.map((item, i) =>
     i === index
-      ? { ...next, ...(item.caption && !next.caption ? { caption: item.caption } : {}) }
+      ? SLOT_OWNED_PROPERTIES.reduce<CollectionItem>(
+          (merged, key) =>
+            merged[key] === undefined && item[key] !== undefined
+              ? { ...merged, [key]: item[key] }
+              : merged,
+          next,
+        )
       : item,
   );
 }

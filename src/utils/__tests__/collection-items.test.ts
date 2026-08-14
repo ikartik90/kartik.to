@@ -183,6 +183,38 @@ describe("replaceItem", () => {
     expect(next[0].caption).toBe("Fresh");
   });
 
+  it("keeps the styling the slot was given — fit, inset, corner, effect", () => {
+    const seeded: CollectionItem[] = [
+      {
+        src: "old",
+        objectFit: "contain",
+        padding: 24,
+        borderRadius: 0,
+        backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+      },
+    ];
+    expect(replaceItem(seeded, 0, { src: "new" })[0]).toEqual({
+      ...seeded[0],
+      src: "new",
+    });
+  });
+
+  it("lets the incoming item's own styling win over the slot's", () => {
+    const seeded: CollectionItem[] = [{ src: "old", objectFit: "contain" }];
+    const next = replaceItem(seeded, 0, { src: "new", objectFit: "cover" });
+    expect(next[0].objectFit).toBe("cover");
+  });
+
+  it("keeps a squared corner, which is falsy but not absent", () => {
+    const seeded: CollectionItem[] = [{ src: "old", borderRadius: 0 }];
+    expect(replaceItem(seeded, 0, { src: "new" })[0].borderRadius).toBe(0);
+  });
+
+  it("does not carry the old picture's alt onto the new one", () => {
+    const seeded: CollectionItem[] = [{ src: "old", alt: "A red bicycle" }];
+    expect(replaceItem(seeded, 0, { src: "new" })[0].alt).toBeUndefined();
+  });
+
   it("ignores an out-of-range index", () => {
     expect(replaceItem(items("a"), 3, { src: "b" })).toEqual(items("a"));
   });
