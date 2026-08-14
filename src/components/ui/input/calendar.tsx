@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type HTMLAttributes,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -254,6 +255,13 @@ export type CalendarBand = {
 
 /** Pointer slop, in px, before a press is treated as a drag rather than a click. */
 const DRAG_THRESHOLD = 3;
+
+/**
+ * How long a page turn takes — the window in which both the arriving and the
+ * leaving range are on screen. Kept in step with the `calendarPageIn/Out`
+ * keyframes in `panda.config.ts`.
+ */
+const PUSH_MS = 200;
 
 /** Do two boxes overlap at all? Touching edges don't count; any sliver does. */
 function overlaps(
@@ -524,9 +532,12 @@ function CalendarRoot({
       originY: y,
       listRect,
       // Spill copies are already excluded by the selector, and a date outside
-      // min/max can't be dragged into any more than it can be clicked.
+      // min/max can't be dragged into any more than it can be clicked. A page
+      // mid-turn is a picture of the range it is replacing: its cells are
+      // duplicates, and their boxes are still moving — the band is measured
+      // off the live page alone.
       cells: cells
-        .filter((cell) => !cell.disabled)
+        .filter((cell) => !cell.disabled && !cell.closest("[data-outgoing]"))
         .map((cell) => ({
           key: cell.dataset.date as string,
           rect: cell.getBoundingClientRect(),
@@ -556,9 +567,10 @@ function CalendarRoot({
     const top = Math.min(open.originY, y);
     const bottom = Math.max(open.originY, y);
 
-    // Drawn relative to the period list, which is the band's positioning
-    // parent. The calendar root clips it, so a drag that runs off the grid
-    // stops at the frame instead of trailing across the page.
+    // Drawn relative to the period list, which is both the band's positioning
+    // parent and (since a page turn has to be cropped to it) the box that
+    // clips it — so a drag that runs off the grid stops at the frame instead
+    // of trailing across the page.
     setBand({
       left: left - open.listRect.left,
       top: top - open.listRect.top,
@@ -805,6 +817,25 @@ function CalendarNext(props: CalendarNavProps) {
 export type CalendarPeriodListProps = HTMLAttributes<HTMLDivElement>;
 
 /**
+ * The row of months on screen, and the one being pushed off to make room for
+ * it. `view` is held alongside `periods` because it is what a change is
+ * MEASURED against — the direction of a turn is the compare between the view
+ * that arrived and the one it replaced.
+ */
+type CalendarPageState = {
+  view: Temporal.PlainDate;
+  periods: CalendarMonth[];
+  /** The leaving page, mounted only for the length of the slide. */
+  out: {
+    /** Its view, as a React key — a new turn remounts, and so restarts. */
+    key: string;
+    periods: CalendarMonth[];
+    /** Is the range moving forward in time? Decides which side to push from. */
+    forward: boolean;
+  } | null;
+};
+
+/**
  * The row of months, and the only part that knows how many there are. It clones
  * its single `Calendar.Period` template once per visible month and leaves every
  * other child alone — including the navs, which wire themselves. Dropping a
@@ -813,16 +844,23 @@ export type CalendarPeriodListProps = HTMLAttributes<HTMLDivElement>;
  *
  * It is also the DRAGGABLE area, which is why an optional `Calendar.Tooltip`
  * dropped in here is the sweep's hint — see `useHintTooltip` below.
+ *
+ * And it is where a view change becomes a PAGE TURN. Moving the range replaces
+ * every month at once, and cut between the two the range simply blinks:
+ * nothing says which way it went, or that the months either side of the press
+ * are neighbours at all. So this holds the page it turned away from beside the
+ * one arriving and pushes the pair along together — see `page` below.
  */
 function CalendarPeriodList({
   className,
   children,
+  style,
   onPointerDown,
   onMouseEnter,
   onMouseLeave,
   ...rest
 }: CalendarPeriodListProps) {
-  const { styles, periods, sweep, dragStart, band } =
+  const { styles, periods, view, step, sweep, dragStart, band } =
     useCalendar("Calendar.PeriodList");
 
   // A `Calendar.Tooltip` child is lifted out of the flow and hosted here: this
@@ -853,21 +891,88 @@ function CalendarPeriodList({
 
   // The one child this part does rewrite: `Period` is a TEMPLATE, not a role —
   // it has to be a direct child because it's stamped out once per month.
+  const stamp = (
+    template: ReactElement<CalendarPeriodProps>,
+    row: readonly CalendarMonth[],
+  ) => row.map((period) => cloneElement(template, { key: period.key, period }));
+
   const expanded = items
     .filter((child) => child !== hint)
     .flatMap((child) => {
       if (isValidElement(child) && child.type === CalendarPeriod) {
-        const el = child as ReactElement<CalendarPeriodProps>;
-        return periods.map((period) =>
-          cloneElement(el, { key: period.key, period }),
-        );
+        return stamp(child as ReactElement<CalendarPeriodProps>, periods);
       }
       return child;
     });
 
+  // The same template again, for the row a page turn is pushing off.
+  const template = items.find(
+    (child): child is ReactElement<CalendarPeriodProps> =>
+      isValidElement(child) && child.type === CalendarPeriod,
+  );
+
+  // The page turn. `view` moving is the whole trigger — a chevron, a searched
+  // date, an arrow key walking off the range — so every one of them turns the
+  // page, and picking a date already on screen (which moves nothing) turns
+  // none. Derived during render rather than in an effect: the leaving page has
+  // to be mounted in the SAME commit the arriving one is, or the first frame of
+  // the slide is a range with nothing behind it.
+  const [page, setPage] = useState<CalendarPageState>(() => ({
+    view,
+    periods,
+    out: null,
+  }));
+  if (!view.equals(page.view)) {
+    setPage({
+      view,
+      periods,
+      out: {
+        key: page.view.toString(),
+        periods: page.periods,
+        // Which side the arriving page comes from. A jump of any distance
+        // still only says forward or back — the turn is a direction, not a
+        // measure of how far it went.
+        forward: Temporal.PlainDate.compare(view, page.view) > 0,
+      },
+    });
+  } else if (periods !== page.periods) {
+    // `months` / `weekStartsOn` changed under a standing view: no turn to play,
+    // but the snapshot the NEXT one takes has to be the row actually on screen.
+    setPage({ ...page, periods });
+  }
+
+  // A clock rather than `animationend`: a turn is one animation per COLUMN, so
+  // the event arrives once per month and the last one to fire is the page's
+  // own business, not this component's. (PropertiesPanel's exit makes the same
+  // trade.) Under `prefers-reduced-motion` globals.css collapses the slide to
+  // 0.01ms, so the leaving page is off frame immediately either way and the
+  // wait costs nothing anyone can see.
+  const { out } = page;
+  useEffect(() => {
+    if (!out) return;
+    // A turn that interrupts this one replaces `out`, and the cleanup below
+    // takes its clock with it — so this only ever drops the page it was set
+    // for, and the new one gets its own full slide.
+    const timer = setTimeout(
+      () => setPage((current) => ({ ...current, out: null })),
+      PUSH_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [out]);
+
+  // One signed distance drives both halves, in COLUMNS rather than screenfuls:
+  // a range that walks (step < months) travels one column, so the months that
+  // carry over land exactly where they already were instead of sliding against
+  // themselves.
+  const push = out
+    ? { "--calendar-push": `${(out.forward ? step : -step) * 100}%` }
+    : null;
+
   return (
     <div
       className={cx(styles.periodList, className)}
+      data-push={out ? "" : undefined}
+      style={{ ...style, ...push } as CSSProperties}
       // The band opens HERE rather than on a day cell, so a drag can begin on
       // the gutters between months, the month labels, or the empty tail of a
       // short month — anywhere in the list. A press that lands on a day cell
@@ -897,6 +1002,22 @@ function CalendarPeriodList({
       {...rest}
     >
       {expanded}
+      {out && template ? (
+        // Keyed on the view it shows, so a turn that interrupts another
+        // restarts the slide instead of inheriting its tail. Last in the DOM
+        // and `inert`, so neither the focus chase nor a Tab can reach a cell
+        // on a page that is already leaving; `aria-hidden` keeps the month
+        // labels from announcing themselves a second time on the way out.
+        <div
+          key={out.key}
+          aria-hidden
+          inert
+          data-outgoing
+          className={styles.outgoing}
+        >
+          {stamp(template, out.periods)}
+        </div>
+      ) : null}
       {band ? (
         <div
           aria-hidden

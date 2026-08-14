@@ -591,6 +591,26 @@ export default defineConfig({
           from: { translate: "0 0", opacity: 1 },
           to: { translate: "100% 0", opacity: 0 },
         },
+        // The calendar's page turn. A chevron replaces every month on screen at
+        // once, so the arriving page enters from the side the range is
+        // travelling toward and the leaving one is pushed out by the same
+        // distance — the pair reads as one strip being moved along rather than
+        // a blink between two months.
+        //
+        // `--calendar-push` IS that distance, set by `Calendar.PeriodList` as a
+        // percentage of one month column (a turn moves by `step` columns,
+        // whatever the range's width) and signed by the direction of travel.
+        // One variable for both halves is what keeps them in lockstep: where a
+        // walking range repeats a month, the two copies sit at exactly the same
+        // x for the whole slide instead of drifting past each other.
+        calendarPageIn: {
+          from: { translate: "var(--calendar-push) 0" },
+          to: { translate: "0 0" },
+        },
+        calendarPageOut: {
+          from: { translate: "0 0" },
+          to: { translate: "calc(var(--calendar-push) * -1) 0" },
+        },
         // The ring a demo's stand-in cursor leaves where it clicked. A real
         // cursor makes no such mark — this one has to, because the pointer is
         // the only thing on screen that ISN'T under the visitor's hand, and a
@@ -3058,7 +3078,7 @@ export default defineConfig({
         calendar: defineSlotRecipe({
           className: "calendar",
           description:
-            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
+            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). A turn is a push: the list crops, the arriving page slides in from the side the range is travelling toward and the leaving one (the `outgoing` copy) is pushed out by the same `--calendar-push` — `step` month columns, signed by the direction. Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
           slots: [
             "root",
             "search",
@@ -3071,6 +3091,7 @@ export default defineConfig({
             "grid",
             "date",
             "marquee",
+            "outgoing",
           ],
           base: {
             root: {
@@ -3109,6 +3130,13 @@ export default defineConfig({
               justifyContent: "center",
               // Anchors the nav chevrons below.
               position: "relative",
+              // ...and the frame a page turn slides through. `default`'s root
+              // already crops, but the `onBrand` popover's does not — and a
+              // month sailing across the search row, or out of the popover
+              // altogether, is worse than no transition at all. It also crops
+              // the drag band, which is a tighter box than the root but the
+              // same one the band is drawn in.
+              overflow: "hidden",
               // A `multiple`-selection drag starting on a day cell would
               // otherwise run on and highlight the month labels it passes.
               userSelect: "none",
@@ -3119,9 +3147,31 @@ export default defineConfig({
               // 715:921 / 716:1116). Scoped to direct children, so the same
               // part nested in a consumer's own chrome stays in the flow.
               // `navPlacement` decides how it meets that edge.
-              "& > [data-nav]": { position: "absolute" },
+              //
+              // Lifted above BOTH pages of a turn: the outgoing one is
+              // positioned over the whole list, so without this it would paint
+              // across the chevrons for the length of the slide. It is also the
+              // floor `edge`'s scrims need — see the layer order there.
+              "& > [data-nav]": { position: "absolute", zIndex: 2 },
               "& > [data-nav='prev']": { left: "md" },
               "& > [data-nav='next']": { right: "md" },
+            },
+            // The page being pushed off — a copy of the row it is replacing,
+            // lifted out of the flow and laid exactly over it (same widths,
+            // same centring), so the arriving row goes on owning the list's
+            // size while this one slides away. Held for `PUSH_MS`, then
+            // unmounted; the motion itself is on the `period` slot, because
+            // every column of both pages moves as one.
+            outgoing: {
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "center",
+              // It is a picture, not a page: a press mid-turn belongs to the
+              // live row underneath. (`inert` covers the a11y tree and the tab
+              // order; this covers hit-testing.)
+              pointerEvents: "none",
             },
             period: {
               display: "flex",
@@ -3132,6 +3182,21 @@ export default defineConfig({
               // a flex row would otherwise shrink the columns and break the
               // grid arithmetic rather than letting them overflow and crop.
               flexShrink: 0,
+              // ── The page turn ──────────────────────────────────────────
+              // Both halves are declared on the COLUMN rather than on the two
+              // rows that hold them, because a turn is one motion: every column
+              // on screen, arriving or leaving, moves by the same
+              // `--calendar-push`. That is what makes the pair read as a strip
+              // being pushed along — and what lets a walking range (step <
+              // months) carry a month over without it sliding against itself.
+              // `[data-push]` is on the list only while a turn is in flight.
+              "[data-push] > &": { animation: "calendarPageIn 200ms ease-out" },
+              // `forwards` so the leaving page HOLDS off-frame at the end
+              // rather than snapping back for the frame between the animation
+              // finishing and React unmounting it.
+              "[data-outgoing] > &": {
+                animation: "calendarPageOut 200ms ease-out forwards",
+              },
             },
             // The chevron's WRAPPER, not the chevron itself. Panda emits plain
             // recipes into `@layer recipes` but slot recipes into its
@@ -3266,16 +3331,16 @@ export default defineConfig({
                     width: "token(sizes.calendarNavZone)",
                     alignItems: "center",
                     paddingInline: "sm",
-                    // Being positioned is NOT enough to sit above the grid: the
-                    // weekend and spill-over cells carry `opacity < 1`, making
-                    // each a stacking context painted at level 0 — the same as
+                    // The scrim rides on the base slot's `z-index: 2`, and
+                    // needs it as badly as the chevron does: being positioned
+                    // is NOT enough to sit above the grid, because the weekend
+                    // and spill-over cells carry `opacity < 1` — each a
+                    // stacking context painted at level 0, the same as
                     // `z-index: auto` — so DOM order decided, and the navs come
                     // first. Precisely the outermost column this scrim exists
                     // to fade was punching through it, sharp and unwashed.
-                    //
-                    // Explicit layer order across the calendar, since `auto`
-                    // ties with those cells: marquee 1 ▸ scrim 2 ▸ ring 3.
-                    zIndex: 2,
+                    // (The layer order across the calendar, since `auto` ties
+                    // with those cells: marquee 1 ▸ nav 2 ▸ frame ring 3.)
                     // The scrim lies OVER the outer columns, so without this it
                     // would swallow clicks on the dates it is merely fading.
                     // The chevron takes its own events back below.
