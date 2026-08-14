@@ -205,7 +205,10 @@ describe("replaceItem", () => {
     expect(next[0].objectFit).toBe("cover");
   });
 
-  it("keeps a squared corner, which is falsy but not absent", () => {
+  // A zero the panel writes is dropped rather than stored, but a document
+  // written before that was true can still hold one — and the merge tests for
+  // ABSENCE, not truthiness, so it carries across either way.
+  it("keeps a stored zero corner, which is falsy but not absent", () => {
     const seeded: CollectionItem[] = [{ src: "old", borderRadius: 0 }];
     expect(replaceItem(seeded, 0, { src: "new" })[0].borderRadius).toBe(0);
   });
@@ -381,15 +384,19 @@ describe("setItemLayout", () => {
 });
 
 describe("setItemLayout border radius", () => {
-  it("KEEPS a zero corner, because zero is not the same as never asked", () => {
-    const next = setItemLayout(items("a"), 0, { borderRadius: 0 });
-    expect(next[0]).toEqual({ src: "a", borderRadius: 0 });
+  // Zero is the DEFAULT now — no surface rounds a picture that has not asked to
+  // be rounded — so a zero corner is nothing to record, exactly like a zero
+  // inset. Rounding a picture and squaring it again leaves the document as it
+  // started.
+  it("drops a zero corner, which is now the default rather than an override", () => {
+    const rounded = setItemLayout(items("a"), 0, { borderRadius: 12 });
+    expect(setItemLayout(rounded, 0, { borderRadius: 0 })[0]).toEqual({ src: "a" });
   });
 
   it("survives a later patch to another property", () => {
-    const once = setItemLayout(items("a"), 0, { borderRadius: 0 });
+    const once = setItemLayout(items("a"), 0, { borderRadius: 12 });
     const twice = setItemLayout(once, 0, { padding: 16 });
-    expect(twice[0]).toMatchObject({ borderRadius: 0, padding: 16 });
+    expect(twice[0]).toMatchObject({ borderRadius: 12, padding: 16 });
   });
 
   it("stores a set corner", () => {

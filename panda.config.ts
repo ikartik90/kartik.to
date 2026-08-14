@@ -1395,7 +1395,9 @@ export default defineConfig({
             "Image inside article content with divider border matching demo showcase shells.",
           base: {
             width: "token(spacing.full)",
-            borderRadius: "xl",
+            // No corner: an article image, like a collection tile, wears the
+            // radius its own properties state and nothing else — see
+            // `DEFAULT_MEDIA_RADIUS`.
             display: "block",
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
@@ -3579,7 +3581,19 @@ export default defineConfig({
             cell: {
               position: "relative",
               overflow: "hidden",
-              borderRadius: "xxl",
+              // NO corner of its own — see `DEFAULT_MEDIA_RADIUS`. A cell that
+              // clipped to `radii.xxl` rounded every picture in it whatever the
+              // picture's own corner said, so squaring one through the panel
+              // changed nothing you could see and the slider read 0 under a
+              // visibly rounded photo.
+              //
+              // The query container the picture's corner and the gradient's are
+              // a share OF. The cell is the right element for it because it is
+              // the box both fill, and it is safe on this one because a grid
+              // item's inline size comes from its track rather than from its
+              // contents — the same containment on a shrink-wrapping box would
+              // collapse it to nothing.
+              containerType: "inline-size",
               // Editor cells only — the reader's tiles carry `zoom-in` on the
               // button that opens the lightbox.
               "&[data-collection-cell]": { cursor: "grab" },
@@ -3752,12 +3766,10 @@ export default defineConfig({
               width: "token(spacing.full)",
               height: "token(spacing.full)",
               objectFit: "cover",
-              // Redundant in the grid — the cell already clips to this radius —
-              // but NOT on the clone the editor carries while reordering. That
-              // rides the cursor parented to the body, outside the cell doing
-              // the clipping, so without a radius of its own the thing in hand
-              // would be a hard-cornered rectangle where the design is round.
-              borderRadius: "xxl",
+              // No corner here either. It is the picture's own property and
+              // arrives as an inline style (`mediaObjectStyle`), which outranks
+              // this class — a default stated here could only ever be the value
+              // the panel does NOT show.
               // The press feedback the editor's cell drives above. Stated here
               // because the transition belongs to the thing that moves; the
               // reader never sets the state, so it costs it nothing.
@@ -3826,11 +3838,12 @@ export default defineConfig({
               position: "absolute",
               inset: 0,
               zIndex: 0,
-              // Its OWN corners, not the cell's clip — a pressed cell sets
-              // `overflow: visible` so the picture can tilt out of its slot,
-              // and anything relying on that clip squares off the moment the
-              // press lands. Same reason the photo carries its radius.
-              borderRadius: "inherit",
+              // Its corner arrives inline, from the PICTURE's radius
+              // (`mediaGroundStyle`) — the ground and the picture are one
+              // artifact, and a square ground behind a rounded photo shows as
+              // four wedges poking out from behind it. Not `inherit`: the cell
+              // has no corner to inherit any more, and a pressed cell drops its
+              // clip entirely so anything relying on that squares off mid-press.
               // Decoration under the picture — the cell beneath it owns the
               // press that starts a reorder, and the tile above it owns clicks.
               pointerEvents: "none",
@@ -3848,8 +3861,16 @@ export default defineConfig({
             // corners (a native drag bitmap composites onto white) and vanishes
             // the instant you let go (a native one animates itself home).
             // `left`/`top` stay at zero and movement goes through `transform`,
-            // so tracking the pointer never touches layout. Size and position
-            // are the only things set inline, because only they are dynamic.
+            // so tracking the pointer never touches layout. Size, position and
+            // the corner are the only things set inline, because only they are
+            // dynamic.
+            //
+            // The corner is inline for a reason peculiar to the clone: it is
+            // parented to <body>, where the cell that was its query container
+            // is nowhere in its ancestry, so the `cqw` the picture carries
+            // would resolve against the VIEWPORT and hand the thing in hand a
+            // corner several times the one it left behind. The editor resolves
+            // it to pixels against the measured box instead — see `beginDrag`.
             dragPreview: {
               position: "fixed",
               left: 0,
@@ -3857,7 +3878,6 @@ export default defineConfig({
               zIndex: 60,
               pointerEvents: "none",
               objectFit: "cover",
-              borderRadius: "xxl",
               // Position rides the INDEPENDENT `translate` property, and the
               // press feedback below rides `scale`, precisely so they do not
               // share `transform`. A transition on `transform` would be a
@@ -4521,11 +4541,14 @@ export default defineConfig({
             // the FIGURE — that column also holds the caption, and the ground
             // would run out behind the text. `flex` (not block) so the wrapper
             // shrink-wraps whatever size the image's own maxima resolve to.
+            // No corner of its own — the enlarged picture keeps the one it was
+            // authored with, like every other surface showing it. The clip
+            // stays: it is what holds the gradient to the picture's shape,
+            // since the ground fills this box exactly.
             frame: {
               position: "relative",
               display: "flex",
               minWidth: 0,
-              borderRadius: "xxl",
               overflow: "hidden",
             },
             backgroundEffect: {
@@ -4547,7 +4570,6 @@ export default defineConfig({
               // the pair past the viewport.
               maxHeight: "calc(85vh - token(spacing.4xl))",
               objectFit: "contain",
-              borderRadius: "xxl",
               borderWidth: "token(spacing.3xs)",
               borderStyle: "solid",
               borderColor: "border.divider",

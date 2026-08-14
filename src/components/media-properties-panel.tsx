@@ -12,6 +12,7 @@ import {
   BACKGROUND_EFFECT_MAX_COLORS,
   DEFAULT_BACKGROUND_EFFECT,
   DEFAULT_MEDIA_FIT,
+  DEFAULT_MEDIA_RADIUS,
   MEDIA_PADDING_MAX,
   MEDIA_PADDING_STEP,
   MEDIA_RADIUS_MAX,
@@ -93,7 +94,7 @@ export interface MediaPropertiesPanelProps {
   /** Absent means no padding. */
   padding: number | undefined;
   onPaddingChange: (padding: number) => void;
-  /** Absent means the surface's own corner — NOT zero. See `mediaLayoutStyle`. */
+  /** Absent means square, as it does for the inset. See `DEFAULT_MEDIA_RADIUS`. */
   borderRadius: number | undefined;
   onBorderRadiusChange: (radius: number) => void;
   caption: string | undefined;
@@ -201,18 +202,18 @@ export function MediaPropertiesPanel({
             />
           </PropertiesPanel.Control>
 
-          {/* The OBJECT's corner, not the frame's — so it is the picture that
-              rounds, and it only becomes visible once padding has lifted it off
-              the container's edge (with no padding the container's own clip is
-              the corner you see). Reads 0 for a picture that has never set one,
-              which is the honest starting point for that reason: what you would
-              be rounding is not on show yet. */}
+          {/* The OBJECT's corner, and the corner of the ground behind it — no
+              surface adds one of its own, so this number IS the shape on
+              screen. It reads 0 for a picture nobody has rounded because that
+              picture is square; it used to read 0 over a tile drawn with a 20px
+              corner, which is the discrepancy `DEFAULT_MEDIA_RADIUS` exists to
+              close. */}
           <PropertiesPanel.Control label="Radius">
             <Slider
               min={0}
               max={MEDIA_RADIUS_MAX}
               step={MEDIA_RADIUS_STEP}
-              value={borderRadius ?? 0}
+              value={borderRadius ?? DEFAULT_MEDIA_RADIUS}
               onValueChange={onBorderRadiusChange}
             />
           </PropertiesPanel.Control>
