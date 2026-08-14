@@ -26,8 +26,7 @@ import {
 } from "@/components/ui/properties-panel";
 import {
   COLLECTION_MAX_ITEMS,
-  MEDIA_PADDING_REFERENCE,
-  mediaGroundStyle,
+  mediaRadiusPx,
   type BackgroundEffect,
   type CollectionItem,
 } from "@/domain/nodes";
@@ -423,18 +422,27 @@ export function CollectionGrid({
     node.className = gridStyles.dragPreview;
     node.style.width = `${rect.width}px`;
     node.style.height = `${rect.height}px`;
-    // The corner, resolved to PIXELS for the journey.
+    // The corner the CELL was drawing on this picture, resolved to PIXELS for
+    // the journey.
     //
-    // The clone carries the picture's inline style, and that corner is a `cqw`
-    // — a share of the cell that was its query container. Parented to <body>
-    // the clone has no container at all, so the same declaration would resolve
-    // against the viewport and put a corner several times the right size on the
-    // thing in hand. The share is the same arithmetic, against the box we
-    // already measured.
-    node.style.borderRadius = `${
-      ((items[held.index]?.borderRadius ?? 0) / MEDIA_PADDING_REFERENCE) *
-      rect.width
-    }px`;
+    // An INSET picture is not touching the cell's edge, so the corner on screen
+    // is its own — and the clone carries the picture's inline style, where that
+    // corner is a `cqw` share of the cell that was its query container.
+    // Parented to <body> the clone has no container at all, so the same
+    // declaration would resolve against the viewport and put a corner several
+    // times the right size on the thing in hand. Same arithmetic, against the
+    // box we already measured.
+    //
+    // A picture that FILLS its slot is a different matter: what you see is the
+    // card's corner, because the cell clips it there. The clone has no cell
+    // around it to do the clipping, so it takes that corner from its own class
+    // (see the `dragPreview` slot) — and the cloned inline `cqw` has to be
+    // CLEARED for the class to be reached at all. Left in place it would not
+    // merely be the wrong shape, it would be the viewport's share of it.
+    const carried = items[held.index];
+    node.style.borderRadius = carried?.padding
+      ? `${mediaRadiusPx(carried, rect.width)}px`
+      : "";
     // A cloned <video> is a video with nothing playing in it: `cloneNode`
     // copies attributes, and React never wrote the `muted` one, so the clone
     // would sit on frame zero while the cell it left goes on playing. Muted and
@@ -896,10 +904,6 @@ export function CollectionGrid({
               <BackgroundEffectLayer
                 effect={item.backgroundEffect}
                 className={gridStyles.backgroundEffect}
-                // The picture's corner, so the ground and the photo standing on
-                // it are one shape. Measured against the CELL, which is the
-                // query container both boxes fill.
-                style={mediaGroundStyle(item)}
               />
             )}
             {/* A clip in a cell is a tile like any other — no transport, since

@@ -217,11 +217,10 @@ export default defineConfig({
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
           xl: { value: "{spacing.xl}" },
-          // Collection tiles, which round harder than the standalone article
-          // image at `xl`: across a 12px-gutter grid a 16px corner reads as a
-          // seam rather than a gap, and the featured tile is big enough to
-          // carry the extra curvature without looking like a button
-          // (Figma 829:6922).
+          // Chips large enough that a pill would be too round — the collection's
+          // surplus badge, which sits in a quadrant of a tile and has to read
+          // as a plate rather than as a button. The cards it sits on round at
+          // `xl`, with the demo frames they share a column with.
           xxl: { value: "{spacing.xxl}" },
           // Pill. `spacing.half` (50%) is the CIRCLE radius — on an oblong box
           // it draws an ellipse, not a stadium — so anything that can widen
@@ -1431,7 +1430,9 @@ export default defineConfig({
             gap: "sm",
             width: "token(spacing.full)",
             height: "token(spacing.full)",
-            borderRadius: "xxl",
+            // The filled cell's corner — an empty slot is the same card with
+            // nothing in it, and the two sit side by side in one grid.
+            borderRadius: "xl",
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
             borderColor: "border.divider",
@@ -3581,19 +3582,26 @@ export default defineConfig({
             cell: {
               position: "relative",
               overflow: "hidden",
-              // NO corner of its own — see `DEFAULT_MEDIA_RADIUS`. A cell that
-              // clipped to `radii.xxl` rounded every picture in it whatever the
-              // picture's own corner said, so squaring one through the panel
-              // changed nothing you could see and the slider read 0 under a
-              // visibly rounded photo.
+              // The CARD's corner — a constant of the design system, and
+              // nothing to do with the picture inside it. The properties
+              // panel's slider rounds the media OBJECT and only the media
+              // object; this is the container that object and its ground sit
+              // in, and it wears the same corner every surface of its kind
+              // wears (`radii.xxl`, which the empty slot beside it and the
+              // surplus badge over it already draw).
               //
-              // The query container the picture's corner and the gradient's are
-              // a share OF. The cell is the right element for it because it is
-              // the box both fill, and it is safe on this one because a grid
-              // item's inline size comes from its track rather than from its
-              // contents — the same containment on a shrink-wrapping box would
-              // collapse it to nothing.
-              containerType: "inline-size",
+              // The two are independent by design, not in tension: the cell
+              // clips at this radius, so a picture filling its slot takes the
+              // card's shape, and the picture's OWN corner is what shows once
+              // an inset lifts it off this edge — exactly as
+              // `MEDIA_RADIUS_STEP` describes it.
+              //
+              // `xl`, the corner a demo frame draws: a collection is a showcase
+              // block sitting in the same column as those, so the two read as
+              // the same kind of surface. Four other boxes are this same card
+              // seen from somewhere else and move with it — the empty slot, the
+              // hover scrim, the clone in hand, and the lightbox's ground.
+              borderRadius: "xl",
               // Editor cells only — the reader's tiles carry `zoom-in` on the
               // button that opens the lightbox.
               "&[data-collection-cell]": { cursor: "grab" },
@@ -3657,6 +3665,8 @@ export default defineConfig({
                   rotate: "2deg",
                   transformOrigin: "var(--press-origin, center)",
                 },
+              // The hairline round the card, on the cell's own box, which is
+              // what makes it follow the corner above.
               borderWidth: "token(spacing.3xs)",
               borderStyle: "solid",
               borderColor: "border.divider",
@@ -3838,12 +3848,16 @@ export default defineConfig({
               position: "absolute",
               inset: 0,
               zIndex: 0,
-              // Its corner arrives inline, from the PICTURE's radius
-              // (`mediaGroundStyle`) — the ground and the picture are one
-              // artifact, and a square ground behind a rounded photo shows as
-              // four wedges poking out from behind it. Not `inherit`: the cell
-              // has no corner to inherit any more, and a pressed cell drops its
-              // clip entirely so anything relying on that squares off mid-press.
+              // The CELL's corner, not the picture's: the ground fills the
+              // card, so it is the card's shape it has to take — the picture
+              // in front of it wears its own, which is a property of the
+              // picture and stops at the picture.
+              //
+              // Its OWN copy of that corner rather than the cell's clip, though.
+              // A pressed cell sets `overflow: visible` so the picture can tilt
+              // out of its slot, and anything relying on that clip squares off
+              // the moment the press lands.
+              borderRadius: "inherit",
               // Decoration under the picture — the cell beneath it owns the
               // press that starts a reorder, and the tile above it owns clicks.
               pointerEvents: "none",
@@ -3865,12 +3879,14 @@ export default defineConfig({
             // the corner are the only things set inline, because only they are
             // dynamic.
             //
-            // The corner is inline for a reason peculiar to the clone: it is
-            // parented to <body>, where the cell that was its query container
-            // is nowhere in its ancestry, so the `cqw` the picture carries
-            // would resolve against the VIEWPORT and hand the thing in hand a
-            // corner several times the one it left behind. The editor resolves
-            // it to pixels against the measured box instead — see `beginDrag`.
+            // The card's corner, because a picture filling its slot is clipped
+            // to it and the clone has no cell around it to do that clipping —
+            // it rides the cursor parented to the body. An INSET picture is not
+            // touching that edge, so its own corner is the one on screen and
+            // the editor writes it inline, in pixels: the `cqw` the picture
+            // carries would resolve against the viewport out here and hand the
+            // thing in hand a corner several times the one it left behind. See
+            // `beginDrag`.
             dragPreview: {
               position: "fixed",
               left: 0,
@@ -3878,6 +3894,7 @@ export default defineConfig({
               zIndex: 60,
               pointerEvents: "none",
               objectFit: "cover",
+              borderRadius: "xl",
               // Position rides the INDEPENDENT `translate` property, and the
               // press feedback below rides `scale`, precisely so they do not
               // share `transform`. A transition on `transform` would be a
@@ -4093,7 +4110,7 @@ export default defineConfig({
               // moment it takes to fade. Nothing here may depend on being
               // masked by the cell; the photo carries its radius for the same
               // reason.
-              borderRadius: "xxl",
+              borderRadius: "xl",
               backgroundColor: "bg.imageScrim",
               backdropFilter: "blur(token(spacing.md))",
               "-webkit-backdrop-filter": "blur(token(spacing.md))",
@@ -4556,6 +4573,13 @@ export default defineConfig({
               inset: 0,
               zIndex: 0,
               pointerEvents: "none",
+              // The same card corner a collection cell draws, for the same
+              // reason: this is the container the picture and its ground sit
+              // in, and a container's corner is a constant of the design system
+              // rather than a per-image property. The picture in front of it
+              // wears its own, which grows with the enlargement (see
+              // `mediaRadiusPx`) while this does not.
+              borderRadius: "xl",
             },
             image: {
               display: "block",

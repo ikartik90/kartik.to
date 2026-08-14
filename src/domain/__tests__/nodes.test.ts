@@ -15,8 +15,8 @@ import {
   hasMediaLayout,
   mediaBoxStyle,
   mediaFrameStyle,
-  mediaGroundStyle,
   mediaObjectStyle,
+  mediaRadiusPx,
 } from "../nodes";
 
 describe("BackgroundEffectSchema", () => {
@@ -174,14 +174,15 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
     expect(hasMediaLayout({ padding: 8 })).toBe(true);
   });
 
-  // The gradient behind a picture is the same artifact as the picture, so it
-  // takes the same corner. Left square while the picture rounded, its corners
-  // showed as four wedges poking out from behind a transparent PNG.
-  it("gives the ground behind a picture the picture's own corner", () => {
-    expect(mediaGroundStyle({ borderRadius: 20 }).borderRadius).toBe(
-      mediaObjectStyle({ borderRadius: 20 }).borderRadius,
-    );
-    expect(mediaGroundStyle({}).borderRadius).toBe(DEFAULT_MEDIA_RADIUS);
+  // The corner is the media OBJECT's and stops there. The surfaces showing it
+  // — the collection cell, the lightbox card — carry `radii.xxl` from their own
+  // recipes, so nothing here may hand a container a corner derived from the
+  // picture inside it.
+  it("styles the object alone, never the surface or the ground behind it", () => {
+    const media = { borderRadius: 20, padding: 32 };
+    expect(Object.keys(mediaFrameStyle(media))).not.toContain("borderRadius");
+    expect(Object.keys(mediaBoxStyle(media))).not.toContain("borderRadius");
+    expect(mediaObjectStyle(media).borderRadius).toBe("3.125cqw");
   });
 
   // The frame is the box the corner is a share of, so it must span the FULL
@@ -251,6 +252,28 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
   // included.
   it("writes a square corner as a plain zero, which needs no container", () => {
     expect(mediaObjectStyle({ borderRadius: 0 }).borderRadius).toBe(0);
+  });
+
+  // For the one surface that cannot be a query container at all: the lightbox
+  // frame shrink-wraps its picture, so it has no width of its own to be a share
+  // of and the caller has to measure what the picture actually came out at.
+  it("resolves the corner in pixels against whatever width it is handed", () => {
+    // Enlarged past the reference, the corner grows with the picture — the
+    // whole point of a composition that reproduces at any size.
+    expect(mediaRadiusPx({ borderRadius: 20 }, MEDIA_PADDING_REFERENCE * 2)).toBe(40);
+    expect(mediaRadiusPx({ borderRadius: 20 }, MEDIA_PADDING_REFERENCE / 2)).toBe(10);
+    // The same share the `cqw` corner draws — one rule, two units.
+    expect(mediaRadiusPx({ borderRadius: 20 }, 1280)).toBe(
+      (parseFloat(mediaObjectStyle({ borderRadius: 20 }).borderRadius as string) /
+        100) *
+        1280,
+    );
+  });
+
+  it("falls back to the authored pixels when no width is known", () => {
+    expect(mediaRadiusPx({ borderRadius: 20 })).toBe(20);
+    expect(mediaRadiusPx({ borderRadius: 20 }, MEDIA_PADDING_REFERENCE)).toBe(20);
+    expect(mediaRadiusPx({})).toBe(DEFAULT_MEDIA_RADIUS);
   });
 
   // A `contain` picture cannot fill its frame, so a stretched element would be

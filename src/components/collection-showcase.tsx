@@ -10,7 +10,7 @@ import { Media } from "@/components/media";
 import { Dialog } from "@/components/ui/dialog";
 import { Typography } from "@/components/ui/typography";
 import {
-  mediaGroundStyle,
+  MEDIA_PADDING_REFERENCE,
   mediaRadiusPx,
   type CollectionItem,
 } from "@/domain/nodes";
@@ -71,8 +71,6 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
                 <BackgroundEffectLayer
                   effect={item.backgroundEffect}
                   className={styles.backgroundEffect}
-                  // The picture's own corner — the tile draws none of its own.
-                  style={mediaGroundStyle(item)}
                 />
               )}
               <button
@@ -160,6 +158,47 @@ function CollectionLightbox({
   const intrinsicWidth = measured?.index === index ? measured.width : null;
   const item = index === null ? null : items[index];
 
+  // The width the picture actually came out at, which is what its corner is a
+  // share of.
+  //
+  // Every other surface hands that arithmetic to CSS: the box is a query
+  // container and the corner is a `cqw` of it. Here it cannot be — a container
+  // may not take its inline size from its contents, and this frame is sized BY
+  // the picture — so the box is measured instead. Without it the corner stayed
+  // the number it was authored as, and a picture enlarged to fill a wide screen
+  // read progressively sharper the bigger it got, against a tile that keeps its
+  // shape at every size.
+  //
+  // The FRAME rather than the picture, because the frame is the picture plus
+  // its inset — the same box the cell is on every other surface. Nothing it
+  // reports depends on the corner, so there is no loop to guard against.
+  //
+  // Stamped with its image like `measured` above, and for the same reason: a
+  // portrait must not spend a frame wearing the corner a landscape's box
+  // earned. Stepping falls back to the authored number until the observer
+  // reports the new box, which is one frame later at most.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [framed, setFramed] = useState<{ index: number; width: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    const frame = frameRef.current;
+    // Absent on the server and in jsdom, where nothing is laid out anyway —
+    // the corner then stays the authored pixels, exactly as it was.
+    if (index === null || !frame || typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(([entry]) =>
+      setFramed({ index, width: entry.contentRect.width }),
+    );
+    // Observing reports the box straight away, so opening measures without
+    // waiting for anything to change size.
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [index]);
+  const frameWidth = framed?.index === index ? framed.width : null;
+  const corner = item
+    ? mediaRadiusPx(item, frameWidth ?? MEDIA_PADDING_REFERENCE)
+    : 0;
+
   // `showModal` (not the `open` attribute) is what buys the focus trap, the
   // inert background, the ::backdrop and — on close — focus returning to the
   // tile that opened this.
@@ -205,16 +244,14 @@ function CollectionLightbox({
           {/* The frame shrink-wraps the image so the gradient has a box to
               fill. It cannot fill the figure — that column also holds the
               caption, and the ground would run on behind the text. */}
-          <div className={lightboxStyles.frame}>
+          <div ref={frameRef} className={lightboxStyles.frame}>
+          {/* The card behind the picture, and it wears the card's corner from
+              its own class — a constant, like the collection cell's. The
+              picture in front of it wears its own. */}
           {item.backgroundEffect && (
             <BackgroundEffectLayer
               effect={item.backgroundEffect}
               className={lightboxStyles.backgroundEffect}
-              // Pixels here, not a share of a container — see `mediaRadiusPx`.
-              // This frame hugs the picture, so it can never be the container a
-              // `cqw` would need, and the ground has to match the corner the
-              // picture beside it is wearing.
-              style={{ borderRadius: mediaRadiusPx(item) }}
             />
           )}
           <Media
@@ -246,13 +283,16 @@ function CollectionLightbox({
             // show. (It did exactly that for every inset picture until this
             // was written.)
             //
-            // So the two properties arrive as the pixels they were authored as.
-            // A picture enlarged past the reference width wears an inset and a
-            // corner slightly tighter than the tile it was composed in, which
-            // is the honest trade for a surface that has no width to be a share
-            // of. `objectFit` is inert here by construction — width and height
-            // are both auto, so there is no box to cover or fit inside and the
-            // picture is always shown whole.
+            // So the two arrive as pixels. The CORNER is still a share — of
+            // the width the frame was measured at rather than of a container
+            // CSS could resolve (see `frameWidth`), so an enlarged picture is
+            // rounded like the tile it was composed in. The INSET stays the
+            // number it was authored as: it is what the frame's width is made
+            // of, so deriving it from that width would be a loop, and a margin
+            // that grew with the picture would be a band of empty page rather
+            // than a composition. `objectFit` is inert here by construction —
+            // width and height are both auto, so there is no box to cover or
+            // fit inside and the picture is always shown whole.
             //
             // The inset is a MARGIN rather than a padding, so that the ground
             // behind it still fills the whole card: the gradient is positioned
@@ -261,7 +301,7 @@ function CollectionLightbox({
             // it is supposed to be spreading out from under.
             style={{
               margin: item.padding ?? 0,
-              borderRadius: mediaRadiusPx(item),
+              borderRadius: corner,
               ...(intrinsicWidth
                 ? { maxWidth: `min(${intrinsicWidth}px, 85vw)` }
                 : {}),

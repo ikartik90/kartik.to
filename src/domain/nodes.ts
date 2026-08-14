@@ -236,9 +236,9 @@ export const MEDIA_PADDING_REFERENCE = 640;
  * visible once there is padding to lift it off the container's edge.
  *
  * Eleven stops at a 2px step, matching the eleven marks the slider draws. The
- * ceiling is `radii.xxl` (20px), the roundest corner in the system and the one
- * a collection tile already uses, so "as round as the tile it sits in" is the
- * most the control will do.
+ * ceiling is 20px — `radii.xxl`, the roundest corner in the system, and a step
+ * past the `xl` card the picture sits on, so "rounder than the tile it is in"
+ * is available and nothing beyond it is.
  */
 export const MEDIA_RADIUS_STEP = 2;
 export const MEDIA_RADIUS_MAX = 20;
@@ -246,11 +246,11 @@ export const MEDIA_RADIUS_MAX = 20;
 /**
  * What a picture nobody has rounded is: square.
  *
- * The corner belongs to the MEDIA, and to nothing else. No surface supplies one
- * — not the collection cell, not the article block, not the drag clone — which
- * is what makes the panel's slider a readout of the picture rather than of the
- * place it happens to be shown. `MEDIA_RADIUS_MAX` is `radii.xxl`, the corner
- * those surfaces used to draw, so the old look is still one drag away.
+ * The corner belongs to the MEDIA, and the surfaces showing it never write one
+ * ONTO it: the panel's slider is a readout of the picture rather than of the
+ * place it happens to be shown. What a card does draw is its own corner, which
+ * clips whatever fills it — a different property, and not one this control has
+ * any business editing (see the `collectionGrid` recipe's `cell` slot).
  */
 export const DEFAULT_MEDIA_RADIUS = 0;
 
@@ -377,35 +377,43 @@ function mediaRadiusValue(media: MediaLayout): string | number {
   return `${(radius / MEDIA_PADDING_REFERENCE) * 100}cqw`;
 }
 
-/**
- * The GROUND's style — the gradient painted behind a picture.
+/*
+ * NOTE — the corner stops at the media, and the SURFACE has one of its own.
  *
- * It takes the picture's own corner, because the two are one artifact: a
- * rounded picture over a square ground shows the ground's corners as four
- * wedges poking out from behind it, which is precisely the case the effect
- * exists for (a screenshot on a transparent canvas, where the ground is what
- * you see THROUGH the picture).
+ * A collection cell, and the lightbox card behind an enlarged picture, wear
+ * `radii.xxl` from their recipes: a container's corner is a constant of the
+ * design system, not a per-image property, and the panel's slider is a control
+ * over the media OBJECT. The two meet without either having to know about the
+ * other — the cell clips, so a picture filling its slot takes the card's shape,
+ * and its own corner is what shows once an inset lifts it off that edge.
  *
- * The ground is sized by the surface rather than by the picture, so the surface
- * showing it has to be the query container — see the `collectionGrid` recipe's
- * `cell` slot.
+ * There was briefly a `mediaGroundStyle` here that handed the gradient the
+ * picture's corner. It is gone: the gradient fills the CARD, so the card's
+ * corner is the one it has to take, and a ground that tracked the picture drew
+ * a shape neither of them had.
  */
-export function mediaGroundStyle(media: MediaLayout): CSSProperties {
-  return { borderRadius: mediaRadiusValue(media) };
-}
 
 /**
- * The corner in PIXELS, for a surface that cannot be a query container.
+ * The corner in PIXELS, against a width the caller has measured.
  *
- * A container's inline size may not depend on its contents, so a box that
- * shrink-wraps its picture — the lightbox's frame — can never be one, and a
- * `cqw` there would silently measure the VIEWPORT instead. Such a surface takes
- * the authored number as written: a picture enlarged past the reference width
- * wears a corner slightly tighter than the tile it was authored in, which is
- * the honest trade for a corner that is right at every OTHER size.
+ * For the one surface that cannot be a query container at all: a container's
+ * inline size may not depend on its contents, so a box that shrink-wraps its
+ * picture — the lightbox's frame — can never be one, and a `cqw` there would
+ * silently measure the VIEWPORT instead. Measuring the box in JS is what is
+ * left, and it buys the same rule every other surface gets for free: the corner
+ * is `R` px at `MEDIA_PADDING_REFERENCE` and the same SHARE of any other width,
+ * so a picture enlarged to fill a wide screen is rounded like the tile it was
+ * composed in rather than progressively sharper the bigger it gets.
+ *
+ * The default is the authored number, which is what an unmeasured surface —
+ * the first paint, before the picture has loaded — draws until it knows better.
  */
-export function mediaRadiusPx(media: MediaLayout): number {
-  return media.borderRadius ?? DEFAULT_MEDIA_RADIUS;
+export function mediaRadiusPx(
+  media: MediaLayout,
+  width: number = MEDIA_PADDING_REFERENCE,
+): number {
+  const radius = media.borderRadius ?? DEFAULT_MEDIA_RADIUS;
+  return (radius / MEDIA_PADDING_REFERENCE) * width;
 }
 
 /**

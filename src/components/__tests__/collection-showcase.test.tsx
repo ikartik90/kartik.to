@@ -1,9 +1,34 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { act, render, screen, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CollectionItem } from "@/domain/nodes";
+import { DEFAULT_BACKGROUND_EFFECT, type CollectionItem } from "@/domain/nodes";
+// StaticMeshGradient is WebGL; jsdom can't run it. The same stand-in the
+// editor's grid test uses — a marker element carrying the colours.
+vi.mock("@paper-design/shaders-react", () => ({
+  StaticMeshGradient: ({
+    colors,
+    className,
+    style,
+  }: {
+    colors: string[];
+    className?: string;
+    style?: React.CSSProperties;
+  }) => (
+    <div
+      data-background-effect=""
+      data-colors={colors.join(",")}
+      className={className}
+      // The corner arrives here — the ground and the picture are one artifact,
+      // so what the stand-in has to preserve is the shape, not the shader.
+      style={style}
+    >
+      <canvas />
+    </div>
+  ),
+}));
+
 import { CollectionShowcase } from "../collection-showcase";
 
 // jsdom implements neither of these, and the lightbox is a native <dialog>.
@@ -79,6 +104,29 @@ describe("CollectionShowcase layout", () => {
       <CollectionShowcase items={[{ src: "/a.jpg", caption: "A caption" }]} />,
     );
     expect(screen.getByAltText("A caption")).toBeDefined();
+  });
+
+  // The tile is a card with a corner of its own, and the picture's radius is
+  // the picture's — so nothing about the item may reach the cell or the ground
+  // filling it. Both take their shape from their classes.
+  it("hands the tile and its ground no corner off the picture", () => {
+    render(
+      <CollectionShowcase
+        items={[
+          {
+            src: "/a.jpg",
+            borderRadius: 20,
+            backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+          },
+        ]}
+      />,
+    );
+    const cell = tiles()[0].parentElement!;
+    expect(cell.getAttribute("style")).toBeNull();
+    expect(
+      cell.querySelector<HTMLElement>("[data-background-effect]")!.style
+        .borderRadius,
+    ).toBe("");
   });
 });
 
@@ -191,6 +239,105 @@ describe("CollectionShowcase lightbox", () => {
     );
     await user.click(tiles()[0]);
     expect(screen.getByRole("dialog").hasAttribute("open")).toBe(true);
+  });
+});
+
+// The lightbox is the one surface with no width of its own to be a share of —
+// its frame shrink-wraps the picture — so it measures the box the picture
+// actually came out at and resolves the corner against that.
+describe("CollectionShowcase lightbox corner", () => {
+  /** States a width for the frame, the way a browser's layout would. */
+  let resizeFrameTo: ((width: number) => void) | null = null;
+
+  beforeEach(() => {
+    resizeFrameTo = null;
+    // jsdom lays nothing out and implements no ResizeObserver, so the frame's
+    // width is whatever this stub reports.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeFrameTo = (width: number) =>
+            act(() =>
+              callback(
+                [{ contentRect: { width } } as ResizeObserverEntry],
+                this as unknown as ResizeObserver,
+              ),
+            );
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  const openRounded = async (item: Partial<CollectionItem> = {}) => {
+    const user = userEvent.setup();
+    render(
+      <CollectionShowcase
+        items={[
+          { src: "/a.jpg", alt: "A", borderRadius: 20, ...item },
+          { src: "/b.jpg", alt: "B", borderRadius: 8 },
+        ]}
+      />,
+    );
+    await user.click(tiles()[0]);
+    return screen.getByRole("dialog");
+  };
+
+  // A 20px corner authored against a 640px tile stayed 20px on a 1280px
+  // enlargement, so the same picture read visibly sharper the bigger it got.
+  it("grows the corner with the picture it is enlarging", async () => {
+    const dialog = await openRounded();
+    const img = dialog.querySelector("img")!;
+
+    // Unmeasured — the first paint, before the picture has loaded — is the
+    // authored number, which is what it always was.
+    expect(img.style.borderRadius).toBe("20px");
+
+    resizeFrameTo!(1280);
+    expect(img.style.borderRadius).toBe("40px");
+  });
+
+  it("shrinks it on a viewport too narrow for the authored size", async () => {
+    const dialog = await openRounded();
+    resizeFrameTo!(320);
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("10px");
+  });
+
+  // The card behind the picture keeps the corner its class gives it. Only the
+  // media object grows — the enlargement is the picture's, not the container's.
+  it("leaves the card behind it alone", async () => {
+    const dialog = await openRounded({
+      backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+    });
+    resizeFrameTo!(1280);
+
+    const ground = dialog.querySelector<HTMLElement>("[data-background-effect]")!;
+    expect(ground.style.borderRadius).toBe("");
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("40px");
+  });
+
+  // The same rule the natural-width cap follows: a portrait must not spend a
+  // frame wearing the corner a landscape's box earned.
+  it("does not carry the previous image's box across a step", async () => {
+    const dialog = await openRounded();
+    resizeFrameTo!(1280);
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("40px");
+
+    // The next picture is authored at 8, so an unmeasured step draws 8 — not
+    // the 16 the box it is replacing would have made of it.
+    fireEvent.keyDown(dialog, { key: "ArrowRight" });
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("8px");
+  });
+
+  it("leaves a square picture square at any size", async () => {
+    const dialog = await openRounded({ borderRadius: undefined });
+    resizeFrameTo!(1280);
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("0px");
   });
 });
 
