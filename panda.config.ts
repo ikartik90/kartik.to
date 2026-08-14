@@ -1217,52 +1217,38 @@ export default defineConfig({
         demoFrameControls: defineRecipe({
           className: "demo-frame__controls",
           description:
-            "The frame's control toolbar — icon buttons on the shared `toolbar` chrome, which it composes with and adds a hairline to (but no drop shadow, which is reserved for toolbars that float as popovers), tucked into its bottom-right corner for a demo that performs itself (replay / reset). It belongs to the frame rather than to the demo's own layout, which is why it is placed here: the demo is centred inside the area's 20px padding band and so never reaches this corner. Out of flow, so it costs the frame's content measurement nothing.",
+            "The frame's controls for a demo that performs itself (replay / reset) — the bare pair of icon buttons in its bottom-right corner, with no rail under them. Deliberately NOT the shared `toolbar` chrome it used to compose: these sit on the frame's own surface, which is already a bounded box, and a second bordered box inside it was one frame too many. What is left is the row itself, and each button draws its own chip on hover. It belongs to the frame rather than to the demo's own layout, which is why it is placed here: the demo is centred inside the area's 20px padding band and so never reaches this corner. Out of flow, so it costs the frame's content measurement nothing.",
           base: {
             position: "absolute",
-            // 8px in, not the 4px the bare rail sat at: the frame's own corner
-            // is `radii.xl`, and 16 − 8 = 8 is exactly the toolbar's own `md`
-            // radius, so the two curves are concentric. A surface tucked 4px
-            // into a 16px corner reads as slipping out of it.
-            right: "md",
-            bottom: "md",
+            // 12px in, because it is now the BUTTON that sits in the corner
+            // rather than a rail around it: the frame's own corner is
+            // `radii.xl` and the icon chip's is `radii.sm`, and 16 − 12 = 4
+            // makes those two curves concentric. The rail this replaces was
+            // inset 8px on exactly the same arithmetic against its own 8px
+            // corner.
+            right: "lg",
+            bottom: "lg",
             // The demo below can carry stacking contexts of its own (any
             // element with opacity < 1 makes one at level 0), so `auto` would
-            // leave the rail's order to the DOM.
+            // leave the row's order to the DOM.
             zIndex: 1,
-            // The box itself — 40px tall on an 8px inline inset with its
-            // controls 4px apart — comes from the `toolbar` recipe this
-            // composes with. It was the third place those metrics were wanted,
-            // which is what finally bought the shared skin; what stays here is
-            // only what the frame's corner adds to it.
-            borderWidth: "token(spacing.3xs)",
-            borderStyle: "solid",
-            borderColor: "border.divider",
-            // NO drop shadow, and that is the rule rather than a preference:
-            // in this system the `0 4px 16px` elevation means "this surface is
-            // floating over the page" and belongs to popovers alone — the menu,
-            // slash, date, combobox and selection popovers all carry it, and
-            // every toolbar that is furniture instead goes without (the
-            // collection cell's pill drops it too). This one is fixed in the
-            // frame's own corner and never floats over anything, so the
-            // hairline and the surface do the separating on their own.
-            //
-            // The `overflow: hidden` those carry is deliberately not taken
-            // either. It is there to clip options and dividers that run to the
-            // edge, and nothing here reaches one — it would only be a trap laid
-            // for the first descendant that wants out. The frame ABOVE this rail
-            // is the cautionary tale: its own `overflow: hidden` over a
-            // `container-type` cropped these buttons' hover tooltips, which is
-            // why `Tooltip` portals itself to the body rather than trusting
-            // `position: fixed` to be enough.
+            // The row, which is all the chrome there is now. 4px apart, the
+            // spacing the rail used to hold them at — at zero the two hover
+            // chips would meet and read as one lozenge, which is the frame
+            // coming back in by the side door.
+            display: "flex",
+            alignItems: "center",
+            gap: "sm",
             // The `icon` action is `color: inherit` — its SURFACE owns the
-            // glyph hue — so a rail that sets nothing inherits `text.default`
+            // glyph hue — so a row that sets nothing inherits `text.default`
             // off the body. That is prose colour, and prose runs to the far end
             // of the ramp in dark (neutral.200) while merely sitting heavy in
             // light (neutral.700): the same omission reads as fine in one theme
-            // and as two glaring white glyphs in the other. This is the pair the
-            // calendar's own chevrons take, so the frame's controls and the
-            // demo's read as one class of control in both themes.
+            // and as two glaring white glyphs in the other. It matters more
+            // now that there is no surface behind the glyphs to hold them
+            // down. This is the pair the calendar's own chevrons take, so the
+            // frame's controls and the demo's read as one class of control in
+            // both themes.
             color: "field.text.default",
           },
         }),
