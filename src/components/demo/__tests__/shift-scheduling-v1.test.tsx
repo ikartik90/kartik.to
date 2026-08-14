@@ -215,26 +215,22 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(screen.getByText("Shift Date")).toBeTruthy();
   });
 
-  it("labels the first date field 'First Shift' while repeating", () => {
+  // The switch adds a SECOND date to the form; it does not re-describe the one
+  // already filled in. Renaming it under the pointer made the field the visitor
+  // had just set look like it had become something else.
+  it("leaves the date field labelled 'Shift Date' whether or not it repeats", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
-    expect(screen.getByText("First Shift")).toBeTruthy();
-    expect(screen.queryByText("Shift Date")).toBeNull();
-  });
-
-  it("relabels the date field to 'Shift Date' when repeat is switched off", () => {
-    render(<ShiftSchedulingV1 />);
-    openRepeat();
+    expect(screen.getByText("Shift Date")).toBeTruthy();
     fireEvent.click(repeatSwitch());
     expect(screen.getByText("Shift Date")).toBeTruthy();
-    expect(screen.queryByText("First Shift")).toBeNull();
   });
 
-  it("collapses the weekday toolbar, the Last Shift field AND the Notice as one region", () => {
+  it("collapses the weekday toolbar, the Until field AND the Notice as one region", () => {
     render(<ShiftSchedulingV1 />);
     const region = recurrence();
     expect(region.contains(weekdayToolbar())).toBe(true);
-    expect(region.contains(screen.getByText("Last Shift"))).toBe(true);
+    expect(region.contains(screen.getByText("Until"))).toBe(true);
     expect(region.contains(screen.getByRole("status"))).toBe(true);
   });
 
@@ -253,14 +249,13 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(recurrence().hasAttribute("inert")).toBe(true);
   });
 
-  it("restores the region and the 'First Shift' label when repeat is switched back on", () => {
+  it("restores the region when repeat is switched back on", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
     fireEvent.click(repeatSwitch());
     fireEvent.click(repeatSwitch());
     expect(recurrence().getAttribute("data-collapsed")).toBe("false");
     expect(recurrence().hasAttribute("inert")).toBe(false);
-    expect(screen.getByText("First Shift")).toBeTruthy();
   });
 
   // Re-entry from `display: none` needs an @starting-style before-change style,
@@ -281,8 +276,20 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(notice()).toContain("repeat every");
   });
 
+  // The whole sentence, not a fragment of it: the Notice is what v1 exists to
+  // show, so its wording is the specification rather than an implementation
+  // detail. A run is a PATTERN bounded by two dates — the pattern leads, and
+  // both dates are named in the same breath as the range they bracket.
+  it("reads the run as a pattern between two dates", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(notice()).toBe(
+      `This shift will repeat every ${weekdayName(FIRST_SHIFT)} between ` +
+        `${longDate(FIRST_SHIFT)} and ${longDate(TODAY.add({ days: 8 }))}.`,
+    );
+  });
+
   // Deselecting every weekday leaves the region VISIBLE, so the sentence must
-  // drop the clause it can no longer fill.
+  // fall back to the one thing it can still say.
   it("drops the Notice's repeat clause when every weekday is deselected", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
@@ -292,6 +299,7 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     }
     expect(pressedWeekdays()).toEqual([]);
     expect(notice()).not.toContain("repeat every");
+    expect(notice()).toBe(`This shift will start on ${longDate(FIRST_SHIFT)}.`);
   });
 });
 
@@ -313,7 +321,7 @@ describe("ShiftSchedulingV1 — repeating shift card", () => {
   it("stacks the shift date field above the card rather than inside it", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
-    expect(repeatCard().contains(screen.getByText("First Shift"))).toBe(false);
+    expect(repeatCard().contains(screen.getByText("Shift Date"))).toBe(false);
   });
 
   // A rule left hanging under the switch is the obvious way this collapse can
@@ -462,7 +470,7 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
   });
 
   // The picker hands focus back to its trigger as it closes, so without this
-  // the walkthrough leaves the Last Shift field sitting in its focused state,
+  // the walkthrough leaves the Until field sitting in its focused state,
   // as though the visitor had tabbed into it. Nobody did.
   it("gives up the focus its own clicks took", async () => {
     const reveal = scrollIntoView();
