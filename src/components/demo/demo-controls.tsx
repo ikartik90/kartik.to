@@ -1,7 +1,6 @@
 "use client";
 
-import { demoFrameControls, toolbar } from "../../../styled-system/recipes";
-import { cx } from "../../../styled-system/css";
+import { demoFrameControls } from "../../../styled-system/recipes";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import ReplayIcon from "@/assets/icons/replay.svg";
@@ -18,14 +17,21 @@ import ResetIcon from "@/assets/icons/reset.svg";
 // must be placed outside the demo's own stage: a press on one of these is the
 // visitor operating the demo, not reaching into it mid-performance.
 //
-// The rail IS the toolbar — the recipe already lays the pair out as one
+// The row IS the toolbar — the recipe already lays the pair out as one
 // horizontal row in the corner, so the semantics go on the element that is
-// there rather than on a wrapper around it. `OptionList.Toolbar` is the house
-// primitive for this and was the first thing considered, but it is bound to an
-// `OptionList` root for its context and layout, and its contract is to flip
-// `OptionList.Option` children into toggles — these are icon `Button`s with
-// hover tooltips, which an Option cannot carry. Borrowing it would mean an
-// empty OptionList root, a layout to fight, and no tooltips.
+// there rather than on a wrapper around it. That element is now a bare flex row
+// and nothing else: the shared `toolbar` chrome it used to compose drew a
+// second bordered box inside a frame that is already one, so the surface, the
+// hairline and the 8px inset are gone and only the buttons are left. The role
+// stays regardless — a toolbar is a grouping of controls, not a box drawn
+// around them.
+//
+// `OptionList.Toolbar` is the house primitive for this and was the first thing
+// considered, but it is bound to an `OptionList` root for its context and
+// layout, and its contract is to flip `OptionList.Option` children into
+// toggles — these are icon `Button`s with hover tooltips, which an Option
+// cannot carry. Borrowing it would mean an empty OptionList root, a layout to
+// fight, and no tooltips.
 //
 // Semantics only, no roving cursor, matching that primitive's own call: two
 // controls do not need a keyboard mode, and folding them into a single tab stop
@@ -65,7 +71,7 @@ export function DemoControls({
       // in the app is labelled the same way, and an unnamed one announces as a
       // bare group.
       aria-label="Demo controls"
-      className={cx(toolbar(), demoFrameControls())}
+      className={demoFrameControls()}
     >
       {/* Replay sits in the corner itself, with Reset inboard of it: replay is
           the offer the demo has just finished making, and reset only means
@@ -73,8 +79,8 @@ export function DemoControls({
           order, so the tab order runs the same way.
 
           That ordering is also what lets Reset come and go without disturbing
-          anything: the rail is pinned by its right edge, so the one control
-          that is always here keeps its corner and it is the rail's far side
+          anything: the row is pinned by its right edge, so the one control
+          that is always here keeps its corner and it is the row's far side
           that moves. Reset arrives beside Replay rather than under the pointer
           that was reaching for it. */}
       {resettable ? (
