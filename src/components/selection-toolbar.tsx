@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { inlineEditRow, menuIcon } from "../../styled-system/recipes";
-import { selectionPopover } from "../../styled-system/recipes";
+import { selectionPopover, toolbar } from "../../styled-system/recipes";
+import { cx } from "../../styled-system/css";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { OptionList } from "@/components/ui/input/option-list";
 import type { Mark } from "@/domain/nodes";
@@ -79,7 +80,9 @@ const FORMAT_GROUPS: FormatButton[][] = [
 // ---------------------------------------------------------------------------
 
 const iconStyle = menuIcon();
-const toolbarClass = selectionPopover();
+// The shared toolbar rail, floated: `toolbar` draws the box, `selectionPopover`
+// adds the anchor, the hairline and the elevation that floating costs.
+const toolbarClass = cx(toolbar(), selectionPopover());
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
 

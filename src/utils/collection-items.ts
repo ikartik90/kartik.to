@@ -1,5 +1,6 @@
 import {
   COLLECTION_MAX_ITEMS,
+  DEFAULT_MEDIA_FIT,
   type BackgroundEffect,
   type CollectionItem,
 } from "@/domain/nodes";
@@ -104,6 +105,51 @@ export function setItemBackgroundEffect(
     if (i !== index) return item;
     const { backgroundEffect: _dropped, ...rest } = item;
     return effect ? { ...rest, backgroundEffect: effect } : rest;
+  });
+}
+
+/** How the media sits in its frame — the panel's top section (Figma 885:1963). */
+export type MediaLayoutPatch = Partial<
+  Pick<CollectionItem, "objectFit" | "padding" | "borderRadius">
+>;
+
+/**
+ * Patches one image's fit and/or inset. A PATCH rather than a wholesale write,
+ * unlike the background effect above: the two controls are independent rows
+ * that commit separately, so each hands back only what it owns and the other's
+ * value has to survive.
+ *
+ * A value equal to the default DROPS its key, exactly as a blank caption does.
+ * That is what keeps the round trip clean — set a picture to `contain` and back
+ * to `cover` and it serializes as it did before the control existed, instead of
+ * accumulating a `"objectFit": "cover"` on every image anyone ever clicked.
+ *
+ * `borderRadius` is the exception and passes straight through, zero included:
+ * there, absent means "leave the surface's own corner" and zero means "square
+ * this object", so dropping a zero would silently restore the corner the author
+ * had just taken off. It rides in `rest` below rather than being handled — the
+ * two named keys are exactly the two with a droppable default.
+ */
+export function setItemLayout(
+  items: readonly CollectionItem[],
+  index: number,
+  patch: MediaLayoutPatch,
+): CollectionItem[] {
+  if (!inRange(items, index)) return [...items];
+  return items.map((item, i) => {
+    if (i !== index) return item;
+    const {
+      objectFit: _fit,
+      padding: _padding,
+      ...rest
+    } = { ...item, ...patch };
+    const objectFit = patch.objectFit ?? item.objectFit;
+    const padding = patch.padding ?? item.padding;
+    return {
+      ...rest,
+      ...(objectFit && objectFit !== DEFAULT_MEDIA_FIT ? { objectFit } : {}),
+      ...(padding ? { padding } : {}),
+    };
   });
 }
 

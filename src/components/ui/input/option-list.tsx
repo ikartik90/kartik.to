@@ -99,6 +99,13 @@ type OptionListContextValue = {
    * `loop` wraps around the ends (the slash menu's externalKeys navigation).
    */
   moveActive: (delta: 1 | -1, focus: boolean, loop?: boolean) => void;
+  /**
+   * Which way the options run — the LAYOUT axis, and therefore the key pair
+   * that walks them. A vertical list is arrowed with Up/Down and a horizontal
+   * one with Left/Right; a row that answered to Up/Down would be a row you
+   * cannot drive with the arrows that point along it.
+   */
+  direction: "block" | "inline";
   /** Park the highlight on a specific value — pointer-preselect on open. */
   setActiveValue: (value: string | null) => void;
   /**
@@ -387,6 +394,7 @@ function OptionListRoot({
     activeValue,
     select,
     moveActive,
+    direction,
     setActiveValue: setActiveFromPointer,
     clearActive,
     activeSource,
@@ -488,6 +496,7 @@ function OptionListListbox({
     styles,
     filteredValues,
     moveActive,
+    direction,
     activeValue,
     select,
     selectedSet,
@@ -586,13 +595,23 @@ function OptionListListbox({
     return () => cancelAnimationFrame(raf);
   }, [externalKeys, modality]);
 
+  // The arrows that point ALONG the list — Up/Down down a column, Left/Right
+  // across a row. Only the pair matching the axis is claimed, so the other one
+  // keeps whatever meaning the surrounding page gives it (caret movement in a
+  // combobox's search, horizontal scroll) instead of being swallowed by a list
+  // that cannot move that way.
+  const [prevKey, nextKey] =
+    direction === "inline"
+      ? ["ArrowLeft", "ArrowRight"]
+      : ["ArrowUp", "ArrowDown"];
+
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (event.defaultPrevented) return;
-    if (event.key === "ArrowDown") {
+    if (event.key === nextKey) {
       event.preventDefault();
       moveActive(1, true, loop);
-    } else if (event.key === "ArrowUp") {
+    } else if (event.key === prevKey) {
       event.preventDefault();
       moveActive(-1, true, loop);
     }
@@ -616,6 +635,10 @@ function OptionListListbox({
       // Only claimed when the consumer actually runs a multi-selection — an
       // ordinary single-select list must keep announcing itself as one.
       aria-multiselectable={selectedSet ? true : undefined}
+      // Vertical is the default for a listbox, so only a row has to say so —
+      // and it must, since it is also what tells assistive tech which arrows
+      // walk it, matching the pair `handleKeyDown` claims.
+      aria-orientation={direction === "inline" ? "horizontal" : undefined}
       aria-labelledby={hasLabel ? labelId : undefined}
       aria-describedby={hasHint ? hintId : undefined}
       className={cx(styles.list, className)}

@@ -13,7 +13,9 @@ import {
   collectionCellOverlay,
   collectionEmptyCell,
   collectionGrid,
+  toolbar,
 } from "../../styled-system/recipes";
+import { cx } from "../../styled-system/css";
 import { OptionList } from "@/components/ui/input/option-list";
 import { BackgroundEffectLayer } from "@/components/background-effect";
 import { Media } from "@/components/media";
@@ -27,6 +29,7 @@ import {
   type BackgroundEffect,
   type CollectionItem,
 } from "@/domain/nodes";
+import type { MediaLayoutPatch } from "@/utils/collection-items";
 import { useImageTransparency } from "@/hooks/use-image-transparency";
 import { collectionItemAlt } from "@/utils/collection-items";
 import AddIcon from "@/assets/icons/add.svg";
@@ -209,6 +212,8 @@ export interface CollectionGridProps {
     index: number,
     effect: BackgroundEffect | undefined,
   ) => void;
+  /** Patches how one image sits in its frame — its fit and/or its inset. */
+  onSetLayout: (index: number, patch: MediaLayoutPatch) => void;
 }
 
 export function CollectionGrid({
@@ -221,6 +226,7 @@ export function CollectionGrid({
   onAddImage,
   onReorder,
   onSetBackgroundEffect,
+  onSetLayout,
 }: CollectionGridProps) {
   // The image whose properties panel is open, keyed on the IMAGE and not on
   // the slot. Featuring an image moves it to another cell and removing one
@@ -885,6 +891,14 @@ export function CollectionGrid({
               src={item.src}
               alt={collectionItemAlt(item)}
               className={gridStyles.image}
+              // Fit and inset are per-picture DATA, so they ride as a style
+              // rather than as recipe variants — a slider that emits a value
+              // per frame has nothing a static variant table could enumerate.
+              // The padding shrinks the picture's content box while the
+              // gradient behind it stays sized to the whole cell, which is what
+              // lets the ground out from under a photo that would otherwise
+              // cover it.
+              layout={item}
               // The checkerboard, which is the photo's OWN background rather
               // than a layer behind it — see the recipe's `image` slot. So it
               // is the exclusive alternative to a gradient and not a companion
@@ -936,6 +950,18 @@ export function CollectionGrid({
         // from that picture's values rather than the previous one's drafts —
         // and its sections re-derive which of them are open.
         key={propertiesItem.src}
+        objectFit={propertiesItem.objectFit}
+        onObjectFitChange={(fit) =>
+          onSetLayout(propertiesIndex, { objectFit: fit })
+        }
+        padding={propertiesItem.padding}
+        onPaddingChange={(padding) =>
+          onSetLayout(propertiesIndex, { padding })
+        }
+        borderRadius={propertiesItem.borderRadius}
+        onBorderRadiusChange={(borderRadius) =>
+          onSetLayout(propertiesIndex, { borderRadius })
+        }
         caption={propertiesItem.caption}
         onCaptionChange={(caption) => onEditCaption(propertiesIndex, caption)}
         effect={propertiesItem.backgroundEffect}
@@ -979,7 +1005,7 @@ function CellOverlay({
   return (
     <div className={styles.root}>
       <div className={styles.scrim} aria-hidden />
-      <div className={styles.toolbar}>
+      <div className={cx(toolbar(), styles.toolbar)}>
         <OptionList direction="inline">
           <OptionList.Toolbar aria-label={`${label} actions`}>
             {/* Featured is a POSITION (index 0), so the first slot's button is

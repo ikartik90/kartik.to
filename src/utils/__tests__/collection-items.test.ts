@@ -14,6 +14,7 @@ import {
   replaceItem,
   setItemBackgroundEffect,
   setItemCaption,
+  setItemLayout,
   swapItems,
 } from "../collection-items";
 
@@ -304,5 +305,62 @@ describe("setItemBackgroundEffect", () => {
     const list = items("a");
     setItemBackgroundEffect(list, 0, DEFAULT_BACKGROUND_EFFECT);
     expect(list[0].backgroundEffect).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setItemLayout
+// ---------------------------------------------------------------------------
+
+describe("setItemLayout", () => {
+  it("patches one slot only", () => {
+    const next = setItemLayout(items("a", "b"), 1, { objectFit: "contain" });
+    expect(next[0].objectFit).toBeUndefined();
+    expect(next[1].objectFit).toBe("contain");
+  });
+
+  it("merges into what the item already carries, rather than replacing it", () => {
+    const once = setItemLayout(items("a"), 0, { objectFit: "contain" });
+    const twice = setItemLayout(once, 0, { padding: 16 });
+    expect(twice[0]).toMatchObject({ objectFit: "contain", padding: 16 });
+  });
+
+  it("drops the key when the value IS the default, so an untouched item stays bare", () => {
+    const contained = setItemLayout(items("a"), 0, {
+      objectFit: "contain",
+      padding: 24,
+    });
+    const back = setItemLayout(contained, 0, { objectFit: "cover", padding: 0 });
+    expect(back[0]).toEqual({ src: "a" });
+    expect("objectFit" in back[0]).toBe(false);
+    expect("padding" in back[0]).toBe(false);
+  });
+
+  it("leaves the list alone for an index that is not there", () => {
+    const list = items("a", "b");
+    expect(setItemLayout(list, 7, { padding: 8 })).toEqual(list);
+  });
+
+  it("never mutates the list it was given", () => {
+    const list = items("a");
+    setItemLayout(list, 0, { padding: 8 });
+    expect(list[0]).toEqual({ src: "a" });
+  });
+});
+
+describe("setItemLayout border radius", () => {
+  it("KEEPS a zero corner, because zero is not the same as never asked", () => {
+    const next = setItemLayout(items("a"), 0, { borderRadius: 0 });
+    expect(next[0]).toEqual({ src: "a", borderRadius: 0 });
+  });
+
+  it("survives a later patch to another property", () => {
+    const once = setItemLayout(items("a"), 0, { borderRadius: 0 });
+    const twice = setItemLayout(once, 0, { padding: 16 });
+    expect(twice[0]).toMatchObject({ borderRadius: 0, padding: 16 });
+  });
+
+  it("stores a set corner", () => {
+    expect(setItemLayout(items("a"), 0, { borderRadius: 12 })[0].borderRadius).toBe(12);
   });
 });
