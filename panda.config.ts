@@ -1239,10 +1239,12 @@ export default defineConfig({
             //
             // The `overflow: hidden` those carry is deliberately not taken
             // either. It is there to clip options and dividers that run to the
-            // edge; nothing here reaches one, and the buttons' hover tooltips
-            // are children of this very element — `position: fixed`, so they
-            // escape a clip today, but the clip would be a trap laid for the
-            // first descendant that isn't.
+            // edge, and nothing here reaches one — it would only be a trap laid
+            // for the first descendant that wants out. The frame ABOVE this rail
+            // is the cautionary tale: its own `overflow: hidden` over a
+            // `container-type` cropped these buttons' hover tooltips, which is
+            // why `Tooltip` portals itself to the body rather than trusting
+            // `position: fixed` to be enough.
             // The `icon` action is `color: inherit` — its SURFACE owns the
             // glyph hue — so a rail that sets nothing inherits `text.default`
             // off the body. That is prose colour, and prose runs to the far end

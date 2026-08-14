@@ -910,9 +910,9 @@ function CalendarPeriodList({
         />
       ) : null}
       {hint ? (
-        // A plain sibling: the tooltip box is `position: fixed` and placed by
-        // the ref, so it needs no positioned ancestor and takes no layout slot
-        // in this flex row.
+        // A plain sibling: the tooltip box is `position: fixed`, placed by the
+        // ref and portalled to the body, so it needs no positioned ancestor and
+        // takes no layout slot in this flex row.
         <TooltipHostContext.Provider value={{ ref: hintRef, visible: hintVisible }}>
           {hint}
         </TooltipHostContext.Provider>

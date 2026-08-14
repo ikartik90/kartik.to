@@ -63,9 +63,10 @@ const isActionTooltip = (node: ReactNode) =>
 /**
  * Splits an action's children into the rendered CONTENT (icon + label) and its
  * optional `.Tooltip`, and wires that tooltip to a cursor-following hover. The
- * returned `tooltipNode` renders as a sibling of the trigger (the box is
- * `position: fixed`, so it needs no positioned ancestor); `show`/`hide` drive
- * its visibility. `hasText` feeds the text-vs-icon variant inference.
+ * returned `tooltipNode` renders as a sibling of the trigger — it needs no
+ * positioned ancestor and takes no layout slot, being `position: fixed` and
+ * portalled to the body by `Tooltip` itself; `show`/`hide` drive its
+ * visibility. `hasText` feeds the text-vs-icon variant inference.
  */
 export function useActionTooltip(children: ReactNode) {
   const items = Children.toArray(children);
