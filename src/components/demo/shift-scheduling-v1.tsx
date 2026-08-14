@@ -102,17 +102,17 @@ function joinDays(names: string[]): ReactNode {
 // shell's own padding is the only outer inset.
 const formStyle = css({ display: "flex", flexDirection: "column", gap: "lg" });
 
-// The one remaining side-by-side row: the weekday toolbar beside Last Shift.
-// Top-aligned, so their labels line up even though only Last Shift carries a
-// hint under it.
+// The one remaining side-by-side row: the weekday toolbar beside Until. Top-
+// aligned, so their labels line up even though only Until carries a hint under
+// it.
 //
 // It WRAPS, because neither half can give: the toolbar is seven fixed 28px
 // chips and the date field is a fixed 140px, so a card too narrow for both just
-// clips Last Shift against its edge. Wrapping is content-driven — no breakpoint
-// to keep in step with the chip count — and the two gaps differ on purpose:
-// 16px side by side is the design's (Figma 704:1625), while a wrapped Last
-// Shift drops onto the form's own 12px vertical rhythm, the same step that
-// separates this row from the Notice under it.
+// clips Until against its edge. Wrapping is content-driven — no breakpoint to
+// keep in step with the chip count — and the two gaps differ on purpose: 16px
+// side by side is the design's (Figma 704:1625), while a wrapped Until drops
+// onto the form's own 12px vertical rhythm, the same step that separates this
+// row from the Notice under it.
 const rowStyle = css({
   display: "flex",
   flexWrap: "wrap",
@@ -150,7 +150,7 @@ const repeatCardStyle = css({
 /** The card's header row — the switch, on the same 12px inset as its body. */
 const switchRowStyle = css({ paddingInline: "lg" });
 
-// The recurrence block — the card's rule, the weekday toolbar, Last Shift, and
+// The recurrence block — the card's rule, the weekday toolbar, Until, and
 // the Notice — folds away as ONE region when the repeat switch is off, so the
 // card resizes instead of snapping. The card's height is content-driven, so it
 // simply tracks the region. (The DIALOG's height is held steady by the footer
@@ -266,7 +266,7 @@ const recurrenceBodyStyle = css({
 
 // No gap: the label's line box sits directly above the frame, matching how the
 // Field stacks its label over the input — so the weekday toolbar frame lines up
-// with the sibling Last Shift input frame (Figma 684:1032 — label y=0, frame y=24).
+// with the sibling Until input frame (Figma 684:1032 — label y=0, frame y=24).
 // The COUNTERWEIGHT — the wireframe block in the footer that takes back exactly
 // the space the recurrence gives up (Figma 902:2390). Without it the dialog
 // shrinks by the height of the folded block, and since the DemoFrame CENTRES
@@ -573,7 +573,7 @@ export function ShiftSchedulingV1() {
       // Focus is part of what has to be handed back. The date picker returns
       // it to its trigger as it closes — right for whoever opened the thing,
       // wrong here, because the walkthrough opened it and the form is left
-      // with the Last Shift field wearing its focused frame as though the
+      // with the Until field wearing its focused frame as though the
       // visitor had tabbed in. Only ever gives up focus that is INSIDE the
       // form: a visitor who pressed Reset is focused on the button, out here,
       // and that focus is theirs to keep.
@@ -602,7 +602,7 @@ export function ShiftSchedulingV1() {
       const inPopover = (selector: string) => () =>
         document.querySelector<HTMLElement>(`${DATE_POPOVER} ${selector}`);
 
-      // The calendar opens on whatever Last Shift currently reads, so the
+      // The calendar opens on whatever Until currently reads, so the
       // chevron presses are counted from there rather than from a fixed month.
       const shown = lastShift ?? opening.lastShift;
       const turns = Math.max(0, monthsBetween(shown, tour.lastShift));
@@ -719,7 +719,11 @@ export function ShiftSchedulingV1() {
           {/* Interactive scheduling section — the real components + the Notice. */}
           <div className={formStyle}>
             <Field className={dateFieldStyle}>
-              <Field.Label>{repeat ? "First Shift" : "Shift Date"}</Field.Label>
+              {/* One name, switch or no switch. Turning the repeat on adds a
+                  SECOND date to the form; it does not turn this one into
+                  something else, and relabelling it under the pointer made the
+                  field the visitor had just filled in look like it had. */}
+              <Field.Label>Shift Date</Field.Label>
               <DatePicker value={firstShift} onValueChange={setFirstShift} />
               <Field.Hint>dd/mm/yyyy</Field.Hint>
             </Field>
@@ -783,7 +787,7 @@ export function ShiftSchedulingV1() {
                           </div>
                         </div>
                         <Field className={dateFieldStyle}>
-                          <Field.Label>Last Shift</Field.Label>
+                          <Field.Label>Until</Field.Label>
                           <DatePicker
                             value={lastShift}
                             onValueChange={setLastShift}
@@ -798,18 +802,23 @@ export function ShiftSchedulingV1() {
                           <InfoIcon />
                         </Notice.Icon>
                         <Notice.Label>
-                          This shift will start on{" "}
-                          <strong>
-                            {firstShift ? formatFull(firstShift) : "—"}
-                          </strong>
                           {repeating && lastShift ? (
                             <>
-                              {" "}
-                              and repeat every {joinDays(
-                                selectedNames,
-                              )} until <strong>{formatFull(lastShift)}</strong>
+                              This shift will repeat every{" "}
+                              {joinDays(selectedNames)} between{" "}
+                              <strong>
+                                {firstShift ? formatFull(firstShift) : "—"}
+                              </strong>{" "}
+                              and <strong>{formatFull(lastShift)}</strong>
                             </>
-                          ) : null}
+                          ) : (
+                            <>
+                              This shift will start on{" "}
+                              <strong>
+                                {firstShift ? formatFull(firstShift) : "—"}
+                              </strong>
+                            </>
+                          )}
                           .
                         </Notice.Label>
                       </Notice>
