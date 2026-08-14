@@ -67,6 +67,18 @@ const monthLabel = (date: Temporal.PlainDate) =>
 const dayName = (date: Temporal.PlainDate) =>
   `${FULL_MONTHS[date.month - 1]} ${date.day}, ${date.year}`;
 
+/** "July 2026" — a month grid's accessible name, always the full month. */
+const gridLabel = (date: Temporal.PlainDate) =>
+  `${FULL_MONTHS[date.month - 1]} ${date.year}`;
+
+/**
+ * The three months on the LIVE page. A chevron holds the page it turned away
+ * from on screen for the length of the push, but that copy is aria-hidden — so
+ * a role query answers for the window that just arrived.
+ */
+const monthsOnScreen = () =>
+  screen.getAllByRole("grid").map((g) => g.getAttribute("aria-label"));
+
 /** The OWNED cell for a date — a spill copy shares its accessible name. */
 function day(date: Temporal.PlainDate): HTMLButtonElement {
   const matches = screen.getAllByRole("gridcell", { name: dayName(date) });
@@ -331,24 +343,17 @@ describe("ShiftSchedulingV2 — layout", () => {
   it("advances the window one month per chevron press", () => {
     render(<ShiftSchedulingV2 />);
     fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-    expect(
-      screen.getByText(monthLabel(OPENING.add({ months: 1 }))),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(monthLabel(OPENING.add({ months: 3 }))),
-    ).toBeTruthy();
-    expect(screen.queryByText(monthLabel(OPENING))).toBeNull();
+    expect(monthsOnScreen()).toEqual(
+      [1, 2, 3].map((m) => gridLabel(OPENING.add({ months: m }))),
+    );
   });
 
   it("walks back one month at a time too", () => {
     render(<ShiftSchedulingV2 />);
     fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
-    expect(
-      screen.getByText(monthLabel(OPENING.subtract({ months: 1 }))),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(monthLabel(OPENING.add({ months: 1 }))),
-    ).toBeTruthy();
+    expect(monthsOnScreen()).toEqual(
+      [-1, 0, 1].map((m) => gridLabel(OPENING.add({ months: m }))),
+    );
   });
 
   it("keeps the wireframe chrome around the form", () => {

@@ -44,6 +44,16 @@ function renderCalendar(
   return render(<Field>{calendarTree(props, queryParser)}</Field>);
 }
 
+/**
+ * The months on the LIVE page, in order. A chevron leaves the page it turned
+ * away from on screen for the length of the slide, but that copy is aria-hidden
+ * — so a role query answers for the range that just ARRIVED, which is what
+ * "what is on screen now" means.
+ */
+function monthsOnScreen(): (string | null)[] {
+  return screen.getAllByRole("grid").map((g) => g.getAttribute("aria-label"));
+}
+
 afterEach(cleanup);
 
 describe("field wiring", () => {
@@ -189,6 +199,94 @@ describe("month navigation", () => {
   });
 });
 
+// A chevron replaces every month on screen at once. Cut between the two and the
+// range simply BLINKS — nothing on screen says which way it moved, or that the
+// months either side of the press are neighbours at all. So the page that is
+// leaving is held beside the one arriving and the pair is pushed along
+// together, as one strip.
+describe("page turn", () => {
+  /** The list — the frame both pages slide through (grid ▸ period ▸ list). */
+  const list = () =>
+    screen.getAllByRole("grid")[0].parentElement!.parentElement!;
+  /** The page being pushed off, while one is still on screen. */
+  const outgoing = () => list().querySelector<HTMLElement>("[data-outgoing]");
+  const nav = (name: string) => screen.getByRole("button", { name });
+
+  it("holds the outgoing page beside the incoming one, then drops it", () => {
+    vi.useFakeTimers();
+    try {
+      renderCalendar();
+      fireEvent.click(nav("Next month"));
+      // January has arrived; December is still on screen, on its way out.
+      expect(monthsOnScreen()).toEqual(["January 2027"]);
+      expect(within(outgoing()!).getByText("December 2026")).toBeTruthy();
+      // The slide's own length — `PUSH_MS`, in step with the recipe.
+      act(() => vi.advanceTimersByTime(199));
+      expect(outgoing()).toBeTruthy();
+      act(() => vi.advanceTimersByTime(1));
+      expect(outgoing()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The distance carries the direction in its sign, so one variable drives both
+  // halves of the turn: the arriving page enters from `--calendar-push` and the
+  // leaving one exits by its negation.
+  it("pushes from the side the range is travelling toward", () => {
+    renderCalendar();
+    fireEvent.click(nav("Next month"));
+    expect(list().style.getPropertyValue("--calendar-push")).toBe("100%");
+    fireEvent.click(nav("Previous month"));
+    expect(list().style.getPropertyValue("--calendar-push")).toBe("-100%");
+  });
+
+  // In columns, not screenfuls: a range that WALKS (step < months) must land
+  // the months that carry over exactly where they already were.
+  it("travels by the step, not by the width of the range", () => {
+    renderCalendar({ months: 3, step: 1 });
+    fireEvent.click(nav("Next month"));
+    expect(list().style.getPropertyValue("--calendar-push")).toBe("100%");
+    cleanup();
+
+    renderCalendar({ months: 3 });
+    fireEvent.click(nav("Next 3 months"));
+    expect(list().style.getPropertyValue("--calendar-push")).toBe("300%");
+  });
+
+  it("keeps the outgoing page out of the a11y tree and the tab order", () => {
+    renderCalendar();
+    fireEvent.click(nav("Next month"));
+    expect(outgoing()!.getAttribute("aria-hidden")).toBe("true");
+    expect(outgoing()!.hasAttribute("inert")).toBe(true);
+    // One page answers for the calendar however many are mid-slide — or the
+    // range would read as two months, and announce both.
+    expect(screen.getAllByRole("grid")).toHaveLength(1);
+    expect(screen.getAllByRole("gridcell")).toHaveLength(42);
+  });
+
+  it("turns no page when the view stands still", () => {
+    renderCalendar({ months: 3 });
+    // February is already on screen, so picking in it moves nothing.
+    fireEvent.click(
+      screen.getAllByRole("gridcell", { name: "February 10, 2027" })[0],
+    );
+    expect(outgoing()).toBeNull();
+  });
+
+  // Typing a date jumps the range wherever it likes, and a jump is still a
+  // move — the turn is how far it went made legible.
+  it("turns the page for a search that lands off the range", () => {
+    renderCalendar();
+    fireEvent.input(screen.getByRole("searchbox"), {
+      target: { value: "05/06/2027" },
+    });
+    expect(monthsOnScreen()).toEqual(["June 2027"]);
+    expect(within(outgoing()!).getByText("December 2026")).toBeTruthy();
+    expect(list().style.getPropertyValue("--calendar-push")).toBe("100%");
+  });
+});
+
 // How far a chevron moves and how much is on show are separate questions. A
 // range that pages a clear screenful never repeats a month, but it also throws
 // away the context it just built; `step` lets a wide range walk instead, so
@@ -220,25 +318,29 @@ describe("paging step", () => {
     expect(screen.getByText("December 2026")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next 3 months" }));
     // Dec–Feb ▸ Mar–May: nothing on screen repeats.
-    expect(screen.getByText("March 2027")).toBeTruthy();
-    expect(screen.queryByText("December 2026")).toBeNull();
+    expect(monthsOnScreen()).toEqual(["March 2027", "April 2027", "May 2027"]);
   });
 
   it("walks one month at a time when step is 1", () => {
     range({ step: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Next month" }));
     // Dec–Feb ▸ Jan–Mar: two of the three months carry over.
-    expect(screen.getByText("January 2027")).toBeTruthy();
-    expect(screen.getByText("March 2027")).toBeTruthy();
-    expect(screen.queryByText("December 2026")).toBeNull();
+    expect(monthsOnScreen()).toEqual([
+      "January 2027",
+      "February 2027",
+      "March 2027",
+    ]);
   });
 
   it("steps back by the same one month", () => {
     range({ step: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Next month" }));
     fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
-    expect(screen.getByText("December 2026")).toBeTruthy();
-    expect(screen.getByText("February 2027")).toBeTruthy();
+    expect(monthsOnScreen()).toEqual([
+      "December 2026",
+      "January 2027",
+      "February 2027",
+    ]);
   });
 
   // The label has to describe what the button DOES, not how wide the range is —
@@ -389,13 +491,18 @@ describe("multi-month ranges", () => {
     renderCalendar({ months: 3 });
     fireEvent.click(screen.getByRole("button", { name: "Previous 3 months" }));
     // Dec–Feb ▸ Sep–Nov: no month carries over between pages.
-    expect(screen.getByText("September 2026")).toBeTruthy();
-    expect(screen.getByText("November 2026")).toBeTruthy();
-    expect(screen.queryByText("December 2026")).toBeNull();
+    expect(monthsOnScreen()).toEqual([
+      "September 2026",
+      "October 2026",
+      "November 2026",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Next 3 months" }));
-    expect(screen.getByText("December 2026")).toBeTruthy();
-    expect(screen.getByText("February 2027")).toBeTruthy();
+    expect(monthsOnScreen()).toEqual([
+      "December 2026",
+      "January 2027",
+      "February 2027",
+    ]);
   });
 
   it("keeps ONE roving tabstop across the range, not one per grid", () => {
