@@ -39,6 +39,18 @@ describe("DemoInvitation", () => {
     expect(tip?.hasAttribute("data-visible")).toBe(true);
   });
 
+  // The invitation is an OFFER, not a label, so it wears the brand tone while
+  // every other tooltip in the app stays neutral. The wiring is what's under
+  // test — that the component opts in — not the hues, which are the recipe's.
+  it("wears the brand tone", () => {
+    const ref = createRef<HTMLElement>();
+    render(<DemoInvitation ref={ref} visible offer={() => {}} />);
+
+    const tip = screen.getByText("Try it yourself").closest("div");
+
+    expect(tip?.className).toContain("tooltip--tone_brand");
+  });
+
   it("stays put until it is offered", () => {
     const ref = createRef<HTMLElement>();
     render(<DemoInvitation ref={ref} visible={false} offer={() => {}} />);
