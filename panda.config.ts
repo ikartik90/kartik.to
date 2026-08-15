@@ -757,13 +757,14 @@ export default defineConfig({
                 _active: { transform: "none" },
               },
             },
-            // Fill prominence — orthogonal to `variant` (the shape). Both are
-            // empty here: `secondary` is what `text` already draws, and
-            // `tertiary` is applied by the compound below. Inert for `icon`,
-            // which is tertiary by nature.
+            // Fill prominence — orthogonal to `variant` (the shape). All three
+            // are empty here: `secondary` is what `text` already draws, and the
+            // other two are applied by the compounds below. `tertiary` is inert
+            // for `icon`, which is tertiary by nature.
             emphasis: {
               secondary: {},
               tertiary: {},
+              glass: {},
             },
             // The chip's scale — the third axis, orthogonal to both of the
             // above. Empty for the same reason `emphasis` is: `md` is what
@@ -784,6 +785,38 @@ export default defineConfig({
               css: {
                 backgroundColor: "transparent",
                 _hover: { backgroundColor: "field.bg.hover" },
+              },
+            },
+            {
+              variant: "icon",
+              emphasis: "glass",
+              // The one icon chip that floats ON a picture rather than on a
+              // surface of the app's own, so it cannot rest transparent: the
+              // `icon` variant's `color: inherit` and bare glyph are legible
+              // because a surface behind them holds them down, and over a video
+              // frame there is no such surface — a pale still swallows the
+              // glyph outright.
+              //
+              // The material is the one every other chip over an image already
+              // uses (the collection's surplus badge): `surfaceGlass` is
+              // `surface` at 75%, and the blur is what keeps the glyph legible
+              // over whatever happens to be moving underneath it. Same override
+              // mechanic as the compounds around it — a compound's declarations
+              // land in a later layer than the variant's, so the transparent
+              // fill and inherited colour they replace are the ones that lose.
+              css: {
+                backgroundColor: "bg.surfaceGlass",
+                // Panda's `backdropFilter` utility emits only the -webkit-
+                // form, which Chromium does not recognise, so the raw key is
+                // the one that lands; the prefixed spelling stays for older
+                // WebKit. The 8px radius is the app's one blur strength.
+                backdropFilter: "blur(token(spacing.md))",
+                "-webkit-backdrop-filter": "blur(token(spacing.md))",
+                "backdrop-filter": "blur(token(spacing.md))",
+                color: "text.body",
+                // Opaque on hover — the chip comes forward as you reach for it,
+                // and `surface` is exactly what `surfaceGlass` is 75% of.
+                _hover: { backgroundColor: "bg.surface" },
               },
             },
             {
@@ -1249,6 +1282,19 @@ export default defineConfig({
             // frame's controls and the demo's read as one class of control in
             // both themes.
             color: "field.text.default",
+            // Down until the visitor is actually in the frame. The demo plays
+            // itself the moment it comes on screen, so for most of an article
+            // these are controls nobody is reaching for, sitting in the corner
+            // of a picture — the same call the clip's transport makes, and the
+            // same terms: a fade, and up for as long as focus is inside, so a
+            // keyboard can reach them at all.
+            opacity: 0,
+            transition: "opacity 150ms ease",
+            "[data-demo-frame]:hover &, [data-demo-frame]:focus-within &": {
+              opacity: 1,
+            },
+            // No pointer to hover with, so no reveal to wait for.
+            "@media (hover: none)": { opacity: 1 },
           },
         }),
 
@@ -1401,6 +1447,50 @@ export default defineConfig({
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
             borderColor: "border.divider",
+          },
+        }),
+
+        articleMediaFrame: defineRecipe({
+          className: "article-media-frame",
+          description:
+            "The box around a single media block in article prose — the picture's own, NOT the figure's, which also holds the caption. It exists to be the positioned parent a clip's transport pins to, so the chip lands in the corner of the picture rather than down beside the words under it. The width is load-bearing, not a default: `articleShowcase` is a centred flex column, so a box that did not state one would shrink-wrap, and the media's own frame inside it — a query container, whose inline size may not come from its contents — would then collapse to nothing at all. `flex` rather than `block` so no line box puts a descender gap under the picture.",
+          base: {
+            position: "relative",
+            display: "flex",
+            width: "token(spacing.full)",
+            minWidth: 0,
+          },
+        }),
+
+        mediaTransport: defineRecipe({
+          className: "media-transport",
+          description:
+            "The box that holds a clip's own transport — the single play/pause chip in the bottom-right corner of the surface showing it, for the places a visitor should be able to stop a loop without the browser's full control strip laid across the foot of the picture. Positioned exactly like `demoFrameControls`, and on the same terms: it is absolute against whatever positioned box the SURFACE provides (the lightbox's frame), so it costs that box's measurement nothing and nothing enters the media's own flow. It is a box around the button rather than the button's own class for the same reason the frame's controls are: `action`'s `icon` variant is itself `position: relative`, and one recipe cannot out-rank another recipe's variant. The chip inside wears the `glass` emphasis rather than the frame controls' bare glyph, because this one floats on a picture rather than on a surface of the app's own.",
+          base: {
+            position: "absolute",
+            // The same 12px the frame's controls take, so the two read as one
+            // class of control wherever they turn up. Anchored to the FRAME,
+            // like every other control in this app that sits in a corner —
+            // never to the picture inside it, which moves as its inset changes.
+            right: "lg",
+            bottom: "lg",
+            // Above the clip, which is itself raised over the ground behind it
+            // (the lightbox's `image` slot sits at 1 to clear its gradient).
+            zIndex: 2,
+            // Down until you reach for the picture. A clip is shown to be
+            // WATCHED, and a chip parked in the corner of every one of them is
+            // permanent chrome over content that has none — the same call the
+            // collection cell's controls make. It fades rather than snapping,
+            // and it stays up for as long as focus is inside the surface, so a
+            // keyboard can reach it at all.
+            opacity: 0,
+            transition: "opacity 150ms ease",
+            "[data-media-surface]:hover &, [data-media-surface]:focus-within &":
+              { opacity: 1 },
+            // Where there is no pointer to hover with, there is no reveal to
+            // wait for — a touch visitor would otherwise have no way to stop a
+            // clip at all.
+            "@media (hover: none)": { opacity: 1 },
           },
         }),
 
@@ -3756,6 +3846,11 @@ export default defineConfig({
                   position: "absolute",
                   inset: 0,
                 },
+                // The badge has taken this cell's bottom-right quadrant, so a
+                // clip's transport crosses to the other corner rather than
+                // sitting under it. Stated here, where the quadrant layout is,
+                // because it is the badge's arrival that moves the chip.
+                "& [data-media-transport]": { right: "auto", left: "lg" },
               },
             },
             tile: {

@@ -389,7 +389,7 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
     // toggle its way around.
     fireEvent.click(day(TODAY));
 
-    fireEvent.click(screen.getByRole("button", { name: "Replay Demo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Demo" }));
     await playToLastPick();
 
     const planned = planDemoShiftDates(TODAY);
@@ -425,6 +425,30 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
     expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
   });
 
+  // The break-in as a CONTROL rather than a thing you have to guess at: the
+  // corner offers a way out of the performance while it performs, and it does
+  // exactly what touching the calendar always did — stands the show down where
+  // it stands, and leaves what it had already picked on the board.
+  it("stops the walkthrough where it stands, keeping its picks", async () => {
+    const reveal = scrollIntoView();
+    render(<ShiftSchedulingV0 />);
+
+    reveal();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_600);
+    });
+    const picked = selectedDates().length;
+    expect(picked).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop Demo" }));
+    // Nothing more is added, and what the run had committed is still there —
+    // which is what makes reset mean something again.
+    await play();
+    expect(selectedDates()).toHaveLength(picked);
+    expect(screen.getByRole("button", { name: "Play Demo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reset Demo" })).toBeTruthy();
+  });
+
   it("clears the board on request, once the visitor has taken the stage", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV0 />);
@@ -450,7 +474,7 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
     render(<ShiftSchedulingV0 />);
     // Reset only exists once there is a pick to clear.
     fireEvent.click(day(TODAY));
-    const replay = screen.getByRole("button", { name: "Replay Demo" });
+    const replay = screen.getByRole("button", { name: "Play Demo" });
     const reset = screen.getByRole("button", { name: "Reset Demo" });
 
     // Replay takes the corner, Reset sits inboard of it — and since nothing
@@ -459,7 +483,7 @@ describe("ShiftSchedulingV0 — the in-view walkthrough", () => {
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     // Each carries a decorative twin of that name, hidden until hovered.
-    expect(shown(screen.getByText("Replay Demo").parentElement)).toBe(false);
+    expect(shown(screen.getByText("Play Demo").parentElement)).toBe(false);
     expect(shown(screen.getByText("Reset Demo").parentElement)).toBe(false);
   });
 

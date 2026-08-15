@@ -294,7 +294,11 @@ export function ShiftSchedulingV0() {
           dialog's — and outside the stage, so pressing one is not mistaken for
           the visitor reaching into the grid mid-performance. */}
       <DemoControls
-        onReplay={replay}
+        onPlay={replay}
+        // Stops the run where it stands and keeps its picks — the same break-in
+        // touching the calendar already performs, offered as a control.
+        onStop={stopTour}
+        running={cursor.running}
         onReset={reset}
         // An empty board is already the state reset hands back, so there is
         // nothing to offer until dates are on it — and nothing to offer while

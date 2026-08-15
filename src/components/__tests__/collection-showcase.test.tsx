@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
-import { act, render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_BACKGROUND_EFFECT, type CollectionItem } from "@/domain/nodes";
@@ -246,18 +253,18 @@ describe("CollectionShowcase lightbox", () => {
 // its frame shrink-wraps the picture — so it measures the box the picture
 // actually came out at and resolves the corner against that.
 describe("CollectionShowcase lightbox corner", () => {
-  /** States a width for the frame, the way a browser's layout would. */
-  let resizeFrameTo: ((width: number) => void) | null = null;
+  /** States a width for the PICTURE, the way a browser's layout would. */
+  let resizePictureTo: ((width: number) => void) | null = null;
 
   beforeEach(() => {
-    resizeFrameTo = null;
-    // jsdom lays nothing out and implements no ResizeObserver, so the frame's
-    // width is whatever this stub reports.
+    resizePictureTo = null;
+    // jsdom lays nothing out and implements no ResizeObserver, so the
+    // picture's width is whatever this stub reports.
     vi.stubGlobal(
       "ResizeObserver",
       class {
         constructor(callback: ResizeObserverCallback) {
-          resizeFrameTo = (width: number) =>
+          resizePictureTo = (width: number) =>
             act(() =>
               callback(
                 [{ contentRect: { width } } as ResizeObserverEntry],
@@ -298,13 +305,13 @@ describe("CollectionShowcase lightbox corner", () => {
     // authored number, which is what it always was.
     expect(img.style.borderRadius).toBe("20px");
 
-    resizeFrameTo!(1280);
+    resizePictureTo!(1280);
     expect(img.style.borderRadius).toBe("40px");
   });
 
   it("shrinks it on a viewport too narrow for the authored size", async () => {
     const dialog = await openRounded();
-    resizeFrameTo!(320);
+    resizePictureTo!(320);
     expect(dialog.querySelector("img")!.style.borderRadius).toBe("10px");
   });
 
@@ -314,7 +321,7 @@ describe("CollectionShowcase lightbox corner", () => {
     const dialog = await openRounded({
       backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
     });
-    resizeFrameTo!(1280);
+    resizePictureTo!(1280);
 
     const ground = dialog.querySelector<HTMLElement>("[data-background-effect]")!;
     expect(ground.style.borderRadius).toBe("");
@@ -325,7 +332,7 @@ describe("CollectionShowcase lightbox corner", () => {
   // frame wearing the corner a landscape's box earned.
   it("does not carry the previous image's box across a step", async () => {
     const dialog = await openRounded();
-    resizeFrameTo!(1280);
+    resizePictureTo!(1280);
     expect(dialog.querySelector("img")!.style.borderRadius).toBe("40px");
 
     // The next picture is authored at 8, so an unmeasured step draws 8 — not
@@ -336,8 +343,88 @@ describe("CollectionShowcase lightbox corner", () => {
 
   it("leaves a square picture square at any size", async () => {
     const dialog = await openRounded({ borderRadius: undefined });
-    resizeFrameTo!(1280);
+    resizePictureTo!(1280);
     expect(dialog.querySelector("img")!.style.borderRadius).toBe("0px");
+  });
+
+  // The band round a picture is a share of the box, exactly as the corner is,
+  // and an enlargement that kept the authored pixels was a different
+  // composition from the tile it was composed in — a 40px band on a 640px tile
+  // is a quarter of the picture, and the same 40px on a 1280px enlargement is
+  // an eighth of it.
+  it("grows the band with the picture it is enlarging", async () => {
+    const dialog = await openRounded({ padding: 40 });
+    const img = dialog.querySelector("img")!;
+
+    // Unmeasured — the first paint — is the authored number, as it always was.
+    expect(img.style.margin).toBe("40px");
+
+    // A 1120px picture with a 40-per-640 band on each side implies a 1280px
+    // box, so the band is 80.
+    resizePictureTo!(1120);
+    expect(img.style.margin).toBe("80px");
+    // ...and the corner is a share of that same recovered box, not of the
+    // picture alone: 20 of 640 is 40 at 1280.
+    expect(img.style.borderRadius).toBe("40px");
+  });
+
+  // The picture is measured rather than the frame BECAUSE the frame is the
+  // picture plus the band being derived from it — a value feeding its own next
+  // input. One measurement has to be final.
+  it("settles the band in one measurement", async () => {
+    const dialog = await openRounded({ padding: 40 });
+    const img = dialog.querySelector("img")!;
+
+    resizePictureTo!(1120);
+    expect(img.style.margin).toBe("80px");
+    // The band changed the frame's width, but not the picture's — so a second
+    // report of the same picture says the same thing.
+    resizePictureTo!(1120);
+    expect(img.style.margin).toBe("80px");
+  });
+
+  // The viewport caps are what the whole COMPOSITION may take, so the picture
+  // at the heart of it gets its own share of them. Capping the picture at 85vw
+  // and then hanging a band off each side composes something wider than the
+  // screen.
+  it("leaves the band room inside the viewport caps", async () => {
+    const dialog = await openRounded({ padding: 40 });
+    const img = dialog.querySelector("img")!;
+    // 40 a side of 640 leaves the picture 87.5% of its box. (The CSSOM folds
+    // the multiplication away, which is why this reads as one number.)
+    expect(img.style.maxWidth).toBe(`calc(${85 * 0.875}vw)`);
+    // Unmeasured, the shape is taken as square, which is the case where the
+    // two axes agree: dividing by 1/0.875 IS multiplying by 0.875.
+    expect(img.style.maxHeight).toBe(
+      `calc((85vh - var(--spacing-4xl)) / ${1 / 0.875})`,
+    );
+
+    Object.defineProperty(img, "naturalWidth", {
+      value: 640,
+      configurable: true,
+    });
+    Object.defineProperty(img, "naturalHeight", {
+      value: 480,
+      configurable: true,
+    });
+    fireEvent.load(img);
+    expect(img.style.maxWidth).toBe("min(640px, calc(85vw * 0.875))");
+    // ...and once the shape is known, a landscape gets a stricter height cap
+    // than a square would: its bands are the same pixels as a square's, but a
+    // bigger fraction of the height they have to fit inside.
+    expect(img.style.maxHeight).toBe(
+      `calc((85vh - var(--spacing-4xl)) / ${1 + (2 * (40 / 640) * (640 / 480)) / 0.875})`,
+    );
+  });
+
+  // ...and a picture with no band IS the whole composition, so it keeps the
+  // caps its class already states rather than being written over with a
+  // multiplication by one.
+  it("leaves an uninset picture's caps alone", async () => {
+    const img = (await openRounded()).querySelector("img")!;
+    expect(img.style.maxWidth).toBe("");
+    expect(img.style.maxHeight).toBe("");
+    expect(img.style.margin).toBe("0px");
   });
 });
 
@@ -355,19 +442,73 @@ describe("CollectionShowcase clips", () => {
     expect(screen.getByRole("dialog").hasAttribute("open")).toBe(true);
   });
 
-  // The tile is a hit target for the lightbox, so a control strip over it would
-  // eat the click. Full size and alone on a dimmed page, the clip IS the
-  // subject and a reader should be able to stop and scrub it.
-  it("withholds the transport on the tile and offers it in the lightbox", async () => {
+  // A tile gets the transport too — a looping clip is worth stopping wherever
+  // it is — but never the browser's strip, and never INSIDE the tile's own
+  // button: one control may not contain another, and a press on the chip has to
+  // work the clip rather than open the lightbox behind it.
+  it("gives a clip tile a chip outside the button that opens the lightbox", async () => {
     const user = userEvent.setup();
     render(<CollectionShowcase items={[clip]} />);
 
     const tile = screen.getByRole("button", { name: "A demo" });
-    expect(tile.querySelector("video")!.hasAttribute("controls")).toBe(false);
+    const chip = screen.getByRole("button", { name: /video$/ });
+    expect(tile.querySelector("video")).not.toBeNull();
+    expect(tile.contains(chip)).toBe(false);
+
+    // A closed <dialog> is not in the accessibility tree at all, so its absence
+    // by role IS "the lightbox did not open".
+    await user.click(chip);
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     await user.click(tile);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(dialog.querySelector("video")!.hasAttribute("controls")).toBe(false);
+    expect(
+      within(dialog).getByRole("button", { name: /video$/ }),
+    ).toBeTruthy();
+  });
+
+  // Three clips looping at once is three things competing for the same reader.
+  // The featured slot is the one the composition is built around, so it is the
+  // one that performs; the rest hold their first frame until asked.
+  it("plays the featured clip in the grid and holds the rest still", () => {
+    render(
+      <CollectionShowcase
+        items={[
+          { src: "/a.mp4", alt: "A" },
+          { src: "/b.mp4", alt: "B" },
+          { src: "/c.mp4", alt: "C" },
+        ]}
+      />,
+    );
+
+    const tiles = Array.from(document.querySelectorAll("video"));
+    expect(tiles).toHaveLength(3);
+    expect(tiles.map((v) => v.hasAttribute("autoplay"))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
+  });
+
+  // ...and the enlargement always performs, whichever tile it came from: it is
+  // the one thing on the screen at that point.
+  it("plays whichever clip the lightbox opens", async () => {
+    const user = userEvent.setup();
+    render(
+      <CollectionShowcase
+        items={[
+          { src: "/a.mp4", alt: "A" },
+          { src: "/b.mp4", alt: "B" },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "B" }));
     const opened = screen.getByRole("dialog").querySelector("video")!;
-    expect(opened.hasAttribute("controls")).toBe(true);
+    expect(opened.hasAttribute("autoplay")).toBe(true);
   });
 
   // Same rule the pictures follow — min(intrinsic, 85vw, 85vh) — read off the

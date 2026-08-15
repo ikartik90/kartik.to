@@ -36,6 +36,7 @@ import {
   codeBlock,
   articleShowcase,
   articleImg,
+  articleMediaFrame,
   horizontalRule,
 } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
@@ -284,17 +285,24 @@ function renderBlockNode(
     case "image":
       return (
         <figure key={index} className={articleShowcase()}>
-          {/* A clip gets its transport here: this block IS the picture, at the
-              article's full width, so there is no tile reading to protect and
-              a reader who wants to stop a loop should be able to. */}
-          <Media
-            src={node.src}
-            alt={node.alt ?? ""}
-            className={articleImg()}
-            layout={node}
-            loading="lazy"
-            controls
-          />
+          {/* The media's own frame, and the box the transport anchors to — NOT
+              the figure, which also holds the caption and would put the chip
+              down beside the words. */}
+          <div data-media-surface="" className={articleMediaFrame()}>
+            {/* A clip gets the house transport here, and this is where it earns
+                its keep: a looping demo running beside a paragraph is the one
+                thing a reader most wants to be able to stop, and the block IS
+                the picture at the article's full width, so there is no tile
+                reading to protect. */}
+            <Media
+              src={node.src}
+              alt={node.alt ?? ""}
+              className={articleImg()}
+              layout={node}
+              loading="lazy"
+              transport
+            />
+          </div>
           {node.caption && (
             <Typography tag="figcaption" type="caption">
               {node.caption}

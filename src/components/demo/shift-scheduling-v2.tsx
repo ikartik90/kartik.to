@@ -304,7 +304,11 @@ export function ShiftSchedulingV2() {
           dialog's — and outside the stage, so pressing one is not mistaken for
           the visitor reaching into the grid mid-performance. */}
       <DemoControls
-        onReplay={replay}
+        onPlay={replay}
+        // Stops the run where it stands and keeps its work — the same break-in
+        // touching the grid already performs, offered as a control.
+        onStop={stopTour}
+        running={cursor.running}
         onReset={reset}
         // An empty grid is already the state reset hands back, so there is
         // nothing to offer until shifts are drawn on it — and nothing to offer

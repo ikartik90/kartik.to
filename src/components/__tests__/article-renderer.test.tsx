@@ -421,6 +421,53 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector("figcaption")).toBeNull();
     });
 
+    // The block a reader most needs a way out of: a clip looping beside the
+    // paragraph they are trying to read. It gets the house chip rather than the
+    // browser's strip — one control, in the corner of the picture, inside a box
+    // of the picture's own so it cannot land beside the caption.
+    it("gives a clip in an image block a transport of its own", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "image",
+              src: "https://example.com/demo.mp4",
+              alt: "A demo",
+              caption: "Clip caption",
+            },
+          ])}
+        />,
+      );
+      const clip = container.querySelector("video")!;
+      expect(clip).not.toBeNull();
+      expect(clip.hasAttribute("controls")).toBe(false);
+
+      const surface = container.querySelector("[data-media-surface]")!;
+      expect(surface.contains(clip)).toBe(true);
+      expect(surface.contains(screen.getByText("Clip caption"))).toBe(false);
+      expect(
+        within(surface as HTMLElement).getByRole("button", {
+          name: "Play video",
+        }),
+      ).toBeTruthy();
+    });
+
+    // ...and a still picture has nothing to play, so it gets no control at all.
+    it("leaves a picture in an image block without one", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "image",
+              src: "https://example.com/img.png",
+              alt: "An example image",
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector("button")).toBeNull();
+    });
+
     it("renders a collection with the block's own caption", () => {
       render(
         <ArticleRenderer
