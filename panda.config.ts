@@ -1103,13 +1103,19 @@ export default defineConfig({
         articleShowcase: defineRecipe({
           className: "article-showcase",
           description:
-            "Wide showcase container for figures and embeddable components inside article content.",
+            "Wide showcase container for figures and embeddable components inside article content. The block itself spans the article's full 960 column; its caption wraps at the 640 text column, since a caption is prose and reads at the measure the paragraphs around it do.",
           base: {
             width: "token(spacing.full)",
             display: "flex",
             flexDirection: "column",
             gap: "md",
             alignItems: "center",
+            // The picture is 960 wide; the words under it are not. A caption
+            // set to the block's width would run to a measure no other prose
+            // in the article uses, so it takes the text column's — centred
+            // under the block by the `alignItems` above, exactly as a shorter
+            // caption already sits.
+            "& > figcaption": { maxWidth: "token(sizes.articleContent)" },
           },
         }),
 
