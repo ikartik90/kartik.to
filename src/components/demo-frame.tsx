@@ -129,6 +129,9 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
     const frame = (
       <div
         ref={mergedRef}
+        // The hook the frame's own controls reveal themselves off — they are
+        // absolute against this box, and up only while the visitor is in it.
+        data-demo-frame=""
         className={cx(
           demoFrame({ logger: loggerEnabled ? true : undefined }),
           className,

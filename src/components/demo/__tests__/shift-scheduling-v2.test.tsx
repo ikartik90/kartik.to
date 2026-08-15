@@ -552,10 +552,10 @@ describe("ShiftSchedulingV2 — the walkthrough", { timeout: 15_000 }, () => {
     stage();
     // Reset is offered against WORK, and an empty grid is already the state it
     // hands back — so a shift has to be drawn on before there is a pair at all.
-    expect(controlNames()).toEqual(["Replay Demo"]);
+    expect(controlNames()).toEqual(["Play Demo"]);
 
     fireEvent.click(day(SHIFT_MONTH.with({ day: 6 })));
-    expect(controlNames()).toEqual(["Reset Demo", "Replay Demo"]);
+    expect(controlNames()).toEqual(["Reset Demo", "Play Demo"]);
   });
 
   // ...and "back to how it started" is a moving target while the walkthrough is
@@ -565,11 +565,14 @@ describe("ShiftSchedulingV2 — the walkthrough", { timeout: 15_000 }, () => {
     reveal();
     await advance(2600);
     expect(selected().length).toBeGreaterThan(0);
-    expect(controlNames()).toEqual(["Replay Demo"]);
+    // ...and the corner is offering the way OUT of the run rather than the way
+    // back into it, since that is the only one of the two there is anything to
+    // press for while it performs.
+    expect(controlNames()).toEqual(["Stop Demo"]);
 
     // And gone again at the other end, since the run puts the grid back.
     await advance(WHOLE_TOUR_MS);
-    expect(controlNames()).toEqual(["Replay Demo"]);
+    expect(controlNames()).toEqual(["Play Demo"]);
   });
 
   it("replays on request, over a board it clears first", async () => {
@@ -578,7 +581,7 @@ describe("ShiftSchedulingV2 — the walkthrough", { timeout: 15_000 }, () => {
     await play();
     await advance(WHOLE_TOUR_MS);
 
-    fireEvent.click(screen.getByRole("button", { name: "Replay Demo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Demo" }));
     // The sweep TOGGLES, so a replay run over dates still on the board would
     // rub them out rather than draw them again.
     expect(boardsShown(await play())).toContain(finished());

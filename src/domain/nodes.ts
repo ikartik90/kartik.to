@@ -417,6 +417,81 @@ export function mediaRadiusPx(
 }
 
 /**
+ * The inset in PIXELS, against a width the caller has measured — the corner's
+ * twin above, for the same surface and the same reason.
+ *
+ * A band that stayed the number it was authored as while the picture beside it
+ * quadrupled is not the composition anyone drew: the whole rule this file
+ * implements is that an inset is a SHARE of the box, so at four times the size
+ * it is four times the pixels.
+ */
+export function mediaInsetPx(
+  media: MediaLayout,
+  width: number = MEDIA_PADDING_REFERENCE,
+): number {
+  return ((media.padding ?? 0) / MEDIA_PADDING_REFERENCE) * width;
+}
+
+/**
+ * How much of its box an inset picture is — `1` when nothing surrounds it, and
+ * less as the band widens. Both bands come out of the same axis, so it is the
+ * inset twice over.
+ *
+ * The factor a viewport cap has to be taken through: `85vw` is what the whole
+ * COMPOSITION may occupy, so the picture at the heart of it may have only this
+ * share of that. Capping the picture itself at `85vw` and then hanging bands
+ * off it composes something wider than the screen.
+ */
+export function mediaPictureShare(media: MediaLayout): number {
+  return 1 - (2 * (media.padding ?? 0)) / MEDIA_PADDING_REFERENCE;
+}
+
+/**
+ * What a HEIGHT budget has to be divided by to leave room for the bands above
+ * and below the picture — the vertical twin of `mediaPictureShare`, and not the
+ * same number, because the two bands are the same PIXELS on every side while
+ * the height they eat into is not the width they came out of.
+ *
+ * On a square picture the two agree and this is exactly `1 / share`. On a wide
+ * one the bands are a larger fraction of the height, so a 16:9 clip taken
+ * through the width's share alone composes taller than the screen it was meant
+ * to fit; on a tall one they are a smaller fraction, and the same arithmetic
+ * leaves the picture needlessly small.
+ *
+ * The shape comes from the FILE (`naturalWidth / naturalHeight`), never from
+ * what the screen gave it, so this stays a constant of the picture and the cap
+ * it feeds can never chase the layout it constrains.
+ */
+export function mediaHeightBudgetFactor(
+  media: MediaLayout,
+  aspect: number = 1,
+): number {
+  const padding = media.padding ?? 0;
+  if (!padding) return 1;
+  const share = (padding / MEDIA_PADDING_REFERENCE) * aspect;
+  return 1 + (2 * share) / mediaPictureShare(media);
+}
+
+/**
+ * The container an enlarged picture implies, recovered from the width the
+ * picture itself came out at.
+ *
+ * The lightbox is sized BY its picture, so it is the one surface where the box
+ * is the unknown and the picture is what can be measured — the reverse of every
+ * other surface, where the box is given and the picture takes what is left.
+ * Running the arithmetic in that direction is also what keeps it out of a loop:
+ * an inset derived from the frame it is PART OF would feed its own next value,
+ * settling over several frames of visibly growing picture, while the picture's
+ * own width owes the band nothing.
+ */
+export function mediaContainerWidth(
+  media: MediaLayout,
+  pictureWidth: number,
+): number {
+  return pictureWidth / mediaPictureShare(media);
+}
+
+/**
  * The FRAME's style — the padded box the picture sits inside.
  *
  * The inset lives here and not on the media element, and that split is

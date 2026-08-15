@@ -15,7 +15,11 @@ import {
   hasMediaLayout,
   mediaBoxStyle,
   mediaFrameStyle,
+  mediaContainerWidth,
+  mediaHeightBudgetFactor,
+  mediaInsetPx,
   mediaObjectStyle,
+  mediaPictureShare,
   mediaRadiusPx,
 } from "../nodes";
 
@@ -274,6 +278,85 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
     expect(mediaRadiusPx({ borderRadius: 20 })).toBe(20);
     expect(mediaRadiusPx({ borderRadius: 20 }, MEDIA_PADDING_REFERENCE)).toBe(20);
     expect(mediaRadiusPx({})).toBe(DEFAULT_MEDIA_RADIUS);
+  });
+
+  // The inset is the OTHER half of that arithmetic, and the same surface needs
+  // it: an enlargement whose band stays the number it was authored as is a
+  // composition drawn at one size and shown at another.
+  it("resolves the inset in pixels against whatever width it is handed", () => {
+    expect(mediaInsetPx({ padding: 40 }, MEDIA_PADDING_REFERENCE * 2)).toBe(80);
+    expect(mediaInsetPx({ padding: 40 }, MEDIA_PADDING_REFERENCE / 2)).toBe(20);
+    // The same share the percentage padding lays down — one rule, two units.
+    expect(mediaInsetPx({ padding: 40 }, 1280)).toBe(
+      (parseFloat(mediaBoxStyle({ padding: 40 }).padding as string) / 100) *
+        1280,
+    );
+  });
+
+  it("falls back to the authored inset when no width is known", () => {
+    expect(mediaInsetPx({ padding: 40 })).toBe(40);
+    expect(mediaInsetPx({})).toBe(0);
+  });
+
+  // What the picture itself is left of the box, once the band round it is
+  // taken out — the factor that keeps an enlarged COMPOSITION inside the
+  // viewport rather than just the picture at the heart of it.
+  it("reports the share of the box the picture itself takes", () => {
+    expect(mediaPictureShare({})).toBe(1);
+    // 40 of 640 a side, so the picture is 640 − 80 of it.
+    expect(mediaPictureShare({ padding: 40 })).toBe(0.875);
+    expect(mediaPictureShare({ padding: MEDIA_PADDING_MAX })).toBe(0.75);
+  });
+
+  // The height budget is the awkward one: both bands come out of the box's
+  // WIDTH, so on a wide picture they are a bigger share of the height than of
+  // the width, and taking the height through the picture's share alone leaves a
+  // composition taller than the screen it was supposed to fit.
+  it("takes the height budget through the shape of the picture", () => {
+    // Nothing to fit around, so nothing to divide by.
+    expect(mediaHeightBudgetFactor({}, 1.778)).toBe(1);
+    // A square picture is the case where the two axes agree, so the factor is
+    // exactly the share the width cap uses.
+    expect(mediaHeightBudgetFactor({ padding: 40 }, 1)).toBeCloseTo(
+      1 / mediaPictureShare({ padding: 40 }),
+      10,
+    );
+    // 16:9 needs more room than that, and a portrait needs less.
+    expect(mediaHeightBudgetFactor({ padding: 40 }, 16 / 9)).toBeGreaterThan(
+      mediaHeightBudgetFactor({ padding: 40 }, 1),
+    );
+    expect(mediaHeightBudgetFactor({ padding: 40 }, 9 / 16)).toBeLessThan(
+      mediaHeightBudgetFactor({ padding: 40 }, 1),
+    );
+  });
+
+  // The property that matters: picture plus both bands is exactly the budget,
+  // whatever shape the picture is.
+  it("spends the whole height budget and no more", () => {
+    const media = { padding: MEDIA_PADDING_MAX };
+    for (const aspect of [16 / 9, 1, 9 / 16, 3]) {
+      const budget = 800;
+      const height = budget / mediaHeightBudgetFactor(media, aspect);
+      const box = mediaContainerWidth(media, height * aspect);
+      expect(height + 2 * mediaInsetPx(media, box)).toBeCloseTo(budget, 10);
+    }
+  });
+
+  // The measurement runs the other way round on the one surface sized BY its
+  // picture: what is knowable there is how wide the picture came out, and the
+  // container it implies is what both the inset and the corner are shares of.
+  // Recovering it is what breaks the loop — a band derived from the box it is
+  // part of would chase its own tail.
+  it("recovers the container width an enlarged picture implies", () => {
+    expect(mediaContainerWidth({}, 640)).toBe(640);
+    // A 560px picture with a 40px-per-640 band: 560 / 0.875.
+    expect(mediaContainerWidth({ padding: 40 }, 560)).toBe(640);
+
+    // And it round-trips at any size, which is the property the lightbox needs:
+    // picture + both bands is exactly the container they were measured from.
+    const media = { padding: MEDIA_PADDING_MAX };
+    const box = mediaContainerWidth(media, 1200);
+    expect(1200 + 2 * mediaInsetPx(media, box)).toBeCloseTo(box, 10);
   });
 
   // A `contain` picture cannot fill its frame, so a stretched element would be

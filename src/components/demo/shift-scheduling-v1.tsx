@@ -840,7 +840,11 @@ export function ShiftSchedulingV1() {
           dialog's — and outside the stage, so pressing one is not mistaken for
           the visitor reaching into the form mid-performance. */}
       <DemoControls
-        onReplay={replay}
+        onPlay={replay}
+        // Stops the run where it stands and keeps its work — the same break-in
+        // touching the form already performs, offered as a control.
+        onStop={stopTour}
+        running={cursor.running}
         onReset={reset}
         resettable={dirty && !cursor.running}
       />

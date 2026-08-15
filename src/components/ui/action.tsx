@@ -25,10 +25,12 @@ export type ActionVariant = "text" | "icon" | "link";
 /**
  * The fill prominence a Button/Link takes — mirrors the recipe's `emphasis`,
  * orthogonal to `variant` (the shape). `secondary` is the filled chip;
- * `tertiary` has no resting fill and its own subtler hover wash. `primary` is
+ * `tertiary` has no resting fill and its own subtler hover wash; `glass` is the
+ * translucent, blurred chip for an icon button that floats ON a picture, where
+ * there is no surface behind the glyph to hold it down. `primary` is
  * intentionally absent until its look is designed.
  */
-export type ActionEmphasis = "secondary" | "tertiary";
+export type ActionEmphasis = "secondary" | "tertiary" | "glass";
 
 /**
  * The scale a Button/Link takes — mirrors the recipe's `size`, orthogonal to

@@ -579,7 +579,7 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     await play();
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Replay Demo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play Demo" }));
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("false");
 
     const finished = peak(await play());
@@ -634,7 +634,7 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
       }),
     );
     const reset = screen.getByRole("button", { name: "Reset Demo" });
-    const replay = screen.getByRole("button", { name: "Replay Demo" });
+    const replay = screen.getByRole("button", { name: "Play Demo" });
     expect(
       reset.compareDocumentPosition(replay) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
