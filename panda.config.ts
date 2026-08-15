@@ -1114,8 +1114,14 @@ export default defineConfig({
             // set to the block's width would run to a measure no other prose
             // in the article uses, so it takes the text column's — centred
             // under the block by the `alignItems` above, exactly as a shorter
-            // caption already sits.
-            "& > figcaption": { maxWidth: "token(sizes.articleContent)" },
+            // caption already sits. `textAlign` centres the LINES too, so a
+            // caption that wraps still reads as centred rather than as a
+            // ragged left column — the same alignment the editor's own
+            // caption has always had.
+            "& > figcaption": {
+              maxWidth: "token(sizes.articleContent)",
+              textAlign: "center",
+            },
           },
         }),
 
