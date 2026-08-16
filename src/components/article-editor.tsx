@@ -1085,8 +1085,10 @@ const editorCaptionStyle = cx(
   editableBaseStyle,
   typographyStyles({ type: "caption" }),
   css({
+    // Only what an EDITABLE caption needs: a full-width hit area to click
+    // into and a line of height to hold the placeholder. The measure and the
+    // centring come from `articleShowcase`, the same figure the reader uses.
     width: "full",
-    textAlign: "center",
     minHeight: "1.5em",
     "&:empty::before, &[data-empty]::before": {
       content: "attr(data-placeholder)",

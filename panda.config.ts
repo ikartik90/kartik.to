@@ -1118,6 +1118,9 @@ export default defineConfig({
             // caption that wraps still reads as centred rather than as a
             // ragged left column — the same alignment the editor's own
             // caption has always had.
+            // (The caption's `text-wrap` cannot be set here — `Typography`'s
+            // own `pretty` is an atomic utility, a later layer than this one,
+            // so the balance is a `wrap` variant on the type itself.)
             "& > figcaption": {
               maxWidth: "token(sizes.articleContent)",
               textAlign: "center",

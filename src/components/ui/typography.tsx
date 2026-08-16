@@ -55,7 +55,12 @@ export const typographyStyles = cva({
         textStyle: "quote",
       },
       caption: {
+        // `balance` rather than the base's `pretty`: a caption is a line or
+        // two set under something and centred on it, so what matters is that
+        // the lines come out even — `pretty` only guards the last one, which
+        // leaves a centred caption looking bottom-heavy.
         textStyle: "caption",
+        textWrap: "balance",
       },
       sidenote: {
         textStyle: "sidenote",
