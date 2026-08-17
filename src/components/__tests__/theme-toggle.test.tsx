@@ -35,32 +35,32 @@ describe("ThemeToggle", () => {
   // door, and a door is labelled with the room on the other side of it.
   it("offers dark while the page is light", () => {
     render(<ThemeToggle />);
-    expect(screen.getByRole("button", { name: "Switch to dark mode" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Switch to dark theme" })).toBeDefined();
   });
 
   it("offers light while the page is dark", () => {
     mockMode.mockReturnValue("dark");
     render(<ThemeToggle />);
-    expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Switch to light theme" })).toBeDefined();
   });
 
   it("reads the system preference when the mode follows the system", () => {
     mockMode.mockReturnValue("system");
     mockPrefersDark.mockReturnValue(true);
     render(<ThemeToggle />);
-    expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Switch to light theme" })).toBeDefined();
   });
 
   it("switches to the theme it offered", () => {
     render(<ThemeToggle />);
-    fireEvent.click(screen.getByRole("button", { name: "Switch to dark mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to dark theme" }));
     expect(mockSetMode).toHaveBeenCalledWith("dark");
   });
 
   it("switches back the other way", () => {
     mockMode.mockReturnValue("dark");
     render(<ThemeToggle />);
-    fireEvent.click(screen.getByRole("button", { name: "Switch to light mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to light theme" }));
     expect(mockSetMode).toHaveBeenCalledWith("light");
   });
 

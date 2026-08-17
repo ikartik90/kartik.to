@@ -9,9 +9,11 @@ import { Tooltip } from "./ui/tooltip";
 
 // The control names and pictures the theme it OFFERS, never the one in force:
 // it is a door, and a door is labelled with the room on the other side.
+// "theme", the word the command palette has always used for the same act —
+// one action the site names one way, wherever it is reached from.
 const OFFER = {
-  light: "Switch to light mode",
-  dark: "Switch to dark mode",
+  light: "Switch to light theme",
+  dark: "Switch to dark theme",
 } as const;
 
 // Both glyphs ship on every render and the cascade picks between them, so the
