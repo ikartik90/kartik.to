@@ -26,9 +26,13 @@ export function useCursorTooltip(visible: boolean) {
     rafRef.current = 0;
     const el = ref.current;
     if (!el) return;
+    // `offsetWidth` is the label at its natural width — read before writing,
+    // and only ever compared against the viewport, so this is one measurement
+    // per frame that already had to touch layout, not a read-write-read.
     const { left, top } = getCursorTooltipPosition(
       pointerRef.current.x,
       pointerRef.current.y,
+      { width: el.offsetWidth, viewportWidth: window.innerWidth },
     );
     el.style.left = left;
     el.style.top = top;
