@@ -113,7 +113,16 @@ export default defineConfig({
         sizes: {
           articleContent: { value: "640px" },
           dialogSm: { value: "480px" },
-          listingCardWidth: { value: "304px" },
+          // The pitch the projects listing counts its tiers in, and the ONLY
+          // number that grid is built from: it goes two-up at 2 × this and
+          // three-up at 3 × this. Those are FLOORS, not widths — under the
+          // three-up ceiling a grid spreads to whatever room it has, so a tier
+          // says the least a grid of that many columns may be rather than what
+          // it is held to. The gutter comes out of the pitch rather than being
+          // added to it, so a column runs its share of one under 320 at the
+          // very bottom of a tier and grows past it the rest of the way up.
+          listingColumn: { value: "320px" },
+          listingGrid3Up: { value: "calc(3 * {sizes.listingColumn})" },
           articleShowcase: { value: "960px" },
           calchemyDemo: { value: "720px" },
           librarySidebar: { value: "200px" },
@@ -236,7 +245,7 @@ export default defineConfig({
         },
       },
 
-      containerNames: ["demoFrame"],
+      containerNames: ["demoFrame", "projectsGrid"],
 
       semanticTokens: {
         colors: {
