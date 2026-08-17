@@ -47,7 +47,15 @@ export default defineConfig({
       : {}),
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // `userAgent: undefined` drops the descriptor's own UA string, which pins
+  // `Windows NT 10.0` on every host — and Chromium derives `userAgentData`
+  // from the override too, so the page CLAIMS Windows while the keyboard is
+  // driven from the real OS. Anything platform-shaped then reads one machine's
+  // truth and the other's keys: the palette's shortcut is ⌘K or Ctrl K by that
+  // claim, so a Mac would emulate Windows, be told Ctrl, and be sent ⌘.
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"], userAgent: undefined } },
+  ],
 
   ...(externalTarget
     ? {}

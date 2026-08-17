@@ -66,6 +66,18 @@ export const typographyStyles = cva({
         textStyle: "sidenote",
       },
     },
+    // The base's `pretty` is right for prose that runs on — it guards the last
+    // line and leaves the rest alone. A short centred paragraph standing on its
+    // own wants every line even instead, and that has to be asked for HERE: the
+    // base is an atomic utility, so a `text-wrap` from the call site would sit
+    // in the same layer at the same specificity and the winner would be
+    // stylesheet order. As a variant it is merged into one class before
+    // anything is emitted.
+    wrap: {
+      balance: {
+        textWrap: "balance",
+      },
+    },
   },
 });
 
@@ -73,6 +85,8 @@ export interface TypographyProps
   extends React.HTMLAttributes<HTMLElement> {
   tag: TypographyTag;
   type: TypographyType;
+  /** Even out the lines instead of the type's own wrapping. */
+  wrap?: "balance";
   children: React.ReactNode;
   className?: string;
 }
@@ -80,12 +94,13 @@ export interface TypographyProps
 export function Typography({
   tag: Tag,
   type,
+  wrap,
   children,
   className,
   ...rest
 }: TypographyProps) {
   return (
-    <Tag className={cx(typographyStyles({ type }), className)} {...rest}>
+    <Tag className={cx(typographyStyles({ type, wrap }), className)} {...rest}>
       <WireframeText>{children}</WireframeText>
     </Tag>
   );

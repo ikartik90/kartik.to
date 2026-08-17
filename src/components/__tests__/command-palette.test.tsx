@@ -47,11 +47,23 @@ Object.defineProperty(window, "matchMedia", {
 // JSDOM dialog polyfill
 // ---------------------------------------------------------------------------
 
+/** Claim the field the shortcut's platform detection reads first. */
+function stubPlatform(platform: string) {
+  Object.defineProperty(navigator, "userAgentData", {
+    value: { platform },
+    configurable: true,
+  });
+}
+
 afterEach(() => {
   cleanup();
+  delete (navigator as { userAgentData?: unknown }).userAgentData;
 });
 
 beforeEach(() => {
+  // The shortcut is ⌘K on Apple hardware and Ctrl K everywhere else, so every
+  // test that presses it has to say which keyboard it is pressing it on.
+  stubPlatform("macOS");
   mockUseSession.mockReturnValue({ data: null });
   mockPathname.mockReturnValue("/");
   mockSetMode.mockClear();
@@ -298,6 +310,33 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: false });
+      expect(dialog.showModal).not.toHaveBeenCalled();
+    });
+
+    // ⌘ on Apple hardware is Ctrl on a PC keyboard — the same shortcut, typed
+    // with the key that platform's shortcuts are actually typed with. Neither
+    // modifier is accepted on the other's platform: Ctrl+K is a text binding on
+    // macOS, and Meta on Windows is the OS's own key.
+    it("opens on Ctrl+K on a non-Apple platform", () => {
+      stubPlatform("Windows");
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+      expect(dialog.showModal).toHaveBeenCalledOnce();
+    });
+
+    it("does not open on ⌘K on a non-Apple platform", () => {
+      stubPlatform("Windows");
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(dialog.showModal).not.toHaveBeenCalled();
+    });
+
+    it("does not open on Ctrl+K on Apple hardware", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
       expect(dialog.showModal).not.toHaveBeenCalled();
     });
   });

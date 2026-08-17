@@ -1,7 +1,11 @@
 import { expect, test } from "./fixtures";
 
+// `ControlOrMeta` rather than `Meta`: the palette answers to ⌘ on Apple
+// hardware and to Ctrl everywhere else, so a spec pressing one of them is only
+// true on half the machines this suite runs on — a developer's Mac locally, a
+// Linux runner in CI. Playwright's modifier resolves the same way the app does.
 test.describe("command palette", () => {
-  test("opens on Cmd+K and closes on Escape", async ({
+  test("opens on the platform's shortcut and closes on Escape", async ({
     page,
     pageFailures,
   }) => {
@@ -10,7 +14,16 @@ test.describe("command palette", () => {
     const palette = page.getByRole("dialog", { name: "Command palette" });
     await expect(palette).toBeHidden();
 
-    await page.keyboard.press("Meta+k");
+    // The chip and the listener are one fact — whichever key opens the palette
+    // is the key the header offers — so the browser's platform has to be
+    // readable from both ends. `process.platform` is what `ControlOrMeta`
+    // resolves against, and (with the descriptor's UA override dropped in the
+    // config) what the page reads too.
+    await expect(page.locator("[data-site-menu-shortcut]")).toHaveText(
+      process.platform === "darwin" ? "⌘K" : "Ctrl K",
+    );
+
+    await page.keyboard.press("ControlOrMeta+k");
     await expect(palette).toBeVisible();
     await expect(page.getByPlaceholder("Search…")).toBeFocused();
 
@@ -22,7 +35,7 @@ test.describe("command palette", () => {
 
   test("filters commands as you type", async ({ page }) => {
     await page.goto("/");
-    await page.keyboard.press("Meta+k");
+    await page.keyboard.press("ControlOrMeta+k");
 
     // Scoped to the dialog: the gutter's theme control offers the same act in
     // the same words, so its resting tooltip answers to this text too.
@@ -39,7 +52,7 @@ test.describe("command palette", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.keyboard.press("Meta+k");
+    await page.keyboard.press("ControlOrMeta+k");
 
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
     // Admin-only groups are gated on a client-side session; a logged-out
@@ -61,7 +74,7 @@ test.describe("theme", () => {
     // and the offered command is deterministic.
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
-    await page.keyboard.press("Meta+k");
+    await page.keyboard.press("ControlOrMeta+k");
     await page
       .getByRole("dialog", { name: "Command palette" })
       .getByText("Switch to dark theme")

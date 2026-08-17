@@ -12,6 +12,7 @@ import {
 import { Dialog } from "@/components/ui/dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
+import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
 import DarkIcon from "@/assets/icons/dark.svg";
 import LightIcon from "@/assets/icons/light.svg";
@@ -138,7 +139,9 @@ export function CommandPalette() {
       setOpenKey((k) => k + 1);
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.metaKey && e.key === "k") {
+      // ⌘K on Apple hardware, Ctrl K everywhere else — whichever key the
+      // header's chip is offering on this platform.
+      if (hasShortcutModifier(e) && e.key === "k") {
         e.preventDefault();
         if (dialogRef.current?.open) {
           dialogRef.current.close();
