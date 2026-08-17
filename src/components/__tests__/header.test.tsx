@@ -10,6 +10,13 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
 }));
 
+// jsdom does not implement matchMedia, which the theme toggle in the opposite
+// gutter resolves `system` mode through.
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: vi.fn().mockReturnValue({ matches: false }),
+});
+
 describe("Header", () => {
   beforeEach(() => {
     mockPathname.mockReturnValue("/");
@@ -19,14 +26,21 @@ describe("Header", () => {
     cleanup();
   });
 
-  it("renders the circular logo, title, and tagline on the home page", () => {
+  it("renders the circular logo and its tagline on the home page", () => {
     render(<Header />);
     expect(screen.getByRole("banner")).toBeDefined();
     expect(
       document.querySelector('img[src*="kartik-iyer-logo"]'),
     ).not.toBeNull();
-    expect(screen.getByText("Kartik Iyer")).toBeDefined();
     expect(screen.getByText("DESIGNER • BUILDER • ENGINEER •")).toBeDefined();
+  });
+
+  it("leaves the name to the logo rather than setting it beside it", () => {
+    render(<Header />);
+    // Nothing spells the name out in the row any more, so the picture has to
+    // carry it — an empty alt would drop it from the page entirely.
+    expect(screen.queryByText("Kartik Iyer")).toBeNull();
+    expect(screen.getByAltText("Kartik Iyer")).toBeDefined();
   });
 
   it("asks for the command palette when the menu button is pressed", () => {

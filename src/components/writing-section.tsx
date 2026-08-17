@@ -8,12 +8,6 @@ const sectionStyle = css({
   width: "token(spacing.full)",
 });
 
-const sectionLabelStyle = css({
-  textStyle: "caption",
-  color: "text.default",
-  marginBottom: "3xl",
-});
-
 const listStyle = css({
   listStyle: "none",
   display: "flex",
@@ -59,8 +53,7 @@ interface WritingSectionProps {
 
 export function WritingSection({ articles }: WritingSectionProps) {
   return (
-    <section className={sectionStyle}>
-      <p className={sectionLabelStyle}>Writing</p>
+    <section className={sectionStyle} aria-label="Writing">
       <ul className={listStyle}>
         {articles.map((article) => (
           <li key={article.id}>

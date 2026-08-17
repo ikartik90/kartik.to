@@ -1,6 +1,7 @@
 "use client";
 
 import ReturnIcon from "@/assets/icons/return.svg";
+import { ThemeToggle } from "./theme-toggle";
 import { Link } from "./ui/link";
 import { Tooltip } from "./ui/tooltip";
 import { Typography } from "./ui/typography";
@@ -28,6 +29,7 @@ export function ArticleIntro({ title }: ArticleIntroProps) {
           </Link.Tooltip>
         </Link>
       </div>
+      <ThemeToggle />
       {title && (
         <Typography tag="h1" type="title">
           {title}

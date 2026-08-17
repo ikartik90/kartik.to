@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ArticleIntro } from "../article-intro";
+
+// jsdom does not implement matchMedia, which the theme toggle in the opposite
+// gutter resolves `system` mode through.
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: vi.fn().mockReturnValue({ matches: false }),
+});
 
 describe("ArticleIntro", () => {
   afterEach(() => {
