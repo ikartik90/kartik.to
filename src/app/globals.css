@@ -173,19 +173,16 @@ body {
   }
 
   /*
-    Inset by the orbit's OVERHANG, because the logo's leftmost ink is not the
-    logo. The tagline rides a 28-radius path drawn in a 60px stage that is
-    already offset -6px from the 48px avatar, and its glyphs stand off that
-    path — 72.2px of ring around a 48px picture, so it reaches 12.1px past the
-    avatar on both sides (measured: the <text>'s own getBBox, which the spin
-    cannot change). Left flush, that put the ring a token OUTSIDE the column
-    every line of the page below it starts on. The inset aligns the ring, not
-    the box, and 12px lands it within a tenth of a pixel.
+    No inset, because centred there is nothing to correct for. The tagline
+    rides a 28-radius path drawn in a 60px stage offset -6px from the 48px
+    avatar, and its glyphs stand off that path — 72.2px of ring around a 48px
+    picture, so it overhangs 12.1px on BOTH sides. Set flush left that was a
+    real error, and the row paid it back with a matching inset; centred, the
+    two overhangs cancel and the ring's middle is the box's middle.
   */
   [data-site-brand] {
     width: min(100%, var(--sizes-article-content));
     margin-inline: auto;
-    padding-inline-start: var(--spacing-lg);
   }
 
   /*
@@ -207,17 +204,40 @@ body {
     gap: var(--spacing-xs);
   }
 
+  /*
+    The other gutter, and the mirror of whichever control the surface opens
+    with: the menu on the home page, the back link on an article. One rule
+    serves both because both open on a 48px first row — the logo there, the
+    title's first line here — so `top: 0` plus that height centres the toggle
+    on the same pixel its counterpart sits on, without either surface having
+    to restate how tall its own first row is.
+  */
+  [data-theme-toggle] {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: calc(2rem * 1.5);
+    display: flex;
+    align-items: center;
+  }
+
   /* The article intro's breakpoint, on the same terms: below it there is no
-     gutter left to sit in, so the control stacks above the row instead. */
+     gutter left to sit in, so both controls move above the row — and by the
+     same means, into the opening offset rather than into the flow. See
+     [data-article-back-anchor] below for why they stay out of flow. */
   @container site-header (max-width: 819px) {
     [data-site-menu] {
-      position: static;
-      width: min(100%, var(--sizes-article-content));
-      margin-inline: auto;
-      margin-top: calc(var(--spacing-4xl) - var(--spacing-5xl));
-      margin-bottom: calc(
-        var(--spacing-5xl) - var(--spacing-4xl) + var(--spacing-xl)
-      );
+      top: auto;
+      bottom: 100%;
+      left: max(0px, calc((100% - var(--sizes-article-content)) / 2));
+      height: var(--spacing-5xl);
+    }
+
+    [data-theme-toggle] {
+      top: auto;
+      bottom: 100%;
+      right: max(0px, calc((100% - var(--sizes-article-content)) / 2));
+      height: var(--spacing-5xl);
     }
   }
 
@@ -245,26 +265,36 @@ body {
 
   /*
     Side-by-side needs ~80px left gutter: (showcase − content) / 2.
-    Below 820px intro width, stack the back control above the title.
+    Below 820px intro width, move the back control above the title.
 
-    Wrapped, the control takes the TOP OF THE PAGE — 4xl rather than the 5xl
-    opening offset every surface otherwise shares — and hands the 40px it gave
-    up straight back below itself, so the row it wrapped away from doesn't
-    move. Both halves matter: without the lift the control merely sits one 16px
-    gap above the title (or the logo, on the home header, which stacks by the
-    same rule); without the give-back it drags the whole page up with it and
-    the two are just as close as they were.
+    It stays ABSOLUTE across the breakpoint, which is the whole point: only the
+    control has run out of room, so only the control should move. Put back in
+    flow it would push every line of the page down by its own height and its
+    gap, and the title, the prose and everything under them would jump on a
+    resize that changed nothing about them.
+
+    So it moves into the 5xl opening offset the row already sits behind —
+    `bottom: 100%` puts it above the row, `height` makes it exactly that
+    offset, and the `align-items: center` it already has drops the control in
+    the middle of it, air above and below. `left` alone (no `right`) keeps the
+    box shrunk to the control, which matters now that a second control holds
+    the other end of the same strip: a full-width box would lie over it and
+    swallow its clicks. The offset lands on the text column's edge, which is
+    where the `width` + `margin-inline: auto` of a static box used to put it.
   */
   @container article-intro (max-width: 819px) {
     [data-article-back-anchor] {
-      position: static;
-      height: auto;
-      width: min(100%, var(--sizes-article-content));
-      margin-inline: auto;
-      margin-top: calc(var(--spacing-4xl) - var(--spacing-5xl));
-      margin-bottom: calc(
-        var(--spacing-5xl) - var(--spacing-4xl) + var(--spacing-xl)
-      );
+      top: auto;
+      bottom: 100%;
+      left: max(0px, calc((100% - var(--sizes-article-content)) / 2));
+      height: var(--spacing-5xl);
+    }
+
+    [data-theme-toggle] {
+      top: auto;
+      bottom: 100%;
+      right: max(0px, calc((100% - var(--sizes-article-content)) / 2));
+      height: var(--spacing-5xl);
     }
   }
 

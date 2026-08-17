@@ -6,9 +6,9 @@ import { css, cx } from "../../styled-system/css";
 import { hotkey } from "../../styled-system/recipes";
 import MenuIcon from "@/assets/icons/menu.svg";
 import { openCommandPalette } from "@/utils/command-palette-channel";
+import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
 import { Tooltip } from "./ui/tooltip";
-import { Typography } from "./ui/typography";
 
 const TAGLINE = "DESIGNER • BUILDER • ENGINEER •";
 
@@ -21,10 +21,11 @@ const ORBIT_CENTER_Y = STAGE_HEIGHT / 2;
 /** Clockwise offset in degrees before/at orbit start. Tweak to align tagline copy. */
 const ORBIT_INITIAL_ANGLE_DEG = -132;
 
+// One thing in the row now, so the row's whole job is to put it in the middle
+// of the column the page below it reads on.
 const brandStyle = css({
   display: "flex",
-  alignItems: "center",
-  gap: "calc(token(spacing.xxl) + token(spacing.sm))",
+  justifyContent: "center",
 });
 
 // The shortcut and the tooltip are the same button's label wearing two faces,
@@ -115,7 +116,8 @@ export function Header() {
     <header data-site-header>
       {/* The left gutter's control, in the same seat the article pages give
           their back link: flush with the showcase edge, centred on the first
-          row of the page. Both are the one control the surface opens with. */}
+          row of the page. Both are the one control the surface opens with —
+          and the theme toggle answers it from the gutter opposite. */}
       <div data-site-menu>
         <Button variant="icon" aria-label="Menu" onClick={openCommandPalette}>
           <MenuIcon />
@@ -181,16 +183,17 @@ export function Header() {
             <img
               data-brand-avatar=""
               src="/assets/kartik-iyer-logo.png"
-              alt=""
+              // Named, not decorative: with no title beside it the picture is
+              // the only place the name is said, so an empty alt would take it
+              // off the page for anyone not looking at it.
+              alt="Kartik Iyer"
               width={LOGO_SIZE}
               height={LOGO_SIZE}
             />
           </span>
         </div>
-        <Typography tag="p" type="title">
-          Kartik Iyer
-        </Typography>
       </div>
+      <ThemeToggle />
     </header>
   );
 }
