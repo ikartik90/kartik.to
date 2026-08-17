@@ -155,9 +155,9 @@ body {
   /*
     Showcase-wide like an article's intro, and for the same reason: the brand
     row keeps the content column, and the width either side of it is the gutter
-    the menu control sits in. Both surfaces open at the same offset (5xl) with a
-    48px first row — the logo here, the title's first line there — so the two
-    controls land on exactly the same pixel.
+    that positions the controls above it. Both surfaces open at the same offset
+    (5xl), and that offset is the strip the controls live in — see the gutter
+    control rules below.
   */
   [data-site-header] {
     position: relative;
@@ -168,8 +168,6 @@ body {
       var(--sizes-article-showcase),
       calc(100% - 2 * var(--spacing-xxl))
     );
-    container-type: inline-size;
-    container-name: site-header;
   }
 
   /*
@@ -186,126 +184,67 @@ body {
   }
 
   /*
-    `top`/`bottom` rather than a height: out of flow, the header measures the
-    brand row alone, so stretching to it is what centres the control on that row
-    without restating how tall the logo is.
-  */
-  [data-site-menu] {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    /* Measured from the chip's BOX, which the icon button already pads by 4px
-       around its 20px glyph — so the gap the eye reads is this plus that. The
-       shortcut belongs to the button beside it and has to sit close enough to
-       be read as its label rather than as the next thing along. */
-    gap: var(--spacing-xs);
-  }
+    The gutter controls — the home page's menu and the article's back link on
+    one side, the theme toggle answering from the other — across both surfaces.
 
-  /*
-    The other gutter, and the mirror of whichever control the surface opens
-    with: the menu on the home page, the back link on an article. One rule
-    serves both because both open on a 48px first row — the logo there, the
-    title's first line here — so `top: 0` plus that height centres the toggle
-    on the same pixel its counterpart sits on, without either surface having
-    to restate how tall its own first row is.
+    ONE seat, at every width — the row ABOVE the first row, which is where they
+    used to end up only once the showcase gutter beside that row ran out (a
+    container query at 819px). Two seats meant the pair jumped a whole row on a
+    resize that changed nothing about the page under them, so the wrapped seat
+    is now simply the seat: `bottom: 100%` lifts the control clear of the row it
+    is anchored to, `height` fills the 5xl offset that row already opens on
+    exactly, and `align-items: center` drops the control in the middle of it
+    with air above and below.
+
+    Flush with the SHOWCASE edge, so the pair spans the full 960 rather than
+    drawing in to the text column under them. That is also where the squeeze
+    comes from, and why no inset is written here: the surfaces they are anchored
+    to are `min(100%, showcase)` boxes, so past 960 the two controls hold still
+    and below it they come in with the box, on the page's own 20px margin.
+
+    Out of flow throughout, and that is the other half of it: only the controls
+    have ever run out of room, so only the controls should move. In flow the
+    strip would push every line of the page down by its own height.
+
+    `left` alone on one and `right` alone on the other (never both) keeps each
+    box shrunk to its control — a full-width box would lie over its opposite
+    number and swallow its clicks.
   */
+  [data-site-menu],
+  [data-article-back-anchor],
   [data-theme-toggle] {
     position: absolute;
-    right: 0;
-    top: 0;
-    height: calc(2rem * 1.5);
+    bottom: 100%;
+    height: var(--spacing-5xl);
     display: flex;
     align-items: center;
   }
 
-  /* The article intro's breakpoint, on the same terms: below it there is no
-     gutter left to sit in, so both controls move above the row — and by the
-     same means, into the opening offset rather than into the flow. See
-     [data-article-back-anchor] below for why they stay out of flow. */
-  @container site-header (max-width: 819px) {
-    [data-site-menu] {
-      top: auto;
-      bottom: 100%;
-      left: max(0px, calc((100% - var(--sizes-article-content)) / 2));
-      height: var(--spacing-5xl);
-    }
+  [data-site-menu],
+  [data-article-back-anchor] {
+    left: 0;
+  }
 
-    [data-theme-toggle] {
-      top: auto;
-      bottom: 100%;
-      right: max(0px, calc((100% - var(--sizes-article-content)) / 2));
-      height: var(--spacing-5xl);
-    }
+  [data-theme-toggle] {
+    right: 0;
+  }
+
+  /* Measured from the chip's BOX, which the icon button already pads by 4px
+     around its 20px glyph — so the gap the eye reads is this plus that. The
+     shortcut belongs to the button beside it and has to sit close enough to
+     be read as its label rather than as the next thing along. */
+  [data-site-menu] {
+    gap: var(--spacing-xs);
   }
 
   [data-article-intro] {
     position: relative;
     width: min(100%, var(--sizes-article-showcase));
-    container-type: inline-size;
-    container-name: article-intro;
   }
 
   [data-article-intro] h1 {
     width: min(100%, var(--sizes-article-content));
     margin-inline: auto;
-  }
-
-  [data-article-back-anchor] {
-    position: absolute;
-    left: 0;
-    top: 0;
-    /* Match title textStyle first line (2rem × 1.5) — centers control on line 1 */
-    height: calc(2rem * 1.5);
-    display: flex;
-    align-items: center;
-  }
-
-  /*
-    Side-by-side needs ~80px left gutter: (showcase − content) / 2.
-    Below 820px intro width, move the back control above the title.
-
-    It stays ABSOLUTE across the breakpoint, which is the whole point: only the
-    control has run out of room, so only the control should move. Put back in
-    flow it would push every line of the page down by its own height and its
-    gap, and the title, the prose and everything under them would jump on a
-    resize that changed nothing about them.
-
-    So it moves into the 5xl opening offset the row already sits behind —
-    `bottom: 100%` puts it above the row, `height` makes it exactly that
-    offset, and the `align-items: center` it already has drops the control in
-    the middle of it, air above and below. `left` alone (no `right`) keeps the
-    box shrunk to the control, which matters now that a second control holds
-    the other end of the same strip: a full-width box would lie over it and
-    swallow its clicks. The offset lands on the text column's edge, which is
-    where the `width` + `margin-inline: auto` of a static box used to put it.
-  */
-  @container article-intro (max-width: 819px) {
-    [data-article-back-anchor] {
-      top: auto;
-      bottom: 100%;
-      left: max(0px, calc((100% - var(--sizes-article-content)) / 2));
-      height: var(--spacing-5xl);
-    }
-
-    [data-theme-toggle] {
-      top: auto;
-      bottom: 100%;
-      right: max(0px, calc((100% - var(--sizes-article-content)) / 2));
-      height: var(--spacing-5xl);
-    }
-  }
-
-  /*
-    Titleless draft: keep the back control in its usual absolute spot (left
-    gutter, aligned to where the title's first line would be), but reserve one
-    title-line of height so the collapsed intro doesn't let content slide up
-    underneath it. Matches a single-line-titled article's header offset.
-  */
-  [data-article-intro]:not(:has(h1)) {
-    min-height: calc(2rem * 1.5);
   }
 
   [data-article-back] {
