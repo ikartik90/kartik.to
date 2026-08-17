@@ -14,10 +14,15 @@ test.describe("public routes", () => {
 
     await expect(page).toHaveTitle("kartik.to");
     // The header only renders on "/", so its presence doubles as a check that
-    // the client-side `usePathname` branch hydrated.
-    await expect(page.getByText("Kartik Iyer")).toBeVisible();
-    await expect(page.getByText("Projects", { exact: true })).toBeVisible();
-    await expect(page.getByText("Writing", { exact: true })).toBeVisible();
+    // the client-side `usePathname` branch hydrated. The name is the logo's
+    // alt text now that nothing spells it out beside the picture — which is
+    // also the assertion that would catch the alt going back to decorative
+    // and taking the name off the page.
+    await expect(page.getByAltText("Kartik Iyer")).toBeVisible();
+    // Neither listing draws a heading any more; each names its landmark
+    // instead, so the region's accessible name is what says it is there.
+    await expect(page.getByRole("region", { name: "Projects" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Writing" })).toBeVisible();
 
     // Listings merge database posts over the static fallbacks, so assert the
     // sections are populated rather than pinning an exact count.

@@ -24,11 +24,15 @@ test.describe("command palette", () => {
     await page.goto("/");
     await page.keyboard.press("Meta+k");
 
+    // Scoped to the dialog: the gutter's theme control offers the same act in
+    // the same words, so its resting tooltip answers to this text too.
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+
     await page.getByPlaceholder("Search…").fill("theme");
-    await expect(page.getByText("Switch to dark theme")).toBeVisible();
+    await expect(palette.getByText("Switch to dark theme")).toBeVisible();
 
     await page.getByPlaceholder("Search…").fill("zzzzz");
-    await expect(page.getByText("Switch to dark theme")).toBeHidden();
+    await expect(palette.getByText("Switch to dark theme")).toBeHidden();
   });
 
   test("does not expose admin commands to an anonymous visitor", async ({
@@ -58,7 +62,10 @@ test.describe("theme", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
     await page.keyboard.press("Meta+k");
-    await page.getByText("Switch to dark theme").click();
+    await page
+      .getByRole("dialog", { name: "Command palette" })
+      .getByText("Switch to dark theme")
+      .click();
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
@@ -66,6 +73,31 @@ test.describe("theme", () => {
     // paint; if it regresses the page reloads light and flashes.
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+    expect(pageFailures).toEqual([]);
+  });
+
+  test("the gutter control flips the theme and renames itself", async ({
+    page,
+    pageFailures,
+  }) => {
+    await page.goto("/");
+
+    // Scoped to the banner because the palette offers the same act in the same
+    // words — this is the control in the header's right-hand gutter.
+    const gutter = page.getByRole("banner");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+    await gutter
+      .getByRole("button", { name: "Switch to dark theme" })
+      .click();
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    // It names the theme it OFFERS, so flipping the page has to rename it —
+    // a control still offering dark on a dark page is the regression here.
+    await expect(
+      gutter.getByRole("button", { name: "Switch to light theme" }),
+    ).toBeVisible();
 
     expect(pageFailures).toEqual([]);
   });
