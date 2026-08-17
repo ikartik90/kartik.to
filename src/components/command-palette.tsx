@@ -3,9 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { css } from "../../styled-system/css";
-import { dialogPanel, menuIcon, menuItem } from "../../styled-system/recipes";
+import {
+  dialogPanel,
+  hotkey,
+  menuIcon,
+  menuItem,
+} from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
+import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import SearchIcon from "@/assets/icons/search.svg";
 import DarkIcon from "@/assets/icons/dark.svg";
 import LightIcon from "@/assets/icons/light.svg";
@@ -59,23 +65,7 @@ const hotkeyHintStyle = css({
   flexShrink: 0,
 });
 
-const hotkeyBadgeStyle = css({
-  display: "flex",
-  alignItems: "center",
-  height: "xxl",
-  paddingInline: "sm",
-  borderRadius: "sm",
-  borderWidth: "token(spacing.3xs)",
-  borderStyle: "solid",
-  borderColor: "border.divider",
-  backgroundColor: "border.divider",
-});
-
-const hotkeyKeyStyle = css({
-  textStyle: "caption",
-  color: "text.body",
-  whiteSpace: "nowrap",
-});
+const hotkeyKeyStyle = hotkey({ surface: "menu" });
 
 const hotkeyLabelStyle = css({
   textStyle: "caption",
@@ -138,19 +128,31 @@ export function CommandPalette() {
   } = useCommandPalette(close, openKey);
 
   useEffect(() => {
+    // Guarded rather than toggling: `showModal()` on an already-open dialog
+    // throws, and a caller ringing the doorbell is asking for the palette, not
+    // asking about it. Only the shortcut, which is also how you dismiss it,
+    // toggles.
+    function open() {
+      if (dialogRef.current?.open) return;
+      dialogRef.current?.showModal();
+      setOpenKey((k) => k + 1);
+    }
     function handleKeyDown(e: KeyboardEvent) {
       if (e.metaKey && e.key === "k") {
         e.preventDefault();
         if (dialogRef.current?.open) {
           dialogRef.current.close();
         } else {
-          dialogRef.current?.showModal();
-          setOpenKey((k) => k + 1);
+          open();
         }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    const unsubscribe = subscribeCommandPalette(open);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      unsubscribe();
+    };
   }, []);
 
   return (
@@ -170,9 +172,7 @@ export function CommandPalette() {
             className={inputStyle}
           />
           <div className={hotkeyHintStyle}>
-            <div className={hotkeyBadgeStyle}>
-              <kbd className={hotkeyKeyStyle}>Esc</kbd>
-            </div>
+            <kbd className={hotkeyKeyStyle}>Esc</kbd>
             <span className={hotkeyLabelStyle}>to exit</span>
           </div>
         </div>
