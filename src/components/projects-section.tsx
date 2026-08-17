@@ -8,18 +8,6 @@ const CARDS_CONTAINER_ALIGNMENT =
 const SCROLL_PADDING =
   "calc(token(spacing.xxl) + max(0px, calc((100% - 2 * token(spacing.xxl) - token(sizes.articleContent)) / 2)))";
 
-const projectsWrapperStyle = css({
-  maxWidth: "articleContent",
-  marginInline: "auto",
-  width: "token(spacing.full)",
-});
-
-const sectionLabelStyle = css({
-  textStyle: "caption",
-  color: "text.default",
-  marginBottom: "3xl",
-});
-
 const scrollContainerStyle = css({
   display: "flex",
   alignItems: "flex-start",
@@ -59,10 +47,7 @@ interface ProjectsSectionProps {
 
 export function ProjectsSection({ projects }: ProjectsSectionProps) {
   return (
-    <section>
-      <div className={projectsWrapperStyle}>
-        <p className={sectionLabelStyle}>Projects</p>
-      </div>
+    <section aria-label="Projects">
       <div className={scrollContainerStyle}>
         <div className={gridStyle}>
           {projects.map((project) => (
