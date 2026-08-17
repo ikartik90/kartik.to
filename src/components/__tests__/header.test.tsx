@@ -17,6 +17,14 @@ Object.defineProperty(window, "matchMedia", {
   value: vi.fn().mockReturnValue({ matches: false }),
 });
 
+/** Claim the field the shortcut's platform detection reads first. */
+function stubPlatform(platform: string) {
+  Object.defineProperty(navigator, "userAgentData", {
+    value: { platform },
+    configurable: true,
+  });
+}
+
 describe("Header", () => {
   beforeEach(() => {
     mockPathname.mockReturnValue("/");
@@ -24,6 +32,7 @@ describe("Header", () => {
 
   afterEach(() => {
     cleanup();
+    delete (navigator as { userAgentData?: unknown }).userAgentData;
   });
 
   it("renders the circular logo and its tagline on the home page", () => {
@@ -54,7 +63,15 @@ describe("Header", () => {
     stop();
   });
 
+  it("writes the shortcut with the key the platform actually types", () => {
+    stubPlatform("Windows");
+    render(<Header />);
+    expect(screen.getByText("Ctrl K").tagName).toBe("KBD");
+    expect(screen.queryByText("⌘K")).toBeNull();
+  });
+
   it("shows the ⌘K shortcut beside the menu, and names it on hover", () => {
+    stubPlatform("macOS");
     render(<Header />);
 
     // The shortcut is the resting label; CSS is what withholds it from a

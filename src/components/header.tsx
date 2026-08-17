@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { css, cx } from "../../styled-system/css";
 import { hotkey } from "../../styled-system/recipes";
 import MenuIcon from "@/assets/icons/menu.svg";
+import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { openCommandPalette } from "@/utils/command-palette-channel";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
@@ -109,6 +110,10 @@ export function Header() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const pathId = `brand-tagline-path-${useId().replace(/:/g, "")}`;
+  // The chip names the key this visitor's keyboard actually has — ⌘K on Apple
+  // hardware, Ctrl K on a PC — which is the same shortcut the palette listens
+  // for on each.
+  const shortcut = useShortcutLabel("K");
 
   if (!isHome) return null;
 
@@ -126,7 +131,7 @@ export function Header() {
           </Button.Tooltip>
         </Button>
         <kbd className={cx(hotkey(), shortcutStyle)} data-site-menu-shortcut>
-          ⌘K
+          {shortcut}
         </kbd>
       </div>
       <div data-site-brand className={brandStyle}>
