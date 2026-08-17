@@ -152,14 +152,73 @@ body {
     backdrop-filter: blur(var(--spacing-md));
   }
 
+  /*
+    Showcase-wide like an article's intro, and for the same reason: the brand
+    row keeps the content column, and the width either side of it is the gutter
+    the menu control sits in. Both surfaces open at the same offset (5xl) with a
+    48px first row — the logo here, the title's first line there — so the two
+    controls land on exactly the same pixel.
+  */
   [data-site-header] {
+    position: relative;
     margin-inline: auto;
     margin-top: var(--spacing-5xl);
-    width: min(100%, var(--sizes-article-content));
+    width: min(100%, var(--sizes-article-showcase));
     max-width: min(
-      var(--sizes-article-content),
+      var(--sizes-article-showcase),
       calc(100% - 2 * var(--spacing-xxl))
     );
+    container-type: inline-size;
+    container-name: site-header;
+  }
+
+  /*
+    Inset by the orbit's OVERHANG, because the logo's leftmost ink is not the
+    logo. The tagline rides a 28-radius path drawn in a 60px stage that is
+    already offset -6px from the 48px avatar, and its glyphs stand off that
+    path — 72.2px of ring around a 48px picture, so it reaches 12.1px past the
+    avatar on both sides (measured: the <text>'s own getBBox, which the spin
+    cannot change). Left flush, that put the ring a token OUTSIDE the column
+    every line of the page below it starts on. The inset aligns the ring, not
+    the box, and 12px lands it within a tenth of a pixel.
+  */
+  [data-site-brand] {
+    width: min(100%, var(--sizes-article-content));
+    margin-inline: auto;
+    padding-inline-start: var(--spacing-lg);
+  }
+
+  /*
+    `top`/`bottom` rather than a height: out of flow, the header measures the
+    brand row alone, so stretching to it is what centres the control on that row
+    without restating how tall the logo is.
+  */
+  [data-site-menu] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    /* Measured from the chip's BOX, which the icon button already pads by 4px
+       around its 20px glyph — so the gap the eye reads is this plus that. The
+       shortcut belongs to the button beside it and has to sit close enough to
+       be read as its label rather than as the next thing along. */
+    gap: var(--spacing-xs);
+  }
+
+  /* The article intro's breakpoint, on the same terms: below it there is no
+     gutter left to sit in, so the control stacks above the row instead. */
+  @container site-header (max-width: 819px) {
+    [data-site-menu] {
+      position: static;
+      width: min(100%, var(--sizes-article-content));
+      margin-inline: auto;
+      margin-top: calc(var(--spacing-4xl) - var(--spacing-5xl));
+      margin-bottom: calc(
+        var(--spacing-5xl) - var(--spacing-4xl) + var(--spacing-xl)
+      );
+    }
   }
 
   [data-article-intro] {
@@ -187,6 +246,14 @@ body {
   /*
     Side-by-side needs ~80px left gutter: (showcase − content) / 2.
     Below 820px intro width, stack the back control above the title.
+
+    Wrapped, the control takes the TOP OF THE PAGE — 4xl rather than the 5xl
+    opening offset every surface otherwise shares — and hands the 40px it gave
+    up straight back below itself, so the row it wrapped away from doesn't
+    move. Both halves matter: without the lift the control merely sits one 16px
+    gap above the title (or the logo, on the home header, which stacks by the
+    same rule); without the give-back it drags the whole page up with it and
+    the two are just as close as they were.
   */
   @container article-intro (max-width: 819px) {
     [data-article-back-anchor] {
@@ -194,7 +261,10 @@ body {
       height: auto;
       width: min(100%, var(--sizes-article-content));
       margin-inline: auto;
-      margin-bottom: var(--spacing-xl);
+      margin-top: calc(var(--spacing-4xl) - var(--spacing-5xl));
+      margin-bottom: calc(
+        var(--spacing-5xl) - var(--spacing-4xl) + var(--spacing-xl)
+      );
     }
   }
 

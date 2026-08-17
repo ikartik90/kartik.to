@@ -178,7 +178,7 @@ export default function ButtonPreviewPage() {
         <Specimen label="internal, text">
           <Link href="/">Back to home</Link>
         </Specimen>
-        <Specimen label="internal, icon + label (the ← Home affordance)">
+        <Specimen label="internal, icon + label">
           <Link href="/" variant="icon" aria-label="Home">
             <ReturnIcon />
             <Link.Text>Home</Link.Text>
