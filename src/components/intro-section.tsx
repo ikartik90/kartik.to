@@ -19,17 +19,6 @@ const socialRowStyle = css({
   justifyContent: "center",
 });
 
-// Bold prose as the articles set it — 550 and the full-strength ink, so an
-// emphasised run steps out of the 75% the paragraph around it reads at. Both
-// have to be named rather than left to the `<strong>`: the rule that pairs them
-// (globals.css, `article :is(strong, b)`) is scoped to article content, which
-// the home page is not, and the tag alone would take the UA's `bolder` — 700,
-// well past what this type scale calls bold.
-const emphasisStyle = css({
-  fontWeight: "bold",
-  color: "text.default",
-});
-
 export function IntroSection() {
   return (
     <section className={sectionStyle}>
@@ -37,12 +26,10 @@ export function IntroSection() {
           lines have to come out even, which `pretty` — the body default — only
           promises for the last one. */}
       <Typography tag="p" type="bodyLarge" wrap="balance">
-        Hi, I&apos;m Kartik. A design systems and prototyping specialist of 12
-        years,{" "}
-        <strong className={emphasisStyle}>
-          driving startups into hypergrowth
-        </strong>
-        . I invest care into the details that make software feel considered.
+        Hi, I&apos;m Kartik. As a design systems and prototyping specialist of
+        12 years, I design to help startups achieve product-market-fit and
+        hypergrowth. I invest care into the details that make software feel
+        considered.
       </Typography>
       <nav aria-label="Social links" className={socialRowStyle}>
         <SocialLinks />
