@@ -387,12 +387,13 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector("hr")).toBeDefined();
     });
 
-    it("renders an image with caption", () => {
+    it("renders a media block with caption", () => {
       render(
         <ArticleRenderer
           content={doc([
             {
-              type: "image",
+              type: "media",
+              kind: "image",
               src: "https://example.com/img.png",
               alt: "An example image",
               caption: "Image caption text",
@@ -405,12 +406,13 @@ describe("ArticleRenderer", () => {
       expect(screen.getByText("Image caption text")).toBeDefined();
     });
 
-    it("renders an image without caption", () => {
+    it("renders a media block without caption", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
             {
-              type: "image",
+              type: "media",
+              kind: "image",
               src: "https://example.com/img.png",
               alt: "Alt only",
             },
@@ -425,13 +427,19 @@ describe("ArticleRenderer", () => {
     // paragraph they are trying to read. It gets the house chip rather than the
     // browser's strip — one control, in the corner of the picture, inside a box
     // of the picture's own so it cannot land beside the caption.
-    it("gives a clip in an image block a transport of its own", () => {
+    //
+    // The src is deliberately extensionless. The block hands `Media` its own
+    // `kind` and nothing sniffs the URL any more, so a fixture spelling the
+    // answer into the filename would pass against a renderer that ignored the
+    // field entirely.
+    it("gives a clip in a media block a transport of its own", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
             {
-              type: "image",
-              src: "https://example.com/demo.mp4",
+              type: "media",
+              kind: "video",
+              src: "https://example.com/media/8f2c-key",
               alt: "A demo",
               caption: "Clip caption",
             },
@@ -453,12 +461,13 @@ describe("ArticleRenderer", () => {
     });
 
     // ...and a still picture has nothing to play, so it gets no control at all.
-    it("leaves a picture in an image block without one", () => {
+    it("leaves a picture in a media block without one", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
             {
-              type: "image",
+              type: "media",
+              kind: "image",
               src: "https://example.com/img.png",
               alt: "An example image",
             },
@@ -475,8 +484,18 @@ describe("ArticleRenderer", () => {
             {
               type: "collection",
               items: [
-                { src: "https://example.com/1.png", alt: "First" },
-                { src: "https://example.com/2.png", alt: "Second" },
+                {
+                  type: "media",
+                  kind: "image",
+                  src: "https://example.com/1.png",
+                  alt: "First",
+                },
+                {
+                  type: "media",
+                  kind: "image",
+                  src: "https://example.com/2.png",
+                  alt: "Second",
+                },
               ],
               caption: "Collection caption text",
             },
@@ -495,6 +514,8 @@ describe("ArticleRenderer", () => {
             {
               type: "collection",
               items: Array.from({ length: 5 }, (_, i) => ({
+                type: "media",
+                kind: "image",
                 src: `https://example.com/${i}.png`,
                 alt: `Image ${i}`,
               })),

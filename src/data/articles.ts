@@ -45,7 +45,8 @@ export const articles: Post[] = [
           ],
         },
         {
-          type: "image",
+          type: "media",
+          kind: "image",
           src: "https://placehold.co/800x400/EEF2F6/576675?text=anchor-name+and+position-anchor+diagram",
           alt: "Diagram showing a trigger element with anchor-name and a tooltip positioned with position-anchor and anchor()",
           caption:
@@ -126,7 +127,8 @@ setPosition({
           children: [{ type: "text", text: "Browser support" }],
         },
         {
-          type: "image",
+          type: "media",
+          kind: "image",
           src: "https://placehold.co/800x200/EEF2F6/576675?text=Chrome+125%2B+%7C+Firefox+130%2B+%7C+Safari+18.4%2B",
           alt: "Browser support: Chrome 125+, Firefox 130+, Safari 18.4+",
           caption: "Full support across the three major engines as of late 2024.",
@@ -204,7 +206,8 @@ setPosition({
           ],
         },
         {
-          type: "image",
+          type: "media",
+          kind: "image",
           src: "https://placehold.co/800x400/EEF2F6/576675?text=Figma+%E2%86%92+%3F%3F%3F+%E2%86%92+CSS",
           alt: "Diagram of a broken token pipeline: Figma variables with no connection to CSS",
           caption:
@@ -285,7 +288,8 @@ setPosition({
           ],
         },
         {
-          type: "image",
+          type: "media",
+          kind: "image",
           src: "https://placehold.co/800x300/EEF2F6/576675?text=Figma+Variables+%E2%86%92+JSON+%E2%86%92+CSS+Custom+Properties+%E2%86%92+Components",
           alt: "The complete pipeline: Figma Variables to JSON to CSS custom properties to components",
           caption: "Every step is automated. No manual copying of hex values.",

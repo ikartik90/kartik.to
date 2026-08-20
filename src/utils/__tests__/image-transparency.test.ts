@@ -18,13 +18,21 @@ describe("formatCanCarryAlpha", () => {
     expect(formatCanCarryAlpha("photo.jfif")).toBe(false);
   });
 
-  // A clip has no alpha to find, and `new Image()` could not decode it to look
-  // — so the extension has to answer, or two network loads fail to.
-  it("rules out an mp4 without trying to decode it", () => {
-    expect(formatCanCarryAlpha("demo.mp4")).toBe(false);
+  // This used to rule an mp4 out, and that was picture-vs-clip being decided
+  // from a filename on a render path — the one thing the `kind` field exists to
+  // stop. It could not even do the job: a clip under a bare R2 key carries no
+  // extension, so the case it was there for was the case it missed.
+  //
+  // A clip is now excluded by its node's own `kind` before this is ever
+  // reached, so an mp4 here is simply a format nobody asks about, and it must
+  // answer like any other unrecognised one. Pinned so that the video knowledge
+  // cannot creep back in: if it does, this goes red rather than quietly
+  // reinstating the guess.
+  it("has no opinion about a clip — that is not this question", () => {
+    expect(formatCanCarryAlpha("demo.mp4")).toBe(true);
     expect(
       formatCanCarryAlpha("https://cdn.example.com/media/uuid-demo.MP4?v=2"),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("allows the formats that carry an alpha channel", () => {

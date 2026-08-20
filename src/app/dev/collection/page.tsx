@@ -55,12 +55,16 @@ const UI_SCREENSHOT =
 
 const SEED: CollectionItem[] = [
   {
+    type: "media",
+    kind: "image",
     src: UI_SCREENSHOT,
     alt: "A UI window on a transparent canvas",
     caption: "Transparent PNG — the gradient shows through",
     backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
   },
   ...PHOTOS.slice(1).map((src, i) => ({
+    type: "media" as const,
+    kind: "image" as const,
     src,
     alt: `Landscape ${i + 1}`,
     caption: undefined,
@@ -110,12 +114,14 @@ export default function CollectionPreviewPage() {
           }
           onSetLayout={(i, patch) => setItems(setItemLayout(items, i, patch))}
           // Through the real algebra, and with the shape the picker actually
-          // hands over — a source and the new file's own alt, nothing more — so
-          // this route shows what a replacement keeps rather than a local
-          // spread's more generous answer.
+          // hands over — a source, the new file's own alt and its own kind,
+          // nothing more — so this route shows what a replacement keeps rather
+          // than a local spread's more generous answer.
           onReplace={(i) =>
             setItems(
               replaceItem(items, i, {
+                type: "media",
+                kind: "image",
                 src: PHOTOS[(i + 3) % 6],
                 alt: "Replacement",
               }),
@@ -124,7 +130,12 @@ export default function CollectionPreviewPage() {
           onAddImage={() =>
             setItems([
               ...items,
-              { src: PHOTOS[items.length % 6], alt: "Added" },
+              {
+                type: "media",
+                kind: "image",
+                src: PHOTOS[items.length % 6],
+                alt: "Added",
+              },
             ])
           }
         />

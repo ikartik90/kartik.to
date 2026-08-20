@@ -22,9 +22,16 @@ export const MEDIA_PREFIX = "media/";
 
 /**
  * What counts as a library object. The bucket is not exclusively the media
- * library's, so listing filters by extension rather than trusting the prefix —
- * and the extension is also what the renderer later reads the KIND back off
- * (see `isVideoSource`), so the two lists have to grow together.
+ * library's, so listing filters by extension rather than trusting the prefix.
+ *
+ * This is the ONE remaining place an extension decides anything, and it decides
+ * only whether an object belongs to the library — never what it is. The
+ * renderer used to read the kind back off the same string, which made this list
+ * and `VIDEO_EXTENSIONS` a pair that had to grow together; a media node now
+ * records its `kind` outright and nothing renders off a filename, so adding a
+ * format here is only a question of what the library will list. Note the
+ * asymmetry it leaves: an object under a bare key is invisible to this filter
+ * but perfectly renderable once it is in a document.
  */
 const MEDIA_KEY_PATTERN = /\.(png|jpe?g|gif|webp|svg|mp4)$/i;
 

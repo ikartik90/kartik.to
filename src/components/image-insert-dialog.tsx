@@ -30,11 +30,18 @@ import {
   type ImageInsertPayload,
   type ImageInsertPhase,
 } from "@/hooks/use-image-insert";
-import { ALLOWED_MEDIA_CONTENT_TYPES } from "@/domain/media";
+import { ALLOWED_MEDIA_CONTENT_TYPES, mediaKindOf } from "@/domain/media";
 import { Media } from "@/components/media";
 import { formatFileSize, formatMediaType } from "@/utils/format-file-size";
 import CloseIcon from "@/assets/icons/cross.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
+
+// This is the one surface that shows media it holds as an ASSET rather than as
+// a document node, so there is no `kind` field to read — and it needs none,
+// because the content type it does have is where a node's `kind` comes from in
+// the first place. `mediaKindOf` is the same call `getInsertPayload` makes one
+// step later (see `ImageInsertPayload.kind`), so the pane you check a file in
+// and the block that file becomes cannot disagree about which element it is.
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -361,7 +368,11 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     <span className={mediaThumbnail()}>
                       {/* The row's own `label` is the accessible name, so the
                           thumbnail is decorative either way. */}
-                      <Media src={asset.url} alt="" />
+                      <Media
+                        src={asset.url}
+                        kind={mediaKindOf(asset.contentType)}
+                        alt=""
+                      />
                     </span>
                     <span className={libraryFilenameStyle}>
                       {asset.filename}
@@ -389,6 +400,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                       clip that means being able to scrub it. */}
                   <Media
                     src={selectedAsset.url}
+                    kind={mediaKindOf(selectedAsset.contentType)}
                     alt={altText || selectedAsset.filename}
                     controls
                   />

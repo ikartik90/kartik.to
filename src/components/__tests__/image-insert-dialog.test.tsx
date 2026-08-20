@@ -19,6 +19,24 @@ const asset = (name: string) => ({
   size: 100,
 });
 
+/**
+ * A clip under a BARE key — no extension anywhere in the url.
+ *
+ * Deliberately unnameable, because that is the case this dialog exists to get
+ * right. It is the one surface holding an upload rather than a document node,
+ * so its only word on the matter is `contentType`; a preview that went back to
+ * reading the filename would answer "picture" here and hand a `<video>` source
+ * to an `<img>`. The filename keeps its `.mp4` so the row label still looks
+ * like a real upload — it must not be what decides.
+ */
+const videoAsset = (name: string) => ({
+  key: `media/8f2c-${name}`,
+  url: `https://cdn/8f2c-${name}`,
+  filename: `${name}.mp4`,
+  contentType: "video/mp4",
+  size: 4_000,
+});
+
 /** Per-test overrides merged over the default hook shape. */
 let hookState: Record<string, unknown> = {};
 /** What the dialog asked the hook for — how the selection mode is threaded. */
@@ -99,6 +117,29 @@ describe("ImageInsertDialog", () => {
     // that the edit is reported.)
     await user.type(field, "X");
     expect(mockUpdateFilename).toHaveBeenCalledWith("favicon.pngX");
+  });
+
+  // The dialog holds an ASSET, not a media node, so it has no `kind` field to
+  // read — it derives one from the content type the upload was validated
+  // against (`mediaKindOf`). Asserted on the ELEMENT rather than on that
+  // derivation, because a preview is only correct if a clip is playable: an
+  // `<img>` pointed at an mp4 is a broken picture, and it is broken in exactly
+  // the library where you go to check what you are about to insert.
+  it("previews a clip as a <video>, from its content type and not its url", () => {
+    hookState = {
+      assets: [videoAsset("demo")],
+      selectedKey: "media/8f2c-demo",
+      selectedAsset: videoAsset("demo"),
+    };
+    render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
+
+    const clip = document.querySelector("video");
+    expect(clip).not.toBeNull();
+    expect(clip?.getAttribute("src")).toBe("https://cdn/8f2c-demo");
+    // Both surfaces fork, and the thumbnail is the one a caller is likeliest to
+    // leave behind — it is decorative, so nothing about it reads as wrong.
+    expect(document.querySelectorAll("video")).toHaveLength(2);
+    expect(document.querySelector("img")).toBeNull();
   });
 
   it("renders change mode title and confirm label", () => {

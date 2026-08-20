@@ -67,6 +67,8 @@ afterEach(() => cleanup());
 
 const items = (count: number): CollectionItem[] =>
   Array.from({ length: count }, (_, i) => ({
+    type: "media",
+    kind: "image",
     src: `/img/${i}.jpg`,
     alt: `Image ${i}`,
   }));
@@ -108,7 +110,11 @@ describe("CollectionShowcase layout", () => {
 
   it("falls back to the caption for alt text", () => {
     render(
-      <CollectionShowcase items={[{ src: "/a.jpg", caption: "A caption" }]} />,
+      <CollectionShowcase
+        items={[
+          { type: "media", kind: "image", src: "/a.jpg", caption: "A caption" },
+        ]}
+      />,
     );
     expect(screen.getByAltText("A caption")).toBeDefined();
   });
@@ -121,6 +127,8 @@ describe("CollectionShowcase layout", () => {
       <CollectionShowcase
         items={[
           {
+            type: "media",
+            kind: "image",
             src: "/a.jpg",
             borderRadius: 20,
             backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
@@ -182,8 +190,8 @@ describe("CollectionShowcase lightbox", () => {
     render(
       <CollectionShowcase
         items={[
-          { src: "/a.jpg", alt: "A", caption: "First" },
-          { src: "/b.jpg", alt: "B", caption: "Second" },
+          { type: "media", kind: "image", src: "/a.jpg", alt: "A", caption: "First" },
+          { type: "media", kind: "image", src: "/b.jpg", alt: "B", caption: "Second" },
         ]}
       />,
     );
@@ -286,8 +294,8 @@ describe("CollectionShowcase lightbox corner", () => {
     render(
       <CollectionShowcase
         items={[
-          { src: "/a.jpg", alt: "A", borderRadius: 20, ...item },
-          { src: "/b.jpg", alt: "B", borderRadius: 8 },
+          { type: "media", kind: "image", src: "/a.jpg", alt: "A", borderRadius: 20, ...item },
+          { type: "media", kind: "image", src: "/b.jpg", alt: "B", borderRadius: 8 },
         ]}
       />,
     );
@@ -429,7 +437,12 @@ describe("CollectionShowcase lightbox corner", () => {
 });
 
 describe("CollectionShowcase clips", () => {
-  const clip = { src: "/demo.mp4", alt: "A demo" };
+  const clip = {
+    type: "media" as const,
+    kind: "video" as const,
+    src: "/demo.mp4",
+    alt: "A demo",
+  };
 
   it("plays an mp4 tile as a video, still under the tile's own button", async () => {
     const user = userEvent.setup();
@@ -476,9 +489,9 @@ describe("CollectionShowcase clips", () => {
     render(
       <CollectionShowcase
         items={[
-          { src: "/a.mp4", alt: "A" },
-          { src: "/b.mp4", alt: "B" },
-          { src: "/c.mp4", alt: "C" },
+          { type: "media", kind: "video", src: "/a.mp4", alt: "A" },
+          { type: "media", kind: "video", src: "/b.mp4", alt: "B" },
+          { type: "media", kind: "video", src: "/c.mp4", alt: "C" },
         ]}
       />,
     );
@@ -493,6 +506,26 @@ describe("CollectionShowcase clips", () => {
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
   });
 
+  // Both surfaces have to pass the item's own word to `Media` rather than let
+  // it re-read the src — and a bare R2 key, which carries no extension for the
+  // guess to work from, is the case that tells the two apart.
+  it("shows a clip stored under an extensionless key, in the tile and enlarged", async () => {
+    const user = userEvent.setup();
+    const keyed = {
+      type: "media" as const,
+      kind: "video" as const,
+      src: "media/8f2c-4b1e-key",
+      alt: "A demo",
+    };
+    render(<CollectionShowcase items={[keyed]} />);
+
+    const tile = screen.getByRole("button", { name: "A demo" });
+    expect(tile.querySelector("video")).not.toBeNull();
+
+    await user.click(tile);
+    expect(screen.getByRole("dialog").querySelector("video")).not.toBeNull();
+  });
+
   // ...and the enlargement always performs, whichever tile it came from: it is
   // the one thing on the screen at that point.
   it("plays whichever clip the lightbox opens", async () => {
@@ -500,8 +533,8 @@ describe("CollectionShowcase clips", () => {
     render(
       <CollectionShowcase
         items={[
-          { src: "/a.mp4", alt: "A" },
-          { src: "/b.mp4", alt: "B" },
+          { type: "media", kind: "video", src: "/a.mp4", alt: "A" },
+          { type: "media", kind: "video", src: "/b.mp4", alt: "B" },
         ]}
       />,
     );

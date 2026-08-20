@@ -76,7 +76,7 @@ describe("collectSidenotes", () => {
   it("ignores blocks without inline children", () => {
     const blocks: BlockNode[] = [
       { type: "horizontal_rule" },
-      { type: "image", src: "/x.png" },
+      { type: "media", kind: "image", src: "/x.png" },
       para(annotated("n", "only")),
     ];
     expect(collectSidenotes(blocks).map((e) => e.id)).toEqual(["only"]);

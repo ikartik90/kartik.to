@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { MediaKind } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // Allowed upload types — validated on client and server
@@ -51,6 +52,34 @@ export function maxUploadBytesFor(contentType: string): number {
   return isVideoContentType(contentType)
     ? MAX_VIDEO_UPLOAD_BYTES
     : MAX_IMAGE_UPLOAD_BYTES;
+}
+
+/**
+ * The `kind` an upload of this content type becomes once it is in a document.
+ *
+ * This is the ONE place a `MediaKind` is ever derived — the crossing from what
+ * the library knows about a file to what a document says about it. It had been
+ * written out twice, byte-identically, in the insert hook and in the dialog,
+ * which is one copy for each of the two things that happen at the moment
+ * Insert is pressed: a block is written and a preview is drawn. Those two must
+ * agree by construction, because disagreeing means the pane you checked the
+ * file in showed a different element from the one the document got.
+ *
+ * It lives beside `maxUploadBytesFor` because it is the same shape of
+ * question: a property of the FORMAT, read off the content type, which is the
+ * only description of a file that survives upload — the filename does not
+ * (`sanitizeMediaFilename` rewrites it, and an R2 key need carry no extension
+ * at all). Takes the content type rather than a whole `MediaAsset` for the
+ * same reason its neighbour does: the asset is not the subject, its format is,
+ * and an upload in flight has one before it has an asset.
+ *
+ * Falls through to `"image"` on anything unrecognised, matching the bias
+ * everywhere else this question is asked (`isVideoSource`, `withMediaKind`).
+ * Every caller has already been past `isAllowedMediaContentType`, so the
+ * fall-through is unreachable rather than lenient.
+ */
+export function mediaKindOf(contentType: string): MediaKind {
+  return isVideoContentType(contentType) ? "video" : "image";
 }
 
 export const MediaAssetSchema = z.object({

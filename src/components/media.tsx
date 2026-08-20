@@ -6,25 +6,35 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type FocusEventHandler,
+  type KeyboardEventHandler,
 } from "react";
-import { isVideoSource } from "@/utils/media-source";
 import { MediaTransport } from "@/components/media-transport";
 import {
   mediaBoxStyle,
   mediaFrameStyle,
   mediaObjectStyle,
+  type MediaKind,
   type MediaLayout,
 } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // Media — one source, shown with whichever element can show it.
 //
-// The library takes clips as well as pictures, and a document records both the
-// same way: an `src` and an `alt` (see `ImageNodeSchema`). So every place that
-// renders one — the editor's collection cell, the reader's tile, the lightbox,
-// the standalone block, the library's own preview — faces the same fork, and
-// each would otherwise answer it slightly differently. It is answered here,
-// once, off the filename.
+// The library takes clips as well as pictures, and every place that renders one
+// — the editor's collection cell, the reader's tile, the lightbox, the
+// standalone block, the library's own preview — faces the same fork. It is
+// settled here, once, so that no two surfaces answer it differently.
+//
+// Settled, not GUESSED. This component used to read the answer back off the
+// filename, because the document did not record it; now `kind` is required and
+// is the only thing consulted. Every caller has the answer first-hand: a
+// document node states it (`MediaNodeSchema`, backfilled on the way in by
+// `withMediaKind`), and the media library's preview holds an upload whose
+// `contentType` was validated before it was ever stored. An optional prop with
+// an extension fallback behind it would leave exactly one way for a clip under
+// a bare R2 key to render as a broken picture — a caller that forgot — so
+// there is no fallback to forget into.
 //
 // The two elements are interchangeable on purpose: same className, same box,
 // same `object-fit`, and one `onMeasure` in place of the `naturalWidth` an
@@ -57,6 +67,15 @@ export interface MediaProps {
   src: string;
   /** Describes the source. Empty means decorative, as it does on an `<img>`. */
   alt: string;
+  /**
+   * Which element to render with — a picture or a clip.
+   *
+   * Required, and deliberately so: the src is not consulted at all. Whoever
+   * renders media here holds either a node that states its kind or an upload
+   * whose content type does, so there is no caller left that would have to
+   * guess, and no default quietly waiting to be wrong about one.
+   */
+  kind: MediaKind;
   className?: string;
   style?: CSSProperties;
   /**
@@ -103,6 +122,35 @@ export interface MediaProps {
   /** The checkerboard hook; see the `collectionGrid` recipe's `image` slot. */
   "data-checkered"?: string;
   /**
+   * The surface's own interaction contract, handed through untouched to
+   * whichever element the fork produced.
+   *
+   * The list is here for one caller and one reason: the editor's media block is
+   * FOCUSABLE. Its figure holds no caret, so the media element itself is the
+   * tab stop — it is what the Change Image / Delete overlay keys off, what the
+   * caret keys are read from, and what `focusBlockAtStart` reaches by querying
+   * `[data-showcase-media]` and calling `.focus()` on whatever answers. All of
+   * that has to sit on the element that actually ends up in the document, and
+   * that element is now this component's to decide rather than the caller's.
+   *
+   * Hanging the contract on a box AROUND the media was the obvious alternative
+   * and is the wrong shape twice over: the tab stop becomes the box, so a clip
+   * stops being the thing that takes focus; and the two sibling branches that
+   * already carry this same contract put it on the object itself — the
+   * collection's grid root, the component block's demo frame. A pass-through is
+   * what keeps all three saying one thing.
+   *
+   * The bargain is `data-checkered`'s, one prop up: this component owns which
+   * element exists, so it must own the hooks that have to be ON that element.
+   * It does not own what they mean, so it reads none of them.
+   */
+  tabIndex?: number;
+  onFocus?: FocusEventHandler<HTMLElement>;
+  onBlur?: FocusEventHandler<HTMLElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLElement>;
+  /** The editor's block-focus hook; see `tabIndex` above. */
+  "data-showcase-media"?: string;
+  /**
    * The source's intrinsic size once it is known — `naturalWidth`/`Height` for
    * a picture, `videoWidth`/`Height` for a clip. One question, so one callback.
    *
@@ -131,6 +179,7 @@ export interface MediaProps {
 export function Media({
   src,
   alt,
+  kind,
   className,
   style,
   layout,
@@ -141,7 +190,12 @@ export function Media({
   autoPlay = true,
   onMeasure,
   elementRef,
+  tabIndex,
+  onFocus,
+  onBlur,
+  onKeyDown,
   "data-checkered": checkered,
+  "data-showcase-media": showcaseMedia,
 }: MediaProps) {
   // The element itself, held as STATE rather than in a ref, because the
   // transport has to re-render when it arrives — and arrive again it does: the
@@ -203,7 +257,7 @@ export function Media({
     ? { ...mediaObjectStyle(layout), ...style }
     : style;
 
-  const isClip = isVideoSource(src);
+  const isClip = kind === "video";
 
   const element = !isClip ? (
     // eslint-disable-next-line @next/next/no-img-element
@@ -215,7 +269,12 @@ export function Media({
       style={objectStyle}
       draggable={draggable}
       loading={loading}
+      tabIndex={tabIndex}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
       data-checkered={checkered}
+      data-showcase-media={showcaseMedia}
       onLoad={(event) =>
         onMeasure?.(
           event.currentTarget.naturalWidth,
@@ -241,7 +300,12 @@ export function Media({
       muted
       playsInline
       preload="metadata"
+      tabIndex={tabIndex}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
       data-checkered={checkered}
+      data-showcase-media={showcaseMedia}
       onLoadedMetadata={(event) => {
         const node = event.currentTarget;
         onMeasure?.(node.videoWidth, node.videoHeight);

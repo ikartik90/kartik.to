@@ -155,6 +155,7 @@ function CollectionTile({
       >
         <Media
           src={item.src}
+          kind={item.kind}
           alt={collectionItemAlt(item)}
           className={styles.image}
           // The same fit and inset the editor previewed — the whole
@@ -358,6 +359,7 @@ function CollectionLightbox({
             // inheriting the last one's playhead.
             key={index}
             src={item.src}
+            kind={item.kind}
             alt={collectionItemAlt(item)}
             className={lightboxStyles.image}
             // A clip gets ONE control here rather than the browser's strip: the

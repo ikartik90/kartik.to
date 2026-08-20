@@ -252,7 +252,17 @@ export function CollectionGrid({
   // on screen distinguishes "the picture has no background" from "the slot is
   // empty" or "the upload failed". The checkerboard is what says it, in the
   // vocabulary every image editor already uses for it.
-  const transparentSrcs = useImageTransparency(items.map((item) => item.src));
+  //
+  // PICTURES only, and the filter is load-bearing rather than an optimisation.
+  // The scan decodes with `new Image()`, so a clip sent through it spends two
+  // failed loads to answer a question a video could not have had — and it is
+  // the extensionless R2 key, the case this whole `kind` field exists for, that
+  // would reach it. Filtered HERE and not inside the hook: `kind` is the item's
+  // own word about itself, and pushing it down would teach a hook that knows
+  // about alpha channels and `<canvas>` what a document node is.
+  const transparentSrcs = useImageTransparency(
+    items.filter((item) => item.kind === "image").map((item) => item.src),
+  );
 
   /**
    * Opens the properties panel for a slot — or closes it, if that slot's panel
@@ -911,6 +921,10 @@ export function CollectionGrid({
                 laid over it would take the grip away. */}
             <Media
               src={item.src}
+              // The item's own word about what it is — never re-derived from
+              // the src here, so a clip under an extensionless key shows as a
+              // clip in the grid the author is arranging.
+              kind={item.kind}
               alt={collectionItemAlt(item)}
               className={gridStyles.image}
               // Fit and inset are per-picture DATA, so they ride as a style

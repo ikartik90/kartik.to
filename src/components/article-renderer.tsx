@@ -282,7 +282,7 @@ function renderBlockNode(
     case "horizontal_rule":
       return <hr key={index} className={horizontalRule()} />;
 
-    case "image":
+    case "media":
       return (
         <figure key={index} className={articleShowcase()}>
           {/* The media's own frame, and the box the transport anchors to — NOT
@@ -296,6 +296,7 @@ function renderBlockNode(
                 reading to protect. */}
             <Media
               src={node.src}
+              kind={node.kind}
               alt={node.alt ?? ""}
               className={articleImg()}
               layout={node}
