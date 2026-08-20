@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "panda codegen --silent && next dev",
+    "dev:https": "panda codegen --silent && next dev --experimental-https",
     "build": "prisma generate && panda codegen --silent && next build",
     "start": "next start",
     "lint": "eslint",

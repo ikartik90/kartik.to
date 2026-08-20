@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { cva, cx } from "../../../styled-system/css";
+import { preservePageScroll } from "@/utils/preserve-page-scroll";
 
 export type DialogAlign =
   | "top"
@@ -166,11 +167,20 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
       }
     }
 
+    // Safari drops the page's scroll position a couple of frames after a modal
+    // dialog closes — the reader is thrown back to the top for having opened
+    // the command palette at all. The position is still intact here, in the
+    // close handler, so this is where it gets captured. See preservePageScroll.
+    function handleClose() {
+      preservePageScroll();
+      onClose?.();
+    }
+
     return (
       <dialog
         ref={ref}
         className={cx(dialogRecipe({ align, justify }), className)}
-        onClose={onClose}
+        onClose={handleClose}
         onClick={handleClick}
         onKeyDownCapture={handleKeyDownCapture}
         {...rest}
