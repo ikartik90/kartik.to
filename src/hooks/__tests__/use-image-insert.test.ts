@@ -117,6 +117,58 @@ describe("useImageInsert", () => {
     expect(result.current.assets).toHaveLength(1);
     expect(result.current.selectedKey).toBe("media/b.png");
   });
+
+  // The content type is validated on the way in and stored on the asset, and
+  // until now it stopped here — the payload carried an src and an alt, and the
+  // renderer was left to work the rest out from the URL. Passing it through is
+  // what stops the untyped set from growing: every node inserted from this
+  // dialog states its own kind, so the filename guess only ever has to answer
+  // for documents written before there was a field to write it in.
+  //
+  // The urls below carry NO extension on purpose. That is the case the sniffer
+  // cannot get right — a bare R2 key reads as a picture whatever it holds — so
+  // it is the case that proves the answer came from the content type.
+  it("hands the insert its kind, read from the stored content type", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      {
+        key: "media/demo",
+        url: "https://cdn/demo",
+        filename: "demo.mp4",
+        contentType: "video/mp4",
+        size: 2048,
+      },
+      {
+        key: "media/shot",
+        url: "https://cdn/shot",
+        filename: "shot.png",
+        contentType: "image/png",
+        size: 100,
+      },
+    ]);
+
+    const { result } = renderHook(() => useImageInsert({ open: true }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => result.current.selectAsset("media/demo"));
+    expect(result.current.getInsertPayload()).toEqual({
+      src: "https://cdn/demo",
+      alt: undefined,
+      kind: "video",
+    });
+
+    act(() => result.current.selectAsset("media/shot"));
+    expect(result.current.getInsertPayload()?.kind).toBe("image");
+  });
+
+  it("has nothing to insert when nothing is selected", async () => {
+    const { result } = renderHook(() => useImageInsert({ open: true }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.getInsertPayload()).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -260,8 +312,31 @@ describe("useImageInsert (selectionMode: multiple)", () => {
     act(() => result.current.toggleAsset("media/a.png"));
 
     expect(result.current.getInsertPayloads()).toEqual([
-      { src: "https://cdn/c.png", alt: undefined },
-      { src: "https://cdn/a.png", alt: undefined },
+      { src: "https://cdn/c.png", alt: undefined, kind: "image" },
+      { src: "https://cdn/a.png", alt: undefined, kind: "image" },
+    ]);
+  });
+
+  // Same argument as the single-insert case above: a batch dropped into a
+  // collection is exactly where a wall of untyped items used to come from.
+  it("carries each asset's kind through the batch, in selection order", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      asset("a"),
+      {
+        key: "media/demo",
+        url: "https://cdn/demo",
+        filename: "demo.mp4",
+        contentType: "video/mp4",
+        size: 2048,
+      },
+    ]);
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/demo"));
+    act(() => result.current.toggleAsset("media/a.png"));
+
+    expect(result.current.getInsertPayloads().map((p) => p.kind)).toEqual([
+      "video",
+      "image",
     ]);
   });
 
@@ -275,8 +350,8 @@ describe("useImageInsert (selectionMode: multiple)", () => {
     act(() => result.current.toggleAsset("media/b.png"));
 
     expect(result.current.getInsertPayloads()).toEqual([
-      { src: "https://cdn/a.png", alt: "An A" },
-      { src: "https://cdn/b.png", alt: undefined },
+      { src: "https://cdn/a.png", alt: "An A", kind: "image" },
+      { src: "https://cdn/b.png", alt: undefined, kind: "image" },
     ]);
   });
 

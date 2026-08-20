@@ -11,16 +11,24 @@ import { sourceExtension } from "@/utils/media-source";
 
 /**
  * The extensions that CANNOT carry an alpha channel, so a source wearing one is
- * opaque by construction and needs no decoding to prove it. Among the uploads
- * this app accepts (see `ALLOWED_MEDIA_CONTENT_TYPES`) that is JPEG and MP4 —
- * everything else, PNG, WebP, GIF and SVG, can.
+ * opaque by construction and needs no decoding to prove it. Among the picture
+ * formats this app accepts (see `ALLOWED_IMAGE_CONTENT_TYPES`) that is JPEG
+ * alone — PNG, WebP, GIF and SVG can all carry one.
  *
- * MP4 belongs here for a second reason as well as the first: the scan decodes
- * with `new Image()`, which cannot load a video at all, so leaving a clip out
- * of this list would spend two failed network round trips to arrive at the
- * answer the extension already gave.
+ * PICTURE formats, and only those. `"mp4"` was in this list, put there so a
+ * clip would be ruled out before the scan tried to decode it with `new Image()`
+ * — which cannot load a video, so the alternative was two failed network round
+ * trips. But that made this the place picture-vs-clip got decided, from a
+ * filename, on a render path, which is the exact guess the `kind` field on a
+ * media node was added to retire; and it never worked for the case that
+ * mattered, since a clip under a bare R2 key has no extension to be recognised
+ * by. `CollectionGrid` now filters on the item's own `kind` before asking, so
+ * nothing that is not a picture reaches here and there is nothing to rule out.
+ *
+ * Adding a video format back would not be a small extension of this list — it
+ * would be reinstating the guess somewhere the caller already has the answer.
  */
-const OPAQUE_EXTENSIONS = ["jpg", "jpeg", "jfif", "pjpeg", "pjp", "mp4"];
+const OPAQUE_EXTENSIONS = ["jpg", "jpeg", "jfif", "pjpeg", "pjp"];
 
 /**
  * Alpha at or above this counts as opaque.

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COLLECTION_MAX_ITEMS,
   DEFAULT_BACKGROUND_EFFECT,
-  type CollectionItem,
+  type MediaNode,
 } from "@/domain/nodes";
 import {
   appendItems,
@@ -18,10 +18,30 @@ import {
   swapItems,
 } from "../collection-items";
 
-const items = (...srcs: string[]): CollectionItem[] =>
-  srcs.map((src) => ({ src }));
+/**
+ * Everything a media node holds bar the two words that classify it. Spelling
+ * `type: "media"` into every fixture would say nothing — it is constant across
+ * both arms — and spelling `kind` into every one would bury the handful of
+ * cases where the kind is the point.
+ */
+type MediaFields = Omit<MediaNode, "type" | "kind">;
 
-const srcs = (list: CollectionItem[]) => list.map((item) => item.src);
+const picture = (fields: MediaFields): MediaNode => ({
+  type: "media",
+  kind: "image",
+  ...fields,
+});
+
+const clip = (fields: MediaFields): MediaNode => ({
+  type: "media",
+  kind: "video",
+  ...fields,
+});
+
+const items = (...srcs: string[]): MediaNode[] =>
+  srcs.map((src) => picture({ src }));
+
+const srcs = (list: MediaNode[]) => list.map((item) => item.src);
 
 // ---------------------------------------------------------------------------
 // featureItem
@@ -126,7 +146,7 @@ describe("setItemCaption", () => {
   });
 
   it("drops an empty or whitespace-only caption rather than storing it", () => {
-    const seeded: CollectionItem[] = [{ src: "a", caption: "Old" }];
+    const seeded = [picture({ src: "a", caption: "Old" })];
     expect(setItemCaption(seeded, 0, "")[0].caption).toBeUndefined();
     expect(setItemCaption(seeded, 0, "   ")[0].caption).toBeUndefined();
     expect(setItemCaption(seeded, 0, undefined)[0].caption).toBeUndefined();
@@ -173,35 +193,45 @@ describe("appendItems", () => {
 
 describe("replaceItem", () => {
   it("swaps the image but keeps the caption already written for that slot", () => {
-    const seeded: CollectionItem[] = [{ src: "old", caption: "Kept" }];
-    const next = replaceItem(seeded, 0, { src: "new", alt: "New" });
-    expect(next[0]).toEqual({ src: "new", alt: "New", caption: "Kept" });
+    const seeded = [picture({ src: "old", caption: "Kept" })];
+    const next = replaceItem(seeded, 0, picture({ src: "new", alt: "New" }));
+    expect(next[0]).toEqual(
+      picture({ src: "new", alt: "New", caption: "Kept" }),
+    );
   });
 
   it("takes the incoming caption when the slot had none", () => {
-    const next = replaceItem(items("old"), 0, { src: "new", caption: "Fresh" });
+    const next = replaceItem(
+      items("old"),
+      0,
+      picture({ src: "new", caption: "Fresh" }),
+    );
     expect(next[0].caption).toBe("Fresh");
   });
 
   it("keeps the styling the slot was given — fit, inset, corner, effect", () => {
-    const seeded: CollectionItem[] = [
-      {
+    const seeded = [
+      picture({
         src: "old",
         objectFit: "contain",
         padding: 24,
         borderRadius: 0,
         backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
-      },
+      }),
     ];
-    expect(replaceItem(seeded, 0, { src: "new" })[0]).toEqual({
+    expect(replaceItem(seeded, 0, picture({ src: "new" }))[0]).toEqual({
       ...seeded[0],
       src: "new",
     });
   });
 
   it("lets the incoming item's own styling win over the slot's", () => {
-    const seeded: CollectionItem[] = [{ src: "old", objectFit: "contain" }];
-    const next = replaceItem(seeded, 0, { src: "new", objectFit: "cover" });
+    const seeded = [picture({ src: "old", objectFit: "contain" })];
+    const next = replaceItem(
+      seeded,
+      0,
+      picture({ src: "new", objectFit: "cover" }),
+    );
     expect(next[0].objectFit).toBe("cover");
   });
 
@@ -209,17 +239,45 @@ describe("replaceItem", () => {
   // written before that was true can still hold one — and the merge tests for
   // ABSENCE, not truthiness, so it carries across either way.
   it("keeps a stored zero corner, which is falsy but not absent", () => {
-    const seeded: CollectionItem[] = [{ src: "old", borderRadius: 0 }];
-    expect(replaceItem(seeded, 0, { src: "new" })[0].borderRadius).toBe(0);
+    const seeded = [picture({ src: "old", borderRadius: 0 })];
+    expect(
+      replaceItem(seeded, 0, picture({ src: "new" }))[0].borderRadius,
+    ).toBe(0);
   });
 
   it("does not carry the old picture's alt onto the new one", () => {
-    const seeded: CollectionItem[] = [{ src: "old", alt: "A red bicycle" }];
-    expect(replaceItem(seeded, 0, { src: "new" })[0].alt).toBeUndefined();
+    const seeded = [picture({ src: "old", alt: "A red bicycle" })];
+    expect(
+      replaceItem(seeded, 0, picture({ src: "new" }))[0].alt,
+    ).toBeUndefined();
+  });
+
+  // The one property that is emphatically NOT the slot's. Everything in
+  // SLOT_OWNED_PROPERTIES is work the author did against a POSITION in the
+  // grid and rightly outlives the file standing in it; `kind` is a statement
+  // about the file itself, in exactly the way `src` and `alt` are. Preserve it
+  // from the outgoing item and dropping a clip into a slot that used to hold a
+  // photograph leaves an `<img>` pointed at an mp4 — a broken image where the
+  // demo should be, and one that no amount of re-picking the file can fix,
+  // because every replacement would inherit the same stale word.
+  it("takes the incoming item's kind, never the outgoing one's", () => {
+    const seeded = [picture({ src: "old.png", caption: "Kept", padding: 24 })];
+    expect(replaceItem(seeded, 0, clip({ src: "new.mp4" }))[0]).toEqual(
+      clip({ src: "new.mp4", caption: "Kept", padding: 24 }),
+    );
+  });
+
+  it("swaps a clip back out for a picture just as readily", () => {
+    const seeded = [clip({ src: "old.mp4" })];
+    expect(replaceItem(seeded, 0, picture({ src: "new.png" }))[0].kind).toBe(
+      "image",
+    );
   });
 
   it("ignores an out-of-range index", () => {
-    expect(replaceItem(items("a"), 3, { src: "b" })).toEqual(items("a"));
+    expect(replaceItem(items("a"), 3, picture({ src: "b" }))).toEqual(
+      items("a"),
+    );
   });
 });
 
@@ -229,17 +287,17 @@ describe("replaceItem", () => {
 
 describe("collectionItemAlt", () => {
   it("prefers explicit alt text", () => {
-    expect(collectionItemAlt({ src: "a", alt: "Alt", caption: "Cap" })).toBe(
-      "Alt",
-    );
+    expect(
+      collectionItemAlt(picture({ src: "a", alt: "Alt", caption: "Cap" })),
+    ).toBe("Alt");
   });
 
   it("falls back to the caption", () => {
-    expect(collectionItemAlt({ src: "a", caption: "Cap" })).toBe("Cap");
+    expect(collectionItemAlt(picture({ src: "a", caption: "Cap" }))).toBe("Cap");
   });
 
   it("falls back to an empty string, marking the image decorative", () => {
-    expect(collectionItemAlt({ src: "a" })).toBe("");
+    expect(collectionItemAlt(picture({ src: "a" }))).toBe("");
   });
 });
 
@@ -325,9 +383,9 @@ describe("setItemBackgroundEffect", () => {
   });
 
   it("leaves the rest of the item alone", () => {
-    const list: CollectionItem[] = [{ src: "a", alt: "A", caption: "C" }];
+    const list = [picture({ src: "a", alt: "A", caption: "C" })];
     const next = setItemBackgroundEffect(list, 0, DEFAULT_BACKGROUND_EFFECT);
-    expect(next[0]).toMatchObject({ src: "a", alt: "A", caption: "C" });
+    expect(next[0]).toMatchObject(picture({ src: "a", alt: "A", caption: "C" }));
   });
 
   it("is a no-op for an index outside the collection", () => {
@@ -366,7 +424,7 @@ describe("setItemLayout", () => {
       padding: 24,
     });
     const back = setItemLayout(contained, 0, { objectFit: "cover", padding: 0 });
-    expect(back[0]).toEqual({ src: "a" });
+    expect(back[0]).toEqual(picture({ src: "a" }));
     expect("objectFit" in back[0]).toBe(false);
     expect("padding" in back[0]).toBe(false);
   });
@@ -379,7 +437,7 @@ describe("setItemLayout", () => {
   it("never mutates the list it was given", () => {
     const list = items("a");
     setItemLayout(list, 0, { padding: 8 });
-    expect(list[0]).toEqual({ src: "a" });
+    expect(list[0]).toEqual(picture({ src: "a" }));
   });
 });
 
@@ -390,7 +448,9 @@ describe("setItemLayout border radius", () => {
   // started.
   it("drops a zero corner, which is now the default rather than an override", () => {
     const rounded = setItemLayout(items("a"), 0, { borderRadius: 12 });
-    expect(setItemLayout(rounded, 0, { borderRadius: 0 })[0]).toEqual({ src: "a" });
+    expect(setItemLayout(rounded, 0, { borderRadius: 0 })[0]).toEqual(
+      picture({ src: "a" }),
+    );
   });
 
   it("survives a later patch to another property", () => {

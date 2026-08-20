@@ -33,11 +33,17 @@ vi.mock("@paper-design/shaders-react", () => ({
 // canvas, neither of which jsdom does — and it is the hook's own contract
 // anyway (see `use-image-transparency.test.tsx`). Here the answer is simply
 // declared, so these tests are about what the GRID does with it.
-const { transparentSrcs } = vi.hoisted(() => ({
+const { transparentSrcs, askedAbout } = vi.hoisted(() => ({
   transparentSrcs: new Set<string>(),
+  // What the grid actually put to the hook. Recorded because WHICH sources are
+  // sent is itself a contract — see "never asks whether a clip is see-through".
+  askedAbout: [] as string[][],
 }));
 vi.mock("@/hooks/use-image-transparency", () => ({
-  useImageTransparency: () => transparentSrcs,
+  useImageTransparency: (srcs: string[]) => {
+    askedAbout.push(srcs);
+    return transparentSrcs;
+  },
 }));
 
 import { CollectionGrid } from "../collection-grid";
@@ -52,10 +58,26 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   transparentSrcs.clear();
+  askedAbout.length = 0;
 });
 
 const items = (...srcs: string[]): CollectionItem[] =>
-  srcs.map((src) => ({ src }));
+  srcs.map((src) => ({ type: "media" as const, kind: "image" as const, src }));
+
+/**
+ * The same, as clips. A separate helper rather than a `.mp4` in `items()`,
+ * because the grid reads the item's DECLARED type and no longer looks at the
+ * src at all — a fixture that spelled the kind into the filename would be
+ * asserting against a rule this component stopped applying.
+ */
+const clips = (...srcs: string[]): CollectionItem[] =>
+  srcs.map((src) => ({ type: "media" as const, kind: "video" as const, src }));
+
+/** One picture with something applied to it — a corner, an effect, a caption. */
+const picture = (
+  src: string,
+  fields: Partial<Omit<CollectionItem, "type" | "kind" | "src">> = {},
+): CollectionItem => ({ type: "media", kind: "image", src, ...fields });
 
 /**
  * Renders the grid over REAL state, so a reorder actually swaps the items the
@@ -1039,7 +1061,10 @@ describe("CollectionGrid properties panel", () => {
   // it cannot be the way back — the header's close is.
   it("closes from the header without taking anything away", async () => {
     const { user, onSetBackgroundEffect, onEditCaption } = setup([
-      { src: "a", caption: "A note", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+      picture("a", {
+        caption: "A note",
+        backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
+      }),
     ]);
     await user.click(propertiesButton(0));
 
@@ -1057,7 +1082,7 @@ describe("CollectionGrid properties panel", () => {
 
   it("closes on Escape", async () => {
     const { user } = setup([
-      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+      picture("a", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
     ]);
     await user.click(propertiesButton(0));
 
@@ -1073,11 +1098,13 @@ describe("CollectionGrid properties panel", () => {
   it("reads pressed only while its own panel is open", async () => {
     const { user } = setup([
       {
+        type: "media",
+        kind: "image",
         src: "a",
         caption: "A note",
         backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
       },
-      { src: "b" },
+      picture("b"),
     ]);
     expect(propertiesButton(0).getAttribute("aria-pressed")).toBe("false");
 
@@ -1129,8 +1156,8 @@ describe("CollectionGrid properties panel", () => {
 
   it("paints the gradient behind an image that has one, and only that image", () => {
     setup([
-      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
-      { src: "b" },
+      picture("a", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
+      picture("b"),
     ]);
     const layers = document.querySelectorAll("[data-background-effect]");
     expect(layers).toHaveLength(1);
@@ -1141,8 +1168,8 @@ describe("CollectionGrid properties panel", () => {
   // stored index would leave the panel captioning whichever picture slid in.
   it("follows its image when the collection is reordered", async () => {
     const seeded: CollectionItem[] = [
-      { src: "a" },
-      { src: "b", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
+      picture("a"),
+      picture("b", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
     ];
     const props = panelProps();
     const { rerender } = render(<CollectionGrid items={seeded} {...props} />);
@@ -1156,8 +1183,8 @@ describe("CollectionGrid properties panel", () => {
 
   it("closes itself when its image is removed", async () => {
     const seeded: CollectionItem[] = [
-      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
-      { src: "b" },
+      picture("a", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
+      picture("b"),
     ];
     const props = panelProps();
     const { rerender } = render(<CollectionGrid items={seeded} {...props} />);
@@ -1298,10 +1325,22 @@ describe("CollectionGrid transparency checkerboard", () => {
   // rather than beside it.
   it("yields to a background effect", () => {
     transparentSrcs.add("a");
-    setup([{ src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT }]);
+    setup([picture("a", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT })]);
 
     expect(imageAt(0).dataset.checkered).toBeUndefined();
     expect(cells()[0].querySelector("[data-background-effect]")).not.toBeNull();
+  });
+
+  // A clip has no alpha question to ask, and asking it anyway is not merely
+  // wasted work — the scan decodes with `new Image()`, which cannot load a
+  // video at all, so an mp4 sent here spends two failed network round trips
+  // arriving at nothing. The item's `kind` is what excludes it. The clip's src
+  // is deliberately EXTENSIONLESS, because a bare R2 key is precisely the case
+  // a filename test could not catch: it is why this grid stopped guessing.
+  it("never asks whether a clip is see-through", () => {
+    setup([...items("a.png"), ...clips("8f2c-key")]);
+
+    expect(askedAbout.at(-1)).toEqual(["a.png"]);
   });
 
   // Keyed on the PICTURE, not the slot — the same reason the properties panel
@@ -1339,7 +1378,7 @@ describe("CollectionGrid drag clone corner", () => {
   // what rounds it — so the clone leaves its own class to state that and writes
   // nothing inline.
   it("leaves the card's corner to the clone's class for a picture that fills its slot", () => {
-    setup([{ src: "a", borderRadius: 20 }, { src: "b" }]);
+    setup([picture("a", { borderRadius: 20 }), picture("b")]);
     const source = lift(0);
 
     expect(preview()!.style.borderRadius).toBe("");
@@ -1351,7 +1390,7 @@ describe("CollectionGrid drag clone corner", () => {
   // picture's own — and a `cqw` out here would measure the viewport, so it goes
   // as pixels against the box the drag has already measured.
   it("resolves an inset picture's own corner to pixels", () => {
-    setup([{ src: "a", borderRadius: 20, padding: 32 }, { src: "b" }]);
+    setup([picture("a", { borderRadius: 20, padding: 32 }), picture("b")]);
     const source = lift(0);
 
     // 20 of 640, against the 100px box `layOutCells` states.
@@ -1361,7 +1400,7 @@ describe("CollectionGrid drag clone corner", () => {
   });
 
   it("carries a square inset picture square", () => {
-    setup([{ src: "a", padding: 32 }, { src: "b" }]);
+    setup([picture("a", { padding: 32 }), picture("b")]);
     const source = lift(0);
 
     expect(preview()!.style.borderRadius).toBe("0px");
@@ -1388,7 +1427,10 @@ describe("CollectionGrid background effect travels with the photo", () => {
   // explicit snapshot the picture leaves its gradient behind in the cell and
   // flies as a transparent cut-out.
   it("paints the gradient onto the clone that rides the cursor", () => {
-    setup([{ src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT }, { src: "b" }]);
+    setup([
+      picture("a", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
+      picture("b"),
+    ]);
     layOutCells();
     const source = press(0, centreOf(0));
     pointer("pointermove", source, { clientX: 60, clientY: 50 });
@@ -1430,7 +1472,7 @@ describe("CollectionGrid background effect travels with the photo", () => {
   // playing, because `cloneNode` copies attributes and React never wrote the
   // `muted` one — an unmuted clone is one the autoplay policy declines.
   it("carries a clip mid-frame rather than restarting it", () => {
-    setup(items("a.mp4", "b"));
+    setup([...clips("a.mp4"), ...items("b")]);
     layOutCells();
     const clip = mediaIn(cells()[0]) as HTMLVideoElement;
     Object.defineProperty(clip, "currentTime", { value: 4, writable: true });
@@ -1453,8 +1495,8 @@ describe("CollectionGrid background effect travels with the photo", () => {
       throw new Error("context lost");
     });
     const { onReorder } = setup([
-      { src: "a", backgroundEffect: DEFAULT_BACKGROUND_EFFECT },
-      { src: "b" },
+      picture("a", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
+      picture("b"),
     ]);
 
     drag(0, 1);
@@ -1464,19 +1506,29 @@ describe("CollectionGrid background effect travels with the photo", () => {
 });
 
 describe("CollectionGrid clips", () => {
-  // The document records a clip exactly as it records a picture — an `src` and
-  // an `alt` — so the element is chosen off the filename and nothing else.
-  it("shows an mp4 as a video and everything else as a picture", () => {
-    setup(items("demo.mp4", "shot.png"));
+  // A cell shows what its item SAYS it is. The document carries the answer now
+  // (see `MediaNodeSchema`) — the filename is only consulted for items written
+  // before it did, and by then the schema has already turned it into a `type`.
+  it("shows an item declared a clip as a video, and a picture as an <img>", () => {
+    setup([...clips("demo.mp4"), ...items("shot.png")]);
 
     expect(mediaIn(cells()[0])?.tagName).toBe("VIDEO");
     expect(mediaIn(cells()[1])?.tagName).toBe("IMG");
   });
 
+  // The fork itself belongs to `Media`; what this asserts is that the cell
+  // actually hands the item's word over instead of letting the src be sniffed
+  // again. A bare R2 key is where the two answers come apart — it carries no
+  // extension, so the guess can only ever call it a picture.
+  it("shows a clip stored under an extensionless key as a video", () => {
+    setup([{ type: "media", kind: "video", src: "media/8f2c-4b1e-key" }]);
+    expect(mediaIn(cells()[0])?.tagName).toBe("VIDEO");
+  });
+
   // The picture is the grip, whichever element it is. A cell that could only be
   // dragged by an <img> would leave a clip stuck in whatever slot it landed in.
   it("hands a clip the same grip a photo has", () => {
-    const { onReorder } = setup(items("demo.mp4", "b", "c"));
+    const { onReorder } = setup([...clips("demo.mp4"), ...items("b", "c")]);
 
     drag(0, 2);
 
@@ -1486,7 +1538,7 @@ describe("CollectionGrid clips", () => {
   // The cell's toolbar sits over the picture, and a clip must not come with a
   // second set of controls competing with it for the same corner.
   it("gives a cell's clip no transport of its own", () => {
-    setup(items("demo.mp4"));
+    setup(clips("demo.mp4"));
 
     expect(mediaIn(cells()[0])?.hasAttribute("controls")).toBe(false);
   });

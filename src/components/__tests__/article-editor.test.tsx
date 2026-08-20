@@ -22,7 +22,7 @@ import {
   mergeAdjacentInlineNodes,
   normalizeLinkHref,
 } from "../article-editor";
-import type { InlineNode, Mark } from "@/domain/nodes";
+import type { InlineNode, Mark, MediaNode } from "@/domain/nodes";
 import type { Document } from "@/domain/post";
 import { useEditorStore } from "@/store/editor";
 import { notifyContentUpdated } from "@/utils/content-sync";
@@ -92,16 +92,31 @@ vi.mock("@/components/image-insert-dialog", () => ({
             onInsert(
               (selectionMode === "multiple"
                 ? [
-                    { src: "https://cdn/1.png" },
-                    { src: "https://cdn/2.png" },
-                    { src: "https://cdn/3.png" },
-                    { src: "https://cdn/4.png" },
+                    { kind: "image", src: "https://cdn/1.png" },
+                    { kind: "image", src: "https://cdn/2.png" },
+                    { kind: "image", src: "https://cdn/3.png" },
+                    { kind: "image", src: "https://cdn/4.png" },
                   ]
-                : { src: "https://cdn/1.png" }) as never,
+                : { kind: "image", src: "https://cdn/1.png" }) as never,
             )
           }
         >
           insert
+        </button>
+        {/* The library holds clips too, and the dialog reads their kind off
+            the stored content type rather than off the url — so the src here
+            carries no extension, and a handler that re-derived the kind from
+            it would come back with the wrong answer. */}
+        <button
+          onClick={() =>
+            onInsert(
+              (selectionMode === "multiple"
+                ? [{ kind: "video", src: "https://cdn/8f2c-key" }]
+                : { kind: "video", src: "https://cdn/8f2c-key" }) as never,
+            )
+          }
+        >
+          insert clip
         </button>
       </div>
     ) : null,
@@ -762,7 +777,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
             alt: "Example photo",
           },
@@ -932,7 +948,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -950,8 +967,8 @@ describe("ArticleEditor", () => {
     fireEvent.input(caption);
 
     const imageBlock = useEditorStore.getState().document.content[0];
-    expect(imageBlock.type).toBe("image");
-    if (imageBlock.type === "image") {
+    expect(imageBlock.type).toBe("media");
+    if (imageBlock.type === "media") {
       expect(imageBlock.caption).toBe("A sunny day");
     }
   });
@@ -966,7 +983,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
             caption: "Keep me",
           },
@@ -982,7 +1000,7 @@ describe("ArticleEditor", () => {
     caption.focus();
     fireEvent.keyDown(caption, { key: "Delete" });
 
-    expect(useEditorStore.getState().document.content[0]?.type).toBe("image");
+    expect(useEditorStore.getState().document.content[0]?.type).toBe("media");
     expect(document.querySelector("figure img")).not.toBeNull();
   });
 
@@ -996,7 +1014,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1027,7 +1046,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1045,7 +1065,7 @@ describe("ArticleEditor", () => {
     const blocks = useEditorStore.getState().document.content;
     expect(blocks).toHaveLength(3);
     expect(blocks[0].type).toBe("paragraph");
-    expect(blocks[1].type).toBe("image");
+    expect(blocks[1].type).toBe("media");
     expect(blocks[2].type).toBe("paragraph");
   });
 
@@ -1059,7 +1079,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1088,7 +1109,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1123,7 +1145,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
             caption: "Caption",
           },
@@ -1144,7 +1167,7 @@ describe("ArticleEditor", () => {
 
     const blocks = useEditorStore.getState().document.content;
     expect(blocks).toHaveLength(3);
-    expect(blocks[0].type).toBe("image");
+    expect(blocks[0].type).toBe("media");
     expect(blocks[1].type).toBe("paragraph");
     expect(blocks[2].type).toBe("paragraph");
     if (blocks[1].type === "paragraph") {
@@ -1169,7 +1192,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1193,7 +1217,7 @@ describe("ArticleEditor", () => {
 
     const blocks = useEditorStore.getState().document.content;
     expect(blocks).toHaveLength(2);
-    expect(blocks[0].type).toBe("image");
+    expect(blocks[0].type).toBe("media");
     expect(blocks[1].type).toBe("paragraph");
     expect(document.activeElement).toBe(trailingParagraph);
   });
@@ -1211,7 +1235,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1239,7 +1264,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
             caption: "Caption",
           },
@@ -1277,7 +1303,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1314,7 +1341,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
             caption: "Gone",
           },
@@ -1344,7 +1372,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1372,7 +1401,8 @@ describe("ArticleEditor", () => {
         type: "doc" as const,
         content: [
           {
-            type: "image" as const,
+            type: "media" as const,
+            kind: "image" as const,
             src: "https://example.com/photo.png",
           },
           { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
@@ -1389,6 +1419,142 @@ describe("ArticleEditor", () => {
 
     const dialog = screen.getByTestId("image-dialog");
     expect(dialog.getAttribute("data-mode")).toBe("change");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Clips as article blocks
+  //
+  // The whole return on separating the block's IDENTITY from the file's FORMAT.
+  // Every predicate in the editor asks `block.type === "media"`, and `type` is
+  // the same word on a clip as on a photograph, so a clip arrives already
+  // editable: the caption, the traversal, the overlay and the delete all work
+  // without one of them having heard of `kind`. These lock that in — if any of
+  // them ever narrows to a kind, one of these goes red.
+  // ---------------------------------------------------------------------------
+
+  const clipPost = () => ({
+    id: "clip1",
+    slug: "clip1",
+    title: "Clip Post",
+    category: "ARTICLE" as const,
+    content: {
+      type: "doc" as const,
+      content: [
+        {
+          type: "media" as const,
+          kind: "video" as const,
+          // Extensionless on purpose: the block's own `kind` is the only thing
+          // that can answer for this src.
+          src: "https://cdn/8f2c-key",
+        },
+        {
+          type: "paragraph" as const,
+          children: [{ type: "text" as const, text: "" }],
+        },
+      ],
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  // The editor painted this block with a raw <img> of its own, and that was
+  // survivable only for as long as a clip could not be authored deliberately:
+  // an mp4 reached the document as `type: "image"` because nothing recorded
+  // otherwise, so the broken picture was a thing you had to go out of your way
+  // to produce. Now the block STATES its kind and the insert dialog offers
+  // clips, so an author can make one in two clicks and would have been looking
+  // straight at the broken picture on the very canvas that promises to show
+  // what will be published. The fork is `Media`'s — the reader's block, the
+  // tile, the lightbox and the library's own preview all ask it — and the
+  // editor asking the same question is the only thing that keeps the canvas
+  // and the article agreeing about what a source is.
+  it("shows a clip block as the clip it is, not a broken picture", () => {
+    render(<ArticleEditor initialPost={clipPost()} />);
+
+    const clip = document.querySelector("figure video");
+    expect(clip).not.toBeNull();
+    expect(clip?.getAttribute("src")).toBe("https://cdn/8f2c-key");
+    expect(document.querySelector("figure img")).toBeNull();
+  });
+
+  it("captions a clip block exactly as it captions a picture", () => {
+    render(<ArticleEditor initialPost={clipPost()} />);
+
+    const caption = document.querySelector(
+      "figcaption[data-placeholder='Add caption...']",
+    ) as HTMLElement;
+    expect(caption).not.toBeNull();
+    caption.textContent = "The flow, end to end";
+    fireEvent.input(caption);
+
+    const block = useEditorStore.getState().document.content[0];
+    expect(block.type).toBe("media");
+    if (block.type === "media") {
+      expect(block.kind).toBe("video");
+      expect(block.caption).toBe("The flow, end to end");
+    }
+  });
+
+  // Routing the block through `Media` moves the element out of the editor's own
+  // JSX, and the figure's entire keyboard model hangs off that element: it is
+  // the tab stop, the overlay keys on its focus, the caret keys are read from
+  // it, and `focusBlockAtStart` reaches the block by querying
+  // `[data-showcase-media]` and focusing whatever answers. Put the contract on
+  // a box around the media instead and every one of those still "works" while
+  // the clip itself quietly stops being the thing that takes focus — so this
+  // asserts WHICH element carries it, not merely that something does.
+  it("hands a clip the same focus and keyboard contract a picture had", () => {
+    render(<ArticleEditor initialPost={clipPost()} />);
+
+    const media = document.querySelector("[data-showcase-media]") as HTMLElement;
+    expect(media.tagName).toBe("VIDEO");
+    expect(media.tabIndex).toBe(0);
+
+    // Focus is what raises the overlay — the block has no caret of its own, so
+    // this is the only thing that says "you are on this block".
+    fireEvent.focus(media);
+    expect(screen.getByRole("button", { name: "Change Image..." })).not.toBeNull();
+
+    // And the caret keys reach the figure's handler from the clip itself.
+    fireEvent.keyDown(media, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(
+      document.querySelector("figcaption[data-placeholder='Add caption...']"),
+    );
+
+    fireEvent.blur(media);
+    expect(screen.queryByRole("button", { name: "Change Image..." })).toBeNull();
+  });
+
+  it("deletes a clip block from the overlay, as it does a picture", () => {
+    render(<ArticleEditor initialPost={clipPost()} />);
+
+    const media = document.querySelector("[data-showcase-media]") as HTMLElement;
+    fireEvent.focus(media);
+    fireEvent.click(screen.getByRole("button", { name: "Delete image" }));
+
+    expect(
+      useEditorStore
+        .getState()
+        .document.content.some((block) => block.type === "media"),
+    ).toBe(false);
+  });
+
+  // The insert path's own contribution: the kind comes off the upload's
+  // content type and is written down, so an extensionless key survives into
+  // the document as a clip rather than being guessed back into a picture.
+  it("writes an inserted clip's kind, taking the dialog at its word", () => {
+    render(<ArticleEditor initialPost={clipPost()} />);
+
+    const media = document.querySelector("[data-showcase-media]") as HTMLElement;
+    fireEvent.focus(media);
+    fireEvent.click(screen.getByRole("button", { name: "Change Image..." }));
+    fireEvent.click(screen.getByText("insert clip"));
+
+    expect(useEditorStore.getState().document.content[0]).toEqual({
+      type: "media",
+      kind: "video",
+      src: "https://cdn/8f2c-key",
+    });
   });
 
   it("populates the title from initialPost", () => {
@@ -3348,7 +3514,13 @@ describe("ArticleEditor collection block", () => {
     useEditorStore.getState().reset();
   });
 
-  const collectionPost = (items: { src: string; caption?: string }[]) => ({
+  /** A filled slot, spelled the way a document holds one. */
+  const slot = (
+    src: string,
+    fields: Partial<Omit<MediaNode, "type" | "kind" | "src">> = {},
+  ): MediaNode => ({ type: "media", kind: "image", src, ...fields });
+
+  const collectionPost = (items: MediaNode[]) => ({
     id: "collection-post",
     slug: "collection-post",
     title: "Collection Post",
@@ -3409,7 +3581,7 @@ describe("ArticleEditor collection block", () => {
   });
 
   it("shows every slot, filled or not", () => {
-    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     expect(screen.getAllByRole("toolbar")).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Add Media" })).toHaveLength(5);
   });
@@ -3417,7 +3589,7 @@ describe("ArticleEditor collection block", () => {
   it("swaps a featured image with the one it replaces", () => {
     render(
       <ArticleEditor
-        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+        initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
       />,
     );
     fireEvent.click(
@@ -3474,7 +3646,7 @@ describe("ArticleEditor collection block", () => {
   it("swaps two slots when a tile is dragged onto another", () => {
     render(
       <ArticleEditor
-        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+        initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
       />,
     );
     dragCell(1, 2);
@@ -3485,7 +3657,7 @@ describe("ArticleEditor collection block", () => {
   it("features an image dragged into the first cell", () => {
     render(
       <ArticleEditor
-        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+        initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
       />,
     );
     dragCell(2, 0);
@@ -3500,7 +3672,7 @@ describe("ArticleEditor collection block", () => {
 
   it("removes one image and leaves the block behind", () => {
     render(
-      <ArticleEditor initialPost={collectionPost([{ src: "a" }, { src: "b" }])} />,
+      <ArticleEditor initialPost={collectionPost([slot("a"), slot("b")])} />,
     );
     fireEvent.click(
       within(toolbarFor(0)).getByRole("button", { name: "Remove image" }),
@@ -3521,7 +3693,7 @@ describe("ArticleEditor collection block", () => {
     // deliberate act, and it lives in the media library alone.
     mediaActions.deleteMedia.mockClear();
     render(
-      <ArticleEditor initialPost={collectionPost([{ src: "a" }, { src: "b" }])} />,
+      <ArticleEditor initialPost={collectionPost([slot("a"), slot("b")])} />,
     );
     fireEvent.click(
       within(toolbarFor(0)).getByRole("button", { name: "Remove image" }),
@@ -3534,7 +3706,7 @@ describe("ArticleEditor collection block", () => {
   it("caps the picker at the remaining capacity when adding", () => {
     render(
       <ArticleEditor
-        initialPost={collectionPost([{ src: "a" }, { src: "b" }, { src: "c" }])}
+        initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
       />,
     );
     fireEvent.click(screen.getAllByRole("button", { name: "Add Media" })[0]);
@@ -3547,10 +3719,10 @@ describe("ArticleEditor collection block", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([
-          { src: "a" },
-          { src: "b" },
-          { src: "c" },
-          { src: "d" },
+          slot("a"),
+          slot("b"),
+          slot("c"),
+          slot("d"),
         ])}
       />,
     );
@@ -3571,8 +3743,8 @@ describe("ArticleEditor collection block", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([
-          { src: "a" },
-          { src: "b", caption: "Kept" },
+          slot("a"),
+          slot("b", { caption: "Kept" }),
         ])}
       />,
     );
@@ -3585,13 +3757,15 @@ describe("ArticleEditor collection block", () => {
 
     fireEvent.click(screen.getByText("insert"));
     expect(collection().items[1]).toEqual({
+      type: "media",
+      kind: "image",
       src: "https://cdn/1.png",
       caption: "Kept",
     });
   });
 
   it("stores a per-image caption from the properties panel", () => {
-    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     fireEvent.click(
       within(toolbarFor(0)).getByRole("button", { name: "Image properties" }),
     );
@@ -3608,7 +3782,7 @@ describe("ArticleEditor collection block", () => {
   it("stores the block's own caption separately from the images'", () => {
     render(
       <ArticleEditor
-        initialPost={collectionPost([{ src: "a", caption: "Per image" }])}
+        initialPost={collectionPost([slot("a", { caption: "Per image" })])}
       />,
     );
     const figcaption = document.querySelector("figcaption") as HTMLElement;
@@ -3620,7 +3794,7 @@ describe("ArticleEditor collection block", () => {
   });
 
   it("deletes the whole block on Backspace over the grid", () => {
-    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     const grid = document.querySelector("[data-showcase-media]") as HTMLElement;
     grid.focus();
     fireEvent.keyDown(grid, { key: "Backspace" });
@@ -3631,7 +3805,7 @@ describe("ArticleEditor collection block", () => {
   // The grid root owns the figure's caret keys, but it also CONTAINS the cell
   // toolbars — whose own Enter and Backspace must stay theirs.
   it("leaves the block alone when a key comes from inside a cell", () => {
-    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     const button = within(toolbarFor(0)).getByRole("button", {
       name: "Image properties",
     });
@@ -3643,7 +3817,7 @@ describe("ArticleEditor collection block", () => {
   });
 
   it("navigates from the grid into the block caption with ArrowDown", () => {
-    render(<ArticleEditor initialPost={collectionPost([{ src: "a" }])} />);
+    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     const grid = document.querySelector("[data-showcase-media]") as HTMLElement;
     grid.focus();
     fireEvent.keyDown(grid, { key: "ArrowDown" });

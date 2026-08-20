@@ -11,8 +11,10 @@ import {
 import {
   isAllowedMediaContentType,
   maxUploadBytesFor,
+  mediaKindOf,
   type MediaAsset,
 } from "@/domain/media";
+import type { MediaKind } from "@/domain/nodes";
 import { PROGRESS_COMPLETE_HOLD_MS } from "@/components/ui/progress-bar";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,6 +42,24 @@ export interface UseImageInsertOptions {
 export interface ImageInsertPayload {
   src: string;
   alt?: string;
+  /**
+   * Which element the inserted node should render with — the ONE fact this
+   * dialog knows first-hand that the document could not otherwise recover.
+   *
+   * Every asset in the library was validated against
+   * `CreateMediaUploadInputSchema` on the way up and carries its content type
+   * ever since, so the answer is sitting in `MediaAsset.contentType` at the
+   * moment Insert is pressed. It used to be dropped here: the payload was an
+   * src and an alt, and the renderer went back to guessing from the file
+   * extension (`isVideoSource`) on every paint — a guess that is only as good
+   * as the URL, and R2 keys are not obliged to carry an extension at all.
+   *
+   * Passing it through is what stops the unanswered set from growing. The
+   * filename guess survives, but only as the backfill for documents written
+   * before there was a field to write this in (see `withMediaKind`), and
+   * nothing inserted from here on will ever need it.
+   */
+  kind: MediaKind;
 }
 
 function uploadFileWithProgress(
@@ -402,6 +422,7 @@ export function useImageInsert({
     return {
       src: selectedAsset.url,
       alt: altText.trim() || undefined,
+      kind: mediaKindOf(selectedAsset.contentType),
     };
   }, [selectedAsset, altText]);
 
@@ -415,7 +436,13 @@ export function useImageInsert({
       const asset = assets.find((item) => item.key === key);
       if (!asset) return [];
       const alt = key === selectedKey ? altText : (asset.alt ?? "");
-      return [{ src: asset.url, alt: alt.trim() || undefined }];
+      return [
+        {
+          src: asset.url,
+          alt: alt.trim() || undefined,
+          kind: mediaKindOf(asset.contentType),
+        },
+      ];
     });
   }, [selectedKeys, assets, selectedKey, altText]);
 

@@ -65,6 +65,7 @@ import {
 } from "@/components/image-insert-dialog";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import { CollectionGrid } from "@/components/collection-grid";
+import { Media } from "@/components/media";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { NumberToolbar } from "@/components/number-toolbar";
 import { BulletToolbar, type BulletStyle } from "@/components/bullet-toolbar";
@@ -90,6 +91,7 @@ import type {
   InlineNode,
   Mark,
   CodeLanguage,
+  MediaNode,
 } from "@/domain/nodes";
 import { CodeLanguageSchema, COLLECTION_MAX_ITEMS } from "@/domain/nodes";
 import {
@@ -924,10 +926,33 @@ export function findSidenoteRangeAt(
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The dialog's answer, as the document records it.
+ *
+ * The payload is deliberately not a media node already — it is what the media
+ * LIBRARY knows about a file (a url, a description, the kind its content type
+ * declares), while a node is that plus everything an author does to it in a
+ * frame. Spelling the conversion out here is what keeps the dialog from having
+ * to know the document's shape, and it is one function rather than two because
+ * a slot in a collection and a block in the article take the identical node —
+ * which is the point of an item carrying the redundant `type: "media"`.
+ *
+ * `alt` is dropped rather than stored empty: it is optional in the schema and
+ * an empty string would serialize noise into every document that never got one.
+ */
+function mediaNodeFrom(payload: ImageInsertPayload): MediaNode {
+  return {
+    type: "media",
+    kind: payload.kind,
+    src: payload.src,
+    ...(payload.alt ? { alt: payload.alt } : {}),
+  };
+}
+
 /** Return true if a block carries no text content. */
 function isBlockEmpty(block: BlockNode): boolean {
   if (block.type === "horizontal_rule") return false;
-  if (block.type === "image") return false;
+  if (block.type === "media") return false;
   if (block.type === "collection") return false;
   if (block.type === "component") return false;
   if (block.type === "code_block") {
@@ -1541,12 +1566,12 @@ function EditableBlock({
   // after store init, or a slash-menu type conversion that causes remount).
   // While the user is actively typing the element has focus — skip the update
   // so we never reset the cursor position.
-  // Non-editable blocks (horizontal_rule, image) have no editable children —
+  // Non-editable blocks (horizontal_rule, media) have no editable children —
   // skip innerHTML sync to avoid wiping their rendered content.
   useEffect(() => {
     if (
       block.type === "horizontal_rule" ||
-      block.type === "image" ||
+      block.type === "media" ||
       block.type === "collection" ||
       block.type === "component"
     )
@@ -1566,7 +1591,7 @@ function EditableBlock({
 
   useEffect(() => {
     if (
-      block.type !== "image" &&
+      block.type !== "media" &&
       block.type !== "collection" &&
       block.type !== "component" &&
       block.type !== "blockquote" &&
@@ -2056,7 +2081,7 @@ function EditableBlock({
   const handleCaptionInput = useCallback(
     (e: React.FormEvent<HTMLElement>) => {
       if (
-        block.type !== "image" &&
+        block.type !== "media" &&
         block.type !== "collection" &&
         block.type !== "component" &&
         block.type !== "blockquote" &&
@@ -2483,17 +2508,28 @@ function EditableBlock({
   }
 
   // ---------------------------------------------------------------------------
-  // Image block — img with editable caption
+  // Media block — the picture with an editable caption
   // ---------------------------------------------------------------------------
 
-  if (block.type === "image") {
-    const showcaseMediaProps = {
+  if (block.type === "media") {
+    // Split in two here, and nowhere else, because this branch has two kinds of
+    // consumer. The placeholder is an element the editor renders itself and
+    // takes a plain DOM `ref`; the filled block is `Media`, which decides for
+    // itself whether the element is an <img> or a <video> and therefore names
+    // that hook `elementRef` — a callback, so a caller can hold what arrived in
+    // state. `showcaseMediaCallbackRef` already satisfies both: it is the right
+    // signature and it is a `useCallback`, which is what keeps a clip from
+    // being torn down and losing its playhead on every render.
+    const showcaseMediaContract = {
       tabIndex: 0 as const,
       "data-showcase-media": "",
-      ref: showcaseMediaCallbackRef,
       onFocus: () => setIsShowcaseMediaFocused(true),
       onBlur: () => setIsShowcaseMediaFocused(false),
       onKeyDown: handleShowcaseMediaKeyDown,
+    };
+    const showcaseMediaProps = {
+      ...showcaseMediaContract,
+      ref: showcaseMediaCallbackRef,
     };
 
     return (
@@ -2505,12 +2541,33 @@ function EditableBlock({
       >
         <div className={editorShowcaseMediaShellStyle}>
           {block.src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            // Not a raw <img>. The block now records its own `kind`, and the
+            // insert dialog offers clips, so an author can make a video block
+            // deliberately — and painting one with an <img> put a broken
+            // picture on the very canvas that promises to show what will be
+            // published. `Media` is where the reader's block, the tile, the
+            // lightbox and the library's preview all settle this fork, and the
+            // editor asking the same question is what keeps the canvas and the
+            // article agreeing about what a source is.
+            <Media
               src={block.src}
+              kind={block.kind}
               alt={block.alt ?? ""}
               className={editorImgStyle}
-              {...showcaseMediaProps}
+              // Held, not played. A loop running beside the prose someone is
+              // writing is a distraction, and holding costs nothing to look at:
+              // `Media` seeks a hair past the start so a paused clip shows its
+              // opening frame rather than an empty box. The house transport is
+              // left off for the same reason — that corner already belongs to
+              // the Change Image / Delete overlay, and this canvas is for
+              // arranging blocks rather than watching them run.
+              autoPlay={false}
+              // NOT `layout={block}`: the editor block does not apply media
+              // layout today and the reader's does, which is a real
+              // inconsistency but an older and separate one. Fixing it here
+              // would change how every existing picture sits in the editor.
+              elementRef={showcaseMediaCallbackRef}
+              {...showcaseMediaContract}
             />
           ) : (
             <span
@@ -2847,7 +2904,7 @@ function EditableBlock({
 /**
  * Ensure an editable paragraph trails certain terminal blocks so the author can
  * always continue typing after them. This covers caret-less blocks
- * (horizontal_rule, image, component), lists — a list item last block would
+ * (horizontal_rule, media, component), lists — a list item last block would
  * otherwise trap the author in the list with no plain block to click into below
  * it — and code blocks, where Enter inserts a literal newline rather than a new
  * block, leaving no way to escape downward.
@@ -2859,7 +2916,7 @@ function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
   const last = blocks[blocks.length - 1];
   if (
     last.type === "horizontal_rule" ||
-    last.type === "image" ||
+    last.type === "media" ||
     last.type === "collection" ||
     last.type === "component" ||
     last.type === "code_block" ||
@@ -2889,7 +2946,7 @@ function hasSyntheticTrailingParagraph(
 ): boolean {
   const block = blocks[index];
   if (
-    block.type !== "image" &&
+    block.type !== "media" &&
     block.type !== "collection" &&
     block.type !== "component"
   )
@@ -3855,10 +3912,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
     const prevBlock = blocks[index - 1];
 
-    // Non-text predecessor (HR, image) — just delete it, keep current block
+    // Non-text predecessor (HR, media) — just delete it, keep current block
     if (
       prevBlock.type === "horizontal_rule" ||
-      prevBlock.type === "image" ||
+      prevBlock.type === "media" ||
       prevBlock.type === "collection" ||
       prevBlock.type === "component"
     ) {
@@ -3905,10 +3962,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
     const nextBlock = blocks[index + 1];
 
-    // Non-text successor (HR, image) — just delete it, keep current block
+    // Non-text successor (HR, media) — just delete it, keep current block
     if (
       nextBlock.type === "horizontal_rule" ||
-      nextBlock.type === "image" ||
+      nextBlock.type === "media" ||
       nextBlock.type === "collection" ||
       nextBlock.type === "component"
     ) {
@@ -4175,17 +4232,21 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       // placeholder, so this is where the collection actually comes into being.
       next[blockIndex] = {
         type: "collection",
-        items: payloads.slice(0, COLLECTION_MAX_ITEMS),
+        items: payloads.slice(0, COLLECTION_MAX_ITEMS).map(mediaNodeFrom),
       };
     } else if (collectionDialogTarget === null) {
       next[blockIndex] = {
         ...existing,
-        items: appendItems(existing.items, payloads),
+        items: appendItems(existing.items, payloads.map(mediaNodeFrom)),
       };
     } else {
       next[blockIndex] = {
         ...existing,
-        items: replaceItem(existing.items, collectionDialogTarget, payloads[0]),
+        items: replaceItem(
+          existing.items,
+          collectionDialogTarget,
+          mediaNodeFrom(payloads[0]),
+        ),
       };
     }
 
@@ -4307,16 +4368,32 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     setImageDialogOpen(true);
   }
 
-  function handleImageInsert(payload: { src: string; alt?: string }) {
+  // The payload's `kind` goes straight into the block, and this is the one
+  // place in the app where the answer is known first-hand: it came off the
+  // upload's own `contentType` (see `ImageInsertPayload`), never off a
+  // filename.
+  //
+  // Nothing else here has to be taught which kind it is holding. Every
+  // predicate in this file asks `block.type === "media"` — captions, arrow
+  // traversal, toolbars, selection — and every one of them is a question about
+  // a FIGURE rather than about a file, so a clip is as editable as a
+  // photograph without a single extra branch. That is precisely what a block
+  // identity held CONSTANT across the two buys. While the format lived in
+  // `type`, authoring a clip would have meant teaching a dozen predicates a
+  // second literal and would have left an inserted clip unreachable in the
+  // editor until every one of them had learned it — which is why it was not
+  // done.
+  function handleImageInsert(payload: ImageInsertPayload) {
     if (imageDialogBlockIndex === null) return;
 
     const existing = blocks[imageDialogBlockIndex];
     const next = [...blocks];
     next[imageDialogBlockIndex] = {
-      type: "image",
-      src: payload.src,
-      ...(payload.alt ? { alt: payload.alt } : {}),
-      ...(existing.type === "image" && existing.caption
+      ...mediaNodeFrom(payload),
+      // The caption belongs to the block's POSITION in the article rather than
+      // to the file standing in it — the same rule `replaceItem` applies to a
+      // collection slot.
+      ...(existing.type === "media" && existing.caption
         ? { caption: existing.caption }
         : {}),
     };
@@ -5156,7 +5233,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           onShiftArrowUp={() => shiftArrowUp(i)}
           onShiftArrowDown={() => shiftArrowDown(i)}
           onChangeImage={
-            block.type === "image" ? () => handleChangeImage(i) : undefined
+            block.type === "media" ? () => handleChangeImage(i) : undefined
           }
           onCollectionAdd={
             block.type === "collection"
@@ -5187,7 +5264,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           }
           onInsertParagraphBefore={() => insertParagraphBefore(i)}
           onInsertParagraphAfter={
-            block.type === "image" ||
+            block.type === "media" ||
             block.type === "collection" ||
             block.type === "component" ||
             block.type === "metric" ||

@@ -1,11 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, afterEach, describe, it, expect, vi } from "vitest";
 import {
   BACKGROUND_EFFECT_MAX_COLORS,
   BackgroundEffectSchema,
   CollectionItemSchema,
+  CollectionNodeSchema,
   DEFAULT_BACKGROUND_EFFECT,
   DEFAULT_MEDIA_FIT,
-  ImageNodeSchema,
+  MediaNodeSchema,
   MEDIA_PADDING_MAX,
   MEDIA_PADDING_REFERENCE,
   MEDIA_PADDING_STEP,
@@ -77,13 +78,15 @@ describe("BackgroundEffectSchema", () => {
   });
 });
 
-describe("background effect on image nodes", () => {
-  it("is optional — an image without one still parses", () => {
-    expect(ImageNodeSchema.parse({ type: "image", src: "/a.png" }).backgroundEffect)
-      .toBeUndefined();
+describe("background effect on media nodes", () => {
+  it("is optional — a media node without one still parses", () => {
+    expect(
+      MediaNodeSchema.parse({ type: "media", kind: "image", src: "/a.png" })
+        .backgroundEffect,
+    ).toBeUndefined();
   });
 
-  it("rides along on collection items, which are image nodes minus the type", () => {
+  it("rides along on collection items, which ARE media nodes", () => {
     const item = CollectionItemSchema.parse({
       src: "/a.png",
       backgroundEffect: {},
@@ -92,45 +95,82 @@ describe("background effect on image nodes", () => {
   });
 });
 
-describe("media layout on image nodes", () => {
-  it("leaves both properties absent on an image that never set them", () => {
-    const node = ImageNodeSchema.parse({ type: "image", src: "/a.png" });
+describe("media layout on media nodes", () => {
+  it("leaves both properties absent on a node that never set them", () => {
+    const node = MediaNodeSchema.parse({
+      type: "media",
+      kind: "image",
+      src: "/a.png",
+    });
     expect(node.objectFit).toBeUndefined();
     expect(node.padding).toBeUndefined();
   });
 
   it("accepts the two fits the segmented control offers, and nothing else", () => {
     expect(
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", objectFit: "contain" })
-        .objectFit,
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        objectFit: "contain",
+      }).objectFit,
     ).toBe("contain");
     expect(
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", objectFit: "cover" })
-        .objectFit,
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        objectFit: "cover",
+      }).objectFit,
     ).toBe("cover");
     expect(() =>
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", objectFit: "fill" }),
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        objectFit: "fill",
+      }),
     ).toThrow();
   });
 
   it("holds padding to the slider's own grid — multiples of the step, within range", () => {
     expect(
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", padding: 0 }).padding,
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        padding: 0,
+      }).padding,
     ).toBe(0);
     expect(
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", padding: MEDIA_PADDING_MAX })
-        .padding,
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        padding: MEDIA_PADDING_MAX,
+      }).padding,
     ).toBe(MEDIA_PADDING_MAX);
     // Off the 8px grid, below the floor, and past the ceiling.
     expect(() =>
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", padding: 5 }),
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        padding: 5,
+      }),
     ).toThrow();
     expect(() =>
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", padding: -8 }),
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        padding: -8,
+      }),
     ).toThrow();
     expect(() =>
-      ImageNodeSchema.parse({
-        type: "image",
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
         src: "/a.png",
         padding: MEDIA_PADDING_MAX + MEDIA_PADDING_STEP,
       }),
@@ -388,31 +428,318 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
   });
 });
 
-describe("border radius on image nodes", () => {
+describe("border radius on media nodes", () => {
   it("holds the corner to the slider's grid — multiples of the step, within range", () => {
     expect(
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", borderRadius: 0 })
-        .borderRadius,
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        borderRadius: 0,
+      }).borderRadius,
     ).toBe(0);
     expect(
-      ImageNodeSchema.parse({
-        type: "image",
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
         src: "/a.png",
         borderRadius: MEDIA_RADIUS_MAX,
       }).borderRadius,
     ).toBe(MEDIA_RADIUS_MAX);
     expect(() =>
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", borderRadius: 3 }),
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        borderRadius: 3,
+      }),
     ).toThrow();
     expect(() =>
-      ImageNodeSchema.parse({ type: "image", src: "/a.png", borderRadius: -2 }),
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        borderRadius: -2,
+      }),
     ).toThrow();
     expect(() =>
-      ImageNodeSchema.parse({
-        type: "image",
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
         src: "/a.png",
         borderRadius: MEDIA_RADIUS_MAX + MEDIA_RADIUS_STEP,
       }),
     ).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The media union — WHAT a source is, asked separately from WHICH block holds
+// it.
+//
+// The two questions used to share the `type` field, and sharing it is what
+// made the field untrustworthy: `type: "image"` was a block's identity long
+// before it was ever a claim about a file, so every mp4 inserted as a
+// standalone block is stored under it. `type` is now the constant `"media"`
+// and cannot be false about a format it no longer describes; `kind` is fresh,
+// has never been written by anything but this code, and so has no falsehoods
+// to inherit.
+// ---------------------------------------------------------------------------
+
+describe("MediaNodeSchema", () => {
+  it("holds a picture and a clip under one block identity", () => {
+    expect(
+      MediaNodeSchema.parse({ type: "media", kind: "image", src: "/a.png" })
+        .type,
+    ).toBe("media");
+    expect(
+      MediaNodeSchema.parse({ type: "media", kind: "video", src: "/a.mp4" })
+        .type,
+    ).toBe("media");
+  });
+
+  it("takes every field on the clip arm that it takes on the picture arm", () => {
+    const node = MediaNodeSchema.parse({
+      type: "media",
+      kind: "video",
+      src: "/demo.mp4",
+      alt: "A demo",
+      caption: "The flow, end to end",
+      objectFit: "contain",
+      padding: MEDIA_PADDING_STEP,
+      borderRadius: MEDIA_RADIUS_STEP,
+      backgroundEffect: {},
+    });
+    expect(node).toMatchObject({
+      type: "media",
+      kind: "video",
+      src: "/demo.mp4",
+      alt: "A demo",
+      caption: "The flow, end to end",
+      objectFit: "contain",
+      padding: MEDIA_PADDING_STEP,
+      borderRadius: MEDIA_RADIUS_STEP,
+    });
+    expect(node.backgroundEffect).toEqual(DEFAULT_BACKGROUND_EFFECT);
+  });
+
+  it("holds the clip arm to the same bounds, so the panel edits one thing", () => {
+    expect(() =>
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "video",
+        src: "/a.mp4",
+        padding: 5,
+      }),
+    ).toThrow();
+    expect(() =>
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "video",
+        src: "/a.mp4",
+        objectFit: "fill",
+      }),
+    ).toThrow();
+  });
+
+  // The point of the fresh field: the document's own word about the format
+  // wins over anything the URL happens to look like, in both directions.
+  it("routes on the declared kind, not on the filename", () => {
+    expect(
+      MediaNodeSchema.parse({ type: "media", kind: "video", src: "/clip" })
+        .kind,
+    ).toBe("video");
+    expect(
+      MediaNodeSchema.parse({ type: "media", kind: "image", src: "/still.mp4" })
+        .kind,
+    ).toBe("image");
+  });
+
+  it("takes neither a third kind nor a missing one", () => {
+    expect(() =>
+      MediaNodeSchema.parse({ type: "media", kind: "audio", src: "/a.mp3" }),
+    ).toThrow();
+    expect(() =>
+      MediaNodeSchema.parse({ type: "media", src: "/a.png" }),
+    ).toThrow();
+  });
+
+  // `type` is the block's identity and is not a place to put a format. The
+  // union takes the raw shape only; the legacy spellings go through the
+  // migration below.
+  it("takes no identity but `media`", () => {
+    expect(() =>
+      MediaNodeSchema.parse({ type: "image", kind: "image", src: "/a.png" }),
+    ).toThrow();
+    expect(() =>
+      MediaNodeSchema.parse({ kind: "image", src: "/a.png" }),
+    ).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The migration. Every `kind` that will ever exist is either derived here from
+// the file extension or written at insert time from the upload's content type
+// — the old `type: "image"` is discarded as the identity it always was, so its
+// falsehoods about format have nowhere to propagate to.
+// ---------------------------------------------------------------------------
+
+describe("CollectionItemSchema (documents written before `kind`)", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  afterEach(() => warn.mockClear());
+  // A spy installed in a `describe` body is installed for the whole FILE — the
+  // block scopes when the callback runs, not when the module-level side effect
+  // does — so without this `console.warn` stays swallowed for every suite after
+  // this one. Restored here rather than by turning on `restoreMocks` in
+  // `vitest.config.ts`: that is a global with a blast radius across every spec
+  // in the repo, and the leak is local.
+  afterAll(() => warn.mockRestore());
+
+  // The asymmetry with `BlockNodeSchema`, which refuses a typeless object (see
+  // "refuses a block that never says what it is" in `post.test.ts`). It is not
+  // an inconsistency but a record of what was actually written: a collection
+  // item came straight from an `ImageInsertPayload`, `{ src, alt? }`, with no
+  // type — every slot held a picture, so a field with one possible value was
+  // six bytes of noise. A block's `type` was a required literal on the old
+  // schema and is present on every one that has ever parsed. Each entry point
+  // is exactly as permissive as its own history requires, and no more.
+  it("takes a legacy item's stray `type` as readily as its absence", () => {
+    // Items were parsed by `ImageNodeSchema.omit({ type: true })`, and a Zod
+    // object strips unknown keys rather than rejecting them — so an item that
+    // did carry a `type` was silently accepted and may sit in stored data.
+    expect(CollectionItemSchema.parse({ type: "image", src: "/a.png" })).toEqual(
+      { type: "media", kind: "image", src: "/a.png" },
+    );
+    expect(CollectionItemSchema.parse({ src: "/a.png" })).toEqual({
+      type: "media",
+      kind: "image",
+      src: "/a.png",
+    });
+  });
+
+  it("stamps a whole media node onto an item that carries no type at all", () => {
+    expect(CollectionItemSchema.parse({ src: "/a.png", alt: "A" })).toEqual({
+      type: "media",
+      kind: "image",
+      src: "/a.png",
+      alt: "A",
+    });
+  });
+
+  // The filename is where the answer was left, and the only place it was.
+  it("recovers a clip from the extension the renderer used to sniff", () => {
+    expect(CollectionItemSchema.parse({ src: "/media/demo.mp4" }).kind).toBe(
+      "video",
+    );
+  });
+
+  // `isVideoSource`'s bias, which has to survive the move: an unnameable
+  // source is a picture, because every legacy src actually is one.
+  it("calls a source it cannot name a picture, never a clip", () => {
+    for (const src of ["/media/8f2c-key", "/a.svg", "/v1.2/shot"]) {
+      expect(CollectionItemSchema.parse({ src }).kind).toBe("image");
+    }
+  });
+
+  // The legacy STANDALONE block, which the collection path never produced but
+  // `BlockNodeSchema` sends through the same preprocess. Its `type: "image"`
+  // is the block's identity and says nothing true about the file, so the
+  // extension — not the stored word — decides.
+  it("derives a legacy block's kind from the src, never from its `type`", () => {
+    expect(
+      CollectionItemSchema.parse({ type: "image", src: "/media/demo.mp4" }),
+    ).toEqual({ type: "media", kind: "video", src: "/media/demo.mp4" });
+    expect(
+      CollectionItemSchema.parse({ type: "image", src: "/a.png" }).kind,
+    ).toBe("image");
+  });
+
+  it("never overrules a kind the item already states", () => {
+    expect(
+      CollectionItemSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/still.mp4",
+      }).kind,
+    ).toBe("image");
+    expect(
+      CollectionItemSchema.parse({ type: "media", kind: "video", src: "/clip" })
+        .kind,
+    ).toBe("video");
+  });
+
+  it("leaves everything the author applied to the slot untouched", () => {
+    expect(
+      CollectionItemSchema.parse({
+        src: "/a.png",
+        caption: "A caption",
+        objectFit: "contain",
+        padding: MEDIA_PADDING_STEP,
+      }),
+    ).toMatchObject({
+      type: "media",
+      kind: "image",
+      caption: "A caption",
+      objectFit: "contain",
+      padding: MEDIA_PADDING_STEP,
+    });
+  });
+
+  it("still rejects an item the schema would have rejected anyway", () => {
+    expect(() =>
+      CollectionItemSchema.parse({ src: "/a.png", padding: 5 }),
+    ).toThrow();
+    expect(() => CollectionItemSchema.parse({ alt: "no source" })).toThrow();
+  });
+
+  it("backfills every slot of a whole legacy collection block", () => {
+    const node = CollectionNodeSchema.parse({
+      type: "collection",
+      items: [{ src: "/a.png" }, { src: "/demo.mp4" }],
+    });
+    expect(node.items.map((item) => item.kind)).toEqual(["image", "video"]);
+  });
+
+  // A stamped `kind` is baked in — nothing downstream sniffs the src any more,
+  // so a wrong guess has no later chance to be corrected. The log is how the
+  // backfill is audited, and the extensionless case is the one worth auditing:
+  // `src` is a plain string, so an externally hosted clip with no extension
+  // migrates to `image` on the bias and only the log will say so.
+  it("says what it stamped, and on what evidence", () => {
+    CollectionItemSchema.parse({ src: "/media/demo.mp4" });
+    expect(warn.mock.calls[0][0]).toContain("/media/demo.mp4");
+    expect(warn.mock.calls[0][0]).toContain("video");
+    expect(warn.mock.calls[0][0]).toContain("mp4");
+
+    warn.mockClear();
+    CollectionItemSchema.parse({ src: "/media/8f2c-key" });
+    expect(warn.mock.calls[0][0]).toContain("/media/8f2c-key");
+    expect(warn.mock.calls[0][0]).toContain("image");
+    expect(warn.mock.calls[0][0]).toMatch(/no extension/i);
+  });
+
+  it("stays quiet for an item that already states its kind", () => {
+    CollectionItemSchema.parse({ type: "media", kind: "video", src: "/clip" });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // The log was a required deliverable so the backfill would not run blind, and
+  // it stays one — but the preprocess is PERMANENT (a document is only
+  // rewritten if somebody edits it), so an ungated warning is one that fires
+  // forever, on every parse of every legacy node, for the life of the app.
+  // Auditing a migration is a thing you do while watching; production is where
+  // nobody is. Media nodes parse server-side only (`src/lib/posts.ts`,
+  // `src/app/edit/[slug]/page.tsx`), so what is saved is server log volume.
+  it("keeps the audit trail out of production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const item = CollectionItemSchema.parse({ src: "/media/demo.mp4" });
+      // Silent, but NOT inert — the backfill itself is what makes the document
+      // parse at all, so gating the log must not gate the stamp.
+      expect(item.kind).toBe("video");
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

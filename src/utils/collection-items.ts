@@ -2,7 +2,7 @@ import {
   COLLECTION_MAX_ITEMS,
   DEFAULT_MEDIA_FIT,
   type BackgroundEffect,
-  type CollectionItem,
+  type MediaNode,
 } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
@@ -10,7 +10,16 @@ import {
 //
 // Every mutation a collection block supports, as a pure array transform. The
 // editor's grid and the reader's showcase are then both dumb: they take an
-// ordered `items` array and render it. Two conventions carry the whole model:
+// ordered `items` array and render it.
+//
+// The element type is `MediaNode` — the picture-or-clip union — rather than a
+// collection-specific record, because a slot holds exactly what a standalone
+// block holds and nothing about these transforms is picture-specific. All but
+// one of them are pure position arithmetic that never reads a field; the one
+// that does is `replaceItem`, and what it has to know is precisely WHICH of
+// these fields describe the file and which describe the slot.
+//
+// Two conventions carry the whole model:
 //
 //   • Index 0 IS the featured image. There is no `featured` flag to keep in
 //     sync with the order, so "feature this one" is a move-to-front.
@@ -24,7 +33,7 @@ import {
 /** How many tiles the reader's featured skeleton puts on screen. */
 const READER_VISIBLE_TILES = 3;
 
-const inRange = (items: readonly CollectionItem[], index: number) =>
+const inRange = (items: readonly MediaNode[], index: number) =>
   Number.isInteger(index) && index >= 0 && index < items.length;
 
 /**
@@ -37,10 +46,10 @@ const inRange = (items: readonly CollectionItem[], index: number) =>
  * left it, instead of the whole tail sliding along by one.
  */
 export function swapItems(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   a: number,
   b: number,
-): CollectionItem[] {
+): MediaNode[] {
   const next = [...items];
   if (!inRange(items, a) || !inRange(items, b) || a === b) return next;
   [next[a], next[b]] = [next[b], next[a]];
@@ -53,16 +62,16 @@ export function swapItems(
  * the first cell reaches this same state by the same route.
  */
 export function featureItem(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   index: number,
-): CollectionItem[] {
+): MediaNode[] {
   return swapItems(items, index, 0);
 }
 
 export function removeItem(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   index: number,
-): CollectionItem[] {
+): MediaNode[] {
   if (!inRange(items, index)) return [...items];
   return items.filter((_, i) => i !== index);
 }
@@ -72,10 +81,10 @@ export function removeItem(
  * optional and an empty string would serialize noise into every document.
  */
 export function setItemCaption(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   index: number,
   caption: string | undefined,
-): CollectionItem[] {
+): MediaNode[] {
   if (!inRange(items, index)) return [...items];
   const trimmed = caption?.trim();
   return items.map((item, i) => {
@@ -96,10 +105,10 @@ export function setItemCaption(
  * only ever mean a bug upstream.
  */
 export function setItemBackgroundEffect(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   index: number,
   effect: BackgroundEffect | undefined,
-): CollectionItem[] {
+): MediaNode[] {
   if (!inRange(items, index)) return [...items];
   return items.map((item, i) => {
     if (i !== index) return item;
@@ -110,7 +119,7 @@ export function setItemBackgroundEffect(
 
 /** How the media sits in its frame — the panel's top section (Figma 885:1963). */
 export type MediaLayoutPatch = Partial<
-  Pick<CollectionItem, "objectFit" | "padding" | "borderRadius">
+  Pick<MediaNode, "objectFit" | "padding" | "borderRadius">
 >;
 
 /**
@@ -132,10 +141,10 @@ export type MediaLayoutPatch = Partial<
  * there is nothing left for a stored zero to override.
  */
 export function setItemLayout(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   index: number,
   patch: MediaLayoutPatch,
-): CollectionItem[] {
+): MediaNode[] {
   if (!inRange(items, index)) return [...items];
   return items.map((item, i) => {
     if (i !== index) return item;
@@ -159,9 +168,9 @@ export function setItemLayout(
 
 /** Appends up to the block's cap and silently drops the overflow. */
 export function appendItems(
-  items: readonly CollectionItem[],
-  added: readonly CollectionItem[],
-): CollectionItem[] {
+  items: readonly MediaNode[],
+  added: readonly MediaNode[],
+): MediaNode[] {
   return [...items, ...added].slice(0, COLLECTION_MAX_ITEMS);
 }
 
@@ -172,10 +181,23 @@ export function appendItems(
  * crops well, an inset and a corner tuned against its neighbours, a shader
  * picked to sit behind it — so it outlives the picture it was applied to.
  *
- * `src` and `alt` are pointedly NOT here. Those describe the FILE: a new
- * picture arrives with its own source and its own description, and inheriting
- * the old one's alt would leave the page announcing a photo it is no longer
- * showing.
+ * `src`, `alt` and `kind` are pointedly NOT here. Those describe the FILE: a
+ * new picture arrives with its own source and its own description, and
+ * inheriting the old one's alt would leave the page announcing a photo it is
+ * no longer showing.
+ *
+ * `kind` is the one whose absence from this list actually does something, and
+ * the list is `satisfies keyof MediaNode`, so nothing but this note stops
+ * somebody adding it. Preserved from the outgoing item, dropping a clip into a
+ * slot that used to hold a photograph would leave an `<img>` pointed at an
+ * mp4 — a broken image where the demo should be, and one that re-picking the
+ * file cannot fix, because every replacement inherits the same stale word. The
+ * incoming item's own is the only one that can be right here.
+ *
+ * `type` is not at issue either way: it is the constant `"media"` on every
+ * node, which is exactly why the format was moved off it (see
+ * `MediaNodeSchema`). Merging it from the slot and taking it from the incoming
+ * item are the same operation now, and neither can be wrong.
  */
 const SLOT_OWNED_PROPERTIES = [
   "caption",
@@ -183,7 +205,7 @@ const SLOT_OWNED_PROPERTIES = [
   "padding",
   "borderRadius",
   "backgroundEffect",
-] as const satisfies readonly (keyof CollectionItem)[];
+] as const satisfies readonly (keyof MediaNode)[];
 
 /**
  * Swaps the media in one slot, keeping everything the author applied to that
@@ -196,14 +218,14 @@ const SLOT_OWNED_PROPERTIES = [
  * author had just taken off.
  */
 export function replaceItem(
-  items: readonly CollectionItem[],
+  items: readonly MediaNode[],
   index: number,
-  next: CollectionItem,
-): CollectionItem[] {
+  next: MediaNode,
+): MediaNode[] {
   if (!inRange(items, index)) return [...items];
   return items.map((item, i) =>
     i === index
-      ? SLOT_OWNED_PROPERTIES.reduce<CollectionItem>(
+      ? SLOT_OWNED_PROPERTIES.reduce<MediaNode>(
           (merged, key) =>
             merged[key] === undefined && item[key] !== undefined
               ? { ...merged, [key]: item[key] }
@@ -219,7 +241,7 @@ export function replaceItem(
  * to describe an image in prose has already written its alternative text; an
  * empty string is the correct terminal fallback (decorative), not the filename.
  */
-export function collectionItemAlt(item: CollectionItem): string {
+export function collectionItemAlt(item: MediaNode): string {
   return item.alt ?? item.caption ?? "";
 }
 

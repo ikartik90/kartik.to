@@ -208,14 +208,79 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  it("accepts an image node", () => {
+  it("accepts a media node", () => {
     expect(
       BlockNodeSchema.safeParse({
-        type: "image",
+        type: "media",
+        kind: "image",
         src: "/uploads/photo.jpg",
         alt: "A photo",
       }).success
     ).toBe(true);
+  });
+
+  // A clip is the same block as a picture, distinguished by `kind` — see
+  // `MediaNodeSchema`. The union has to carry media in BOTH of the places it
+  // is written down, and only the schema half of that pair is testable.
+  it("accepts a clip, with everything a picture takes", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "media",
+        kind: "video",
+        src: "/uploads/demo.mp4",
+        alt: "A demo",
+        caption: "The flow, end to end",
+      }).success,
+    ).toBe(true);
+  });
+
+  // Nothing sniffs the src any more: the block says which element it is.
+  it("accepts a clip whose src does not look like one", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "media",
+        kind: "video",
+        src: "/media/8f2c-key",
+      }).success,
+    ).toBe(true);
+  });
+
+  // The block spelling every document on disk actually uses. `type: "image"`
+  // was this block's IDENTITY, never a claim about the file, so the migration
+  // reads the src and not the stored word — which is the whole reason `kind`
+  // is a new field rather than a reuse of that one.
+  it("migrates a legacy image block, taking its kind from the src", () => {
+    const picture = BlockNodeSchema.parse({
+      type: "image",
+      src: "/uploads/photo.jpg",
+      alt: "A photo",
+    });
+    expect(picture).toEqual({
+      type: "media",
+      kind: "image",
+      src: "/uploads/photo.jpg",
+      alt: "A photo",
+    });
+
+    // Every mp4 ever inserted as a standalone block is stored under
+    // `type: "image"`. Believing that literal would strand each one.
+    expect(
+      BlockNodeSchema.parse({ type: "image", src: "/uploads/demo.mp4" }),
+    ).toEqual({ type: "media", kind: "video", src: "/uploads/demo.mp4" });
+  });
+
+  // A BLOCK has always had to say what it is. The old `ImageNodeSchema` made
+  // `type` a required literal, so a typeless object could never have parsed as
+  // one — every media block in every document that has ever loaded carries it.
+  // The migration's tolerance of an absent `type` exists for COLLECTION ITEMS,
+  // which were written `{ src, alt? }` with no type at all, and letting that
+  // tolerance reach the block union quietly turned every malformed block into a
+  // media block instead of a parse error.
+  it("refuses a block that never says what it is", () => {
+    expect(BlockNodeSchema.safeParse({ src: "/a.png" }).success).toBe(false);
+    expect(
+      BlockNodeSchema.safeParse({ src: "/a.png", alt: "A" }).success,
+    ).toBe(false);
   });
 
   it("accepts a component block node with caption", () => {
@@ -296,6 +361,18 @@ describe("BlockNodeSchema", () => {
         })),
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts a collection node holding a clip beside a picture", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "collection",
+        items: [
+          { type: "media", kind: "image", src: "/uploads/a.jpg" },
+          { type: "media", kind: "video", src: "/uploads/demo.mp4" },
+        ],
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects a collection item without a src", () => {

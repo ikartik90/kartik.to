@@ -8,6 +8,7 @@ import {
   isAllowedMediaContentType,
   isVideoContentType,
   maxUploadBytesFor,
+  mediaKindOf,
   sanitizeMediaFilename,
   filenameFromMediaKey,
 } from "../media";
@@ -89,6 +90,25 @@ describe("maxUploadBytesFor", () => {
   it("gives each format its own ceiling", () => {
     expect(maxUploadBytesFor("video/mp4")).toBe(MAX_VIDEO_UPLOAD_BYTES);
     expect(maxUploadBytesFor("image/png")).toBe(MAX_IMAGE_UPLOAD_BYTES);
+  });
+});
+
+describe("mediaKindOf", () => {
+  it("names the element an upload of this type should be rendered with", () => {
+    expect(mediaKindOf("video/mp4")).toBe("video");
+    expect(mediaKindOf("image/png")).toBe("image");
+    expect(mediaKindOf("image/svg+xml")).toBe("image");
+  });
+
+  // The library only ever holds types that passed
+  // `CreateMediaUploadInputSchema`, so this branch is unreachable through the
+  // app — it is pinned because the fall-through is the SAFE direction and
+  // should stay that way. An unrecognised type shown as a picture is a broken
+  // image; shown as a clip it is an empty black box with nothing to say it
+  // failed.
+  it("falls through to a picture for a type it does not know", () => {
+    expect(mediaKindOf("application/octet-stream")).toBe("image");
+    expect(mediaKindOf("")).toBe("image");
   });
 });
 

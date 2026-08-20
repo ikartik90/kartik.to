@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { z } from "zod";
+import { isVideoSource, sourceExtension } from "@/utils/media-source";
 
 // ---------------------------------------------------------------------------
 // Marks — inline formatting annotations attached to text nodes
@@ -254,18 +255,34 @@ export const MEDIA_RADIUS_MAX = 20;
  */
 export const DEFAULT_MEDIA_RADIUS = 0;
 
-export const ImageNodeSchema = z.object({
-  type: z.literal("image"),
+// ---------------------------------------------------------------------------
+// Media — a picture or a clip, and the box either one sits in.
+//
+// Every field below is a property of a piece of MEDIA in a frame, and not one
+// of them is any less true of thirty seconds of screen recording than of a
+// screenshot: the alt, the caption, the background effect, the fit, the inset,
+// the corner. So they are written down ONCE, here, and both arms of the union
+// extend this. Two hand-written lists would drift the first time a field
+// landed on one of them, and the properties panel edits both through a single
+// `MediaLayout`.
+// ---------------------------------------------------------------------------
+const BaseMediaSchema = z.object({
+  // The BLOCK's identity, and only that. It is constant across pictures and
+  // clips on purpose — see `MediaNodeSchema` for why the format is asked
+  // separately.
+  type: z.literal("media"),
   src: z.string(),
   alt: z.string().optional(),
   caption: z.string().optional(),
-  // Absent means no effect; there is no `false`. Lives on the IMAGE node rather
-  // than on the collection item so a standalone image block inherits it for
-  // free — `CollectionItemSchema` is this schema minus its discriminant.
+  // Absent means no effect; there is no `false`. Lives on the MEDIA node rather
+  // than on the collection item so a standalone block inherits it for free —
+  // a collection item IS a media node (`CollectionItemSchema`) — and on the
+  // shared base rather than on either arm, so a field added here reaches a
+  // picture and a clip in the same edit.
   backgroundEffect: BackgroundEffectSchema.optional(),
   // Both absent-means-default rather than `.default()`, matching the effect
   // above. A Zod default would make the PARSED type require them, and every
-  // image literal in `src/data/articles.ts` and the editor's own insert would
+  // media literal in `src/data/articles.ts` and the editor's own insert would
   // have to state a fit and a padding it has no opinion about. Absent is also
   // the honest record of "this picture predates the control".
   objectFit: MediaFitSchema.optional(),
@@ -296,6 +313,57 @@ export const ImageNodeSchema = z.object({
     .optional(),
 });
 
+/**
+ * A picture or a clip — told apart by the DOCUMENT, and told apart from the
+ * question of which block this is.
+ *
+ * TWO fields, and that is the whole design. `type` is the block's identity and
+ * `kind` is the format, and they are separate because they were briefly the
+ * same field and that field could not be trusted. `type: "image"` had carried
+ * block identity since long before the library accepted mp4s, so every clip
+ * ever inserted as a standalone block is stored under it; reusing that literal
+ * as a format claim would have meant a discriminant that is simply false about
+ * a whole population of real documents, and no migration can tell a truthful
+ * `"image"` from a legacy one by looking at it. `kind` is FRESH — nothing has
+ * ever written one — so every value it will ever hold is either derived by the
+ * migration below from the file extension or written at insert time from the
+ * upload's `contentType`. It starts with nothing to inherit.
+ *
+ * The content type is known at upload (`CreateMediaUploadInputSchema`
+ * validates it, `MediaAssetSchema` stores it) and it used to be thrown away on
+ * the way into the document, leaving the renderer to recover it from the
+ * filename (`isVideoSource`) on every paint. That guess is only ever as good
+ * as the naming, and the naming is not ours to rely on: a bare R2 key carries
+ * no extension, a signed URL buries it behind a query, a CDN is free to
+ * rewrite the path entirely. Writing down an answer already in hand costs one
+ * field and retires the question.
+ *
+ * A discriminated union rather than one node with a `kind` string, because a
+ * clip will eventually hold things a picture cannot have: whether it loops,
+ * whether it offers the browser's controls, the frame it shows before it
+ * plays. On a single flat node every one of those would be an optional field
+ * meaningless on every photograph in the library, and "optional and
+ * meaningless" is exactly the shape a schema cannot tell apart from "optional
+ * and not set yet". None of them exist yet; this shape is what makes adding
+ * them additive, landing on the video arm alone with nothing dangling on
+ * pictures.
+ *
+ * `type` being constant across both arms is what lets `BlockNodeSchema` go on
+ * routing blocks by `type` and the editor's dozen `block.type === "media"`
+ * predicates see one stable value — every one of them is a format-agnostic
+ * editor concern (captions, arrow traversal, toolbars, selection), so they
+ * start working for clips at no cost.
+ */
+export const MediaNodeSchema = z.discriminatedUnion("kind", [
+  BaseMediaSchema.extend({ kind: z.literal("image") }),
+  BaseMediaSchema.extend({ kind: z.literal("video") }),
+]);
+
+export type MediaNode = z.infer<typeof MediaNodeSchema>;
+
+/** Picture or clip — the format, asked without asking which block holds it. */
+export type MediaKind = MediaNode["kind"];
+
 // A set of related images authored as ONE block. The editor exposes exactly
 // this many slots (a 3×2 grid), so the cap is the layout, not an arbitrary
 // limit; the reader shows the first three and folds the rest into a surplus
@@ -304,11 +372,146 @@ export const ImageNodeSchema = z.object({
 // determines the layout and there is no second source of truth to keep in sync.
 export const COLLECTION_MAX_ITEMS = 6;
 
-// Structurally an image node minus its discriminant, so the two stay in
-// lockstep as the image schema grows (alt/caption additions land on both).
-export const CollectionItemSchema = ImageNodeSchema.omit({ type: true });
+/**
+ * Turns a media object written before `kind` existed into one that has it.
+ *
+ * Separate from the union rather than folded into it, because it CANNOT be
+ * folded into it: `z.discriminatedUnion` routes on the RAW input, reading
+ * `kind` to pick a branch before any schema in the union has run. So a
+ * `.default("image")` on the literal is never reached — there is no branch to
+ * default INTO — and the backfill has to happen upstream of the routing.
+ *
+ * Exactly two legacy shapes reach here, and they are the only two ever
+ * persisted. A collection item was written `{ src, ... }` with no `type` at
+ * all, because every item was a picture and a field with one possible value is
+ * six bytes of noise per slot. A standalone block was written
+ * `{ type: "image", src, ... }`, where the literal is the BLOCK's identity and
+ * says nothing whatever about the file — which is why the incoming `type` is
+ * read only to recognise the shape and never to answer the question. Both come
+ * out as `{ type: "media", kind: <derived>, ...rest }`.
+ *
+ * `typeRequired` is which of those two shapes the caller can actually receive,
+ * and it exists because accepting both everywhere COSTS something. A block has
+ * always had to say what it is: `type` was a required literal on the old image
+ * schema, so a typeless object could never parse as a block, and `BlockNodeSchema`
+ * is a plain union with no other member that would take one either — a
+ * malformed block was a parse error, loudly. Tolerating an absent `type` there
+ * silently reclassifies any object with a string `src` as media, which is a
+ * validation quietly lost rather than a legacy shape accommodated. So the
+ * block entry (`StoredMediaBlockSchema`) sets this and the item entry
+ * (`StoredMediaItemSchema`) does not, and each ends up exactly as permissive as
+ * its own history requires.
+ *
+ * The item entry stays open to BOTH spellings rather than only the typeless
+ * one, deliberately: items were parsed by `ImageNodeSchema.omit({ type: true })`
+ * and a Zod object strips unknown keys instead of rejecting them, so an item
+ * that did carry a `type` was accepted without complaint and may well be
+ * sitting in stored data. Nothing that has ever parsed stops parsing.
+ *
+ * (The interim `{ type: "image" | "video" }` spelling is not handled, and does
+ * not need to be: this stamps on PARSE rather than on storage, so it never
+ * reached a document.)
+ *
+ * The guess is the one the renderer used to make on every paint, with the same
+ * bias, and the bias is the load-bearing part: an unrecognised source is a
+ * PICTURE, because every src written before mp4s were accepted actually is
+ * one. Guessing that way, a clip nobody can name from its URL comes up as a
+ * broken image — visibly wrong, and wrong about a file that is genuinely
+ * unusual. Guessing the other way turns every extensionless legacy key in
+ * every old collection into a silent empty `<video>`.
+ */
+function withMediaKind(node: unknown, typeRequired: boolean): unknown {
+  if (!node || typeof node !== "object" || "kind" in node) return node;
+  const { type, src } = node as { type?: unknown; src?: unknown };
+  // The two legacy spellings and nothing else. Anything carrying some other
+  // `type` is a different block entirely, and it does reach here: this
+  // preprocess sits inside `BlockNodeSchema`'s union, so a heading or a metric
+  // can pass through on the way to its own schema and has to come back out
+  // untouched.
+  if (type !== undefined && type !== "image") return node;
+  // And where a `type` was always written, its absence is not a legacy
+  // spelling — it is a malformed node, which must reach the union unstamped so
+  // it is rejected rather than reclassified as media. See `typeRequired` above.
+  if (type === undefined && typeRequired) return node;
+  // Nothing to derive a kind FROM. Left alone so the union rejects it for the
+  // missing src it actually has, rather than for a `kind` it was never asked
+  // to carry.
+  if (typeof src !== "string") return node;
 
-export type CollectionItem = z.infer<typeof CollectionItemSchema>;
+  const kind = isVideoSource(src) ? "video" : "image";
+  // Nothing downstream sniffs the src any more, so this guess is the last one
+  // anybody makes about this document: it is baked in the moment it is stamped
+  // and there is no render-time correction left to save it. `src` is a plain
+  // string rather than a URL, so an externally hosted clip with no extension
+  // migrates to `image` on the bias above and this line is the only place that
+  // will ever say so. Re-saving the document from the editor replaces the
+  // guess with the insert path's first-hand answer and retires the warning.
+  //
+  // Off in production, and that is a correction to the original spec rather
+  // than a walking-back of it. Logging was required so the backfill would not
+  // run blind — but this preprocess is permanent, not a pass to be run once and
+  // deleted, so an ungated warning is not a migration record, it is a line
+  // emitted on every parse of every legacy node for as long as the app lives.
+  // Auditing is something done while somebody is watching; production is
+  // precisely where nobody is. Gated on the LOG alone — the stamp below is what
+  // makes a legacy document parse at all and can never be conditional.
+  if (process.env.NODE_ENV !== "production") {
+    const extension = sourceExtension(src);
+    console.warn(
+      `[media-migration] ${src} → kind: "${kind}"` +
+        (extension ? ` (from .${extension})` : " (no extension — picture bias)"),
+    );
+  }
+  return { ...node, type: "media", kind };
+}
+
+/**
+ * A media node as documents actually hold one — legacy spellings included.
+ *
+ * The preprocess IS the migration, and it is permanent rather than a pass to
+ * be run and deleted: a document is only rewritten if somebody edits it, and
+ * the ones nobody opens again still have to parse. See `withMediaKind` for why
+ * it cannot live inside the union.
+ *
+ * TWO of them, because the two positions media occupies were written down
+ * differently and so have different things to forgive — the block entry has
+ * never had to accept a node with no `type`, and must not start. The split is
+ * about the legacy INPUT only: both stamp the same field, both produce the same
+ * `MediaNode`, and an item is still literally a block node once parsed.
+ */
+export const StoredMediaBlockSchema = z.preprocess(
+  (node) => withMediaKind(node, true),
+  MediaNodeSchema,
+);
+
+/** The same, for a node that was written into a collection slot. */
+export const StoredMediaItemSchema = z.preprocess(
+  (node) => withMediaKind(node, false),
+  MediaNodeSchema,
+);
+
+/**
+ * A collection's items ARE media nodes — the same picture-or-clip a document
+ * holds anywhere else, standing in a numbered slot.
+ *
+ * This was `ImageNodeSchema.omit({ type: true })`, defended as keeping the two
+ * in lockstep as the image schema grew. Lockstep was the effect; the reason was
+ * narrower. An item had no discriminant to keep, because every item was a
+ * picture, and the omit was how a schema that wanted to be an image node said
+ * so without saying "image" over and over.
+ *
+ * The `type: "media"` an item now carries is redundant in a collection — every
+ * slot holds media, so the field decides nothing there — and it is kept anyway,
+ * deliberately. It makes an item LITERALLY a block node, so a picture can move
+ * between a collection slot and a block position untransformed, which is what
+ * a planned sibling grid node (arbitrary block content, not media-only) will
+ * need. Lockstep also stops being an arrangement to maintain, because this is
+ * no longer a second schema.
+ */
+export const CollectionItemSchema = StoredMediaItemSchema;
+
+/** A media node, named for the position it occupies. */
+export type CollectionItem = MediaNode;
 
 /**
  * The two layout properties as the style the media element wears — resolved
@@ -346,7 +549,7 @@ export type CollectionItem = z.infer<typeof CollectionItemSchema>;
  * declares itself a container.
  */
 export type MediaLayout = Pick<
-  CollectionItem,
+  MediaNode,
   "objectFit" | "padding" | "borderRadius"
 >;
 
@@ -637,7 +840,7 @@ export type BlockNode =
   | z.infer<typeof BulletListItemNodeSchema>
   | z.infer<typeof CodeBlockNodeSchema>
   | z.infer<typeof HorizontalRuleNodeSchema>
-  | z.infer<typeof ImageNodeSchema>
+  | MediaNode
   | z.infer<typeof CollectionNodeSchema>
   | z.infer<typeof ComponentNodeSchema>
   | z.infer<typeof MetricNodeSchema>;
@@ -650,7 +853,7 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   BulletListItemNodeSchema,
   CodeBlockNodeSchema,
   HorizontalRuleNodeSchema,
-  ImageNodeSchema,
+  StoredMediaBlockSchema,
   CollectionNodeSchema,
   ComponentNodeSchema,
   MetricNodeSchema,
