@@ -29,7 +29,7 @@ export default function ShiftSchedulingV0PreviewPage() {
   return (
     <main className={pageStyle}>
       <div className={stageStyle}>
-        <DemoFrame aspectRatio="md">
+        <DemoFrame aspectRatio="3/2">
           <ShiftSchedulingV0 />
         </DemoFrame>
       </div>
