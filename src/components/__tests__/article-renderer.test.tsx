@@ -138,11 +138,11 @@ describe("ArticleRenderer", () => {
         />,
       );
       const blockquote = container.querySelector("blockquote");
-      expect(blockquote).toBeDefined();
+      expect(blockquote).not.toBeNull();
       expect(blockquote?.className).toContain("article-blockquote");
       expect(
         container.querySelector(".article-blockquote-shell"),
-      ).toBeDefined();
+      ).not.toBeNull();
       expect(screen.getByText("A quoted thought")).toBeDefined();
     });
 
@@ -189,8 +189,8 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      expect(container.querySelector("pre")).toBeDefined();
-      expect(container.querySelector('[data-syntax-role="primary"], [data-syntax-role="secondary"]')).toBeDefined();
+      expect(container.querySelector("pre")).not.toBeNull();
+      expect(container.querySelector('[data-syntax-role="primary"], [data-syntax-role="secondary"]')).not.toBeNull();
       expect(
         container.querySelector("code")?.textContent,
       ).toBe(".foo { color: red; }");
@@ -384,7 +384,7 @@ describe("ArticleRenderer", () => {
           content={doc([{ type: "horizontal_rule" }])}
         />,
       );
-      expect(container.querySelector("hr")).toBeDefined();
+      expect(container.querySelector("hr")).not.toBeNull();
     });
 
     it("renders an image with caption", () => {
@@ -615,7 +615,7 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      expect(container.querySelector("strong")).toBeDefined();
+      expect(container.querySelector("strong")).not.toBeNull();
       expect(screen.getByText("bold word")).toBeDefined();
     });
 
@@ -636,7 +636,7 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      expect(container.querySelector("em")).toBeDefined();
+      expect(container.querySelector("em")).not.toBeNull();
       expect(screen.getByText("italic word")).toBeDefined();
     });
 
@@ -744,8 +744,8 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      expect(container.querySelector("strong")).toBeDefined();
-      expect(container.querySelector("em")).toBeDefined();
+      expect(container.querySelector("strong")).not.toBeNull();
+      expect(container.querySelector("em")).not.toBeNull();
     });
   });
 
