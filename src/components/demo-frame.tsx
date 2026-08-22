@@ -57,7 +57,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
   function DemoFrame(
     {
       children,
-      aspectRatio = "sm",
+      aspectRatio = "2/1",
       logger,
       interactive = true,
       className,
@@ -73,7 +73,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
     const measureRef = useRef<HTMLDivElement>(null);
     const [demoAreaStyle, setDemoAreaStyle] = useState<CSSProperties>({});
     const [loggerExpanded, setLoggerExpanded] = useState(false);
-    const resolvedAspectRatio = (aspectRatio ?? "sm") as DemoFrameAspectRatio;
+    const resolvedAspectRatio: DemoFrameAspectRatio = aspectRatio ?? "2/1";
 
     const mergedRef = useCallback(
       (node: HTMLDivElement | null) => {

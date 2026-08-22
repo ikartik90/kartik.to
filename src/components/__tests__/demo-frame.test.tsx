@@ -19,26 +19,26 @@ describe("DemoFrame", () => {
     );
   });
 
-  it("applies the default sm aspect ratio variant on demo-area", () => {
+  it("applies the default 2/1 aspect ratio variant on demo-area", () => {
     const { container } = render(
       <DemoFrame>
         <p>Demo content</p>
       </DemoFrame>,
     );
     expect(
-      container.querySelector(".demo-frame__demo-area--aspectRatio_sm"),
-    ).toBeDefined();
+      container.querySelector(".demo-frame__demo-area--aspectRatio_2\\/1"),
+    ).not.toBeNull();
   });
 
   it("applies the requested aspect ratio variant on demo-area", () => {
     const { container } = render(
-      <DemoFrame aspectRatio="lg">
+      <DemoFrame aspectRatio="6/5">
         <p>Demo content</p>
       </DemoFrame>,
     );
     expect(
-      container.querySelector(".demo-frame__demo-area--aspectRatio_lg"),
-    ).toBeDefined();
+      container.querySelector(".demo-frame__demo-area--aspectRatio_6\\/5"),
+    ).not.toBeNull();
   });
 
   it("renders the logger section when logger is enabled", () => {
@@ -48,9 +48,9 @@ describe("DemoFrame", () => {
       </DemoFrame>,
     );
 
-    expect(container.querySelector(".demo-frame--logger_true")).toBeDefined();
-    expect(container.querySelector(".demo-logger-section")).toBeDefined();
-    expect(container.querySelector(".demo-logger-header")).toBeDefined();
+    expect(container.querySelector(".demo-frame--logger_true")).not.toBeNull();
+    expect(container.querySelector(".demo-logger-section")).not.toBeNull();
+    expect(container.querySelector(".demo-logger-header")).not.toBeNull();
     expect(container.querySelector(".demo-frame")?.children).toHaveLength(2);
   });
 

@@ -40,7 +40,7 @@ export default function NoticeShowcasePage() {
         })}
       >
         <div className={stageStyle}>
-          <DemoFrame aspectRatio="md">
+          <DemoFrame aspectRatio="3/2">
             <ShiftSchedulingV1 />
           </DemoFrame>
         </div>

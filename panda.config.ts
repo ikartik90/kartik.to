@@ -1,4 +1,5 @@
 import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
+import { ASPECT_RATIOS } from "./src/utils/demo-frame-sizing";
 
 /**
  * check-small.svg / cross-small.svg as masks, so the brand gradient can be
@@ -10,6 +11,34 @@ const CHECK_GLYPH_MASK =
 
 const CROSS_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.5 7.5L7.5 12.5M12.5 12.5L7.5 7.5' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
+
+// The two CSS shapes the demo frame needs its aspect ratios in, both generated
+// from the single `[W, H]` map in src/utils/demo-frame-sizing.ts. They read as
+// unrelated values in the output — `aspect-ratio: 3 / 2` against a min-height
+// of `calc(200cqw / 3)` — which is exactly why they were allowed to drift apart
+// by hand: the floor states the ratio INVERTED, so the two never look like
+// copies of each other and a careful reader can correct one and leave the other
+// sitting at the old value. Deriving both from the same tuple is the only thing
+// that makes them impossible to disagree.
+const demoFrameAspectRatioEntries = Object.entries(ASPECT_RATIOS);
+
+const demoFrameAspectRatioVariants = Object.fromEntries(
+  demoFrameAspectRatioEntries.map(([tier, [w, h]]) => [
+    tier,
+    { aspectRatio: `${w} / ${h}` },
+  ]),
+);
+
+// `cqw` is a percentage of the container's WIDTH, so reserving a height from it
+// needs the ratio the other way up: h / w, written as `calc(h * 100 / w)` so it
+// stays exact for tiers like 3:2 that no decimal expresses cleanly.
+const demoFrameAspectRatioFloors = demoFrameAspectRatioEntries.map(
+  ([tier, [w, h]]) => ({
+    logger: true,
+    aspectRatio: tier,
+    css: { minHeight: `calc(${h * 100}cqw / ${w})` },
+  }),
+);
 
 /**
  * blockquote.svg as two masks off the SAME path — `fill` gives the body,
@@ -1216,11 +1245,7 @@ export default defineConfig({
             paddingInline: "xxl",
           },
           variants: {
-            aspectRatio: {
-              sm: { aspectRatio: "2 / 1" },
-              md: { aspectRatio: "3 / 2" },
-              lg: { aspectRatio: "5 / 6" },
-            },
+            aspectRatio: demoFrameAspectRatioVariants,
             logger: {
               true: {
                 height: "auto",
@@ -1239,26 +1264,13 @@ export default defineConfig({
           },
           // A logger frame drops `aspect-ratio`, so reserve that height as a
           // floor in container-query units — full height from SSR, no
-          // client-measured jump. cqw factor = ratioHeight / ratioWidth.
-          compoundVariants: [
-            {
-              logger: true,
-              aspectRatio: "sm",
-              css: { minHeight: "50cqw" },
-            },
-            {
-              logger: true,
-              aspectRatio: "md",
-              css: { minHeight: "calc(200cqw / 3)" },
-            },
-            {
-              logger: true,
-              aspectRatio: "lg",
-              css: { minHeight: "120cqw" },
-            },
-          ],
+          // client-measured jump. cqw factor = ratioHeight / ratioWidth, which
+          // is why these read as different numbers from the variant above even
+          // though they are the same ratios; both are derived from the one map
+          // in src/utils/demo-frame-sizing.ts rather than written out here.
+          compoundVariants: demoFrameAspectRatioFloors,
           defaultVariants: {
-            aspectRatio: "sm",
+            aspectRatio: "2/1",
           },
           // Runtime variant values — force every branch, compounds included, or
           // the area silently falls back to its content-height min-height.

@@ -41,40 +41,40 @@ describe("demo-frame-sizing", () => {
   });
 
   it("computes aspect-ratio heights from frame width", () => {
-    expect(getAspectRatioHeight(800, "sm")).toBe(400);
-    expect(getAspectRatioHeight(900, "md")).toBe(600);
-    expect(getAspectRatioHeight(500, "lg")).toBe(600);
+    expect(getAspectRatioHeight(800, "2/1")).toBe(400);
+    expect(getAspectRatioHeight(900, "3/2")).toBe(600);
+    expect(getAspectRatioHeight(960, "6/5")).toBe(800);
   });
 
   it("returns zero aspect-ratio height for non-positive widths", () => {
-    expect(getAspectRatioHeight(0, "sm")).toBe(0);
-    expect(getAspectRatioHeight(-10, "md")).toBe(0);
+    expect(getAspectRatioHeight(0, "2/1")).toBe(0);
+    expect(getAspectRatioHeight(-10, "3/2")).toBe(0);
   });
 
   it("includes logger height in aspect-ratio min height", () => {
-    expect(getDemoFrameAspectMinHeight(800, "sm", true, true)).toBe(
+    expect(getDemoFrameAspectMinHeight(800, "2/1", true, true)).toBe(
       400 + DEMO_FRAME_LOGGER_SECTION_EXPANDED_PX,
     );
-    expect(getDemoFrameAspectMinHeight(800, "sm", true)).toBe(
+    expect(getDemoFrameAspectMinHeight(800, "2/1", true)).toBe(
       400 + DEMO_FRAME_LOGGER_SECTION_COLLAPSED_PX,
     );
   });
 
   it("overrides aspect ratio when content-driven min height is taller", () => {
-    expect(shouldOverrideDemoFrameAspectRatio(500, 800, "sm")).toBe(true);
+    expect(shouldOverrideDemoFrameAspectRatio(500, 800, "2/1")).toBe(true);
   });
 
   it("keeps aspect ratio when it provides enough height", () => {
-    expect(shouldOverrideDemoFrameAspectRatio(100, 800, "sm")).toBe(false);
+    expect(shouldOverrideDemoFrameAspectRatio(100, 800, "2/1")).toBe(false);
   });
 
   it("accounts for logger height when deciding aspect-ratio override", () => {
-    expect(shouldOverrideDemoFrameAspectRatio(100, 800, "sm", true, true)).toBe(
+    expect(shouldOverrideDemoFrameAspectRatio(100, 800, "2/1", true, true)).toBe(
       false,
     );
-    expect(shouldOverrideDemoFrameAspectRatio(400, 800, "sm", true, true)).toBe(
+    expect(shouldOverrideDemoFrameAspectRatio(400, 800, "2/1", true, true)).toBe(
       true,
     );
-    expect(shouldOverrideDemoFrameAspectRatio(100, 800, "sm", true)).toBe(false);
+    expect(shouldOverrideDemoFrameAspectRatio(100, 800, "2/1", true)).toBe(false);
   });
 });

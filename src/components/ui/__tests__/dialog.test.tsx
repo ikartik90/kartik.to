@@ -137,7 +137,7 @@ describe("Dialog", () => {
       const { container } = render(
         <Dialog align={align}>content</Dialog>,
       );
-      expect(container.querySelector("dialog")).toBeDefined();
+      expect(container.querySelector("dialog")).not.toBeNull();
     });
   });
 
@@ -150,7 +150,7 @@ describe("Dialog", () => {
         const { container } = render(
           <Dialog justify={justify}>content</Dialog>,
         );
-        expect(container.querySelector("dialog")).toBeDefined();
+        expect(container.querySelector("dialog")).not.toBeNull();
       },
     );
   });
@@ -161,7 +161,7 @@ describe("Dialog", () => {
         content
       </Dialog>,
     );
-    expect(container.querySelector("dialog")).toBeDefined();
+    expect(container.querySelector("dialog")).not.toBeNull();
   });
 
   it("merges a custom className", () => {
