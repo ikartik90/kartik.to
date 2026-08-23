@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import { GridItem, type GridItemProps } from "../grid-item";
 
@@ -42,13 +42,30 @@ class StubResizeObserver {
   }
 }
 
-/** jsdom lays nothing out, so heights are stated rather than measured. */
-function stubHeight(height: number) {
+/** jsdom lays nothing out, so boxes are stated rather than measured. */
+function stubRect({
+  height = 0,
+  left = 0,
+  width = 0,
+}: {
+  height?: number;
+  left?: number;
+  width?: number;
+}) {
   Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
     configurable: true,
-    value: () => ({ height, width: 0, top: 0, left: 0, right: 0, bottom: 0 }),
+    value: () => ({
+      height,
+      width,
+      top: 0,
+      left,
+      right: left + width,
+      bottom: height,
+    }),
   });
 }
+
+const stubHeight = (height: number) => stubRect({ height });
 
 const props: Omit<GridItemProps, "children"> = {
   aspect: "3/2",
@@ -127,5 +144,78 @@ describe("GridItem", () => {
     stubHeight(0);
     const cell = renderCell();
     expect(cell.style.getPropertyValue("--card-height")).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edit mode hangs an [+] in the gutter on BOTH sides of every card. Only the
+// one the cursor is already next to is worth showing — the other is a second
+// identical button in the corner of the eye. The cell publishes which side that
+// is as `data-near-side`, which is what the stylesheet hides the far rail on.
+// ---------------------------------------------------------------------------
+describe("GridItem insertion rails", () => {
+  const realObserver = global.ResizeObserver;
+
+  beforeEach(() => {
+    global.ResizeObserver =
+      StubResizeObserver as unknown as typeof ResizeObserver;
+    stubRect({ height: 200, left: 100, width: 200 });
+  });
+
+  afterEach(() => {
+    cleanup();
+    global.ResizeObserver = realObserver;
+    StubResizeObserver.callbacks.clear();
+  });
+
+  function renderEditingCell() {
+    const { container } = render(
+      <GridItem {...props} editing>
+        <div>Card</div>
+      </GridItem>,
+    );
+    return container.querySelector("[data-grid-cell]") as HTMLElement;
+  }
+
+  it("names the gutter the cursor is nearest as the pointer moves", () => {
+    const cell = renderEditingCell();
+
+    fireEvent.pointerMove(cell, { clientX: 120 });
+    expect(cell.dataset.nearSide).toBe("before");
+
+    fireEvent.pointerMove(cell, { clientX: 280 });
+    expect(cell.dataset.nearSide).toBe("after");
+  });
+
+  // With the pointer gone the card has no near side, and saying it still has
+  // one would leave a card the cursor has left holding half its controls open
+  // for a keyboard user who tabs into it next.
+  it("forgets the near side when the pointer leaves", () => {
+    const cell = renderEditingCell();
+
+    fireEvent.pointerMove(cell, { clientX: 120 });
+    fireEvent.pointerLeave(cell);
+    expect(cell.dataset.nearSide).toBeUndefined();
+  });
+
+  // Both rails stay in the DOM: hiding the far one is the stylesheet's job, so
+  // that a keyboard user — who has no cursor and so no near side — can still
+  // reach either insertion point.
+  it("keeps both insertion points mounted", () => {
+    renderEditingCell();
+    expect(screen.getByRole("button", { name: "Add before A card" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add after A card" })).toBeTruthy();
+  });
+
+  it("tracks nothing when the grid is not being edited", () => {
+    stubRect({ height: 200, left: 100, width: 200 });
+    const { container } = render(
+      <GridItem {...props}>
+        <div>Card</div>
+      </GridItem>,
+    );
+    const cell = container.querySelector("[data-grid-cell]") as HTMLElement;
+    fireEvent.pointerMove(cell, { clientX: 120 });
+    expect(cell.dataset.nearSide).toBeUndefined();
   });
 });

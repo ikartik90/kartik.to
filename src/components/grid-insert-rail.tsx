@@ -25,13 +25,14 @@ export interface GridInsertRailProps {
   /**
    * Which edge of the card this rail hugs. Both cards either side of a gutter
    * carry one, so the two overlap — the grid decides which is reachable by only
-   * rendering the rails of the card being hovered.
+   * rendering the rails of the card being hovered, and of those two showing
+   * only the one the cursor is nearest (`data-near-side`, set by the cell).
    */
   side: "before" | "after";
   /**
-   * The button's accessible name, and it must say WHERE. A grid in edit mode
-   * shows two of these per card, so a name that is only "Add" tells a screen
-   * reader nothing about which gap is about to be filled.
+   * The button's accessible name, and it must say WHERE. A card mounts one of
+   * these per gutter and a keyboard user can reach both, so a name that is only
+   * "Add" tells a screen reader nothing about which gap is about to be filled.
    */
   label: string;
   onInsert: () => void;
