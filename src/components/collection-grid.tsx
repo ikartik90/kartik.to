@@ -10,7 +10,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import {
-  collectionCellOverlay,
+  collectionCellToolbar,
   collectionEmptyCell,
   collectionGrid,
   toolbar,
@@ -754,8 +754,8 @@ export function CollectionGrid({
       {...rootProps}
       className={gridStyles.root}
       data-collection-grid=""
-      // Stands every overlay down for the whole gesture, so the scrim is not
-      // blurring the cell you are aiming at.
+      // Stands every cell's control rail down for the whole gesture, so
+      // nothing is floating over the cell you are aiming at.
       //
       // "The whole gesture" starts at the PRESS, not at the drag threshold:
       // the moment a hand is on the photo it is the photo being addressed, not
@@ -770,9 +770,9 @@ export function CollectionGrid({
       // the hand is already reaching for it.
       //
       // (This used to be the whole story, on the reasoning that releasing early
-      // gave the blur the length of the flight to fade up, so it was on the
+      // gave the rail the length of the flight to fade up, so it was on the
       // cell as the photo touched down. That was answering "when may the
-      // overlay return?" with a time, when the honest answer is a gesture.)
+      // controls return?" with a time, when the honest answer is a gesture.)
       data-reordering={
         pressed !== null || dragIndex !== null ? "" : undefined
       }
@@ -783,174 +783,184 @@ export function CollectionGrid({
     >
       {slots.map((item, index) =>
         item ? (
-          <figure
-            // Keyed by SLOT, never by the photo in it. Keying on `src` made a
-            // swap change both keys, so React destroyed and rebuilt the two
-            // cells — including the element the browser was mid-drag on, which
-            // then never received its `dragend` and left the drag resolving
-            // against a source that no longer existed. The grid is six fixed
-            // slots whose contents change; the slot is the identity.
-            key={index}
-            ref={(node) => {
-              if (node) cellNodes.current.set(index, node);
-              else cellNodes.current.delete(index);
-            }}
-            className={gridStyles.cell}
-            // The hook the overlay's reveal rule keys on — an attribute rather
-            // than a generated class, so the recipe can name it directly.
-            data-collection-cell=""
-            data-pressed={pressed?.index === index ? "" : undefined}
-            // The coordinate is runtime data, so it comes through as a custom
-            // property and the recipe keeps the rule. Inherits to the <img>,
-            // which is what actually scales.
-            style={
-              pressed?.index === index
-                ? ({ "--press-origin": pressed.origin } as CSSProperties)
-                : undefined
-            }
-            // Empty and dashed while the photo is out of it — from the moment
-            // it is lifted until the flight carrying it has landed. Its own
-            // replacement is still visibly in the air over the target cell
-            // until then, so filling this slot early would show that photo
-            // twice.
-            data-dragging={
-              dragIndex === index || landing?.vacated === index ? "" : undefined
-            }
-            data-drop-target={dropIndex === index ? "" : undefined}
-            data-arriving={arrivingIndex === index ? "" : undefined}
-            data-landing={landing?.target === index ? "" : undefined}
-            // Which picture the open panel is editing. The overlay is NOT
-            // styled off it — see the `collectionCellOverlay` recipe for why
-            // the open cell behaves like every other one — but the state is
-            // worth surfacing on the element it is about rather than living
-            // only inside this component.
-            data-properties-open={propertiesIndex === index ? "" : undefined}
-            onPointerDown={(event) => {
-              if (event.button !== 0) return;
-              // The picture is the handle — a clip as much as a photo. A press
-              // that lands on the controls laid over it is a press on those
-              // controls, not a grab.
-              const media = (event.target as HTMLElement).closest(MEDIA_TAGS);
-              if (!media) return;
-              // Measured BEFORE the press below, while the photo is still full
-              // size — see `pending`'s `rect` note. It is also what makes the
-              // press origin below a point INSIDE the photo rather than a page
-              // coordinate.
-              const rect = media.getBoundingClientRect();
-              pending.current = {
-                index,
-                pointerId: event.pointerId,
-                originX: event.clientX,
-                originY: event.clientY,
-                media: media as HTMLElement,
-                cell: event.currentTarget,
-                rect,
-              };
-              // Acknowledge the press immediately — before we know whether a
-              // drag is coming. Reaching here at all means the press landed on
-              // the photo and not on the controls over it, so the toolbar never
-              // scales the picture underneath it.
-              //
-              // Anchored to the point the hand actually landed on, so the
-              // picture shrinks TOWARDS the cursor and the pixel under it stays
-              // put. About the centre it would slide away instead.
-              setPressed({
-                index,
-                origin: `${event.clientX - rect.left}px ${event.clientY - rect.top}px`,
-              });
-              // Capture keeps every move and the release coming to this cell
-              // even once the pointer has left it, which is what makes the
-              // gesture survive crossing the rest of the page. Claimed AFTER
-              // the grab is recorded: it throws for a pointer id that is not
-              // live, which only a synthetic event can produce, and a drag
-              // that works while the pointer stays put beats no drag at all.
-              event.currentTarget.setPointerCapture?.(event.pointerId);
-            }}
-            onPointerMove={(event) => {
-              const held = pending.current;
-              if (!held || held.pointerId !== event.pointerId) return;
-              if (dragIndexRef.current === null) {
-                const travelled = Math.hypot(
-                  event.clientX - held.originX,
-                  event.clientY - held.originY,
-                );
-                if (travelled < DRAG_THRESHOLD) return;
-                beginDrag(event.clientX, event.clientY);
-              }
-              moveDrag(event.clientX, event.clientY);
-            }}
-            onPointerUp={(event) => {
-              const held = pending.current;
-              if (!held || held.pointerId !== event.pointerId) return;
-              if (dragIndexRef.current !== null) {
-                const to = cellIndexAt(event.clientX, event.clientY);
-                if (to !== null && to !== held.index) {
-                  // Order matters twice over: the photo has to be handed to its
-                  // flight before `endDrag` clears the preview out from under
-                  // it, and the target's CURRENT photo has to be captured
-                  // before `onReorder` swaps it away — that is what the cell
-                  // goes on showing while the clone is in the air.
-                  const flew = settleInto(to, items[to], held.index);
-                  onReorder(held.index, to);
-                  // With no flight there is nothing to wait for, so the
-                  // displaced photo fades up straight away; otherwise the
-                  // landing announces it.
-                  if (!flew) markArriving(held.index);
-                }
-                // Released over a gap, an empty slot or off the grid entirely:
-                // nothing moves, and taking the preview away puts the photo
-                // straight back where it was, at once and with no animation.
-              }
-              endDrag();
-            }}
-            // The system taking the pointer away — a touch that turned into a
-            // scroll, a window losing focus — ends the gesture like any other.
-            onPointerCancel={endDrag}
-          >
-            {/* Behind the photo, so it shows through wherever the picture is
-                transparent. Before it in the DOM as well as beneath it in the
-                stack — see the recipe's `backgroundEffect` slot. */}
-            {item.backgroundEffect && (
-              <BackgroundEffectLayer
-                effect={item.backgroundEffect}
-                className={gridStyles.backgroundEffect}
-              />
-            )}
-            {/* A clip in a cell is a tile like any other — no transport, since
-                the cell's own gesture is a press-and-drag and a control strip
-                laid over it would take the grip away. */}
-            <Media
-              src={item.src}
-              // The item's own word about what it is — never re-derived from
-              // the src here, so a clip under an extensionless key shows as a
-              // clip in the grid the author is arranging.
-              kind={item.kind}
-              alt={collectionItemAlt(item)}
-              className={gridStyles.image}
-              // Fit and inset are per-picture DATA, so they ride as a style
-              // rather than as recipe variants — a slider that emits a value
-              // per frame has nothing a static variant table could enumerate.
-              // The padding shrinks the picture's content box while the
-              // gradient behind it stays sized to the whole cell, which is what
-              // lets the ground out from under a photo that would otherwise
-              // cover it.
-              layout={item}
-              // The checkerboard, which is the photo's OWN background rather
-              // than a layer behind it — see the recipe's `image` slot. So it
-              // is the exclusive alternative to a gradient and not a companion
-              // to one: a background box paints over any sibling behind it, and
-              // a picture that has been given a ground does not need one
-              // offered.
-              data-checkered={
-                !item.backgroundEffect && transparentSrcs.has(item.src)
-                  ? ""
+          // The cell AND the rail that edits it, as one grid item. The cell
+          // clips — that is what rounds a photo filling it — and the rail is
+          // centred on the cell's top edge with half of it outside, so the two
+          // have to be siblings in a box that does not clip. See the recipe's
+          // `slot` slot, and `grid-item.tsx`, which pairs a home-grid card with
+          // its toolbar the same way and for the same reason.
+          //
+          // Keyed by SLOT, never by the photo in it. Keying on `src` made a
+          // swap change both keys, so React destroyed and rebuilt the two
+          // cells — including the element the browser was mid-drag on, which
+          // then never received its `dragend` and left the drag resolving
+          // against a source that no longer existed. The grid is six fixed
+          // slots whose contents change; the slot is the identity.
+          <div key={index} className={gridStyles.slot}>
+            <figure
+              ref={(node) => {
+                if (node) cellNodes.current.set(index, node);
+                else cellNodes.current.delete(index);
+              }}
+              className={gridStyles.cell}
+              // The hook the rail's reveal rule keys on — an attribute rather
+              // than a generated class, so the recipe can name it directly.
+              data-collection-cell=""
+              data-pressed={pressed?.index === index ? "" : undefined}
+              // The coordinate is runtime data, so it comes through as a custom
+              // property and the recipe keeps the rule. Inherits to the <img>,
+              // which is what actually scales.
+              style={
+                pressed?.index === index
+                  ? ({ "--press-origin": pressed.origin } as CSSProperties)
                   : undefined
               }
-              // Images are draggable by default, and that native drag would
-              // hijack the pointer gesture with the very bitmap this avoids.
-              draggable={false}
-            />
-            <CellOverlay
+              // Empty and dashed while the photo is out of it — from the moment
+              // it is lifted until the flight carrying it has landed. Its own
+              // replacement is still visibly in the air over the target cell
+              // until then, so filling this slot early would show that photo
+              // twice.
+              data-dragging={
+                dragIndex === index || landing?.vacated === index ? "" : undefined
+              }
+              data-drop-target={dropIndex === index ? "" : undefined}
+              data-arriving={arrivingIndex === index ? "" : undefined}
+              data-landing={landing?.target === index ? "" : undefined}
+              // Which picture the open panel is editing. The control rail is
+              // NOT styled off it — a cell whose panel is open behaves like
+              // every other one — but the state is worth surfacing on the
+              // element it is about rather than living only inside this
+              // component.
+              data-properties-open={propertiesIndex === index ? "" : undefined}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                // The picture is the handle — a clip as much as a photo. A
+                // press that lands on the controls laid over it is a press on
+                // those controls, not a grab.
+                const media = (event.target as HTMLElement).closest(MEDIA_TAGS);
+                if (!media) return;
+                // Measured BEFORE the press below, while the photo is still
+                // full size — see `pending`'s `rect` note. It is also what
+                // makes the press origin below a point INSIDE the photo rather
+                // than a page coordinate.
+                const rect = media.getBoundingClientRect();
+                pending.current = {
+                  index,
+                  pointerId: event.pointerId,
+                  originX: event.clientX,
+                  originY: event.clientY,
+                  media: media as HTMLElement,
+                  cell: event.currentTarget,
+                  rect,
+                };
+                // Acknowledge the press immediately — before we know whether a
+                // drag is coming. Reaching here at all means the press landed
+                // on the photo and not on the controls over it, so the toolbar
+                // never scales the picture underneath it.
+                //
+                // Anchored to the point the hand actually landed on, so the
+                // picture shrinks TOWARDS the cursor and the pixel under it
+                // stays put. About the centre it would slide away instead.
+                setPressed({
+                  index,
+                  origin: `${event.clientX - rect.left}px ${event.clientY - rect.top}px`,
+                });
+                // Capture keeps every move and the release coming to this cell
+                // even once the pointer has left it, which is what makes the
+                // gesture survive crossing the rest of the page. Claimed AFTER
+                // the grab is recorded: it throws for a pointer id that is not
+                // live, which only a synthetic event can produce, and a drag
+                // that works while the pointer stays put beats no drag at all.
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                const held = pending.current;
+                if (!held || held.pointerId !== event.pointerId) return;
+                if (dragIndexRef.current === null) {
+                  const travelled = Math.hypot(
+                    event.clientX - held.originX,
+                    event.clientY - held.originY,
+                  );
+                  if (travelled < DRAG_THRESHOLD) return;
+                  beginDrag(event.clientX, event.clientY);
+                }
+                moveDrag(event.clientX, event.clientY);
+              }}
+              onPointerUp={(event) => {
+                const held = pending.current;
+                if (!held || held.pointerId !== event.pointerId) return;
+                if (dragIndexRef.current !== null) {
+                  const to = cellIndexAt(event.clientX, event.clientY);
+                  if (to !== null && to !== held.index) {
+                    // Order matters twice over: the photo has to be handed to
+                    // its flight before `endDrag` clears the preview out from
+                    // under it, and the target's CURRENT photo has to be
+                    // captured before `onReorder` swaps it away — that is what
+                    // the cell goes on showing while the clone is in the air.
+                    const flew = settleInto(to, items[to], held.index);
+                    onReorder(held.index, to);
+                    // With no flight there is nothing to wait for, so the
+                    // displaced photo fades up straight away; otherwise the
+                    // landing announces it.
+                    if (!flew) markArriving(held.index);
+                  }
+                  // Released over a gap, an empty slot or off the grid
+                  // entirely: nothing moves, and taking the preview away puts
+                  // the photo straight back where it was, at once and with no
+                  // animation.
+                }
+                endDrag();
+              }}
+              // The system taking the pointer away — a touch that turned into a
+              // scroll, a window losing focus — ends the gesture like any
+              // other.
+              onPointerCancel={endDrag}
+            >
+              {/* Behind the photo, so it shows through wherever the picture is
+                  transparent. Before it in the DOM as well as beneath it in the
+                  stack — see the recipe's `backgroundEffect` slot. */}
+              {item.backgroundEffect && (
+                <BackgroundEffectLayer
+                  effect={item.backgroundEffect}
+                  className={gridStyles.backgroundEffect}
+                />
+              )}
+              {/* A clip in a cell is a tile like any other — no transport,
+                  since the cell's own gesture is a press-and-drag and a
+                  control strip laid over it would take the grip away. */}
+              <Media
+                src={item.src}
+                // The item's own word about what it is — never re-derived from
+                // the src here, so a clip under an extensionless key shows as a
+                // clip in the grid the author is arranging.
+                kind={item.kind}
+                alt={collectionItemAlt(item)}
+                className={gridStyles.image}
+                // Fit and inset are per-picture DATA, so they ride as a style
+                // rather than as recipe variants — a slider that emits a value
+                // per frame has nothing a static variant table could enumerate.
+                // The padding shrinks the picture's content box while the
+                // gradient behind it stays sized to the whole cell, which is
+                // what lets the ground out from under a photo that would
+                // otherwise cover it.
+                layout={item}
+                // The checkerboard, which is the photo's OWN background rather
+                // than a layer behind it — see the recipe's `image` slot. So it
+                // is the exclusive alternative to a gradient and not a
+                // companion to one: a background box paints over any sibling
+                // behind it, and a picture that has been given a ground does
+                // not need one offered.
+                data-checkered={
+                  !item.backgroundEffect && transparentSrcs.has(item.src)
+                    ? ""
+                    : undefined
+                }
+                // Images are draggable by default, and that native drag would
+                // hijack the pointer gesture with the very bitmap this avoids.
+                draggable={false}
+              />
+            </figure>
+            <CellToolbar
               index={index}
               featured={index === 0}
               propertiesOpen={propertiesIndex === index}
@@ -959,7 +969,7 @@ export function CollectionGrid({
               onReplace={() => onReplace(index)}
               onRemove={() => onRemove(index)}
             />
-          </figure>
+          </div>
         ) : (
           <button
             key={index}
@@ -1015,7 +1025,7 @@ export function CollectionGrid({
 // Per-cell controls
 // ---------------------------------------------------------------------------
 
-interface CellOverlayProps {
+interface CellToolbarProps {
   index: number;
   featured: boolean;
   /** Whether THIS cell's properties panel is the one currently open. */
@@ -1026,7 +1036,7 @@ interface CellOverlayProps {
   onRemove: () => void;
 }
 
-function CellOverlay({
+function CellToolbar({
   index,
   featured,
   propertiesOpen,
@@ -1034,63 +1044,59 @@ function CellOverlay({
   onFeature,
   onReplace,
   onRemove,
-}: CellOverlayProps) {
-  const styles = collectionCellOverlay();
+}: CellToolbarProps) {
   const label = `Image ${index + 1}`;
 
   return (
-    <div className={styles.root}>
-      <div className={styles.scrim} aria-hidden />
-      <div className={cx(toolbar(), styles.toolbar)}>
-        <OptionList direction="inline">
-          <OptionList.Toolbar aria-label={`${label} actions`}>
-            {/* Featured is a POSITION (index 0), so the first slot's button is
-                simply already on. Pressed rather than disabled: a disabled
-                button dims to 40%, which would fight the brand chip that is
-                the whole signal here. */}
-            <OptionList.Option
-              aria-label="Feature image"
-              pressed={featured}
-              onClick={() => {
-                if (!featured) onFeature();
-              }}
-            >
-              <FeatureIcon aria-hidden />
-            </OptionList.Option>
-            <OptionList.Divider />
-            {/* ONE button for everything about the picture that isn't an
-                action on the picture. Caption and background each had their
-                own before, which put two editors on a five-button pill and
-                made "add a caption" and "add a gradient" look like different
-                KINDS of thing; they are both properties, and the panel is
-                where properties are.
+    <div className={cx(toolbar(), collectionCellToolbar())}>
+      <OptionList direction="inline">
+        <OptionList.Toolbar aria-label={`${label} actions`}>
+          {/* Featured is a POSITION (index 0), so the first slot's button is
+              simply already on. Pressed rather than disabled: a disabled
+              button dims to 40%, which would fight the brand chip that is
+              the whole signal here. */}
+          <OptionList.Option
+            aria-label="Feature image"
+            pressed={featured}
+            onClick={() => {
+              if (!featured) onFeature();
+            }}
+          >
+            <FeatureIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Divider />
+          {/* ONE button for everything about the picture that isn't an
+              action on the picture. Caption and background each had their
+              own before, which put two editors on a five-button pill and
+              made "add a caption" and "add a gradient" look like different
+              KINDS of thing; they are both properties, and the panel is
+              where properties are.
 
-                Pressed while its own panel is OPEN — the state it reports is
-                the panel's, not the picture's. It is the way back out as well
-                as in, so it has to look held down while it is holding
-                something open, and the toolbar deliberately stays live over a
-                cell being edited (only the scrim stands down) so the button
-                can be pressed again to close.
+              Pressed while its own panel is OPEN — the state it reports is
+              the panel's, not the picture's. It is the way back out as well
+              as in, so it has to look held down while it is holding
+              something open. The rail behaves no differently over a cell
+              being edited than over any other one, so the button is always
+              there to be pressed again and close the panel.
 
-                Marked as the panel's trigger so that second press actually
-                closes it — see PROPERTIES_TRIGGER_ATTR. */}
-            <OptionList.Option
-              {...PROPERTIES_TRIGGER_ATTR}
-              aria-label="Image properties"
-              pressed={propertiesOpen}
-              onClick={onToggleProperties}
-            >
-              <PropertiesIcon aria-hidden />
-            </OptionList.Option>
-            <OptionList.Option aria-label="Replace image" onClick={onReplace}>
-              <ReplaceIcon aria-hidden />
-            </OptionList.Option>
-            <OptionList.Option aria-label="Remove image" onClick={onRemove}>
-              <TrashIcon aria-hidden />
-            </OptionList.Option>
-          </OptionList.Toolbar>
-        </OptionList>
-      </div>
+              Marked as the panel's trigger so that second press actually
+              closes it — see PROPERTIES_TRIGGER_ATTR. */}
+          <OptionList.Option
+            {...PROPERTIES_TRIGGER_ATTR}
+            aria-label="Image properties"
+            pressed={propertiesOpen}
+            onClick={onToggleProperties}
+          >
+            <PropertiesIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Option aria-label="Replace image" onClick={onReplace}>
+            <ReplaceIcon aria-hidden />
+          </OptionList.Option>
+          <OptionList.Option aria-label="Remove image" onClick={onRemove}>
+            <TrashIcon aria-hidden />
+          </OptionList.Option>
+        </OptionList.Toolbar>
+      </OptionList>
     </div>
   );
 }
