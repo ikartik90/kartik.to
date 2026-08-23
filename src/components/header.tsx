@@ -108,7 +108,10 @@ function buildOrbitPath(
 
 export function Header() {
   const pathname = usePathname();
-  const isHome = pathname === "/";
+  // `/edit/home` is the homepage, being edited — the same page wearing a
+  // different hat. Editing it must not strip the logo, the menu and the theme
+  // toggle off the top of it; they are the page's furniture, not the reader's.
+  const isHome = pathname === "/" || pathname === "/edit/home";
   const pathId = `brand-tagline-path-${useId().replace(/:/g, "")}`;
   // The chip names the key this visitor's keyboard actually has — ⌘K on Apple
   // hardware, Ctrl K on a PC — which is the same shortcut the palette listens

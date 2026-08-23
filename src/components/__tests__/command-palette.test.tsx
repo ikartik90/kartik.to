@@ -29,11 +29,19 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Stub server actions so they never hit the network
+vi.mock("@/app/actions/grid", () => ({
+  publishComponent: vi.fn().mockResolvedValue("component-id"),
+  setPinned: vi.fn(),
+  moveGridItem: vi.fn(),
+  unpublishComponent: vi.fn(),
+}));
+
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn(),
   saveDraft: vi.fn(),
   publishPost: vi.fn(),
+  unpublishPost: vi.fn(),
   deleteDraft: vi.fn(),
 }));
 

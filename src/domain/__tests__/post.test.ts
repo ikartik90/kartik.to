@@ -497,6 +497,37 @@ describe("PostSchema", () => {
       PostSchema.safeParse({ ...validPost, category: "DRAFT" }).success
     ).toBe(false);
   });
+
+  // A post pins to the homepage grid exactly the way a published component
+  // does — same field, same rules — so these mirror the `ComponentSchema`
+  // cases in `component.test.ts`.
+
+  // Asserts the parsed VALUE, not just success — Zod strips unknown keys, so a
+  // post carrying a `gridIndex` the schema has never heard of parses happily
+  // and drops the pin on the floor.
+  it("accepts a post pinned to a grid position and keeps the pin", () => {
+    const result = PostSchema.safeParse({ ...validPost, gridIndex: 3 });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.gridIndex).toBe(3);
+  });
+
+  it("accepts an unpinned post (gridIndex is null)", () => {
+    expect(
+      PostSchema.safeParse({ ...validPost, gridIndex: null }).success
+    ).toBe(true);
+  });
+
+  it("rejects a post pinned to a negative grid position", () => {
+    expect(PostSchema.safeParse({ ...validPost, gridIndex: -1 }).success).toBe(
+      false
+    );
+  });
+
+  it("rejects a post pinned to a fractional grid position", () => {
+    expect(PostSchema.safeParse({ ...validPost, gridIndex: 1.5 }).success).toBe(
+      false
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

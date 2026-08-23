@@ -10,6 +10,8 @@ import {
   menuItem,
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
+import { ComponentInsertDialog } from "@/components/component-insert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
@@ -23,6 +25,8 @@ import WorkIcon from "@/assets/icons/work.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
+import ComponentIcon from "@/assets/icons/component.svg";
+import UnpublishIcon from "@/assets/icons/unpublish.svg";
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -110,10 +114,32 @@ export function CommandPalette() {
 
   const close = () => dialogRef.current?.close();
 
+  // The palette owns its own component picker rather than reaching for the
+  // grid's: "New component…" has to work from any page, and the grid only
+  // exists on one of them.
+  const [pickingComponent, setPickingComponent] = useState(false);
+
+  // Anything that removes published work asks first, in the same dialog the
+  // grid uses to retire a component. One piece of state rather than a flag per
+  // action: the question is identical in shape every time and only the wording
+  // differs.
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   const {
     isAdmin,
     isDark,
     isEditMode,
+    isHomeEditMode,
+    handlePublishHome,
+    handleDiscardHome,
+    handlePublishComponent,
+    handleUnpublish,
+    isPublished,
     editCategory,
     drafts,
     currentDraft,
@@ -159,153 +185,248 @@ export function CommandPalette() {
   }, []);
 
   return (
-    <Dialog
-      ref={dialogRef}
-      align="top-center"
-      aria-label="Command palette"
-      className={dialogPanel({ size: "sm" })}
-    >
-      <Command key={openKey} loop className={css({ display: "contents" })}>
-        {/* Input row */}
-        <div className={inputRowStyle} data-command-input-row>
-          <SearchIcon className={iconStyle} />
-          <Command.Input
-            autoFocus
-            placeholder="Search…"
-            className={inputStyle}
-          />
-          <div className={hotkeyHintStyle}>
-            <kbd className={hotkeyKeyStyle}>Esc</kbd>
-            <span className={hotkeyLabelStyle}>to exit</span>
+    <>
+      <Dialog
+        ref={dialogRef}
+        align="top-center"
+        aria-label="Command palette"
+        className={dialogPanel({ size: "sm" })}
+      >
+        <Command key={openKey} loop className={css({ display: "contents" })}>
+          {/* Input row */}
+          <div className={inputRowStyle} data-command-input-row>
+            <SearchIcon className={iconStyle} />
+            <Command.Input
+              autoFocus
+              placeholder="Search…"
+              className={inputStyle}
+            />
+            <div className={hotkeyHintStyle}>
+              <kbd className={hotkeyKeyStyle}>Esc</kbd>
+              <span className={hotkeyLabelStyle}>to exit</span>
+            </div>
           </div>
-        </div>
 
-        {/* Results */}
-        <Command.List className={listStyle}>
-          {/* Settings — always visible */}
-          <Command.Group className={groupStyle}>
-            <div className={groupHeadingStyle}>Settings</div>
-            <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
-              {isDark ? (
-                <LightIcon className={iconStyle} />
-              ) : (
-                <DarkIcon className={iconStyle} />
-              )}
-              {isDark ? "Switch to light theme" : "Switch to dark theme"}
-            </Command.Item>
-          </Command.Group>
+          {/* Results */}
+          <Command.List className={listStyle}>
+            {/* Settings — always visible */}
+            <Command.Group className={groupStyle}>
+              <div className={groupHeadingStyle}>Settings</div>
+              <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
+                {isDark ? (
+                  <LightIcon className={iconStyle} />
+                ) : (
+                  <DarkIcon className={iconStyle} />
+                )}
+                {isDark ? "Switch to light theme" : "Switch to dark theme"}
+              </Command.Item>
+            </Command.Group>
 
-          {/* Admin-only groups */}
-          {isAdmin && (
-            <>
-              {/* This Article — only in edit mode */}
-              {isEditMode ? (
-                <Command.Group className={groupStyle}>
-                  <div className={groupHeadingStyle}>
-                    {editCategory === "WORK" ? "This Project" : "This Article"}
-                  </div>
-                  <Command.Item className={itemStyle} onSelect={handlePublish}>
-                    <PublishIcon className={iconStyle} />
-                    {editCategory === "WORK"
-                      ? "Publish project"
-                      : "Publish article"}
-                  </Command.Item>
-                  <Command.Item
-                    className={itemStyle}
-                    onSelect={handleSaveDraft}
-                  >
-                    <SaveIcon className={iconStyle} />
-                    Save changes and exit
-                  </Command.Item>
-                  <Command.Item
-                    className={itemStyle}
-                    onSelect={handleDiscardChanges}
-                  >
-                    <TrashIcon className={iconStyle} />
-                    Discard changes and exit
-                  </Command.Item>
-                </Command.Group>
-              ) : (
-                <>
+            {/* Admin-only groups */}
+            {isAdmin && (
+              <>
+                {/* The grid's edit route — a grid has no title and no buffered
+                    document, so none of an article's exits apply to it. */}
+                {isHomeEditMode ? (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>This Page</div>
-                    <Command.Item className={itemStyle} onSelect={handleEditPage}>
-                      <EditIcon className={iconStyle} />
-                      Edit page
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handlePublishHome}
+                    >
+                      <PublishIcon className={iconStyle} />
+                      Publish and exit
                     </Command.Item>
                     <Command.Item
                       className={itemStyle}
-                      onSelect={() => {
-                        console.log("edit metadata");
-                        close();
-                      }}
+                      onSelect={handleDiscardHome}
                     >
-                      <MetadataIcon className={iconStyle} />
-                      Edit metadata
+                      <TrashIcon className={iconStyle} />
+                      Discard and exit
                     </Command.Item>
-                    {currentDraft && (
+                  </Command.Group>
+                ) : isEditMode ? (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>
+                      {editCategory === "WORK"
+                        ? "This Project"
+                        : "This Article"}
+                    </div>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handlePublish}
+                    >
+                      <PublishIcon className={iconStyle} />
+                      {editCategory === "WORK"
+                        ? "Publish project"
+                        : "Publish article"}
+                    </Command.Item>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handleSaveDraft}
+                    >
+                      <SaveIcon className={iconStyle} />
+                      Save changes and exit
+                    </Command.Item>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handleDiscardChanges}
+                    >
+                      <TrashIcon className={iconStyle} />
+                      Discard changes and exit
+                    </Command.Item>
+                    {/* Only a live post has something to withdraw. */}
+                    {isPublished && (
                       <Command.Item
                         className={itemStyle}
-                        onSelect={handleDiscardDraft}
+                        onSelect={() => {
+                          const noun =
+                            editCategory === "WORK" ? "Project" : "Article";
+                          setConfirm({
+                            title: `Unpublish ${noun}`,
+                            message: `You are about to unpublish this ${noun.toLowerCase()}. Do you want to proceed?`,
+                            confirmLabel: "Unpublish",
+                            onConfirm: () => void handleUnpublish(),
+                          });
+                          close();
+                        }}
                       >
-                        <TrashIcon className={iconStyle} />
-                        Discard draft
+                        <UnpublishIcon className={iconStyle} />
+                        {editCategory === "WORK"
+                          ? "Unpublish project"
+                          : "Unpublish article"}
                       </Command.Item>
                     )}
                   </Command.Group>
-
-                  {/* Publish */}
-                  <Command.Group className={groupStyle}>
-                    <div className={groupHeadingStyle}>Publish</div>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handleNewBlogArticle}
-                    >
-                      <WriteIcon className={iconStyle} />
-                      New blog article…
-                    </Command.Item>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handleNewWorkArticle}
-                    >
-                      <WorkIcon className={iconStyle} />
-                      New work article…
-                    </Command.Item>
-                  </Command.Group>
-
-                  {/* Drafts — the draft being viewed is omitted so the
-                      current page never lists itself */}
-                  {(() => {
-                    const listableDrafts = drafts.filter(
-                      (draft) => draft.id !== currentDraft?.id,
-                    );
-                    if (listableDrafts.length === 0) return null;
-                    return (
+                ) : (
+                  <>
                     <Command.Group className={groupStyle}>
-                      <div className={groupHeadingStyle}>Drafts</div>
-                      {listableDrafts.map((draft) => (
+                      <div className={groupHeadingStyle}>This Page</div>
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleEditPage}
+                      >
+                        <EditIcon className={iconStyle} />
+                        Edit page
+                      </Command.Item>
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={() => {
+                          console.log("edit metadata");
+                          close();
+                        }}
+                      >
+                        <MetadataIcon className={iconStyle} />
+                        Edit metadata
+                      </Command.Item>
+                      {currentDraft && (
                         <Command.Item
-                          key={draft.id}
                           className={itemStyle}
-                          onSelect={() => handleOpenDraft(draft)}
+                          onSelect={() => {
+                            setConfirm({
+                              title: "Delete Draft",
+                              message:
+                                "You are about to permanently delete this draft. Do you want to proceed?",
+                              confirmLabel: "Delete",
+                              onConfirm: () => void handleDiscardDraft(),
+                            });
+                            close();
+                          }}
                         >
-                          {draft.category === "WORK" ? (
-                            <WorkIcon className={iconStyle} />
-                          ) : (
-                            <WriteIcon className={iconStyle} />
-                          )}
-                          {draft.title ?? `Untitled ${draft.untitledIndex ?? ""}`}
+                          <TrashIcon className={iconStyle} />
+                          Discard draft
                         </Command.Item>
-                      ))}
+                      )}
                     </Command.Group>
-                    );
-                  })()}
-                </>
-              )}
-            </>
-          )}
-        </Command.List>
-      </Command>
-    </Dialog>
+
+                    {/* Publish */}
+                    <Command.Group className={groupStyle}>
+                      <div className={groupHeadingStyle}>Publish</div>
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleNewBlogArticle}
+                      >
+                        <WriteIcon className={iconStyle} />
+                        New blog article…
+                      </Command.Item>
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleNewWorkArticle}
+                      >
+                        <WorkIcon className={iconStyle} />
+                        New work article…
+                      </Command.Item>
+                      {/* Published, but NOT pinned — unlike the grid's own [+],
+                        which places a component at a seat you chose. Arriving
+                        from the palette there is no seat in mind, so it takes
+                        whatever chronology gives it. */}
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={() => {
+                          setPickingComponent(true);
+                          close();
+                        }}
+                      >
+                        <ComponentIcon className={iconStyle} />
+                        New component…
+                      </Command.Item>
+                    </Command.Group>
+
+                    {/* Drafts — the draft being viewed is omitted so the
+                      current page never lists itself */}
+                    {(() => {
+                      const listableDrafts = drafts.filter(
+                        (draft) => draft.id !== currentDraft?.id,
+                      );
+                      if (listableDrafts.length === 0) return null;
+                      return (
+                        <Command.Group className={groupStyle}>
+                          <div className={groupHeadingStyle}>Drafts</div>
+                          {listableDrafts.map((draft) => (
+                            <Command.Item
+                              key={draft.id}
+                              className={itemStyle}
+                              onSelect={() => handleOpenDraft(draft)}
+                            >
+                              {draft.category === "WORK" ? (
+                                <WorkIcon className={iconStyle} />
+                              ) : (
+                                <WriteIcon className={iconStyle} />
+                              )}
+                              {draft.title ??
+                                `Untitled ${draft.untitledIndex ?? ""}`}
+                            </Command.Item>
+                          ))}
+                        </Command.Group>
+                      );
+                    })()}
+                  </>
+                )}
+              </>
+            )}
+          </Command.List>
+        </Command>
+      </Dialog>
+
+      {/* Sibling of the palette, not a child: the picker is a modal of its own
+          and the palette closes on the way into it. */}
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm?.title ?? ""}
+        message={confirm?.message ?? ""}
+        confirmLabel={confirm?.confirmLabel ?? ""}
+        onConfirm={() => confirm?.onConfirm()}
+        onClose={() => setConfirm(null)}
+      />
+
+      <ComponentInsertDialog
+        open={pickingComponent}
+        onClose={() => setPickingComponent(false)}
+        onInsert={(componentId) => {
+          void handlePublishComponent(componentId);
+          setPickingComponent(false);
+        }}
+      />
+    </>
   );
 }

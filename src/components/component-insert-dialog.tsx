@@ -252,10 +252,15 @@ export function ComponentInsertDialog({
       {/* Two buttons, so the footer's own space-between does the placing — no
           grouping wrapper (that's for the image dialog, which has a cluster). */}
       <footer className={dialogFooter()}>
-        <Button type="button" emphasis="tertiary" onClick={onClose}>
+        <Button type="button" emphasis="tertiary" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="button" disabled={!selectedId} onClick={handleInsert}>
+        <Button
+          type="button"
+          size="sm"
+          disabled={!selectedId}
+          onClick={handleInsert}
+        >
           Insert Component
         </Button>
       </footer>

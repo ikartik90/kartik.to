@@ -278,6 +278,72 @@ body {
     width: min(100%, var(--sizes-article-showcase));
   }
 
+  /* Furniture (the project grid, the social row) is not prose and is not held
+     to the reading measure. Each caps its own width — the grid at its
+     three-column size — so this only has to stop the text column from doing it
+     first. */
+  article > [data-furniture] {
+    width: 100%;
+  }
+
+  /* The grid's editing controls — hidden until you point at the card, or reach
+     it with the keyboard.
+
+     In CSS rather than React state because the grid can hold dozens of cells
+     and routing pointer enter/leave through state would re-render one on every
+     crossing.
+
+     The keyboard half is GATED on the live input modality, and that gate is
+     load-bearing rather than tidy. A native <dialog> hands focus back to
+     whatever opened it, so clicking a rail's [+] and picking a component left
+     that button focused — and its card's controls lit — with the pointer long
+     gone. They stayed up until something else was clicked. Same gate, and the
+     same reason, as the hover tint in the `optionList` recipe.
+
+     Not written as a Panda selector: it emits a class for a selector with `&`
+     in the middle but no rule to go with it, which fails silently. */
+  [data-grid-cell] [data-grid-controls] {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease;
+  }
+
+  [data-grid-cell]:hover [data-grid-controls],
+  html[data-input-modality="keyboard"]
+    [data-grid-cell]:focus-within
+    [data-grid-controls] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* The insertion rail's [+] frosts what is behind it on hover. Its hover fill
+     is translucent and it sits in the gutter overhanging the cards either side,
+     so without this you read straight through the button to the cards.
+
+     Here rather than in `css()`, which rejects both the raw `backdrop-filter`
+     key and the `-webkit-` one — and Panda's `backdropFilter` utility emits
+     ONLY the `-webkit-` form, which Chromium does not recognise. Both spellings
+     written out; 8px is the app's one blur strength, as the `glass` emphasis
+     uses. */
+  [data-grid-rail-add]:hover {
+    -webkit-backdrop-filter: blur(var(--spacing-md));
+    backdrop-filter: blur(var(--spacing-md));
+  }
+
+  /* The social row belongs to the intro above it, not to the projects below.
+     Both gaps were the article's uniform 16px, which measures equal and does
+     not READ equal: the grid is a solid mass of cards and pulls the eye, so an
+     evenly-spaced row of icons attaches itself to the wrong neighbour. The
+     extra space below is what breaks that tie.
+
+     5xl on top of the article's 16px gap puts the icons ~22px under the last
+     line of text and ~96px above the first card. The icons read as the tail of
+     the intro, and the grid reads as the next thing on the page rather than as
+     the rest of this one. */
+  article > [data-furniture="social_links"] {
+    margin-block-end: var(--spacing-5xl);
+  }
+
   /* Anchor the top of every article surface to the homepage header offset
      (5xl). The first child differs per surface — the renderer's intro, the
      editor's title, or (for a titleless draft) its first content block — so
@@ -286,12 +352,27 @@ body {
     margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
   }
 
+  /* …except the homepage, whose first block is the intro text. That offset
+     exists to hang an article's title off the header; here the logo already
+     occupies that space, so adding it again just pushes the intro down a gap
+     that is already there. */
+  article[data-home] > :first-child {
+    margin-top: 0;
+  }
+
   /* One-level indent (Tab in the editor) — shifts the block's content right by
      a list marker + gap (3xl) so paragraphs, subheadings, blockquotes, and
      metrics line up with bulleted/numbered list-item text. box-sizing:border-box
      keeps the block within its content column. Rendered in the reader too. */
   article [data-indented] {
     padding-inline-start: var(--spacing-3xl);
+  }
+
+  /* Centred paragraphs — the homepage's opening lines, and anything else that
+     wants them. `text-align` is inherited, so it also carries to inline marks
+     and to a `<br>`-separated second line without either needing to know. */
+  article [data-align="center"] {
+    text-align: center;
   }
 
   article > img {

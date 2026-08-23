@@ -63,6 +63,16 @@ export const ParagraphNodeSchema = z.object({
   type: z.literal("paragraph"),
   children: z.array(InlineNodeSchema),
   indent: z.boolean().optional(),
+  // Centred rather than ranged left. Only "center" exists because left IS the
+  // absence of this field, and an explicit "left" would be a second way to say
+  // the default that documents would then disagree about.
+  //
+  // This is what the homepage's opening lines are: an ordinary paragraph that
+  // happens to be centred, not a special "intro" block. The distinction earns
+  // its keep — an intro block would have been a second paragraph
+  // implementation, with its own marks, its own inline handling and its own
+  // bugs, to express one property of the text.
+  align: z.literal("center").optional(),
 });
 
 export const HeadingNodeSchema = z.object({
@@ -828,6 +838,32 @@ export const MetricNodeSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Furniture — blocks that render a fixed piece of the site rather than content
+// stored in the node.
+//
+// Both carry no fields, and that is the point: what they render is owned
+// elsewhere (the grid by the two tables behind `getGridCards`, the icon row by
+// `SocialLinks`), and the document only says WHERE it goes. Giving them
+// options would start a second, weaker copy of a thing that already has one
+// home.
+//
+// They exist so the homepage can be an ordinary document. It was three
+// hardcoded sections; making the grid part of it must not mean losing the
+// ability to write above and below it, and the intro's icon row is not
+// something to delete on the way past.
+// ---------------------------------------------------------------------------
+
+/** The homepage's masonry of projects, articles and published components. */
+export const ProjectGridNodeSchema = z.object({
+  type: z.literal("project_grid"),
+});
+
+/** The row of social icons. */
+export const SocialLinksNodeSchema = z.object({
+  type: z.literal("social_links"),
+});
+
+// ---------------------------------------------------------------------------
 // BlockNode union — the single source of truth for all valid block types.
 // Add new node schemas to both the type union and the z.union() array below.
 // ---------------------------------------------------------------------------
@@ -843,7 +879,9 @@ export type BlockNode =
   | MediaNode
   | z.infer<typeof CollectionNodeSchema>
   | z.infer<typeof ComponentNodeSchema>
-  | z.infer<typeof MetricNodeSchema>;
+  | z.infer<typeof MetricNodeSchema>
+  | z.infer<typeof ProjectGridNodeSchema>
+  | z.infer<typeof SocialLinksNodeSchema>;
 
 export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   ParagraphNodeSchema,
@@ -857,4 +895,6 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   CollectionNodeSchema,
   ComponentNodeSchema,
   MetricNodeSchema,
+  ProjectGridNodeSchema,
+  SocialLinksNodeSchema,
 ]);

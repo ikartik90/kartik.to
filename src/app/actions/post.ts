@@ -102,6 +102,27 @@ export async function publishPost(id: string): Promise<Post> {
   return post;
 }
 
+/**
+ * Take a published post off the site without destroying it.
+ *
+ * Clearing `publishedAt` rather than deleting: unlike a published component —
+ * which is only ever a row saying "show this demo" — an article is the writing
+ * itself, and the reversible half of "remove this" is the one that should be a
+ * click away. Deleting it outright is `deleteDraft`, and it asks first.
+ */
+export async function unpublishPost(id: string): Promise<Post> {
+  await requireAdmin();
+
+  const raw = await prisma.post.update({
+    where: { id },
+    data: { publishedAt: null },
+  });
+
+  const post = parsePost(raw);
+  revalidatePostPaths(post);
+  return post;
+}
+
 export async function deleteDraft(id: string): Promise<void> {
   await requireAdmin();
 
