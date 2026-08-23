@@ -42,7 +42,20 @@ const demoFrameAspectRatioVariants = Object.fromEntries(
 const demoFrameAspectRatioFloors = aspectRatioEntries.map(([tier, [w, h]]) => ({
   logger: true,
   aspectRatio: tier,
-  css: { minHeight: `calc(${h * 100}cqw / ${w})` },
+  css: {
+    // Dropping the ratio has to happen HERE, in the compound, rather than in
+    // the `logger` variant that reads like it does it. Both variants are a
+    // single class, so neither outranks the other and source order decides —
+    // and Panda emits `aspectRatio` after `logger`, so the variant's
+    // `aspect-ratio: unset` lost every time. That went unnoticed for exactly
+    // one reason: the floor below is derived from the same ratio and resolves
+    // to the same pixel, so a logger frame measured correct while the ratio
+    // sat on it as a CEILING. It is what capped the Calchemy demo at 232px in
+    // a 296px demo and left it to hide its own calendar. Compounds are emitted
+    // last, so this one wins.
+    aspectRatio: "auto",
+    minHeight: `calc(${h * 100}cqw / ${w})`,
+  },
 }));
 
 // The same ratios again, wrapped for a SLOT recipe: a slot recipe's variant is
@@ -1418,7 +1431,6 @@ export default defineConfig({
             logger: {
               true: {
                 height: "auto",
-                aspectRatio: "unset",
                 // A logger footer follows, and `demoLoggerSection` carries an
                 // 8px inset of its own. Trimming the area's foot to 12 lets the
                 // two add back up to 20, so the demo still sits evenly between
@@ -1427,13 +1439,28 @@ export default defineConfig({
                 "& > *": {
                   width: "token(spacing.full)",
                   maxWidth: "token(spacing.full)",
+                  // The floor below is a `min-height`, and a floor is only a
+                  // floor if the demo can push past it. This column's items
+                  // shrink by default, so a demo taller than the floor was
+                  // squashed down to it instead of raising it — and a demo
+                  // that hides its own overflow (Calchemy does) then quietly
+                  // cut its calendar off rather than showing it clipped. The
+                  // demo keeps its height and the AREA gives way, which is
+                  // exactly what `demoFrameDemoMeasure` guarantees the
+                  // non-logger path; a logger frame has no such wrapper, so
+                  // the guarantee has to be made here.
+                  flexShrink: 0,
                 },
               },
             },
           },
-          // A logger frame drops `aspect-ratio`, so reserve that height as a
-          // floor in container-query units — full height from SSR, no
-          // client-measured jump. cqw factor = ratioHeight / ratioWidth, which
+          // A logger frame drops `aspect-ratio` (here, in the compound — see
+          // `demoFrameAspectRatioFloors` for why it cannot be done in the
+          // variant), so reserve that height as a floor in container-query
+          // units — full height from SSR, no client-measured jump. A FLOOR,
+          // which is the point: the ratio it replaces was a fixed height, and
+          // a demo taller than it at the width it landed at raises the frame
+          // instead of being cut off by it. cqw factor = ratioHeight / ratioWidth, which
           // is why these read as different numbers from the variant above even
           // though they are the same ratios; both are derived from the one map
           // in src/utils/demo-frame-sizing.ts rather than written out here.
