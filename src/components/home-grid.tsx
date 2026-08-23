@@ -131,7 +131,10 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
             }}
             moved={card.key === movedKey}
             onMoveBack={() => {
-              draft.setPin(card.key, Math.max(0, (card.gridIndex ?? index) - 1));
+              draft.setPin(
+                card.key,
+                Math.max(0, (card.gridIndex ?? index) - 1),
+              );
               setMovedKey(card.key);
             }}
             onMoveForward={() => {
@@ -186,34 +189,45 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
         ))}
       </div>
 
-      <ComponentInsertDialog
-        open={insert !== null}
-        onClose={() => setInsert(null)}
-        onInsert={(componentId) => {
-          const entry = getDemoComponent(componentId);
-          // Pinned to the seat by default: you chose this spot, so the card
-          // stays in it rather than drifting the next time something ships.
-          draft.addInsert({
-            key: `pending:${(pendingSeq += 1)}`,
-            componentId,
-            index: insert?.index ?? 0,
-            aspect: entry?.aspectRatio ?? "3/2",
-            logger: Boolean(entry?.logger),
-          });
-          setInsert(null);
-        }}
-      />
+      {/* Mounted only while editing, and that is a correctness requirement
+          rather than a saving. A closed `<dialog>` still renders its contents
+          into the document, so mounting these on the public page put "You are
+          about to unpublish this component" into the HTML every visitor
+          receives — invisible, but there, and admin surface on a page that has
+          no admin. Found by the e2e check that asserts an anonymous visitor is
+          shown no admin commands. */}
+      {editable && (
+        <>
+          <ComponentInsertDialog
+            open={insert !== null}
+            onClose={() => setInsert(null)}
+            onInsert={(componentId) => {
+              const entry = getDemoComponent(componentId);
+              // Pinned to the seat by default: you chose this spot, so the card
+              // stays in it rather than drifting the next time something ships.
+              draft.addInsert({
+                key: `pending:${(pendingSeq += 1)}`,
+                componentId,
+                index: insert?.index ?? 0,
+                aspect: entry?.aspectRatio ?? "3/2",
+                logger: Boolean(entry?.logger),
+              });
+              setInsert(null);
+            }}
+          />
 
-      <ConfirmDialog
-        open={confirmUnpublish !== null}
-        title="Unpublish Component"
-        message="You are about to unpublish this component. Do you want to proceed?"
-        confirmLabel="Unpublish"
-        onConfirm={() => {
-          if (confirmUnpublish) draft.remove(confirmUnpublish.key);
-        }}
-        onClose={() => setConfirmUnpublish(null)}
-      />
+          <ConfirmDialog
+            open={confirmUnpublish !== null}
+            title="Unpublish Component"
+            message="You are about to unpublish this component. Do you want to proceed?"
+            confirmLabel="Unpublish"
+            onConfirm={() => {
+              if (confirmUnpublish) draft.remove(confirmUnpublish.key);
+            }}
+            onClose={() => setConfirmUnpublish(null)}
+          />
+        </>
+      )}
     </section>
   );
 }

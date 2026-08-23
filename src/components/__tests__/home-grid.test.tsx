@@ -85,6 +85,26 @@ describe("HomeGrid", () => {
     expect(screen.queryByRole("button", { name: /pin/i })).toBeNull();
   });
 
+  // The editing DIALOGS are markup, not just controls: a closed `<dialog>`
+  // renders its contents into the document, so mounting them outside edit mode
+  // ships "You are about to unpublish this component" to every visitor of the
+  // public homepage. Invisible is not the same as absent, and an e2e check for
+  // admin text on `/` is what found this.
+  it("mounts no editing dialogs when not editable", () => {
+    const { container } = render(
+      <HomeGrid cards={[post("a"), component("c1")]} />,
+    );
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(container.textContent).not.toMatch(/unpublish/i);
+  });
+
+  it("mounts them once editing", () => {
+    const { container } = render(
+      <HomeGrid cards={[post("a"), component("c1")]} editable />,
+    );
+    expect(container.querySelector("dialog")).not.toBeNull();
+  });
+
   // Clicking a card in edit mode would navigate away and take the unsaved
   // layout with it, and a component card is a live demo that would respond to
   // the click as well.
