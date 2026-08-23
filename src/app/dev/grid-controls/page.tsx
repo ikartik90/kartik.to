@@ -21,8 +21,10 @@ import { Typography } from "@/components/ui/typography";
 // and the rails centre on `--grid-gap`. A showcase that stood them in a plain
 // box would prove nothing about the only thing that can go wrong with them.
 //
-// Every control is visible at rest here. In the grid proper they appear on
-// hover, which is a property of the grid rather than of these components.
+// Every control here behaves as it does in the grid proper: they appear on
+// hover, and of the two rails only the one in the gutter the cursor is nearest
+// is shown. Both of those are properties of the cell rather than of these
+// components, which is why the preview stands them in a real grid.
 // ---------------------------------------------------------------------------
 
 const pageStyle = css({
@@ -96,13 +98,15 @@ export default function GridControlsPage() {
           Grid controls
         </Typography>
         <Typography tag="p" type="caption">
-          Controls appear on hover, as they do in the grid proper. Pin is a
-          toggle; the moves stay disabled until a card is pinned. The width pair
-          resizes the card for real, up to the three columns this grid has, and
-          the aspect button swaps the rail for the shape picker (Esc to leave).
-          Customize docks the card&apos;s properties panel to the edge —
-          CosmicTrack logs, so it alone carries the log-output control there,
-          and is the only component here, so it alone offers unpublish.
+          Controls appear on hover, as they do in the grid proper, and a card
+          offers the insertion [+] in whichever gutter the cursor is nearest —
+          cross the middle of a card and it swaps sides. Pin is a toggle; the
+          moves stay disabled until a card is pinned. The width pair resizes the
+          card for real, up to the three columns this grid has, and the aspect
+          button swaps the rail for the shape picker (Esc to leave). Customize
+          docks the card&apos;s properties panel to the edge — CosmicTrack logs,
+          so it alone carries the log-output control there, and is the only
+          component here, so it alone offers unpublish.
         </Typography>
       </div>
 

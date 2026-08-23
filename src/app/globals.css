@@ -316,6 +316,30 @@ body {
     pointer-events: auto;
   }
 
+  /* ...but only ONE of the two insertion rails: the one in the gutter the
+     cursor is already next to. Both are mounted, and showing both puts a second
+     identical [+] in the corner of the eye for an insertion point the cursor is
+     moving away from — clutter around a card that is already carrying a
+     toolbar. The cell names the near gutter in `data-near-side` as the pointer
+     crosses it (see `useNearSide`).
+
+     Gated on the pointer being what is driving: a keyboard user has no cursor
+     and so no near side, and a stale attribute left by a cursor parked over the
+     card must not be what decides which insertion point they can tab to. With
+     the pointer gone the attribute is cleared anyway, so this is belt and
+     braces on the one ordering that could outlive it.
+
+     Not written as a Panda selector, for the same reason as the rules above. */
+  html:not([data-input-modality="keyboard"])
+    [data-grid-cell][data-near-side="before"]
+    [data-grid-controls][data-side="after"],
+  html:not([data-input-modality="keyboard"])
+    [data-grid-cell][data-near-side="after"]
+    [data-grid-controls][data-side="before"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   /* The insertion rail's [+] frosts what is behind it on hover. Its hover fill
      is translucent and it sits in the gutter overhanging the cards either side,
      so without this you read straight through the button to the cards.
