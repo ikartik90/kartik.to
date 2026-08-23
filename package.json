@@ -23,7 +23,7 @@
     "@calchemy/date-react": "^0.1.5",
     "@neondatabase/auth": "^0.4.0-beta",
     "@neondatabase/serverless": "^1.1.0",
-    "@paper-design/shaders-react": "^0.0.77",
+    "@paper-design/shaders-react": "^0.0.80",
     "@prisma/adapter-neon": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "cmdk": "^1.1.1",

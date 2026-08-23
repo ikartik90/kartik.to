@@ -97,12 +97,6 @@ const rowStyle = css({ display: "flex", flexWrap: "wrap", gap: "sm" });
 
 const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
 
-const blurbStyle = css({
-  textStyle: "caption",
-  color: "text.default/70",
-  maxWidth: "320px",
-});
-
 const headingStyle = css({
   textStyle: "caption",
   color: "text.default/40",
@@ -361,7 +355,6 @@ export default function ShaderPlaygroundPage() {
               </Button>
             ))}
           </div>
-          <p className={blurbStyle}>{spec.blurb}</p>
         </div>
 
         <div className={groupStyle}>

@@ -79,7 +79,6 @@ export interface ShaderPreset {
 export interface ShaderSpec {
   id: ShaderId;
   label: string;
-  blurb: string;
   /** The shader's own `maxColorCount`. */
   maxColors: number;
   /** False for the mesh gradients, which are opaque fills with no background. */
@@ -126,8 +125,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   cosmicTrack: {
     id: "cosmicTrack",
     label: "Cosmic Track",
-    blurb:
-      "Ours: discrete ribbons on a fanned track, each carrying ONE mirrored copy of the gradient — first colour and last are the same, and beyond its two ends the track is just ground. Angle slides the whole set along the track and Travel is how far Speed swings it either side, out and back. Stagger is the offset between neighbours that turns their leading edges into a staircase. None of them touch the geometry — Spread, Bandwidth, Roundness, Apex and Curve own that. Bandwidth is how wide the ribbon stack is (every ribbon narrows together, staying edge to edge); Spread is the gap between ribbons (0 = touching). The fan’s own shape comes from Apex and Roundness, and Tilt is the angle the whole plane makes with the surface — 0 lies flat-on, higher leans it away so the ribbons foreshorten toward a horizon. Tail is how far each band fades out at its ends, and it leaves the outer silhouette alone.",
     maxColors: 10,
     hasColorBack: true,
     extraColors: [],
@@ -207,8 +204,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   colorPanels: {
     id: "colorPanels",
     label: "Color Panels",
-    blurb:
-      "Semi-transparent panels around a central axis. Verified in the browser: this is a folded-wing bloom, NOT the reference fan — reach for God Rays for that. Keep it for the soft vertical glow. Rotation 90 stands the panels up; at 0 they lie in bands.",
     maxColors: 7,
     hasColorBack: true,
     extraColors: [],
@@ -258,8 +253,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   godRays: {
     id: "godRays",
     label: "God Rays",
-    blurb:
-      "THE match for the reference art: broad blades fanning from a source above the frame. Density is the whole ballgame — near 0.8 the shafts read as grass, near 0.3 as the soft blades in the cards.",
     maxColors: 5,
     hasColorBack: true,
     extraColors: [{ key: "colorBloom", label: "Bloom", value: LIME }],
@@ -301,8 +294,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   warp: {
     id: "warp",
     label: "Warp",
-    blurb:
-      "Distorted bands. Set the pattern to Stripes and add a little swirl for the flowing-ribbon variant of the look.",
     maxColors: 10,
     hasColorBack: false,
     extraColors: [],
@@ -349,8 +340,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   swirl: {
     id: "swirl",
     label: "Swirl",
-    blurb:
-      "Colour bands wrapped around a centre. Drop Twist near zero and you get straight wedges — a third way at the fan.",
     maxColors: 10,
     hasColorBack: true,
     extraColors: [],
@@ -381,8 +370,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   staticMeshGradient: {
     id: "staticMeshGradient",
     label: "Static Mesh Gradient",
-    blurb:
-      "The soft blurred wash — no rays at all. Already in production behind article images, so a setting found here ports straight to a BackgroundEffect.",
     maxColors: 10,
     hasColorBack: false,
     extraColors: [],
