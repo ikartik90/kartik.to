@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { masonryGrid } from "../../../../styled-system/recipes";
+import { CardPropertiesPanel } from "@/components/card-properties-panel";
 import { GridItem } from "@/components/grid-item";
 import { LinkCard } from "@/components/link-card";
+import { type PropertiesPanelHandle } from "@/components/ui/properties-panel";
 import { MAX_GRID_SPAN } from "@/utils/listing-columns";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import { Typography } from "@/components/ui/typography";
@@ -68,6 +70,13 @@ export default function GridControlsPage() {
   const [pinned, setPinned] = useState<Record<string, boolean>>({ b: true });
   const [log, setLog] = useState<string[]>([]);
   const [movedId, setMovedId] = useState<string | null>(null);
+  // Which card's properties panel is docked, and — for the one card here that
+  // logs — whether its log output is on show. Real state rather than a logged
+  // press, for the same reason the widths above are: the control is only worth
+  // previewing if the panel actually reads back what it was told.
+  const [propertiesId, setPropertiesId] = useState<string | null>(null);
+  const [logShown, setLogShown] = useState<Record<string, boolean>>({ b: true });
+  const propertiesPanelRef = useRef<PropertiesPanelHandle>(null);
   // Real widths, not a mock: the width controls are the only ones here whose
   // effect is a layout change, so a preview that logged the press without
   // resizing the card would be showing the half that cannot go wrong.
@@ -78,6 +87,7 @@ export default function GridControlsPage() {
     Record<string, DemoFrameAspectRatio>
   >({});
   const note = (line: string) => setLog((l) => [line, ...l].slice(0, 6));
+  const propertiesCard = CARDS.find((card) => card.id === propertiesId) ?? null;
 
   return (
     <main className={pageStyle}>
@@ -90,7 +100,9 @@ export default function GridControlsPage() {
           toggle; the moves stay disabled until a card is pinned. The width pair
           resizes the card for real, up to the three columns this grid has, and
           the aspect button swaps the rail for the shape picker (Esc to leave).
-          CosmicTrack is a component, so it alone offers unpublish.
+          Customize docks the card&apos;s properties panel to the edge —
+          CosmicTrack logs, so it alone carries the log-output control there,
+          and is the only component here, so it alone offers unpublish.
         </Typography>
       </div>
 
@@ -140,6 +152,17 @@ export default function GridControlsPage() {
                 setAspects((a) => ({ ...a, [card.id]: aspect }));
                 note(`aspect ${aspect} ${card.title}`);
               }}
+              propertiesOpen={propertiesId === card.id}
+              onToggleProperties={() => {
+                // Closing goes through the panel so it slides out rather than
+                // vanishing — same handshake the grid proper uses.
+                if (propertiesId === card.id) {
+                  propertiesPanelRef.current?.dismiss();
+                } else {
+                  setPropertiesId(card.id);
+                }
+                note(`customize ${card.title}`);
+              }}
               onUnpublish={
                 card.isComponent
                   ? () => note(`unpublish ${card.title}`)
@@ -160,6 +183,28 @@ export default function GridControlsPage() {
           ))}
         </div>
       </div>
+
+      {propertiesCard && (
+        <CardPropertiesPanel
+          ref={propertiesPanelRef}
+          key={propertiesCard.id}
+          // Only a logging demo is offered the control; the other two cards
+          // open the panel on its near-empty state, which is what they will
+          // look like until they grow properties of their own.
+          logger={
+            propertiesCard.isComponent
+              ? {
+                  shown: logShown[propertiesCard.id] ?? false,
+                  onShownChange: (shown) => {
+                    setLogShown((l) => ({ ...l, [propertiesCard.id]: shown }));
+                    note(`log output ${shown ? "show" : "hide"}`);
+                  },
+                }
+              : undefined
+          }
+          onDismiss={() => setPropertiesId(null)}
+        />
+      )}
 
       <div>
         {log.length === 0 ? (

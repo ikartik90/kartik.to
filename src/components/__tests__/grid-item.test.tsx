@@ -64,6 +64,8 @@ const props: Omit<GridItemProps, "children"> = {
   onAddColumn: () => {},
   onRemoveColumn: () => {},
   onAspectChange: () => {},
+  propertiesOpen: false,
+  onToggleProperties: () => {},
   onInsertBefore: () => {},
   onInsertAfter: () => {},
   label: "A card",

@@ -10,6 +10,7 @@ interface GridDraftStore extends GridDraft {
   setPin: (key: string, index: number | null) => void;
   setSpan: (key: string, span: number) => void;
   setAspect: (key: string, aspect: DemoFrameAspectRatio) => void;
+  setLogger: (key: string, logger: boolean) => void;
   addInsert: (insert: PendingComponentInsert) => void;
   remove: (key: string) => void;
   reset: () => void;
@@ -43,6 +44,12 @@ export const useGridDraftStore = create<GridDraftStore>()((set) => ({
   // reshaped in one place and left alone in the other.
   setAspect: (key, aspect) =>
     set((s) => ({ aspects: { ...s.aspects, [key]: aspect } })),
+
+  // Recorded against the card key like the shape above, and for the same
+  // reason: the same demo published twice can show its log output in one
+  // showing and hide it in the other.
+  setLogger: (key, logger) =>
+    set((s) => ({ loggers: { ...s.loggers, [key]: logger } })),
 
   addInsert: (insert) => set((s) => ({ inserts: [...s.inserts, insert] })),
 

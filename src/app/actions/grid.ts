@@ -177,6 +177,7 @@ const GridDraftSchema = z.object({
   pins: z.record(z.string(), GridIndexSchema.nullable()),
   spans: z.record(z.string(), GridSpanSchema),
   aspects: z.record(z.string(), ComponentAspectSchema),
+  loggers: z.record(z.string(), z.boolean()),
   inserts: z.array(InsertSchema),
   removals: z.array(z.string().min(1)),
 });
@@ -234,6 +235,14 @@ interface RowPatch {
   gridIndex?: number | null;
   gridSpan?: number;
   aspect?: string;
+  /**
+   * COMPONENTS only — a post has no log output and no column to keep this in.
+   * The field is on the one patch type rather than in a second one because
+   * every other column here is shared, and the constraint is not a shape: it is
+   * a fact about which cards may be given the value, which is checked where the
+   * value is set below.
+   */
+  logger?: boolean;
 }
 
 /**
@@ -249,7 +258,7 @@ interface RowPatch {
  */
 export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
   await requireAdmin();
-  const { pins, spans, aspects, inserts, removals } =
+  const { pins, spans, aspects, loggers, inserts, removals } =
     GridDraftSchema.parse(draft);
 
   await prisma.$transaction(async (tx) => {
@@ -297,6 +306,19 @@ export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
       const data = patchFor(key);
       if (data) data.aspect = aspect;
     }
+    for (const [key, logger] of Object.entries(loggers)) {
+      // A post is turned away HERE rather than by the schema, and before
+      // `patchFor` is asked for anything: a patch opened for a post would be
+      // sent as an update either way, and one carrying `logger` is a column
+      // that table does not have — P2025's louder cousin, and it would roll
+      // back everything else in the transaction with it.
+      if (parseCardKey(key)?.kind !== "component") continue;
+      const data = patchFor(key);
+      // Assigned rather than merged, for the same reason a released pin is:
+      // `false` is a real value — a log panel deliberately hidden on a demo
+      // the registry logs by default.
+      if (data) data.logger = logger;
+    }
 
     for (const { target, data } of patches.values()) {
       if (target.kind === "post") {
@@ -314,7 +336,11 @@ export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
           // registry's default for the demo. Null only if neither said
           // anything, so the publication keeps tracking the registry.
           aspect: aspects[insert.key] ?? insert.aspect ?? null,
-          logger: insert.logger ?? null,
+          // The panel wins over the flag the `[+]` published with, which is
+          // the registry's default for the demo — the same rule the shape
+          // above follows. Null only if neither said anything, so the
+          // publication keeps tracking the registry.
+          logger: loggers[insert.key] ?? insert.logger ?? null,
           // A pin made against the card before it was saved still counts —
           // it was placed by hand and the seat it was dragged to is the one
           // it should get, not the one the `[+]` originally opened.

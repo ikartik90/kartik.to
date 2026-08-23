@@ -51,13 +51,34 @@ export interface GridDraft {
    * company at the write, not here.
    */
   aspects: Record<string, DemoFrameAspectRatio>;
+  /**
+   * Card key → whether its log output is on show.
+   *
+   * A property of the card's own record, like the shape above and for the same
+   * reason it rides here rather than with the placements: it is edited in the
+   * same session, from the same rail, and has to be thrown away by the same
+   * "Discard and exit".
+   *
+   * COMPONENTS only — a post card has no log panel, and no column to record one
+   * in. Nothing here enforces that: what a key names is the caller's business
+   * everywhere else in this draft too, and the write is where a post is turned
+   * away (see `saveGridLayout`).
+   */
+  loggers: Record<string, boolean>;
   inserts: PendingComponentInsert[];
   /** Card keys to take off the grid. */
   removals: string[];
 }
 
 export function emptyGridDraft(): GridDraft {
-  return { pins: {}, spans: {}, aspects: {}, inserts: [], removals: [] };
+  return {
+    pins: {},
+    spans: {},
+    aspects: {},
+    loggers: {},
+    inserts: [],
+    removals: [],
+  };
 }
 
 /** Whether a draft holds anything worth saving — drives the exits' wording. */
@@ -66,6 +87,7 @@ export function isGridDraftDirty(draft: GridDraft): boolean {
     Object.keys(draft.pins).length > 0 ||
     Object.keys(draft.spans).length > 0 ||
     Object.keys(draft.aspects).length > 0 ||
+    Object.keys(draft.loggers).length > 0 ||
     draft.inserts.length > 0 ||
     draft.removals.length > 0
   );
@@ -95,7 +117,11 @@ export function applyGridDraft(
       const pinned = card.key in draft.pins;
       const widened = card.key in draft.spans;
       const reshaped = card.key in draft.aspects;
-      if (!pinned && !widened && !reshaped) return card;
+      // A post cannot carry one, so a stray key naming one is ignored here
+      // rather than spreading a `logger` field onto a card that has no such
+      // property to be read back off it.
+      const logged = card.kind === "component" && card.key in draft.loggers;
+      if (!pinned && !widened && !reshaped && !logged) return card;
       return {
         ...card,
         // Both applied in one rebuild, because a card that was moved AND
@@ -106,6 +132,11 @@ export function applyGridDraft(
         ...(pinned ? { gridIndex: draft.pins[card.key] } : null),
         ...(widened ? { span: draft.spans[card.key] } : null),
         ...(reshaped ? { aspect: draft.aspects[card.key] } : null),
+        // Spread conditionally like the rest, and here it is load-bearing
+        // twice over: `false` is a real value — hiding the panel on a demo the
+        // registry logs by default — so a `??` merge would drop exactly the
+        // edit the control exists to make.
+        ...(logged ? { logger: draft.loggers[card.key] } : null),
       };
     });
 
@@ -119,7 +150,11 @@ export function applyGridDraft(
       id: "",
       pending: true,
       componentId: insert.componentId,
-      logger: insert.logger,
+      // The registry's default for this demo, unless the panel has already
+      // been used on the card — the same rule the shape below follows, and for
+      // the same reason: an override made before the row exists still has to
+      // reach the card on screen.
+      logger: draft.loggers[insert.key] ?? insert.logger,
       // The registry's default for this demo, unless the picker has already
       // been used on the card — an override made before the row exists still
       // has to reach the card on screen.

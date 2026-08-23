@@ -43,6 +43,13 @@ export interface GridItemProps {
   onAddColumn: () => void;
   onRemoveColumn: () => void;
   onAspectChange: (aspect: DemoFrameAspectRatio) => void;
+  /**
+   * Whether the grid's one properties panel is currently showing THIS card.
+   * The panel is a single docked surface shared by every cell, so which card
+   * has it is the grid's state rather than the cell's.
+   */
+  propertiesOpen: boolean;
+  onToggleProperties: () => void;
   /** Components only — see `GridItemToolbar`. */
   onUnpublish?: () => void;
   onInsertBefore: () => void;
@@ -158,6 +165,8 @@ export function GridItem({
   onAddColumn,
   onRemoveColumn,
   onAspectChange,
+  propertiesOpen,
+  onToggleProperties,
   onUnpublish,
   onInsertBefore,
   onInsertAfter,
@@ -197,6 +206,8 @@ export function GridItem({
             onRemoveColumn={onRemoveColumn}
             aspect={aspect}
             onAspectChange={onAspectChange}
+            propertiesOpen={propertiesOpen}
+            onToggleProperties={onToggleProperties}
             onUnpublish={onUnpublish}
           />
           <GridInsertRail

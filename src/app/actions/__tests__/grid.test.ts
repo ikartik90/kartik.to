@@ -298,3 +298,100 @@ describe("saveGridLayout — widths", () => {
     expect(postUpdate).not.toHaveBeenCalled();
   });
 });
+
+// --- Log output ------------------------------------------------------------
+//
+// Whether a card shows its log panel is an override on the component row, the
+// same shape of column as `aspect`: null means "whatever the registry says",
+// and a boolean means this publication has been told otherwise. It is the one
+// property in the draft that only HALF the cards can carry — a post has no log
+// output and no column to record one in.
+
+describe("saveGridLayout — log output", () => {
+  beforeEach(() => {
+    [
+      postUpdate,
+      postUpdateMany,
+      componentUpdate,
+      componentUpdateMany,
+      componentCreate,
+      componentDelete,
+    ].forEach((fn) => fn.mockReset());
+  });
+
+  it("writes a component's log output to its own logger column", async () => {
+    await saveGridLayout(draft({ loggers: { "component:xyz": true } }));
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { logger: true },
+    });
+  });
+
+  // Hiding a panel the registry turns on is the whole point of the override,
+  // so `false` has to reach the column rather than being read as "unset".
+  it("writes a hidden log panel as false, not as nothing", async () => {
+    await saveGridLayout(draft({ loggers: { "component:xyz": false } }));
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { logger: false },
+    });
+  });
+
+  it("sends a seat, a shape and a log panel as one update", async () => {
+    await saveGridLayout(
+      draft({
+        pins: { "component:xyz": 1 },
+        aspects: { "component:xyz": "1/1" },
+        loggers: { "component:xyz": true },
+      }),
+    );
+    expect(componentUpdate).toHaveBeenCalledOnce();
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { gridIndex: 1, aspect: "1/1", logger: true },
+    });
+  });
+
+  // A post row has no `logger` column at all, so a key naming one is dropped
+  // before any write is built — reaching Prisma with it would throw and take
+  // the whole transaction, and the rest of the layout, down with it.
+  it("attempts no write for a post", async () => {
+    await saveGridLayout(draft({ loggers: { "post:abc": true } }));
+    expect(postUpdate).not.toHaveBeenCalled();
+    expect(postUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("saves the rest of the layout alongside a post's stray log key", async () => {
+    await saveGridLayout(
+      draft({
+        loggers: { "post:abc": true },
+        spans: { "post:abc": 2 },
+      }),
+    );
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridSpan: 2 },
+    });
+  });
+
+  it("creates an inserted component with the log panel it was given", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          {
+            key: "pending:1",
+            componentId: "calchemy",
+            index: 0,
+            logger: true,
+          },
+        ],
+        loggers: { "pending:1": false },
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ logger: false }),
+      }),
+    );
+  });
+});

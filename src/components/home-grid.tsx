@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import { masonryGrid } from "../../styled-system/recipes";
+import { CardPropertiesPanel } from "@/components/card-properties-panel";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DemoComponent } from "@/components/demo-component";
 import { DemoFrame } from "@/components/demo-frame";
 import { GridItem } from "@/components/grid-item";
 import { LinkCard } from "@/components/link-card";
+import { type PropertiesPanelHandle } from "@/components/ui/properties-panel";
 import { getDemoComponent } from "@/components/demo/registry";
 import { listingColumnsFor } from "@/utils/listing-columns";
 import { useGridDraftStore } from "@/store/grid-draft";
@@ -101,6 +103,17 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
     key: string;
   } | null>(null);
 
+  // The card whose properties panel is open, keyed on the CARD and not on its
+  // seat. Pinning slides its neighbours along and unpublishing takes one out
+  // entirely, so a stored index would strand the open panel on whatever moved
+  // into that slot — customising the wrong card. Pinning to the key makes "the
+  // panel follows its card" and "the panel closes when its card is gone" fall
+  // out of a plain lookup, with no effect keeping them in step.
+  const [propertiesKey, setPropertiesKey] = useState<string | null>(null);
+  // Closing goes through the PANEL, never through this state directly — see
+  // `togglePropertiesPanel`.
+  const propertiesPanelRef = useRef<PropertiesPanelHandle>(null);
+
   // The card the last move acted on. Held rather than flashed: you nudge a card
   // several times to get it where you want, and a ring that faded after each
   // press would be gone exactly when you look up to find what moved.
@@ -118,6 +131,51 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
   // call: a card offered a fourth column in a three-column grid would be
   // clamped back down by the CSS and the control would do nothing.
   const columns = listingColumnsFor(shown.length);
+
+  // Read out of the DRAFTED list rather than off the card the button was
+  // pressed on: the panel edits the draft, so a value read from the server's
+  // copy would spring back to the stored one the moment it was changed.
+  const propertiesCard =
+    shown.find((card) => card.key === propertiesKey) ?? null;
+
+  /**
+   * What the panel may offer for this card's log output — nothing at all
+   * unless the demo behind it logs.
+   *
+   * The REGISTRY answers "can this card log", because that is a fact about the
+   * demo's code; the card's own `logger` answers "is the panel on show", which
+   * is this publication's override of the registry's default. Offering the
+   * control on a demo with no logging would be a switch over nothing.
+   */
+  const loggerEntry =
+    propertiesCard?.kind === "component"
+      ? getDemoComponent(propertiesCard.componentId)
+      : undefined;
+  const propertiesLogger =
+    propertiesCard?.kind === "component" && loggerEntry?.logger
+      ? {
+          shown: propertiesCard.logger,
+          onShownChange: (visible: boolean) =>
+            draft.setLogger(propertiesCard.key, visible),
+        }
+      : undefined;
+
+  /**
+   * Opens the panel for a card — or closes it, if that card's is the one
+   * already open.
+   *
+   * Closing ASKS the panel rather than dropping it from the tree: clearing
+   * this state unmounts it on the spot and takes its closing slide with it. It
+   * calls back once it has finished leaving. Same arrangement as the
+   * collection editor's, for the same reason.
+   */
+  function togglePropertiesPanel(key: string) {
+    if (propertiesKey === key) {
+      propertiesPanelRef.current?.dismiss();
+      return;
+    }
+    setPropertiesKey(key);
+  }
 
   return (
     <section aria-label="Work" className={containerStyle}>
@@ -171,6 +229,10 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
             // not per demo, so the same component shown twice can be wide in
             // one slot and square in the other.
             onAspectChange={(aspect) => draft.setAspect(card.key, aspect)}
+            // Everything else about the card — for a logging demo, whether its
+            // log output is on show — is edited in the docked panel below.
+            propertiesOpen={propertiesKey === card.key}
+            onToggleProperties={() => togglePropertiesPanel(card.key)}
             // Only a component can be retired from here. An article is
             // unpublished from its own page, and offering a second route to it
             // from a tile would be two places to get it wrong.
@@ -198,6 +260,21 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
           </GridItem>
         ))}
       </div>
+
+      {/* A SIBLING of the grid, not a child of the cell it edits: one docked
+          surface for the whole grid, since only one card can be inspected at a
+          time. It is fixed to the viewport (and portals to the body to get
+          there), so it takes no space here and needs none. */}
+      {editable && propertiesCard && (
+        <CardPropertiesPanel
+          ref={propertiesPanelRef}
+          // Remounted per card, so a panel reopened on another one starts from
+          // that card's values rather than the previous card's.
+          key={propertiesCard.key}
+          logger={propertiesLogger}
+          onDismiss={() => setPropertiesKey(null)}
+        />
+      )}
 
       {/* Mounted only while editing, and that is a correctness requirement
           rather than a saving. A closed `<dialog>` still renders its contents
@@ -251,7 +328,16 @@ function ComponentCard({
   const entry = getDemoComponent(card.componentId);
   if (!entry) return null;
   return (
-    <DemoFrame aspectRatio={card.aspect} logger={card.logger}>
+    // The card says WHETHER the log panel shows; the registry says what it
+    // shows — a demo's empty hint, say. Handing the frame a bare `true` would
+    // turn the panel on and drop the configuration that goes with it, so the
+    // entry's own value is what travels once the card has said yes. `true` is
+    // the fallback for a row that was told to log a demo the registry has no
+    // logger for, which the panel does not offer but a hand-edited row can.
+    <DemoFrame
+      aspectRatio={card.aspect}
+      logger={card.logger ? (entry.logger ?? true) : false}
+    >
       <DemoComponent entry={entry} />
     </DemoFrame>
   );

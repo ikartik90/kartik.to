@@ -12,6 +12,7 @@ const handlers = () => ({
   onAddColumn: vi.fn(),
   onRemoveColumn: vi.fn(),
   onAspectChange: vi.fn(),
+  onToggleProperties: vi.fn(),
 });
 
 /** The placement rail's default props — every test needs a current shape. */
@@ -66,8 +67,8 @@ describe("GridItemToolbar", () => {
     render(<GridItemToolbar {...base} pinned={false} {...handlers()} />);
     expect(screen.queryByRole("button", { name: /move back/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /move forward/i })).toBeNull();
-    // Pin, plus the shape group — none of which is a placement control.
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    // Pin, plus the shape group and customize — none of which is a placement control.
+    expect(screen.getAllByRole("button")).toHaveLength(5);
   });
 
   it("enables the moves once pinned", () => {
@@ -163,6 +164,8 @@ describe("GridItemToolbar", () => {
       "Add column",
       "Remove column",
       "|",
+      "Customize",
+      "|",
       "Unpublish",
     ]);
   });
@@ -175,7 +178,57 @@ describe("GridItemToolbar", () => {
       "Aspect ratio",
       "Add column",
       "Remove column",
+      "|",
+      "Customize",
     ]);
+  });
+
+  // --- Customize -----------------------------------------------------------
+  //
+  // Everything about the card the rail cannot say in icons — for a logging
+  // component, whether its log output is on show — is edited in the docked
+  // panel, and this is the one control that opens it. Every card carries it:
+  // what a card's properties ARE differs by kind, but that it has some does
+  // not.
+
+  it("reports the open panel on the customize control itself", () => {
+    const { rerender } = render(
+      <GridItemToolbar {...base} pinned={false} {...handlers()} />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /customize/i })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+
+    rerender(
+      <GridItemToolbar {...base} pinned={false} propertiesOpen {...handlers()} />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /customize/i })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("asks for the panel when customize is pressed", async () => {
+    const user = userEvent.setup();
+    const fns = handlers();
+    render(<GridItemToolbar {...base} pinned={false} {...fns} />);
+    await user.click(screen.getByRole("button", { name: /customize/i }));
+    expect(fns.onToggleProperties).toHaveBeenCalledOnce();
+  });
+
+  // The panel dismisses itself on a press outside, and its own trigger is
+  // outside it — so without this exemption the second press would close the
+  // panel and immediately reopen it, which reads as the button doing nothing.
+  it("marks customize as the panel's own trigger", () => {
+    render(<GridItemToolbar {...base} pinned={false} {...handlers()} />);
+    expect(
+      screen
+        .getByRole("button", { name: /customize/i })
+        .hasAttribute("data-properties-trigger"),
+    ).toBe(true);
   });
 
   // A card's width has nothing to do with its seat, so unlike the moves these
