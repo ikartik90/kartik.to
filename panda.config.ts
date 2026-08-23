@@ -732,7 +732,7 @@ export default defineConfig({
         masonryGrid: defineRecipe({
           className: "masonry-grid",
           description:
-            "A masonry grid that supports column spans. Upgrades to `display: grid-lanes` where it exists; elsewhere it packs cards into 1px row tracks and computes each card's row span from its declared aspect and the width it lands at. Children drive it with three custom properties — `--span` (columns, clamped to what the grid has), `--aspect-w` and `--aspect-h` (the shape as a pair, kept as integers so ratios like 3:2 stay exact). `data-columns` is the CEILING on the column count from `listingColumnsFor`; the tier queries hand out the smaller of that and what fits.",
+            "A masonry grid that supports column spans. Upgrades to `display: grid-lanes` where it exists; elsewhere it packs cards into 1px row tracks and computes each card's row span from its declared aspect and the width it lands at. Children drive it with three custom properties — `--span` (columns, clamped to what the grid has), `--aspect-w` and `--aspect-h` (the shape as a pair, kept as integers so ratios like 3:2 stay exact) — and may publish a fourth, `--card-height`, when they have measured themselves taller than their shape; the span reserves the larger of the two. The grid hands `--aspect-height` back to each child, which is the shape's height at the width that child landed at, so the child can take its shape as a floor. `data-columns` is the CEILING on the column count from `listingColumnsFor`; the tier queries hand out the smaller of that and what fits.",
           base: {
             // The gap, once, as a length the arithmetic can read back. It has
             // to be a custom property rather than `columnGap` alone, because the
@@ -763,28 +763,54 @@ export default defineConfig({
               // with it.
               gridColumn: "span min(var(--span, 1), var(--columns))",
               minWidth: "0",
+
+              "--span-clamped": "min(var(--span, 1), var(--columns))",
+              "--col-width":
+                "calc((100cqw - (var(--columns) - 1) * var(--grid-gap)) / var(--columns))",
+              // A spanning card is not N columns wide — it is N columns plus
+              // the N-1 gutters it swallows.
+              "--cell-width":
+                "calc(var(--col-width) * var(--span-clamped) + (var(--span-clamped) - 1) * var(--grid-gap))",
+              // The height the declared shape asks for at the width the card
+              // landed at. Published to the cell rather than kept for the span
+              // arithmetic, because the cell takes it as a `min-height` — see
+              // `--card-height` below for why it cannot be an `aspect-ratio`.
+              "--aspect-height":
+                "calc(var(--cell-width) * var(--aspect-h, 9) / var(--aspect-w, 16))",
             },
 
             "@supports (grid-row: span calc(tan(atan2(1px, 1px))))": {
               gridAutoRows: "1px",
               rowGap: "0",
               "& > *": {
-                "--span-clamped": "min(var(--span, 1), var(--columns))",
-                "--col-width":
-                  "calc((100cqw - (var(--columns) - 1) * var(--grid-gap)) / var(--columns))",
-                // A spanning card is not N columns wide — it is N columns plus
-                // the N-1 gutters it swallows.
-                "--cell-width":
-                  "calc(var(--col-width) * var(--span-clamped) + (var(--span-clamped) - 1) * var(--grid-gap))",
                 // Height, then the gutter, both as counts of 1px rows. `row-gap`
                 // is zero above precisely so the second term can be the gap —
                 // a real row-gap would apply between every 1px track and turn a
                 // 20px gutter into 20px times the height of the card.
+                //
+                // The height is the LARGER of the shape's and the card's own.
+                // The shape is a floor, not a fixed height: a demo frame stops
+                // shrinking with its width at its content's height plus its
+                // padding, so a card too narrow for its shape to hold its
+                // contents is taller than its shape — which is every card at
+                // one column, and most of them at two. Reserving the shape's
+                // height there packed the next card into rows this one was
+                // still drawing in, and the card, told to fill a cell shorter
+                // than its contents, simply clipped them.
+                //
+                // `--card-height` is measured and published by the cell itself
+                // (`GridItem`), because a rendered height is not a quantity CSS
+                // can be asked for. Absent — before the first measurement, and
+                // on the server — this falls back to the shape's height alone,
+                // which is what the grid reserved before any of this existed.
                 gridRow:
-                  "span calc(tan(atan2(var(--cell-width) * var(--aspect-h, 9), var(--aspect-w, 16) * 1px)) + tan(atan2(var(--grid-gap), 1px)))",
+                  "span calc(tan(atan2(max(var(--aspect-height), var(--card-height, 0px)), 1px)) + tan(atan2(var(--grid-gap), 1px)))",
                 // `start`, not the default `stretch`. Stretched, a card grows
                 // to fill the rows it was given INCLUDING the gutter rows, and
-                // the gap closes to nothing.
+                // the gap closes to nothing. It is also what keeps the
+                // measurement above from chasing its own tail: the card's
+                // height decides the span, and the span must not decide the
+                // card's height back.
                 alignSelf: "start",
               },
             },

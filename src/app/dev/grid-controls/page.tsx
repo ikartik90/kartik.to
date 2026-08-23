@@ -37,11 +37,13 @@ const containerStyle = css({
   containerName: "projectsGrid",
 });
 
-// Cards fill their cell — the cell owns the shape the grid reserved space for.
+// Cards fill their cell — the cell owns the shape the grid reserved space for,
+// as a floor a taller card may exceed. Same arrangement as the grid proper.
 const fillStyle = css({
-  position: "absolute",
-  inset: 0,
-  "& > *": { height: "token(spacing.full)" },
+  display: "flex",
+  flexDirection: "column",
+  flexGrow: 1,
+  "& > *": { flexGrow: 1 },
   // Editing here is always on, so the card is always scenery — same as the
   // grid proper, where following a card would discard the unsaved layout.
   pointerEvents: "none",
