@@ -42,8 +42,19 @@ vi.mock("@calchemy/date-react", () => ({
       <input placeholder={placeholder} />
     ),
     Candidates: () => null,
-    Calendar: ({ children }: { children: React.ReactNode }) => (
-      <div data-testid="calchemy-calendar">{children}</div>
+    Calendar: ({
+      children,
+      period,
+    }: {
+      children: React.ReactNode;
+      period?: { months?: number };
+    }) => (
+      // The period is surfaced because it is not decoration: `period.count` is
+      // exactly what `CalchemyCalendarNavPrevious`/`Next` step by, so a demo
+      // showing one month and paging by three is a disagreement visible here.
+      <div data-testid="calchemy-calendar" data-months={period?.months}>
+        {children}
+      </div>
     ),
     CalendarPeriodList: ({ children }: { children: React.ReactNode }) => (
       <div>{children}</div>
@@ -63,6 +74,43 @@ afterEach(() => {
   // The engine is module-cached; drop it so each case exercises fresh init.
   __resetCalchemyDemoCache();
 });
+
+/**
+ * Mount the demo inside a frame of a stated width.
+ *
+ * The demo reads the width off the `.demo-frame` it is standing in, so the
+ * frame is real (jsdom lays nothing out, hence the stubbed rect) and a real
+ * ResizeObserver is stubbed to report once, as the browser's does on observe.
+ */
+function renderInFrameOfWidth(width: number) {
+  const realObserver = global.ResizeObserver;
+  global.ResizeObserver = class {
+    constructor(private cb: () => void) {}
+    observe() {
+      this.cb();
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+
+  const rect = vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockReturnValue({ width, height: 0, top: 0, left: 0, right: width, bottom: 0 } as DOMRect);
+
+  const result = render(
+    <DemoFrame logger>
+      <CalchemyDemo />
+    </DemoFrame>,
+  );
+
+  return {
+    ...result,
+    restore: () => {
+      rect.mockRestore();
+      global.ResizeObserver = realObserver;
+    },
+  };
+}
 
 describe("CalchemyDemo", () => {
   it("renders the field placeholder after Calchemy initializes", async () => {
@@ -188,5 +236,68 @@ describe("CalchemyDemo", () => {
     expect(screen.getByRole("log").textContent).not.toContain(
       "Could not parse input",
     );
+  });
+  // --- Layout tier ---------------------------------------------------------
+  //
+  // The demo shows as many months as the frame is wide enough for, and pages
+  // by exactly that many: `period.count` is what the nav buttons step. The two
+  // are one number, so getting the tier wrong is not a cosmetic mistake — it
+  // is a calendar that shows one month and jumps three when you press Next,
+  // which is what the published grid card did on a phone.
+  //
+  // The tier has to be settled on MOUNT. Waiting for a resize that never comes
+  // (a card's width does not change after it lands) leaves the demo on its
+  // initial guess, which is the widest tier.
+  it("opens on the compact tier inside a narrow frame", async () => {
+    mockUseCalchemyContext.mockReturnValue({
+      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
+      calchemy: { toJSON: (value: unknown) => value },
+    });
+
+    const { getByTestId, getByPlaceholderText, restore } =
+      renderInFrameOfWidth(350);
+
+    try {
+      await waitFor(() => {
+        expect(getByTestId("calchemy-calendar").dataset.months).toBe("1");
+      });
+      expect(getByPlaceholderText('Try "Mondays next month"')).toBeDefined();
+    } finally {
+      restore();
+    }
+  });
+
+  it("opens on the middle tier inside a medium frame", async () => {
+    mockUseCalchemyContext.mockReturnValue({
+      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
+      calchemy: { toJSON: (value: unknown) => value },
+    });
+
+    const { getByTestId, restore } = renderInFrameOfWidth(600);
+
+    try {
+      await waitFor(() => {
+        expect(getByTestId("calchemy-calendar").dataset.months).toBe("2");
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("opens on the wide tier inside a wide frame", async () => {
+    mockUseCalchemyContext.mockReturnValue({
+      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
+      calchemy: { toJSON: (value: unknown) => value },
+    });
+
+    const { getByTestId, restore } = renderInFrameOfWidth(900);
+
+    try {
+      await waitFor(() => {
+        expect(getByTestId("calchemy-calendar").dataset.months).toBe("3");
+      });
+    } finally {
+      restore();
+    }
   });
 });
