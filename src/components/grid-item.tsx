@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  useCallback,
   useLayoutEffect,
   useRef,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -10,6 +12,7 @@ import { css } from "../../styled-system/css";
 import { GridInsertRail } from "@/components/grid-insert-rail";
 import { GridItemToolbar } from "@/components/grid-item-toolbar";
 import { gridItemVars } from "@/utils/grid-item-vars";
+import { nearerInsertSide } from "@/utils/grid-insert-side";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
@@ -143,6 +146,45 @@ function useCardHeight(cell: RefObject<HTMLDivElement | null>) {
   }, [cell]);
 }
 
+/**
+ * Publish which of the cell's two gutters the cursor is nearest.
+ *
+ * Edit mode hangs an [+] in the gutter either side of every card, and only the
+ * one the cursor is on its way to is worth drawing — the far one is a second
+ * identical button sitting in the corner of the eye. The stylesheet hides it,
+ * off `data-near-side` here.
+ *
+ * Written straight to the DOM rather than held in state, and for the same
+ * reason the hover reveal is CSS: this fires on every pointer move over a grid
+ * that can hold dozens of cards, and a `setState` per move would re-render the
+ * cell — with the demo component inside it — the whole way across. The
+ * attribute only feeds a selector, so nothing React draws depends on it.
+ *
+ * Cleared when the pointer leaves, because a card with no cursor on it has no
+ * near side: keyboard focus reveals BOTH rails, which is the only way to reach
+ * the leading insertion point without a mouse.
+ */
+function useNearSide(editing: boolean) {
+  const track = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const cell = event.currentTarget;
+    const side = nearerInsertSide(
+      event.clientX,
+      cell.getBoundingClientRect(),
+    );
+    // Only on a change: the attribute is read by a selector, and rewriting the
+    // same value on every move is a style invalidation for nothing.
+    if (cell.dataset.nearSide !== side) cell.dataset.nearSide = side;
+  }, []);
+
+  const clear = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    delete event.currentTarget.dataset.nearSide;
+  }, []);
+
+  return editing
+    ? { onPointerMove: track, onPointerLeave: clear }
+    : undefined;
+}
+
 export function GridItem({
   aspect,
   span,
@@ -167,6 +209,7 @@ export function GridItem({
 }: GridItemProps) {
   const cellRef = useRef<HTMLDivElement>(null);
   useCardHeight(cellRef);
+  const nearSide = useNearSide(editing);
 
   return (
     <div
@@ -175,6 +218,7 @@ export function GridItem({
       data-grid-cell
       style={gridItemVars(aspect, span)}
       data-moved={moved ? "" : undefined}
+      {...nearSide}
     >
       {children}
       {editing && (
