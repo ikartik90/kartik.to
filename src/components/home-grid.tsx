@@ -40,13 +40,23 @@ const containerStyle = css({
   containerName: "projectsGrid",
 });
 
-// The cards fill their cell rather than sizing themselves: the cell owns the
-// shape (it carries the aspect the grid computed a row span from), so a card
-// that also sized itself could disagree with the space reserved for it.
+// The cards fill their cell, and may exceed it. The cell owns the shape — it
+// carries the aspect the grid reserved rows from — but as a FLOOR: a demo
+// frame stops shrinking with its width at its content's height plus its
+// padding, and a card at one or two columns is regularly past that point. So
+// the card grows and the cell measures it (`GridItem` publishes the result for
+// the row span), rather than the card being held at a height it cannot hold
+// its contents in.
+//
+// In flow rather than absolute, which is what makes that measurement possible:
+// an absolute card contributes nothing to its cell's height, so the cell could
+// only ever be the shape. `flexGrow` is what fills the cell in its place —
+// a percentage height would resolve against a `min-height` and give nothing.
 const fillStyle = css({
-  position: "absolute",
-  inset: 0,
-  "& > *": { height: "token(spacing.full)" },
+  display: "flex",
+  flexDirection: "column",
+  flexGrow: 1,
+  "& > *": { flexGrow: 1 },
 
   // While editing, the card is scenery. Clicking it would navigate away and
   // take the unsaved layout with it — and a published component is a LIVE demo,
