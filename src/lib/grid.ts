@@ -1,0 +1,174 @@
+import { prisma } from "@/lib/prisma";
+import { getDemoComponent } from "@/components/demo/registry";
+import { orderGridItems } from "@/utils/grid-order";
+import { mergePosts, parsePost } from "@/lib/posts";
+import { articles as staticArticles } from "@/data/articles";
+import { projects as staticProjects } from "@/data/projects";
+import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import type { Post } from "@/domain/post";
+
+// ---------------------------------------------------------------------------
+// The homepage feed: every published thing, in the order the grid renders it.
+//
+// Projects, articles and standalone components are ONE list here rather than
+// three sections, because the grid does not distinguish them — a card is a card,
+// and a pin at seat 3 has to mean seat 3 among all of them or it means nothing.
+// Keeping writing in a separate list below would have made "index 3" ambiguous
+// the moment an article wanted to sit between two projects.
+//
+// The kind survives as a discriminant because the three still RENDER
+// differently and offer different controls: only a component can be
+// unpublished from the grid, and only a post has somewhere to navigate to.
+// ---------------------------------------------------------------------------
+
+/**
+ * How a project's tile is shaped when the post has no opinion of its own.
+ *
+ * A default, not a rule: the grid's aspect picker writes `Post.aspect`, and a
+ * post that has been reshaped keeps its shape.
+ */
+const POST_ASPECT: DemoFrameAspectRatio = "16/9";
+/** A registered demo with no shape of its own — the showcase ratio. */
+const COMPONENT_FALLBACK_ASPECT: DemoFrameAspectRatio = "3/2";
+
+interface GridCardBase {
+  /** Stable across renders and unique across the two tables. */
+  key: string;
+  id: string;
+  gridIndex: number | null;
+  publishedAt: Date | null;
+  aspect: DemoFrameAspectRatio;
+  span: number;
+}
+
+export interface GridPostCard extends GridCardBase {
+  kind: "post";
+  title: string;
+  href: string;
+  /** Articles are filed by date; projects are not. */
+  date: string | null;
+}
+
+export interface GridComponentCard extends GridCardBase {
+  kind: "component";
+  /** The registry key — not unique, so one demo can appear more than once. */
+  componentId: string;
+  logger: boolean;
+}
+
+export type GridCard = GridPostCard | GridComponentCard;
+
+/** The listing's date format, matching what the writing list used to print. */
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function postToCard(post: Post): GridPostCard {
+  const isArticle = post.category === "ARTICLE";
+  return {
+    kind: "post",
+    key: `post:${post.id}`,
+    id: post.id,
+    // Nullable because a draft exists before it is called anything; what an
+    // unnamed record is CALLED is a fact about posts, not about tiles.
+    title: post.title ?? "Untitled",
+    href: `${isArticle ? "/writing" : "/work"}/${post.slug}`,
+    date: isArticle && post.publishedAt ? formatDate(post.publishedAt) : null,
+    gridIndex: post.gridIndex ?? null,
+    publishedAt: post.publishedAt ?? null,
+    // The post's own override, or the listing default. Same absent-means-
+    // default rule a component's `aspect` follows.
+    aspect: post.aspect ?? POST_ASPECT,
+    // Null is one column — see `GridSpanSchema`. A card that has never been
+    // widened has no width of its own, and the grid's default is the answer.
+    span: post.gridSpan ?? 1,
+  };
+}
+
+/**
+ * Run a query, and take the fallback if anything at all goes wrong.
+ *
+ * A `try` block rather than `.catch()` on the promise, which is the difference
+ * between working and not: a delegate for a table the generated client has not
+ * caught up with is `undefined`, so `prisma.component.findMany` throws a
+ * TypeError SYNCHRONOUSLY and there is no promise to reject. `.catch()` never
+ * runs and the whole page 500s over a table that simply is not there yet.
+ */
+async function safely<T>(run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Every card on the homepage, seated.
+ *
+ * Reads wide and fails narrow: a database that is unreachable, or one that has
+ * not had the grid columns pushed to it yet, must not take the page down — the
+ * static entries in `src/data` are a real part of the listing and can still be
+ * served. Each source is caught on its own so one failing does not silence the
+ * others.
+ */
+export async function getGridCards(): Promise<GridCard[]> {
+  const dbPosts = await safely(
+    async () =>
+      (
+        await prisma.post.findMany({
+          // WORK and ARTICLE only. A PAGE is not a card: the homepage is itself
+          // a published `PAGE` post now, and without this it lists itself — an
+          // "Untitled" tile linking to the page you are already on.
+          where: {
+            publishedAt: { not: null },
+            category: { in: ["WORK", "ARTICLE"] },
+          },
+          orderBy: { publishedAt: "desc" },
+        })
+      ).map(parsePost),
+    [] as Post[],
+  );
+
+  const components = await safely(
+    () =>
+      prisma.component.findMany({
+        where: { publishedAt: { not: null } },
+        orderBy: { publishedAt: "desc" },
+      }),
+    [],
+  );
+
+  const posts = mergePosts(dbPosts, [...staticProjects, ...staticArticles]);
+
+  const componentCards: GridComponentCard[] = components.flatMap((row) => {
+    // A publication whose demo has since left the registry renders nothing at
+    // all, so it is dropped rather than shown as a hole. The row survives, and
+    // reappears if the demo comes back.
+    const entry = getDemoComponent(row.componentId);
+    if (!entry) return [];
+    return [
+      {
+        kind: "component",
+        key: `component:${row.id}`,
+        id: row.id,
+        componentId: row.componentId,
+        // The row overrides the registry only where it actually said something;
+        // null means "whatever the registry says now", so a later correction
+        // there reaches every showing of the demo.
+        aspect: (row.aspect as DemoFrameAspectRatio | null) ??
+          entry.aspectRatio ??
+          COMPONENT_FALLBACK_ASPECT,
+        logger: row.logger ?? Boolean(entry.logger),
+        gridIndex: row.gridIndex,
+        publishedAt: row.publishedAt,
+        span: row.gridSpan ?? 1,
+      },
+    ];
+  });
+
+  return orderGridItems([...posts.map(postToCard), ...componentCards]);
+}

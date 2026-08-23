@@ -28,6 +28,12 @@ interface EditorStore {
   draftId: string | null;
   category: PostCategory;
   document: Document;
+  /**
+   * Whether the post being edited is live. The palette needs it to decide
+   * which of Publish / Unpublish it can honestly offer — a post that has never
+   * been published has nothing to withdraw.
+   */
+  isPublished: boolean;
   isDirty: boolean;
   /** Ordered list of snapshots from oldest to newest. */
   history: HistorySnapshot[];
@@ -38,6 +44,7 @@ interface EditorStore {
   setDocument: (document: Document) => void;
   setDraftId: (id: string) => void;
   setDirty: (dirty: boolean) => void;
+  setPublished: (published: boolean) => void;
   /**
    * Append a snapshot to the history stack. Any snapshots that were ahead of
    * the current index (the "redo stack") are trimmed first.
@@ -55,6 +62,7 @@ const INITIAL_STATE = {
   draftId: null as string | null,
   category: "ARTICLE" as PostCategory,
   document: EMPTY_DOCUMENT,
+  isPublished: false,
   isDirty: false,
   history: [] as HistorySnapshot[],
   historyIndex: -1,
@@ -67,6 +75,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setDocument: (document) => set({ document, isDirty: true }),
   setDraftId: (draftId) => set({ draftId }),
   setDirty: (isDirty) => set({ isDirty }),
+  setPublished: (isPublished) => set({ isPublished }),
 
   pushHistory: ({ title, document }) => {
     const { history, historyIndex } = get();

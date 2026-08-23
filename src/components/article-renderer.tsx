@@ -203,10 +203,28 @@ function renderInlineNodes(
 // Block node renderer
 // ---------------------------------------------------------------------------
 
+/**
+ * What to render in place of a furniture node.
+ *
+ * Furniture (`project_grid`, `social_links`) says WHERE something goes and
+ * nothing about what it is, so the thing itself is supplied by the page. The
+ * grid in particular is built from two database tables the renderer has no
+ * business reaching for — and on the homepage it also has to be handed its
+ * edit state, which only that route knows.
+ *
+ * A node with no slot renders nothing rather than an error: an article that
+ * somehow carries a `project_grid` is a document in the wrong place, and the
+ * reader should get the rest of it rather than a blank page.
+ */
+export type FurnitureSlots = Partial<
+  Record<"project_grid" | "social_links", React.ReactNode>
+>;
+
 function renderBlockNode(
   node: BlockNode,
   index: number,
   numberOf: Map<string, number>,
+  slots: FurnitureSlots = {},
 ): React.ReactNode {
   switch (node.type) {
     case "paragraph":
@@ -216,6 +234,10 @@ function renderBlockNode(
           tag="p"
           type="bodyLarge"
           data-indented={node.indent ? "" : undefined}
+          data-align={node.align}
+          // `balance` for a centred paragraph: ragged line lengths are barely
+          // visible ranged left and glaring once both edges move.
+          wrap={node.align === "center" ? "balance" : undefined}
         >
           {renderInlineNodes(node.children, numberOf)}
         </Typography>
@@ -326,6 +348,18 @@ function renderBlockNode(
           )}
         </figure>
       );
+
+    case "project_grid":
+    case "social_links":
+      // `data-furniture` opts the wrapper out of the `article > *` text-column
+      // clamp (globals.css). Furniture is not prose: the grid caps itself at
+      // its own three-column width and centres there, and being held to the
+      // 640px reading measure would silently make it a two-up.
+      return slots[node.type] ? (
+        <div key={index} data-furniture={node.type}>
+          {slots[node.type]}
+        </div>
+      ) : null;
 
     case "component":
       return (
@@ -439,9 +473,11 @@ function renderBulletList(
 
 interface ArticleRendererProps {
   content: Document;
+  /** Supplies the furniture nodes — see {@link FurnitureSlots}. */
+  slots?: FurnitureSlots;
 }
 
-export function ArticleRenderer({ content }: ArticleRendererProps) {
+export function ArticleRenderer({ content, slots }: ArticleRendererProps) {
   const nodes = content.content;
   const output: React.ReactNode[] = [];
   // Resolve ordinals/labels for the whole document so "continue numbering"
@@ -479,7 +515,7 @@ export function ArticleRenderer({ content }: ArticleRendererProps) {
       );
       i = j;
     } else {
-      output.push(renderBlockNode(node, i, numberOf));
+      output.push(renderBlockNode(node, i, numberOf, slots));
       i++;
     }
   }

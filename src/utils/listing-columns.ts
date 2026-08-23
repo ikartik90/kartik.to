@@ -17,3 +17,16 @@ export function listingColumnsFor(count: number): ListingColumns {
   if (count === 2 || count === 4) return 2;
   return 3;
 }
+
+/**
+ * The widest a single card may be told to span.
+ *
+ * The same three the function above tops out at, and stated here rather than in
+ * the validator that enforces it because the two facts are one fact: a card
+ * cannot be wider than the grid, and the grid's width is decided in this file.
+ * The CSS clamps a span down to however many columns are actually on screen
+ * (`min(var(--span), var(--columns))` in the `masonryGrid` recipe), so this is
+ * the ceiling on what is worth STORING — a stored 4 would render as 3 and read
+ * back as a width the grid never drew.
+ */
+export const MAX_GRID_SPAN: ListingColumns = 3;

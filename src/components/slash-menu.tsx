@@ -8,6 +8,7 @@ import ParagraphIcon from "@/assets/icons/paragraph.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import CollectionIcon from "@/assets/icons/collection.svg";
 import ComponentIcon from "@/assets/icons/component.svg";
+import LinkIcon from "@/assets/icons/link.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import CodeIcon from "@/assets/icons/code.svg";
 import BorderIcon from "@/assets/icons/border.svg";
@@ -35,7 +36,9 @@ export type SlashMenuBlockType =
   | "bullet_list_item"
   | "metric"
   | "code_block"
-  | "horizontal_rule";
+  | "horizontal_rule"
+  | "project_grid"
+  | "social_links";
 
 export interface SlashMenuEntry {
   type: SlashMenuBlockType;
@@ -74,6 +77,11 @@ const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "metric", label: "Metric", Icon: MetricIcon },
   { type: "code_block", label: "Code Block", Icon: CodeIcon },
   { type: "horizontal_rule", label: "Horizontal Rule", Icon: BorderIcon },
+  // Furniture. Offered everywhere the menu is, because `allowedTypes` is what
+  // decides where a block may go and the editor sets it per page — a second
+  // gate here would be a second place for the two to disagree.
+  { type: "project_grid", label: "Project Grid", Icon: ComponentIcon },
+  { type: "social_links", label: "Social Links", Icon: LinkIcon },
 ];
 
 /**

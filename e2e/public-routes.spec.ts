@@ -6,7 +6,7 @@ import {
 } from "./fixtures";
 
 test.describe("public routes", () => {
-  test("the home page renders both listing sections", async ({
+  test("the home page renders the listing grid", async ({
     page,
     pageFailures,
   }) => {
@@ -19,13 +19,15 @@ test.describe("public routes", () => {
     // also the assertion that would catch the alt going back to decorative
     // and taking the name off the page.
     await expect(page.getByAltText("Kartik Iyer")).toBeVisible();
-    // Neither listing draws a heading any more; each names its landmark
-    // instead, so the region's accessible name is what says it is there.
-    await expect(page.getByRole("region", { name: "Projects" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Writing" })).toBeVisible();
+    // ONE listing now, not two. Projects and articles share a single masonry
+    // grid because a pin names an absolute seat, and "seat 3" means nothing
+    // while there are two lists it might be seat 3 of. The grid draws no
+    // heading, so the region's accessible name is what says it is there.
+    await expect(page.getByRole("region", { name: "Work" })).toBeVisible();
 
-    // Listings merge database posts over the static fallbacks, so assert the
-    // sections are populated rather than pinning an exact count.
+    // The listing merges database posts over the static fallbacks, so assert
+    // it is populated rather than pinning an exact count — and assert BOTH
+    // kinds of card, which is what the merge into one grid has to preserve.
     await expect(
       page.locator(`a[href^="/work/"]`).first(),
     ).toBeVisible();
@@ -86,6 +88,7 @@ const DEV_ROUTES = [
   "combobox",
   "datepicker",
   "demo-logger",
+  "grid-controls",
   "menu",
   "notice",
   "option-list",

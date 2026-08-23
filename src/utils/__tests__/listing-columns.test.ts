@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { listingColumnsFor } from "@/utils/listing-columns";
+import { MAX_GRID_SPAN, listingColumnsFor } from "@/utils/listing-columns";
 
 describe("listingColumnsFor", () => {
   it("gives a lone card the whole grid", () => {
@@ -26,5 +26,16 @@ describe("listingColumnsFor", () => {
   it("never asks for fewer than one column, so an empty listing stays valid CSS", () => {
     expect(listingColumnsFor(0)).toBe(1);
     expect(listingColumnsFor(-1)).toBe(1);
+  });
+
+  // A card can be widened to span columns, and the widest it can usefully get
+  // is the widest the grid itself ever is. Asserted against the function rather
+  // than restated as a literal, so raising the ceiling in one place cannot
+  // leave the other behind.
+  it("caps a card's span at the widest the grid ever gets", () => {
+    const widest = Math.max(
+      ...Array.from({ length: 20 }, (_, n) => listingColumnsFor(n)),
+    );
+    expect(MAX_GRID_SPAN).toBe(widest);
   });
 });

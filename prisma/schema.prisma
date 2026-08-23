@@ -24,10 +24,92 @@ model Post {
   category       PostCategory @default(ARTICLE)
   content        Json
   coverImageKey  String?
+  // The shape this post's CARD is drawn at on the homepage, overriding the
+  // 16:9 every project and article defaults to. A property of the post rather
+  // than of the grid — which is why it is `aspect` and not `gridAspect`, and
+  // why it sits up here with the cover rather than down with `gridIndex`.
+  // Same column, same meaning, as `Component.aspect`; see there for why the
+  // ratio set is validated in Zod rather than declared as a database enum.
+  aspect         String?
   publishedAt    DateTime?
   untitledIndex  Int?
+  // Where this post sits on the homepage grid, if it has been pinned there.
+  // Null is the ordinary case: the card takes its place from `publishedAt`
+  // along with everything else. Nullable rather than defaulted to 0, because
+  // "position zero" and "no position" are different behaviours and a default
+  // would pin every existing row to the front of the grid at once.
+  //
+  // Same column, same rules, as `Component.gridIndex` — a project and a demo
+  // are pinned by one control and must not answer differently. See
+  // `GridIndexSchema` in `src/domain/component.ts` for why neither of them
+  // carries a unique constraint.
+  gridIndex      Int?
+  // How many of the grid's columns this post's card occupies. Null is one, the
+  // ordinary case — the same absent-means-default rule `Component.aspect` uses,
+  // and the reason it is nullable rather than `@default(1)`: every row that
+  // existed before cards could be widened has no opinion about its width, and a
+  // default would record one on all of their behalf. Bounded above by
+  // `GridSpanSchema`, not by the column, since the ceiling is however many
+  // columns the grid is currently drawing.
+  gridSpan       Int?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+// A demo's PUBLICATION on the homepage grid — which is a different fact from
+// the demo existing.
+//
+// `src/components/demo/registry.ts` is the catalogue: it lists every demo this
+// codebase has, so an article can embed one. It is emphatically NOT the
+// published set, and the three shift-scheduling demos are why. They exist to be
+// embedded in an article about shift scheduling; if the registry doubled as the
+// homepage's source, all three of them would appear on it the moment the grid
+// shipped, and the only way to keep them off would be a hardcoded exclusion
+// list that every future article-only demo would have to remember to join. A
+// demo appears on the homepage once, and only once, somebody writes a row here.
+model Component {
+  id          String    @id @default(cuid())
+  // The registry key this row publishes. NOT unique, and that is deliberate.
+  //
+  // A unique constraint here looks like the obvious safety rail and enforces
+  // the wrong thing: "which demo" is not the identity of a publication. The
+  // same demo is legitimately published more than once — a decorative component
+  // that belongs in two places on the grid, or one demo shown twice at
+  // different aspects because the wide slot and the tall slot want different
+  // shapes of it. Under a unique index the second of those is not a slower
+  // path, it is impossible, and the author's only recourse would be a duplicate
+  // registry entry, which also puts the copy in the article insert overlay
+  // where nobody asked for it. The row's identity is `id`; this is a foreign
+  // key in spirit (there is no table to point at — the registry is code) and is
+  // as repeatable as any other foreign key.
+  componentId String
+  // OVERRIDES, not copies — which is exactly why they are nullable.
+  //
+  // Null means "whatever the registry entry says", the same absent-means-
+  // default convention `padding` and `borderRadius` use on a media node in
+  // `src/domain/nodes.ts`. It is NOT the same as storing the registry's value:
+  // a row that copied `aspectRatio: "3/2"` out of the registry at publish time
+  // would go stale and then silently win the next time that entry's shape was
+  // corrected in code, so the fix would never reach the grid. Null is the
+  // honest record of "this publication has no opinion", and a publication with
+  // no opinion must keep tracking the entry it publishes.
+  //
+  // `aspect` is a String rather than a Prisma enum on purpose. The ratio set
+  // belongs to the frame (`ASPECT_RATIOS` in `src/utils/demo-frame-sizing.ts`),
+  // which is the single source of truth the Zod layer derives its validator
+  // from; a database enum would be a second copy of that list, and adding a
+  // twelfth ratio would turn a one-line code change into a schema migration.
+  // Nothing writes this column except through `ComponentSchema`.
+  aspect      String?
+  logger      Boolean?
+  // See `Post.gridIndex` / `Post.gridSpan` — identical fields, identical
+  // meanings. A project and a demo are placed and sized by one control and must
+  // not answer differently.
+  gridIndex   Int?
+  gridSpan    Int?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model UserProfile {

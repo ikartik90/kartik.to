@@ -37,6 +37,13 @@ vi.mock("@/utils/open-in-new-tab", () => ({
   openInNewTab: (url: string) => mockOpenInNewTab(url),
 }));
 
+vi.mock("@/app/actions/grid", () => ({
+  publishComponent: vi.fn().mockResolvedValue("component-id"),
+  setPinned: vi.fn(),
+  moveGridItem: vi.fn(),
+  unpublishComponent: vi.fn(),
+}));
+
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn().mockResolvedValue({
@@ -219,13 +226,40 @@ describe("useCommandPalette", () => {
       expect(mockPush).toHaveBeenCalledWith("/edit/my-project?category=WORK");
     });
 
+    // The homepage is edited the way everything else is — by going to its edit
+    // route — not by flipping a mode in place. It must NOT fall through to the
+    // contentEditable branch, which would make the cards' text directly
+    // editable.
+    it("opens the grid's edit route from the homepage", () => {
+      mockPathname.mockReturnValue("/");
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      act(() => result.current.handleEditPage());
+      expect(mockPush).toHaveBeenCalledWith("/edit/home");
+      expect(main.contentEditable).not.toBe("true");
+    });
+
+    it("returns to the homepage on discarding the grid's layout", () => {
+      mockPathname.mockReturnValue("/edit/home");
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      act(() => result.current.handleDiscardHome());
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+
     it("sets contentEditable on <main>", () => {
+      // A page that is neither the grid nor a post: the homepage now has real
+      // editing of its own and never reaches this branch.
+      mockPathname.mockReturnValue("/about");
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleEditPage());
       expect(main.contentEditable).toBe("true");
     });
 
     it("falls back to document.body when no <main> exists", () => {
+      // A page that is neither the grid nor a post: the homepage now has real
+      // editing of its own and never reaches this branch.
+      mockPathname.mockReturnValue("/about");
       main.parentNode?.removeChild(main);
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleEditPage());
@@ -234,6 +268,9 @@ describe("useCommandPalette", () => {
     });
 
     it("places the caret at position 0 of the first text node", () => {
+      // A page that is neither the grid nor a post: the homepage now has real
+      // editing of its own and never reaches this branch.
+      mockPathname.mockReturnValue("/about");
       const addRange = vi.fn<(range: Range) => void>();
       vi.spyOn(window, "getSelection").mockReturnValue({
         removeAllRanges: vi.fn<() => void>(),

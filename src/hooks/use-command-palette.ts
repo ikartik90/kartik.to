@@ -5,10 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
 import { useThemeStore } from "@/store/theme";
 import { useEditorStore } from "@/store/editor";
+import { publishComponent, saveGridLayout } from "@/app/actions/grid";
+import { useGridDraftStore } from "@/store/grid-draft";
 import {
   createDraft,
   saveDraft,
   publishPost,
+  unpublishPost,
   deleteDraft,
   getDrafts,
 } from "@/app/actions/post";
@@ -26,6 +29,18 @@ export interface CommandPaletteHandlers {
   isAdmin: boolean;
   isDark: boolean;
   isEditMode: boolean;
+  /** The grid's edit route, which needs its own palette group. */
+  isHomeEditMode: boolean;
+  /** Write the edited page and its layout, then return to `/`. */
+  handlePublishHome: () => Promise<void>;
+  /** Abandon both drafts and return to `/`. */
+  handleDiscardHome: () => void;
+  /** Publish a registered demo to the grid, unpinned. */
+  handlePublishComponent: (componentId: string) => Promise<void>;
+  /** Clear `publishedAt` on the post being edited, leaving it as a draft. */
+  handleUnpublish: () => Promise<void>;
+  /** Whether the post being edited is live — gates Unpublish. */
+  isPublished: boolean;
   editCategory: Post["category"];
   drafts: Post[];
   /** The draft currently being viewed in renderer mode, or null. */
@@ -77,7 +92,16 @@ export function useCommandPalette(
   const isEditMode =
     pathname === "/edit/new" || /^\/edit\/[^/]+$/.test(pathname);
 
+  // The grid only exists on the homepage, so its controls are only offered
+  // there. Every other page would be advertising a mode it cannot enter.
+  const isHome = pathname === "/";
+  // `/edit/home` matches the generic edit-mode test above, but it is editing a
+  // GRID, not a document — no title, no draft, nothing buffered to save — so it
+  // needs its own branch or it would be offered an article's exits.
+  const isHomeEditMode = pathname === "/edit/home";
+
   const editCategory = useEditorStore((state) => state.category);
+  const isPublished = useEditorStore((state) => state.isPublished);
 
   const { mode, setMode } = useThemeStore();
 
@@ -141,6 +165,13 @@ export function useCommandPalette(
   };
 
   const handleEditPage = () => {
+    // The homepage IS the grid, and it is edited the way everything else is:
+    // by going to its edit route.
+    if (isHome) {
+      close();
+      router.push("/edit/home");
+      return;
+    }
     const articleSlug = pathname.match(/^\/writing\/([^/]+)$/)?.[1];
     const workSlug = pathname.match(/^\/work\/([^/]+)$/)?.[1];
     close();
@@ -288,10 +319,95 @@ export function useCommandPalette(
     }
   };
 
+  /**
+   * Retire the post being edited. Distinct from discarding it: this leaves the
+   * writing intact and merely stops serving it, which is why it is offered
+   * beside Publish rather than beside the delete.
+   */
+  const handleUnpublish = async () => {
+    const id = useEditorStore.getState().draftId;
+    if (!id) return;
+    try {
+      await unpublishPost(id);
+      syncOtherTabs();
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to unpublish:", err);
+    }
+    close();
+  };
+
+  /**
+   * Publish a registered demo as a project of its own.
+   *
+   * Unpinned, unlike the grid's own [+], which places one at a seat you picked.
+   * Arriving from the palette there is no seat in mind, so it takes whatever
+   * chronology gives it.
+   */
+  /**
+   * Commit the homepage and leave.
+   *
+   * TWO drafts, one press. The page is a document with a grid in it, and the
+   * two are edited together but stored apart — the prose in the post's
+   * `content`, the placements across the post and component tables. Saving
+   * only one would publish half of what is on screen.
+   *
+   * Named for publishing rather than saving because the homepage is already
+   * live: there is no draft state in between, so committing it IS publishing.
+   */
+  const handlePublishHome = async () => {
+    const { draftId, title, document, category } = useEditorStore.getState();
+    const { pins, spans, aspects, inserts, removals } =
+      useGridDraftStore.getState();
+    try {
+      if (draftId) {
+        await saveDraft({ id: draftId, title: title || undefined, document });
+      }
+      await saveGridLayout({ pins, spans, aspects, inserts, removals });
+      useGridDraftStore.getState().reset();
+      clearAutosave(autosaveKey(draftId, category));
+      syncOtherTabs();
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to publish the homepage:", err);
+    }
+    close();
+  };
+
+  /**
+   * Throw both drafts away and leave. Nothing was written by either — the
+   * toolbar edits a layout draft rather than the database precisely so that
+   * this can be a no-op.
+   */
+  const handleDiscardHome = () => {
+    const { draftId, category } = useEditorStore.getState();
+    useGridDraftStore.getState().reset();
+    clearAutosave(autosaveKey(draftId, category));
+    useEditorStore.getState().reset();
+    close();
+    router.push("/");
+  };
+
+  const handlePublishComponent = async (componentId: string) => {
+    try {
+      await publishComponent({ componentId });
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to publish component:", err);
+    }
+  };
+
   return {
     isAdmin,
     isDark,
     isEditMode,
+    isHomeEditMode,
+    handlePublishHome,
+    handleDiscardHome,
+    handlePublishComponent,
+    handleUnpublish,
+    isPublished,
     editCategory,
     drafts,
     currentDraft,

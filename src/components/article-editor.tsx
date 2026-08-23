@@ -59,6 +59,7 @@ import {
 import { DemoFrame } from "@/components/demo-frame";
 import { DemoComponent } from "@/components/demo-component";
 import { getDemoComponent } from "@/components/demo/registry";
+import type { FurnitureSlots } from "@/components/article-renderer";
 import {
   ImageInsertDialog,
   type ImageDialogMode,
@@ -333,7 +334,8 @@ export function renumberSidenoteSups(el: HTMLElement, base = 0): void {
     if (!id) return;
     if (!numberById.has(id)) numberById.set(id, ++n);
     const sup = wrapper.querySelector<HTMLElement>(".article-sidenote-ref");
-    if (sup) sup.setAttribute("data-sidenote-number", String(numberById.get(id)));
+    if (sup)
+      sup.setAttribute("data-sidenote-number", String(numberById.get(id)));
   });
 }
 
@@ -860,7 +862,10 @@ export function findLinkRangeAt(
   // Precompute each node's [start, end) bounds and link href (if any).
   const spans = nodes.map((node) => {
     const link = (node.marks ?? []).find((m) => m.type === "link");
-    return { len: node.text.length, href: link?.type === "link" ? link.href : null };
+    return {
+      len: node.text.length,
+      href: link?.type === "link" ? link.href : null,
+    };
   });
   let pos = 0;
   const bounds = spans.map((s) => {
@@ -881,7 +886,11 @@ export function findLinkRangeAt(
   for (let i = hitIndex - 1; i >= 0 && bounds[i].href === href; i--) {
     start = bounds[i].start;
   }
-  for (let i = hitIndex + 1; i < bounds.length && bounds[i].href === href; i++) {
+  for (
+    let i = hitIndex + 1;
+    i < bounds.length && bounds[i].href === href;
+    i++
+  ) {
     end = bounds[i].end;
   }
   return { start, end, href };
@@ -898,7 +907,10 @@ export function findSidenoteRangeAt(
 ): { start: number; end: number; id: string } | null {
   const spans = nodes.map((node) => {
     const mark = (node.marks ?? []).find((m) => m.type === "sidenote");
-    return { len: node.text.length, id: mark?.type === "sidenote" ? mark.id : null };
+    return {
+      len: node.text.length,
+      id: mark?.type === "sidenote" ? mark.id : null,
+    };
   });
   let pos = 0;
   const bounds = spans.map((s) => {
@@ -955,6 +967,8 @@ function isBlockEmpty(block: BlockNode): boolean {
   if (block.type === "media") return false;
   if (block.type === "collection") return false;
   if (block.type === "component") return false;
+  if (block.type === "project_grid") return false;
+  if (block.type === "social_links") return false;
   if (block.type === "code_block") {
     return block.children.every((c) => !c.text.trim());
   }
@@ -1013,19 +1027,18 @@ const editorCodeLanguageSelectStyle = css({
   },
 });
 
-const CODE_LANGUAGE_OPTIONS: Array<{ value: CodeLanguage | ""; label: string }> =
-  [
-    { value: "", label: "Plain text" },
-    ...CodeLanguageSchema.options.map((language) => ({
-      value: language,
-      label: CODE_LANGUAGE_LABELS[language],
-    })),
-  ];
+const CODE_LANGUAGE_OPTIONS: Array<{
+  value: CodeLanguage | "";
+  label: string;
+}> = [
+  { value: "", label: "Plain text" },
+  ...CodeLanguageSchema.options.map((language) => ({
+    value: language,
+    label: CODE_LANGUAGE_LABELS[language],
+  })),
+];
 
-const editorHrStyle = cx(
-  horizontalRule(),
-  css({ marginBlock: "0" }),
-);
+const editorHrStyle = cx(horizontalRule(), css({ marginBlock: "0" }));
 
 const editorShowcaseStyle = articleShowcase();
 
@@ -1062,10 +1075,7 @@ const editorDemoPreviewStyle = css({
   userSelect: "none",
 });
 
-const editorImgStyle = cx(
-  articleImg(),
-  editorShowcaseMediaStyle,
-);
+const editorImgStyle = cx(articleImg(), editorShowcaseMediaStyle);
 
 const editorImagePlaceholderStyle = cx(
   editorShowcaseMediaStyle,
@@ -1197,13 +1207,31 @@ const editorMetricLabelStyle = cx(
 );
 
 // Wrapper for <hr> so it can receive keyboard focus (void elements can't).
+// A furniture block's shell: focusable so it can be selected and deleted like
+// any other non-text block, with a focus ring that reads as "this block is
+// selected" rather than as a form field.
+const editorFurnitureWrapperStyle = css({
+  position: "relative",
+  outline: "none",
+  borderRadius: "lg",
+  _focusVisible: {
+    outlineWidth: "token(spacing.xs)",
+    outlineStyle: "solid",
+    outlineColor: "field.border.active",
+    outlineOffset: "token(spacing.sm)",
+  },
+});
+
 const editorHrWrapperStyle = css({
   focusVisibleRing: "none",
   cursor: "default",
 });
 
 // List item content — contentEditable mechanics + shared prose recipe.
-const editorListItemContentStyle = cx(editableBaseStyle, articleListItemContent());
+const editorListItemContentStyle = cx(
+  editableBaseStyle,
+  articleListItemContent(),
+);
 // Every marker is a real button in the editor so it can open its popover —
 // reset the native chrome and re-enable pointer events (the read-only recipes
 // disable them). The button is always the 24px alignment BOX; the gradient ink
@@ -1243,6 +1271,12 @@ function isListItemType(type: BlockNode["type"]): type is ListItemType {
 
 interface EditableBlockProps {
   block: BlockNode;
+  /**
+   * What to draw for a furniture block. The editor cannot build these itself —
+   * the grid is assembled from two database tables — so the page supplies them,
+   * exactly as it does for the reader.
+   */
+  slots?: FurnitureSlots;
   blockIndex: number;
   /** Count of distinct sidenotes before this block — offsets the block's own
    *  note ordinals to their global values (see inlineNodesToHtml / sidenoteBases). */
@@ -1319,6 +1353,7 @@ interface EditableBlockProps {
 
 function EditableBlock({
   block,
+  slots,
   blockIndex,
   sidenoteBase,
   isFirst,
@@ -1436,7 +1471,14 @@ function EditableBlock({
           break;
       }
     },
-    [onArrowUp, onArrowDown, onArrowLeft, onArrowRight, onDelete, onInsertParagraphBefore],
+    [
+      onArrowUp,
+      onArrowDown,
+      onArrowLeft,
+      onArrowRight,
+      onDelete,
+      onInsertParagraphBefore,
+    ],
   );
 
   const focusCaption = useCallback((position: "start" | "end") => {
@@ -1573,7 +1615,9 @@ function EditableBlock({
       block.type === "horizontal_rule" ||
       block.type === "media" ||
       block.type === "collection" ||
-      block.type === "component"
+      block.type === "component" ||
+      block.type === "project_grid" ||
+      block.type === "social_links"
     )
       return;
     const el = contentRef.current;
@@ -1840,7 +1884,10 @@ function EditableBlock({
         e.preventDefault();
         // Empty item → exit the list, converting to a paragraph.
         if (isBlockEmpty(block)) {
-          onChange({ type: "paragraph", children: [{ type: "text", text: "" }] });
+          onChange({
+            type: "paragraph",
+            children: [{ type: "text", text: "" }],
+          });
           onConvertedToParagraph?.();
           return;
         }
@@ -1948,7 +1995,11 @@ function EditableBlock({
       ) {
         e.preventDefault();
         if (onToggleMark && block.type !== "code_block") {
-          const markForKey = { b: "bold", i: "italic", u: "underline" } as const;
+          const markForKey = {
+            b: "bold",
+            i: "italic",
+            u: "underline",
+          } as const;
           onToggleMark(markForKey[e.key as "b" | "i" | "u"]);
         }
         return;
@@ -2236,7 +2287,11 @@ function EditableBlock({
         focusContentStart();
         return;
       }
-      if (e.key === "ArrowUp" && !e.shiftKey && isCaretAtStart(e.currentTarget)) {
+      if (
+        e.key === "ArrowUp" &&
+        !e.shiftKey &&
+        isCaretAtStart(e.currentTarget)
+      ) {
         e.preventDefault();
         onArrowUp?.();
         return;
@@ -2338,6 +2393,27 @@ function EditableBlock({
   // Horizontal rule (non-editable)
   // ---------------------------------------------------------------------------
 
+  // Furniture — the grid and the icon row. Focusable and deletable like any
+  // other non-text block, but with nothing inside to edit: what they render is
+  // owned elsewhere and the document only says where it goes. The grid brings
+  // its own controls when the page passes it an editable one.
+  if (block.type === "project_grid" || block.type === "social_links") {
+    return (
+      <div
+        tabIndex={0}
+        ref={combinedRef as React.RefCallback<HTMLDivElement>}
+        className={editorFurnitureWrapperStyle}
+        data-block-index={blockIndex}
+        data-furniture={block.type}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        onKeyDown={handleNonTextKeyDown}
+      >
+        {slots?.[block.type] ?? null}
+      </div>
+    );
+  }
+
   if (block.type === "horizontal_rule") {
     return (
       <div
@@ -2383,7 +2459,10 @@ function EditableBlock({
   if (block.type === "code_block") {
     return (
       <div className={cx(editorCodeBlockWrapperStyle, "code-block-wrapper")}>
-        <label className={css({ srOnly: true })} htmlFor={`code-language-${blockIndex}`}>
+        <label
+          className={css({ srOnly: true })}
+          htmlFor={`code-language-${blockIndex}`}
+        >
           Code language
         </label>
         <select
@@ -2395,9 +2474,7 @@ function EditableBlock({
             onChange({
               ...block,
               language:
-                value === ""
-                  ? undefined
-                  : CodeLanguageSchema.parse(value),
+                value === "" ? undefined : CodeLanguageSchema.parse(value),
             });
           }}
           onMouseDown={(e) => e.stopPropagation()}
@@ -2657,7 +2734,10 @@ function EditableBlock({
           // Per-item captions are ordinary edits, so they ride `onChange`'s
           // history debounce like every other caption in the editor.
           onEditCaption={(i, caption) =>
-            onChange({ ...block, items: setItemCaption(block.items, i, caption) })
+            onChange({
+              ...block,
+              items: setItemCaption(block.items, i, caption),
+            })
           }
           // Rides `onChange`'s history debounce like the captions do — a slider
           // drag emits a value per frame, and one undo step per frame would
@@ -2876,10 +2956,23 @@ function EditableBlock({
   // Paragraph (default)
   // ---------------------------------------------------------------------------
 
+  const align = (block as { align?: "center" }).align;
+
   return (
     <p
       ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
-      className={cx(editableBaseStyle, typographyStyles({ type: "bodyLarge" }))}
+      className={cx(
+        editableBaseStyle,
+        // `wrap` has to come through the recipe, not the `data-align` rule in
+        // globals.css: the base `text-wrap: pretty` is an atomic utility, and a
+        // rule in the base layer loses to it. As a variant the two are merged
+        // into one class before anything is emitted. Same reasoning the reader
+        // follows — see the note on the `wrap` variant in `typography.tsx`.
+        typographyStyles({
+          type: "bodyLarge",
+          wrap: align === "center" ? "balance" : undefined,
+        }),
+      )}
       contentEditable
       suppressContentEditableWarning
       onKeyDown={handleKeyDown}
@@ -2889,9 +2982,8 @@ function EditableBlock({
       data-placeholder={placeholder}
       data-block-index={blockIndex}
       data-empty={isBlockEmpty(block) ? "" : undefined}
-      data-indented={
-        (block as { indent?: boolean }).indent ? "" : undefined
-      }
+      data-indented={(block as { indent?: boolean }).indent ? "" : undefined}
+      data-align={align}
       {...slashAnchorProps}
     />
   );
@@ -2959,9 +3051,39 @@ function hasSyntheticTrailingParagraph(
 // ArticleEditor
 // ---------------------------------------------------------------------------
 
+/**
+ * Everything except the furniture blocks — what the slash menu offers on a page
+ * that supplies no slots. Listed rather than filtered so that adding a block
+ * type is a compile error here if it needs a decision, not a silent omission.
+ */
+const NON_FURNITURE_TYPES: SlashMenuBlockType[] = [
+  "heading",
+  "paragraph",
+  "media",
+  "collection",
+  "component",
+  "blockquote",
+  "list_item",
+  "bullet_list_item",
+  "metric",
+  "code_block",
+  "horizontal_rule",
+];
+
 interface ArticleEditorProps {
   initialPost?: Post;
   category?: PostCategory;
+  /** Renders the furniture blocks — see {@link FurnitureSlots}. */
+  slots?: FurnitureSlots;
+  /**
+   * Whether the page has a title to edit.
+   *
+   * False for the homepage, which has none and never will: it is reached at
+   * `/`, nothing links to it by name, and an empty "Title" placeholder sitting
+   * above the intro is an invitation to fill in a field that would then have
+   * nowhere to appear.
+   */
+  showTitle?: boolean;
 }
 
 /** Viewport-relative rect used to anchor the floating selection toolbar. */
@@ -2999,7 +3121,12 @@ const TOOLBAR_MARK_TYPES: Mark["type"][] = [
   "sidenote",
 ];
 
-export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
+export function ArticleEditor({
+  initialPost,
+  category,
+  slots,
+  showTitle = true,
+}: ArticleEditorProps) {
   const {
     title,
     setTitle,
@@ -3026,6 +3153,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         title: restored.title,
         draftId: restored.draftId,
         category: restored.category,
+        isPublished: initialPost?.publishedAt != null,
         document: {
           ...restored.document,
           content: withTrailingParagraph(restored.document.content),
@@ -3039,6 +3167,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         title: initialPost.title ?? "",
         draftId: initialPost.id,
         category: initialPost.category,
+        isPublished: initialPost.publishedAt !== null,
         document: {
           ...initialPost.content,
           content: withTrailingParagraph(initialPost.content.content),
@@ -3482,7 +3611,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
   function focusBlockAtStart(el: HTMLElement) {
     if (isShowcaseFigure(el)) {
-      const host = el.querySelector("[data-showcase-media]") as HTMLElement | null;
+      const host = el.querySelector(
+        "[data-showcase-media]",
+      ) as HTMLElement | null;
       host?.focus();
       return;
     }
@@ -3699,11 +3830,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
             continued: source.continued,
           }
         : emptyListItemInheriting(source);
-    updateBlocks([
-      ...blocks.slice(0, index),
-      newItem,
-      ...blocks.slice(index),
-    ]);
+    updateBlocks([...blocks.slice(0, index), newItem, ...blocks.slice(index)]);
     cancelHistoryDebounce();
     pushHistoryNow();
 
@@ -3808,7 +3935,8 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     let start = index;
     while (start > 0 && blocks[start - 1].type === "bullet_list_item") start--;
     let end = index;
-    while (end < blocks.length && blocks[end].type === "bullet_list_item") end++;
+    while (end < blocks.length && blocks[end].type === "bullet_list_item")
+      end++;
     return { start, end };
   }
 
@@ -4146,7 +4274,13 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     blockType: SlashMenuBlockType,
     base = 0,
   ) {
-    if (blockType === "horizontal_rule") return;
+    // Blocks with no text of their own — there is no DOM here to write into.
+    if (
+      blockType === "horizontal_rule" ||
+      blockType === "project_grid" ||
+      blockType === "social_links"
+    )
+      return;
     if (blockType === "code_block") {
       el.innerHTML = children.map((n) => n.text).join("");
       return;
@@ -4195,10 +4329,7 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       : COLLECTION_MAX_ITEMS;
   }
 
-  function updateCollection(
-    blockIndex: number,
-    items: CollectionItem[],
-  ) {
+  function updateCollection(blockIndex: number, items: CollectionItem[]) {
     const block = blocks[blockIndex];
     if (block?.type !== "collection") return;
     const next = [...blocks];
@@ -4339,6 +4470,10 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
         type: "code_block",
         children: [{ type: "text", text: plainText }],
       };
+    } else if (type === "project_grid" || type === "social_links") {
+      // Furniture carries no fields, so the type IS the block. Any text on the
+      // trigger line is dropped, exactly as it is for a horizontal rule.
+      newBlock = { type };
     } else {
       newBlock = { type: "horizontal_rule" };
     }
@@ -4458,7 +4593,8 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     r: { left: number; top: number; width: number; height: number },
     within: Node | null,
   ): ToolbarRect {
-    const el = within?.nodeType === 1 ? (within as Element) : within?.parentElement;
+    const el =
+      within?.nodeType === 1 ? (within as Element) : within?.parentElement;
     const article = el?.closest("article") ?? null;
     const base =
       article && typeof article.getBoundingClientRect === "function"
@@ -4671,10 +4807,14 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     if (range.start === range.end) return;
     const nodes = domToInlineNodes(el);
     const has = rangeHasMark(nodes, range.start, range.end, type);
-    const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
-      has
-        ? marks.filter((m) => m.type !== type)
-        : [...marks.filter((m) => m.type !== type), { type } as Mark],
+    const next = transformMarksInRange(
+      nodes,
+      range.start,
+      range.end,
+      (marks) =>
+        has
+          ? marks.filter((m) => m.type !== type)
+          : [...marks.filter((m) => m.type !== type), { type } as Mark],
     );
     el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
@@ -4730,10 +4870,15 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     }
     const normalized = normalizeLinkHref(href);
     const nodes = domToInlineNodes(el);
-    const next = transformMarksInRange(nodes, range.start, range.end, (marks) => [
-      ...marks.filter((m) => m.type !== "link"),
-      { type: "link", href: normalized } as Mark,
-    ]);
+    const next = transformMarksInRange(
+      nodes,
+      range.start,
+      range.end,
+      (marks) => [
+        ...marks.filter((m) => m.type !== "link"),
+        { type: "link", href: normalized } as Mark,
+      ],
+    );
     el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
     // Collapse into the link so the link-view popover surfaces next.
@@ -4778,13 +4923,17 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
     const nodes = domToInlineNodes(el);
     const has = rangeHasMark(nodes, range.start, range.end, "sidenote");
     const id = has ? null : makeSidenoteId();
-    const next = transformMarksInRange(nodes, range.start, range.end, (marks) =>
-      has
-        ? marks.filter((m) => m.type !== "sidenote")
-        : [
-            ...marks.filter((m) => m.type !== "sidenote"),
-            { type: "sidenote", id: id as string, text: "" } as Mark,
-          ],
+    const next = transformMarksInRange(
+      nodes,
+      range.start,
+      range.end,
+      (marks) =>
+        has
+          ? marks.filter((m) => m.type !== "sidenote")
+          : [
+              ...marks.filter((m) => m.type !== "sidenote"),
+              { type: "sidenote", id: id as string, text: "" } as Mark,
+            ],
     );
     el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
@@ -5112,76 +5261,79 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
 
   return (
     <>
-      <h1
-        ref={titleRef}
-        id="article-title"
-        aria-label="Title"
-        contentEditable
-        suppressContentEditableWarning
-        data-placeholder="Title"
-        className={cx(editableBaseStyle, typographyStyles({ type: "title" }))}
-        onInput={(e) => {
-          setTitle(e.currentTarget.innerText);
-          pushHistoryDebounced();
-        }}
-        onPaste={(e) => {
-          e.preventDefault();
-          const text = e.clipboardData.getData("text/plain");
-          if (text) document.execCommand("insertText", false, text);
-        }}
-        onKeyDown={(e) => {
-          // Tab has no navigation role in the editor — swallow it so the caret
-          // never jumps from the title into the body.
-          if (e.key === "Tab") {
+      {showTitle && (
+        <h1
+          ref={titleRef}
+          id="article-title"
+          aria-label="Title"
+          contentEditable
+          suppressContentEditableWarning
+          data-placeholder="Title"
+          className={cx(editableBaseStyle, typographyStyles({ type: "title" }))}
+          onInput={(e) => {
+            setTitle(e.currentTarget.innerText);
+            pushHistoryDebounced();
+          }}
+          onPaste={(e) => {
             e.preventDefault();
-            return;
-          }
-          if (e.key === "Enter") {
-            e.preventDefault();
-            const el = blockRefs.current[0];
-            if (el) focusBlockAtStart(el);
-          }
-          if (
-            e.key === "ArrowDown" &&
-            !e.shiftKey &&
-            isCaretAtLastLine(e.currentTarget)
-          ) {
-            e.preventDefault();
-            const el = blockRefs.current[0];
-            if (el) focusBlockAtStart(el);
-          }
-          if (
-            e.key === "ArrowDown" &&
-            e.shiftKey &&
-            isFocusAtLastLine(e.currentTarget)
-          ) {
-            e.preventDefault();
-            const sel = window.getSelection();
-            if (!sel?.anchorNode) return;
-            const { anchorNode, anchorOffset } = sel;
-            const nextEl = blockRefs.current[0];
-            if (nextEl) {
-              const focus = firstTextNode(nextEl) ?? nextEl;
-              nextEl.focus();
-              sel.setBaseAndExtent(anchorNode, anchorOffset, focus, 0);
+            const text = e.clipboardData.getData("text/plain");
+            if (text) document.execCommand("insertText", false, text);
+          }}
+          onKeyDown={(e) => {
+            // Tab has no navigation role in the editor — swallow it so the caret
+            // never jumps from the title into the body.
+            if (e.key === "Tab") {
+              e.preventDefault();
+              return;
             }
-          }
-          if (
-            e.key === "ArrowRight" &&
-            !e.shiftKey &&
-            isCaretAtEnd(e.currentTarget)
-          ) {
-            e.preventDefault();
-            const el = blockRefs.current[0];
-            if (el) focusBlockAtStart(el);
-          }
-        }}
-      />
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const el = blockRefs.current[0];
+              if (el) focusBlockAtStart(el);
+            }
+            if (
+              e.key === "ArrowDown" &&
+              !e.shiftKey &&
+              isCaretAtLastLine(e.currentTarget)
+            ) {
+              e.preventDefault();
+              const el = blockRefs.current[0];
+              if (el) focusBlockAtStart(el);
+            }
+            if (
+              e.key === "ArrowDown" &&
+              e.shiftKey &&
+              isFocusAtLastLine(e.currentTarget)
+            ) {
+              e.preventDefault();
+              const sel = window.getSelection();
+              if (!sel?.anchorNode) return;
+              const { anchorNode, anchorOffset } = sel;
+              const nextEl = blockRefs.current[0];
+              if (nextEl) {
+                const focus = firstTextNode(nextEl) ?? nextEl;
+                nextEl.focus();
+                sel.setBaseAndExtent(anchorNode, anchorOffset, focus, 0);
+              }
+            }
+            if (
+              e.key === "ArrowRight" &&
+              !e.shiftKey &&
+              isCaretAtEnd(e.currentTarget)
+            ) {
+              e.preventDefault();
+              const el = blockRefs.current[0];
+              if (el) focusBlockAtStart(el);
+            }
+          }}
+        />
+      )}
 
       {blocks.map((block, i) => (
         <EditableBlock
           key={`${i}-${block.type}`}
           block={block}
+          slots={slots}
           blockIndex={i}
           sidenoteBase={sidenoteBaseList[i]}
           isFirst={i === 0}
@@ -5259,7 +5411,8 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
           }
           onCollectionReorder={
             block.type === "collection"
-              ? (from, to) => updateCollection(i, swapItems(block.items, from, to))
+              ? (from, to) =>
+                  updateCollection(i, swapItems(block.items, from, to))
               : undefined
           }
           onInsertParagraphBefore={() => insertParagraphBefore(i)}
@@ -5268,7 +5421,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
             block.type === "collection" ||
             block.type === "component" ||
             block.type === "metric" ||
-            block.type === "blockquote"
+            block.type === "blockquote" ||
+            block.type === "project_grid" ||
+            block.type === "social_links"
               ? () => insertParagraphAfter(i)
               : undefined
           }
@@ -5285,6 +5440,11 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
       {slashAnchor && (
         <SlashMenu
           query={slashQuery}
+          // On a line that already has text the menu CONVERTS it, so only the
+          // types that can hold that text are offered. Otherwise everything is
+          // available — minus the furniture on any page that has nowhere to
+          // put it: `slots` is what actually renders a grid or an icon row, so
+          // a page given none would insert a block that draws nothing.
           allowedTypes={
             slashAnchor.hasExistingContent
               ? [
@@ -5296,7 +5456,9 @@ export function ArticleEditor({ initialPost, category }: ArticleEditorProps) {
                   "metric",
                   "code_block",
                 ]
-              : undefined
+              : slots
+                ? undefined
+                : NON_FURNITURE_TYPES
           }
           excludeType={
             blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined

@@ -207,11 +207,16 @@ const tooltipActionStyle = css({
   cursor: "pointer",
 });
 
+// No margin of its own. It carried a 32px `marginTop` from when the intro
+// section stacked it straight under a paragraph and that margin WAS the gap.
+// The row is now a block in a document, spaced by the layout around it, and an
+// internal margin there is invisible from the outside: it made the space above
+// the icons 48px while the markup said 16, so tuning the gap from the page
+// moved a number that was never the whole story.
 const listStyle = css({
   display: "flex",
   gap: "xl",
   listStyle: "none",
-  marginTop: "3xl",
   flexWrap: "wrap",
 });
 

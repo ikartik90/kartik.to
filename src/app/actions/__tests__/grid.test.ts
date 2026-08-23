@@ -1,0 +1,300 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ---------------------------------------------------------------------------
+// `saveGridLayout` — the one write the grid editor makes.
+//
+// Everything the toolbar does is buffered until "Publish and exit", so this is
+// where a session's worth of pinning, widening, inserting and retiring either
+// all lands or none of it does. The tests below are about what reaches each
+// table, which is the part a type checker cannot hold on its own: a width and a
+// seat are two columns on the same row, and sending them as two updates or
+// against the wrong table is a mistake that compiles.
+// ---------------------------------------------------------------------------
+
+vi.mock("@/lib/auth/server", () => ({
+  auth: {
+    getSession: () =>
+      Promise.resolve({ data: { user: { email: "admin@example.com" } } }),
+  },
+}));
+
+vi.mock("@/lib/env", () => ({
+  env: { ADMIN_GITHUB_ID: "admin@example.com" },
+}));
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+
+// `updateMany` is spied alongside `update` purely so the static-card tests can
+// assert that NEITHER ran — "no write was attempted" is the specification, and
+// checking only `update` would pass a version that quietly no-opped through
+// `updateMany` instead.
+const postUpdate = vi.fn();
+const postUpdateMany = vi.fn();
+const componentUpdate = vi.fn();
+const componentUpdateMany = vi.fn();
+const componentCreate = vi.fn();
+const componentDelete = vi.fn();
+
+const tx = {
+  post: { update: postUpdate, updateMany: postUpdateMany },
+  component: {
+    update: componentUpdate,
+    updateMany: componentUpdateMany,
+    create: componentCreate,
+    delete: componentDelete,
+  },
+};
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    $transaction: (run: (t: typeof tx) => Promise<void>) => run(tx),
+  },
+}));
+
+import { saveGridLayout } from "../grid";
+import { emptyGridDraft } from "@/utils/grid-draft";
+import { articles as staticArticles } from "@/data/articles";
+import { projects as staticProjects } from "@/data/projects";
+
+const staticArticleId = staticArticles[0].id;
+const staticProjectId = staticProjects[0].id;
+
+const draft = (over: Partial<Parameters<typeof saveGridLayout>[0]> = {}) => ({
+  ...emptyGridDraft(),
+  ...over,
+});
+
+describe("saveGridLayout — widths", () => {
+  beforeEach(() => {
+    [
+      postUpdate,
+      postUpdateMany,
+      componentUpdate,
+      componentUpdateMany,
+      componentCreate,
+      componentDelete,
+    ].forEach((fn) => fn.mockReset().mockResolvedValue({ count: 1 }));
+  });
+
+  it("writes a post's width to the post table", async () => {
+    await saveGridLayout(draft({ spans: { "post:abc": 2 } }));
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridSpan: 2 },
+    });
+    expect(componentUpdate).not.toHaveBeenCalled();
+  });
+
+  it("writes a component's width to the component table", async () => {
+    await saveGridLayout(draft({ spans: { "component:xyz": 3 } }));
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { gridSpan: 3 },
+    });
+    expect(postUpdate).not.toHaveBeenCalled();
+  });
+
+  // A seat and a width are two columns of one row. Two updates would be two
+  // round trips and, worse, two chances for the second to lose to the first.
+  it("sends a seat and a width as one update", async () => {
+    await saveGridLayout(
+      draft({ pins: { "post:abc": 4 }, spans: { "post:abc": 2 } }),
+    );
+    expect(postUpdate).toHaveBeenCalledOnce();
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridIndex: 4, gridSpan: 2 },
+    });
+  });
+
+  // Releasing a pin writes null. It has to survive being merged with a width,
+  // which is exactly where a `??`-style merge would drop it.
+  it("keeps a released pin when the same card was widened", async () => {
+    await saveGridLayout(
+      draft({ pins: { "post:abc": null }, spans: { "post:abc": 2 } }),
+    );
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridIndex: null, gridSpan: 2 },
+    });
+  });
+
+  it("leaves the width alone on a card that was only moved", async () => {
+    await saveGridLayout(draft({ pins: { "post:abc": 1 } }));
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridIndex: 1 },
+    });
+  });
+
+  // A card widened before it was ever saved has no row to update — its width
+  // belongs to the row the insert is about to create.
+  it("creates an inserted component at the width it was drafted", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          { key: "pending:1", componentId: "cosmic-track", index: 0 },
+        ],
+        spans: { "pending:1": 2 },
+      }),
+    );
+    expect(postUpdate).not.toHaveBeenCalled();
+    expect(componentUpdate).not.toHaveBeenCalled();
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          componentId: "cosmic-track",
+          gridSpan: 2,
+        }),
+      }),
+    );
+  });
+
+  it("creates an untouched insert at a single column", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [{ key: "pending:1", componentId: "cosmic-track", index: 0 }],
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ gridSpan: 1 }),
+      }),
+    );
+  });
+
+  // The CSS clamps anything wider than the grid, so a value that got past the
+  // UI would be stored as a width the page never draws.
+  it("refuses a width the grid cannot draw", async () => {
+    await expect(
+      saveGridLayout(draft({ spans: { "post:abc": 9 } })),
+    ).rejects.toThrow();
+    expect(postUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a width below one column", async () => {
+    await expect(
+      saveGridLayout(draft({ spans: { "post:abc": 0 } })),
+    ).rejects.toThrow();
+  });
+
+  // --- Static cards -------------------------------------------------------
+  //
+  // The grid is not drawn from the database alone: `src/data/articles.ts` and
+  // `src/data/projects.ts` contribute seed cards that exist only in code, and
+  // they carry the same toolbar as every other card. Nothing about them belongs
+  // in a table — there is no row to hold it — so the requirement is not "the
+  // write is harmless", it is that no write is attempted.
+  //
+  // The ids are read off the data modules rather than hardcoded, so this keeps
+  // testing the real thing after a rename instead of quietly testing nothing.
+
+  it("stores nothing at all for a static post", async () => {
+    await saveGridLayout(
+      draft({
+        pins: { [`post:${staticArticleId}`]: 0 },
+        spans: { [`post:${staticProjectId}`]: 2 },
+      }),
+    );
+    expect(postUpdate).not.toHaveBeenCalled();
+    expect(postUpdateMany).not.toHaveBeenCalled();
+  });
+
+  // The point of skipping rather than letting the write fail: a card that has
+  // no row must not be able to roll back the rest of the draft.
+  it("saves the rest of the layout alongside a static card", async () => {
+    await saveGridLayout(
+      draft({
+        spans: { [`post:${staticArticleId}`]: 2, "post:abc": 3 },
+        inserts: [{ key: "pending:1", componentId: "calchemy", index: 1 }],
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledOnce();
+    expect(postUpdate).toHaveBeenCalledOnce();
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridSpan: 3 },
+    });
+  });
+
+  // --- Shape ---------------------------------------------------------------
+  //
+  // A width is a fact about the GRID; a shape is a fact about the CARD, and the
+  // two end up in different columns even though one rail sets both. For a
+  // component the column is the row's existing `aspect` override — per
+  // PUBLICATION, since the same demo can be published more than once and only
+  // this showing of it was reshaped.
+
+  it("writes a component's shape to its own aspect column", async () => {
+    await saveGridLayout(draft({ aspects: { "component:xyz": "9/16" } }));
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { aspect: "9/16" },
+    });
+  });
+
+  it("writes a post's shape to the post row", async () => {
+    await saveGridLayout(draft({ aspects: { "post:abc": "1/1" } }));
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { aspect: "1/1" },
+    });
+  });
+
+  it("sends a seat, a width and a shape as one update", async () => {
+    await saveGridLayout(
+      draft({
+        pins: { "post:abc": 1 },
+        spans: { "post:abc": 2 },
+        aspects: { "post:abc": "2/1" },
+      }),
+    );
+    expect(postUpdate).toHaveBeenCalledOnce();
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridIndex: 1, gridSpan: 2, aspect: "2/1" },
+    });
+  });
+
+  // Reshaping a card that has not been published yet belongs to the row the
+  // insert is about to create, overriding the registry default it came with.
+  it("creates an inserted component at the shape it was reshaped to", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          {
+            key: "pending:1",
+            componentId: "cosmic-track",
+            index: 0,
+            aspect: "3/2",
+          },
+        ],
+        aspects: { "pending:1": "1/1" },
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ aspect: "1/1" }),
+      }),
+    );
+  });
+
+  it("stores no shape for a static post", async () => {
+    await saveGridLayout(
+      draft({ aspects: { [`post:${staticArticleId}`]: "1/1" } }),
+    );
+    expect(postUpdate).not.toHaveBeenCalled();
+    expect(postUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses a shape the frame has no ratio for", async () => {
+    await expect(
+      saveGridLayout(
+        draft({
+          aspects: { "post:abc": "7/3" } as unknown as Record<string, never>,
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(postUpdate).not.toHaveBeenCalled();
+  });
+});

@@ -12,18 +12,25 @@ const CHECK_GLYPH_MASK =
 const CROSS_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.5 7.5L7.5 12.5M12.5 12.5L7.5 7.5' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 
-// The two CSS shapes the demo frame needs its aspect ratios in, both generated
-// from the single `[W, H]` map in src/utils/demo-frame-sizing.ts. They read as
-// unrelated values in the output — `aspect-ratio: 3 / 2` against a min-height
-// of `calc(200cqw / 3)` — which is exactly why they were allowed to drift apart
-// by hand: the floor states the ratio INVERTED, so the two never look like
-// copies of each other and a careful reader can correct one and leave the other
-// sitting at the old value. Deriving both from the same tuple is the only thing
-// that makes them impossible to disagree.
-const demoFrameAspectRatioEntries = Object.entries(ASPECT_RATIOS);
+// Every CSS shape any recipe needs the app's aspect ratios in, all generated
+// from the single `[W, H]` map in src/utils/demo-frame-sizing.ts. Two of them
+// are the demo frame's, and they read as unrelated values in the output —
+// `aspect-ratio: 3 / 2` against a min-height of `calc(200cqw / 3)` — which is
+// exactly why they were allowed to drift apart by hand: the floor states the
+// ratio INVERTED, so the two never look like copies of each other and a careful
+// reader can correct one and leave the other sitting at the old value. Deriving
+// them from the same tuple is the only thing that makes them impossible to
+// disagree.
+//
+// The entries are named for the RATIOS, not for the demo frame, because a
+// second consumer has arrived: `linkCard` shapes its box off the same map. The
+// map itself is deliberately not renamed — see the note over `ASPECT_RATIOS`
+// for what its keys cost the last time they were named something other than
+// the answer.
+const aspectRatioEntries = Object.entries(ASPECT_RATIOS);
 
 const demoFrameAspectRatioVariants = Object.fromEntries(
-  demoFrameAspectRatioEntries.map(([tier, [w, h]]) => [
+  aspectRatioEntries.map(([tier, [w, h]]) => [
     tier,
     { aspectRatio: `${w} / ${h}` },
   ]),
@@ -32,12 +39,22 @@ const demoFrameAspectRatioVariants = Object.fromEntries(
 // `cqw` is a percentage of the container's WIDTH, so reserving a height from it
 // needs the ratio the other way up: h / w, written as `calc(h * 100 / w)` so it
 // stays exact for tiers like 3:2 that no decimal expresses cleanly.
-const demoFrameAspectRatioFloors = demoFrameAspectRatioEntries.map(
-  ([tier, [w, h]]) => ({
-    logger: true,
-    aspectRatio: tier,
-    css: { minHeight: `calc(${h * 100}cqw / ${w})` },
-  }),
+const demoFrameAspectRatioFloors = aspectRatioEntries.map(([tier, [w, h]]) => ({
+  logger: true,
+  aspectRatio: tier,
+  css: { minHeight: `calc(${h * 100}cqw / ${w})` },
+}));
+
+// The same ratios again, wrapped for a SLOT recipe: a slot recipe's variant is
+// a map of slot → styles, not styles, so `linkCard` cannot share the object
+// `demoFrameDemoArea` takes even though the declaration inside it is identical.
+// Derived a third time rather than copied for the reason the whole map exists:
+// a twelfth ratio should be one line in one file, not a line here as well.
+const linkCardAspectVariants = Object.fromEntries(
+  aspectRatioEntries.map(([ratio, [w, h]]) => [
+    ratio,
+    { root: { aspectRatio: `${w} / ${h}` } },
+  ]),
 );
 
 /**
@@ -141,6 +158,9 @@ export default defineConfig({
       tokens: {
         sizes: {
           articleContent: { value: "640px" },
+          // The confirm dialog (Figma 979:2025) — narrow enough that a
+          // yes/no question does not arrive looking like a form.
+          dialogXs: { value: "320px" },
           dialogSm: { value: "480px" },
           // The pitch the projects listing counts its tiers in, and the ONLY
           // number that grid is built from: it goes two-up at 2 × this and
@@ -668,6 +688,129 @@ export default defineConfig({
       },
 
       recipes: {
+        // -------------------------------------------------------------------
+        // Masonry, done as arithmetic rather than as a layout mode.
+        //
+        // `display: grid-lanes` is the real answer, and this upgrades to it
+        // wherever it exists (Safari 26.4+ as of writing; Chrome and Firefox
+        // still behind a flag). Everywhere else the same picture is built from
+        // a grid whose rows are 1px tall, with every card spanning as many of
+        // them as its own height comes to. A card's height is a function of the
+        // width it lands at and the shape it declares, and BOTH are knowable in
+        // CSS, so the span can be computed rather than measured.
+        //
+        // The division is the awkward part: `calc()` will not divide a length
+        // by a length and hand back a number. `tan(atan2(A, B))` will — atan2
+        // takes two same-unit values and returns an angle, and the tangent of
+        // that angle is A/B as a bare number. It is a trigonometric identity
+        // pressed into service as a type cast, it is ugly, and it is the only
+        // thing in CSS that does this. BOTH divisions have to route through it,
+        // the gutter term included; a bare `calc(20px / 1px)` is invalid and
+        // takes the whole declaration down with it.
+        //
+        // Rejected: `column-count`, which is what this replaces. It packs
+        // beautifully and cannot span — a card two columns wide is not
+        // expressible in a column box at all — and spanning is the entire point
+        // of the grid this feeds. Rejected: measuring heights in JS and writing
+        // spans back, which is a layout pass per card per resize and a frame of
+        // wrong on each one. An observer still has a job here, but as a
+        // correction for content that outgrows its declared shape, not as the
+        // mechanism.
+        //
+        // The `@supports` guard is load-bearing rather than polite. Without it
+        // an engine lacking `atan2` drops the `grid-row` declaration and KEEPS
+        // `grid-auto-rows: 1px`, collapsing every card to a single pixel. It
+        // tests the exact construction it protects, not a proxy for it.
+        //
+        // Two nested containers, deliberately. The grid is its own unnamed
+        // `inline-size` container so a child's `100cqw` is the GRID's width and
+        // the arithmetic is exact; the tier queries name `projectsGrid` and so
+        // skip it for the section outside. Capping the grid's width while
+        // measuring against a wider ancestor is precisely the drift this
+        // arrangement rules out.
+        // -------------------------------------------------------------------
+        masonryGrid: defineRecipe({
+          className: "masonry-grid",
+          description:
+            "A masonry grid that supports column spans. Upgrades to `display: grid-lanes` where it exists; elsewhere it packs cards into 1px row tracks and computes each card's row span from its declared aspect and the width it lands at. Children drive it with three custom properties — `--span` (columns, clamped to what the grid has), `--aspect-w` and `--aspect-h` (the shape as a pair, kept as integers so ratios like 3:2 stay exact). `data-columns` is the CEILING on the column count from `listingColumnsFor`; the tier queries hand out the smaller of that and what fits.",
+          base: {
+            // The gap, once, as a length the arithmetic can read back. It has
+            // to be a custom property rather than `columnGap` alone, because the
+            // span calc needs the same quantity as an operand and a recipe
+            // cannot read back what it set.
+            //
+            // 20px, the gutter the `column-count` masonry used. Note that it
+            // is narrower than the 28px button `GridInsertRail` centres in it,
+            // so in edit mode that button overhangs the cards either side by
+            // 4px. Deliberate, and only visible while editing.
+            "--grid-gap": "token(spacing.xxl)",
+            "--columns": "1",
+
+            containerType: "inline-size",
+            display: "grid",
+            gridTemplateColumns: "repeat(var(--columns), minmax(0, 1fr))",
+            columnGap: "var(--grid-gap)",
+            rowGap: "var(--grid-gap)",
+            width: "token(spacing.full)",
+            marginInline: "auto",
+
+            "& > *": {
+              // Clamped in CSS, not by the caller: the column count is a
+              // function of the space available and changes under the caller's
+              // feet, so a card asking for three columns in a one-column grid
+              // has to be cut down HERE. Left unclamped it does not overflow —
+              // it silently mints two implicit columns and takes the layout
+              // with it.
+              gridColumn: "span min(var(--span, 1), var(--columns))",
+              minWidth: "0",
+            },
+
+            "@supports (grid-row: span calc(tan(atan2(1px, 1px))))": {
+              gridAutoRows: "1px",
+              rowGap: "0",
+              "& > *": {
+                "--span-clamped": "min(var(--span, 1), var(--columns))",
+                "--col-width":
+                  "calc((100cqw - (var(--columns) - 1) * var(--grid-gap)) / var(--columns))",
+                // A spanning card is not N columns wide — it is N columns plus
+                // the N-1 gutters it swallows.
+                "--cell-width":
+                  "calc(var(--col-width) * var(--span-clamped) + (var(--span-clamped) - 1) * var(--grid-gap))",
+                // Height, then the gutter, both as counts of 1px rows. `row-gap`
+                // is zero above precisely so the second term can be the gap —
+                // a real row-gap would apply between every 1px track and turn a
+                // 20px gutter into 20px times the height of the card.
+                gridRow:
+                  "span calc(tan(atan2(var(--cell-width) * var(--aspect-h, 9), var(--aspect-w, 16) * 1px)) + tan(atan2(var(--grid-gap), 1px)))",
+                // `start`, not the default `stretch`. Stretched, a card grows
+                // to fill the rows it was given INCLUDING the gutter rows, and
+                // the gap closes to nothing.
+                alignSelf: "start",
+              },
+            },
+
+            // Last, so it wins on source order where both are supported.
+            "@supports (display: grid-lanes)": {
+              display: "grid-lanes",
+              gridAutoRows: "auto",
+              rowGap: "var(--grid-gap)",
+              "& > *": {
+                gridRow: "auto",
+                alignSelf: "auto",
+              },
+            },
+
+            // Narrow to wide: the tiers OVERLAP, so the wider one has to be the
+            // later of the two.
+            "@container projectsGrid (min-width: 640px)": {
+              "&[data-columns='2'], &[data-columns='3']": { "--columns": "2" },
+            },
+            "@container projectsGrid (min-width: 960px)": {
+              width: "min(100%, token(sizes.listingGrid3Up))",
+              "&[data-columns='3']": { "--columns": "3" },
+            },
+          },
+        }),
         // The wireframe scope — the provider's root element. Turning text into
         // bars is the primitives' job (only the component knows WHICH of its
         // parts are text); this owns what is genuinely scope-wide — the
@@ -1617,6 +1760,10 @@ export default defineConfig({
           },
           variants: {
             size: {
+              xs: {
+                width:
+                  "min(token(sizes.dialogXs), calc(100vw - token(spacing.xl) * 2))",
+              },
               sm: {
                 width:
                   "min(token(sizes.dialogSm), calc(100vw - token(spacing.xl) * 2))",
@@ -1635,14 +1782,20 @@ export default defineConfig({
 
         dialogHeader: defineRecipe({
           className: "dialog-header",
-          description: "Dialog title row with bottom divider.",
+          description:
+            "Dialog title row with bottom divider. Insets its contents 8px — the panel's own `md` corner — so the trailing close chip and the leading title sit on the same margin the shell curves at.",
           base: {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             width: "100%",
             height: "token(spacing.4xl)",
-            paddingInline: "lg",
+            // 8px, matching the footer below and the panel's `md` radius. Set
+            // on the recipe rather than per dialog: the header row is the one
+            // thing every dialog in the app draws identically, and an inset
+            // that differed between the image and component dialogs would be
+            // visible the moment you opened one after the other.
+            paddingInline: "md",
             borderBottomWidth: "token(spacing.3xs)",
             borderBottomStyle: "solid",
             borderColor: "border.divider",
@@ -1677,14 +1830,17 @@ export default defineConfig({
 
         dialogFooter: defineRecipe({
           className: "dialog-footer",
-          description: "Dialog action row with top divider.",
+          description:
+            "Dialog action row with top divider. Insets its buttons 8px, the same margin the header keeps, so the two rows bracketing the body agree.",
           base: {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             width: "100%",
             height: "token(sizes.dialogFooter)",
-            paddingInline: "lg",
+            // Deliberately the same 8px as the header — these two rows frame
+            // the dialog and any difference between them reads as a slip.
+            paddingInline: "md",
             borderTopWidth: "token(spacing.3xs)",
             borderTopStyle: "solid",
             borderColor: "border.divider",
@@ -2410,10 +2566,15 @@ export default defineConfig({
         //
         // `size` is the whole variant axis, because the numbers that make a
         // toolbar only ever move together:
-        //   md — the default rail. 40px tall, controls 4px apart on an 8px
-        //        inline inset. 8 + 28px button + 8 = 40, and the button's own
-        //        4px corner + the 4px it is inset from the edge = the rail's
-        //        `md` (8px) radius, so the two curves are concentric.
+        //   md — the default rail. 40px tall, controls 4px apart on a 6px
+        //        inset. 6 + 28px button + 6 = 40 was already the block-axis
+        //        arithmetic, and the inline inset now agrees with it, so the
+        //        buttons sit in a band of one thickness instead of 8 from the
+        //        ends and 6 from the edges. There is no 6px token and a single
+        //        inset does not earn one, so it is spelled as the 4 + 2 it is
+        //        made of. The corner stays `md` (8px): strict concentricity
+        //        would now want 4 + 6 = 10, which is not on the radius scale,
+        //        and 8 is what the rest of the floating chrome curves at.
         //   sm — the rail shrink-wrapped onto its buttons: 28px tall (exactly
         //        `sizes.toolbarButton`, so the box IS one button), no inset, no
         //        gap, and the ITEMS go square so the rail is the only thing in
@@ -2426,7 +2587,7 @@ export default defineConfig({
         toolbar: defineRecipe({
           className: "toolbar",
           description:
-            "The app's shared toolbar chrome — the horizontal rail a row of controls sits in, with a corner concentric to the buttons inside it. Owns the box only (layout, height, inset, gap, radius, surface); positioning and whether the rail is bordered, elevated or clipped stay with the consumer, since the surfaces that draw it differ on exactly those. `size=md` is the default 40px rail (8px inset, 4px gap, 8px radius) whose buttons keep their own 4px corners; `size=sm` shrink-wraps it onto the buttons at 28px with no inset and no gap, squares the items, and keeps a single 4px corner on the rail itself — which it clips the row to. `tone` picks the ground: `surface` for free-standing chrome, `field` for a rail that is one row of a form (the segmented control). `fit` picks hug-your-contents or fill-your-slot.",
+            "The app's shared toolbar chrome — the horizontal rail a row of controls sits in, with a corner concentric to the buttons inside it. Owns the box only (layout, height, inset, gap, radius, surface); positioning and whether the rail is bordered, elevated or clipped stay with the consumer, since the surfaces that draw it differ on exactly those. `size=md` is the default 40px rail (6px inset, 4px gap, 8px radius) whose buttons keep their own 4px corners; `size=sm` shrink-wraps it onto the buttons at 28px with no inset and no gap, squares the items, and keeps a single 4px corner on the rail itself — which it clips the row to. `tone` picks the ground: `surface` for free-standing chrome, `field` for a rail that is one row of a form (the segmented control). `fit` picks hug-your-contents or fill-your-slot.",
           base: {
             display: "flex",
             alignItems: "center",
@@ -2466,7 +2627,11 @@ export default defineConfig({
               md: {
                 gap: "sm",
                 height: "token(spacing.4xl)",
-                paddingInline: "md",
+                // 6px — the block-axis inset the 40px height already implies
+                // around a 28px button. Composed rather than tokenised: the
+                // scale stops at 4 and jumps to 8, and one rail's inset is not
+                // reason enough to wedge a step between them.
+                paddingInline: "calc(token(spacing.sm) + token(spacing.xs))",
                 borderRadius: "md",
               },
               sm: {
@@ -5128,6 +5293,84 @@ export default defineConfig({
               },
             },
           },
+        }),
+
+        // ------------------------------------------------------------------
+        // A pointer into the site drawn as a picture with its name written
+        // across it — the tile the projects listing is made of, and the tile
+        // the articles listing will be made of next.
+        //
+        // It replaced a card that was a 16/9 cover with the title, and
+        // sometimes a blurb, stacked in a column underneath. That shape had two
+        // problems worth naming. The card's height was whatever its text came
+        // to, so a column of them was a column of unequal boxes with the
+        // pictures at unequal heights; and the blurb was the FIRST PARAGRAPH of
+        // the post, dug out of the document by the card itself, which is the
+        // kind of derivation that reads as a summary while being nothing of the
+        // sort. Both went the same way: the card is now one box, at one
+        // declared shape, and everything it shows is laid over the picture.
+        //
+        // `aspect` is the whole of that promise, and the reason `overflow` is
+        // not decoration. `aspect-ratio` on an auto-height box is a FLOOR, not
+        // a shape: the box's automatic minimum size is still its content, so a
+        // title long enough to wrap past the ratio's height simply pushes the
+        // bottom edge down and the card silently comes out taller than the
+        // shape it declared. Measured, not assumed — a 3:2 card asked for 100px
+        // and rendered 392px with enough words in it. Clipping is what makes
+        // the declaration true, and it is why the caption may sit in flow at
+        // all: the cover is taken out of flow so only the words can ever push
+        // the box, and then they cannot.
+        // ------------------------------------------------------------------
+        linkCard: defineSlotRecipe({
+          className: "link-card",
+          description:
+            "A link rendered as one shaped tile — the projects listing's card, and the articles listing's next. `root` is the whole card and the only box with a shape: it takes an `aspect` from the app's shared ratio map and CLIPS to it, since aspect-ratio alone is only a floor. `cover` is the picture's slot, out of flow so it fills the card without being able to grow it, and a flat `bg.surface` plate until posters land. `caption` is the name — and, for a dated listing, the date — laid over the cover along its bottom edge. No hover state of its own beyond the press: the card is a picture, and a wash over a picture is a decision for when there is one.",
+          slots: ["root", "cover", "caption"],
+          base: {
+            root: {
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              // The caption sits on the bottom edge, which is the one that
+              // moves: a card is read from its picture down to its name, and
+              // pinning the name to the foot keeps every card in a column
+              // agreeing on where the words are regardless of how many lines
+              // they run to.
+              justifyContent: "flex-end",
+              // Same 12px the card has always worn. The cover carries none of
+              // its own — an overlay pinned flush inside a clipped, rounded box
+              // is already rounded BY it, and a second radius would only hold
+              // the plate back from the corner.
+              borderRadius: "lg",
+              overflow: "hidden",
+              textDecoration: "none",
+              _active: { transform: "scale(0.98)" },
+            },
+            cover: {
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "bg.surface",
+            },
+            // `position: relative` for one reason only: the cover is positioned
+            // and this is not, so without it the plate paints OVER the words it
+            // is supposed to sit behind. Both positioned, no z-index, DOM order
+            // decides — which is the order they are written in.
+            caption: {
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              gap: "sm",
+              padding: "xl",
+            },
+          },
+          variants: {
+            aspect: linkCardAspectVariants,
+          },
+          // The shape is chosen per card at RUNTIME, so the extractor never
+          // sees one: without this only the ratios that happen to be written as
+          // literals somewhere would be emitted, and every other card would
+          // fall back to no shape at all. Same trap `demoFrameDemoArea` sprang.
+          staticCss: [{ aspect: ["*"] }],
         }),
       },
 
