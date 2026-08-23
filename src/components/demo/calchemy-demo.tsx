@@ -415,18 +415,26 @@ function useCalchemyDemoLayout(
       return;
     }
 
-    const lastWidthRef = {
-      current: Math.round(frame.getBoundingClientRect().width),
-    };
-
+    // Compared by RESOLVED TIER, not by width. The width comparison this
+    // replaces was seeded with the frame's current width and then run once
+    // immediately, so the first pass always decided "unchanged" and returned
+    // before it could resolve anything — leaving the demo on its initial
+    // guess, the widest tier, for as long as the frame was never resized. A
+    // card's width does not change after it lands, so on the homepage grid
+    // that was forever: a phone got a demo showing one month (the container
+    // queries got that right on their own) that paged three at a time,
+    // because `period.count` is both the months rendered and the nav's step.
+    //
+    // Reading the tier off the state it is about to replace cannot be seeded
+    // wrong, and skips more: every width change WITHIN a tier is a re-render
+    // avoided, not just an identical width. Returning `current` unchanged is
+    // what makes React bail out — which matters here because this observer
+    // watches the frame, and the frame's height now moves with its content.
     const updateLayout = () => {
-      const rect = frame.getBoundingClientRect();
-      const w = Math.round(rect.width);
-      const widthChanged = lastWidthRef.current !== w;
-      lastWidthRef.current = w;
-      if (!widthChanged) return;
-
-      setLayout(getCalchemyDemoLayout(rect.width));
+      const next = getCalchemyDemoLayout(frame.getBoundingClientRect().width);
+      setLayout((current) =>
+        current.visiblePeriods === next.visiblePeriods ? current : next,
+      );
     };
 
     updateLayout();
