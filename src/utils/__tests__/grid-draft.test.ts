@@ -19,7 +19,12 @@ const post = (id: string, gridIndex: number | null = null): GridCard => ({
   span: 1,
 });
 
-const comp = (id: string, gridIndex: number | null = null): GridCard => ({
+// Typed as the component variant rather than as the union, so a test can
+// override `logger` — a property only half the cards have.
+const comp = (
+  id: string,
+  gridIndex: number | null = null,
+): Extract<GridCard, { kind: "component" }> => ({
   kind: "component",
   key: `component:${id}`,
   id,
@@ -277,6 +282,89 @@ describe("isGridDraftDirty", () => {
   it("is dirty once a card has been reshaped", () => {
     expect(
       isGridDraftDirty({ ...emptyGridDraft(), aspects: { "post:a": "1/1" } }),
+    ).toBe(true);
+  });
+});
+
+// A card's log panel is shown or hidden from the same rail as its shape, so
+// the flag buffers here with the placements and is thrown away by the same
+// discard. Components only — a post has no log output to show.
+const loggerOf = (cards: ReturnType<typeof applyGridDraft>, key: string) => {
+  const card = cards.find((c) => c.key === key);
+  return card?.kind === "component" ? card.logger : undefined;
+};
+
+describe("applyGridDraft — logger", () => {
+  it("shows the log panel on a card the draft turned it on for", () => {
+    const cards = [comp("c1")];
+    const out = applyGridDraft(cards, {
+      ...emptyGridDraft(),
+      loggers: { "component:c1": true },
+    });
+    expect(loggerOf(out, "component:c1")).toBe(true);
+    // The server's list is the copy a discard restores, so it must not have
+    // been touched.
+    expect(cards[0].logger).toBe(false);
+  });
+
+  // False is a value, not an absence: hiding the panel on a demo the registry
+  // logs by default is the whole point of the control, and a nullish merge is
+  // what would drop it.
+  it("hides the log panel on a card the draft turned it off for", () => {
+    const out = applyGridDraft([{ ...comp("c1"), logger: true }], {
+      ...emptyGridDraft(),
+      loggers: { "component:c1": false },
+    });
+    expect(loggerOf(out, "component:c1")).toBe(false);
+  });
+
+  it("leaves every other card's log panel as it came", () => {
+    const out = applyGridDraft([comp("c1"), { ...comp("c2"), logger: true }], {
+      ...emptyGridDraft(),
+      loggers: { "component:c1": true },
+    });
+    expect(loggerOf(out, "component:c2")).toBe(true);
+  });
+
+  it("overrides the log panel a pending insert arrived with", () => {
+    const out = applyGridDraft([post("a")], {
+      ...emptyGridDraft(),
+      inserts: [
+        {
+          key: "pending:1",
+          componentId: "x",
+          index: 0,
+          aspect: "3/2",
+          logger: true,
+        },
+      ],
+      loggers: { "pending:1": false },
+    });
+    expect(loggerOf(out, "pending:1")).toBe(false);
+  });
+
+  it("leaves an untouched insert at the log panel the registry gave it", () => {
+    const out = applyGridDraft([post("a")], {
+      ...emptyGridDraft(),
+      inserts: [
+        {
+          key: "pending:1",
+          componentId: "x",
+          index: 0,
+          aspect: "3/2",
+          logger: true,
+        },
+      ],
+    });
+    expect(loggerOf(out, "pending:1")).toBe(true);
+  });
+
+  it("is dirty once a card's log panel has been toggled", () => {
+    expect(
+      isGridDraftDirty({
+        ...emptyGridDraft(),
+        loggers: { "component:c1": true },
+      }),
     ).toBe(true);
   });
 });

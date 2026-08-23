@@ -357,13 +357,20 @@ export function useCommandPalette(
    */
   const handlePublishHome = async () => {
     const { draftId, title, document, category } = useEditorStore.getState();
-    const { pins, spans, aspects, inserts, removals } =
+    const { pins, spans, aspects, loggers, inserts, removals } =
       useGridDraftStore.getState();
     try {
       if (draftId) {
         await saveDraft({ id: draftId, title: title || undefined, document });
       }
-      await saveGridLayout({ pins, spans, aspects, inserts, removals });
+      await saveGridLayout({
+        pins,
+        spans,
+        aspects,
+        loggers,
+        inserts,
+        removals,
+      });
       useGridDraftStore.getState().reset();
       clearAutosave(autosaveKey(draftId, category));
       syncOtherTabs();

@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,7 +33,14 @@ vi.mock("@/components/demo-component", () => ({
   DemoComponent: () => <div data-testid="demo" />,
 }));
 vi.mock("@/components/demo/registry", () => ({
-  getDemoComponent: (id: string) => ({ id, label: id, load: vi.fn() }),
+  // Only one of these demos logs, which is what the log control keys off —
+  // "can this card log at all" is the registry's answer, not the row's.
+  getDemoComponent: (id: string) => ({
+    id,
+    label: id,
+    load: vi.fn(),
+    logger: id === "calchemy-demo" ? true : undefined,
+  }),
 }));
 
 import { HomeGrid } from "../home-grid";
@@ -57,6 +70,13 @@ const component = (id: string, gridIndex: number | null = null): GridCard => ({
   publishedAt: new Date("2026-01-01"),
   aspect: "3/2",
   span: 1,
+});
+
+/** A card for the one demo in the mocked registry that logs. */
+const logging = (id: string, logger = true): GridCard => ({
+  ...(component(id) as Extract<GridCard, { kind: "component" }>),
+  componentId: "calchemy-demo",
+  logger,
 });
 
 describe("HomeGrid", () => {
@@ -364,5 +384,143 @@ describe("HomeGrid", () => {
     );
     await user.click(screen.getByRole("button", { name: "1:1" }));
     expect(actions.saveGridLayout).not.toHaveBeenCalled();
+  });
+});
+
+// --- Customize -------------------------------------------------------------
+//
+// One docked panel for the whole grid, opened from the card whose properties
+// it is showing. It is a SIBLING of the grid rather than a child of a cell:
+// the panel is fixed to the viewport and only one card can be inspected at a
+// time, so a copy per cell would be a dozen dialogs for one surface.
+
+describe("HomeGrid — card properties", () => {
+  beforeEach(() => {
+    useGridDraftStore.getState().reset();
+  });
+  afterEach(cleanup);
+
+  const customize = () => screen.getAllByRole("button", { name: /customize/i });
+  const panel = () => screen.queryByRole("dialog", { name: "Card properties" });
+  const logControl = () => screen.queryByRole("group", { name: "Log output" });
+
+  it("offers customize on every card while editing", () => {
+    render(<HomeGrid cards={[post("a"), component("c1")]} editable />);
+    expect(customize()).toHaveLength(2);
+  });
+
+  it("offers it on no card outside edit mode", () => {
+    render(<HomeGrid cards={[post("a"), component("c1")]} />);
+    expect(screen.queryByRole("button", { name: /customize/i })).toBeNull();
+  });
+
+  it("opens the panel on the card it was pressed from", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[post("a"), logging("c1")]} editable />);
+    expect(panel()).toBeNull();
+
+    await user.click(customize()[1]);
+    expect(panel()).not.toBeNull();
+    expect(logControl()).not.toBeNull();
+  });
+
+  // The panel opens on a post too — what it holds differs by card, that it
+  // opens does not.
+  it("opens on a card with nothing to customize yet", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[post("a")]} editable />);
+
+    await user.click(customize()[0]);
+    expect(panel()).not.toBeNull();
+    expect(logControl()).toBeNull();
+  });
+
+  // The button is the way back out as well as in, which is what the trigger
+  // exemption on it is for: without it the outside-press dismiss would close
+  // the panel and the click would reopen it.
+  it("closes the panel on a second press of the same control", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[post("a")]} editable />);
+
+    await user.click(customize()[0]);
+    await user.click(customize()[0]);
+    await waitFor(() => expect(panel()).toBeNull());
+  });
+
+  it("moves the panel to the card pressed next", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[post("a"), logging("c1")]} editable />);
+
+    await user.click(customize()[0]);
+    expect(logControl()).toBeNull();
+
+    await user.click(customize()[1]);
+    expect(logControl()).not.toBeNull();
+  });
+
+  // Whether a demo CAN log is the registry's answer; whether it currently
+  // shows the panel is the row's. A demo the registry does not log has nothing
+  // to show or hide.
+  it("offers no log control for a demo that does not log", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[component("c1")]} editable />);
+
+    await user.click(customize()[0]);
+    expect(logControl()).toBeNull();
+  });
+
+  it("reads the log control off the card's own state", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[logging("c1", false)]} editable />);
+
+    await user.click(customize()[0]);
+    expect(
+      within(logControl()!)
+        .getByRole("option", { name: "Hide" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  // Buffered like every other edit the rail makes: nothing reaches the server
+  // until "Publish and exit", so a discard still has something to discard.
+  it("records a hidden log panel in the draft rather than writing it", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[logging("c1")]} editable />);
+
+    await user.click(customize()[0]);
+    await user.click(within(logControl()!).getByRole("option", { name: "Hide" }));
+
+    expect(useGridDraftStore.getState().loggers).toEqual({
+      "component:c1": false,
+    });
+    expect(actions.saveGridLayout).not.toHaveBeenCalled();
+  });
+
+  it("shows the card's log panel again from the same control", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[logging("c1", false)]} editable />);
+
+    await user.click(customize()[0]);
+    await user.click(within(logControl()!).getByRole("option", { name: "Show" }));
+
+    expect(useGridDraftStore.getState().loggers).toEqual({
+      "component:c1": true,
+    });
+  });
+
+  // The control edits the DRAFT, so the panel has to read back through it —
+  // otherwise the segment you just pressed springs back to the row's value.
+  it("keeps the control on what the draft says", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[logging("c1")]} editable />);
+
+    await user.click(customize()[0]);
+    await user.click(within(logControl()!).getByRole("option", { name: "Hide" }));
+
+    expect(
+      within(logControl()!)
+        .getByRole("option", { name: "Hide" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
   });
 });

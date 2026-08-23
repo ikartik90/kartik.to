@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import { inlineEditRow, menuIcon, toolbar } from "../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
+import { PROPERTIES_TRIGGER_ATTR } from "@/components/ui/properties-panel";
 import {
   aspectCounterpart,
   isPortraitAspect,
@@ -15,6 +16,7 @@ import MoveForwardIcon from "@/assets/icons/move-forward.svg";
 import AddColumnIcon from "@/assets/icons/add-column.svg";
 import RemoveColumnIcon from "@/assets/icons/remove-column.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
+import CustomizeIcon from "@/assets/icons/slider.svg";
 import AspectRatioIcon from "@/assets/icons/aspect-ratio.svg";
 import ToLandscapeIcon from "@/assets/icons/to-landscape.svg";
 import ToPortraitIcon from "@/assets/icons/to-portrait.svg";
@@ -91,6 +93,15 @@ export interface GridItemToolbarProps {
    */
   aspect: DemoFrameAspectRatio;
   onAspectChange: (aspect: DemoFrameAspectRatio) => void;
+  /**
+   * Whether THIS card's properties panel is the one currently open — the
+   * PANEL's state, not the card's, which is why it is a prop where the shape
+   * picker's `mode` is local: the panel is a single docked surface shared by
+   * every cell in the grid, so only its owner knows which card has it.
+   */
+  propertiesOpen?: boolean;
+  /** Opens the panel — or closes it, if this card's is the one already open. */
+  onToggleProperties: () => void;
   /**
    * Components only, and the reason this is optional rather than a boolean: an
    * article is unpublished from its own page, so a card for one must not offer
@@ -210,6 +221,8 @@ export function GridItemToolbar({
   onAddColumn,
   onRemoveColumn,
   onAspectChange,
+  propertiesOpen = false,
+  onToggleProperties,
   onUnpublish,
 }: GridItemToolbarProps) {
   // Which face the rail is wearing, and — while it is the picker — which
@@ -351,6 +364,32 @@ export function GridItemToolbar({
               onClick={onRemoveColumn}
             >
               <RemoveColumnIcon className={iconStyle} />
+            </OptionList.Option>
+
+            {/* Everything about the card the rail cannot say in icons, in the
+                docked inspector the collection editor already uses for a
+                picture's properties (Figma 845:7223) — for a logging component
+                that is whether its log output is on show.
+
+                A group of its own, between the edits and the retirement,
+                because it is a different KIND of control: every other button
+                here changes the card on the spot, where this one opens a
+                surface to change it from. Present on every card, including the
+                ones whose panel is currently near-empty — what a card's
+                properties are differs by kind, that it has some does not.
+
+                Pressed while its own panel is open — the state it reports is
+                the panel's, not the card's — and marked as the panel's trigger
+                so that second press actually closes it rather than reopening
+                it on the way out. See PROPERTIES_TRIGGER_ATTR. */}
+            <OptionList.Divider />
+            <OptionList.Option
+              {...PROPERTIES_TRIGGER_ATTR}
+              aria-label="Customize"
+              pressed={propertiesOpen}
+              onClick={onToggleProperties}
+            >
+              <CustomizeIcon className={iconStyle} />
             </OptionList.Option>
 
             {/* Last, and alone. Retiring a card is not a layout edit, and a
