@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -455,27 +456,73 @@ const WEEKDAY_NAMES_BY_KEY = new Map(
   WEEKDAYS.map((day) => [day.key, day.name]),
 );
 
+/**
+ * The anchor the server renders from — a constant, and that is the whole point.
+ *
+ * The clock cannot be read while rendering. Every surface this demo appears on
+ * is PRERENDERED (a static dev route, and an embed in a cached article), so a
+ * `useState(() => Temporal.Now…)` seed is written into HTML on the build machine
+ * and hydrated by a visitor on some later day: the first client render computes
+ * a different date, React finds markup it did not send, and it throws the
+ * subtree away with error #418. Integration caught it 41 seconds into a day the
+ * build had never heard of.
+ *
+ * The real date arrives in `useLayoutEffect` instead — after hydration has
+ * matched, and before paint, so nobody reads this placeholder. Its own value is
+ * arbitrary: it only has to be the SAME on both sides of the handshake.
+ */
+const SEED_TODAY = Temporal.PlainDate.from("2026-01-01");
+
+/**
+ * The opening state for an anchor: tomorrow through a week later, and the
+ * weekday that first shift falls on. Shared by the seeds, by the settle below,
+ * and by every reset — which is defined as "put it back to this".
+ */
+function openingFrom(today: Temporal.PlainDate) {
+  const firstShift = today.add({ days: 1 });
+  return {
+    firstShift,
+    lastShift: today.add({ days: 8 }),
+    // The weekday the first shift itself falls on — the one repeat a shift on
+    // that date implies, so the form is already describing something true
+    // rather than an arbitrary pair. A SEED only: re-dating the first shift
+    // later leaves the toolbar alone, because by then the weekdays are the
+    // user's answer and not ours to overwrite.
+    days: [weekdayOf(firstShift)] as WeekdayKey[],
+  };
+}
+
+/**
+ * The clock, read once and then held. `useSyncExternalStore` re-renders on any
+ * snapshot that is not referentially equal to the last, and a fresh
+ * `Temporal.PlainDate` never is — so the read is cached. Holding it is also the
+ * behaviour you want: a form left open across midnight must not re-date itself
+ * under whoever is filling it in.
+ */
+let clientToday: Temporal.PlainDate | null = null;
+const readToday = () => (clientToday ??= Temporal.Now.plainDateISO());
+
+/** Nothing to subscribe to — the anchor settles once, at hydration. */
+const holdStill = () => () => {};
+
+/**
+ * The anchor, and the handshake around it. The server has no day it can render
+ * (see `SEED_TODAY`), so it renders the constant, the first client render
+ * matches it, and React swaps in the real date immediately afterwards — the
+ * same shape as the theme read in `social-icon-shader.tsx`.
+ *
+ * `key` is what makes the swap land: the form seeds three `useState` fields
+ * from the anchor, and an initialiser does not re-run for a changed prop. Keyed
+ * on the date, the form is rebuilt from the real one instead of adjusting
+ * itself afterwards — and at hydration there is nothing in it to lose.
+ */
 export function ShiftSchedulingV1() {
-  // The form opens on a plausible near-future run rather than on fixed dates:
-  // tomorrow through a week later. Read from the clock ONCE and shared by every
-  // seed, so they can't land on either side of midnight, and lazily so the read
-  // happens at mount rather than on every render.
-  const [today] = useState(() => Temporal.Now.plainDateISO());
-  // The opening state, kept in one place because two things need it: the seeds
-  // below, and every reset — which is defined as "put it back to this".
-  const opening = useMemo(() => {
-    const firstShift = today.add({ days: 1 });
-    return {
-      firstShift,
-      lastShift: today.add({ days: 8 }),
-      // The weekday the first shift itself falls on — the one repeat a shift on
-      // that date implies, so the form is already describing something true
-      // rather than an arbitrary pair. A SEED only: re-dating the first shift
-      // later leaves the toolbar alone, because by then the weekdays are the
-      // user's answer and not ours to overwrite.
-      days: [weekdayOf(firstShift)] as WeekdayKey[],
-    };
-  }, [today]);
+  const today = useSyncExternalStore(holdStill, readToday, () => SEED_TODAY);
+  return <ShiftSchedulingForm key={today.toString()} today={today} />;
+}
+
+function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
+  const opening = useMemo(() => openingFrom(today), [today]);
 
   const [firstShift, setFirstShift] = useState<Temporal.PlainDate | null>(
     opening.firstShift,
