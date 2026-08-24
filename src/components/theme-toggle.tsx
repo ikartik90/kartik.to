@@ -8,12 +8,16 @@ import { Button } from "./ui/button";
 import { Tooltip } from "./ui/tooltip";
 
 // The control names and pictures the theme it OFFERS, never the one in force:
-// it is a door, and a door is labelled with the room on the other side.
-// "theme", the word the command palette has always used for the same act —
-// one action the site names one way, wherever it is reached from.
-const OFFER = {
-  light: "Switch to light theme",
-  dark: "Switch to dark theme",
+// it is a door, and a door is labelled with the room on the other side — here
+// with the room's NAME and nothing else, because the door is a door and does
+// not need to say so.
+//
+// Exported, and the command palette's row reads from it rather than restating
+// it: that row is the same act reached another way, and the site names an
+// action once.
+export const OFFER = {
+  light: "Light theme",
+  dark: "Dark theme",
 } as const;
 
 // Both glyphs ship on every render and the cascade picks between them, so the
@@ -24,19 +28,39 @@ const OFFER = {
 const glyphForDark = css({ display: "block", _dark: { display: "none" } });
 const glyphForLight = css({ display: "none", _dark: { display: "block" } });
 
-export function ThemeToggle() {
+/**
+ * The control itself, with no box of its own — the chip, the two glyphs, the
+ * accessible name and the tooltip that repeats it.
+ *
+ * Split out from `ThemeToggle` so a consumer that has to PLACE the control can
+ * take it without the wrapper below, whose position globals.css owns. The card
+ * studio sits one in the corner of its canvas; the site sits it above the
+ * header's brand row. One control, two placements — not two controls drawn to
+ * match.
+ */
+export function ThemeToggleButton() {
   const { isDark, toggle } = useThemeToggle();
   const label = isDark ? OFFER.light : OFFER.dark;
 
   return (
+    <Button variant="icon" aria-label={label} onClick={toggle}>
+      <DarkIcon className={glyphForDark} data-theme-glyph="dark" />
+      <LightIcon className={glyphForLight} data-theme-glyph="light" />
+      <Button.Tooltip>
+        <Tooltip.Text>{label}</Tooltip.Text>
+      </Button.Tooltip>
+    </Button>
+  );
+}
+
+/**
+ * The site's own, in the slot `[data-theme-toggle]` is positioned into by
+ * globals.css — the header's row and an article's intro.
+ */
+export function ThemeToggle() {
+  return (
     <div data-theme-toggle>
-      <Button variant="icon" aria-label={label} onClick={toggle}>
-        <DarkIcon className={glyphForDark} data-theme-glyph="dark" />
-        <LightIcon className={glyphForLight} data-theme-glyph="light" />
-        <Button.Tooltip>
-          <Tooltip.Text>{label}</Tooltip.Text>
-        </Button.Tooltip>
-      </Button>
+      <ThemeToggleButton />
     </div>
   );
 }

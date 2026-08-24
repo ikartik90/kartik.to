@@ -49,6 +49,30 @@ describe("PropertiesPanel", () => {
     ).toBeDefined();
   });
 
+  it("makes the page give up its width while docked", () => {
+    const { unmount } = render(<Harness />);
+    // The rule is `body[data-properties-panel]` in globals.css — the panel is
+    // fixed to the viewport, so the PAGE is what has to make the room.
+    expect(document.body.hasAttribute("data-properties-panel")).toBe(true);
+
+    unmount();
+    expect(document.body.hasAttribute("data-properties-panel")).toBe(false);
+  });
+
+  it("hands the width back the moment it is dismissed, not when it has gone", async () => {
+    render(<Harness />);
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Close properties panel" }));
+
+    // Still mounted, still sliding out — and the page is already expanding, so
+    // the two move together instead of the content snapping open behind it.
+    await waitFor(() =>
+      expect(document.body.hasAttribute("data-properties-panel")).toBe(false),
+    );
+    expect(screen.getByRole("dialog", { name: "Media properties" })).toBeTruthy();
+  });
+
   it("dismisses from the header", async () => {
     const onDismiss = vi.fn();
     render(<Harness onDismiss={onDismiss} />);

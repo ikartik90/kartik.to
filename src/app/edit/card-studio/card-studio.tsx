@@ -10,7 +10,10 @@ import {
 } from "@paper-design/shaders-react";
 import { css } from "../../../../styled-system/css";
 import { propertiesPanel } from "../../../../styled-system/recipes";
+import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
+import { IndexLink } from "@/components/index-link";
+import { ThemeToggleButton } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
 import { Slider } from "@/components/ui/input/slider";
@@ -32,8 +35,9 @@ import {
 } from "./shader-specs";
 
 // ---------------------------------------------------------------------------
-// Local-only playground for the card-background shaders — the fanned light
-// blades and soft washes in the reference art.
+// Card Studio — where a card's background is tuned, on its way to being
+// published as a component. The art it is aimed at is the fanned light blades
+// and soft colour washes of the reference cards.
 //
 // One shader is mounted at a time, which is deliberate: every paper-shaders
 // instance holds its OWN webgl2 context, the library pools nothing and
@@ -43,29 +47,88 @@ import {
 //
 // The controls come from the table in `shader-specs.ts` rather than being
 // written out here, so a range can only be wrong in one place.
+//
+// Client-side throughout: this is one long-lived piece of local state — which
+// shader, its uniforms, the canvas theme — over a WebGL canvas, and none of it
+// is the server's business. `page.tsx` next to this file is the admin gate.
 // ---------------------------------------------------------------------------
 
 /** The preview is ~380×680 at 2×; no detail in a soft gradient survives above it. */
 const MAX_PIXELS = 1280 * 1280;
 
-// The stage is the whole page minus the docked panel: the card sits in the
-// middle of what is left, not in the middle of the viewport, so the panel never
-// covers the thing being judged.
+// The page is the viewport, edge to edge — the canvas takes all of it.
 //
-// `padding` is written out because `main` already carries the site's own
-// (globals.css) — 20px inline, 32px block. Left alone that is what holds the
-// panel off the top and right edges it is supposed to be flush with, which is
-// also why the panel is `fixed` rather than a flex child.
+// The panel's width is NOT reserved here: `usePropertiesPanelInset` insets the
+// body while a panel is docked, everywhere in the app, and this page opts into
+// that like every other. Reserving it a second time would inset the canvas
+// twice and leave a band of nothing between the two.
+//
+// `padding: none` is stated rather than omitted because `main` already carries
+// the site's own (globals.css) — 20px inline, 32px block — which would inset
+// the canvas from the edges it is meant to reach. That inset is also why the
+// panel is `fixed` rather than a flex child: in flow it would sit inside the
+// padding instead of flush to the viewport's top, bottom and right.
 const pageStyle = css({
   minHeight: "100dvh",
   backgroundColor: "bg.canvas",
   display: "flex",
+  padding: "none",
+  gap: 0,
+});
+
+// The canvas: everything left once the panel has taken its column, with the
+// card in the middle of THAT rather than of the viewport, so the panel never
+// covers the thing being judged.
+//
+// It is also the theme boundary — `data-theme` lands here rather than on <html>
+// — so the card can be judged in the theme it will be PUBLISHED into while the
+// studio around it stays in the one the editor is wearing. Its own `bg.canvas`
+// is what makes the switch visible: read through the island's tokens it
+// resolves to the other neutral. Rounded, so a canvas in the opposite theme
+// reads as a surface laid on the page rather than as a page that half changed.
+//
+// Everything the panel leaves, with the card in the middle of THAT rather than
+// of the viewport, so the panel never covers the thing being judged. Positioned
+// because the theme control sits in its corner. It takes no ground of its own —
+// the page's `bg.canvas` is already the right one, in whichever theme is in
+// force.
+const canvasStyle = css({
+  position: "relative",
+  flex: 1,
+  display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "3xl",
-  paddingInlineEnd:
-    "calc(token(sizes.propertiesPanelWidth) + token(spacing.3xl))",
-  gap: 0,
+});
+
+// The gutter controls, in the seat they take everywhere else: an 80px band
+// across the top, the way back on the left and the theme toggle answering from
+// the right.
+//
+// Flush with the SHOWCASE, not with the viewport. The pair is confined to the
+// same centred `min(100%, 960px)` box the site header and an article's intro
+// are — the width the page reads at — so past 960 the two controls hold still
+// and below it they come in with the box, on the page's own 20px margin. The
+// canvas behind them still runs to the edges; only the controls are confined,
+// which is the whole point of the rule. (Same declarations as
+// `[data-site-header]` in globals.css. Restated because that rule also hangs
+// the pair off `bottom: 100%`, clear of the row they are anchored to — which
+// on an article is the intro and here would be the top of the screen.)
+//
+// Out of flow, for the reason that rule gives: the controls are the only thing
+// that has ever run out of room, so the card underneath keeps the whole canvas
+// to centre itself in rather than being pushed down by a strip.
+const canvasChromeStyle = css({
+  position: "absolute",
+  insetBlockStart: 0,
+  insetInline: 0,
+  marginInline: "auto",
+  width: "min(token(spacing.full), token(sizes.articleShowcase))",
+  maxWidth:
+    "min(token(sizes.articleShowcase), calc(token(spacing.full) - 2 * token(spacing.xxl)))",
+  height: "token(spacing.5xl)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
 });
 
 // The card the reference art is drawn on: portrait, generously rounded. The
@@ -183,8 +246,15 @@ function ShaderStage({
   }
 }
 
-export default function ShaderPlaygroundPage() {
+export function CardStudio() {
   const [shaderId, setShaderId] = useState<ShaderId>("cosmicTrack");
+
+  // This page's rail is the propertiesPanel RECIPE rather than the component —
+  // the component is a dismissible dialog, and a studio whose whole content is
+  // the thing you click would close it on the first press with nothing left to
+  // bring it back. So the inset the component arranges for itself is asked for
+  // here directly, and permanently: this rail never leaves.
+  usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
 
   const [state, setState] = useState(() => defaultState(spec));
@@ -314,14 +384,24 @@ export default function ShaderPlaygroundPage() {
 
   return (
     <main className={pageStyle}>
-      <div className={cardStyle}>
-        <ShaderStage
-          spec={spec}
-          params={state.params}
-          colors={state.colors}
-          colorBack={state.colorBack}
-          extraColors={state.extraColors}
-        />
+      <div className={canvasStyle}>
+        <div className={cardStyle}>
+          <ShaderStage
+            spec={spec}
+            params={state.params}
+            colors={state.colors}
+            colorBack={state.colorBack}
+            extraColors={state.extraColors}
+          />
+        </div>
+
+        {/* The site's own two gutter controls, exactly as an article carries
+            them — same link, same chip, same store. The studio has no intro row
+            to hang them off, so the band is measured from the canvas instead. */}
+        <div className={canvasChromeStyle}>
+          <IndexLink />
+          <ThemeToggleButton />
+        </div>
       </div>
 
       <aside className={panel.root} aria-label="Properties">

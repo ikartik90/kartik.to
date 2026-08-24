@@ -12,6 +12,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
+import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { propertiesPanel } from "../../../styled-system/recipes";
 import { cx } from "../../../styled-system/css";
 import { Button } from "./button";
@@ -173,6 +174,12 @@ function PropertiesPanelRoot({
   // the slide, and only then tells the consumer.
   const [exiting, setExiting] = useState(false);
   const close = useCallback(() => setExiting(true), []);
+
+  // The page gives up the width the panel is about to occupy, and takes it back
+  // the moment the panel is asked to leave rather than when it has gone — so
+  // the content expands across the same 200ms the panel spends sliding out,
+  // instead of snapping open behind it.
+  usePropertiesPanelInset(!exiting);
   // Escape, the header button, a press outside, and the trigger that opened
   // it all end up here — so the panel leaves the same way whichever of them
   // asked, and the timing lives in exactly one place.

@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
+import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
@@ -218,7 +219,7 @@ export function CommandPalette() {
                 ) : (
                   <DarkIcon className={iconStyle} />
                 )}
-                {isDark ? "Switch to light theme" : "Switch to dark theme"}
+                {isDark ? OFFER.light : OFFER.dark}
               </Command.Item>
             </Command.Group>
 

@@ -100,12 +100,12 @@ describe("CommandPalette", () => {
 
     it("renders the theme toggle item", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Switch to dark theme")).toBeDefined();
+      expect(screen.getByText("Dark theme")).toBeDefined();
     });
 
-    it("shows 'Switch to dark theme' when in light mode (default)", () => {
+    it("shows 'Dark theme' when in light mode (default)", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Switch to dark theme")).toBeDefined();
+      expect(screen.getByText("Dark theme")).toBeDefined();
     });
   });
 
@@ -234,7 +234,7 @@ describe("CommandPalette", () => {
     it("renders only the This Article actions relevant to editing", () => {
       render(<CommandPalette />);
       expect(screen.getByText("This Article")).toBeDefined();
-      expect(screen.getByText("Switch to dark theme")).toBeDefined();
+      expect(screen.getByText("Dark theme")).toBeDefined();
       expect(screen.getByText("Publish article")).toBeDefined();
       expect(screen.getByText("Save changes and exit")).toBeDefined();
       expect(screen.getByText("Discard changes and exit")).toBeDefined();
@@ -365,7 +365,7 @@ describe("CommandPalette", () => {
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      const item = screen.getByText("Switch to dark theme");
+      const item = screen.getByText("Dark theme");
       fireEvent.click(item);
 
       expect(dialog.close).toHaveBeenCalledOnce();
