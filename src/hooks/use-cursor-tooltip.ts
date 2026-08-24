@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { getCursorTooltipPosition } from "@/data/cursor";
+import { PANEL_INSET_ATTR } from "@/hooks/use-properties-panel-inset";
 import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 
 // ---------------------------------------------------------------------------
@@ -17,6 +18,27 @@ import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 // opens the tooltip so it appears in place instead of at a stale spot before
 // the first pointermove lands.
 // ---------------------------------------------------------------------------
+
+/**
+ * How much of the viewport's trailing edge a docked properties panel is holding.
+ *
+ * Read from the body's own inset rather than measured off the panel: that
+ * padding IS the app's answer to the question (one rule in globals.css, keyed
+ * off the mark `usePropertiesPanelInset` sets), so a tooltip and the page it is
+ * drawn over cannot disagree about where the usable edge is. It also comes free
+ * of the 820px gate — below it the panel overlays instead of insetting, the
+ * padding is absent, and there is no narrower edge to aim at.
+ *
+ * Gated on the attribute so the common case is one attribute check per frame:
+ * the computed-style read only happens on a page that actually has a rail up.
+ * Mid-slide it returns the interpolated width, which is the right answer — the
+ * label tracks the panel in rather than jumping when it lands.
+ */
+function reservedRightInset(): number {
+  if (!document.body.hasAttribute(PANEL_INSET_ATTR)) return 0;
+  return parseFloat(getComputedStyle(document.body).paddingInlineEnd) || 0;
+}
+
 export function useCursorTooltip(visible: boolean) {
   const ref = useRef<HTMLElement | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
@@ -27,12 +49,17 @@ export function useCursorTooltip(visible: boolean) {
     const el = ref.current;
     if (!el) return;
     // `offsetWidth` is the label at its natural width — read before writing,
-    // and only ever compared against the viewport, so this is one measurement
-    // per frame that already had to touch layout, not a read-write-read.
+    // and only ever compared against the usable edge, so this is one
+    // measurement per frame that already had to touch layout, not a
+    // read-write-read.
     const { left, top } = getCursorTooltipPosition(
       pointerRef.current.x,
       pointerRef.current.y,
-      { width: el.offsetWidth, viewportWidth: window.innerWidth },
+      {
+        width: el.offsetWidth,
+        viewportWidth: window.innerWidth,
+        reservedRight: reservedRightInset(),
+      },
     );
     el.style.left = left;
     el.style.top = top;

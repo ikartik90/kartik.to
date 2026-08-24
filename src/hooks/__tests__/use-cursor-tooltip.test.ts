@@ -16,7 +16,11 @@ describe("useCursorTooltip", () => {
     });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.removeAttribute("data-properties-panel");
+    document.body.style.paddingInlineEnd = "";
+  });
 
   it("seed writes the offset position onto the element", () => {
     const el = document.createElement("div");
@@ -82,6 +86,45 @@ describe("useCursorTooltip", () => {
 
     expect(el.style.left).toBe("");
     expect(el.style.top).toBe("");
+  });
+
+  // The page reserves a docked panel's column as `padding-inline-end` on the
+  // body (globals.css, keyed off `data-properties-panel`), which is the app's
+  // one answer to how much of the right edge is already spoken for. The
+  // positioner has to read it, or a label near the panel is placed on screen
+  // and painted underneath it — which is what the cover playground's theme
+  // toggle did.
+  it("treats a docked panel's column as taken", () => {
+    const el = document.createElement("div");
+    // jsdom lays nothing out, so the label's width has to be stated.
+    Object.defineProperty(el, "offsetWidth", { value: 73, configurable: true });
+    document.body.setAttribute("data-properties-panel", "");
+    document.body.style.paddingInlineEnd = "332px";
+
+    const { result } = renderHook(() => useCursorTooltip(false));
+    result.current.ref.current = el;
+
+    // window.innerWidth is 1024 in jsdom, so the usable edge is 692 and the
+    // label may start no further right than 692 - 4 - 73. Anchored at 915 it
+    // slides back to exactly that, and drops the 2px a shifted label drops.
+    act(() => result.current.seed(900, 200));
+
+    expect(el.style.left).toBe("615px");
+    expect(el.style.top).toBe("219px");
+  });
+
+  it("takes the whole viewport back when no panel is docked", () => {
+    const el = document.createElement("div");
+    Object.defineProperty(el, "offsetWidth", { value: 73, configurable: true });
+
+    const { result } = renderHook(() => useCursorTooltip(false));
+    result.current.ref.current = el;
+
+    act(() => result.current.seed(900, 200));
+
+    expect(el.style.left).toBe("915px");
+    // Never shifted, so never dropped either.
+    expect(el.style.top).toBe("217px");
   });
 
   it("stops tracking after it becomes hidden", () => {
