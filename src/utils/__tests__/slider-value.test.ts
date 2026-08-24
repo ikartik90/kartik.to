@@ -3,6 +3,7 @@ import {
   formatSliderValue,
   ratioOfValue,
   snapToStep,
+  tickRatios,
   valueAtRatio,
 } from "../slider-value";
 
@@ -109,5 +110,54 @@ describe("formatSliderValue", () => {
 
   it("never renders a signed zero", () => {
     expect(formatSliderValue(-0, 1)).toBe("0");
+  });
+});
+
+describe("tickRatios", () => {
+  it("draws one mark per value when the scale holds 11 or fewer", () => {
+    // The God Rays colour count: 1–5 can only ever be five numbers, so eleven
+    // marks would promise six stops the thumb cannot visit.
+    expect(tickRatios({ min: 1, max: 5, step: 1 })).toEqual([
+      0, 0.25, 0.5, 0.75, 1,
+    ]);
+  });
+
+  it("still draws every value at exactly 11", () => {
+    expect(tickRatios({ min: 0, max: 10, step: 1 })).toHaveLength(11);
+  });
+
+  it("caps a denser scale at 11 marks spread across the range", () => {
+    // 0–1 by hundredths is 101 stops; the ruler shows a tenth of the range.
+    expect(tickRatios({ min: 0, max: 1, step: 0.01 })).toEqual([
+      0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1,
+    ]);
+  });
+
+  it("caps a continuous scale at 11 marks", () => {
+    expect(tickRatios({ min: 0, max: 100, step: 0 })).toHaveLength(11);
+  });
+
+  it("ends the ruler where the thumb ends when max is off the grid", () => {
+    // Grid is 0, 3, 6, 9 — snapToStep can never reach 10, so neither does a mark.
+    expect(tickRatios({ min: 0, max: 10, step: 3 })).toEqual([0, 0.3, 0.6, 0.9]);
+  });
+
+  it("does not lose a stop to float error in the division", () => {
+    // (0.5 - 0) / 0.1 is 4.999999999999999 — six stops, not five.
+    expect(tickRatios({ min: 0, max: 0.5, step: 0.1 })).toEqual([
+      0, 0.2, 0.4, 0.6, 0.8, 1,
+    ]);
+  });
+
+  it("collapses a degenerate range to a single mark", () => {
+    expect(tickRatios({ min: 5, max: 5, step: 1 })).toEqual([0]);
+  });
+
+  it("spreads an explicitly requested count evenly, whatever the scale", () => {
+    expect(tickRatios({ min: 0, max: 100, step: 1 }, 5)).toEqual([
+      0, 0.25, 0.5, 0.75, 1,
+    ]);
+    expect(tickRatios({ min: 0, max: 100, step: 1 }, 1)).toEqual([0]);
+    expect(tickRatios({ min: 0, max: 100, step: 1 }, 0)).toEqual([]);
   });
 });

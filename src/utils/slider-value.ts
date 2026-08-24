@@ -86,3 +86,41 @@ export function formatSliderValue(value: number, step: number): string {
   // toFixed keeps the sign on values that round to zero (-0.4 → "-0").
   return /^-0(\.0+)?$/.test(text) ? text.slice(1) : text;
 }
+
+/** The most marks a ruler draws before it stops trying to show every value. */
+export const MAX_SLIDER_TICKS = 11;
+
+/** How many values the scale holds; Infinity when it is continuous. */
+function stopCount({ min, max, step }: SliderScale): number {
+  if (!(max > min)) return 1;
+  if (!(step > 0)) return Infinity;
+  // Settle the quotient before flooring, for the reason snapToStep settles it
+  // before rounding: (0.5 - 0) / 0.1 is 4.999999999999999, and flooring that
+  // raw would drop the last stop off the ruler.
+  return Math.floor(Number(((max - min) / step).toFixed(9))) + 1;
+}
+
+/**
+ * Where the ruler's marks sit, as 0–1 positions along the track.
+ *
+ * A scale the ruler can show WHOLE gets one mark per reachable value, each
+ * sitting on that value: a 1–5 colour count is drawn with five marks, not with
+ * eleven promising stops the thumb can never visit, and a max off the grid
+ * (min 0, max 10, step 3) ends its ruler at 9, where the thumb ends. Denser
+ * scales — and continuous ones — fall back to `MAX_SLIDER_TICKS` marks spread
+ * evenly across the range, which is the ruler a 0–100 slider always had.
+ *
+ * `count` overrides the lot with that many evenly spread marks.
+ */
+export function tickRatios(scale: SliderScale, count?: number): number[] {
+  const stops = count ?? stopCount(scale);
+  if (count === undefined && stops <= MAX_SLIDER_TICKS) {
+    return Array.from({ length: stops }, (_, i) =>
+      ratioOfValue(snapToStep(scale.min + i * scale.step, scale), scale),
+    );
+  }
+  const marks = Math.min(stops, MAX_SLIDER_TICKS);
+  if (marks <= 0) return [];
+  if (marks === 1) return [0];
+  return Array.from({ length: marks }, (_, i) => i / (marks - 1));
+}

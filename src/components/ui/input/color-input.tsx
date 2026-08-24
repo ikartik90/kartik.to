@@ -87,7 +87,10 @@ export function ColorInput({
       <span className={styles.swatch} aria-hidden>
         {/* The colour composites OVER the frame's checkerboard, so a partial
             opacity reads as partial rather than as a paler colour. */}
-        <span className={styles.swatchFill} style={{ backgroundColor: value }} />
+        <span
+          className={styles.swatchFill}
+          style={{ backgroundColor: value }}
+        />
       </span>
       <span className={styles.separator} aria-hidden />
       <Field.Control
@@ -117,11 +120,19 @@ export function ColorInput({
         value={opacity}
         onChange={commitOpacity}
         disabled={disabled}
-        className={cx(fieldStyles.control, styles.hex, styles.opacity)}
+        // The `opacity` slot IS the slider's value box (one `fieldValueBox` in
+        // the config), so the two field types are the same number in the same
+        // place — `hex` no longer has anything to lend it.
+        className={cx(fieldStyles.control, styles.opacity)}
         spellCheck={false}
         autoComplete="off"
         inputMode="numeric"
         maxLength={3}
+        // The width floor is the recipe's; this is the ceiling, for the
+        // browsers without `field-sizing` — an unsized input is ~20 characters
+        // wide and would shove the hex digits out of the frame. Three, the most
+        // this field can hold, so the box never resizes mid-edit.
+        size={3}
         // Snapping back on blur is what makes an emptied or out-of-range field
         // resolve: the draft goes, and the committed value paints instead.
         onBlur={() => {
