@@ -49,13 +49,13 @@ describe("CoverPlayground theme toggle", () => {
     const { container } = render(<CoverPlayground />);
     const canvas = container.querySelector("main > div");
     const control = screen.getByRole("button", { name: "Light theme" });
-    const back = screen.getByRole("link", { name: "Index" });
+    const menu = screen.getByRole("button", { name: "Menu" });
 
     expect(canvas?.contains(control)).toBe(true);
-    // The way back sits with it, as it does on an article — and it goes to the
-    // front page, not backwards through history.
-    expect(canvas?.contains(back)).toBe(true);
-    expect(back.getAttribute("href")).toBe("/");
+    // The menu sits with it, as it does on an article — and the way back is
+    // inside it now, as "Back to index", rather than being a control of its own.
+    expect(canvas?.contains(menu)).toBe(true);
+    expect(screen.queryByRole("link", { name: "Index" })).toBeNull();
     // Both glyphs ship and the cascade picks — the site's own mechanism, which
     // works here because the theme is the document's.
     expect(container.querySelectorAll("[data-theme-glyph]").length).toBe(2);

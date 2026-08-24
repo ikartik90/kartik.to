@@ -17,6 +17,8 @@ import {
 } from "@/app/actions/post";
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
+import { getBackTarget, type BackTarget } from "@/utils/back-target";
+import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
@@ -45,6 +47,10 @@ export interface CommandPaletteHandlers {
   drafts: Post[];
   /** The draft currently being viewed in renderer mode, or null. */
   currentDraft: Post | null;
+  /** Where "back" goes from here, or null where it is not offered. */
+  backTarget: BackTarget | null;
+  /** Leave for `backTarget`. A no-op where there is none. */
+  handleBack: () => void;
   handleThemeToggle: () => void;
   /** Open the cover playground — public, so this is offered logged out too. */
   handleCoverPlayground: () => void;
@@ -152,6 +158,43 @@ export function useCommandPalette(
     }
     return null;
   }, [isEditMode, pathname, drafts]);
+
+  // Editing a document already names its exits, and each one says what becomes
+  // of the work in the buffer. A bare "back" would answer that question by
+  // throwing it away without saying so, so it is not offered there.
+  //
+  // No exception carved out for the cover playground any more: it used to sit
+  // under `/edit` and had to be excepted by name to keep its way back, and it
+  // is a route of its own now, so it is simply not in edit mode. The rule reads
+  // as what it always meant — buffered work is what withholds the command.
+  const backTarget = useMemo(
+    () =>
+      isEditMode || isHomeEditMode ? null : getBackTarget(pathname),
+    [isEditMode, isHomeEditMode, pathname],
+  );
+
+  const handleBack = () => {
+    if (!backTarget) return;
+    close();
+    router.push(backTarget.href);
+  };
+
+  // ⌘[ / Ctrl [ — the same gesture the browser reads as "back", claimed so it
+  // lands on the page above THIS page rather than on whatever was visited
+  // before it. Global, because the control it replaces was on the page rather
+  // than in the palette: it has to work without opening anything.
+  useEffect(() => {
+    if (!backTarget) return;
+    const { href } = backTarget;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!hasShortcutModifier(event) || event.key !== "[") return;
+      event.preventDefault();
+      close();
+      router.push(href);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [backTarget, close, router]);
 
   const syncOtherTabs = () => {
     notifyContentUpdated();
@@ -429,6 +472,8 @@ export function useCommandPalette(
     editCategory,
     drafts,
     currentDraft,
+    backTarget,
+    handleBack,
     handleThemeToggle,
     handleCoverPlayground,
     handleEditPage,

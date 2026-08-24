@@ -2,14 +2,9 @@
 
 import { useId } from "react";
 import { usePathname } from "next/navigation";
-import { css, cx } from "../../styled-system/css";
-import { hotkey } from "../../styled-system/recipes";
-import MenuIcon from "@/assets/icons/menu.svg";
-import { useShortcutLabel } from "@/hooks/use-shortcut-label";
-import { openCommandPalette } from "@/utils/command-palette-channel";
+import { css } from "../../styled-system/css";
+import { MenuButton } from "./menu-button";
 import { ThemeToggle } from "./theme-toggle";
-import { Button } from "./ui/button";
-import { Tooltip } from "./ui/tooltip";
 
 const TAGLINE = "DESIGNER • BUILDER • ENGINEER •";
 
@@ -27,29 +22,6 @@ const ORBIT_INITIAL_ANGLE_DEG = -132;
 const brandStyle = css({
   display: "flex",
   justifyContent: "center",
-});
-
-// The shortcut and the tooltip are the same button's label wearing two faces,
-// and they are never both up. At rest the chip says how to reach the menu
-// without the mouse; the moment a cursor arrives, the tooltip beside it says
-// what the menu IS, and the chip that was answering the other question steps
-// out of the way. `visibility` rather than `display` so the button never moves,
-// on the tooltip's own 150ms ease-out so one hands over to the other.
-//
-// Both faces are cursor-first by nature — `_hasCursor` withholds the chip from
-// a device with no key to press, exactly as hover withholds the tooltip from a
-// device with no pointer to reveal it. A touch visitor gets the icon and its
-// accessible name, which is all that is true for them.
-const shortcutStyle = css({
-  display: "none",
-  _hasCursor: { display: "flex" },
-  transitionProperty: "opacity, visibility",
-  transitionDuration: "150ms",
-  transitionTimingFunction: "ease-out",
-  "button:hover ~ &": {
-    opacity: 0,
-    visibility: "hidden",
-  },
 });
 
 const orbitStageStyle = css({
@@ -113,29 +85,18 @@ export function Header() {
   // toggle off the top of it; they are the page's furniture, not the reader's.
   const isHome = pathname === "/" || pathname === "/edit/home";
   const pathId = `brand-tagline-path-${useId().replace(/:/g, "")}`;
-  // The chip names the key this visitor's keyboard actually has — ⌘K on Apple
-  // hardware, Ctrl K on a PC — which is the same shortcut the palette listens
-  // for on each.
-  const shortcut = useShortcutLabel("K");
 
   if (!isHome) return null;
 
   return (
     <header data-site-header>
       {/* The left gutter's control, in the same seat the article pages give
-          their back link: flush with the showcase edge, centred on the first
-          row of the page. Both are the one control the surface opens with —
-          and the theme toggle answers it from the gutter opposite. */}
+          their own: flush with the showcase edge, centred on the first row of
+          the page. The same control on both now — the one control a surface
+          opens with — and the theme toggle answers it from the gutter
+          opposite. */}
       <div data-site-menu>
-        <Button variant="icon" aria-label="Menu" onClick={openCommandPalette}>
-          <MenuIcon />
-          <Button.Tooltip>
-            <Tooltip.Text>Menu</Tooltip.Text>
-          </Button.Tooltip>
-        </Button>
-        <kbd className={cx(hotkey(), shortcutStyle)} data-site-menu-shortcut>
-          {shortcut}
-        </kbd>
+        <MenuButton />
       </div>
       <div data-site-brand className={brandStyle}>
         <div className={orbitStageStyle} aria-label={TAGLINE}>

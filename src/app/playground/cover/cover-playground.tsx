@@ -12,7 +12,7 @@ import { css } from "../../../../styled-system/css";
 import { propertiesPanel } from "../../../../styled-system/recipes";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
-import { IndexLink } from "@/components/index-link";
+import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
@@ -90,8 +90,8 @@ const canvasStyle = css({
 });
 
 // The gutter controls, in the seat they take everywhere else: an 80px band
-// across the top, the way back on the left and the theme toggle answering from
-// the right.
+// across the top, the menu on the left and the theme toggle answering from the
+// right.
 //
 // Flush with the SHOWCASE, not with the viewport. The pair is confined to the
 // same centred `min(100%, 960px)` box the site header and an article's intro
@@ -385,11 +385,11 @@ export function CoverPlayground() {
         </div>
 
         {/* The site's own two gutter controls, exactly as an article carries
-            them — same link, same chip, same store. The playground has no intro
-            row to hang them off, so the band is measured from the canvas
+            them — same button, same chip, same store. The playground has no
+            intro row to hang them off, so the band is measured from the canvas
             instead. */}
         <div className={canvasChromeStyle}>
-          <IndexLink />
+          <MenuButton />
           <ThemeToggleButton />
         </div>
       </div>
