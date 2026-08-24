@@ -158,14 +158,14 @@ const markerAlignmentBox = {
  * the frame, whose mousedown forwards focus to the field's CONTROL — so a click
  * a few pixels off the number moves a slider's thumb instead of placing a caret
  * in the box. A negative margin pulls the box out over each side, an equal
- * padding puts the number back on exactly the pixel it is drawn on, `alignSelf`
- * claims the frame's full height the way a slider track does, and `content-box`
- * keeps `minWidth` a floor for the NUMBER rather than for the number plus the
- * padding it borrowed. Each side is scoped to the arrangement that has the
- * space to reclaim, so a re-composed frame cannot pull the box out over a
- * sibling. The width is the DRAWN box, reclaimed space included — that space
- * was already the frame's own padding, so the number keeps sitting on the
- * pixel it always sat on and only the room in front of it changes.
+ * padding puts the number back on exactly the pixel it is drawn on, and
+ * `alignSelf` claims the frame's full height the way a slider track does. Each
+ * side is scoped to the arrangement that has the space to reclaim, so a
+ * re-composed frame cannot pull the box out over a sibling.
+ *
+ * The stated width is the DRAWN box, reclaimed space included — that space was
+ * already the frame's own padding, so the number keeps sitting on the pixel it
+ * always sat on and only the room in front of it changes.
  */
 const fieldValueBox = {
   // Doubled class, and this is load-bearing: the box wears the `field` recipe's
@@ -446,21 +446,6 @@ export default defineConfig({
                 base: "color-mix(in srgb, var(--colors-neutral-200) 75%, transparent)",
                 _dark:
                   "color-mix(in srgb, var(--colors-neutral-800) 75%, transparent)",
-              },
-            },
-            // The wash laid over a photo while its controls are up. It INVERTS
-            // with the theme — dark ink in light UI, light ink in dark — which
-            // looks backwards until you notice what floats on it: the toolbar
-            // is `surface`, so light UI needs a dark wash under a pale pill and
-            // dark UI a pale wash under a dark one. Matching the theme instead
-            // would sink the toolbar into its own scrim. Same inversion, same
-            // reason, as `border.imageOutline` (Figma 828:6838 rgba(31,33,35,.5)
-            // / 828:6548 rgba(238,242,246,.5)).
-            imageScrim: {
-              value: {
-                base: "color-mix(in srgb, var(--colors-neutral-900) 50%, transparent)",
-                _dark:
-                  "color-mix(in srgb, var(--colors-neutral-100) 50%, transparent)",
               },
             },
             // `field.bg.default` composited over `surface` — the calendar's own
@@ -2998,6 +2983,121 @@ export default defineConfig({
             },
           },
         }),
+
+        // The control rail that surfaces over a filled collection cell in the
+        // editor (Figma 828:6697 dark / 828:6838 light).
+        //
+        // Reveal is pure CSS off the cell beside it — no hover state in React —
+        // and keys on focus as well, so tabbing into the buttons brings it up.
+        // `opacity: 0` (rather than `display: none` or unmounting) is what makes
+        // that possible: a transparent element is still focusable.
+        //
+        // A SIBLING of the cell, never a child of it, which is what every `+`
+        // below is about: the cell CLIPS — that is what rounds a photo filling
+        // its slot — and this rail is centred on the cell's top edge with half
+        // of it hanging outside. A child would be sliced off along that edge.
+        // The pair sits in the `slot` box, so the rail is always the element
+        // directly after the cell it belongs to.
+        //
+        // It used to sit dead-centre over the photo on a blurred wash, and both
+        // halves of that were wrong: the wash defocused the very picture the
+        // controls exist to work on, and the rail covered the middle of it. On
+        // the edge it covers a strip of nothing and the photo stays sharp —
+        // which is how a home-grid card carries its toolbar too
+        // (`grid-item-toolbar.tsx`), so the two editors now agree.
+        //
+        // With no wash under it the rail has to separate itself from the photo,
+        // so it takes the hairline and the elevation the home grid's rail
+        // spends on exactly that job — the same values, because this is the
+        // same problem and two chrome treatments for it would read as two
+        // materials. (The Figma frame carries neither, on the reasoning that
+        // the scrim already did the separating. Without the scrim it doesn't.)
+        collectionCellToolbar: defineRecipe({
+          className: "collection-cell-toolbar",
+          description:
+            "The hover/focus-revealed control pill for a filled collection cell in the editor, centred on the cell's top edge (Figma 828:6697 dark / 828:6838 light). Composes the shared `toolbar` recipe for the box and adds only what floating costs — position, hairline, elevation, clip — plus a cell-relative width cap. Everything the pill cannot say in four buttons — caption, background — is edited in the docked `propertiesPanel`.",
+          base: {
+            position: "absolute",
+            // Centred on the cell's TOP EDGE — half above it, half over the
+            // photo. Written as "put my centre on the edge" rather than as a
+            // -20px offset, so it stays correct if the rail's height ever
+            // changes; the grid's 20px gap is sized to swallow the half that
+            // hangs out (see the `root` slot).
+            insetBlockStart: 0,
+            insetInlineStart: "half",
+            transform: "translate(-50%, -50%)",
+            // Rung 3 of the cell's paint ladder — see `collectionGrid`'s
+            // `backgroundEffect` slot. Over the photo, and over a neighbouring
+            // cell's drop-target ring, which the overhang reaches into.
+            zIndex: 3,
+            // What floating costs, in the same values `gridItemToolbar` and
+            // `selectionPopover` spend on it — see the note above.
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
+            boxShadow:
+              "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+            // The box — 40px tall, 6px inset, 4px gap, on `bg.surface` — is the
+            // shared `toolbar` recipe this composes with; only the clip and the
+            // cell-relative width cap are the pill's own.
+            overflow: "hidden",
+            maxWidth: "calc(100% - token(spacing.lg) * 2)",
+            opacity: 0,
+            // Inert as well as invisible while it is down: the rail straddles
+            // the gap above the cell, and a control you cannot see must not be
+            // a control you can hit. It is also what keeps `&:hover` below from
+            // firing on a rail nobody can see.
+            pointerEvents: "none",
+            transition: "opacity 150ms ease",
+            // Up while the cell is under the pointer, while the pointer is on
+            // the rail's own overhanging half (the cell is NOT hovered there,
+            // so without this the rail would drop out from under the hand
+            // reaching for it), and while anything in it holds focus.
+            "[data-collection-cell]:hover + &, &:hover, &:focus-within": {
+              opacity: 1,
+              pointerEvents: "auto",
+            },
+            // Down for the whole reorder, and back up once the dropped photo
+            // has landed.
+            //
+            // `transition: none` makes this leave AT ONCE rather than fading:
+            // the press lifts the cell's clip in the same frame so the photo
+            // can tilt out of its slot, and chrome still dissolving over a
+            // picture that has left is the wrong thing in the wrong place. Out
+            // instantly, back in once the state clears — grabbing is abrupt,
+            // letting go is not.
+            //
+            // The extra `[data-collection-cell]` is specificity, not reach:
+            // without it this ties with the reveal rule above and would be
+            // decided by source order alone.
+            "[data-collection-grid][data-reordering] [data-collection-cell] + &":
+              { opacity: 0, pointerEvents: "none", transition: "none" },
+            // And it STAYS down once the gesture is over, for as long as the
+            // pointer has not moved. A drag necessarily ends with the cursor
+            // over the photo it dropped, so `:hover` matches the moment the
+            // rule above lets go — reporting where the gesture finished as
+            // though it were a reach for the controls. See `pointerIdle` in
+            // `collection-grid.tsx`.
+            //
+            // No `transition` of its own, deliberately: this state is entered
+            // from a rail that is ALREADY down, so there is nothing to animate
+            // on the way in, and the fade on the way out should be the ordinary
+            // hover fade.
+            "[data-collection-grid][data-pointer-idle] [data-collection-cell] + &":
+              { opacity: 0, pointerEvents: "none" },
+            // In the cell a photo is FLYING INTO, the rail comes back over the
+            // length of that flight rather than the shorter hover fade, so it
+            // arrives exactly as the photo settles into the slot instead of
+            // finishing early and waiting for it. Duration and curve match
+            // `LANDING_MS` / `LANDING_EASE` in `collection-grid.tsx`. Never
+            // conflicts with the rule above: `data-landing` is set in the same
+            // commit that clears `data-reordering`, so the two are never on
+            // together.
+            "[data-collection-cell][data-landing] + &": {
+              transition: "opacity 100ms ease-out",
+            },
+          },
+        }),
       },
 
       slotRecipes: {
@@ -4010,6 +4110,7 @@ export default defineConfig({
             "Collection tile grid — a 3×2 slot grid in the editor, and in the reader a featured 2×2 with two stacked tiles (3+ images), an equal pair (2), or a single natural-ratio tile (0–1). Figma 828:6837/826:6501 editor, 829:6911/828:6658 reader.",
           slots: [
             "root",
+            "slot",
             "cell",
             "tile",
             "image",
@@ -4022,7 +4123,12 @@ export default defineConfig({
           base: {
             root: {
               display: "grid",
-              gap: "lg",
+              // 20px, and sized by what has to FIT between two cards rather
+              // than by the grid on its own: the editor's control rail is a
+              // 40px pill centred on a cell's TOP EDGE, so exactly half of it
+              // hangs into the row above. At 20px that overhang lands in the
+              // gap instead of over the neighbouring photo.
+              gap: "xxl",
               width: "token(spacing.full)",
               maxWidth: "token(sizes.articleShowcase)",
               // Reordering is a pointer gesture rather than a native drag, so
@@ -4031,6 +4137,20 @@ export default defineConfig({
               // press-and-sweep across the editor would otherwise start.
               "&[data-reordering]": { cursor: "grabbing", userSelect: "none" },
             },
+            // The editor's grid item: a cell and the control rail that belongs
+            // to it, as one box. The cell CLIPS — that is what rounds a photo
+            // filling its slot, since a picture nobody has rounded carries a
+            // corner of zero (`DEFAULT_MEDIA_RADIUS`) — and the rail is centred
+            // on the cell's top edge with half of it outside. A rail inside the
+            // cell would be sliced off along that edge, so the two are siblings
+            // in a box that does not clip, exactly as a home-grid card and its
+            // toolbar are (see `grid-item-toolbar.tsx`).
+            //
+            // `grid` rather than `block` so the cell stretches to the slot in
+            // BOTH axes without having to restate a size; the rail is absolute,
+            // so it never becomes a second track. The reader has no rail and no
+            // wrapper — its tiles are grid items themselves.
+            slot: { position: "relative", display: "grid" },
             cell: {
               position: "relative",
               overflow: "hidden",
@@ -4177,13 +4297,13 @@ export default defineConfig({
               // Being positioned is NOT enough to clear the photo, though it
               // was until the background effect arrived: the gradient has to
               // fill the cell, so the photo was lifted to `z-index: 1` to stay
-              // over it, and this marker went under the picture it marks. Top
-              // rung of the cell's ladder — see the `backgroundEffect` slot.
+              // over it, and this marker went under the picture it marks. See
+              // the `backgroundEffect` slot for the whole ladder.
               "&[data-drop-target]::after": {
                 content: '""',
                 position: "absolute",
                 inset: 0,
-                zIndex: 3,
+                zIndex: 2,
                 borderRadius: "inherit",
                 backgroundColor: "field.bg.active",
                 boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
@@ -4284,17 +4404,20 @@ export default defineConfig({
             // because introducing this one forced the other two: a positioned
             // element outranks every static sibling, so the moment the gradient
             // needed `position: absolute` the photo had to be lifted over it,
-            // and lifting the photo silently sank the editor's hover scrim
-            // (which is `z-index: auto`) underneath the picture it blurs. The
-            // toolbar survived that regression only by carrying a z-index of
-            // its own, which made the bug read as "the blur disappeared but the
-            // controls are fine". Keep them in step:
+            // and lifting the photo silently sank everything laid over the
+            // picture that had been left at `auto`. Keep them in step:
             //
             //   0  backgroundEffect — the ground
             //   1  image            — the picture
-            //   2  overlay root     — the editor's scrim and controls
-            //      (in `collectionCellOverlay`, which must outrank the image)
-            //   3  cell's ::after   — the drop-target wash and ring
+            //   2  cell's ::after   — the drop-target wash and ring
+            //   3  the editor's control rail (`collectionCellToolbar`)
+            //
+            // The rail is on this ladder despite being a SIBLING of the cell
+            // rather than a child of it: the cell is `position: relative` with
+            // no z-index of its own, so it is not a stacking context and its
+            // contents compete with the rail in the same one. Rung 3 is what
+            // keeps the rail over a neighbouring cell's drop-target ring, which
+            // its overhanging half reaches into.
             //
             // Rungs 2 and 3 were both written as `auto` and both sank under the
             // photo the moment rung 1 was raised. Neither is optional: every
@@ -4481,184 +4604,6 @@ export default defineConfig({
           defaultVariants: { layout: "featured" },
           // Both consumers pick `layout` at runtime from the item count.
           staticCss: [{ layout: ["*"] }],
-        }),
-
-        // The controls that surface over a filled collection cell on hover.
-        //
-        // Reveal is pure CSS off the cell — no hover state in React — and keys
-        // on `:focus-within` as well, so tabbing into the buttons brings them
-        // up. `opacity: 0` (rather than `display: none` or unmounting) is what
-        // makes that possible: a transparent element is still focusable.
-        //
-        // The fade lives on the scrim and the pill INDIVIDUALLY, never on the
-        // root that holds them. An element with `opacity < 1` is a Backdrop
-        // Root, so a fading wrapper leaves the scrim's `backdrop-filter` with
-        // an empty backdrop to sample: the blur simply would not paint until
-        // the wrapper settled at exactly 1, snapping on at the end of the
-        // transition instead of easing in with the wash. Fading the scrim
-        // itself is fine — an element's own opacity composites AFTER its
-        // backdrop filter, so the blur ramps up with it.
-        //
-        // The pill deliberately does NOT reuse `selectionPopover`. That recipe
-        // is `position: fixed` anchored to `anchor(top)` with a flip fallback —
-        // it exists to float ABOVE a target, while this one is centred INSIDE
-        // one. Only the chrome is shared, and Figma drops even the hairline and
-        // the drop shadow here: the scrim already separates the pill from the
-        // photo, so elevation would be doing a job that is already done.
-        // The cell whose properties panel is open is NOT a special case here,
-        // deliberately. Standing the scrim down for it — so the gradient being
-        // tuned is not blurred behind a wash — left the toolbar floating on a
-        // bare photo, which reads as the overlay half-drawn; pinning both up
-        // instead means editing a gradient you can only see through a blur.
-        // Leaving the whole overlay on hover resolves both: while you are
-        // actually working in the panel the pointer is over THERE and the cell
-        // is unwashed, and when you come back to the cell you get the same
-        // complete overlay every other cell gives you, with the properties
-        // button lit.
-        collectionCellOverlay: defineSlotRecipe({
-          className: "collection-cell-overlay",
-          description:
-            "Hover/focus-revealed scrim and control pill over a filled collection cell in the editor (Figma 828:6697 dark / 828:6838 light). Everything the pill cannot say in five buttons — caption, background — is edited in the docked `propertiesPanel`, which stands the whole overlay down while it is open.",
-          slots: ["root", "scrim", "toolbar"],
-          base: {
-            // Carries no opacity of its own — see the note above. It only
-            // positions the two layers, and it stays inert THROUGHOUT: the
-            // photo underneath is the drag handle for reordering, so nothing
-            // laid over it may take the press. Only the controls themselves
-            // opt back in, below. (Keyboard focus is unaffected by
-            // `pointer-events`, so tabbing in still works.)
-            root: {
-              position: "absolute",
-              inset: 0,
-              display: "grid",
-              placeItems: "center",
-              pointerEvents: "none",
-              // Top rung of the cell's paint ladder (see `collectionGrid`'s
-              // `backgroundEffect` slot). The photo sits at `z-index: 1` so it
-              // clears the gradient behind it, which means an overlay left at
-              // `auto` paints UNDERNEATH the picture it is supposed to wash and
-              // blur. Raising the whole overlay — rather than the scrim alone —
-              // keeps the scrim and the controls in one layer, in DOM order.
-              //
-              // Safe for the scrim's `backdrop-filter`: a stacking context made
-              // by `z-index` is not a Backdrop Root (only opacity, filter, mask
-              // and friends are), so the blur still samples the photo below.
-              // Verified in the browser, not assumed.
-              zIndex: 2,
-            },
-            // The wash AND a defocus of the photo under it, so the pill is the
-            // sharp thing in the cell. One radius (`spacing.md`) is shared by
-            // every backdrop blur in the app — this scrim, the reader's surplus
-            // badge and the dialog backdrop — so "blurred behind glass" reads
-            // as one material rather than three strengths of the same idea.
-            //
-            // Panda's `backdropFilter` utility emits ONLY the -webkit- form,
-            // which Chromium does not recognise, so the raw key is the one that
-            // actually lands; the prefixed spelling stays for older WebKit.
-            scrim: {
-              position: "absolute",
-              inset: 0,
-              // Its OWN corners, not the cell's clip.
-              //
-              // A pressed cell stops clipping so the photo can tilt out of its
-              // slot, and a scrim that had been relying on that clip for its
-              // rounded corners squares off the instant the press lands —
-              // visible as the wash overflowing the cell's radius for the
-              // moment it takes to fade. Nothing here may depend on being
-              // masked by the cell; the photo carries its radius for the same
-              // reason.
-              borderRadius: "xl",
-              backgroundColor: "bg.imageScrim",
-              backdropFilter: "blur(token(spacing.md))",
-              "-webkit-backdrop-filter": "blur(token(spacing.md))",
-              "backdrop-filter": "blur(token(spacing.md))",
-              opacity: 0,
-              transition: "opacity 150ms ease",
-              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
-                { opacity: 1 },
-              // Down for the whole reorder, and back up once the dropped photo
-              // has landed.
-              //
-              // Stated on the scrim itself rather than on the overlay root for
-              // two reasons: the blur survives (a root below full opacity is a
-              // BACKDROP ROOT, leaving its descendant's `backdrop-filter`
-              // nothing to sample), and it FADES both ways using the transition
-              // this slot already owns instead of snapping.
-              //
-              // The extra `[data-collection-cell]` is specificity, not reach:
-              // without it this ties with the `:hover` rule above and would be
-              // decided by source order alone.
-              //
-              // `transition: none` makes this leave AT ONCE rather than fading:
-              // the press lifts the cell's clip in the same frame so the photo
-              // can tilt out of its slot, and a scrim still dissolving over a
-              // picture that has left is the wrong thing in the wrong place.
-              // Out instantly, back in once the state clears — grabbing is
-              // abrupt, letting go is not.
-              "[data-collection-grid][data-reordering] [data-collection-cell] &":
-                { opacity: 0, transition: "none" },
-              // And it STAYS down once the gesture is over, for as long as the
-              // pointer has not moved. A drag necessarily ends with the cursor
-              // over the photo it dropped, so `:hover` matches the moment the
-              // rule above lets go — reporting where the gesture finished as
-              // though it were a reach for the controls. See `pointerIdle` in
-              // `collection-grid.tsx`.
-              //
-              // The same selector shape as the rule above, and for the same
-              // reason: it has to out-specify `:hover`. Harmless when both
-              // match (a fresh press before the pointer has moved) — they agree
-              // on `opacity`, and only the rule above claims `transition`, so
-              // the press still stands the scrim down instantly.
-              //
-              // No `transition` of its own, deliberately: this state is entered
-              // from an overlay that is ALREADY down, so there is nothing to
-              // animate on the way in, and the fade on the way out should be
-              // the ordinary hover fade.
-              "[data-collection-grid][data-pointer-idle] [data-collection-cell] &":
-                { opacity: 0 },
-              // ...and in the cell a photo is FLYING INTO, it comes back over
-              // the length of that flight rather than the shorter hover fade,
-              // so the blur arrives exactly as the photo settles into the slot
-              // instead of finishing early and waiting for it. Duration and
-              // curve match `LANDING_MS` / `LANDING_EASE` in
-              // `collection-grid.tsx`. Never conflicts with the rule above:
-              // `data-landing` is set in the same commit that clears
-              // `data-reordering`, so the two are never on together.
-              "[data-collection-cell][data-landing] &": {
-                transition: "opacity 100ms ease-out",
-              },
-            },
-            toolbar: {
-              position: "relative",
-              zIndex: 1,
-              opacity: 0,
-              transition: "opacity 150ms ease",
-              // Takes pointer events only once it is actually visible — the
-              // rest of the cell stays a drag handle.
-              "[data-collection-cell]:hover &, [data-collection-cell]:focus-within &":
-                { opacity: 1, pointerEvents: "auto" },
-              // Down for the whole reorder, fading back in once the dropped
-              // photo has landed — see the scrim's note for why it lives here
-              // and why the selector is written this way.
-              // Out at once, back in when the state clears — see the scrim.
-              "[data-collection-grid][data-reordering] [data-collection-cell] &":
-                { opacity: 0, pointerEvents: "none", transition: "none" },
-              // Held down until the pointer moves after a drop — see the
-              // scrim's note. Inert as well as invisible: a control you cannot
-              // see must not be a control you can hit.
-              "[data-collection-grid][data-pointer-idle] [data-collection-cell] &":
-                { opacity: 0, pointerEvents: "none" },
-              // Paced to the flight in the cell being landed in — see the scrim.
-              "[data-collection-cell][data-landing] &": {
-                transition: "opacity 100ms ease-out",
-              },
-              // The box — 40px tall, 8px inset, 4px gap, on `bg.surface` — is
-              // the shared `toolbar` recipe this composes with; only the clip
-              // and the cell-relative width cap are the pill's own.
-              overflow: "hidden",
-              maxWidth: "calc(100% - token(spacing.lg) * 2)",
-            },
-          },
         }),
 
         // A colour as TWO editable parts inside one field frame — the swatch,
