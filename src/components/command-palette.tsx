@@ -146,8 +146,6 @@ export function CommandPalette() {
     isDark,
     isEditMode,
     isHomeEditMode,
-    handlePublishHome,
-    handleDiscardHome,
     handlePublishComponent,
     handleUnpublish,
     isPublished,
@@ -158,13 +156,19 @@ export function CommandPalette() {
     handleBack,
     handleThemeToggle,
     handleCoverPlayground,
+    isCoverPlayground,
+    editorKind,
+    handleSaveChanges,
+    handleDiscardAndExit,
+    pendingExit,
+    confirmExitSave,
+    confirmExitDiscard,
+    cancelExit,
     handleEditPage,
     handleNewBlogArticle,
     handleNewWorkArticle,
     handleOpenDraft,
     handlePublish,
-    handleSaveDraft,
-    handleDiscardChanges,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
 
@@ -172,6 +176,39 @@ export function CommandPalette() {
   // hardware, Ctrl [ on a PC — which is the same shortcut the hook listens for
   // on each.
   const backShortcut = useShortcutLabel("[");
+  const saveShortcut = useShortcutLabel("S");
+
+  /**
+   * Whether the palette should offer to take you somewhere at all.
+   *
+   * Two reasons it should not, and they are different reasons for the same
+   * answer. Inside an EDITOR, leaving is not a thing you simply do: it decides
+   * what becomes of the buffered work, which is exactly why "Back to …" is
+   * withheld there too — the exits an editor offers each say what happens to
+   * the document, and a bare destination would answer that by throwing it away
+   * without saying so. And on the playground ITSELF there is nowhere to go: a
+   * command to the page you are standing on is a row that does nothing, the
+   * same rule the Drafts group follows in omitting the draft being viewed.
+   *
+   * Settings is not covered by this and should not be — it changes the page you
+   * are on rather than taking you off it.
+   */
+  /**
+   * The open editor's heading — one heading in three wordings, because "This
+   * Cover" / "This Page" / "This Article" all name the same thing: whatever is
+   * being edited right now.
+   */
+  const editorTitle =
+    editorKind === "cover"
+      ? "This Cover"
+      : editorKind === "grid"
+        ? "This Page"
+        : editCategory === "WORK"
+          ? "This Project"
+          : "This Article";
+
+  const offersDestinations =
+    !isEditMode && !isHomeEditMode && !isCoverPlayground;
 
   useEffect(() => {
     // Guarded rather than toggling: `showModal()` on an already-open dialog
@@ -237,7 +274,7 @@ export function CommandPalette() {
                 <div className={groupHeadingStyle}>Navigate</div>
                 <Command.Item className={itemStyle} onSelect={handleBack}>
                   <ReturnIcon className={iconStyle} />
-                  {`Back to ${backTarget.label}`}
+                  {backTarget.label}
                   <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
                 </Command.Item>
               </Command.Group>
@@ -246,58 +283,60 @@ export function CommandPalette() {
             {/* Admin-only groups */}
             {isAdmin && (
               <>
-                {/* The grid's edit route — a grid has no title and no buffered
-                    document, so none of an article's exits apply to it. */}
-                {isHomeEditMode ? (
+                {/* Whatever editor is open, said the same way in all three.
+                    They differ in what they buffer and where it goes, and in
+                    nothing the author can see from here: each has unsaved work,
+                    a way to commit it and a way to throw it away.
+
+                    Save STAYS PUT — ⌘S means "commit and carry on" everywhere
+                    else and must here too. Discard exits, and belongs here
+                    rather than in Navigate because it is a decision about the
+                    WORK: you are not going somewhere, you are throwing
+                    something away and the leaving follows from it.
+
+                    There is deliberately no save-and-exit. That one IS just
+                    navigation, and "Exit editor" above already offers it — it
+                    asks about unsaved work on the way out, and answering "Save
+                    changes and exit" there is this same command. Two doors to
+                    one room would have to agree forever.
+
+                    Publish and Unpublish are a document's alone: a cover has
+                    nothing to publish, and the homepage is already live. */}
+                {editorKind ? (
                   <Command.Group className={groupStyle}>
-                    <div className={groupHeadingStyle}>This Page</div>
+                    <div className={groupHeadingStyle}>{editorTitle}</div>
+                    {editorKind === "document" && (
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handlePublish}
+                      >
+                        <PublishIcon className={iconStyle} />
+                        {editCategory === "WORK"
+                          ? "Publish project"
+                          : "Publish article"}
+                      </Command.Item>
+                    )}
+                    {/* The chip sits on THIS one, because this is what the key
+                        does. ⌘S commits and leaves you in the editor — hanging
+                        it off an exit would be a label that lies, the failure
+                        `keyboard-shortcut.ts` exists to prevent. */}
                     <Command.Item
                       className={itemStyle}
-                      onSelect={handlePublishHome}
-                    >
-                      <PublishIcon className={iconStyle} />
-                      Publish and exit
-                    </Command.Item>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handleDiscardHome}
-                    >
-                      <TrashIcon className={iconStyle} />
-                      Discard and exit
-                    </Command.Item>
-                  </Command.Group>
-                ) : isEditMode ? (
-                  <Command.Group className={groupStyle}>
-                    <div className={groupHeadingStyle}>
-                      {editCategory === "WORK"
-                        ? "This Project"
-                        : "This Article"}
-                    </div>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handlePublish}
-                    >
-                      <PublishIcon className={iconStyle} />
-                      {editCategory === "WORK"
-                        ? "Publish project"
-                        : "Publish article"}
-                    </Command.Item>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handleSaveDraft}
+                      onSelect={() => void handleSaveChanges()}
                     >
                       <SaveIcon className={iconStyle} />
-                      Save changes and exit
+                      Save changes
+                      <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
                     </Command.Item>
                     <Command.Item
                       className={itemStyle}
-                      onSelect={handleDiscardChanges}
+                      onSelect={handleDiscardAndExit}
                     >
                       <TrashIcon className={iconStyle} />
                       Discard changes and exit
                     </Command.Item>
                     {/* Only a live post has something to withdraw. */}
-                    {isPublished && (
+                    {editorKind === "document" && isPublished && (
                       <Command.Item
                         className={itemStyle}
                         onSelect={() => {
@@ -426,22 +465,27 @@ export function CommandPalette() {
               </>
             )}
 
-            {/* Playground — always visible, and down here with Settings for
-                the reason Settings is: it is not about the page you are on.
-                Nothing in it writes to the site either — it reads a shader
-                table, draws a canvas and hands back a JSX tag — so unlike the
-                groups above it there is no session to have and nothing for a
-                gate to protect. A destination, so it leads the furniture. */}
-            <Command.Group className={groupStyle}>
-              <div className={groupHeadingStyle}>Playground</div>
-              <Command.Item
-                className={itemStyle}
-                onSelect={handleCoverPlayground}
-              >
-                <ShaderIcon className={iconStyle} />
-                Cover Playground
-              </Command.Item>
-            </Command.Group>
+            {/* Playground — down here with Settings for the reason Settings is:
+                it is not about the page you are on. Nothing in it writes to the
+                site either — it reads a shader table, draws a canvas and hands
+                back a JSX tag — so unlike the groups above it there is no
+                session to have and nothing for a gate to protect. A
+                destination, so it leads the furniture.
+
+                Withheld while you are editing, and once you have arrived —
+                see `offersDestinations`. */}
+            {offersDestinations && (
+              <Command.Group className={groupStyle}>
+                <div className={groupHeadingStyle}>Playground</div>
+                <Command.Item
+                  className={itemStyle}
+                  onSelect={handleCoverPlayground}
+                >
+                  <ShaderIcon className={iconStyle} />
+                  Cover Playground
+                </Command.Item>
+              </Command.Group>
+            )}
 
             {/* Settings — always visible, and last: it is the palette's
                 furniture rather than anything this page is about. */}
@@ -459,6 +503,21 @@ export function CommandPalette() {
           </Command.List>
         </Command>
       </Dialog>
+
+      {/* Leaving a cover with unsaved work in it. THREE answers, because all
+          three are things the author might mean and none is a rewording of
+          another: keep it and go, drop it and go, or stay. Rendered here beside
+          the other modals for the same reason they are — the palette has
+          already closed by the time this opens. */}
+      <ConfirmDialog
+        open={pendingExit !== null}
+        title="Unsaved Changes"
+        message="You have unsaved changes to this cover. How do you want to proceed?"
+        confirmLabel="Save changes and exit"
+        onConfirm={() => void confirmExitSave()}
+        alternate={{ label: "Discard changes", onClick: confirmExitDiscard }}
+        onClose={cancelExit}
+      />
 
       {/* Sibling of the palette, not a child: the picker is a modal of its own
           and the palette closes on the way into it. */}

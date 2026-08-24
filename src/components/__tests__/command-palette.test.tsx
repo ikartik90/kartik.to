@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+} from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CommandPalette } from "../command-palette";
@@ -39,6 +45,13 @@ vi.mock("@/app/actions/grid", () => ({
   unpublishComponent: vi.fn(),
 }));
 
+vi.mock("@/app/actions/cover", () => ({
+  getCovers: vi.fn().mockResolvedValue([]),
+  createCover: vi.fn(),
+  saveCover: vi.fn(),
+  deleteCover: vi.fn(),
+}));
+
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn(),
@@ -64,6 +77,18 @@ function stubPlatform(platform: string) {
     value: { platform },
     configurable: true,
   });
+}
+
+/**
+ * Queries scoped to the command LIST.
+ *
+ * The palette renders its confirm dialogs as siblings, and one of them answers
+ * "Save changes and exit" — the same words a command elsewhere in the list
+ * uses. An unscoped `getByText` matches both and throws, so a test about what
+ * the palette OFFERS has to say so.
+ */
+function list() {
+  return within(document.querySelector("[cmdk-list]") as HTMLElement);
 }
 
 afterEach(() => {
@@ -263,11 +288,13 @@ describe("CommandPalette", () => {
 
     it("renders only the This Article actions relevant to editing", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("This Article")).toBeDefined();
-      expect(screen.getByText("Dark theme")).toBeDefined();
-      expect(screen.getByText("Publish article")).toBeDefined();
-      expect(screen.getByText("Save changes and exit")).toBeDefined();
-      expect(screen.getByText("Discard changes and exit")).toBeDefined();
+      expect(list().getByText("This Article")).toBeDefined();
+      expect(list().getByText("Dark theme")).toBeDefined();
+      expect(list().getByText("Publish article")).toBeDefined();
+      // The same pair the cover and the grid get, worded identically.
+      expect(list().getByText("Save changes")).toBeDefined();
+      expect(list().getByText("Discard changes and exit")).toBeDefined();
+      expect(list().queryByText("Save changes and exit")).toBeNull();
     });
 
     it("hides the Publish, This Page, and Drafts groups while editing", () => {
@@ -402,6 +429,122 @@ describe("CommandPalette", () => {
     });
   });
 
+  // A destination is worth offering only when going there is a thing you can
+  // simply DO. Inside an editor it is not: leaving decides what becomes of the
+  // buffered work, which is the same reason "Back to …" is withheld there.
+  describe("destinations while editing", () => {
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+    });
+
+    it("offers the playground from a page that is merely being read", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      render(<CommandPalette />);
+      expect(list().getByText("Cover Playground")).toBeDefined();
+    });
+
+    it("withholds it while a document is being edited", () => {
+      mockPathname.mockReturnValue("/edit/new");
+      render(<CommandPalette />);
+
+      expect(list().queryByText("Playground")).toBeNull();
+      expect(list().queryByText("Cover Playground")).toBeNull();
+    });
+
+    it("withholds it while the grid is being edited", () => {
+      mockPathname.mockReturnValue("/edit/home");
+      render(<CommandPalette />);
+
+      expect(list().queryByText("Playground")).toBeNull();
+      expect(list().queryByText("Cover Playground")).toBeNull();
+    });
+
+    // Settings is not a destination — it changes the page you are on rather
+    // than taking you off it — so an editor keeps it.
+    it("keeps the settings group, which goes nowhere", () => {
+      mockPathname.mockReturnValue("/edit/new");
+      render(<CommandPalette />);
+      expect(list().getByText("Settings")).toBeDefined();
+    });
+  });
+
+  describe("This Cover — the playground's own exits", () => {
+    beforeEach(() => {
+      mockPathname.mockReturnValue("/playground/cover");
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+    });
+
+    // Save stays put; discard is the one exit the group keeps, because
+    // "abandon this" is a decision about the WORK rather than a way of
+    // navigating — you are not going somewhere, you are throwing something
+    // away and the leaving is a consequence. Save-and-exit is absent: that one
+    // IS just navigation, and Back already offers it on the way out.
+    it("offers save in place and discard-and-exit", () => {
+      render(<CommandPalette />);
+
+      expect(list().getByText("This Cover")).toBeDefined();
+      expect(list().getByText("Save changes")).toBeDefined();
+      expect(list().getByText("Discard changes and exit")).toBeDefined();
+      expect(list().queryByText("Save changes and exit")).toBeNull();
+    });
+
+    // A command that takes you where you already are is noise. Same rule the
+    // Drafts group follows in omitting the draft being viewed — the current
+    // page never lists itself.
+    it("stops advertising the playground once you are on it", () => {
+      render(<CommandPalette />);
+
+      expect(list().queryByText("Playground")).toBeNull();
+      expect(list().queryByText("Cover Playground")).toBeNull();
+    });
+
+    // The chip has to sit on the command the key actually runs, written with
+    // the modifier this platform's keyboard uses — the failure
+    // `keyboard-shortcut.ts` exists to prevent is a label that lies.
+    it("hangs the platform's own ⌘S off it", () => {
+      render(<CommandPalette />);
+
+      const save = list().getByText("Save changes").closest("[cmdk-item]");
+      expect(save?.textContent).toContain("⌘S");
+    });
+
+    // The whole group is an admin affordance: a visitor can tune a cover all
+    // they like, but there is nothing for them to save it to.
+    it("is not offered logged out", () => {
+      mockUseSession.mockReturnValue({ data: null });
+      render(<CommandPalette />);
+
+      expect(list().queryByText("This Cover")).toBeNull();
+      expect(list().queryByText("Save changes")).toBeNull();
+      expect(list().queryByText("Discard changes and exit")).toBeNull();
+      // The way IN stays hidden too, and for a different reason: that rule is
+      // about the ROUTE, not the session — a visitor standing on the
+      // playground has no more use for a command to the playground than the
+      // author does.
+      expect(list().queryByText("Cover Playground")).toBeNull();
+    });
+
+    it("is not offered on any other page", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      render(<CommandPalette />);
+
+      expect(screen.queryByText("This Cover")).toBeNull();
+    });
+
+    // A saved cover is reopened by id, so the group has to be offered on that
+    // route too — and it is the route where Save UPDATES rather than creates.
+    it("is offered on a saved cover's own route", () => {
+      mockPathname.mockReturnValue("/playground/cover/cover-1");
+      render(<CommandPalette />);
+
+      expect(screen.getByText("This Cover")).toBeDefined();
+    });
+  });
+
   describe("closing on item select", () => {
     it("closes the dialog when the theme toggle item is selected", () => {
       render(<CommandPalette />);
@@ -483,28 +626,45 @@ describe("CommandPalette — Navigate", () => {
     expect(screen.queryByText("⌘[")).toBeNull();
   });
 
-  it("does not offer a silent way out of the editor", () => {
-    // Edit mode has its own exits — save, discard, publish — and each of them
-    // says what happens to the buffered work. "Back" would answer that question
-    // by throwing it away without saying so.
+  // It used to be withheld here, so a bare "back" could not throw buffered work
+  // away silently. Withholding it also removed "save and go", which is usually
+  // what was meant — so it is offered now and it ASKS instead. And it is named
+  // for what it does from an editor: you are finishing with one, not walking up
+  // a path.
+  it("offers a named way out of each editor", () => {
     mockPathname.mockReturnValue("/edit/new");
     render(<CommandPalette />);
-    expect(screen.queryByText("Navigate")).toBeNull();
+    expect(list().getByText("Navigate")).toBeDefined();
+    expect(list().getByText("Exit editor")).toBeDefined();
+    expect(list().queryByText("Back to index")).toBeNull();
 
     cleanup();
     mockPathname.mockReturnValue("/edit/home");
     render(<CommandPalette />);
-    expect(screen.queryByText("Navigate")).toBeNull();
+    expect(list().getByText("Exit editor")).toBeDefined();
+
+    cleanup();
+    mockPathname.mockReturnValue("/playground/cover");
+    render(<CommandPalette />);
+    expect(list().getByText("Exit editor")).toBeDefined();
+  });
+
+  it("still says where it is going when you are only reading", () => {
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    expect(list().getByText("Back to index")).toBeDefined();
+    expect(list().queryByText("Exit editor")).toBeNull();
   });
 
   // It used to need excepting from edit mode to keep this; out of `/edit` it
   // simply is not in edit mode. The assertion stays either way — what it is
   // guarding is that the playground has a way back, not how it earns one.
-  it("keeps the cover playground's way back", () => {
+  it("keeps the cover playground's way out", () => {
     mockPathname.mockReturnValue("/playground/cover");
     render(<CommandPalette />);
 
-    expect(screen.getByText("Back to index")).toBeDefined();
+    expect(list().getByText("Exit editor")).toBeDefined();
   });
 
   it("leads the palette, and leaves Settings to close it", () => {
