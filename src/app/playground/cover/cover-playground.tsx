@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import {
   ColorPanels,
   GodRays,
@@ -11,6 +11,7 @@ import {
 import { css } from "../../../../styled-system/css";
 import { propertiesPanel } from "../../../../styled-system/recipes";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
+import { useCoverDraftStore } from "@/store/cover-draft";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
@@ -27,12 +28,12 @@ import {
   SHADER_SPECS,
   FRAMING_CONTROL_KEYS,
   MOTION_CONTROL_KEYS,
-  defaultState,
   type ControlSpec,
   type Params,
   type ShaderId,
   type ShaderSpec,
-} from "./shader-specs";
+} from "@/data/shader-specs";
+import type { CoverSettings } from "@/domain/cover";
 
 // ---------------------------------------------------------------------------
 // Cover Playground — where a cover's background is tuned, on its way to being
@@ -235,8 +236,29 @@ function ShaderStage({
   }
 }
 
-export function CoverPlayground() {
-  const [shaderId, setShaderId] = useState<ShaderId>("cosmicTrack");
+/** A saved cover this page was opened on, if it was opened on one. */
+export interface OpenedCover {
+  id: string;
+  title: string | null;
+  shaderId: ShaderId;
+  settings: CoverSettings;
+}
+
+export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
+  // The draft lives in a STORE rather than in this component, because the
+  // commands that commit it — "Save changes and exit", ⌘S — are in the command
+  // palette, which is mounted in the root layout and knows nothing about the
+  // page under it. See `@/store/cover-draft`.
+  const shaderId = useCoverDraftStore((draft) => draft.shaderId);
+  const state = useCoverDraftStore((draft) => draft.settings);
+  const selectShaderInStore = useCoverDraftStore((draft) => draft.selectShader);
+  const setParamInStore = useCoverDraftStore((draft) => draft.setParam);
+  const setColorsInStore = useCoverDraftStore((draft) => draft.setColors);
+  const setColorBackInStore = useCoverDraftStore((draft) => draft.setColorBack);
+  const setExtraColorInStore = useCoverDraftStore(
+    (draft) => draft.setExtraColor,
+  );
+  const resetParamsInStore = useCoverDraftStore((draft) => draft.resetParams);
 
   // This page's rail is the propertiesPanel RECIPE rather than the component —
   // the component is a dismissible dialog, and a playground whose whole content
@@ -246,13 +268,35 @@ export function CoverPlayground() {
   usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
 
-  const [state, setState] = useState(() => defaultState(spec));
   const [copied, setCopied] = useState(false);
+
+  // Adopt the cover this route was opened on — and RESET when there is none, so
+  // arriving at the bare route after editing a saved one starts blank rather
+  // than silently continuing to edit the last cover under a URL that claims to
+  // be a new one. Keyed on the id, so re-renders do not re-seed over live edits.
+  const coverId = cover?.id;
+  useEffect(() => {
+    const store = useCoverDraftStore.getState();
+    if (cover) {
+      // Already holding this one — do NOT re-seed. ⌘S on a never-saved cover
+      // creates the row and then replaces the URL with its id, so this route
+      // mounts a moment later carrying a cover the draft is already editing.
+      // Loading it again would throw away anything tuned during that gap, which
+      // is exactly the window the author is most likely to still be working in.
+      if (store.coverId === cover.id) return;
+      store.load(cover);
+    } else {
+      store.reset();
+    }
+    // Keyed on the ID, not the object: a server component hands down a fresh
+    // prop object on every render, and depending on that identity would re-seed
+    // the draft over whatever was being edited each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverId]);
 
   /** Switching shader re-seeds from that shader's defaults — its control table is a different shape. */
   function selectShader(next: ShaderId) {
-    setShaderId(next);
-    setState(defaultState(SHADER_SPECS[next]));
+    selectShaderInStore(next);
     setCopied(false);
   }
 
@@ -269,10 +313,7 @@ export function CoverPlayground() {
   const motionControls = byKey(MOTION_CONTROL_KEYS);
 
   function setParam(key: string, value: number | boolean | string) {
-    setState((current) => ({
-      ...current,
-      params: { ...current.params, [key]: value },
-    }));
+    setParamInStore(key, value);
     setCopied(false);
   }
 
@@ -283,13 +324,11 @@ export function CoverPlayground() {
    * (Same reasoning as the media properties panel.)
    */
   function setColorCount(count: number) {
-    setState((current) => {
-      const colors = current.colors.slice(0, count);
-      while (colors.length < count) {
-        colors.push(colors[colors.length - 1] ?? "#FFFFFFFF");
-      }
-      return { ...current, colors };
-    });
+    const colors = state.colors.slice(0, count);
+    while (colors.length < count) {
+      colors.push(colors[colors.length - 1] ?? "#FFFFFFFF");
+    }
+    setColorsInStore(colors);
   }
 
   /** The settings as a JSX tag, ready to paste into a component. */
@@ -446,12 +485,11 @@ export function CoverPlayground() {
               <ColorInput
                 value={color}
                 onValueChange={(value) =>
-                  setState((current) => ({
-                    ...current,
-                    colors: current.colors.map((existing, i) =>
+                  setColorsInStore(
+                    state.colors.map((existing, i) =>
                       i === index ? value : existing,
                     ),
-                  }))
+                  )
                 }
               />
             </Field>
@@ -462,9 +500,7 @@ export function CoverPlayground() {
               <Field.Label>Background</Field.Label>
               <ColorInput
                 value={state.colorBack}
-                onValueChange={(value) =>
-                  setState((current) => ({ ...current, colorBack: value }))
-                }
+                onValueChange={(value) => setColorBackInStore(value)}
               />
             </Field>
           )}
@@ -474,12 +510,7 @@ export function CoverPlayground() {
               <Field.Label>{extra.label}</Field.Label>
               <ColorInput
                 value={state.extraColors[extra.key]}
-                onValueChange={(value) =>
-                  setState((current) => ({
-                    ...current,
-                    extraColors: { ...current.extraColors, [extra.key]: value },
-                  }))
-                }
+                onValueChange={(value) => setExtraColorInStore(extra.key, value)}
               />
             </Field>
           ))}
@@ -504,10 +535,7 @@ export function CoverPlayground() {
               size="sm"
               emphasis="tertiary"
               onClick={() => {
-                setState((current) => ({
-                  ...current,
-                  params: defaultState(spec).params,
-                }));
+                resetParamsInStore();
                 setCopied(false);
               }}
             >
