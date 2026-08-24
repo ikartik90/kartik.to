@@ -87,7 +87,10 @@ export function ColorInput({
       <span className={styles.swatch} aria-hidden>
         {/* The colour composites OVER the frame's checkerboard, so a partial
             opacity reads as partial rather than as a paler colour. */}
-        <span className={styles.swatchFill} style={{ backgroundColor: value }} />
+        <span
+          className={styles.swatchFill}
+          style={{ backgroundColor: value }}
+        />
       </span>
       <span className={styles.separator} aria-hidden />
       <Field.Control
@@ -117,7 +120,10 @@ export function ColorInput({
         value={opacity}
         onChange={commitOpacity}
         disabled={disabled}
-        className={cx(fieldStyles.control, styles.hex, styles.opacity)}
+        // The `opacity` slot IS the slider's value box (one `fieldValueBox` in
+        // the config), so the two field types are the same number in the same
+        // place — `hex` no longer has anything to lend it.
+        className={cx(fieldStyles.control, styles.opacity)}
         spellCheck={false}
         autoComplete="off"
         inputMode="numeric"

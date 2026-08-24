@@ -67,6 +67,25 @@ export default function OptionListPreviewPage() {
         <Field.Hint>Type to filter, click to pick</Field.Hint>
       </Field>
 
+      {/* The dense pitch (Figma 1027:2276): the row IS its 24px line box, with
+          a 2px gap doing the separating that a 4px inset does at `md`, under a
+          28px search strip. Same tone, same surface — only the geometry moves,
+          which is why it is a `size` and not a second recipe. */}
+      <Field>
+        <Field.Label>Fruit (small)</Field.Label>
+        <OptionList size="sm" value={fruit} onValueChange={setFruit}>
+          <Field.Search placeholder="Search…" />
+          <OptionList.Listbox>
+            {FRUITS.map((f) => (
+              <OptionList.Option key={f.value} value={f.value}>
+                {f.label}
+              </OptionList.Option>
+            ))}
+          </OptionList.Listbox>
+        </OptionList>
+        <Field.Hint>9 rows and a peek before it scrolls</Field.Hint>
+      </Field>
+
       {/* Rich children: a leading icon beside the label. `label` gives search +
           the trigger the plain text, children own the visual. */}
       <Field>

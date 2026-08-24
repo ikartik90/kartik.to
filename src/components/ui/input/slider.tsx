@@ -6,6 +6,7 @@ import {
   useContext,
   useState,
   type HTMLAttributes,
+  type InputHTMLAttributes,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -16,11 +17,12 @@ import {
   formatSliderValue,
   ratioOfValue,
   snapToStep,
+  tickRatios,
   valueAtRatio,
   type SliderScale,
 } from "@/utils/slider-value";
 import { Field, useField } from "./field";
-import { WireframeText } from "../wireframe";
+import { WireframeText, useWireframe } from "../wireframe";
 
 // ---------------------------------------------------------------------------
 // Slider — the third control archetype of the field family, composed INTO a
@@ -34,13 +36,15 @@ import { WireframeText } from "../wireframe";
 //   </Field>
 //
 // It brings no surface of its own: it renders the shared `field` frame and
-// draws a ruler, a separator and a numeric readout inside it, so the fill,
-// border, radius and the whole focus accent are the same ones the text input
-// wears. The track carries `data-control`, which is all the field recipe needs
-// to flip the frame — and with it the thumb and readout, both painted in
-// `currentColor` — to the brand accent while the slider holds focus.
+// draws a ruler, a separator and the value inside it, so the fill, border,
+// radius and the whole focus accent are the same ones the text input wears.
+// The value is a box rather than a label — the number can be typed as readily
+// as it can be dragged, and both routes commit through one place. Track and
+// value box both carry `data-control`, which is all the field recipe needs to
+// flip the frame — and with it the thumb and the number, both painted in
+// `currentColor` — to the brand accent while either one holds focus.
 //
-// Pass children to re-compose those parts (drop the readout, reorder, insert
+// Pass children to re-compose those parts (drop the value, reorder, insert
 // your own); pass none and you get the drawn arrangement.
 // ---------------------------------------------------------------------------
 
@@ -51,7 +55,8 @@ type SliderContextValue = {
   value: number;
   /** 0–1 position of the current value, shared by the thumb and the readout. */
   ratio: number;
-  ticks: number;
+  /** 0–1 position of every mark on the ruler. */
+  ticks: number[];
   disabled: boolean;
   commit: (next: number) => void;
   styles: SliderStyles;
@@ -77,8 +82,9 @@ export interface SliderProps {
   /** Grid the value snaps to, anchored at `min`. */
   step?: number;
   /**
-   * How many evenly spaced marks the ruler shows — presentation only, unrelated
-   * to `step` (a 0–100 slider stepping by 1 is still drawn with 11 marks).
+   * Overrides the ruler with this many evenly spaced marks. Left off, the count
+   * comes from the scale: one mark per value the slider can actually hold, or
+   * 11 spread across the range once it holds more than that.
    */
   ticks?: number;
   disabled?: boolean;
@@ -95,7 +101,7 @@ function SliderRoot({
   min = 0,
   max = 100,
   step = 1,
-  ticks = 11,
+  ticks,
   disabled = false,
   className,
   children,
@@ -115,7 +121,7 @@ function SliderRoot({
     scale,
     value,
     ratio: ratioOfValue(value, scale),
-    ticks,
+    ticks: tickRatios(scale, ticks),
     disabled,
     commit: (next) => {
       const snapped = snapToStep(next, scale);
@@ -199,6 +205,18 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
         onPointerDown={(e) => {
           onPointerDown?.(e);
           if (e.defaultPrevented || disabled || e.button !== 0) return;
+          // Take the press. The default action of a primary-button pointerdown
+          // is to START A TEXT SELECTION, and pointer capture does nothing
+          // about it — the drag keeps steering the thumb while the browser
+          // paints a selection across every label and paragraph the cursor
+          // passes on its way out of the frame. Declined here rather than with
+          // `user-select: none` on the track, which only refuses the selection
+          // an anchor INSIDE it, not the one this press just started outside.
+          //
+          // It costs the implicit focus that a mousedown would have given the
+          // track, which is why the explicit `focus()` below is load-bearing
+          // rather than belt-and-braces.
+          e.preventDefault();
           // Capture on the track, so a drag that leaves the frame (or the
           // window) keeps steering the thumb and still ends cleanly.
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -229,12 +247,12 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
         }}
         {...rest}
       >
-        {Array.from({ length: Math.max(ticks, 0) }, (_, i) => (
+        {ticks.map((tick, i) => (
           <span
             key={i}
             aria-hidden
             className={styles.tick}
-            style={{ left: `${ticks > 1 ? (i / (ticks - 1)) * 100 : 0}%` }}
+            style={{ left: `${tick * 100}%` }}
           />
         ))}
         <span
@@ -273,18 +291,81 @@ function SliderSeparator({ className, ...rest }: SliderSeparatorProps) {
   );
 }
 
-export type SliderOutputProps = Omit<HTMLAttributes<HTMLSpanElement>, "children">;
+export type SliderOutputProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "children" | "type" | "value" | "defaultValue"
+>;
+
+/** A finished number — "0." and "-" are on the way to one, and 0 is not. */
+const NUMERIC = /^-?(\d+(\.\d+)?|\.\d+)$/;
 
 /**
- * The numeric readout. Hidden from assistive tech on purpose: it is a visual
- * echo of the track's own `aria-valuetext`, and announcing it twice is noise.
+ * The value — readout AND second way to set it, because a number is often
+ * easier to type than to hit: an exact 60 on a 0–100 rule is one pixel wide.
+ * It is a plain <input> wearing the field's own `control` reset (the colour
+ * input's opacity box is the same arrangement), carrying `data-control` so the
+ * frame lights up while it holds focus, but never the field's id — a label may
+ * point at one control, and that is the track.
+ *
+ * Typing runs through the SAME `commit` the drag and the arrow keys use, so a
+ * typed number is snapped and clamped exactly like a dragged one. What is typed
+ * is held as a draft meanwhile: the box would otherwise rewrite itself under the
+ * caret between keystrokes (a "0.5" reformatted to "1" the moment the dot
+ * lands), which is the one thing that makes a numeric field impossible to type
+ * in. The draft goes on blur, and the committed value paints — which is also
+ * how an emptied or over-range box resolves.
  */
-function SliderOutput({ className, ...rest }: SliderOutputProps) {
-  const { scale, value, styles } = useSlider("Slider.Output");
+function SliderOutput({
+  className,
+  onChange,
+  onBlur,
+  ...rest
+}: SliderOutputProps) {
+  const { scale, value, disabled, commit, styles } = useSlider("Slider.Output");
+  const { hasLabel, labelId, styles: fieldStyles } = useField("Slider.Output");
+  const [draft, setDraft] = useState<string | null>(null);
+  const isWireframe = useWireframe() !== null;
+  const text = draft ?? formatSliderValue(value, scale.step);
+
+  // An <input> holds no children, so there is nowhere to put a placeholder bar
+  // — the same trade `Field.Control` makes. The static readout takes over.
+  if (isWireframe) {
+    return (
+      <span aria-hidden className={cx(styles.output, className)}>
+        <WireframeText>{text}</WireframeText>
+      </span>
+    );
+  }
+
   return (
-    <span aria-hidden className={cx(styles.output, className)} {...rest}>
-      <WireframeText>{formatSliderValue(value, scale.step)}</WireframeText>
-    </span>
+    <input
+      type="text"
+      data-control
+      // Named by the field's label rather than by an invented one: this box and
+      // the track are two ways to set the SAME thing, and a screen reader
+      // meeting "Opacity, slider" then "Value, edit text" would not know that.
+      aria-labelledby={hasLabel ? labelId : undefined}
+      aria-label={hasLabel ? undefined : "Value"}
+      value={text}
+      disabled={disabled}
+      inputMode="decimal"
+      spellCheck={false}
+      autoComplete="off"
+      className={cx(fieldStyles.control, styles.output, className)}
+      onChange={(e) => {
+        onChange?.(e);
+        // Digits, a sign and a point — the numeric field's counterpart to the
+        // colour input's digits-only hex.
+        const next = e.currentTarget.value.replace(/[^0-9.-]/g, "");
+        setDraft(next);
+        if (NUMERIC.test(next)) commit(Number(next));
+      }}
+      onBlur={(e) => {
+        onBlur?.(e);
+        setDraft(null);
+      }}
+      {...rest}
+    />
   );
 }
 

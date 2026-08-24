@@ -138,6 +138,63 @@ const markerAlignmentBox = {
   pointerEvents: "none",
 } as const;
 
+/**
+ * The numeric value at the end of a field frame — the slider's readout and the
+ * colour input's opacity are ONE box wearing ONE set of rules, so a column of
+ * slider rows and colour rows lines its hairlines and its numbers up. They were
+ * two numbers before (a 60px `sizes.effectColorOpacity` beside the slider's
+ * 28px), which is how two things that have to match stop matching.
+ *
+ * The box is an <input>, so it also wears the `field` recipe's `control` reset
+ * — and has to beat that slot's `flex: 1 1 0` / `width: 100%`, which would grow
+ * the number across the ruler beside it. One stated width instead, for every
+ * one of them: a column of rows lines up because the boxes are the same size,
+ * not because their contents happen to be. It was content-sized over a 28px
+ * floor before, which drew a different width per row and moved the hairline
+ * beside it as a value counted past 9.
+ *
+ * It also takes the frame's dead space with it. The flex gap on its left and
+ * the frame's own inline padding on its right would otherwise fall through to
+ * the frame, whose mousedown forwards focus to the field's CONTROL — so a click
+ * a few pixels off the number moves a slider's thumb instead of placing a caret
+ * in the box. A negative margin pulls the box out over each side, an equal
+ * padding puts the number back on exactly the pixel it is drawn on, `alignSelf`
+ * claims the frame's full height the way a slider track does, and `content-box`
+ * keeps `minWidth` a floor for the NUMBER rather than for the number plus the
+ * padding it borrowed. Each side is scoped to the arrangement that has the
+ * space to reclaim, so a re-composed frame cannot pull the box out over a
+ * sibling. The width is the DRAWN box, reclaimed space included — that space
+ * was already the frame's own padding, so the number keeps sitting on the
+ * pixel it always sat on and only the room in front of it changes.
+ */
+const fieldValueBox = {
+  // Doubled class, and this is load-bearing: the box wears the `field` recipe's
+  // `control` reset as well as its own slot, and Panda emits slot recipes
+  // ALPHABETICALLY inside `@layer recipes.slots` — `.field__control` lands
+  // after `.color-field__opacity`, so at equal specificity the reset's
+  // `flex: 1 1 0` / `width: 100%` / `min-width: 0` won on source order and the
+  // opacity box's stated width had simply never applied. `&&` puts every
+  // declaration that overlaps the reset a specificity step above it, wherever
+  // the box is used and whatever the slot is called.
+  "&&": {
+    flex: "0 0 auto",
+    width: "token(sizes.fieldValue)",
+    alignSelf: "stretch",
+    textAlign: "right",
+    // The number changes on every drag frame and every keystroke; proportional
+    // digits would make it shuffle horizontally as it counts.
+    fontVariantNumeric: "tabular-nums",
+    "&:not(:first-child)": {
+      marginInlineStart: "calc(token(spacing.md) * -1)",
+      paddingInlineStart: "md",
+    },
+    "&:last-child": {
+      marginInlineEnd: "calc(token(spacing.md) * -1)",
+      paddingInlineEnd: "md",
+    },
+  },
+} as const;
+
 export default defineConfig({
   presets: [],
   preflight: true,
@@ -206,8 +263,21 @@ export default defineConfig({
           // Fixed like the calendar's 208px pitch, so a select popover and a
           // date popover read as siblings (Figma 647:2383, 629:1416).
           optionListWidth: { value: "208px" },
+          // The number at the end of a field frame — the slider's readout and
+          // the colour input's opacity, which are one box (see
+          // `fieldValueBox`) and so are one width.
+          fieldValue: { value: "60px" },
           // Option row hit target: 24px line + 2×4 inset (Figma 647:2387).
           optionRow: { value: "32px" },
+          // The small list's two heights (Figma 1027:2276), each written as the
+          // relation it actually is rather than as the number it comes out at.
+          // The row loses the inset the line above describes and IS the 14/24
+          // line box, so rows are separated by a 2px gap instead of by padding;
+          // the search strip above them is that same line box on a 2px inset.
+          optionRowSm: { value: "calc({sizes.optionRow} - 2 * {spacing.sm})" },
+          optionSearchSm: {
+            value: "calc({sizes.optionRowSm} + 2 * {spacing.xs})",
+          },
           listBullet: { value: "8px" },
           // Larger than the 16px chip it sits in, so it overhangs the way the
           // source icons do.
@@ -232,9 +302,6 @@ export default defineConfig({
             value:
               "calc({sizes.propertyRowLabel} + {sizes.propertyRowField} + {spacing.md} + 2 * {spacing.lg})",
           },
-          // The opacity readout, matching the slider's numeric output so the
-          // two field types line up down the right edge of the panel.
-          effectColorOpacity: { value: "60px" },
         },
 
         colors: {
@@ -3355,7 +3422,7 @@ export default defineConfig({
         sliderField: defineSlotRecipe({
           className: "slider-field",
           description:
-            "The ruler + thumb + numeric readout of a slider — the control slot of a `field`, drawn inside the shared `frame` rather than bringing a surface of its own. `track` is the focusable `role=\"slider\"` element (full frame height, so the hit target is the whole strip, not the 4px rule); `tick` marks the evenly spaced stops as 1px hairlines on `field.border.*`; `thumb` is the 4×20 pill at the current value; `separator` is the 0.5px rule dividing the ruler from the `output` readout. Thumb and readout paint in `currentColor` so the frame's resting → active colour shift carries them, exactly as it carries a leading icon. Like the checkbox, the geometry is drawn at ONE size (Figma 842:7179); `size` scales only the readout's type, so it keeps step with the field's label and hint.",
+            "The ruler + thumb + numeric readout of a slider — the control slot of a `field`, drawn inside the shared `frame` rather than bringing a surface of its own. `track` is the focusable `role=\"slider\"` element (full frame height, so the hit target is the whole strip, not the 4px rule); `tick` marks the evenly spaced stops as 1px hairlines on `field.border.*`; `thumb` is the 4×20 pill at the current value; `separator` is the 0.5px rule dividing the ruler from the `output` — the value as an editable numeric input, so the number can be typed as well as dragged. Thumb and readout paint in `currentColor` so the frame's resting → active colour shift carries them, exactly as it carries a leading icon. Like the checkbox, the geometry is drawn at ONE size (Figma 842:7179); `size` scales only the readout's type, so it keeps step with the field's label and hint.",
           slots: ["track", "tick", "thumb", "separator", "output"],
           base: {
             track: {
@@ -3421,20 +3488,11 @@ export default defineConfig({
                 },
             },
             output: {
-              flexShrink: 0,
-              // The drawn readout is 28px wide; a MIN width rather than a fixed
-              // one, so a longer value (a negative, or a 0.25 step) grows the
-              // readout instead of being clipped by the frame's overflow.
-              minWidth: "calc(token(spacing.xxl) + token(spacing.md))",
-              textAlign: "right",
+              ...fieldValueBox,
               color: "inherit",
-              // The readout changes on every drag frame; proportional digits
-              // would make the number shuffle horizontally as it counts.
-              fontVariantNumeric: "tabular-nums",
-              userSelect: "none",
-              // The readout sits OUTSIDE the track, so the track's own dimming
+              // The value sits OUTSIDE the track, so the track's own dimming
               // can't reach it — without this a disabled slider greys its ruler
-              // and leaves the value at full strength.
+              // and leaves the number at full strength.
               "[data-field]:has([role='slider'][aria-disabled='true']) &": {
                 opacity: 0.5,
               },
@@ -4663,12 +4721,8 @@ export default defineConfig({
               fontVariantNumeric: "tabular-nums",
               textTransform: "uppercase",
             },
-            opacity: {
-              flex: "0 0 auto",
-              width: "token(sizes.effectColorOpacity)",
-              textAlign: "right",
-              fontVariantNumeric: "tabular-nums",
-            },
+            // The same box the slider's value wears — see `fieldValueBox`.
+            opacity: { ...fieldValueBox },
           },
         }),
 
@@ -5215,6 +5269,40 @@ export default defineConfig({
                 list: { maxHeight: "calc(100dvh - token(spacing.5xl))" },
               },
             },
+            // The row pitch (Figma 1027:2276 for `sm`).
+            //   md — the default: a 32px row, 24px of line box on a 4px inset
+            //        all round, rows abutting so each is its own hit target.
+            //   sm — the dense list: the inset goes vertical-first, so the row
+            //        IS its 24px line box and a 2px gap does the separating a
+            //        padded row did. The search strip drops 40 → 28 and its
+            //        text 16 → 14 with it, or a full-size field would sit over
+            //        a list two thirds its pitch.
+            size: {
+              md: {},
+              sm: {
+                search: {
+                  height: "token(sizes.optionSearchSm)",
+                  textStyle: "bodySmall",
+                },
+                list: {
+                  gap: "xs",
+                  paddingInline: "sm",
+                  // The list keeps an inset of its own top and bottom, so the
+                  // first and last rows are not flush against the search strip
+                  // and the bottom edge (Figma 1027:2282).
+                  paddingBlock: "sm",
+                  // Read exactly as the base cap above it: the rows it means to
+                  // show, plus their gaps, plus the list's own block padding,
+                  // plus a half-row peek that says there is more to scroll. A
+                  // shorter row fits more of them in — 9 here against the
+                  // base's 7.
+                  maxHeight:
+                    "calc(9 * token(sizes.optionRowSm) + 8 * token(spacing.xs) + 2 * token(spacing.sm) + token(spacing.lg))",
+                },
+                option: { paddingInline: "sm", paddingBlock: "none" },
+                empty: { height: "token(sizes.optionRowSm)" },
+              },
+            },
             direction: {
               // The vertical list is already encoded in the base.
               block: {},
@@ -5245,9 +5333,10 @@ export default defineConfig({
             tone: "default",
             direction: "block",
             fit: "scroll",
+            size: "md",
           },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"] }],
+          staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"], size: ["*"] }],
         }),
 
         // A segmented control — one row, every option visible, exactly one on

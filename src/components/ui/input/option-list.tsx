@@ -258,6 +258,12 @@ export interface OptionListProps
    * rows so a menu that fits shows itself whole, bounded only by the viewport.
    */
   fit?: "scroll" | "content";
+  /**
+   * Row pitch. `md` (default) is the 32px row — 24px of line box on a 4px
+   * inset. `sm` is the dense list (Figma 1027:2276): the row IS its 24px line
+   * box, separated by a 2px gap, under a 28px search strip.
+   */
+  size?: "md" | "sm";
   /** A behavior container (`OptionList.Listbox` / `OptionList.Toolbar`) and an optional Field.Search. */
   children: ReactNode;
 }
@@ -272,6 +278,7 @@ function OptionListRoot({
   direction = "block",
   tone = "default",
   fit,
+  size,
   className,
   children,
   ...rest
@@ -285,7 +292,7 @@ function OptionListRoot({
   const hasLabel = field?.hasLabel ?? false;
   const hintId = field?.hintId ?? "";
   const hasHint = field?.hasHint ?? false;
-  const styles = optionList({ tone, direction, fit });
+  const styles = optionList({ tone, direction, fit, size });
   const uid = useId();
 
   const isControlled = value !== undefined;

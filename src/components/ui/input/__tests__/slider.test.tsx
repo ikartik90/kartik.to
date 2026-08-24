@@ -218,6 +218,42 @@ describe("Slider", () => {
       expect(track.getAttribute("aria-valuenow")).toBe("0");
     });
 
+    // The default action of a primary-button pointerdown is to begin a text
+    // selection, and pointer capture does not stop it: the drag keeps steering
+    // the thumb while the browser paints a growing selection across whatever
+    // the cursor passes over outside the frame.
+    it("declines the pointerdown default, so a drag selects no text", () => {
+      render(
+        <Field size="sm">
+          <Slider min={0} max={100} step={10} defaultValue={0} />
+        </Field>,
+      );
+      const track = layoutTrack();
+
+      const notCancelled = fireEvent.pointerDown(track, {
+        clientX: atRatio(0.5),
+        pointerId: 1,
+        button: 0,
+      });
+
+      expect(notCancelled).toBe(false);
+    });
+
+    // ...but only for a drag it is actually taking. A right-click has to keep
+    // its context menu, and a disabled slider has no drag to protect.
+    it("leaves the default alone for a non-primary button", () => {
+      render(
+        <Field size="sm">
+          <Slider min={0} max={100} step={10} defaultValue={0} />
+        </Field>,
+      );
+      const track = layoutTrack();
+
+      expect(
+        fireEvent.pointerDown(track, { clientX: atRatio(0.5), button: 2 }),
+      ).toBe(true);
+    });
+
     it("ignores a non-primary button", () => {
       render(
         <Field size="sm">
@@ -273,6 +309,29 @@ describe("Slider", () => {
   });
 
   describe("marks", () => {
+    const tickOffsets = (container: HTMLElement) =>
+      [...container.querySelectorAll<HTMLElement>("[class*='tick']")].map(
+        (tick) => tick.style.left,
+      );
+
+    it("draws one mark per value when the scale holds 11 or fewer", () => {
+      const { container } = render(
+        <Field size="sm">
+          <Slider min={1} max={5} step={1} defaultValue={1} />
+        </Field>,
+      );
+      expect(tickOffsets(container)).toEqual(["0%", "25%", "50%", "75%", "100%"]);
+    });
+
+    it("caps a denser scale at 11 marks", () => {
+      const { container } = render(
+        <Field size="sm">
+          <Slider min={0} max={1} step={0.01} defaultValue={0} />
+        </Field>,
+      );
+      expect(tickOffsets(container)).toHaveLength(11);
+    });
+
     it("draws the requested number of ticks, spread end to end", () => {
       const { container } = render(
         <Field size="sm">
@@ -301,6 +360,106 @@ describe("Slider", () => {
     });
   });
 
+  describe("value input", () => {
+    const output = () => screen.getByRole("textbox") as HTMLInputElement;
+
+    it("puts the value in a text box that answers to the field's label", () => {
+      render(
+        <Field size="sm">
+          <Field.Label>Opacity</Field.Label>
+          <Slider defaultValue={40} />
+        </Field>,
+      );
+      expect(screen.getByRole("textbox", { name: "Opacity" })).toBe(output());
+      expect(output().value).toBe("40");
+    });
+
+    it("commits what is typed to the slider", () => {
+      const onValueChange = vi.fn();
+      render(
+        <Field size="sm">
+          <Slider defaultValue={40} onValueChange={onValueChange} />
+        </Field>,
+      );
+      fireEvent.change(output(), { target: { value: "70" } });
+      expect(onValueChange).toHaveBeenCalledWith(70);
+      expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("70");
+    });
+
+    it("snaps a typed value onto the step grid, and shows the snap on blur", () => {
+      render(
+        <Field size="sm">
+          <Slider step={10} defaultValue={40} />
+        </Field>,
+      );
+      fireEvent.change(output(), { target: { value: "43" } });
+      // Mid-edit the box holds exactly what was typed — rewriting it under the
+      // caret is what makes a self-correcting field impossible to type in.
+      expect(output().value).toBe("43");
+      expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("40");
+      fireEvent.blur(output());
+      expect(output().value).toBe("40");
+    });
+
+    it("clamps a typed value into the slider's range", () => {
+      const onValueChange = vi.fn();
+      render(
+        <Field size="sm">
+          <Slider min={1} max={5} step={1} defaultValue={3} onValueChange={onValueChange} />
+        </Field>,
+      );
+      fireEvent.change(output(), { target: { value: "12" } });
+      expect(onValueChange).toHaveBeenCalledWith(5);
+      fireEvent.blur(output());
+      expect(output().value).toBe("5");
+    });
+
+    it("commits nothing while the box holds no number yet", () => {
+      const onValueChange = vi.fn();
+      render(
+        <Field size="sm">
+          <Slider min={0} max={1} step={0.25} defaultValue={0.5} onValueChange={onValueChange} />
+        </Field>,
+      );
+      // "" and "0." are both waypoints on the way to a number, not zero.
+      fireEvent.change(output(), { target: { value: "" } });
+      fireEvent.change(output(), { target: { value: "0." } });
+      expect(onValueChange).not.toHaveBeenCalled();
+      expect(output().value).toBe("0.");
+      fireEvent.blur(output());
+      expect(output().value).toBe("0.50");
+    });
+
+    it("keeps letters out of a numeric field", () => {
+      render(
+        <Field size="sm">
+          <Slider defaultValue={40} />
+        </Field>,
+      );
+      fireEvent.change(output(), { target: { value: "7abc" } });
+      expect(output().value).toBe("7");
+    });
+
+    it("follows the value when it changes from outside the box", () => {
+      render(
+        <Field size="sm">
+          <Slider defaultValue={40} />
+        </Field>,
+      );
+      fireEvent.keyDown(screen.getByRole("slider"), { key: "ArrowRight" });
+      expect(output().value).toBe("41");
+    });
+
+    it("goes read-only with the slider", () => {
+      render(
+        <Field size="sm">
+          <Slider defaultValue={40} disabled />
+        </Field>,
+      );
+      expect(output().disabled).toBe(true);
+    });
+  });
+
   describe("composition", () => {
     it("renders the readout beside the track by default", () => {
       render(
@@ -308,7 +467,7 @@ describe("Slider", () => {
           <Slider min={0} max={100} step={1} defaultValue={100} />
         </Field>,
       );
-      expect(screen.queryByText("100")).not.toBeNull();
+      expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("100");
     });
 
     it("lets children replace the default arrangement", () => {
@@ -320,7 +479,7 @@ describe("Slider", () => {
         </Field>,
       );
       expect(screen.queryByRole("slider")).not.toBeNull();
-      expect(screen.queryByText("100")).toBeNull();
+      expect(screen.queryByRole("textbox")).toBeNull();
     });
 
     it("refuses to render a part outside a Slider", () => {

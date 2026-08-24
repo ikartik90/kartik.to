@@ -680,3 +680,32 @@ describe("externalKeys — opening under the cursor", () => {
     expect(activeText()).toBe("Avocado");
   });
 });
+
+// The dense variant (Figma 1027:2276). Asserted on the CLASSES rather than on
+// computed pixels: the recipe holds the geometry and jsdom applies no
+// stylesheet, so the only thing a test can honestly check here is that the
+// prop reaches every slot the variant restyles — which is the part that breaks
+// when a slot is threaded through the context and forgotten at the root.
+describe("size", () => {
+  it("leaves the slots at the default pitch when unset", () => {
+    renderSearch();
+
+    expect(screen.getByRole("listbox").className).not.toContain("size_sm");
+    expect(screen.getByRole("combobox").className).not.toContain("size_sm");
+  });
+
+  it("marks the search row and the listbox small", () => {
+    renderSearch({ size: "sm" });
+
+    expect(screen.getByRole("listbox").className).toContain("size_sm");
+    expect(screen.getByRole("combobox").className).toContain("size_sm");
+  });
+
+  it("marks every option small", () => {
+    renderBare({ size: "sm" });
+
+    for (const option of screen.getAllByRole("option")) {
+      expect(option.className, option.textContent ?? "").toContain("size_sm");
+    }
+  });
+});
