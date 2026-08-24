@@ -42,10 +42,10 @@ test.describe("command palette", () => {
     const palette = page.getByRole("dialog", { name: "Command palette" });
 
     await page.getByPlaceholder("Search…").fill("theme");
-    await expect(palette.getByText("Switch to dark theme")).toBeVisible();
+    await expect(palette.getByText("Dark theme")).toBeVisible();
 
     await page.getByPlaceholder("Search…").fill("zzzzz");
-    await expect(palette.getByText("Switch to dark theme")).toBeHidden();
+    await expect(palette.getByText("Dark theme")).toBeHidden();
   });
 
   test("does not expose admin commands to an anonymous visitor", async ({
@@ -77,7 +77,7 @@ test.describe("theme", () => {
     await page.keyboard.press("ControlOrMeta+k");
     await page
       .getByRole("dialog", { name: "Command palette" })
-      .getByText("Switch to dark theme")
+      .getByText("Dark theme")
       .click();
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -102,14 +102,14 @@ test.describe("theme", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
     await gutter
-      .getByRole("button", { name: "Switch to dark theme" })
+      .getByRole("button", { name: "Dark theme" })
       .click();
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     // It names the theme it OFFERS, so flipping the page has to rename it —
     // a control still offering dark on a dark page is the regression here.
     await expect(
-      gutter.getByRole("button", { name: "Switch to light theme" }),
+      gutter.getByRole("button", { name: "Light theme" }),
     ).toBeVisible();
 
     expect(pageFailures).toEqual([]);

@@ -30,7 +30,36 @@ body {
   -moz-osx-font-smoothing: grayscale;
   transition:
     background 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    /* In step with the panel's own slide — see the inset rule below. */
+      padding-inline-end 200ms ease-out;
+}
+
+/* The page makes room for a docked properties panel.
+
+   The panel is `position: fixed` at the viewport's edge, so it takes no space
+   of its own and would otherwise lie over the very thing it is inspecting.
+   `usePropertiesPanelInset` marks the body for as long as one is up — from
+   anywhere: the collection's media inspector, the grid's card inspector, the
+   card studio's rail — and this is what the mark means. One rule, so the three
+   cannot reserve the width three slightly different ways.
+
+   Structural, and so unlayered with the rest of this section: it is the page's
+   own box rather than a style anything themes or overrides.
+
+   From `md` (820px, `breakpoints.md` in panda.config.ts) up only. The panel is
+   332px wide and capped at `100vw`; on a phone giving that up would leave a
+   column too narrow to edit in, so below this it goes on overlaying, which is
+   what it has always done.
+
+   The 200ms ease-out matches `propertiesPanelIn` / `propertiesPanelOut`, so the
+   content and the panel move as one thing; the transition is declared on `body`
+   above, where the reduced-motion rule at the foot of this file already reaches
+   it. */
+@media (min-width: 820px) {
+  body[data-properties-panel] {
+    padding-inline-end: var(--sizes-properties-panel-width);
+  }
 }
 
 /* Custom cursor handed to the OS via the `cursor` property — the compositor
