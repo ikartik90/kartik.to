@@ -16,7 +16,7 @@ import {
 import { useShaderPolicy } from "./use-shader-policy";
 
 // ---------------------------------------------------------------------------
-// CosmicTrack — a fan of creased ribbons radiating from a point, on a flat ground.
+// CosmicTrack — a fan of ribbons radiating from a point, on a flat ground.
 //
 // Shaped exactly like one of the library's own components (see `GodRays`):
 // friendly props in, a `uniforms` object out, straight into `ShaderMount`. No
@@ -42,6 +42,7 @@ function CosmicTrackImpl({
   angle = DEFAULT_COSMIC_TRACK.angle,
   travel = DEFAULT_COSMIC_TRACK.travel,
   stagger = DEFAULT_COSMIC_TRACK.stagger,
+  symmetry = DEFAULT_COSMIC_TRACK.symmetry,
   spread = DEFAULT_COSMIC_TRACK.spread,
   bandwidth = DEFAULT_COSMIC_TRACK.bandwidth,
   roundness = DEFAULT_COSMIC_TRACK.roundness,
@@ -50,7 +51,7 @@ function CosmicTrackImpl({
   bandCount = DEFAULT_COSMIC_TRACK.bandCount,
   curve = DEFAULT_COSMIC_TRACK.curve,
   tilt = DEFAULT_COSMIC_TRACK.tilt,
-  fold = DEFAULT_COSMIC_TRACK.fold,
+  depth = DEFAULT_COSMIC_TRACK.depth,
   softness = DEFAULT_COSMIC_TRACK.softness,
   tail = DEFAULT_COSMIC_TRACK.tail,
   dither = DEFAULT_COSMIC_TRACK.dither,
@@ -80,6 +81,7 @@ function CosmicTrackImpl({
       angle,
       travel,
       stagger,
+      symmetry,
       spread,
       bandwidth,
       roundness,
@@ -88,7 +90,7 @@ function CosmicTrackImpl({
       bandCount,
       curve,
       tilt,
-      fold,
+      depth,
       softness,
       tail,
       dither,

@@ -104,12 +104,64 @@ describe("toCosmicTrackUniforms", () => {
     expect(staggered.u_spread).toBe(base.u_spread);
   });
 
+  it("blends the two stagger arrangements with a symmetry in 0..1", () => {
+    // 1 is the staircase the reference shows: each band offset one more step
+    // along the track than the one before it, so the first leads and the last
+    // trails by the full span. 0 mirrors the set about its middle band — the
+    // first and last bands share an offset, the second and second-last share
+    // theirs, and the stagger grows from the CENTRE rather than from an edge.
+    const linear = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      symmetry: 1,
+    });
+    const mirrored = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      symmetry: 0,
+    });
+
+    expect(linear.u_symmetry).toBe(1);
+    expect(mirrored.u_symmetry).toBe(0);
+    // It picks the ARRANGEMENT only. The size of one step is still `stagger`,
+    // so mirroring a set must not quietly resize its staircase.
+    expect(mirrored.u_stagger).toBe(linear.u_stagger);
+  });
+
+  it("clamps symmetry to the two arrangements it names", () => {
+    // The shader mixes between them and `mix` EXTRAPOLATES, so a value past
+    // either end is not a third arrangement — it drags the bands beyond both.
+    const over = toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, symmetry: 2.5 });
+    const under = toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, symmetry: -3 });
+
+    expect(over.u_symmetry).toBe(1);
+    expect(under.u_symmetry).toBe(0);
+  });
+
+  it("keeps depth in the range where the surface stays in front of the eye", () => {
+    // Depth curls the plane the tracks lie on, and it does that through the
+    // same perspective divide as `tilt` — so a NEGATIVE curl drives the divisor
+    // toward zero and past it, where the surface has crossed the viewer and the
+    // plane folds back on itself. 0 is the flat sheet the shader shipped with.
+    const under = toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, depth: -0.8 });
+    const over = toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, depth: 4 });
+
+    expect(under.u_depth).toBe(0);
+    expect(over.u_depth).toBe(1);
+  });
+
+  it("leaves the flat sheet alone by default", () => {
+    // The curl is an addition to what already shipped, not a replacement for
+    // it: at rest the shader must render exactly as it did before depth existed.
+    expect(DEFAULT_COSMIC_TRACK.depth).toBe(0);
+    expect(toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_depth).toBe(0);
+  });
+
   it("passes the shape parameters through untouched", () => {
     const uniforms = toCosmicTrackUniforms({
       ...DEFAULT_COSMIC_TRACK,
       angle: 0.42,
       travel: 2.1,
       stagger: 0.31,
+      symmetry: 0.4,
       spread: 0.66,
       bandwidth: 0.44,
       roundness: 0.22,
@@ -118,7 +170,7 @@ describe("toCosmicTrackUniforms", () => {
       bandCount: 7,
       curve: -0.3,
       tilt: 0.9,
-      fold: 0.25,
+      depth: 0.5,
       softness: 0.8,
       tail: 0.05,
       dither: 0.65,
@@ -128,6 +180,7 @@ describe("toCosmicTrackUniforms", () => {
     expect(uniforms.u_angle).toBe(0.42);
     expect(uniforms.u_travel).toBe(2.1);
     expect(uniforms.u_stagger).toBe(0.31);
+    expect(uniforms.u_symmetry).toBe(0.4);
     expect(uniforms.u_spread).toBe(0.66);
     expect(uniforms.u_bandwidth).toBe(0.44);
     expect(uniforms.u_roundness).toBe(0.22);
@@ -136,7 +189,7 @@ describe("toCosmicTrackUniforms", () => {
     expect(uniforms.u_bandCount).toBe(7);
     expect(uniforms.u_curve).toBe(-0.3);
     expect(uniforms.u_tilt).toBe(0.9);
-    expect(uniforms.u_fold).toBe(0.25);
+    expect(uniforms.u_depth).toBe(0.5);
     expect(uniforms.u_softness).toBe(0.8);
     expect(uniforms.u_tail).toBe(0.05);
     expect(uniforms.u_dither).toBe(0.65);
