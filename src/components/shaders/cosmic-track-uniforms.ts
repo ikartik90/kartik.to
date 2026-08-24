@@ -53,6 +53,21 @@ export interface CosmicTrackParams {
    */
   stagger: number;
   /**
+   * WHICH BAND the staircase is measured from — the arrangement, not the size
+   * of a step (that stays `stagger`).
+   *
+   * At 1 the offsets run straight down the stack: the first band leads, each
+   * one after it sits a step further back, and the last trails by the whole
+   * span. At 0 the stack is MIRRORED about its middle band — first and last
+   * share an offset, second and second-last share theirs, and so on — so the
+   * stagger grows outward from the CENTRE instead of from an edge.
+   *
+   * The two ends cover the same total spread, so turning this does not resize
+   * the staircase; it only moves which band leads it, and the values between
+   * walk the leader from the edge to the middle.
+   */
+  symmetry: number;
+  /**
    * The GAP between adjacent ribbons.
    *
    * Each ribbon fills only part of its slot, centred, with ground either side,
@@ -97,7 +112,7 @@ export interface CosmicTrackParams {
    * track carries the background, not another copy of the palette.
    */
   rampLength: number;
-  /** How many ribbons the ramp is creased into. */
+  /** How many ribbons the ramp is divided into. */
   bandCount: number;
   /** Bows the streamlines. 0 is a straight fan; the sign picks the direction. */
   curve: number;
@@ -111,9 +126,22 @@ export interface CosmicTrackParams {
    * measured in the tilted plane's own space.
    */
   tilt: number;
-  /** Depth of the shading at each band boundary — the folded-paper seam. */
-  fold: number;
-  /** Cross-band blur. 0 is a hard crease, 1 is a smooth wash. */
+  /**
+   * How far the sheet the tracks lie on CURLS away from the viewer, on top of
+   * the flat lean `tilt` gives it.
+   *
+   * 0 is that flat sheet — the shader as it was before this existed. Toward 1
+   * the surface bows, so the tracks bend more and more sharply as they run out
+   * and their spacing crowds where the surface turns away, which is what reads
+   * as them moving through depth rather than as curves drawn on glass.
+   *
+   * The distinction from `curve` is the whole point of having both: `curve`
+   * bends the tracks IN THE PICTURE, so their spacing is untouched and they
+   * stay as flat as a printed line. This bends the SURFACE, through the same
+   * perspective divide as `tilt`, so the bend arrives with foreshortening.
+   */
+  depth: number;
+  /** Cross-band blur. 0 is a hard edge, 1 is a smooth wash. */
   softness: number;
   /**
    * How far each band’s gradient fades out at its ENDS, along the track.
@@ -158,6 +186,7 @@ export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   angle: 0,
   travel: 1.5,
   stagger: 0.45,
+  symmetry: 1,
   spread: 0.25,
   bandwidth: 0.7,
   roundness: 0.35,
@@ -166,7 +195,7 @@ export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   bandCount: 7,
   curve: 0.35,
   tilt: 0.6,
-  fold: 0.18,
+  depth: 0,
   softness: 0.55,
   tail: 0.25,
   dither: 0.35,
@@ -180,6 +209,7 @@ export interface CosmicTrackUniforms {
   u_angle: number;
   u_travel: number;
   u_stagger: number;
+  u_symmetry: number;
   u_spread: number;
   u_bandwidth: number;
   u_roundness: number;
@@ -188,7 +218,7 @@ export interface CosmicTrackUniforms {
   u_bandCount: number;
   u_curve: number;
   u_tilt: number;
-  u_fold: number;
+  u_depth: number;
   u_softness: number;
   u_tail: number;
   u_dither: number;
@@ -227,6 +257,10 @@ export function toCosmicTrackUniforms(
     u_angle: params.angle,
     u_travel: params.travel,
     u_stagger: params.stagger,
+    // Clamped rather than passed through: the shader MIXES between the two
+    // arrangements, and `mix` extrapolates — past either end the bands are
+    // dragged beyond both, which is not a third look but a broken one.
+    u_symmetry: Math.min(Math.max(params.symmetry, 0), 1),
     u_spread: params.spread,
     u_bandwidth: params.bandwidth,
     u_roundness: params.roundness,
@@ -235,7 +269,11 @@ export function toCosmicTrackUniforms(
     u_bandCount: Math.max(params.bandCount, 1),
     u_curve: params.curve,
     u_tilt: params.tilt,
-    u_fold: params.fold,
+    // Clamped, and the floor is the one that matters: the curl is added to the
+    // perspective divisor, so a negative one drives it toward zero and through
+    // it — past that the surface has crossed the viewer and the plane is
+    // mirrored back on itself, which is a fold, not a deeper curve.
+    u_depth: Math.min(Math.max(params.depth, 0), 1),
     u_softness: params.softness,
     u_tail: params.tail,
     u_dither: params.dither,

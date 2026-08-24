@@ -163,6 +163,11 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // The gap between one band and the next. At 0 they advance as one flat
       // front; turning it up is what produces the reference's staircase.
       { kind: "slider", key: "stagger", label: "Stagger", min: -2, max: 2, step: 0.01, value: 0.45 },
+      // Which band the staircase is measured from, at the same step size. 1 runs
+      // it straight down the stack from the first band; 0 mirrors it about the
+      // middle band, so the outermost pair share an offset and the stagger grows
+      // from the centre outward.
+      { kind: "slider", key: "symmetry", label: "Symmetry", min: 0, max: 1, step: 0.01, value: 1 },
       // How far a band's single gradient spans along the track. Beyond its two
       // ends the track carries ground, not another copy of the palette.
       { kind: "slider", key: "rampLength", label: "Ramp Length", min: 0.05, max: 6, step: 0.01, value: 1.6 },
@@ -185,7 +190,10 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // The angle the tracks make with the surface. 0 is flat-on; raising it
       // leans the plane away so the ribbons foreshorten toward a horizon.
       { kind: "slider", key: "tilt", label: "Tilt", min: -1.5, max: 1.5, step: 0.01, value: 0.6 },
-      { kind: "slider", key: "fold", label: "Fold", min: 0, max: 1, step: 0.01, value: 0.18 },
+      // Curls the surface the tracks lie on, through the same divide as Tilt —
+      // so the bend arrives with foreshortening and the ribbons crowd where it
+      // turns away. 0 is the flat sheet; Curve is the flat-glass counterpart.
+      { kind: "slider", key: "depth", label: "Depth", min: 0, max: 1, step: 0.01, value: 0 },
       { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, value: 0.55 },
       { kind: "slider", key: "tail", label: "Tail", min: 0, max: 1, step: 0.01, value: 0.25 },
             // Ordered (Bayer) dither: quantises to fewer levels and patterns the
@@ -200,7 +208,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     defaults: {
       colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
       colorBack: "#12042BFF",
-      params: { angle: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, fold: 0.18, softness: 0.55, tail: 0.3, dither: 0.5, ditherSize: 3 },
+      params: { angle: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, dither: 0.5, ditherSize: 3 },
     },
   },
 

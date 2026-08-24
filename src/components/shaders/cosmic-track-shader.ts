@@ -1,7 +1,7 @@
 import { COSMIC_TRACK_MAX_COLORS } from "./cosmic-track-uniforms";
 
 // ---------------------------------------------------------------------------
-// CosmicTrack — a fan of creased ribbons radiating from a point, over a flat ground.
+// CosmicTrack — a fan of ribbons radiating from a point, over a flat ground.
 //
 // Written rather than assembled: the library exports each built-in's GLSL as a
 // finished program, but the snippets those programs are built FROM
@@ -20,7 +20,7 @@ import { COSMIC_TRACK_MAX_COLORS } from "./cosmic-track-uniforms";
 //
 // The geometry is one idea: divide the vertical distance from the axis by a
 // half-width that GROWS with |x|. Lines of constant ratio are then a fan
-// converging on a point, and everything else — the crease, the ramp, the
+// converging on a point, and everything else — the bands, the ramp, the
 // silhouette — is read off that single cross-fan coordinate.
 // ---------------------------------------------------------------------------
 
@@ -38,6 +38,7 @@ uniform vec4 u_colorBack;
 uniform float u_angle;
 uniform float u_travel;
 uniform float u_stagger;
+uniform float u_symmetry;
 uniform float u_spread;
 uniform float u_bandwidth;
 uniform float u_roundness;
@@ -46,7 +47,7 @@ uniform float u_rampLength;
 uniform float u_bandCount;
 uniform float u_curve;
 uniform float u_tilt;
-uniform float u_fold;
+uniform float u_depth;
 uniform float u_softness;
 uniform float u_tail;
 uniform float u_dither;
@@ -70,6 +71,15 @@ out vec4 fragColor;
 // part of it changes something visible.
 #define DITHER_MAX_LEVELS 48.0
 #define DITHER_MIN_LEVELS 3.0
+
+// The exponent the surface curls with at u_depth 1.
+//
+// 0 is a flat plane and 2 is a parabola; past that the far end falls away
+// faster than any quadratic, which is what the top of the control is for. Set
+// here rather than exposed: how much curvature counts as "fully curled" is a
+// property of this shader's coordinate space, not a look decision worth a
+// second slider.
+#define DEPTH_POWER 3.0
 
 // u_ditherSize is device pixels per cell of the Bayer matrix.
 //
@@ -130,7 +140,47 @@ void main() {
   //
   // w is floored well above zero: at the horizon it passes through 0 and flips
   // sign, which would mirror the plane back on itself.
-  float w = max(1. + u_tilt * uv.y, 1e-2);
+  // DEPTH — the same divide, but the surface is no longer flat.
+  //
+  // u_tilt alone makes w a LINEAR ramp in y, which is exactly a plane: straight
+  // tracks stay straight and merely foreshorten. Multiplying by a POWER of the
+  // along-track run curls that plane about the apex, so the sheet falls away
+  // faster the longer it runs — and the tracks crossing it bend harder the
+  // further out they go, which is the loose-rubber-band shape.
+  //
+  // Through the DIVIDE rather than by displacing the tracks, and that is the
+  // whole difference between this and u_curve. A displacement bends the tracks
+  // in the picture and leaves their spacing alone, so they read as curves drawn
+  // on flat glass. Bending the divisor foreshortens too, so the ribbons crowd
+  // where the surface turns away and open where it faces the viewer — which is
+  // what the eye actually reads as depth.
+  //
+  // u_depth moves the EXPONENT, not a coefficient, and that is what gives the
+  // control somewhere to go. Adding a scaled quadratic to w instead makes the
+  // shape approach a fixed ratio of runs as the coefficient grows — so it is
+  // nearly finished by the middle of the slider and the top half does almost
+  // nothing. An exponent has no such ceiling: every step curls the surface
+  // further than the last.
+  //
+  // Measured in units of the run at the frame's CENTRE column, so that column
+  // is the hinge — reach is 1 there at every depth, and the near half swings
+  // toward the viewer while the far half recedes around a composition that
+  // stays put. Scaling w globally instead would zoom the graphic, which swamps
+  // the bend with a change of size.
+  //
+  // pow() of a positive base is always positive, so unlike the tilt ramp this
+  // can never carry the surface through the eye and mirror the plane.
+  //
+  // sqrt(run² + 1) rather than |run|, which is the same softening the fan's own
+  // half-width uses below and is here for the same reason: |run| REACHES ZERO
+  // when the apex sits inside the frame, and any positive exponent then drives
+  // the divisor to its floor and magnifies a speck of the graphic across the
+  // whole card — a blank canvas from two controls that are each fine alone.
+  // Softening by one frame half-width keeps the base away from zero, so the
+  // bowtie apex merely curls into a dome instead of going dark.
+  float run = uv.x + u_apex;
+  float reach = sqrt(run * run + 1.) / sqrt(u_apex * u_apex + 1.);
+  float w = max((1. + u_tilt * uv.y) * pow(reach, u_depth * DEPTH_POWER), 1e-2);
   uv /= w;
 
   // Bow the fan so the ribbons curve instead of running dead straight.
@@ -225,11 +275,6 @@ void main() {
   float inBand =
     1. - smoothstep(halfBand - sideSoft, halfBand + sideSoft, offCentre);
 
-  // The folded-paper crease: darken toward each ribbon's long edges so it reads
-  // as a curved surface rather than a flat strip.
-  float acrossBand = clamp(offCentre / max(halfBand, 1e-4), 0., 1.);
-  float shade = mix(1., 1. - u_fold, acrossBand);
-
   // How far along the track the set has travelled. Time and u_angle are the
   // SAME axis — animating is just Angle moving on its own, which is what makes
   // a moving shader and a dragged slider agree — so they add.
@@ -243,7 +288,8 @@ void main() {
 
   // Position within THIS band's own gradient: 0 where it starts, 1 where it
   // ends. u_stagger is the gap between one band and the next, which is what
-  // turns their leading edges into a staircase instead of one straight front.
+  // turns their leading edges into a staircase instead of one straight front;
+  // u_symmetry below decides which band that staircase is measured from.
   //
   // The gradient is fixed relative to its OWN band — it travels with the band
   // rather than staying put in the frame, which is why the colours never smear
@@ -254,6 +300,28 @@ void main() {
   // right edge, which reads as "the shader is broken" rather than "the set is
   // parked somewhere else".
   float centred = index - (bands - 1.) * .5;
+
+  // SYMMETRY — which band the staircase is measured FROM.
+  //
+  // The signed index above runs straight down the stack, so the first band
+  // leads, the last trails, and the staircase grows from an EDGE. Mirroring it
+  // about the middle band instead makes the offset a function of DISTANCE from
+  // the centre: the first and last bands then sit at the same offset (no
+  // stagger between them at all), the second and second-last at the same
+  // offset, and the staircase grows from the CENTRE outward.
+  //
+  // The 2x and the recentring are what make the two ends comparable rather than
+  // merely different. abs() alone halves the spread — |centred| only reaches
+  // (bands-1)/2, where the signed index covers twice that — so a mirrored set
+  // would quietly bunch up to half the staircase at the same u_stagger.
+  // Doubling restores the span and subtracting (bands-1)/2 recentres it, so both
+  // arrangements occupy exactly the same total extent and this control changes
+  // the ORDER of the bands, never the size of a step.
+  //
+  // Consequently the leader simply migrates: at 1 the offset floor belongs to
+  // band 0, at 0 to the middle band, and every value between walks it inward.
+  float fromCentre = 2. * abs(centred) - (bands - 1.) * .5;
+  float offset = mix(fromCentre, centred, clamp(u_symmetry, 0., 1.));
 
   // ALONG THE TRACK, not along the frame.
   //
@@ -277,7 +345,7 @@ void main() {
   // from the viewport as the apex is pushed out, and Angle would have to be
   // dialled back in by hand to compensate.
   float s =
-    (alongTrack - u_apex - phase - centred * u_stagger) / u_rampLength + .5;
+    (alongTrack - u_apex - phase - offset * u_stagger) / u_rampLength + .5;
 
   // ONE gradient per band, NOT a repeating pattern.
   //
@@ -306,7 +374,6 @@ void main() {
   float mirrored = 1. - abs(2. * clamp(s, 0., 1.) - 1.);
 
   vec4 ramp = rampAt(mirrored);
-  ramp.rgb *= mix(1. - u_fold, 1., shade);
 
   // A ribbon is present only where it is BOTH inside the fan's silhouette
   // (|t| < 1) and within its own gradient's span. Everywhere else is ground.
