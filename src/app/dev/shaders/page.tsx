@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, type ComponentProps } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import {
   ColorPanels,
   GodRays,
-  PaperTexture,
   StaticMeshGradient,
   Swirl,
   Warp,
 } from "@paper-design/shaders-react";
 import { css } from "../../../../styled-system/css";
+import { propertiesPanel } from "../../../../styled-system/recipes";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
@@ -17,11 +17,15 @@ import { Slider } from "@/components/ui/input/slider";
 import { Switch } from "@/components/ui/input/switch";
 import { ColorInput } from "@/components/ui/input/color-input";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
+import { OptionList } from "@/components/ui/input/option-list";
+import { Typography } from "@/components/ui/typography";
 import {
   SHADER_IDS,
   SHADER_SPECS,
-  defaultParams,
-  presetParams,
+  FRAMING_CONTROL_KEYS,
+  MOTION_CONTROL_KEYS,
+  defaultState,
+  type ControlSpec,
   type Params,
   type ShaderId,
   type ShaderSpec,
@@ -31,11 +35,11 @@ import {
 // Local-only playground for the card-background shaders — the fanned light
 // blades and soft washes in the reference art.
 //
-// One shader is mounted at a time (plus the optional grain layer), which is
-// deliberate: every paper-shaders instance holds its OWN webgl2 context, the
-// library pools nothing and registers no `webglcontextlost` handler, so a page
-// that rendered all five side by side would be one long session away from
-// blank canvases. Compare by switching, not by tiling.
+// One shader is mounted at a time, which is deliberate: every paper-shaders
+// instance holds its OWN webgl2 context, the library pools nothing and
+// registers no `webglcontextlost` handler, so a page that rendered all five
+// side by side would be one long session away from blank canvases. Compare by
+// switching, not by tiling.
 //
 // The controls come from the table in `shader-specs.ts` rather than being
 // written out here, so a range can only be wrong in one place.
@@ -44,28 +48,30 @@ import {
 /** The preview is ~380×680 at 2×; no detail in a soft gradient survives above it. */
 const MAX_PIXELS = 1280 * 1280;
 
+// The stage is the whole page minus the docked panel: the card sits in the
+// middle of what is left, not in the middle of the viewport, so the panel never
+// covers the thing being judged.
+//
+// `padding` is written out because `main` already carries the site's own
+// (globals.css) — 20px inline, 32px block. Left alone that is what holds the
+// panel off the top and right edges it is supposed to be flush with, which is
+// also why the panel is `fixed` rather than a flex child.
 const pageStyle = css({
   minHeight: "100dvh",
   backgroundColor: "bg.canvas",
   display: "flex",
-  flexDirection: "row",
-  alignItems: "flex-start",
-  gap: "5xl",
+  alignItems: "center",
+  justifyContent: "center",
   padding: "3xl",
-  flexWrap: "wrap",
-});
-
-const stageStyle = css({
-  position: "sticky",
-  top: "3xl",
-  display: "flex",
-  flexDirection: "column",
-  gap: "xl",
+  paddingInlineEnd:
+    "calc(token(sizes.propertiesPanelWidth) + token(spacing.3xl))",
+  gap: 0,
 });
 
 // The card the reference art is drawn on: portrait, generously rounded. The
-// shader fills it via `fit="cover"` — a ground with margins is just a smaller
-// picture.
+// shader fills it because Fit opens on `cover` — a ground with margins is just
+// a smaller picture — but Fit is a control now, so this is a default and not a
+// guarantee.
 const cardStyle = css({
   position: "relative",
   isolation: "isolate",
@@ -78,48 +84,53 @@ const cardStyle = css({
 
 const layerStyle = css({ position: "absolute", inset: 0 });
 
-const overlayStyle = css({
-  position: "absolute",
-  inset: 0,
-  pointerEvents: "none",
-  color: "#00000055",
-});
-
-const panelStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: "xl",
-  width: "320px",
-  paddingBottom: "5xl",
-});
-
 const rowStyle = css({ display: "flex", flexWrap: "wrap", gap: "sm" });
 
 const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
 
-const headingStyle = css({
-  textStyle: "caption",
-  color: "text.default/40",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-});
-
-const groupStyle = css({ display: "flex", flexDirection: "column", gap: "lg" });
+/**
+ * The docked panel, borrowed from the collection editor's media inspector —
+ * the SAME `propertiesPanel` recipe, applied slot by slot instead of through
+ * `<PropertiesPanel>`.
+ *
+ * The component is not usable here: it is a dismissible dialog (Escape, or a
+ * press anywhere outside it) wrapping a `Popover`, and on a page whose entire
+ * content is the thing you click, the first click on the card would slide the
+ * panel away with nothing left to bring it back. The recipe is the part worth
+ * reusing — flush to the viewport's top, bottom and right edge, its own scroll
+ * container, a sticky header over the sections — and taking it directly is what
+ * keeps this page's rail from being a second, drifting copy of those values.
+ *
+ * `data-property-control` on a row is what the recipe's `controlPanel` slot
+ * relays into its label ∣ control grid, which is also what makes a
+ * SegmentedControl measurable inside a Field.
+ */
+const panel = propertiesPanel();
 
 /**
- * A `Field` holding a SegmentedControl has to be a GRID, not the default column
- * flex: the toolbar sizes itself against its parent, and as a column flex item
- * it collapses to zero height (measured — the control renders, invisibly).
- * `PropertiesPanel.Control` is the proven composition and it lays its fields out
- * exactly this way; this is that rule, minus the panel it is scoped to.
+ * One titled block of the rail — the recipe's section, its header strip and its
+ * control panel. No add/remove button in the strip: every group here describes
+ * properties the shader HAS, so there is nothing for adding one to mean (the
+ * same call the media panel's always-on section makes, which is why that one
+ * draws no header at all — these have headers because there are five of them
+ * and they need telling apart).
  */
-const selectFieldStyle = css({
-  display: "grid",
-  gridTemplateColumns: "auto 1fr",
-  alignItems: "center",
-  columnGap: "md",
-  "& > label": { width: "auto" },
-});
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={panel.section}>
+      <div className={panel.sectionHeader}>
+        <div className={panel.sectionTitle}>
+          <Typography tag="p" type="bodySmall">
+            {title}
+          </Typography>
+        </div>
+      </div>
+      <div className={panel.controlPanel} role="group" aria-label={title}>
+        {children}
+      </div>
+    </section>
+  );
+}
 
 /**
  * The mounted shader. Each component takes a different prop set, so the params
@@ -146,6 +157,8 @@ function ShaderStage({
     ...(spec.hasColorBack ? { colorBack } : {}),
     colors,
     className: layerStyle,
+    // Pinned, not exposed: the card IS the canvas here, and a ground with
+    // margins is just a smaller picture. See `FRAMING_CONTROLS`.
     fit: "cover" as const,
     maxPixelCount: MAX_PIXELS,
   };
@@ -170,64 +183,31 @@ function ShaderStage({
   }
 }
 
-/**
- * The dashed vector marks the reference art lays over its gradients. NOT a
- * shader — an orbit ellipse and a drifting curve are geometry, so they cost a
- * few DOM nodes rather than a second webgl context. Kept here so the card can
- * be judged as the finished thing rather than as a background alone.
- */
-function VectorOverlay() {
-  return (
-    <svg className={overlayStyle} viewBox="0 0 380 680" fill="none" aria-hidden>
-      <ellipse
-        cx="190"
-        cy="150"
-        rx="95"
-        ry="52"
-        transform="rotate(-24 190 150)"
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeDasharray="4 4"
-      />
-      <circle cx="103" cy="122" r="4" fill="currentColor" />
-      <circle cx="277" cy="178" r="4" fill="currentColor" />
-      <path
-        d="M-20 470 C 110 470, 150 300, 400 330"
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeDasharray="4 4"
-      />
-    </svg>
-  );
-}
-
 export default function ShaderPlaygroundPage() {
   const [shaderId, setShaderId] = useState<ShaderId>("cosmicTrack");
   const spec = SHADER_SPECS[shaderId];
 
-  const [presetId, setPresetId] = useState(spec.presets[0].id);
-  const [state, setState] = useState(() =>
-    presetParams(spec, spec.presets[0].id),
-  );
-  const [grain, setGrain] = useState(false);
-  const [vectors, setVectors] = useState(false);
+  const [state, setState] = useState(() => defaultState(spec));
   const [copied, setCopied] = useState(false);
 
-  /** Switching shader re-seeds from that shader's first preset — its control table is a different shape. */
+  /** Switching shader re-seeds from that shader's defaults — its control table is a different shape. */
   function selectShader(next: ShaderId) {
-    const nextSpec = SHADER_SPECS[next];
-    const firstPreset = nextSpec.presets[0].id;
     setShaderId(next);
-    setPresetId(firstPreset);
-    setState(presetParams(nextSpec, firstPreset));
+    setState(defaultState(SHADER_SPECS[next]));
     setCopied(false);
   }
 
-  function selectPreset(next: string) {
-    setPresetId(next);
-    setState(presetParams(spec, next));
-    setCopied(false);
-  }
+  /** The shared blocks, in the order they are grouped — and what is left is the shader's own. */
+  const byKey = (keys: string[]) =>
+    keys
+      .map((key) => spec.controls.find((control) => control.key === key))
+      .filter((control) => control !== undefined);
+  const shared = new Set([...FRAMING_CONTROL_KEYS, ...MOTION_CONTROL_KEYS]);
+  const ownControls = spec.controls.filter(
+    (control) => !shared.has(control.key),
+  );
+  const framingControls = byKey(FRAMING_CONTROL_KEYS);
+  const motionControls = byKey(MOTION_CONTROL_KEYS);
 
   function setParam(key: string, value: number | boolean | string) {
     setState((current) => ({
@@ -286,100 +266,100 @@ export default function ShaderPlaygroundPage() {
     }
   }
 
+  /**
+   * One control, whatever kind it is. Lifted out of the JSX because the sidebar
+   * renders the list TWICE — a shader's own parameters and the shared framing —
+   * and a second copy of this switch is a second place for a control kind to go
+   * missing.
+   */
+  function renderControl(control: ControlSpec) {
+    if (control.kind === "toggle") {
+      return (
+        <Field size="sm" key={control.key} data-property-control>
+          <Switch
+            checked={Boolean(state.params[control.key])}
+            onCheckedChange={(checked) => setParam(control.key, checked)}
+          />
+          <Field.Label>{control.label}</Field.Label>
+        </Field>
+      );
+    }
+
+    if (control.kind === "select") {
+      return (
+        <Field size="sm" key={control.key} data-property-control>
+          <Field.Label>{control.label}</Field.Label>
+          <SegmentedControl
+            options={control.options}
+            value={String(state.params[control.key])}
+            onValueChange={(value) => setParam(control.key, value)}
+          />
+        </Field>
+      );
+    }
+
+    return (
+      <Field size="sm" key={control.key} data-property-control>
+        <Field.Label>{control.label}</Field.Label>
+        <Slider
+          min={control.min}
+          max={control.max}
+          step={control.step}
+          value={Number(state.params[control.key])}
+          onValueChange={(value) => setParam(control.key, value)}
+        />
+      </Field>
+    );
+  }
+
   return (
     <main className={pageStyle}>
-      <div className={stageStyle}>
-        <div className={cardStyle}>
-          <ShaderStage
-            spec={spec}
-            params={state.params}
-            colors={state.colors}
-            colorBack={state.colorBack}
-            extraColors={state.extraColors}
-          />
-
-          {/* The stacking test, live: a SECOND shader over the first, made
-              transparent by `colorBack` and composited with `mix-blend-mode`.
-              Only shaders with a `colorBack` can do this — the mesh gradients
-              are opaque fills, which is why the grain goes on top and never
-              underneath. */}
-          {grain && (
-            <PaperTexture
-              className={layerStyle}
-              colorBack="#00000000"
-              colorFront="#00000022"
-              roughness={0.6}
-              fiber={0.3}
-              fiberSize={0.4}
-              crumples={0}
-              folds={0}
-              drops={0}
-              fade={0}
-              contrast={0.4}
-              fit="cover"
-              speed={0}
-              maxPixelCount={MAX_PIXELS}
-              style={{ mixBlendMode: "overlay" }}
-            />
-          )}
-
-          {vectors && <VectorOverlay />}
-        </div>
-
-        <div className={rowStyle}>
-          <Field size="sm">
-            <Switch checked={grain} onCheckedChange={setGrain} />
-            <Field.Label>Grain layer</Field.Label>
-          </Field>
-        </div>
-        <div className={rowStyle}>
-          <Field size="sm">
-            <Switch checked={vectors} onCheckedChange={setVectors} />
-            <Field.Label>Vector marks</Field.Label>
-          </Field>
-        </div>
+      <div className={cardStyle}>
+        <ShaderStage
+          spec={spec}
+          params={state.params}
+          colors={state.colors}
+          colorBack={state.colorBack}
+          extraColors={state.extraColors}
+        />
       </div>
 
-      <div className={panelStyle}>
-        <div className={groupStyle}>
-          <span className={headingStyle}>Shader</span>
-          <div className={rowStyle}>
-            {SHADER_IDS.map((id) => (
-              <Button
-                key={id}
-                size="sm"
-                emphasis={id === shaderId ? "secondary" : "tertiary"}
-                onClick={() => selectShader(id)}
-              >
-                {SHADER_SPECS[id].label}
-              </Button>
-            ))}
-          </div>
+      <aside className={panel.root} aria-label="Properties">
+        <div className={panel.header}>
+          <Typography tag="p" type="bodyLarge" className={panel.title}>
+            Properties
+          </Typography>
         </div>
 
-        <div className={groupStyle}>
-          <span className={headingStyle}>Preset</span>
-          <div className={rowStyle}>
-            {spec.presets.map((preset) => (
-              <Button
-                key={preset.id}
-                size="sm"
-                emphasis={preset.id === presetId ? "secondary" : "tertiary"}
-                onClick={() => selectPreset(preset.id)}
-              >
-                {preset.label}
-              </Button>
-            ))}
-          </div>
-          <p className={captionStyle}>
-            {spec.presets.find((preset) => preset.id === presetId)?.note}
-          </p>
-        </div>
+        <Group title="Shader">
+          {/* A list rather than a row of chips: six names read as a set to pick
+              ONE of, and the selected row says which is mounted without the
+              reader having to compare button emphases. `sm` because the panel's
+              own rows are 24px — a 32px-pitch list inside it would be the
+              loudest thing in the rail. */}
+          <OptionList
+            size="sm"
+            // The recipe's own width is the 208px popover pitch it shares with
+            // the calendar. In here the panel is the frame, so the list takes
+            // the column it was given — `utilities` outranks `recipes`, which
+            // is what lets a consumer widen it without a variant.
+            className={css({ width: "token(spacing.full)" })}
+            value={shaderId}
+            onValueChange={(value) => selectShader(value as ShaderId)}
+          >
+            <Field.Search placeholder="Search…" />
+            <OptionList.Listbox aria-label="Shader">
+              {SHADER_IDS.map((id) => (
+                <OptionList.Option key={id} value={id}>
+                  {SHADER_SPECS[id].label}
+                </OptionList.Option>
+              ))}
+            </OptionList.Listbox>
+          </OptionList>
+        </Group>
 
-        <div className={groupStyle}>
-          <span className={headingStyle}>Colours</span>
-
-          <Field size="sm">
+        <Group title="Colours">
+          <Field size="sm" data-property-control>
             <Field.Label>Count</Field.Label>
             <Slider
               min={1}
@@ -391,7 +371,7 @@ export default function ShaderPlaygroundPage() {
           </Field>
 
           {state.colors.map((color, index) => (
-            <Field size="sm" key={index}>
+            <Field size="sm" key={index} data-property-control>
               <Field.Label>{`Colour ${index + 1}`}</Field.Label>
               <ColorInput
                 value={color}
@@ -408,7 +388,7 @@ export default function ShaderPlaygroundPage() {
           ))}
 
           {spec.hasColorBack && state.colorBack && (
-            <Field size="sm">
+            <Field size="sm" data-property-control>
               <Field.Label>Background</Field.Label>
               <ColorInput
                 value={state.colorBack}
@@ -420,7 +400,7 @@ export default function ShaderPlaygroundPage() {
           )}
 
           {spec.extraColors.map((extra) => (
-            <Field size="sm" key={extra.key}>
+            <Field size="sm" key={extra.key} data-property-control>
               <Field.Label>{extra.label}</Field.Label>
               <ColorInput
                 value={state.extraColors[extra.key]}
@@ -433,55 +413,19 @@ export default function ShaderPlaygroundPage() {
               />
             </Field>
           ))}
-        </div>
+        </Group>
 
-        <div className={groupStyle}>
-          <span className={headingStyle}>Parameters</span>
+        <Group title="Parameters">{ownControls.map(renderControl)}</Group>
 
-          {spec.controls.map((control) => {
-            if (control.kind === "toggle") {
-              return (
-                <Field size="sm" key={control.key}>
-                  <Switch
-                    checked={Boolean(state.params[control.key])}
-                    onCheckedChange={(checked) =>
-                      setParam(control.key, checked)
-                    }
-                  />
-                  <Field.Label>{control.label}</Field.Label>
-                </Field>
-              );
-            }
+        <Group title="Framing">{framingControls.map(renderControl)}</Group>
 
-            if (control.kind === "select") {
-              return (
-                <Field size="sm" key={control.key} className={selectFieldStyle}>
-                  <Field.Label>{control.label}</Field.Label>
-                  <SegmentedControl
-                    options={control.options}
-                    value={String(state.params[control.key])}
-                    onValueChange={(value) => setParam(control.key, value)}
-                  />
-                </Field>
-              );
-            }
+        {/* Absent entirely for a shader that never samples time, rather than
+            present and inert — see `MOTION_CONTROLS`. */}
+        {motionControls.length > 0 && (
+          <Group title="Motion">{motionControls.map(renderControl)}</Group>
+        )}
 
-            return (
-              <Field size="sm" key={control.key}>
-                <Field.Label>{control.label}</Field.Label>
-                <Slider
-                  min={control.min}
-                  max={control.max}
-                  step={control.step}
-                  value={Number(state.params[control.key])}
-                  onValueChange={(value) => setParam(control.key, value)}
-                />
-              </Field>
-            );
-          })}
-        </div>
-
-        <div className={groupStyle}>
+        <Group title="Output">
           <div className={rowStyle}>
             <Button size="sm" onClick={copyProps}>
               {copied ? "Copied" : "Copy as JSX"}
@@ -492,7 +436,7 @@ export default function ShaderPlaygroundPage() {
               onClick={() => {
                 setState((current) => ({
                   ...current,
-                  params: defaultParams(spec),
+                  params: defaultState(spec).params,
                 }));
                 setCopied(false);
               }}
@@ -501,11 +445,11 @@ export default function ShaderPlaygroundPage() {
             </Button>
           </div>
           <p className={captionStyle}>
-            Presets are starting points, not matches — the last mile is
+            The defaults are a starting point, not a match — the last mile is
             eyeballing.
           </p>
-        </div>
-      </div>
+        </Group>
+      </aside>
     </main>
   );
 }
