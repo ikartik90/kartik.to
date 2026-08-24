@@ -17,6 +17,8 @@ import {
 } from "@/app/actions/post";
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
+import { getBackTarget, type BackTarget } from "@/utils/back-target";
+import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
@@ -45,6 +47,10 @@ export interface CommandPaletteHandlers {
   drafts: Post[];
   /** The draft currently being viewed in renderer mode, or null. */
   currentDraft: Post | null;
+  /** Where "back" goes from here, or null where it is not offered. */
+  backTarget: BackTarget | null;
+  /** Leave for `backTarget`. A no-op where there is none. */
+  handleBack: () => void;
   handleThemeToggle: () => void;
   handleEditPage: () => void;
   handleNewBlogArticle: () => void;
@@ -150,6 +156,44 @@ export function useCommandPalette(
     }
     return null;
   }, [isEditMode, pathname, drafts]);
+
+  // The card studio lives under `/edit` but edits no document — nothing is
+  // buffered there, so it keeps the way back it has always had.
+  const isCardStudio = pathname === "/edit/card-studio";
+
+  // Editing a document already names its exits, and each one says what becomes
+  // of the work in the buffer. A bare "back" would answer that question by
+  // throwing it away without saying so, so it is not offered there.
+  const backTarget = useMemo(
+    () =>
+      (isEditMode || isHomeEditMode) && !isCardStudio
+        ? null
+        : getBackTarget(pathname),
+    [isEditMode, isHomeEditMode, isCardStudio, pathname],
+  );
+
+  const handleBack = () => {
+    if (!backTarget) return;
+    close();
+    router.push(backTarget.href);
+  };
+
+  // ⌘[ / Ctrl [ — the same gesture the browser reads as "back", claimed so it
+  // lands on the page above THIS page rather than on whatever was visited
+  // before it. Global, because the control it replaces was on the page rather
+  // than in the palette: it has to work without opening anything.
+  useEffect(() => {
+    if (!backTarget) return;
+    const { href } = backTarget;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!hasShortcutModifier(event) || event.key !== "[") return;
+      event.preventDefault();
+      close();
+      router.push(href);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [backTarget, close, router]);
 
   const syncOtherTabs = () => {
     notifyContentUpdated();
@@ -418,6 +462,8 @@ export function useCommandPalette(
     editCategory,
     drafts,
     currentDraft,
+    backTarget,
+    handleBack,
     handleThemeToggle,
     handleEditPage,
     handleNewBlogArticle,

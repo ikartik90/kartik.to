@@ -23,9 +23,10 @@ vi.mock("@/store/theme", () => ({
 
 // Stub next/navigation — pathname is controllable per test
 const mockPathname = vi.fn().mockReturnValue("/");
+const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 // Stub server actions so they never hit the network
@@ -74,6 +75,7 @@ beforeEach(() => {
   stubPlatform("macOS");
   mockUseSession.mockReturnValue({ data: null });
   mockPathname.mockReturnValue("/");
+  mockPush.mockClear();
   mockSetMode.mockClear();
 
   HTMLDialogElement.prototype.showModal = vi.fn(function (
@@ -370,5 +372,125 @@ describe("CommandPalette", () => {
 
       expect(dialog.close).toHaveBeenCalledOnce();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Navigate — the back control, which used to be an icon button in the gutter
+// ---------------------------------------------------------------------------
+
+describe("CommandPalette — Navigate", () => {
+  it("offers a way back, named for where it goes", () => {
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    expect(screen.getByText("Navigate")).toBeDefined();
+    expect(screen.getByText("Back to index")).toBeDefined();
+  });
+
+  it("names the nearest ancestor page rather than the index every time", () => {
+    mockPathname.mockReturnValue("/writing/my-post/edit");
+    render(<CommandPalette />);
+
+    expect(screen.getByText("Back to My Post")).toBeDefined();
+  });
+
+  it("shows the shortcut the platform actually types beside it", () => {
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+    expect(screen.getByText("⌘[").tagName).toBe("KBD");
+
+    cleanup();
+    stubPlatform("Windows");
+    render(<CommandPalette />);
+    expect(screen.getByText("Ctrl [").tagName).toBe("KBD");
+  });
+
+  it("goes there when the item is chosen", () => {
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    fireEvent.click(screen.getByText("Back to index"));
+
+    expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
+  it("goes there on the shortcut too, from anywhere on the page", () => {
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    fireEvent.keyDown(window, { key: "[", metaKey: true });
+
+    expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
+  it("ignores the shortcut typed with the other platform's modifier", () => {
+    // ⌘[ on Apple hardware, Ctrl [ on a PC — never both, or the label lies.
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    fireEvent.keyDown(window, { key: "[", ctrlKey: true });
+
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("has nothing to offer on the index itself", () => {
+    mockPathname.mockReturnValue("/");
+    render(<CommandPalette />);
+
+    expect(screen.queryByText("Navigate")).toBeNull();
+    expect(screen.queryByText("⌘[")).toBeNull();
+  });
+
+  it("does not offer a silent way out of the editor", () => {
+    // Edit mode has its own exits — save, discard, publish — and each of them
+    // says what happens to the buffered work. "Back" would answer that question
+    // by throwing it away without saying so.
+    mockPathname.mockReturnValue("/edit/new");
+    render(<CommandPalette />);
+    expect(screen.queryByText("Navigate")).toBeNull();
+
+    cleanup();
+    mockPathname.mockReturnValue("/edit/home");
+    render(<CommandPalette />);
+    expect(screen.queryByText("Navigate")).toBeNull();
+  });
+
+  it("keeps the card studio's way back — it buffers nothing to lose", () => {
+    mockPathname.mockReturnValue("/edit/card-studio");
+    render(<CommandPalette />);
+
+    expect(screen.getByText("Back to index")).toBeDefined();
+  });
+
+  it("leads the palette, and leaves Settings to close it", () => {
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    const navigate = screen.getByText("Navigate");
+    const settings = screen.getByText("Settings");
+    expect(
+      navigate.compareDocumentPosition(settings) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("puts Settings last, after the admin groups", () => {
+    mockUseSession.mockReturnValue({
+      data: {
+        user: { id: "admin-id", email: "admin@example.com" },
+        session: { id: "session-id", userId: "admin-id" },
+      },
+    });
+    mockPathname.mockReturnValue("/writing/my-post");
+    render(<CommandPalette />);
+
+    const settings = screen.getByText("Settings");
+    for (const heading of ["Navigate", "This Page", "Publish"]) {
+      expect(
+        screen.getByText(heading).compareDocumentPosition(settings) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
   });
 });
