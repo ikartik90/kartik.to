@@ -138,6 +138,64 @@ const markerAlignmentBox = {
   pointerEvents: "none",
 } as const;
 
+/**
+ * The numeric value at the end of a field frame — the slider's readout and the
+ * colour input's opacity are ONE box wearing ONE set of rules, so a column of
+ * slider rows and colour rows lines its hairlines and its numbers up. They were
+ * two numbers before (a 60px `sizes.effectColorOpacity` beside the slider's
+ * 28px), which is how two things that have to match stop matching.
+ *
+ * The box is an <input>, so it also wears the `field` recipe's `control` reset
+ * — and has to beat that slot's `flex: 1 1 0` / `width: 100%`, which would grow
+ * the number across the ruler beside it. It sizes to its own content instead:
+ * `field-sizing` where the browser has it, the `size` attribute the components
+ * always set where it doesn't, over a 28px floor — so the drawn width holds for
+ * a short value, and a long one (a negative, a 0.25 step) grows the box instead
+ * of being clipped by the frame's overflow.
+ *
+ * It also takes the frame's dead space with it. The flex gap on its left and
+ * the frame's own inline padding on its right would otherwise fall through to
+ * the frame, whose mousedown forwards focus to the field's CONTROL — so a click
+ * a few pixels off the number moves a slider's thumb instead of placing a caret
+ * in the box. A negative margin pulls the box out over each side, an equal
+ * padding puts the number back on exactly the pixel it is drawn on, `alignSelf`
+ * claims the frame's full height the way a slider track does, and `content-box`
+ * keeps `minWidth` a floor for the NUMBER rather than for the number plus the
+ * padding it borrowed. Each side is scoped to the arrangement that has the
+ * space to reclaim, so a re-composed frame cannot pull the box out over a
+ * sibling.
+ */
+const fieldValueBox = {
+  // Doubled class, and this is load-bearing: the box wears the `field` recipe's
+  // `control` reset as well as its own slot, and Panda emits slot recipes
+  // ALPHABETICALLY inside `@layer recipes.slots` — `.field__control` lands
+  // after `.color-field__opacity`, so at equal specificity the reset's
+  // `flex: 1 1 0` / `width: 100%` / `min-width: 0` won on source order and the
+  // opacity box's stated width had simply never applied. `&&` puts every
+  // declaration that overlaps the reset a specificity step above it, wherever
+  // the box is used and whatever the slot is called.
+  "&&": {
+    flex: "0 0 auto",
+    width: "auto",
+    fieldSizing: "content",
+    boxSizing: "content-box",
+    alignSelf: "stretch",
+    minWidth: "calc(token(spacing.xxl) + token(spacing.md))",
+    textAlign: "right",
+    // The number changes on every drag frame and every keystroke; proportional
+    // digits would make it shuffle horizontally as it counts.
+    fontVariantNumeric: "tabular-nums",
+    "&:not(:first-child)": {
+      marginInlineStart: "calc(token(spacing.md) * -1)",
+      paddingInlineStart: "md",
+    },
+    "&:last-child": {
+      marginInlineEnd: "calc(token(spacing.md) * -1)",
+      paddingInlineEnd: "md",
+    },
+  },
+} as const;
+
 export default defineConfig({
   presets: [],
   preflight: true,
@@ -232,9 +290,6 @@ export default defineConfig({
             value:
               "calc({sizes.propertyRowLabel} + {sizes.propertyRowField} + {spacing.md} + 2 * {spacing.lg})",
           },
-          // The opacity readout, matching the slider's numeric output so the
-          // two field types line up down the right edge of the panel.
-          effectColorOpacity: { value: "60px" },
         },
 
         colors: {
@@ -3455,7 +3510,7 @@ export default defineConfig({
         sliderField: defineSlotRecipe({
           className: "slider-field",
           description:
-            "The ruler + thumb + numeric readout of a slider — the control slot of a `field`, drawn inside the shared `frame` rather than bringing a surface of its own. `track` is the focusable `role=\"slider\"` element (full frame height, so the hit target is the whole strip, not the 4px rule); `tick` marks the evenly spaced stops as 1px hairlines on `field.border.*`; `thumb` is the 4×20 pill at the current value; `separator` is the 0.5px rule dividing the ruler from the `output` readout. Thumb and readout paint in `currentColor` so the frame's resting → active colour shift carries them, exactly as it carries a leading icon. Like the checkbox, the geometry is drawn at ONE size (Figma 842:7179); `size` scales only the readout's type, so it keeps step with the field's label and hint.",
+            "The ruler + thumb + numeric readout of a slider — the control slot of a `field`, drawn inside the shared `frame` rather than bringing a surface of its own. `track` is the focusable `role=\"slider\"` element (full frame height, so the hit target is the whole strip, not the 4px rule); `tick` marks the evenly spaced stops as 1px hairlines on `field.border.*`; `thumb` is the 4×20 pill at the current value; `separator` is the 0.5px rule dividing the ruler from the `output` — the value as an editable numeric input, so the number can be typed as well as dragged. Thumb and readout paint in `currentColor` so the frame's resting → active colour shift carries them, exactly as it carries a leading icon. Like the checkbox, the geometry is drawn at ONE size (Figma 842:7179); `size` scales only the readout's type, so it keeps step with the field's label and hint.",
           slots: ["track", "tick", "thumb", "separator", "output"],
           base: {
             track: {
@@ -3521,20 +3576,11 @@ export default defineConfig({
                 },
             },
             output: {
-              flexShrink: 0,
-              // The drawn readout is 28px wide; a MIN width rather than a fixed
-              // one, so a longer value (a negative, or a 0.25 step) grows the
-              // readout instead of being clipped by the frame's overflow.
-              minWidth: "calc(token(spacing.xxl) + token(spacing.md))",
-              textAlign: "right",
+              ...fieldValueBox,
               color: "inherit",
-              // The readout changes on every drag frame; proportional digits
-              // would make the number shuffle horizontally as it counts.
-              fontVariantNumeric: "tabular-nums",
-              userSelect: "none",
-              // The readout sits OUTSIDE the track, so the track's own dimming
+              // The value sits OUTSIDE the track, so the track's own dimming
               // can't reach it — without this a disabled slider greys its ruler
-              // and leaves the value at full strength.
+              // and leaves the number at full strength.
               "[data-field]:has([role='slider'][aria-disabled='true']) &": {
                 opacity: 0.5,
               },
@@ -4608,12 +4654,8 @@ export default defineConfig({
               fontVariantNumeric: "tabular-nums",
               textTransform: "uppercase",
             },
-            opacity: {
-              flex: "0 0 auto",
-              width: "token(sizes.effectColorOpacity)",
-              textAlign: "right",
-              fontVariantNumeric: "tabular-nums",
-            },
+            // The same box the slider's value wears — see `fieldValueBox`.
+            opacity: { ...fieldValueBox },
           },
         }),
 

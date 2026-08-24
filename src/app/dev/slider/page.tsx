@@ -36,7 +36,8 @@ export default function SliderPreviewPage() {
         flexWrap: "wrap",
       })}
     >
-      {/* The drawn case: a 200px field at size sm, 11 ticks, value at max.
+      {/* The drawn case: a 200px field at size sm, value at max — 0–100 by 1
+          holds far more than 11 values, so the ruler is the capped 11 marks.
           Tab into it for the Focus variant — the frame, ruler, thumb and
           readout all shift to the accent off the field recipe alone. */}
       <div className={columnStyle}>
@@ -58,7 +59,7 @@ export default function SliderPreviewPage() {
         </Field>
         <Field size="sm">
           <Field.Label>Break duration</Field.Label>
-          <Slider max={60} step={5} ticks={13} defaultValue={30} />
+          <Slider max={60} step={5} defaultValue={30} />
           <Field.Hint>Minutes, in fives</Field.Hint>
         </Field>
       </div>
@@ -102,7 +103,7 @@ export default function SliderPreviewPage() {
 
         <span className={captionStyle}>fractional — step 0.25</span>
         <Field size="sm">
-          <Slider min={0} max={1} step={0.25} ticks={5} defaultValue={0.5} />
+          <Slider min={0} max={1} step={0.25} defaultValue={0.5} />
         </Field>
 
         <span className={captionStyle}>disabled</span>
