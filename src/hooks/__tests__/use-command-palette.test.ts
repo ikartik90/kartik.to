@@ -3,6 +3,9 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { useCommandPalette } from "../use-command-palette";
+import { useCoverDraftStore } from "@/store/cover-draft";
+import { useEditorStore } from "@/store/editor";
+import { useGridDraftStore } from "@/store/grid-draft";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -37,7 +40,19 @@ vi.mock("@/utils/open-in-new-tab", () => ({
   openInNewTab: (url: string) => mockOpenInNewTab(url),
 }));
 
+// Every action module is stubbed, not just for isolation: they are
+// `"use server"` files that import `@/lib/env`, which validates DATABASE_URL and
+// friends at import time and throws in a test run that has no `.env`.
+vi.mock("@/app/actions/cover", () => ({
+  getCovers: vi.fn().mockResolvedValue([]),
+  getCover: vi.fn(),
+  createCover: vi.fn(),
+  saveCover: vi.fn(),
+  deleteCover: vi.fn(),
+}));
+
 vi.mock("@/app/actions/grid", () => ({
+  saveGridLayout: vi.fn().mockResolvedValue(undefined),
   publishComponent: vi.fn().mockResolvedValue("component-id"),
   setPinned: vi.fn(),
   moveGridItem: vi.fn(),
@@ -159,6 +174,458 @@ describe("useCommandPalette", () => {
   });
 
   // -------------------------------------------------------------------------
+  // The cover playground
+  // -------------------------------------------------------------------------
+
+  describe("isCoverPlayground", () => {
+    it("is true on the bare playground route", () => {
+      mockPathname.mockReturnValue("/playground/cover");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.isCoverPlayground).toBe(true);
+    });
+
+    it("is true on a saved cover's route", () => {
+      mockPathname.mockReturnValue("/playground/cover/abc123");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.isCoverPlayground).toBe(true);
+    });
+
+    it("is false elsewhere", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.isCoverPlayground).toBe(false);
+    });
+  });
+
+  describe("handleSaveChanges — the cover", () => {
+    beforeEach(async () => {
+      mockPathname.mockReturnValue("/playground/cover");
+      useCoverDraftStore.getState().reset();
+      const cover = await import("@/app/actions/cover");
+      (cover.createCover as Mock).mockReset();
+      (cover.saveCover as Mock).mockReset();
+    });
+
+    // Create or update is decided by the DRAFT, not the route — after a create
+    // the two disagree until the navigation lands, and the store is what knows.
+    it("creates when the draft has never been saved", async () => {
+      const { createCover, saveCover } = await import("@/app/actions/cover");
+      (createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(createCover).toHaveBeenCalledOnce();
+      expect(saveCover).not.toHaveBeenCalled();
+      // The saved row's id comes back into the draft, so a second ⌘S updates
+      // the cover just written rather than creating a duplicate of it.
+      expect(useCoverDraftStore.getState().coverId).toBe("cover-1");
+    });
+
+    it("updates the cover the draft was opened on", async () => {
+      const { createCover, saveCover } = await import("@/app/actions/cover");
+      useCoverDraftStore.getState().load({
+        id: "cover-9",
+        title: "Dusk",
+        shaderId: "swirl",
+        settings: useCoverDraftStore.getState().settings,
+      });
+      (saveCover as Mock).mockResolvedValue({
+        id: "cover-9",
+        title: "Dusk",
+        shaderId: "swirl",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(saveCover).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "cover-9" }),
+      );
+      expect(createCover).not.toHaveBeenCalled();
+    });
+
+    // A failed write must not look like a successful one. The palette closes
+    // either way (the press was received), but the draft keeps its work and the
+    // page does not navigate away from it.
+    // ⌘S is a SAVE, not an exit. The whole point of the shortcut is to keep
+    // working, so the one thing it must never do is navigate.
+    it("stays on the page", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      (createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    // Saving a never-saved cover gives it an id, and the URL has to catch up or
+    // a refresh would land back on the blank route and lose the connection.
+    // `replace`, not `push`: the blank route is not a place to go back to.
+    it("takes on the new cover's URL without adding a history entry", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      (createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(mockReplace).toHaveBeenCalledWith("/playground/cover/cover-1");
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("does not re-write the URL when updating a cover already open", async () => {
+      const { saveCover } = await import("@/app/actions/cover");
+      mockPathname.mockReturnValue("/playground/cover/cover-9");
+      useCoverDraftStore.getState().load({
+        id: "cover-9",
+        title: "Dusk",
+        shaderId: "swirl",
+        settings: useCoverDraftStore.getState().settings,
+      });
+      (saveCover as Mock).mockResolvedValue({
+        id: "cover-9",
+        title: "Dusk",
+        shaderId: "swirl",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
+
+    it("leaves the draft clean, so there is nothing left to discard", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      useCoverDraftStore.getState().setParam("scale", 2);
+      (createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+    });
+
+    it("keeps the draft when the write fails", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      (createCover as Mock).mockRejectedValue(new Error("nope"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(useCoverDraftStore.getState().settings.params.scale).toBe(2);
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("leaving a dirty cover", () => {
+    beforeEach(async () => {
+      mockPathname.mockReturnValue("/playground/cover");
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      useCoverDraftStore.getState().reset();
+      const cover = await import("@/app/actions/cover");
+      (cover.createCover as Mock).mockReset();
+      (cover.saveCover as Mock).mockReset();
+    });
+
+    it("goes straight back when nothing has been tuned", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+
+      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(result.current.pendingExit).toBeNull();
+    });
+
+    // The whole point: unsaved work must not leave silently. #94 solved this by
+    // withholding the command; asking is the better answer, because "I want to
+    // go and I want to keep it" is a thing the author can now say.
+    // A visitor has nowhere to save TO, so their tuning is ephemeral by
+    // definition and stopping them on the way out would offer an answer
+    // ("Save changes and exit") that cannot be carried out.
+    it("does not stop a visitor who has no way to save", () => {
+      mockUseSession.mockReturnValue({ data: null });
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+
+      expect(result.current.pendingExit).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+
+    it("asks instead of navigating when there is unsaved work", () => {
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(result.current.pendingExit).toBe("/");
+    });
+
+    it("saves and then leaves when that is the answer", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      useCoverDraftStore.getState().setParam("scale", 2);
+      (createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+      await act(() => result.current.confirmExitSave());
+
+      expect(createCover).toHaveBeenCalledOnce();
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+
+    it("leaves without writing when the answer is discard", async () => {
+      const { createCover, saveCover } = await import("@/app/actions/cover");
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+      act(() => result.current.confirmExitDiscard());
+
+      expect(createCover).not.toHaveBeenCalled();
+      expect(saveCover).not.toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+    });
+
+    // Cancel is not a quieter discard — the tuning has to survive it intact.
+    it("keeps the work and stays put when cancelled", () => {
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+      act(() => result.current.cancelExit());
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(result.current.pendingExit).toBeNull();
+      expect(useCoverDraftStore.getState().settings.params.scale).toBe(2);
+      expect(useCoverDraftStore.getState().isDirty).toBe(true);
+    });
+
+    // A cover just written is clean, so the same press now simply goes.
+    it("stops asking once the work has been saved", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      useCoverDraftStore.getState().setParam("scale", 2);
+      (createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+      act(() => result.current.handleBack());
+
+      expect(result.current.pendingExit).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+  });
+
+  describe("handleDiscardAndExit — the cover", () => {
+    beforeEach(async () => {
+      mockPathname.mockReturnValue("/playground/cover");
+      useCoverDraftStore.getState().reset();
+      const cover = await import("@/app/actions/cover");
+      (cover.createCover as Mock).mockReset();
+      (cover.saveCover as Mock).mockReset();
+    });
+
+    // Nothing was ever written, so this is a no-op plus a navigation — the same
+    // shape as the grid's "Discard and exit".
+    it("drops the draft and leaves without writing", async () => {
+      const { saveCover, createCover } = await import("@/app/actions/cover");
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleDiscardAndExit());
+
+      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+      expect(useCoverDraftStore.getState().coverId).toBeNull();
+      expect(saveCover).not.toHaveBeenCalled();
+      expect(createCover).not.toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+
+    // It IS the answer to the unsaved-work question, said up front — so it must
+    // not turn round and ask the question again.
+    it("does not stop to confirm what was just chosen", () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      useCoverDraftStore.getState().setParam("scale", 2);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleDiscardAndExit());
+
+      expect(result.current.pendingExit).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // One rule across every editor
+  // -------------------------------------------------------------------------
+
+  describe("handleSaveChanges — the same command in all three editors", () => {
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      useEditorStore.getState().reset();
+      useGridDraftStore.getState().reset();
+      useCoverDraftStore.getState().reset();
+    });
+
+    // The point of the whole change: ⌘S commits and leaves you where you were,
+    // in every editor. An article editor that navigated to the read page was
+    // the same "thrown out mid-session" bug the cover had.
+    it("keeps you in the document editor", async () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      useEditorStore.getState().setDraftId("existing-id");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      const { saveDraft } = await import("@/app/actions/post");
+      expect(saveDraft).toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    // A brand-new draft has no id until it is written, so the URL has to catch
+    // up — replace, not push, exactly as a first-saved cover does.
+    it("takes on the new draft's edit URL without a history entry", async () => {
+      mockPathname.mockReturnValue("/edit/new");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(mockReplace).toHaveBeenCalledWith("/edit/my-draft?category=ARTICLE");
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("keeps you in the grid editor", async () => {
+      mockPathname.mockReturnValue("/edit/home");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      const { saveGridLayout } = await import("@/app/actions/grid");
+      expect(saveGridLayout).toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("leaves the document editor clean once written", async () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setTitle("Changed");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(useEditorStore.getState().isDirty).toBe(false);
+    });
+  });
+
+  describe("leaving a dirty editor — one question everywhere", () => {
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      useEditorStore.getState().reset();
+      useGridDraftStore.getState().reset();
+      useCoverDraftStore.getState().reset();
+    });
+
+    // #94 withheld Back in edit mode so a bare "back" could not discard
+    // silently. Asking is the better answer: it keeps "save and go", which is
+    // usually what was meant.
+    it("offers the way back from a document editor now", () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.backTarget).not.toBeNull();
+    });
+
+    it("asks before leaving a document with unsaved edits", () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      useEditorStore.getState().setTitle("Changed");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(result.current.pendingExit).not.toBeNull();
+    });
+
+    it("asks before leaving the grid with unsaved placements", () => {
+      mockPathname.mockReturnValue("/edit/home");
+      useGridDraftStore.getState().setPin("post:1", 3);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(result.current.pendingExit).not.toBeNull();
+    });
+
+    it("does not ask when the editor holds nothing unsaved", () => {
+      mockPathname.mockReturnValue("/edit/home");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+
+      expect(result.current.pendingExit).toBeNull();
+      expect(mockPush).toHaveBeenCalled();
+    });
+
+    it("saves the right editor when that is the answer", async () => {
+      mockPathname.mockReturnValue("/edit/home");
+      useGridDraftStore.getState().setPin("post:1", 3);
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+      await act(() => result.current.confirmExitSave());
+
+      const { saveGridLayout } = await import("@/app/actions/grid");
+      expect(saveGridLayout).toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // handleThemeToggle
   // -------------------------------------------------------------------------
 
@@ -243,7 +710,7 @@ describe("useCommandPalette", () => {
       mockPathname.mockReturnValue("/edit/home");
       const { result } = renderHook(() => useCommandPalette(close));
 
-      act(() => result.current.handleDiscardHome());
+      act(() => result.current.handleDiscardAndExit());
       expect(mockPush).toHaveBeenCalledWith("/");
     });
 
@@ -369,86 +836,62 @@ describe("useCommandPalette", () => {
   });
 
   // -------------------------------------------------------------------------
-  // handleSaveDraft
+  // A document, through the same two commands every editor uses
   // -------------------------------------------------------------------------
 
-  describe("handleSaveDraft", () => {
-    beforeEach(() => {
+  describe("handleSaveChanges — a document", () => {
+    beforeEach(async () => {
       mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      useEditorStore.getState().reset();
+      const post = await import("@/app/actions/post");
+      (post.createDraft as Mock).mockClear();
+      (post.saveDraft as Mock).mockClear();
     });
 
-    it("creates a new draft and navigates to its preview", async () => {
-      const { useEditorStore } = await import("@/store/editor");
-      useEditorStore.setState({
-        title: "New Draft",
-        draftId: null,
-        category: "ARTICLE",
-        document: { type: "doc", content: [] },
-        isDirty: true,
-        history: [],
-        historyIndex: -1,
-      });
-
+    it("creates a draft that has never been written", async () => {
+      mockPathname.mockReturnValue("/edit/new");
       const { result } = renderHook(() => useCommandPalette(close));
-      await act(async () => {
-        await result.current.handleSaveDraft();
-      });
+      await act(() => result.current.handleSaveChanges());
 
-      expect(close).toHaveBeenCalledOnce();
-      expect(mockNotifyContentUpdated).toHaveBeenCalledOnce();
-      expect(mockRefresh).not.toHaveBeenCalled();
-      expect(mockReplace).toHaveBeenCalledWith("/writing/my-draft");
-      expect(mockReplace.mock.invocationCallOrder[0]).toBeLessThan(
-        mockNotifyContentUpdated.mock.invocationCallOrder[0],
-      );
-      expect(useEditorStore.getState().draftId).toBeNull();
+      const { createDraft } = await import("@/app/actions/post");
+      expect(createDraft).toHaveBeenCalled();
+      // The new id goes into the store, so a second ⌘S updates rather than
+      // creating a second draft of the same work.
+      expect(useEditorStore.getState().draftId).toBe("new-id");
     });
 
-    it("updates an existing draft and navigates to its preview", async () => {
-      const { saveDraft } = await import("@/app/actions/post");
-      const { useEditorStore } = await import("@/store/editor");
-      useEditorStore.setState({
-        title: "Existing",
-        draftId: "existing-id",
-        category: "ARTICLE",
-        document: { type: "doc", content: [] },
-        isDirty: true,
-        history: [],
-        historyIndex: -1,
-      });
+    it("updates one that has", async () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      useEditorStore.getState().setDraftId("existing-id");
 
       const { result } = renderHook(() => useCommandPalette(close));
-      await act(async () => {
-        await result.current.handleSaveDraft();
-      });
+      await act(() => result.current.handleSaveChanges());
 
-      expect(saveDraft).toHaveBeenCalledWith({
-        id: "existing-id",
-        title: "Existing",
-        document: { type: "doc", content: [] },
-      });
-      expect(mockRefresh).not.toHaveBeenCalled();
-      expect(mockNotifyContentUpdated).toHaveBeenCalledOnce();
-      expect(mockPush).toHaveBeenCalledWith("/writing/existing-draft");
-      expect(mockPush.mock.invocationCallOrder[0]).toBeLessThan(
-        mockNotifyContentUpdated.mock.invocationCallOrder[0],
-      );
-      // Reset is deferred until ArticleEditor unmounts after navigation.
-      expect(useEditorStore.getState().draftId).toBe("existing-id");
+      const { saveDraft, createDraft } = await import("@/app/actions/post");
+      expect(saveDraft).toHaveBeenCalled();
+      expect(createDraft).not.toHaveBeenCalled();
+    });
+
+    it("tells the other tabs, which are showing the old copy", async () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      useEditorStore.getState().setDraftId("existing-id");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handleSaveChanges());
+
+      expect(mockNotifyContentUpdated).toHaveBeenCalled();
     });
   });
 
-  // -------------------------------------------------------------------------
-  // handleDiscardChanges (edit mode: revert + exit)
-  // -------------------------------------------------------------------------
-
-  describe("handleDiscardChanges", () => {
+  describe("handleDiscardAndExit — a document", () => {
     beforeEach(() => {
       mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      useEditorStore.getState().reset();
     });
 
-    it("resets the store and navigates to the read page when editing an existing post", async () => {
-      const { useEditorStore } = await import("@/store/editor");
+    // Nothing was persisted, so the last SAVED version is still in the
+    // database — and the read page is where you see it.
+    it("returns to the post as it stands saved", async () => {
       useEditorStore.setState({
         title: "Existing",
         draftId: "existing-id",
@@ -459,28 +902,23 @@ describe("useCommandPalette", () => {
       mockPathname.mockReturnValue("/edit/existing-draft");
 
       const { result } = renderHook(() => useCommandPalette(close));
-      act(() => {
-        result.current.handleDiscardChanges();
-      });
+      act(() => result.current.handleDiscardAndExit());
 
       expect(close).toHaveBeenCalledOnce();
       expect(mockPush).toHaveBeenCalledWith("/writing/existing-draft");
-      // Store is reverted so no unsaved edits leak into the next session.
       expect(useEditorStore.getState().draftId).toBeNull();
       expect(useEditorStore.getState().isDirty).toBe(false);
     });
 
-    it("navigates home when discarding an unsaved new draft", async () => {
+    // A draft never written has no read page to return to.
+    it("goes home from an unsaved new draft, deleting nothing", async () => {
       const { deleteDraft } = await import("@/app/actions/post");
       mockPathname.mockReturnValue("/edit/new");
 
       const { result } = renderHook(() => useCommandPalette(close));
-      act(() => {
-        result.current.handleDiscardChanges();
-      });
+      act(() => result.current.handleDiscardAndExit());
 
       expect(mockPush).toHaveBeenCalledWith("/");
-      // Discarding changes never deletes anything from the database.
       expect(deleteDraft).not.toHaveBeenCalled();
     });
   });

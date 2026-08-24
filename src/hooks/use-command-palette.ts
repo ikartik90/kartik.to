@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
 import { useThemeStore } from "@/store/theme";
@@ -18,14 +18,28 @@ import {
 import type { Post } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 import { getBackTarget, type BackTarget } from "@/utils/back-target";
+import { isGridDraftDirty } from "@/utils/grid-draft";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
+import { createCover, saveCover } from "@/app/actions/cover";
+import { useCoverDraftStore } from "@/store/cover-draft";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/**
+ * The editors, as one idea.
+ *
+ * They differ in what they buffer and where they write it, and in nothing else
+ * that the palette can see: each has unsaved work, a way to commit it, and a
+ * way to throw it away. Naming that here is what lets one Save command, one
+ * Discard command and one unsaved-work question serve all three, instead of
+ * three near-copies that have to be kept saying the same thing.
+ */
+export type EditorKind = "cover" | "grid" | "document" | null;
 
 export interface CommandPaletteHandlers {
   isAdmin: boolean;
@@ -33,10 +47,6 @@ export interface CommandPaletteHandlers {
   isEditMode: boolean;
   /** The grid's edit route, which needs its own palette group. */
   isHomeEditMode: boolean;
-  /** Write the edited page and its layout, then return to `/`. */
-  handlePublishHome: () => Promise<void>;
-  /** Abandon both drafts and return to `/`. */
-  handleDiscardHome: () => void;
   /** Publish a registered demo to the grid, unpinned. */
   handlePublishComponent: (componentId: string) => Promise<void>;
   /** Clear `publishedAt` on the post being edited, leaving it as a draft. */
@@ -47,19 +57,47 @@ export interface CommandPaletteHandlers {
   drafts: Post[];
   /** The draft currently being viewed in renderer mode, or null. */
   currentDraft: Post | null;
-  /** Where "back" goes from here, or null where it is not offered. */
+  /**
+   * The way out of this page, or null at the index. `label` is the whole
+   * command — "Back to index" when you are reading, "Exit editor" when you are
+   * editing, because those are different acts and one wording cannot be honest
+   * about both.
+   */
   backTarget: BackTarget | null;
-  /** Leave for `backTarget`. A no-op where there is none. */
+  /** Leave for `backTarget` — asking first if that would lose unsaved work. */
   handleBack: () => void;
+  /**
+   * Which editor is open, if any — and so which set of exits applies. Also
+   * names the palette's group, since "This Cover" / "This Page" / "This
+   * Article" are the same heading in three wordings.
+   */
+  editorKind: EditorKind;
+  /** Commit whatever editor is open and STAY in it. ⌘S, everywhere. */
+  handleSaveChanges: () => Promise<void>;
+  /** Abandon whatever editor is open and leave. */
+  handleDiscardAndExit: () => void;
   handleThemeToggle: () => void;
+  /** Open the cover playground — public, so this is offered logged out too. */
+  handleCoverPlayground: () => void;
+  /** On the playground — which is an editor, so it has the same exits. */
+  isCoverPlayground: boolean;
+  /**
+   * Where a blocked exit was headed, or null. Non-null means the author asked
+   * to leave an editor with unsaved work in it and has been asked what to do.
+   */
+  pendingExit: string | null;
+  /** Write the open editor, then complete the exit that was blocked. */
+  confirmExitSave: () => Promise<void>;
+  /** Abandon the work and complete the exit. */
+  confirmExitDiscard: () => void;
+  /** Stay, with the work intact. */
+  cancelExit: () => void;
+
   handleEditPage: () => void;
   handleNewBlogArticle: () => void;
   handleNewWorkArticle: () => void;
   handleOpenDraft: (draft: Post) => void;
   handlePublish: () => Promise<void>;
-  handleSaveDraft: () => Promise<void>;
-  /** Revert unsaved edits to the last saved state and exit edit mode. */
-  handleDiscardChanges: () => void;
   /** Permanently delete the draft currently being viewed. */
   handleDiscardDraft: () => Promise<void>;
 }
@@ -105,6 +143,22 @@ export function useCommandPalette(
   // GRID, not a document — no title, no draft, nothing buffered to save — so it
   // needs its own branch or it would be offered an article's exits.
   const isHomeEditMode = pathname === "/edit/home";
+
+  // The playground, either freshly opened or reopened on a saved cover. Both,
+  // because Save means "create" on one and "update" on the other but the group
+  // offering it is the same group.
+  const isCoverPlayground = /^\/playground\/cover(\/[^/]+)?$/.test(pathname);
+
+  // Which editor is open. Ordered most-specific first: `/edit/home` also
+  // satisfies the generic edit-mode test, and it edits a GRID rather than a
+  // document.
+  const editorKind: EditorKind = isCoverPlayground
+    ? "cover"
+    : isHomeEditMode
+      ? "grid"
+      : isEditMode
+        ? "document"
+        : null;
 
   const editCategory = useEditorStore((state) => state.category);
   const isPublished = useEditorStore((state) => state.isPublished);
@@ -157,43 +211,128 @@ export function useCommandPalette(
     return null;
   }, [isEditMode, pathname, drafts]);
 
-  // The card studio lives under `/edit` but edits no document — nothing is
-  // buffered there, so it keeps the way back it has always had.
-  const isCardStudio = pathname === "/edit/card-studio";
+  // Where an exit was headed when it was stopped for unsaved work. One piece of
+  // state rather than a boolean plus a destination: the question only exists
+  // because somewhere was being gone to, and the two can never be out of step
+  // if there is only one of them.
+  const [pendingExit, setPendingExit] = useState<string | null>(null);
 
-  // Editing a document already names its exits, and each one says what becomes
-  // of the work in the buffer. A bare "back" would answer that question by
-  // throwing it away without saying so, so it is not offered there.
-  const backTarget = useMemo(
-    () =>
-      (isEditMode || isHomeEditMode) && !isCardStudio
-        ? null
-        : getBackTarget(pathname),
-    [isEditMode, isHomeEditMode, isCardStudio, pathname],
-  );
+  /**
+   * Whether leaving right now would lose something.
+   *
+   * Gated on `isAdmin` as well as on the buffer, because a visitor has nowhere
+   * to save TO: their work is ephemeral by definition, and stopping them on the
+   * way out would put a question in front of them whose best answer — "Save
+   * changes and exit" — cannot be carried out.
+   *
+   * Read at press time through `getState()` rather than subscribed to, so the
+   * palette does not re-render on every keystroke or slider move behind it.
+   */
+  const wouldLoseWork = () => {
+    if (!isAdmin) return false;
+    switch (editorKind) {
+      case "cover":
+        return useCoverDraftStore.getState().isDirty;
+      // TWO drafts, one page — the homepage is a document with a grid in it and
+      // either half can be the dirty one. See `persistGrid`.
+      case "grid":
+        return (
+          isGridDraftDirty(useGridDraftStore.getState()) ||
+          useEditorStore.getState().isDirty
+        );
+      case "document":
+        return useEditorStore.getState().isDirty;
+      default:
+        return false;
+    }
+  };
+
+  /** Where leaving the open editor puts you. */
+  const exitHref = (): string => {
+    if (editorKind === "document") {
+      // The post as it stands SAVED — which for a draft never written is
+      // nowhere, so the index.
+      const slug = pathname.match(/^\/edit\/([^/?]+)/)?.[1];
+      if (slug && slug !== "new") return getPostReadUrl(editCategory, slug);
+    }
+    return "/";
+  };
+
+  /**
+   * The way out of this page, and what the command calls it.
+   *
+   * "Exit editor" while one is open, rather than "Back to …". They are
+   * different acts: reading a post and going up to the index is navigation,
+   * whereas leaving an editor is finishing with it, and the destination is the
+   * post as it stands SAVED rather than an ancestor in the path. One wording
+   * cannot be honest about both.
+   *
+   * Offered in edit mode at all, which it was not: the command used to be
+   * withheld there so a bare "back" could not throw buffered work away
+   * silently. Withholding it also removed "save and go", which is usually what
+   * was meant — so it is offered, and it asks. See `wouldLoseWork`.
+   */
+  const backTarget = useMemo<BackTarget | null>(() => {
+    if (editorKind) return { href: exitHref(), label: "Exit editor" };
+    const target = getBackTarget(pathname);
+    return target && { href: target.href, label: `Back to ${target.label}` };
+    // `exitHref` closes over the same route values this depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorKind, pathname, editCategory]);
 
   const handleBack = () => {
     if (!backTarget) return;
+    if (wouldLoseWork()) {
+      // Asked, not withheld. The command used to be hidden while editing so a
+      // bare "back" could not throw work away silently — but hiding it also
+      // removes "save and go", which is usually what the author meant. The
+      // question restores both answers.
+      close();
+      setPendingExit(backTarget.href);
+      return;
+    }
     close();
     router.push(backTarget.href);
   };
+
+  const confirmExitSave = async () => {
+    const href = pendingExit;
+    setPendingExit(null);
+    if (href && (await persistEditor())) router.push(href);
+  };
+
+  const confirmExitDiscard = () => {
+    const href = pendingExit;
+    setPendingExit(null);
+    discardEditor();
+    if (href) router.push(href);
+  };
+
+  const cancelExit = () => setPendingExit(null);
+
+  useEffect(() => {
+    handleBackRef.current = handleBack;
+  });
 
   // ⌘[ / Ctrl [ — the same gesture the browser reads as "back", claimed so it
   // lands on the page above THIS page rather than on whatever was visited
   // before it. Global, because the control it replaces was on the page rather
   // than in the palette: it has to work without opening anything.
+  // ⌘[ goes through the same gate as the command. A shortcut that skipped the
+  // unsaved-work question would be a back door round it, and the faster route
+  // is exactly the one an author takes without thinking.
+  const handleBackRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     if (!backTarget) return;
-    const { href } = backTarget;
     function handleKeyDown(event: KeyboardEvent) {
       if (!hasShortcutModifier(event) || event.key !== "[") return;
       event.preventDefault();
-      close();
-      router.push(href);
+      handleBackRef.current();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [backTarget, close, router]);
+  }, [backTarget]);
 
   const syncOtherTabs = () => {
     notifyContentUpdated();
@@ -206,6 +345,62 @@ export function useCommandPalette(
   const handleThemeToggle = () => {
     setMode(isDark ? "light" : "dark");
     close();
+  };
+
+  // Same tab, plain `push` — unlike the editors below, which open in a new one
+  // because they are a place you go to WRITE and then come back from. The
+  // playground is somewhere you go to look, and the way back is the index link
+  // it already draws.
+  const handleCoverPlayground = () => {
+    close();
+    router.push("/playground/cover");
+  };
+
+  /**
+   * Write the cover being tuned. Shared by ⌘S and by the palette's two save
+   * commands, which differ ONLY in where they leave you afterwards.
+   *
+   * Create or update is decided by whether the draft carries an id, not by the
+   * route: the route is where you ARE, and after a create the two disagree for
+   * exactly as long as it takes the URL to catch up. The store is what knows.
+   *
+   * Reads the draft through `getState()` rather than a subscription, the same
+   * way `handlePublishHome` reads the grid's: this runs once, on a press, and
+   * subscribing would re-render the palette on every slider move behind it.
+   *
+   * Returns whether it landed, so a caller that means to navigate afterwards
+   * can decline to — leaving on a failed write would strand the work on a page
+   * the author can no longer see.
+   */
+  const persistCover = async (): Promise<boolean> => {
+    const { coverId, title, shaderId, settings } = useCoverDraftStore.getState();
+    try {
+      const saved = coverId
+        ? await saveCover({ id: coverId, shaderId, settings })
+        : await createCover({ title, shaderId, settings });
+      // Adopt what was STORED rather than what was sent: the schema normalises
+      // on the way in (six-digit colours padded, retired keys dropped), so this
+      // is what makes the panel read the same as the row. It also clears the
+      // dirty flag, which is what stops "Discard changes" offering to throw
+      // away work that has just been written.
+      useCoverDraftStore.getState().load({
+        id: saved.id,
+        title: saved.title ?? null,
+        shaderId: saved.shaderId,
+        settings: saved.settings,
+      });
+      // A cover that has just been created has an id the URL does not know
+      // about yet, and a refresh would land back on the blank route having lost
+      // it. `replace` rather than `push`: the blank route is where you WERE,
+      // not a place to go back to.
+      if (!coverId) {
+        router.replace(`/playground/cover/${saved.id}`);
+      }
+      return true;
+    } catch (err) {
+      console.error("Failed to save the cover:", err);
+      return false;
+    }
   };
 
   const handleEditPage = () => {
@@ -300,9 +495,21 @@ export function useCommandPalette(
     }
   };
 
-  const handleSaveDraft = async () => {
+  /**
+   * Write the document being edited, and STAY in the editor.
+   *
+   * It used to navigate to the read page, which was the same "thrown out
+   * mid-session" fault ⌘S had on the cover: saving is how you keep going, not
+   * how you finish. Leaving is `Back to …` or Discard, both of which say so.
+   *
+   * A draft that has never been written has no id and no slug, so the URL is
+   * still `/edit/new` after one is minted for it. `replace` rather than `push`,
+   * for the reason a first-saved cover replaces: `/edit/new` is where you WERE,
+   * not a place to go back to — and a refresh from it would start a second
+   * empty draft rather than reopening this one.
+   */
+  const persistDocument = async (): Promise<boolean> => {
     const { draftId, title, document, category } = useEditorStore.getState();
-    close();
     clearAutosave(autosaveKey(draftId, category));
     try {
       if (!draftId) {
@@ -311,8 +518,8 @@ export function useCommandPalette(
           document,
           category,
         });
-        router.replace(getPostReadUrl(created.category, created.slug));
-        syncOtherTabs();
+        useEditorStore.getState().setDraftId(created.id);
+        router.replace(getEditUrl(created.category, created.slug));
         setDrafts((prev) => [...prev, created]);
       } else {
         const updated = await saveDraft({
@@ -320,30 +527,18 @@ export function useCommandPalette(
           title: title || undefined,
           document,
         });
-        router.push(getPostReadUrl(updated.category, updated.slug));
-        syncOtherTabs();
         setDrafts((prev) =>
           prev.map((d) => (d.id === updated.id ? updated : d)),
         );
       }
+      // Clean again — which is what stops the unsaved-work question asking
+      // about edits that have just been written.
+      useEditorStore.getState().setDirty(false);
+      syncOtherTabs();
+      return true;
     } catch (err) {
       console.error("Failed to save draft:", err);
-    }
-  };
-
-  // Edit mode: throw away unsaved edits and leave the editor. Nothing is
-  // persisted, so the last saved version remains in the DB; navigating to the
-  // read page (or home for an unsaved new draft) reveals that saved state.
-  const handleDiscardChanges = () => {
-    const slug = pathname.match(/^\/edit\/([^/?]+)/)?.[1];
-    const { draftId, category } = useEditorStore.getState();
-    close();
-    clearAutosave(autosaveKey(draftId, category));
-    useEditorStore.getState().reset();
-    if (slug && slug !== "new") {
-      router.push(getPostReadUrl(editCategory, slug));
-    } else {
-      router.push("/");
+      return false;
     }
   };
 
@@ -389,17 +584,20 @@ export function useCommandPalette(
    * chronology gives it.
    */
   /**
-   * Commit the homepage and leave.
+   * Commit the homepage, and STAY on it.
    *
    * TWO drafts, one press. The page is a document with a grid in it, and the
    * two are edited together but stored apart — the prose in the post's
-   * `content`, the placements across the post and component tables. Saving
-   * only one would publish half of what is on screen.
+   * `content`, the placements across the post and component tables. Saving only
+   * one would publish half of what is on screen.
    *
-   * Named for publishing rather than saving because the homepage is already
-   * live: there is no draft state in between, so committing it IS publishing.
+   * The homepage is already live, so there is no draft state in between and
+   * committing it IS publishing. The command still reads "Save changes",
+   * because that is what it does and because an article that is already
+   * published saves to a live page in exactly the same way — one wording for
+   * one act.
    */
-  const handlePublishHome = async () => {
+  const persistGrid = async (): Promise<boolean> => {
     const { draftId, title, document, category } = useEditorStore.getState();
     const { pins, spans, aspects, loggers, inserts, removals } =
       useGridDraftStore.getState();
@@ -415,29 +613,78 @@ export function useCommandPalette(
         inserts,
         removals,
       });
+      // Both buffers are on disk now, so both have to read clean or the exit
+      // question would ask about work that has just been written.
       useGridDraftStore.getState().reset();
+      useEditorStore.getState().setDirty(false);
       clearAutosave(autosaveKey(draftId, category));
       syncOtherTabs();
-      router.push("/");
       router.refresh();
+      return true;
     } catch (err) {
-      console.error("Failed to publish the homepage:", err);
+      console.error("Failed to save the homepage:", err);
+      return false;
     }
-    close();
   };
 
   /**
-   * Throw both drafts away and leave. Nothing was written by either — the
-   * toolbar edits a layout draft rather than the database precisely so that
-   * this can be a no-op.
+   * Write the open editor, and return whether it landed.
+   *
+   * The boolean is what lets a caller that means to navigate afterwards decline
+   * to: leaving on a failed write would strand the work on a page the author
+   * can no longer see.
    */
-  const handleDiscardHome = () => {
-    const { draftId, category } = useEditorStore.getState();
-    useGridDraftStore.getState().reset();
-    clearAutosave(autosaveKey(draftId, category));
-    useEditorStore.getState().reset();
+  const persistEditor = async (): Promise<boolean> => {
+    switch (editorKind) {
+      case "cover":
+        return persistCover();
+      case "grid":
+        return persistGrid();
+      case "document":
+        return persistDocument();
+      default:
+        return true;
+    }
+  };
+
+  /** Drop the open editor's buffer. Nothing was written, so nothing is undone. */
+  const discardEditor = () => {
+    switch (editorKind) {
+      case "cover":
+        useCoverDraftStore.getState().reset();
+        return;
+      case "grid":
+        useGridDraftStore.getState().reset();
+        useEditorStore.getState().reset();
+        return;
+      case "document":
+        useEditorStore.getState().reset();
+        return;
+    }
+  };
+
+  /** ⌘S, and the Save command beside it: commit, and carry on working. */
+  const handleSaveChanges = async () => {
     close();
-    router.push("/");
+    await persistEditor();
+  };
+
+  /**
+   * Abandon the open editor and go, without being asked to confirm it.
+   *
+   * No question, unlike the one Back raises: this command IS the answer to that
+   * question, said up front, and asking again would be asking whether you meant
+   * what you just chose. Nothing was written either — every editor here buffers
+   * in a store and touches the database only on save — so there is no published
+   * state for it to undo.
+   */
+  const handleDiscardAndExit = () => {
+    const { draftId, category } = useEditorStore.getState();
+    const href = exitHref();
+    clearAutosave(autosaveKey(draftId, category));
+    discardEditor();
+    close();
+    router.push(href);
   };
 
   const handlePublishComponent = async (componentId: string) => {
@@ -454,8 +701,6 @@ export function useCommandPalette(
     isDark,
     isEditMode,
     isHomeEditMode,
-    handlePublishHome,
-    handleDiscardHome,
     handlePublishComponent,
     handleUnpublish,
     isPublished,
@@ -465,13 +710,20 @@ export function useCommandPalette(
     backTarget,
     handleBack,
     handleThemeToggle,
+    handleCoverPlayground,
+    isCoverPlayground,
+    editorKind,
+    handleSaveChanges,
+    handleDiscardAndExit,
+    pendingExit,
+    confirmExitSave,
+    confirmExitDiscard,
+    cancelExit,
     handleEditPage,
     handleNewBlogArticle,
     handleNewWorkArticle,
     handleOpenDraft,
     handlePublish,
-    handleSaveDraft,
-    handleDiscardChanges,
     handleDiscardDraft,
   };
 }

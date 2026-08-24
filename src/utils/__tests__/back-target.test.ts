@@ -17,8 +17,11 @@ describe("getBackTarget", () => {
     });
   });
 
-  it("sends the card studio back to the index", () => {
-    expect(getBackTarget("/edit/card-studio")).toEqual({
+  // `/playground` is a prefix with no page behind it, so the climb finds no
+  // real ancestor and lands on the floor — which is the right answer here, and
+  // the case that would catch a blind parent offering `/playground` instead.
+  it("sends the cover playground back to the index", () => {
+    expect(getBackTarget("/playground/cover")).toEqual({
       href: "/",
       label: "index",
     });

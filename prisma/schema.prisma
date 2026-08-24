@@ -112,6 +112,55 @@ model Component {
   updatedAt   DateTime  @updatedAt
 }
 
+// A saved shader background, authored in the cover playground and reused
+// wherever a surface wants a ground: a picture or a clip in a collection, a
+// component's backdrop.
+//
+// A TABLE of its own rather than columns on `Component`, and the distinction is
+// the same one that table's own comment draws. A `Component` row PUBLISHES
+// something that already exists in code — `componentId` is a foreign key in
+// spirit to `src/components/demo/registry.ts`. A cover has nothing to point at,
+// because its settings ARE the artefact. Folding the two together would mean a
+// nullable "which demo" beside a nullable "which shader", which is a table
+// admitting it holds two kinds of row, and every existing read of `Component`
+// would need a discriminator it does not need today.
+//
+// It is also one-to-MANY by design: a preset is referenced from many embeds and
+// edited in one place, which is the plainest case there is for its own table.
+//
+// SHAPELESS. There is deliberately no aspect, width, padding or corner here: a
+// cover takes the shape of whatever it is embedded into, the way an image under
+// `object-fit: cover` does, so the HOST owns all of that. A column for it here
+// would be a second answer that could disagree with the host's. That is also
+// why there is no `gridIndex`/`gridSpan` — a cover is a background, not a card,
+// and giving it a seat would put a third table into `saveGridLayout`'s fan-out
+// for a thing that is never placed on its own.
+model Cover {
+  id            String   @id @default(cuid())
+  // What the palette calls it when listing saved covers. Nullable with an
+  // index beside it, exactly as `Post` does it: a cover is worth saving before
+  // it is worth naming, and "Untitled 2" is a better handle than a cuid.
+  title         String?
+  untitledIndex Int?
+  // The discriminant, and a column rather than a key inside the blob: it is
+  // what every read switches on, it is a closed set (`SHADER_IDS`), and it is
+  // what a library view would group by.
+  //
+  // A String rather than a Prisma enum for the reason `Component.aspect` is
+  // one: the shader list belongs to `src/data/shader-specs.ts`, which is the
+  // single source the Zod layer derives its validator from. A database enum
+  // would be a second copy, and adding a seventh shader would turn a one-line
+  // code change into a schema migration. Nothing writes this except through
+  // `CoverContentSchema`.
+  shaderId      String
+  // Everything whose SHAPE depends on `shaderId` — the uniforms, the colour
+  // ramp, the ground — as one blob, because they are only meaningful together
+  // and only validatable together. See `CoverContentSchema`.
+  settings      Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 model UserProfile {
   id              String   @id @default(cuid())
   neonUserId      String   @unique

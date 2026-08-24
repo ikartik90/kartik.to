@@ -17,10 +17,17 @@ import { Typography } from "@/components/ui/typography";
 // (Figma 979:2025) — unpublishing a component, unpublishing or deleting an
 // article.
 //
-// One component for all three because the question is the same shape every
+// One component for all of them because the question is the same shape every
 // time: a name for what is about to happen, a sentence saying it plainly, and
-// two buttons where the destructive one is on the right. What differs is only
-// the wording, which is why all of it is props and none of it is a variant.
+// the answers as buttons. What differs is only the wording, which is why all of
+// it is props and none of it is a variant.
+//
+// Usually two answers, with the destructive one on the right. `alternate` adds
+// a THIRD, for the one question here that genuinely has three — leaving an
+// editor with unsaved work, where "save and go", "throw it away" and "stay" are
+// all real answers and none of them is a rewording of another. It sits in the
+// middle so the outer two keep their meanings: cancel on the left, the button
+// you most likely want on the right.
 //
 // Positioned and animated as the command palette is, rather than sliding up
 // from the bottom edge: the app already has exactly one way a modal arrives,
@@ -37,6 +44,11 @@ export interface ConfirmDialogProps {
   /** The affirmative button's label — the verb, never "OK". */
   confirmLabel: string;
   onConfirm: () => void;
+  /**
+   * A third answer, between Cancel and the affirmative. Absent for the ordinary
+   * two-answer question; see the note above for the one that needs it.
+   */
+  alternate?: { label: string; onClick: () => void };
   onClose: () => void;
 }
 
@@ -51,6 +63,7 @@ export function ConfirmDialog({
   message,
   confirmLabel,
   onConfirm,
+  alternate,
   onClose,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -85,6 +98,19 @@ export function ConfirmDialog({
         <Button type="button" emphasis="tertiary" size="sm" onClick={onClose}>
           Cancel
         </Button>
+        {alternate && (
+          <Button
+            type="button"
+            emphasis="secondary"
+            size="sm"
+            onClick={() => {
+              alternate.onClick();
+              onClose();
+            }}
+          >
+            {alternate.label}
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"

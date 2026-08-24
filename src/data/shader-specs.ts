@@ -85,7 +85,7 @@ export interface ShaderSpec {
   defaults: ShaderDefaults;
 }
 
-// How the graphic is FRAMED in the card — the four sizing props that visibly
+// How the graphic is FRAMED in the cover — the four sizing props that visibly
 // move it. Spread LAST into each control table so a shader's own parameters
 // read first and the framing sits together at the foot of the sidebar wherever
 // you are.
@@ -93,7 +93,7 @@ export interface ShaderSpec {
 // The rest of `ShaderSizingParams` is deliberately absent. `fit` and the world
 // box (`worldWidth`/`worldHeight`, and the `originX`/`originY` that only
 // position that box) describe how the shader's coordinate space maps onto a
-// canvas — and here the card IS the canvas, pinned at `fit="cover"` by the page
+// canvas — and here the cover IS the canvas, pinned at `fit="cover"` by the page
 // so the ground has no margins. Left at the canvas size, origin and world size
 // do nothing you can see; `fit: none` against a zero-size world collapses the
 // box to a pixel and renders nothing at all. Controls whose only settings are

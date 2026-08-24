@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import {
   ColorPanels,
   GodRays,
@@ -11,6 +11,7 @@ import {
 import { css } from "../../../../styled-system/css";
 import { propertiesPanel } from "../../../../styled-system/recipes";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
+import { useCoverDraftStore } from "@/store/cover-draft";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
@@ -27,17 +28,17 @@ import {
   SHADER_SPECS,
   FRAMING_CONTROL_KEYS,
   MOTION_CONTROL_KEYS,
-  defaultState,
   type ControlSpec,
   type Params,
   type ShaderId,
   type ShaderSpec,
-} from "./shader-specs";
+} from "@/data/shader-specs";
+import type { CoverSettings } from "@/domain/cover";
 
 // ---------------------------------------------------------------------------
-// Card Studio — where a card's background is tuned, on its way to being
+// Cover Playground — where a cover's background is tuned, on its way to being
 // published as a component. The art it is aimed at is the fanned light blades
-// and soft colour washes of the reference cards.
+// and soft colour washes of the reference covers.
 //
 // One shader is mounted at a time, which is deliberate: every paper-shaders
 // instance holds its OWN webgl2 context, the library pools nothing and
@@ -50,7 +51,7 @@ import {
 //
 // Client-side throughout: this is one long-lived piece of local state — which
 // shader, its uniforms, the canvas theme — over a WebGL canvas, and none of it
-// is the server's business. `page.tsx` next to this file is the admin gate.
+// is the server's business. `page.tsx` next to this file is the route.
 // ---------------------------------------------------------------------------
 
 /** The preview is ~380×680 at 2×; no detail in a soft gradient survives above it. */
@@ -76,22 +77,11 @@ const pageStyle = css({
   gap: 0,
 });
 
-// The canvas: everything left once the panel has taken its column, with the
-// card in the middle of THAT rather than of the viewport, so the panel never
-// covers the thing being judged.
-//
-// It is also the theme boundary — `data-theme` lands here rather than on <html>
-// — so the card can be judged in the theme it will be PUBLISHED into while the
-// studio around it stays in the one the editor is wearing. Its own `bg.canvas`
-// is what makes the switch visible: read through the island's tokens it
-// resolves to the other neutral. Rounded, so a canvas in the opposite theme
-// reads as a surface laid on the page rather than as a page that half changed.
-//
-// Everything the panel leaves, with the card in the middle of THAT rather than
-// of the viewport, so the panel never covers the thing being judged. Positioned
-// because the theme control sits in its corner. It takes no ground of its own —
-// the page's `bg.canvas` is already the right one, in whichever theme is in
-// force.
+// The canvas: everything the panel leaves, with the cover in the middle of
+// THAT rather than of the viewport, so the panel never covers the thing being
+// judged. Positioned because the theme control sits in its corner. It takes no
+// ground of its own — the page's `bg.canvas` is already the right one, in
+// whichever theme is in force.
 const canvasStyle = css({
   position: "relative",
   flex: 1,
@@ -101,8 +91,8 @@ const canvasStyle = css({
 });
 
 // The gutter controls, in the seat they take everywhere else: an 80px band
-// across the top, the way back on the left and the theme toggle answering from
-// the right.
+// across the top, the menu on the left and the theme toggle answering from the
+// right.
 //
 // Flush with the SHOWCASE, not with the viewport. The pair is confined to the
 // same centred `min(100%, 960px)` box the site header and an article's intro
@@ -131,11 +121,11 @@ const canvasChromeStyle = css({
   justifyContent: "space-between",
 });
 
-// The card the reference art is drawn on: portrait, generously rounded. The
+// The cover the reference art is drawn on: portrait, generously rounded. The
 // shader fills it because Fit opens on `cover` — a ground with margins is just
 // a smaller picture — but Fit is a control now, so this is a default and not a
 // guarantee.
-const cardStyle = css({
+const coverStyle = css({
   position: "relative",
   isolation: "isolate",
   width: "380px",
@@ -158,7 +148,7 @@ const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
  *
  * The component is not usable here: it is a dismissible dialog (Escape, or a
  * press anywhere outside it) wrapping a `Popover`, and on a page whose entire
- * content is the thing you click, the first click on the card would slide the
+ * content is the thing you click, the first click on the cover would slide the
  * panel away with nothing left to bring it back. The recipe is the part worth
  * reusing — flush to the viewport's top, bottom and right edge, its own scroll
  * container, a sticky header over the sections — and taking it directly is what
@@ -246,24 +236,67 @@ function ShaderStage({
   }
 }
 
-export function CardStudio() {
-  const [shaderId, setShaderId] = useState<ShaderId>("cosmicTrack");
+/** A saved cover this page was opened on, if it was opened on one. */
+export interface OpenedCover {
+  id: string;
+  title: string | null;
+  shaderId: ShaderId;
+  settings: CoverSettings;
+}
+
+export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
+  // The draft lives in a STORE rather than in this component, because the
+  // commands that commit it — "Save changes and exit", ⌘S — are in the command
+  // palette, which is mounted in the root layout and knows nothing about the
+  // page under it. See `@/store/cover-draft`.
+  const shaderId = useCoverDraftStore((draft) => draft.shaderId);
+  const state = useCoverDraftStore((draft) => draft.settings);
+  const selectShaderInStore = useCoverDraftStore((draft) => draft.selectShader);
+  const setParamInStore = useCoverDraftStore((draft) => draft.setParam);
+  const setColorsInStore = useCoverDraftStore((draft) => draft.setColors);
+  const setColorBackInStore = useCoverDraftStore((draft) => draft.setColorBack);
+  const setExtraColorInStore = useCoverDraftStore(
+    (draft) => draft.setExtraColor,
+  );
+  const resetParamsInStore = useCoverDraftStore((draft) => draft.resetParams);
 
   // This page's rail is the propertiesPanel RECIPE rather than the component —
-  // the component is a dismissible dialog, and a studio whose whole content is
-  // the thing you click would close it on the first press with nothing left to
-  // bring it back. So the inset the component arranges for itself is asked for
-  // here directly, and permanently: this rail never leaves.
+  // the component is a dismissible dialog, and a playground whose whole content
+  // is the thing you click would close it on the first press with nothing left
+  // to bring it back. So the inset the component arranges for itself is asked
+  // for here directly, and permanently: this rail never leaves.
   usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
 
-  const [state, setState] = useState(() => defaultState(spec));
   const [copied, setCopied] = useState(false);
+
+  // Adopt the cover this route was opened on — and RESET when there is none, so
+  // arriving at the bare route after editing a saved one starts blank rather
+  // than silently continuing to edit the last cover under a URL that claims to
+  // be a new one. Keyed on the id, so re-renders do not re-seed over live edits.
+  const coverId = cover?.id;
+  useEffect(() => {
+    const store = useCoverDraftStore.getState();
+    if (cover) {
+      // Already holding this one — do NOT re-seed. ⌘S on a never-saved cover
+      // creates the row and then replaces the URL with its id, so this route
+      // mounts a moment later carrying a cover the draft is already editing.
+      // Loading it again would throw away anything tuned during that gap, which
+      // is exactly the window the author is most likely to still be working in.
+      if (store.coverId === cover.id) return;
+      store.load(cover);
+    } else {
+      store.reset();
+    }
+    // Keyed on the ID, not the object: a server component hands down a fresh
+    // prop object on every render, and depending on that identity would re-seed
+    // the draft over whatever was being edited each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverId]);
 
   /** Switching shader re-seeds from that shader's defaults — its control table is a different shape. */
   function selectShader(next: ShaderId) {
-    setShaderId(next);
-    setState(defaultState(SHADER_SPECS[next]));
+    selectShaderInStore(next);
     setCopied(false);
   }
 
@@ -280,10 +313,7 @@ export function CardStudio() {
   const motionControls = byKey(MOTION_CONTROL_KEYS);
 
   function setParam(key: string, value: number | boolean | string) {
-    setState((current) => ({
-      ...current,
-      params: { ...current.params, [key]: value },
-    }));
+    setParamInStore(key, value);
     setCopied(false);
   }
 
@@ -294,13 +324,11 @@ export function CardStudio() {
    * (Same reasoning as the media properties panel.)
    */
   function setColorCount(count: number) {
-    setState((current) => {
-      const colors = current.colors.slice(0, count);
-      while (colors.length < count) {
-        colors.push(colors[colors.length - 1] ?? "#FFFFFFFF");
-      }
-      return { ...current, colors };
-    });
+    const colors = state.colors.slice(0, count);
+    while (colors.length < count) {
+      colors.push(colors[colors.length - 1] ?? "#FFFFFFFF");
+    }
+    setColorsInStore(colors);
   }
 
   /** The settings as a JSX tag, ready to paste into a component. */
@@ -385,7 +413,7 @@ export function CardStudio() {
   return (
     <main className={pageStyle}>
       <div className={canvasStyle}>
-        <div className={cardStyle}>
+        <div className={coverStyle}>
           <ShaderStage
             spec={spec}
             params={state.params}
@@ -396,8 +424,8 @@ export function CardStudio() {
         </div>
 
         {/* The site's own two gutter controls, exactly as an article carries
-            them — same button, same chip, same store. The studio has no intro
-            row to hang them off, so the band is measured from the canvas
+            them — same button, same chip, same store. The playground has no
+            intro row to hang them off, so the band is measured from the canvas
             instead. */}
         <div className={canvasChromeStyle}>
           <MenuButton />
@@ -457,12 +485,11 @@ export function CardStudio() {
               <ColorInput
                 value={color}
                 onValueChange={(value) =>
-                  setState((current) => ({
-                    ...current,
-                    colors: current.colors.map((existing, i) =>
+                  setColorsInStore(
+                    state.colors.map((existing, i) =>
                       i === index ? value : existing,
                     ),
-                  }))
+                  )
                 }
               />
             </Field>
@@ -473,9 +500,7 @@ export function CardStudio() {
               <Field.Label>Background</Field.Label>
               <ColorInput
                 value={state.colorBack}
-                onValueChange={(value) =>
-                  setState((current) => ({ ...current, colorBack: value }))
-                }
+                onValueChange={(value) => setColorBackInStore(value)}
               />
             </Field>
           )}
@@ -485,12 +510,7 @@ export function CardStudio() {
               <Field.Label>{extra.label}</Field.Label>
               <ColorInput
                 value={state.extraColors[extra.key]}
-                onValueChange={(value) =>
-                  setState((current) => ({
-                    ...current,
-                    extraColors: { ...current.extraColors, [extra.key]: value },
-                  }))
-                }
+                onValueChange={(value) => setExtraColorInStore(extra.key, value)}
               />
             </Field>
           ))}
@@ -515,10 +535,7 @@ export function CardStudio() {
               size="sm"
               emphasis="tertiary"
               onClick={() => {
-                setState((current) => ({
-                  ...current,
-                  params: defaultState(spec).params,
-                }));
+                resetParamsInStore();
                 setCopied(false);
               }}
             >
