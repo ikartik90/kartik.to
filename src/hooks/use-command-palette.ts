@@ -46,6 +46,8 @@ export interface CommandPaletteHandlers {
   /** The draft currently being viewed in renderer mode, or null. */
   currentDraft: Post | null;
   handleThemeToggle: () => void;
+  /** Open the cover playground — public, so this is offered logged out too. */
+  handleCoverPlayground: () => void;
   handleEditPage: () => void;
   handleNewBlogArticle: () => void;
   handleNewWorkArticle: () => void;
@@ -162,6 +164,15 @@ export function useCommandPalette(
   const handleThemeToggle = () => {
     setMode(isDark ? "light" : "dark");
     close();
+  };
+
+  // Same tab, plain `push` — unlike the editors below, which open in a new one
+  // because they are a place you go to WRITE and then come back from. The
+  // playground is somewhere you go to look, and the way back is the index link
+  // it already draws.
+  const handleCoverPlayground = () => {
+    close();
+    router.push("/playground/cover");
   };
 
   const handleEditPage = () => {
@@ -419,6 +430,7 @@ export function useCommandPalette(
     drafts,
     currentDraft,
     handleThemeToggle,
+    handleCoverPlayground,
     handleEditPage,
     handleNewBlogArticle,
     handleNewWorkArticle,

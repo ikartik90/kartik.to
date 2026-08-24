@@ -21,11 +21,14 @@ vi.mock("@/store/theme", () => ({
   useThemeStore: () => ({ mode: "light", setMode: mockSetMode }),
 }));
 
-// Stub next/navigation — pathname is controllable per test
+// Stub next/navigation — pathname is controllable per test, and `push` is one
+// stable spy rather than a fresh one per call so a test can assert where a
+// command sent the router.
 const mockPathname = vi.fn().mockReturnValue("/");
+const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
 }));
 
 // Stub server actions so they never hit the network
@@ -75,6 +78,7 @@ beforeEach(() => {
   mockUseSession.mockReturnValue({ data: null });
   mockPathname.mockReturnValue("/");
   mockSetMode.mockClear();
+  mockPush.mockClear();
 
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -107,9 +111,28 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
       expect(screen.getByText("Dark theme")).toBeDefined();
     });
+
+    // The playground is the one piece of the site's making-of that anybody can
+    // walk into, so it is grouped like Settings rather than like Publish: no
+    // session, no route condition, always in the list.
+    it("renders the Playground group", () => {
+      render(<CommandPalette />);
+      expect(screen.getByText("Playground")).toBeDefined();
+    });
+
+    it("offers the Cover Playground item", () => {
+      render(<CommandPalette />);
+      expect(screen.getByText("Cover Playground")).toBeDefined();
+    });
   });
 
   describe("when logged out", () => {
+    it("still offers the Playground group", () => {
+      render(<CommandPalette />);
+      expect(screen.getByText("Playground")).toBeDefined();
+      expect(screen.getByText("Cover Playground")).toBeDefined();
+    });
+
     it("does not render the This Page group", () => {
       render(<CommandPalette />);
       expect(screen.queryByText("This Page")).toBeNull();
@@ -150,6 +173,12 @@ describe("CommandPalette", () => {
       });
       const html = renderToString(<CommandPalette />);
       expect(html).toContain("Settings");
+    });
+
+    it("renders the Playground group in the server render too", () => {
+      const html = renderToString(<CommandPalette />);
+      expect(html).toContain("Playground");
+      expect(html).toContain("Cover Playground");
     });
   });
 
@@ -355,6 +384,19 @@ describe("CommandPalette", () => {
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
       fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(dialog.close).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("Cover Playground", () => {
+    it("routes to the playground and closes the palette", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(screen.getByText("Cover Playground"));
+
+      expect(mockPush).toHaveBeenCalledWith("/playground/cover");
       expect(dialog.close).toHaveBeenCalledOnce();
     });
   });

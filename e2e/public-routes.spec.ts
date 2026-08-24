@@ -73,6 +73,23 @@ test.describe("public routes", () => {
     expect(pageFailures).toEqual([]);
   });
 
+  // The playground used to live at `/edit/card-studio` behind the stealth gate,
+  // where an anonymous request got a 404. It writes nothing, so it is public
+  // now — and 200-for-anonymous is the whole of that change, which makes this
+  // the test that would catch the gate creeping back over it.
+  test("the cover playground is public", async ({ page, pageFailures }) => {
+    const response = await page.goto("/playground/cover");
+
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveTitle("Cover Playground");
+    // The rail, which is the page — asserting it rules out an interstitial
+    // that also answers 200 (see the dev-route note below).
+    await expect(
+      page.getByRole("complementary", { name: "Properties" }),
+    ).toBeVisible();
+    expect(pageFailures).toEqual([]);
+  });
+
   test("an unknown slug 404s rather than erroring", async ({ page }) => {
     const response = await page.goto("/writing/no-such-article-exists");
     expect(response?.status()).toBe(404);

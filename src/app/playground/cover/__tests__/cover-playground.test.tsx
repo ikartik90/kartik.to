@@ -4,9 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThemeMode } from "@/store/theme";
 
-// Every shader the studio can mount, stubbed. They all end in a `ShaderMount`,
-// which asks for a webgl2 context jsdom does not have — and what is under test
-// here is the studio around the canvas, not the picture inside it.
+// Every shader the playground can mount, stubbed. They all end in a
+// `ShaderMount`, which asks for a webgl2 context jsdom does not have — and what
+// is under test here is the page around the canvas, not the picture inside it.
 vi.mock("@paper-design/shaders-react", () => ({
   ColorPanels: () => null,
   GodRays: () => null,
@@ -19,7 +19,7 @@ vi.mock("@/components/shaders/cosmic-track", () => ({
   CosmicTrack: () => null,
 }));
 
-// The studio's toggle writes to the SITE's theme store, which is the whole
+// The playground's toggle writes to the SITE's theme store, which is the whole
 // point of it — so the store is what this asserts against.
 const mockSetMode = vi.fn();
 const mockMode = vi.fn<() => ThemeMode>(() => "dark");
@@ -36,9 +36,9 @@ Object.defineProperty(window, "matchMedia", {
   value: vi.fn(() => ({ matches: false })),
 });
 
-const { CardStudio } = await import("../card-studio");
+const { CoverPlayground } = await import("../cover-playground");
 
-describe("CardStudio theme toggle", () => {
+describe("CoverPlayground theme toggle", () => {
   beforeEach(() => {
     mockMode.mockReturnValue("dark");
     mockSetMode.mockClear();
@@ -46,7 +46,7 @@ describe("CardStudio theme toggle", () => {
   afterEach(cleanup);
 
   it("carries the site's two gutter controls, in the canvas", () => {
-    const { container } = render(<CardStudio />);
+    const { container } = render(<CoverPlayground />);
     const canvas = container.querySelector("main > div");
     const control = screen.getByRole("button", { name: "Light theme" });
     const back = screen.getByRole("link", { name: "Index" });
@@ -62,8 +62,8 @@ describe("CardStudio theme toggle", () => {
   });
 
   it("makes the page give up the width its rail occupies", () => {
-    render(<CardStudio />);
-    // The rail here is the recipe, not the dismissible component, so the studio
+    render(<CoverPlayground />);
+    // The rail here is the recipe, not the dismissible component, so the page
     // asks for the inset itself — the same one every other panel in the app
     // gets, rather than a width reserved a second way on this page.
     expect(document.body.hasAttribute("data-properties-panel")).toBe(true);
@@ -71,14 +71,14 @@ describe("CardStudio theme toggle", () => {
 
   it("switches the whole site's theme, not a local one", async () => {
     const user = userEvent.setup();
-    const { container } = render(<CardStudio />);
+    const { container } = render(<CoverPlayground />);
 
     await user.click(
       screen.getByRole("button", { name: "Light theme" }),
     );
 
     expect(mockSetMode).toHaveBeenCalledWith("light");
-    // Nothing in the studio holds a theme of its own — no scoped override to
+    // Nothing in the playground holds a theme of its own — no scoped override to
     // leave the page and the canvas disagreeing.
     expect(container.querySelector("[data-theme]")).toBeNull();
   });

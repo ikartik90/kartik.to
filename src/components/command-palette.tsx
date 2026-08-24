@@ -28,6 +28,7 @@ import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 import ComponentIcon from "@/assets/icons/component.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
+import ShaderIcon from "@/assets/icons/shader.svg";
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -145,6 +146,7 @@ export function CommandPalette() {
     drafts,
     currentDraft,
     handleThemeToggle,
+    handleCoverPlayground,
     handleEditPage,
     handleNewBlogArticle,
     handleNewWorkArticle,
@@ -220,6 +222,23 @@ export function CommandPalette() {
                   <DarkIcon className={iconStyle} />
                 )}
                 {isDark ? OFFER.light : OFFER.dark}
+              </Command.Item>
+            </Command.Group>
+
+            {/* Playground — always visible, like Settings above it. Nothing
+                here writes to the site: the playground reads a shader table,
+                draws a canvas and hands back a JSX tag, so there is no session
+                to have and nothing for a gate to protect. It is also the only
+                way in, which is why it sits above the admin groups rather than
+                at the foot of a list a visitor never sees the rest of. */}
+            <Command.Group className={groupStyle}>
+              <div className={groupHeadingStyle}>Playground</div>
+              <Command.Item
+                className={itemStyle}
+                onSelect={handleCoverPlayground}
+              >
+                <ShaderIcon className={iconStyle} />
+                Cover Playground
               </Command.Item>
             </Command.Group>
 

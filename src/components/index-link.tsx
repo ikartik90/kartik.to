@@ -8,10 +8,10 @@ import { Tooltip } from "./ui/tooltip";
 // IndexLink — the way back to the front page, as an icon control.
 //
 // Shared the moment it was wanted twice: an article's intro carries it, and so
-// does the card studio. It brings no box of its own — where it SITS differs by
-// surface (an article hangs it off `[data-article-back-anchor]`, the studio
-// stands it in the band across the top of its canvas), and a component that
-// positioned itself could only ever be right on one of them.
+// does the cover playground. It brings no box of its own — where it SITS differs
+// by surface (an article hangs it off `[data-article-back-anchor]`, the
+// playground stands it in the band across the top of its canvas), and a
+// component that positioned itself could only ever be right on one of them.
 //
 // `data-article-back` travels with it: that attribute is one declaration in
 // globals.css (`position: relative`, which the tooltip anchors against), and

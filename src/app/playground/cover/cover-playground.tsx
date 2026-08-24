@@ -35,9 +35,9 @@ import {
 } from "./shader-specs";
 
 // ---------------------------------------------------------------------------
-// Card Studio — where a card's background is tuned, on its way to being
+// Cover Playground — where a cover's background is tuned, on its way to being
 // published as a component. The art it is aimed at is the fanned light blades
-// and soft colour washes of the reference cards.
+// and soft colour washes of the reference covers.
 //
 // One shader is mounted at a time, which is deliberate: every paper-shaders
 // instance holds its OWN webgl2 context, the library pools nothing and
@@ -50,7 +50,7 @@ import {
 //
 // Client-side throughout: this is one long-lived piece of local state — which
 // shader, its uniforms, the canvas theme — over a WebGL canvas, and none of it
-// is the server's business. `page.tsx` next to this file is the admin gate.
+// is the server's business. `page.tsx` next to this file is the route.
 // ---------------------------------------------------------------------------
 
 /** The preview is ~380×680 at 2×; no detail in a soft gradient survives above it. */
@@ -76,22 +76,11 @@ const pageStyle = css({
   gap: 0,
 });
 
-// The canvas: everything left once the panel has taken its column, with the
-// card in the middle of THAT rather than of the viewport, so the panel never
-// covers the thing being judged.
-//
-// It is also the theme boundary — `data-theme` lands here rather than on <html>
-// — so the card can be judged in the theme it will be PUBLISHED into while the
-// studio around it stays in the one the editor is wearing. Its own `bg.canvas`
-// is what makes the switch visible: read through the island's tokens it
-// resolves to the other neutral. Rounded, so a canvas in the opposite theme
-// reads as a surface laid on the page rather than as a page that half changed.
-//
-// Everything the panel leaves, with the card in the middle of THAT rather than
-// of the viewport, so the panel never covers the thing being judged. Positioned
-// because the theme control sits in its corner. It takes no ground of its own —
-// the page's `bg.canvas` is already the right one, in whichever theme is in
-// force.
+// The canvas: everything the panel leaves, with the cover in the middle of
+// THAT rather than of the viewport, so the panel never covers the thing being
+// judged. Positioned because the theme control sits in its corner. It takes no
+// ground of its own — the page's `bg.canvas` is already the right one, in
+// whichever theme is in force.
 const canvasStyle = css({
   position: "relative",
   flex: 1,
@@ -131,11 +120,11 @@ const canvasChromeStyle = css({
   justifyContent: "space-between",
 });
 
-// The card the reference art is drawn on: portrait, generously rounded. The
+// The cover the reference art is drawn on: portrait, generously rounded. The
 // shader fills it because Fit opens on `cover` — a ground with margins is just
 // a smaller picture — but Fit is a control now, so this is a default and not a
 // guarantee.
-const cardStyle = css({
+const coverStyle = css({
   position: "relative",
   isolation: "isolate",
   width: "380px",
@@ -158,7 +147,7 @@ const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
  *
  * The component is not usable here: it is a dismissible dialog (Escape, or a
  * press anywhere outside it) wrapping a `Popover`, and on a page whose entire
- * content is the thing you click, the first click on the card would slide the
+ * content is the thing you click, the first click on the cover would slide the
  * panel away with nothing left to bring it back. The recipe is the part worth
  * reusing — flush to the viewport's top, bottom and right edge, its own scroll
  * container, a sticky header over the sections — and taking it directly is what
@@ -246,14 +235,14 @@ function ShaderStage({
   }
 }
 
-export function CardStudio() {
+export function CoverPlayground() {
   const [shaderId, setShaderId] = useState<ShaderId>("cosmicTrack");
 
   // This page's rail is the propertiesPanel RECIPE rather than the component —
-  // the component is a dismissible dialog, and a studio whose whole content is
-  // the thing you click would close it on the first press with nothing left to
-  // bring it back. So the inset the component arranges for itself is asked for
-  // here directly, and permanently: this rail never leaves.
+  // the component is a dismissible dialog, and a playground whose whole content
+  // is the thing you click would close it on the first press with nothing left
+  // to bring it back. So the inset the component arranges for itself is asked
+  // for here directly, and permanently: this rail never leaves.
   usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
 
@@ -385,7 +374,7 @@ export function CardStudio() {
   return (
     <main className={pageStyle}>
       <div className={canvasStyle}>
-        <div className={cardStyle}>
+        <div className={coverStyle}>
           <ShaderStage
             spec={spec}
             params={state.params}
@@ -396,8 +385,9 @@ export function CardStudio() {
         </div>
 
         {/* The site's own two gutter controls, exactly as an article carries
-            them — same link, same chip, same store. The studio has no intro row
-            to hang them off, so the band is measured from the canvas instead. */}
+            them — same link, same chip, same store. The playground has no intro
+            row to hang them off, so the band is measured from the canvas
+            instead. */}
         <div className={canvasChromeStyle}>
           <IndexLink />
           <ThemeToggleButton />
