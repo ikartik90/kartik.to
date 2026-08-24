@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
-import { css } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
 import {
   dialogPanel,
   hotkey,
@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
+import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
@@ -28,6 +29,7 @@ import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 import ComponentIcon from "@/assets/icons/component.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
+import ReturnIcon from "@/assets/icons/return.svg";
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -104,6 +106,13 @@ const groupHeadingStyle = css({
 
 const itemStyle = menuItem();
 
+// The row's own shortcut, held against the far end of it — the item says where
+// it goes, the chip says how to get there without opening this at all.
+const itemHotkeyStyle = cx(
+  hotkey({ surface: "menu" }),
+  css({ marginInlineStart: "auto" }),
+);
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -144,6 +153,8 @@ export function CommandPalette() {
     editCategory,
     drafts,
     currentDraft,
+    backTarget,
+    handleBack,
     handleThemeToggle,
     handleEditPage,
     handleNewBlogArticle,
@@ -154,6 +165,11 @@ export function CommandPalette() {
     handleDiscardChanges,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
+
+  // The chip names the key this visitor's keyboard actually has — ⌘[ on Apple
+  // hardware, Ctrl [ on a PC — which is the same shortcut the hook listens for
+  // on each.
+  const backShortcut = useShortcutLabel("[");
 
   useEffect(() => {
     // Guarded rather than toggling: `showModal()` on an already-open dialog
@@ -210,18 +226,20 @@ export function CommandPalette() {
 
           {/* Results */}
           <Command.List className={listStyle}>
-            {/* Settings — always visible */}
-            <Command.Group className={groupStyle}>
-              <div className={groupHeadingStyle}>Settings</div>
-              <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
-                {isDark ? (
-                  <LightIcon className={iconStyle} />
-                ) : (
-                  <DarkIcon className={iconStyle} />
-                )}
-                {isDark ? OFFER.light : OFFER.dark}
-              </Command.Item>
-            </Command.Group>
+            {/* Navigate — the way out of here, which used to be an icon
+                button in the page's left gutter. First, because leaving is the
+                one thing every page can do and the one thing a reader who
+                opened this by accident is looking for. */}
+            {backTarget && (
+              <Command.Group className={groupStyle}>
+                <div className={groupHeadingStyle}>Navigate</div>
+                <Command.Item className={itemStyle} onSelect={handleBack}>
+                  <ReturnIcon className={iconStyle} />
+                  {`Back to ${backTarget.label}`}
+                  <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
+                </Command.Item>
+              </Command.Group>
+            )}
 
             {/* Admin-only groups */}
             {isAdmin && (
@@ -405,6 +423,20 @@ export function CommandPalette() {
                 )}
               </>
             )}
+
+            {/* Settings — always visible, and last: it is the palette's
+                furniture rather than anything this page is about. */}
+            <Command.Group className={groupStyle}>
+              <div className={groupHeadingStyle}>Settings</div>
+              <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
+                {isDark ? (
+                  <LightIcon className={iconStyle} />
+                ) : (
+                  <DarkIcon className={iconStyle} />
+                )}
+                {isDark ? OFFER.light : OFFER.dark}
+              </Command.Item>
+            </Command.Group>
           </Command.List>
         </Command>
       </Dialog>

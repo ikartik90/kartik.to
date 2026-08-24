@@ -12,7 +12,7 @@ import { css } from "../../../../styled-system/css";
 import { propertiesPanel } from "../../../../styled-system/recipes";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
-import { IndexLink } from "@/components/index-link";
+import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
@@ -396,10 +396,11 @@ export function CardStudio() {
         </div>
 
         {/* The site's own two gutter controls, exactly as an article carries
-            them — same link, same chip, same store. The studio has no intro row
-            to hang them off, so the band is measured from the canvas instead. */}
+            them — same button, same chip, same store. The studio has no intro
+            row to hang them off, so the band is measured from the canvas
+            instead. */}
         <div className={canvasChromeStyle}>
-          <IndexLink />
+          <MenuButton />
           <ThemeToggleButton />
         </div>
       </div>

@@ -213,8 +213,8 @@ body {
   }
 
   /*
-    The gutter controls — the home page's menu and the article's back link on
-    one side, the theme toggle answering from the other — across both surfaces.
+    The gutter controls — the menu on one side, the theme toggle answering from
+    the other — across both surfaces.
 
     ONE seat, at every width — the row ABOVE the first row, which is where they
     used to end up only once the showcase gutter beside that row ran out (a
@@ -240,7 +240,6 @@ body {
     number and swallow its clicks.
   */
   [data-site-menu],
-  [data-article-back-anchor],
   [data-theme-toggle] {
     position: absolute;
     bottom: 100%;
@@ -249,21 +248,12 @@ body {
     align-items: center;
   }
 
-  [data-site-menu],
-  [data-article-back-anchor] {
+  [data-site-menu] {
     left: 0;
   }
 
   [data-theme-toggle] {
     right: 0;
-  }
-
-  /* Measured from the chip's BOX, which the icon button already pads by 4px
-     around its 20px glyph — so the gap the eye reads is this plus that. The
-     shortcut belongs to the button beside it and has to sit close enough to
-     be read as its label rather than as the next thing along. */
-  [data-site-menu] {
-    gap: var(--spacing-xs);
   }
 
   [data-article-intro] {
@@ -274,10 +264,6 @@ body {
   [data-article-intro] h1 {
     width: min(100%, var(--sizes-article-content));
     margin-inline: auto;
-  }
-
-  [data-article-back] {
-    position: relative;
   }
 
   main {
