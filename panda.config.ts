@@ -147,23 +147,25 @@ const markerAlignmentBox = {
  *
  * The box is an <input>, so it also wears the `field` recipe's `control` reset
  * — and has to beat that slot's `flex: 1 1 0` / `width: 100%`, which would grow
- * the number across the ruler beside it. It sizes to its own content instead:
- * `field-sizing` where the browser has it, the `size` attribute the components
- * always set where it doesn't, over a 28px floor — so the drawn width holds for
- * a short value, and a long one (a negative, a 0.25 step) grows the box instead
- * of being clipped by the frame's overflow.
+ * the number across the ruler beside it. One stated width instead, for every
+ * one of them: a column of rows lines up because the boxes are the same size,
+ * not because their contents happen to be. It was content-sized over a 28px
+ * floor before, which drew a different width per row and moved the hairline
+ * beside it as a value counted past 9.
  *
  * It also takes the frame's dead space with it. The flex gap on its left and
  * the frame's own inline padding on its right would otherwise fall through to
  * the frame, whose mousedown forwards focus to the field's CONTROL — so a click
  * a few pixels off the number moves a slider's thumb instead of placing a caret
  * in the box. A negative margin pulls the box out over each side, an equal
- * padding puts the number back on exactly the pixel it is drawn on, `alignSelf`
- * claims the frame's full height the way a slider track does, and `content-box`
- * keeps `minWidth` a floor for the NUMBER rather than for the number plus the
- * padding it borrowed. Each side is scoped to the arrangement that has the
- * space to reclaim, so a re-composed frame cannot pull the box out over a
- * sibling.
+ * padding puts the number back on exactly the pixel it is drawn on, and
+ * `alignSelf` claims the frame's full height the way a slider track does. Each
+ * side is scoped to the arrangement that has the space to reclaim, so a
+ * re-composed frame cannot pull the box out over a sibling.
+ *
+ * The stated width is the DRAWN box, reclaimed space included — that space was
+ * already the frame's own padding, so the number keeps sitting on the pixel it
+ * always sat on and only the room in front of it changes.
  */
 const fieldValueBox = {
   // Doubled class, and this is load-bearing: the box wears the `field` recipe's
@@ -176,11 +178,8 @@ const fieldValueBox = {
   // the box is used and whatever the slot is called.
   "&&": {
     flex: "0 0 auto",
-    width: "auto",
-    fieldSizing: "content",
-    boxSizing: "content-box",
+    width: "token(sizes.fieldValue)",
     alignSelf: "stretch",
-    minWidth: "calc(token(spacing.xxl) + token(spacing.md))",
     textAlign: "right",
     // The number changes on every drag frame and every keystroke; proportional
     // digits would make it shuffle horizontally as it counts.
@@ -264,8 +263,21 @@ export default defineConfig({
           // Fixed like the calendar's 208px pitch, so a select popover and a
           // date popover read as siblings (Figma 647:2383, 629:1416).
           optionListWidth: { value: "208px" },
+          // The number at the end of a field frame — the slider's readout and
+          // the colour input's opacity, which are one box (see
+          // `fieldValueBox`) and so are one width.
+          fieldValue: { value: "60px" },
           // Option row hit target: 24px line + 2×4 inset (Figma 647:2387).
           optionRow: { value: "32px" },
+          // The small list's two heights (Figma 1027:2276), each written as the
+          // relation it actually is rather than as the number it comes out at.
+          // The row loses the inset the line above describes and IS the 14/24
+          // line box, so rows are separated by a 2px gap instead of by padding;
+          // the search strip above them is that same line box on a 2px inset.
+          optionRowSm: { value: "calc({sizes.optionRow} - 2 * {spacing.sm})" },
+          optionSearchSm: {
+            value: "calc({sizes.optionRowSm} + 2 * {spacing.xs})",
+          },
           listBullet: { value: "8px" },
           // Larger than the 16px chip it sits in, so it overhangs the way the
           // source icons do.
@@ -5202,6 +5214,40 @@ export default defineConfig({
                 list: { maxHeight: "calc(100dvh - token(spacing.5xl))" },
               },
             },
+            // The row pitch (Figma 1027:2276 for `sm`).
+            //   md — the default: a 32px row, 24px of line box on a 4px inset
+            //        all round, rows abutting so each is its own hit target.
+            //   sm — the dense list: the inset goes vertical-first, so the row
+            //        IS its 24px line box and a 2px gap does the separating a
+            //        padded row did. The search strip drops 40 → 28 and its
+            //        text 16 → 14 with it, or a full-size field would sit over
+            //        a list two thirds its pitch.
+            size: {
+              md: {},
+              sm: {
+                search: {
+                  height: "token(sizes.optionSearchSm)",
+                  textStyle: "bodySmall",
+                },
+                list: {
+                  gap: "xs",
+                  paddingInline: "sm",
+                  // The list keeps an inset of its own top and bottom, so the
+                  // first and last rows are not flush against the search strip
+                  // and the bottom edge (Figma 1027:2282).
+                  paddingBlock: "sm",
+                  // Read exactly as the base cap above it: the rows it means to
+                  // show, plus their gaps, plus the list's own block padding,
+                  // plus a half-row peek that says there is more to scroll. A
+                  // shorter row fits more of them in — 9 here against the
+                  // base's 7.
+                  maxHeight:
+                    "calc(9 * token(sizes.optionRowSm) + 8 * token(spacing.xs) + 2 * token(spacing.sm) + token(spacing.lg))",
+                },
+                option: { paddingInline: "sm", paddingBlock: "none" },
+                empty: { height: "token(sizes.optionRowSm)" },
+              },
+            },
             direction: {
               // The vertical list is already encoded in the base.
               block: {},
@@ -5232,9 +5278,10 @@ export default defineConfig({
             tone: "default",
             direction: "block",
             fit: "scroll",
+            size: "md",
           },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"] }],
+          staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"], size: ["*"] }],
         }),
 
         // A segmented control — one row, every option visible, exactly one on

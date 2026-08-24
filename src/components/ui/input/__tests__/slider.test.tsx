@@ -218,6 +218,42 @@ describe("Slider", () => {
       expect(track.getAttribute("aria-valuenow")).toBe("0");
     });
 
+    // The default action of a primary-button pointerdown is to begin a text
+    // selection, and pointer capture does not stop it: the drag keeps steering
+    // the thumb while the browser paints a growing selection across whatever
+    // the cursor passes over outside the frame.
+    it("declines the pointerdown default, so a drag selects no text", () => {
+      render(
+        <Field size="sm">
+          <Slider min={0} max={100} step={10} defaultValue={0} />
+        </Field>,
+      );
+      const track = layoutTrack();
+
+      const notCancelled = fireEvent.pointerDown(track, {
+        clientX: atRatio(0.5),
+        pointerId: 1,
+        button: 0,
+      });
+
+      expect(notCancelled).toBe(false);
+    });
+
+    // ...but only for a drag it is actually taking. A right-click has to keep
+    // its context menu, and a disabled slider has no drag to protect.
+    it("leaves the default alone for a non-primary button", () => {
+      render(
+        <Field size="sm">
+          <Slider min={0} max={100} step={10} defaultValue={0} />
+        </Field>,
+      );
+      const track = layoutTrack();
+
+      expect(
+        fireEvent.pointerDown(track, { clientX: atRatio(0.5), button: 2 }),
+      ).toBe(true);
+    });
+
     it("ignores a non-primary button", () => {
       render(
         <Field size="sm">

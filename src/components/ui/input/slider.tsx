@@ -205,6 +205,18 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
         onPointerDown={(e) => {
           onPointerDown?.(e);
           if (e.defaultPrevented || disabled || e.button !== 0) return;
+          // Take the press. The default action of a primary-button pointerdown
+          // is to START A TEXT SELECTION, and pointer capture does nothing
+          // about it — the drag keeps steering the thumb while the browser
+          // paints a selection across every label and paragraph the cursor
+          // passes on its way out of the frame. Declined here rather than with
+          // `user-select: none` on the track, which only refuses the selection
+          // an anchor INSIDE it, not the one this press just started outside.
+          //
+          // It costs the implicit focus that a mousedown would have given the
+          // track, which is why the explicit `focus()` below is load-bearing
+          // rather than belt-and-braces.
+          e.preventDefault();
           // Capture on the track, so a drag that leaves the frame (or the
           // window) keeps steering the thumb and still ends cleanly.
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -336,10 +348,6 @@ function SliderOutput({
       aria-label={hasLabel ? undefined : "Value"}
       value={text}
       disabled={disabled}
-      // The width floor is the recipe's; this is the ceiling, for the browsers
-      // without `field-sizing` — without it an input is ~20 characters wide and
-      // would push the ruler out of the frame.
-      size={Math.max(text.length, 2)}
       inputMode="decimal"
       spellCheck={false}
       autoComplete="off"

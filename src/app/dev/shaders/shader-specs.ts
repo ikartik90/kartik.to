@@ -4,8 +4,7 @@
 // One entry per shader worth pointing at the reference art (the Windsurf card
 // backgrounds: fanned light-blades, soft colour washes). Each entry carries
 // BOTH the control table — every uniform the page exposes, with the range the
-// shader's own docs give it — and a handful of presets that park those controls
-// somewhere recognisable.
+// shader's own docs give it — and the starting point those controls open on.
 //
 // A table rather than a page full of hand-written rows, for the same reason
 // `media-properties-panel.tsx` uses one: the rows differ only in their four
@@ -14,9 +13,9 @@
 // `node_modules/@paper-design/shaders/dist/shaders/*.d.ts` — if a control feels
 // clamped, check there before widening it here.
 //
-// The presets are STARTING POINTS, not matches. They put you in the right
-// neighbourhood of each reference card; the page exists because the last mile
-// is eyeballing, not arithmetic.
+// A shader's `defaults` are a STARTING POINT, not a match. They put you in the
+// right neighbourhood of the reference card; the page exists because the last
+// mile is eyeballing, not arithmetic.
 // ---------------------------------------------------------------------------
 
 export type ShaderId =
@@ -64,14 +63,12 @@ export interface ExtraColorSpec {
   value: string;
 }
 
-export interface ShaderPreset {
-  id: string;
-  label: string;
-  /** What in the reference art this preset is reaching for. */
-  note: string;
+/** Where a shader's controls open — one starting point per shader. */
+export interface ShaderDefaults {
   colors: string[];
   /** Required exactly when the shader has a `colorBack`; see the spec table test. */
   colorBack?: string;
+  /** Only the controls this shader wants moved off their own default. */
   params?: Params;
   extraColors?: Record<string, string>;
 }
@@ -79,31 +76,63 @@ export interface ShaderPreset {
 export interface ShaderSpec {
   id: ShaderId;
   label: string;
-  blurb: string;
   /** The shader's own `maxColorCount`. */
   maxColors: number;
   /** False for the mesh gradients, which are opaque fills with no background. */
   hasColorBack: boolean;
   extraColors: ExtraColorSpec[];
   controls: ControlSpec[];
-  presets: ShaderPreset[];
+  defaults: ShaderDefaults;
 }
 
-// The sizing/motion uniforms every shader shares. Spread LAST into each control
-// table so a shader's own parameters read first and the framing controls sit
-// together at the foot of the panel wherever you are.
-const SIZING_CONTROLS: ControlSpec[] = [
+// How the graphic is FRAMED in the card — the four sizing props that visibly
+// move it. Spread LAST into each control table so a shader's own parameters
+// read first and the framing sits together at the foot of the sidebar wherever
+// you are.
+//
+// The rest of `ShaderSizingParams` is deliberately absent. `fit` and the world
+// box (`worldWidth`/`worldHeight`, and the `originX`/`originY` that only
+// position that box) describe how the shader's coordinate space maps onto a
+// canvas — and here the card IS the canvas, pinned at `fit="cover"` by the page
+// so the ground has no margins. Left at the canvas size, origin and world size
+// do nothing you can see; `fit: none` against a zero-size world collapses the
+// box to a pixel and renders nothing at all. Controls whose only settings are
+// "no change" and "broken" are not properties of the shader worth showing.
+const FRAMING_CONTROLS: ControlSpec[] = [
   { kind: "slider", key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.01, value: 1 },
   { kind: "slider", key: "rotation", label: "Rotation", min: 0, max: 360, step: 1, value: 0 },
   { kind: "slider", key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.01, value: 0 },
   { kind: "slider", key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.01, value: 0 },
-  // Zero is not just "slow": the library cancels the rAF entirely at 0, so a
-  // parked shader costs nothing per frame. Worth leaving here at rest.
+];
+
+// Spread ONLY into a shader whose fragment shader actually samples `u_time`.
+// The library types accept `speed` on every component — they all extend
+// `ShaderMotionParams` — but StaticMeshGradient's fragment shader contains no
+// reference to `u_time` at all, so the value travels all the way to the mount
+// and changes nothing. A slider that cannot move what it names is worse than a
+// missing one: it reads as a broken shader rather than as a still one.
+//
+// Zero is not just "slow": the library cancels the rAF entirely at 0, so a
+// parked shader costs nothing per frame. Worth leaving here at rest.
+const MOTION_CONTROLS: ControlSpec[] = [
   { kind: "slider", key: "speed", label: "Speed", min: 0, max: 2, step: 0.01, value: 0 },
 ];
 
+/**
+ * The keys of the two shared blocks, in order — the sidebar reads these to
+ * split a shader's OWN parameters from the framing and the motion. Arrays
+ * rather than sets: they are also the order the groups render in.
+ */
+export const FRAMING_CONTROL_KEYS: string[] = FRAMING_CONTROLS.map(
+  (control) => control.key,
+);
+
+export const MOTION_CONTROL_KEYS: string[] = MOTION_CONTROLS.map(
+  (control) => control.key,
+);
+
 // The reference palette, read off the artwork. Named rather than inlined so the
-// same green means the same thing in three presets.
+// same green means the same thing in every shader that reaches for it.
 const FOREST = "#0A3B2CFF";
 const EMERALD = "#12855FFF";
 const SPRING = "#3ECC85FF";
@@ -111,13 +140,9 @@ const LIME = "#C6F24EFF";
 const PALE_LIME = "#E9F9B8FF";
 const PAPER = "#FBF6ECFF";
 const BLUSH = "#F6B3CEFF";
-const PLUM = "#3B0A45FF";
-const MAGENTA = "#B0197FFF";
-const GOLD = "#F5D14EFF";
 const APRICOT = "#F5B183FF";
 const CORNFLOWER = "#5B7FD4FF";
 const DEEP_BLUE = "#2E4BA8FF";
-const MINT = "#7FE8C0FF";
 
 export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   // Ours — the only entry here that is not a library built-in. Everything else
@@ -126,8 +151,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   cosmicTrack: {
     id: "cosmicTrack",
     label: "Cosmic Track",
-    blurb:
-      "Ours: discrete ribbons on a fanned track, each carrying ONE mirrored copy of the gradient — first colour and last are the same, and beyond its two ends the track is just ground. Angle slides the whole set along the track and Travel is how far Speed swings it either side, out and back. Stagger is the offset between neighbours that turns their leading edges into a staircase. None of them touch the geometry — Spread, Bandwidth, Roundness, Apex and Curve own that. Bandwidth is how wide the ribbon stack is (every ribbon narrows together, staying edge to edge); Spread is the gap between ribbons (0 = touching). The fan’s own shape comes from Apex and Roundness, and Tilt is the angle the whole plane makes with the surface — 0 lies flat-on, higher leans it away so the ribbons foreshorten toward a horizon. Tail is how far each band fades out at its ends, and it leaves the outer silhouette alone.",
     maxColors: 10,
     hasColorBack: true,
     extraColors: [],
@@ -171,34 +194,14 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // Size of one Bayer cell in DEVICE pixels — so on a 2x display 1 puts the
       // whole 8x8 matrix inside 4 CSS px, too fine to read. Raise to coarsen.
       { kind: "slider", key: "ditherSize", label: "Dither Size", min: 1, max: 12, step: 1, value: 3 },
-      ...SIZING_CONTROLS,
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
     ],
-    presets: [
-      {
-        id: "aurora",
-        label: "Aurora",
-        note: "The reference's blue-to-peach ramp along a wide fan.",
-        colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
-        colorBack: "#12042BFF",
-        params: { angle: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, fold: 0.18, softness: 0.55, tail: 0.3, dither: 0.5, ditherSize: 3 },
-      },
-      {
-        id: "angle-swept",
-        label: "Angle swept",
-        note: "The ANGLE video. Drag Angle: every band slides along its track, and Stagger is the gap that makes their leading edges a staircase. Speed does the same thing on its own — the track never moves.",
-        colors: [FOREST, "#1FBF8F", LIME, "#F9C8E0", PAPER],
-        colorBack: FOREST,
-        params: { angle: 0.25, stagger: 0.5, roundness: 0.5, apex: 2.8, rampLength: 2.6, spread: 0.3, bandwidth: 0.38, bandCount: 6, curve: 0.6, tilt: 0.85, fold: 0.12, softness: 0.7, tail: 0.35, speed: 0.5 },
-      },
-      {
-        id: "bent-field",
-        label: "Bent field",
-        note: "Apex and Roundness both 0 — the convergence pulled into frame as a sharp point, showing the symmetric bowtie the fan is built on.",
-        colors: [PLUM, MAGENTA, "#FF8FC7", GOLD, PAPER],
-        colorBack: "#1A0320FF",
-        params: { angle: 0.2, stagger: 0.4, roundness: 0, apex: 0, rampLength: 2.4, spread: 0.12, bandwidth: 0.5, bandCount: 9, curve: 0.2, tilt: 0, fold: 0.22, softness: 0.4, tail: 0.2 },
-      },
-    ],
+    defaults: {
+      colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
+      colorBack: "#12042BFF",
+      params: { angle: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, fold: 0.18, softness: 0.55, tail: 0.3, dither: 0.5, ditherSize: 3 },
+    },
   },
 
   // The closest thing in the library to the hero motif: tapered blades fanning
@@ -207,8 +210,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   colorPanels: {
     id: "colorPanels",
     label: "Color Panels",
-    blurb:
-      "Semi-transparent panels around a central axis. Verified in the browser: this is a folded-wing bloom, NOT the reference fan — reach for God Rays for that. Keep it for the soft vertical glow. Rotation 90 stands the panels up; at 0 they lie in bands.",
     maxColors: 7,
     hasColorBack: true,
     extraColors: [],
@@ -222,34 +223,14 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "fadeOut", label: "Fade Out", min: 0, max: 1, step: 0.01, value: 0.65 },
       { kind: "slider", key: "gradient", label: "Gradient", min: 0, max: 1, step: 0.01, value: 1 },
       { kind: "toggle", key: "edges", label: "Edge highlight", value: false },
-      ...SIZING_CONTROLS,
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
     ],
-    presets: [
-      {
-        id: "emerald-bloom",
-        label: "Emerald bloom",
-        note: "Soft vertical glow on the dark ground. Drop Density near 1 to see the folded-wing structure this is made of.",
-        colors: [EMERALD, SPRING, LIME, PALE_LIME],
-        colorBack: FOREST,
-        params: { density: 3.7, angle1: 0.55, angle2: -0.35, length: 0.9, blur: 0.2, fadeIn: 0.3, fadeOut: 0.7, gradient: 1, scale: 0.7, rotation: 90, offsetY: 0 },
-      },
-      {
-        id: "citrus-bloom",
-        label: "Citrus bloom",
-        note: "The same glow on the paper ground, with pink at the edges.",
-        colors: [PALE_LIME, LIME, SPRING, BLUSH],
-        colorBack: PAPER,
-        params: { density: 3.4, angle1: 0.4, angle2: -0.25, length: 1, blur: 0.3, fadeIn: 0.45, fadeOut: 0.55, gradient: 1, scale: 0.75, rotation: 90 },
-      },
-      {
-        id: "violet-blades",
-        label: "Violet blades",
-        note: "The purple card — few, hard-edged wings raking across a plum ground.",
-        colors: [MAGENTA, BLUSH, GOLD, LIME],
-        colorBack: PLUM,
-        params: { density: 1.4, angle1: 0.45, angle2: -0.3, length: 1.4, blur: 0.06, fadeIn: 0.2, fadeOut: 0.8, gradient: 1, scale: 0.8, rotation: 66 },
-      },
-    ],
+    defaults: {
+      colors: [EMERALD, SPRING, LIME, PALE_LIME],
+      colorBack: FOREST,
+      params: { density: 3.7, angle1: 0.55, angle2: -0.35, length: 0.9, blur: 0.2, fadeIn: 0.3, fadeOut: 0.7, gradient: 1, scale: 0.7, rotation: 90, offsetY: 0 },
+    },
   },
 
   // The other reading of the same motif: light shafts rather than solid blades.
@@ -258,8 +239,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   godRays: {
     id: "godRays",
     label: "God Rays",
-    blurb:
-      "THE match for the reference art: broad blades fanning from a source above the frame. Density is the whole ballgame — near 0.8 the shafts read as grass, near 0.3 as the soft blades in the cards.",
     maxColors: 5,
     hasColorBack: true,
     extraColors: [{ key: "colorBloom", label: "Bloom", value: LIME }],
@@ -270,30 +249,17 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "midSize", label: "Mid Size", min: 0, max: 1, step: 0.01, value: 0.2 },
       { kind: "slider", key: "midIntensity", label: "Mid Intensity", min: 0, max: 1, step: 0.01, value: 0.15 },
       { kind: "slider", key: "bloom", label: "Bloom", min: 0, max: 1, step: 0.01, value: 0.45 },
-      ...SIZING_CONTROLS,
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
     ],
-    presets: [
-      {
-        id: "beam-fan",
-        label: "Beam fan",
-        note: "Shafts thrown down from a source above the frame.",
-        colors: [EMERALD, SPRING, LIME],
-        colorBack: FOREST,
-        extraColors: { colorBloom: LIME },
-        // Density is the whole ballgame: at 0.8 the shafts read as grass, at
-        // 0.3 they read as the broad soft blades in the art.
-        params: { density: 0.3, intensity: 0.6, spotty: 0.12, midSize: 0.1, midIntensity: 0.1, bloom: 0.5, scale: 1.2, offsetY: -0.85 },
-      },
-      {
-        id: "paper-beams",
-        label: "Paper beams",
-        note: "The same shafts on the cream ground, barely there.",
-        colors: [LIME, SPRING, BLUSH],
-        colorBack: PAPER,
-        extraColors: { colorBloom: PALE_LIME },
-        params: { density: 0.26, intensity: 0.4, spotty: 0.2, midSize: 0.25, midIntensity: 0.08, bloom: 0.65, scale: 1.1, offsetY: -0.8 },
-      },
-    ],
+    defaults: {
+      colors: [EMERALD, SPRING, LIME],
+      colorBack: FOREST,
+      extraColors: { colorBloom: LIME },
+      // Density is the whole ballgame: at 0.8 the shafts read as grass, at
+      // 0.3 they read as the broad soft blades in the art.
+      params: { density: 0.3, intensity: 0.6, spotty: 0.12, midSize: 0.1, midIntensity: 0.1, bloom: 0.5, scale: 1.2, offsetY: -0.85 },
+    },
   },
 
   // Not a fan at all, but `stripes` with a little swirl lands on the flowing
@@ -301,8 +267,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   warp: {
     id: "warp",
     label: "Warp",
-    blurb:
-      "Distorted bands. Set the pattern to Stripes and add a little swirl for the flowing-ribbon variant of the look.",
     maxColors: 10,
     hasColorBack: false,
     extraColors: [],
@@ -324,24 +288,13 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "distortion", label: "Distortion", min: 0, max: 1, step: 0.01, value: 0.15 },
       { kind: "slider", key: "swirl", label: "Swirl", min: 0, max: 1, step: 0.01, value: 0.35 },
       { kind: "slider", key: "swirlIterations", label: "Swirl Iterations", min: 0, max: 20, step: 1, value: 6 },
-      ...SIZING_CONTROLS,
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
     ],
-    presets: [
-      {
-        id: "green-ribbon",
-        label: "Green ribbon",
-        note: "Soft bands bending through the frame.",
-        colors: [FOREST, EMERALD, SPRING, LIME, PALE_LIME],
-        params: { shape: "stripes", softness: 0.95, shapeScale: 0.1, distortion: 0.12, swirl: 0.4, swirlIterations: 8, rotation: 14 },
-      },
-      {
-        id: "sunset-ribbon",
-        label: "Sunset ribbon",
-        note: "The warm card's palette, run through the same bands.",
-        colors: [PAPER, APRICOT, BLUSH, CORNFLOWER, DEEP_BLUE],
-        params: { shape: "stripes", softness: 1, shapeScale: 0.18, distortion: 0.2, swirl: 0.5, swirlIterations: 10, rotation: 96 },
-      },
-    ],
+    defaults: {
+      colors: [FOREST, EMERALD, SPRING, LIME, PALE_LIME],
+      params: { shape: "stripes", softness: 0.95, shapeScale: 0.1, distortion: 0.12, swirl: 0.4, swirlIterations: 8, rotation: 14 },
+    },
   },
 
   // Sectoral bands around a centre. With `twist` near zero these are straight
@@ -349,8 +302,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   swirl: {
     id: "swirl",
     label: "Swirl",
-    blurb:
-      "Colour bands wrapped around a centre. Drop Twist near zero and you get straight wedges — a third way at the fan.",
     maxColors: 10,
     hasColorBack: true,
     extraColors: [],
@@ -362,18 +313,14 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, value: 0.9 },
       { kind: "slider", key: "noise", label: "Noise", min: 0, max: 1, step: 0.01, value: 0.1 },
       { kind: "slider", key: "noiseFrequency", label: "Noise Frequency", min: 0, max: 1, step: 0.01, value: 0.3 },
-      ...SIZING_CONTROLS,
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
     ],
-    presets: [
-      {
-        id: "wedge-fan",
-        label: "Wedge fan",
-        note: "Twist at zero, centre pushed off the top edge.",
-        colors: [EMERALD, SPRING, LIME, PALE_LIME],
-        colorBack: FOREST,
-        params: { bandCount: 9, twist: 0.05, center: 0.2, softness: 0.95, scale: 1.6, offsetY: -0.7 },
-      },
-    ],
+    defaults: {
+      colors: [EMERALD, SPRING, LIME, PALE_LIME],
+      colorBack: FOREST,
+      params: { bandCount: 9, twist: 0.05, center: 0.2, softness: 0.95, scale: 1.6, offsetY: -0.7 },
+    },
   },
 
   // The soft-wash cards. This is the shader already shipping behind pictures in
@@ -381,8 +328,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   staticMeshGradient: {
     id: "staticMeshGradient",
     label: "Static Mesh Gradient",
-    blurb:
-      "The soft blurred wash — no rays at all. Already in production behind article images, so a setting found here ports straight to a BackgroundEffect.",
     maxColors: 10,
     hasColorBack: false,
     extraColors: [],
@@ -397,24 +342,15 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "mixing", label: "Mixing", min: 0, max: 1, step: 0.01, value: 0.6 },
       { kind: "slider", key: "grainMixer", label: "Grain Mixer", min: 0, max: 1, step: 0.01, value: 0.2 },
       { kind: "slider", key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.01, value: 0.1 },
-      ...SIZING_CONTROLS,
+      ...FRAMING_CONTROLS,
+      // No MOTION_CONTROLS: this shader's fragment shader never reads
+      // `u_time`, so a Speed slider here would be a control that does
+      // nothing. The name is the specification — it is STATIC.
     ],
-    presets: [
-      {
-        id: "sunset-haze",
-        label: "Sunset haze",
-        note: "The warm card — cream falling through apricot and pink into blue.",
-        colors: [PAPER, APRICOT, BLUSH, CORNFLOWER, DEEP_BLUE],
-        params: { positions: 12, mixing: 0.75, waveY: 0.45, grainOverlay: 0.12 },
-      },
-      {
-        id: "mint-wash",
-        label: "Mint wash",
-        note: "The pale green card — one soft vertical fall, almost no structure.",
-        colors: [MINT, SPRING, PALE_LIME, PAPER],
-        params: { positions: 4, mixing: 0.85, waveX: 0.15, waveY: 0.5, grainOverlay: 0.08 },
-      },
-    ],
+    defaults: {
+      colors: [PAPER, APRICOT, BLUSH, CORNFLOWER, DEEP_BLUE],
+      params: { positions: 12, mixing: 0.75, waveY: 0.45, grainOverlay: 0.12 },
+    },
   },
 };
 
@@ -427,7 +363,7 @@ export function defaultParams(spec: ShaderSpec): Params {
   );
 }
 
-export interface ResolvedPreset {
+export interface ShaderState {
   params: Params;
   colors: string[];
   colorBack: string | undefined;
@@ -435,38 +371,22 @@ export interface ResolvedPreset {
 }
 
 /**
- * The full starting state for one preset: its overrides laid over the control
- * table's defaults, so a preset only has to name what it actually changes.
- *
- * An unrecognised id resolves to the plain defaults rather than throwing — the
- * page reads the id from component state, and a stale one should show you the
- * shader, not an error boundary.
+ * The full starting state for a shader: its `defaults` laid over the control
+ * table's own, so the table only has to name what it actually moves.
  *
  * Returns fresh objects every call: the caller puts these straight into state
  * and edits them, and sharing them would let one tweak rewrite the table.
  */
-export function presetParams(spec: ShaderSpec, presetId: string): ResolvedPreset {
-  const preset = spec.presets.find((candidate) => candidate.id === presetId);
-  const extraColors = Object.fromEntries(
-    spec.extraColors.map((extra) => [
-      extra.key,
-      preset?.extraColors?.[extra.key] ?? extra.value,
-    ]),
-  );
-
-  if (!preset) {
-    return {
-      params: defaultParams(spec),
-      colors: spec.presets[0] ? [...spec.presets[0].colors] : [],
-      colorBack: spec.presets[0]?.colorBack,
-      extraColors,
-    };
-  }
-
+export function defaultState(spec: ShaderSpec): ShaderState {
   return {
-    params: { ...defaultParams(spec), ...preset.params },
-    colors: [...preset.colors],
-    colorBack: preset.colorBack,
-    extraColors,
+    params: { ...defaultParams(spec), ...spec.defaults.params },
+    colors: [...spec.defaults.colors],
+    colorBack: spec.defaults.colorBack,
+    extraColors: Object.fromEntries(
+      spec.extraColors.map((extra) => [
+        extra.key,
+        spec.defaults.extraColors?.[extra.key] ?? extra.value,
+      ]),
+    ),
   };
 }

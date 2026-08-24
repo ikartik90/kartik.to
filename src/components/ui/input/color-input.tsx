@@ -128,11 +128,6 @@ export function ColorInput({
         autoComplete="off"
         inputMode="numeric"
         maxLength={3}
-        // The width floor is the recipe's; this is the ceiling, for the
-        // browsers without `field-sizing` — an unsized input is ~20 characters
-        // wide and would shove the hex digits out of the frame. Three, the most
-        // this field can hold, so the box never resizes mid-edit.
-        size={3}
         // Snapping back on blur is what makes an emptied or out-of-range field
         // resolve: the draft goes, and the committed value paints instead.
         onBlur={() => {

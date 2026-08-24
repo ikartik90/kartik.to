@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
+import { renderToString } from "react-dom/server";
 import { Temporal } from "@js-temporal/polyfill";
 import {
   ShiftSchedulingV1,
@@ -687,5 +688,34 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
 
     const cursor = container.querySelector("[data-demo-cursor]");
     expect(cursor?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("ShiftSchedulingV1 — hydration safety", () => {
+  // The surfaces this demo renders on are PRERENDERED — a static dev route and
+  // an embed in a cached article — so the server's markup is written on the
+  // build machine and hydrated by a visitor on some later day. A clock read
+  // during render bakes the BUILD's date into that HTML; the first client
+  // render computes a different one, the two disagree, and React throws away
+  // the tree with error #418. Integration caught it 41 seconds into a day the
+  // build had never heard of.
+  //
+  // `renderToString` reproduces the server pass — effects do not run — so the
+  // same render on two different days has to come out identical. The dates the
+  // visitor actually reads are still today's: they arrive in a layout effect,
+  // which is what the "default date range" cases above assert.
+  it("renders markup that does not depend on the day the server is on", () => {
+    // A full day apart, not a minute either side of midnight UTC: the polyfill
+    // resolves `plainDateISO` in the LOCAL zone, so a UTC-midnight pair is the
+    // same local day everywhere west of Greenwich and the case would pass
+    // without proving anything.
+    vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+    const buildDay = renderToString(<ShiftSchedulingV1 />);
+
+    vi.setSystemTime(new Date("2026-07-14T12:00:00Z"));
+    const viewingDay = renderToString(<ShiftSchedulingV1 />);
+
+    vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+    expect(viewingDay).toBe(buildDay);
   });
 });
