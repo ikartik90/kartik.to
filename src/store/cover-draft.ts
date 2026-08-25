@@ -6,7 +6,8 @@ import {
   type ParamValue,
   type ShaderId,
 } from "@/data/shader-specs";
-import type { CoverContent, CoverSettings } from "@/domain/cover";
+import { DEFAULT_COVER_ASPECT, type CoverContent, type CoverSettings } from "@/domain/cover";
+import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
 // The cover being tuned, as global state rather than the playground's own.
@@ -44,6 +45,14 @@ interface CoverDraftStore {
   setColors: (colors: string[]) => void;
   setColorBack: (colorBack: string) => void;
   setExtraColor: (key: string, value: string) => void;
+  /**
+   * The shape the cover is being designed against.
+   *
+   * A note on the cover rather than a frame it imposes — see `@/domain/cover`.
+   * It sits in `settings` because that is the blob the whole authored state
+   * travels in, and it is the one part of that blob no shader ever reads.
+   */
+  setAspect: (aspect: DemoFrameAspectRatio) => void;
   setTitle: (title: string | null) => void;
   /** The shader's uniforms back to their defaults, leaving the colours alone. */
   resetParams: () => void;
@@ -60,9 +69,16 @@ interface CoverDraftStore {
   toContent: () => CoverContent;
 }
 
-const blank = (shaderId: ShaderId) => ({
+// The frame is carried IN rather than defaulted, because the two callers want
+// different things from it: a new draft opens on the default, and a shader
+// switch keeps whatever the author was designing against — the shape is a fact
+// about the cover, not about the shader mounted in it.
+const blank = (
+  shaderId: ShaderId,
+  aspect: DemoFrameAspectRatio = DEFAULT_COVER_ASPECT,
+): { shaderId: ShaderId; settings: CoverSettings; isDirty: boolean } => ({
   shaderId,
-  settings: defaultState(SHADER_SPECS[shaderId]) as CoverSettings,
+  settings: { ...defaultState(SHADER_SPECS[shaderId]), aspect },
   isDirty: false,
 });
 
@@ -75,7 +91,11 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   // different shape, so carrying the old params across would carry keys the new
   // shader has never heard of — which the schema would then strip on save,
   // silently losing whatever the panel was still showing.
-  selectShader: (shaderId) => set({ ...blank(shaderId), isDirty: true }),
+  selectShader: (shaderId) =>
+    set((state) => ({
+      ...blank(shaderId, state.settings.aspect),
+      isDirty: true,
+    })),
 
   setParam: (key, value) =>
     set((state) => ({
@@ -104,6 +124,12 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
         ...state.settings,
         extraColors: { ...state.settings.extraColors, [key]: value },
       },
+      isDirty: true,
+    })),
+
+  setAspect: (aspect) =>
+    set((state) => ({
+      settings: { ...state.settings, aspect },
       isDirty: true,
     })),
 

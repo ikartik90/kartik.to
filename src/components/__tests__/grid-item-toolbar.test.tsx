@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GridItemToolbar } from "../grid-item-toolbar";
+import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
 const handlers = () => ({
   onTogglePin: vi.fn(),
@@ -17,6 +19,35 @@ const handlers = () => ({
 
 /** The placement rail's default props — every test needs a current shape. */
 const base = { aspect: "16/9" as const };
+
+/**
+ * The toolbar with a parent that actually honours `onAspectChange`.
+ *
+ * The shape is a CONTROLLED prop — the card owns it — so anything about what
+ * the picker shows AFTER a press has to be tested against a parent that feeds
+ * the new shape back. Rendering with a `vi.fn()` there tests a card that
+ * ignores its own toolbar, which is not a card that exists.
+ */
+function ControlledToolbar({
+  aspect: initial,
+  onAspectChange,
+}: {
+  aspect: DemoFrameAspectRatio;
+  onAspectChange?: (aspect: DemoFrameAspectRatio) => void;
+}) {
+  const [aspect, setAspect] = useState(initial);
+  return (
+    <GridItemToolbar
+      {...handlers()}
+      pinned={false}
+      aspect={aspect}
+      onAspectChange={(next) => {
+        setAspect(next);
+        onAspectChange?.(next);
+      }}
+    />
+  );
+}
 
 /**
  * The rail read left to right — each control by its label, each separator as a
@@ -367,7 +398,7 @@ describe("GridItemToolbar", () => {
 
   it("flips the whole list to the portrait counterparts", async () => {
     const user = userEvent.setup();
-    render(<GridItemToolbar {...base} pinned={false} {...handlers()} />);
+    render(<ControlledToolbar aspect="16/9" />);
     await enterAspect(user);
     await user.click(screen.getByRole("button", { name: /switch to portrait/i }));
 

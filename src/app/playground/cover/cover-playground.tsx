@@ -4,23 +4,19 @@ import {
   useEffect,
   useRef,
   useState,
-  type ComponentProps,
+  type CSSProperties,
   type ReactNode,
 } from "react";
-import {
-  ColorPanels,
-  GodRays,
-  StaticMeshGradient,
-  Swirl,
-  Warp,
-} from "@paper-design/shaders-react";
 import { css, cx } from "../../../../styled-system/css";
-import { propertiesPanel } from "../../../../styled-system/recipes";
+import { propertiesPanel, toolbar } from "../../../../styled-system/recipes";
+import { useIsAdmin } from "@/hooks/use-is-admin";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { useSheetDrag } from "@/hooks/use-sheet-drag";
 import { isBottomSheetLayout } from "@/data/media-queries";
 import { useCoverDraftStore } from "@/store/cover-draft";
-import { CosmicTrack } from "@/components/shaders/cosmic-track";
+import { AspectRail } from "@/components/aspect-rail";
+import { PresetsPane } from "./presets-pane";
+import { ShaderStage } from "./shader-stage";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -40,11 +36,10 @@ import {
   FRAMING_CONTROL_KEYS,
   MOTION_CONTROL_KEYS,
   type ControlSpec,
-  type Params,
   type ShaderId,
-  type ShaderSpec,
 } from "@/data/shader-specs";
 import type { CoverSettings } from "@/domain/cover";
+import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
 // Cover Playground — where a cover's background is tuned, on its way to being
@@ -64,9 +59,6 @@ import type { CoverSettings } from "@/domain/cover";
 // shader, its uniforms, the canvas theme — over a WebGL canvas, and none of it
 // is the server's business. `page.tsx` next to this file is the route.
 // ---------------------------------------------------------------------------
-
-/** The preview is ~380×680 at 2×; no detail in a soft gradient survives above it. */
-const MAX_PIXELS = 1280 * 1280;
 
 // The page is the viewport, edge to edge — the canvas takes all of it.
 //
@@ -91,8 +83,19 @@ const MAX_PIXELS = 1280 * 1280;
 //                  side rail (it is `fixed`, and the body's own inset already
 //                  answers for that), half the viewport while it is a sheet,
 //                  and nothing again once the sheet has been sent away.
+//   --presets-space what the saved-covers strip is holding at the foot of the
+//                  canvas: nothing at all for a visitor, who is not shown one.
+//                  Its own tiles and padding (80 + 2×12) plus the four pixels
+//                  it stands off the bottom edge — the same tokens the pane
+//                  itself is built from, so the two cannot drift.
 //   --card-space   everything the cover may NOT have: the sheet, the gutter
-//                  controls' band, and the page's own margins.
+//                  controls' band, the presets strip, and the page's own
+//                  margins.
+//
+// One declaration rather than one per layout, which `--sheet-space` is what
+// makes possible: it is 0px wherever there is no sheet, so the same expression
+// reads correctly on a desktop, on a phone under a sheet, and on the same phone
+// once the sheet has been sent away.
 const pageStyle = css({
   minHeight: "100dvh",
   backgroundColor: "bg.canvas",
@@ -100,11 +103,19 @@ const pageStyle = css({
   padding: "none",
   gap: 0,
   "--sheet-space": "0px",
-  "--card-space": "calc(2 * token(spacing.xxl))",
+  "--presets-space": "0px",
+  "--card-space":
+    "calc(var(--sheet-space) + var(--presets-space) + token(spacing.5xl) + 2 * token(spacing.xxl))",
   _bottomSheet: {
     "--sheet-space": "50dvh",
-    "--card-space":
-      "calc(var(--sheet-space) + token(spacing.5xl) + 2 * token(spacing.xxl))",
+  },
+  // Signed in, so the strip is on screen and the picture gives up its band.
+  // An attribute rather than a prop threaded into every style, for the reason
+  // the dismissed sheet is one: the page owns the arithmetic, and the parts
+  // read it off one variable.
+  "&[data-presets]": {
+    "--presets-space":
+      "calc(token(spacing.5xl) + 2 * token(spacing.lg) + token(spacing.sm))",
   },
   // The sheet is gone, so the canvas has the whole screen back. An attribute
   // rather than a second media query: it outranks the one above wherever it is
@@ -123,15 +134,20 @@ const canvasStyle = css({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  // Under a sheet the canvas is only the top half, and the cover centres in
-  // THAT — otherwise it would centre on the whole screen and sit half behind
-  // the panel. The band the gutter controls occupy is kept clear at the same
-  // time: on a phone they overlay the picture rather than sitting beside it.
-  _bottomSheet: {
-    paddingBlockStart: "token(spacing.5xl)",
-    paddingBlockEnd: "var(--sheet-space)",
-    transition: "padding-block-end 200ms ease-out",
-  },
+  // The gutter band is RESERVED — the cover centres in what is left under it,
+  // not in the whole canvas. It used to be reserved only under a sheet, where
+  // the menu and the theme toggle would otherwise sit on the picture; the
+  // aspect rail is what makes it a rule everywhere, because that one is in the
+  // middle of the band and would lie across the top of any cover wide enough to
+  // reach it. Chrome must not cover the thing being judged.
+  paddingBlockStart: "token(spacing.5xl)",
+  // And the foot of it is the presets strip's, on the same grounds. Under a
+  // sheet the canvas is only the top half as well, and the cover centres in
+  // what is left of THAT — otherwise it would centre on the whole screen and
+  // sit half behind the panel. Both lengths in one declaration, because
+  // `--sheet-space` is 0px wherever there is no sheet.
+  paddingBlockEnd: "calc(var(--sheet-space) + var(--presets-space))",
+  transition: "padding-block-end 200ms ease-out",
   // The same phone on its side: a rail again, on a viewport globals.css does
   // not inset for (that starts at 820px). MARGIN rather than padding, because
   // what has to move is not just the picture — the gutter controls are
@@ -172,28 +188,81 @@ const canvasChromeStyle = css({
   justifyContent: "space-between",
 });
 
+// The aspect rail's box: the app's shared toolbar, hugging its contents.
+//
+// It rides in the GUTTER ROW, between the menu and the theme toggle, rather
+// than travelling with the picture. The frame is a property of the page here —
+// there is one cover, and this says what shape you are looking at it in — so it
+// belongs with the page's other two controls, holding still while the picture
+// changes shape underneath it. (A grid card's rail is the opposite case: it
+// belongs to one card among many and has to point at it, which is why that one
+// floats over its card's edge.)
+//
+// A hairline and nothing else. The card's rail buys elevation as well because
+// it floats over a picture; this one stands on the page's own ground, where a
+// shadow would be an object casting one onto the surface it is lying on.
+const aspectRailStyle = css({
+  borderWidth: "token(spacing.3xs)",
+  borderStyle: "solid",
+  borderColor: "border.divider",
+  // The end chips are square (the `md` rail keeps its buttons' own 4px
+  // corners), so the row is clipped to the rail's corner rather than being
+  // allowed to square it off.
+  overflow: "hidden",
+});
+
 // The cover the reference art is drawn on: portrait, generously rounded. The
 // shader fills it because Fit opens on `cover` — a ground with margins is just
 // a smaller picture — but Fit is a control now, so this is a default and not a
 // guarantee.
-// The card is 380×680 wherever there is room for it, and the same shape
-// smaller wherever there is not — a phone under a sheet, a phone on its side,
-// a short desktop window. Sized on ONE axis with the ratio doing the rest, so
-// it can never come out stretched: the width is the narrowest of what the
-// design asks for, what the viewport is, and what the height left over allows.
+// The card is as large as its chosen shape fits, and the same shape smaller
+// wherever there is not room — a phone under a sheet, a phone on its side, a
+// short desktop window. Sized on ONE axis with the ratio doing the rest, so it
+// can never come out stretched: the width is the narrowest of four numbers, the
+// last two of which read the space that is actually left.
+//
+// `--cover-w` / `--cover-h` are the chosen frame, written inline by the page
+// (see `ASPECT_RATIOS`, the app's one list of shapes). They are the numerator
+// and denominator rather than a ready-made `aspect-ratio` string because the
+// same pair is needed twice — once as the ratio, once as the multiplier that
+// turns a height budget into a width — and a single string could only serve
+// the first.
+//
+// `--cover-max` is the box the card fits INSIDE, on both axes: 680px, the
+// height the 380×680 poster this page opened on has always had. Capping the
+// long side rather than the width is what keeps a banner from running off the
+// screen and a poster from shrinking when it did not have to — at 9:16 the two
+// come out at 382×680, which is the card this page has always drawn.
+//
+// The width term is `100%` — the CANVAS, not the viewport. The viewport is the
+// wrong quantity twice over: the properties rail is `fixed` and the body's own
+// inset is what makes room for it, and a phone on its side hands the canvas a
+// margin of its own. Neither shows up in `dvw`, so a 16:9 card measured that
+// way came out wider than the space it was in and was left to flex-shrink into
+// it, arriving edge to edge with the page's 20px margins eaten. A percentage
+// resolves against the box the card is actually centred in, which is the box
+// the margins belong to.
 const coverStyle = css({
   position: "relative",
   isolation: "isolate",
-  aspectRatio: "380 / 680",
+  "--cover-max": "680px",
+  aspectRatio: "var(--cover-w) / var(--cover-h)",
   width:
-    "min(380px, calc(100dvw - 2 * token(spacing.xxl)), calc((100dvh - var(--card-space)) * 380 / 680))",
+    "min(var(--cover-max), calc(var(--cover-max) * var(--cover-w) / var(--cover-h)), calc(token(spacing.full) - 2 * token(spacing.xxl)), calc((100dvh - var(--card-space)) * var(--cover-w) / var(--cover-h)))",
   transition: "width 200ms ease-out",
   borderRadius: "xxl",
   overflow: "hidden",
-  backgroundColor: "bg.surface",
+  // NO ground of its own, deliberately. A cover's own background is a colour it
+  // holds — `colorBack`, with its alpha — and taking that to zero has to mean
+  // what it says: you are looking THROUGH the cover, at the page. A plate
+  // underneath would make the transparency a lie, and a quiet one, since
+  // `bg.surface` is close enough to the canvas behind it to read as "the
+  // background did not change" rather than as "something else is showing".
+  //
+  // What is lost is the empty card's outline for the moment before the shader
+  // mounts. That is the right thing to lose: the alternative is a control that
+  // cannot reach zero.
 });
-
-const layerStyle = css({ position: "absolute", inset: 0 });
 
 // The gutter row's right-hand end. The theme toggle used to answer the menu on
 // its own; the sheet's way back stands beside it, so the pair reads as one
@@ -262,57 +331,6 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/**
- * The mounted shader. Each component takes a different prop set, so the params
- * object is spread in wholesale — the control table is what guarantees the keys
- * match the uniforms, and `shader-specs.test.ts` is what guarantees the table
- * does. A component ignores anything it does not recognise.
- */
-function ShaderStage({
-  spec,
-  params,
-  colors,
-  colorBack,
-  extraColors,
-}: {
-  spec: ShaderSpec;
-  params: Params;
-  colors: string[];
-  colorBack: string | undefined;
-  extraColors: Record<string, string>;
-}) {
-  const props = {
-    ...params,
-    ...extraColors,
-    ...(spec.hasColorBack ? { colorBack } : {}),
-    colors,
-    className: layerStyle,
-    // Pinned, not exposed: the card IS the canvas here, and a ground with
-    // margins is just a smaller picture. See `FRAMING_CONTROLS`.
-    fit: "cover" as const,
-    maxPixelCount: MAX_PIXELS,
-  };
-
-  switch (spec.id) {
-    case "cosmicTrack":
-      return <CosmicTrack {...(props as ComponentProps<typeof CosmicTrack>)} />;
-    case "colorPanels":
-      return <ColorPanels {...(props as ComponentProps<typeof ColorPanels>)} />;
-    case "godRays":
-      return <GodRays {...(props as ComponentProps<typeof GodRays>)} />;
-    case "warp":
-      return <Warp {...(props as ComponentProps<typeof Warp>)} />;
-    case "swirl":
-      return <Swirl {...(props as ComponentProps<typeof Swirl>)} />;
-    case "staticMeshGradient":
-      return (
-        <StaticMeshGradient
-          {...(props as ComponentProps<typeof StaticMeshGradient>)}
-        />
-      );
-  }
-}
-
 /** A saved cover this page was opened on, if it was opened on one. */
 export interface OpenedCover {
   id: string;
@@ -335,6 +353,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const setExtraColorInStore = useCoverDraftStore(
     (draft) => draft.setExtraColor,
   );
+  const setAspectInStore = useCoverDraftStore((draft) => draft.setAspect);
   const resetParamsInStore = useCoverDraftStore((draft) => draft.resetParams);
 
   // This page's rail is the propertiesPanel RECIPE rather than the component —
@@ -344,6 +363,18 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // for here directly, and permanently: this rail never leaves.
   usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
+
+  // The saved library is the author's, and so is the strip that shows it: the
+  // playground is public, but everything the strip does reads or writes the
+  // database. One answer, used twice — what to draw, and how much room the
+  // picture has to give up for it.
+  const isAdmin = useIsAdmin();
+
+  // The frame, and the two numbers the card is drawn from. Looked up in the
+  // app's one table of shapes rather than split off the key, so a ratio that is
+  // not in it cannot reach the CSS.
+  const aspect = state.aspect;
+  const [ratioWidth, ratioHeight] = ASPECT_RATIOS[aspect];
 
   const [copied, setCopied] = useState(false);
 
@@ -501,9 +532,22 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   }
 
   return (
-    <main className={pageStyle} data-sheet-dismissed={dismissed || undefined}>
+    <main
+      className={pageStyle}
+      data-sheet-dismissed={dismissed || undefined}
+      data-presets={isAdmin || undefined}
+    >
       <div className={canvasStyle}>
-        <div className={coverStyle}>
+        <div
+          className={coverStyle}
+          data-cover-stage
+          style={
+            {
+              "--cover-w": ratioWidth,
+              "--cover-h": ratioHeight,
+            } as CSSProperties
+          }
+        >
           <ShaderStage
             spec={spec}
             params={state.params}
@@ -519,6 +563,30 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             instead. */}
         <div className={canvasChromeStyle}>
           <MenuButton />
+
+          {/* The frame the cover is being designed against.
+
+              It shapes the PREVIEW and nothing else: a cover is shapeless, and
+              every surface that embeds one gives it that surface's own shape.
+              What it is for is judging — the same fan of light reads as a
+              poster and as a banner differently, and this is how you look at
+              both — and the shape is kept on the draft so that reopening the
+              cover reopens the frame it was judged in. See `@/domain/cover`.
+
+              A third item in a `space-between` row, which is what centres it
+              BETWEEN the two ends rather than on the band's own midline. The
+              difference only shows when the ends are uneven — a phone with the
+              sheet dismissed grows a second button on the right — and there the
+              flex reading is the safe one: it slides the rail over instead of
+              letting it collide with the button. */}
+          <div className={cx(toolbar({ size: "md" }), aspectRailStyle)}>
+            <AspectRail
+              ariaLabel="Preview aspect ratio"
+              aspect={aspect}
+              onPick={setAspectInStore}
+            />
+          </div>
+
           <div className={chromeEndStyle}>
             {dismissed && (
               <Button
@@ -536,6 +604,11 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             <ThemeToggleButton />
           </div>
         </div>
+
+        {/* The saved covers, along the foot of the canvas. Inside it rather
+            than fixed to the viewport, so the strip gives the properties rail
+            the same room the rest of this page does — see `presets-pane`. */}
+        {isAdmin && <PresetsPane />}
       </div>
 
       {/* The rail, and the same panel along the bottom edge on a phone held

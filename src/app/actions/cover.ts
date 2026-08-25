@@ -47,9 +47,20 @@ function parseCover(row: {
   return { ...row, ...content };
 }
 
+/**
+ * The saved library, newest FIRST — the order the playground's presets strip
+ * shows them in, stated here because the database is the only thing that knows
+ * it. Nothing downstream re-sorts: a second answer to "what order are these in"
+ * is a second place for it to be wrong.
+ *
+ * By `createdAt`, not `updatedAt`, and the difference is the whole point: the
+ * strip is a record of what has been ADDED, and ordering by last-touched would
+ * make a preset jump to the front of the row every time you pressed ⌘S while
+ * editing it — the row reshuffling under the pointer that is using it.
+ */
 export async function getCovers(): Promise<(Cover & CoverContent)[]> {
   await requireAdmin();
-  const rows = await prisma.cover.findMany({ orderBy: { updatedAt: "desc" } });
+  const rows = await prisma.cover.findMany({ orderBy: { createdAt: "desc" } });
   return rows.map(parseCover);
 }
 

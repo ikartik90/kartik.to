@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
+import { DEFAULT_COVER_ASPECT } from "@/domain/cover";
 import { useCoverDraftStore } from "../cover-draft";
+
+/** A saved cover's settings — the shader's own state plus the frame it was designed in. */
+const savedSettings = (spec: (typeof SHADER_SPECS)[keyof typeof SHADER_SPECS]) => ({
+  ...defaultState(spec),
+  aspect: DEFAULT_COVER_ASPECT,
+});
 
 describe("useCoverDraftStore", () => {
   beforeEach(() => useCoverDraftStore.getState().reset());
@@ -39,7 +46,7 @@ describe("useCoverDraftStore", () => {
       id: "cover-1",
       title: "Dusk",
       shaderId: "swirl",
-      settings: defaultState(SHADER_SPECS.swirl),
+      settings: savedSettings(SHADER_SPECS.swirl),
     });
 
     const state = useCoverDraftStore.getState();
@@ -56,7 +63,7 @@ describe("useCoverDraftStore", () => {
       id: "cover-1",
       title: "Dusk",
       shaderId: "swirl",
-      settings: defaultState(SHADER_SPECS.swirl),
+      settings: savedSettings(SHADER_SPECS.swirl),
     });
     useCoverDraftStore.getState().reset();
 
@@ -71,6 +78,37 @@ describe("useCoverDraftStore", () => {
     const content = useCoverDraftStore.getState().toContent();
 
     expect(content.shaderId).toBe("warp");
-    expect(content.settings).toEqual(defaultState(SHADER_SPECS.warp));
+    expect(content.settings).toEqual(savedSettings(SHADER_SPECS.warp));
+  });
+
+  // The frame is a fact about the COVER, not about the shader in it — so it
+  // survives the one edit that throws everything else away.
+  it("keeps the designed-for shape across a shader switch", () => {
+    useCoverDraftStore.getState().setAspect("16/9");
+    useCoverDraftStore.getState().selectShader("godRays");
+
+    expect(useCoverDraftStore.getState().settings.aspect).toBe("16/9");
+  });
+
+  it("marks the draft dirty once the shape moves", () => {
+    useCoverDraftStore.getState().setAspect("1/1");
+
+    expect(useCoverDraftStore.getState().isDirty).toBe(true);
+    expect(useCoverDraftStore.getState().settings.aspect).toBe("1/1");
+  });
+
+  // "Reset params" is about the shader's uniforms. The frame you chose to
+  // design in is not one of them.
+  it("leaves the shape alone when the params are reset", () => {
+    useCoverDraftStore.getState().setAspect("4/3");
+    useCoverDraftStore.getState().resetParams();
+
+    expect(useCoverDraftStore.getState().settings.aspect).toBe("4/3");
+  });
+
+  it("opens a new draft on the default shape", () => {
+    expect(useCoverDraftStore.getState().settings.aspect).toBe(
+      DEFAULT_COVER_ASPECT,
+    );
   });
 });

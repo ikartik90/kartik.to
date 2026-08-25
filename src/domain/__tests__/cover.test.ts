@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SHADER_IDS, SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import { CoverContentSchema, coverContentFor } from "../cover";
+import {
+  CoverContentSchema,
+  DEFAULT_COVER_ASPECT,
+  coverContentFor,
+} from "../cover";
 
 describe("CoverContentSchema", () => {
   // The playground's own starting point has to be storable, or the first thing
@@ -117,6 +121,38 @@ describe("CoverContentSchema", () => {
       settings: { ...defaultState(spec), colorBack: "#000000FF" },
     });
     expect(parsed.settings.colorBack).toBeUndefined();
+  });
+
+  // The one thing a cover records about SHAPE, and it records it as a note
+  // rather than as a size: the aspect the picture was designed against, so
+  // reopening it a month later reopens the frame it was judged in. Nothing
+  // reading a cover is obliged to honour it — see the module comment.
+  it("keeps the aspect the cover was designed at", () => {
+    const parsed = CoverContentSchema.parse({
+      shaderId: "cosmicTrack",
+      settings: { ...defaultState(SHADER_SPECS.cosmicTrack), aspect: "16/9" },
+    });
+    expect(parsed.settings.aspect).toBe("16/9");
+  });
+
+  it("opens a cover saved before shapes were recorded at the default", () => {
+    const parsed = CoverContentSchema.parse({
+      shaderId: "cosmicTrack",
+      settings: defaultState(SHADER_SPECS.cosmicTrack),
+    });
+    expect(parsed.settings.aspect).toBe(DEFAULT_COVER_ASPECT);
+  });
+
+  // A ratio the app cannot draw is a frame nothing can reopen in, so it is
+  // rejected rather than quietly replaced with the default.
+  it("rejects a shape that is not one of the app's ratios", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    expect(
+      CoverContentSchema.safeParse({
+        shaderId: "cosmicTrack",
+        settings: { ...settings, aspect: "7/3" },
+      }).success,
+    ).toBe(false);
   });
 });
 

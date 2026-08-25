@@ -4784,11 +4784,19 @@ export default defineConfig({
               overscrollBehavior: "contain",
               animation: "propertiesPanelIn 200ms ease-out",
               // A phone held upright gets the same panel along the BOTTOM
-              // edge instead: full width, half the viewport tall, rounded on
-              // the two corners that are no longer flush with anything. Half
-              // is the point of it — the other half is where the thing being
-              // edited stays visible, which a rail 332px wide on a 390px
-              // screen cannot offer.
+              // edge instead: full width, half the viewport tall. Half is the
+              // point of it — the other half is where the thing being edited
+              // stays visible, which a rail 332px wide on a 390px screen
+              // cannot offer.
+              //
+              // SQUARE, like the rail it is the same panel as. The two upper
+              // corners are the only ones not flush with the screen and a
+              // radius there is the conventional sheet, but this sheet is a
+              // properties panel that has changed edge rather than a card that
+              // has slid up: it fills the width, it is bordered on the one side
+              // it meets the page, and its rows run to both edges. Rounding
+              // only where it happens to be free would make it read as two
+              // different surfaces depending on which way the phone is held.
               //
               // `dvh`, not `vh`: a phone's toolbar collapses as you scroll and
               // a sheet measured against the tall viewport would leave a strip
@@ -4803,8 +4811,6 @@ export default defineConfig({
                 borderBlockStartWidth: "token(spacing.3xs)",
                 borderBlockStartStyle: "solid",
                 borderBlockStartColor: "border.divider",
-                borderTopLeftRadius: "xxl",
-                borderTopRightRadius: "xxl",
                 animation: "bottomSheetIn 200ms ease-out",
                 // Dismissal is a STATE here rather than an unmount, and that is
                 // deliberate: the sheet only exists in this orientation, so a
