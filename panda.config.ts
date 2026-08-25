@@ -1,4 +1,8 @@
 import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
+import {
+  BOTTOM_SHEET_QUERY,
+  NARROW_RAIL_QUERY,
+} from "./src/data/media-queries";
 import { ASPECT_RATIOS } from "./src/utils/demo-frame-sizing";
 
 /**
@@ -213,6 +217,14 @@ export default defineConfig({
       // reveal them with and no key to press. Same query the custom cursor is
       // gated on in globals.css — one definition of "cursor-first" for both.
       hasCursor: "@media (hover: hover) and (pointer: fine)",
+      // The properties panel as a BOTTOM SHEET — see `BOTTOM_SHEET_QUERY` for
+      // what the query says and why. Imported rather than written out, because
+      // a pointer handler has to ask the browser the same question at press
+      // time and the two must not drift.
+      bottomSheet: `@media ${BOTTOM_SHEET_QUERY}`,
+      // A rail on a viewport the page does not inset for — see
+      // `NARROW_RAIL_QUERY`.
+      narrowRail: `@media ${NARROW_RAIL_QUERY}`,
       demoFrameNarrow: "@container demoFrame (max-width: 760px)",
       demoFrameCompact: "@container demoFrame (max-width: 535px)",
     },
@@ -719,6 +731,17 @@ export default defineConfig({
         propertiesPanelOut: {
           from: { translate: "0 0", opacity: 1 },
           to: { translate: "100% 0", opacity: 0 },
+        },
+        // The same panel as a bottom sheet, arriving from the edge THAT is
+        // docked to. Same distance in its own units, same 200ms, same opacity
+        // ride — one object with two edges to come from, not two animations.
+        bottomSheetIn: {
+          from: { translate: "0 100%", opacity: 0 },
+          to: { translate: "0 0", opacity: 1 },
+        },
+        bottomSheetOut: {
+          from: { translate: "0 0", opacity: 1 },
+          to: { translate: "0 100%", opacity: 0 },
         },
         // The calendar's page turn. A chevron replaces every month on screen at
         // once, so the arriving page enters from the side the range is
@@ -4754,6 +4777,49 @@ export default defineConfig({
               // the end of the sections should not start scrolling it away.
               overscrollBehavior: "contain",
               animation: "propertiesPanelIn 200ms ease-out",
+              // A phone held upright gets the same panel along the BOTTOM
+              // edge instead: full width, half the viewport tall, rounded on
+              // the two corners that are no longer flush with anything. Half
+              // is the point of it — the other half is where the thing being
+              // edited stays visible, which a rail 332px wide on a 390px
+              // screen cannot offer.
+              //
+              // `dvh`, not `vh`: a phone's toolbar collapses as you scroll and
+              // a sheet measured against the tall viewport would leave a strip
+              // of page under it.
+              _bottomSheet: {
+                insetBlockStart: "auto",
+                insetInline: 0,
+                width: "token(spacing.full)",
+                maxWidth: "none",
+                height: "50dvh",
+                borderInlineStartWidth: "0",
+                borderBlockStartWidth: "token(spacing.3xs)",
+                borderBlockStartStyle: "solid",
+                borderBlockStartColor: "border.divider",
+                borderTopLeftRadius: "xxl",
+                borderTopRightRadius: "xxl",
+                animation: "bottomSheetIn 200ms ease-out",
+                // Dismissal is a STATE here rather than an unmount, and that is
+                // deliberate: the sheet only exists in this orientation, so a
+                // page turned on its side must find its rail back exactly where
+                // it left it. Nothing outside this media query reads
+                // `data-dismissed`, which is what makes rotating the phone the
+                // whole of the repair.
+                //
+                // `visibility` on a delay equal to the slide keeps the sheet
+                // out of the tab order once it has gone, without cutting the
+                // slide short on the way out.
+                transition: "translate 200ms ease-out, visibility 0s",
+                "&[data-dismissed]": {
+                  translate: "0 100%",
+                  visibility: "hidden",
+                  transitionDelay: "0s, 200ms",
+                },
+                // A finger owns the sheet while it is on it — the transition is
+                // for letting go.
+                "&[data-dragging]": { transition: "none" },
+              },
             },
             header: {
               // Stays put over the sections travelling under it. It needs its
@@ -4897,6 +4963,10 @@ export default defineConfig({
             exiting: {
               animation: "propertiesPanelOut 200ms ease-in forwards",
               pointerEvents: "none",
+              // Out by the edge it came in by. See `bottomSheetIn`.
+              _bottomSheet: {
+                animation: "bottomSheetOut 200ms ease-in forwards",
+              },
             },
           },
         }),

@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { createPortal } from "react-dom";
 import { useDismiss } from "@/hooks/use-dismiss";
+import { scrollBoundary } from "@/hooks/use-scroll-handoff";
 
 // ---------------------------------------------------------------------------
 // Popover — the positioned, dismissable shell behind every floating menu.
@@ -93,8 +94,20 @@ export function Popover({
   const containerRef = useRef<HTMLDivElement>(null);
   useDismiss({ ref: containerRef, onDismiss, dismissOnReflow, ignoreSelector });
 
+  // Where a wheel stops. A popover is anchored to something on the page, so
+  // scrolling the page out from under a list that has run out would drag the
+  // menu off its trigger (and, with `dismissOnReflow`, close it) — the reason
+  // a floating surface contains its scroll. It CLIPS rather than scrolls, so
+  // `overscroll-behavior` has nothing to apply to and the edge is marked with
+  // the attribute `useScrollHandoff` looks for.
   const container = (
-    <div ref={containerRef} className={className} role={role} aria-label={ariaLabel}>
+    <div
+      ref={containerRef}
+      className={className}
+      role={role}
+      aria-label={ariaLabel}
+      {...scrollBoundary}
+    >
       {children}
     </div>
   );

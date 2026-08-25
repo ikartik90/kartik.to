@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useScrollHandoff } from "@/hooks/use-scroll-handoff";
 import Image from "next/image";
 import { css, cx } from "../../styled-system/css";
 import {
@@ -121,6 +122,10 @@ export function DemoLogger({
 }: DemoLoggerProps) {
   const entries = useDemoLoggerEntries();
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  // A log that has scrolled to its last line lets the wheel carry on to the
+  // page, rather than being a dead patch in the middle of a demo card.
+  useScrollHandoff(bodyRef);
 
   useEffect(() => {
     if (!expanded || entries.length === 0) return;
