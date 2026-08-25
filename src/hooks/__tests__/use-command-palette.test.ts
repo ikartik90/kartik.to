@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { useCommandPalette } from "../use-command-palette";
@@ -197,9 +197,126 @@ describe("useCommandPalette", () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // ⌘S
+  //
+  // The palette's Save row carries a ⌘S chip. For a while nothing listened for
+  // the key, so the browser answered it with Save Page — a chip advertising a
+  // shortcut that opened a download dialog.
+  // ---------------------------------------------------------------------------
+  describe("the save shortcut", () => {
+    // The gesture is ⌘S on Apple hardware and Ctrl S everywhere else, so a test
+    // that presses it has to say which keyboard it is pressing it on — the
+    // listener refuses the other platform's modifier deliberately (see
+    // `keyboard-shortcut.ts`).
+    const stubApple = () =>
+      Object.defineProperty(navigator, "userAgentData", {
+        value: { platform: "macOS" },
+        configurable: true,
+      });
+
+    // This file does not unmount between tests, and a hook that stays mounted
+    // keeps its window listener — so without this the first press is answered
+    // by every render that came before it as well.
+    afterEach(() => {
+      cleanup();
+      delete (navigator as { userAgentData?: unknown }).userAgentData;
+    });
+
+    const pressSave = () => {
+      const event = new KeyboardEvent("keydown", {
+        key: "s",
+        metaKey: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    beforeEach(async () => {
+      mockPathname.mockReturnValue("/playground/cover");
+      useCoverDraftStore.getState().reset();
+      const cover = await import("@/app/actions/cover");
+      (cover.createCover as Mock).mockReset();
+      (cover.createCover as Mock).mockResolvedValue({
+        id: "cover-1",
+        title: null,
+        shaderId: "cosmicTrack",
+        settings: useCoverDraftStore.getState().settings,
+      });
+      mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
+      stubApple();
+    });
+
+    it("saves the open editor, and takes the key off the browser", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      await act(async () => {
+        event = pressSave();
+      });
+
+      expect(createCover).toHaveBeenCalledOnce();
+      // Unclaimed, this is the browser's Save Page dialog.
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    // Claiming a key and then doing nothing with it is worse than leaving it
+    // alone: the browser's own behaviour is at least a behaviour.
+    it("leaves the key alone away from an editor", async () => {
+      mockPathname.mockReturnValue("/");
+      const { createCover } = await import("@/app/actions/cover");
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      await act(async () => {
+        event = pressSave();
+      });
+
+      expect(createCover).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("leaves the key alone for a visitor, who has nothing to save to", async () => {
+      mockUseSession.mockReturnValue({ data: null });
+      const { createCover } = await import("@/app/actions/cover");
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      await act(async () => {
+        event = pressSave();
+      });
+
+      expect(createCover).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    // ⌘⇧S is a different gesture, and the browser reports the shifted key as
+    // an uppercase "S".
+    it("does not answer the shifted key", async () => {
+      const { createCover } = await import("@/app/actions/cover");
+      renderHook(() => useCommandPalette(close));
+
+      await act(async () => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "S",
+            metaKey: true,
+            shiftKey: true,
+            cancelable: true,
+          }),
+        );
+      });
+
+      expect(createCover).not.toHaveBeenCalled();
+    });
+  });
+
   describe("handleSaveChanges — the cover", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/playground/cover");
+      window.history.replaceState(null, "", "/playground/cover");
       useCoverDraftStore.getState().reset();
       const cover = await import("@/app/actions/cover");
       (cover.createCover as Mock).mockReset();
@@ -286,7 +403,11 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(mockReplace).toHaveBeenCalledWith("/playground/cover/cover-1");
+      // Corrected in PLACE, not navigated to: the draft already holds the cover
+      // that was just written, and asking the router for its route would fetch
+      // that same cover back and remount the playground around it.
+      expect(window.location.pathname).toBe("/playground/cover/cover-1");
+      expect(mockReplace).not.toHaveBeenCalled();
       expect(mockPush).not.toHaveBeenCalled();
     });
 
@@ -306,9 +427,11 @@ describe("useCommandPalette", () => {
         settings: useCoverDraftStore.getState().settings,
       });
 
+      window.history.replaceState(null, "", "/playground/cover/cover-9");
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
+      expect(window.location.pathname).toBe("/playground/cover/cover-9");
       expect(mockReplace).not.toHaveBeenCalled();
     });
 

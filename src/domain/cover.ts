@@ -8,6 +8,10 @@ import {
   type ShaderId,
   type ShaderSpec,
 } from "@/data/shader-specs";
+import {
+  ASPECT_RATIOS,
+  type DemoFrameAspectRatio,
+} from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
 // Cover — a saved shader background, authored in the playground and reused
@@ -15,12 +19,22 @@ import {
 // component's backdrop.
 //
 // SHAPELESS, and the schema is where that is enforced rather than merely
-// intended. Nothing here records a size, an aspect, a padding or a corner: a
-// cover takes the shape of whatever it is embedded into, the way an image
-// under `object-fit: cover` does, so the host owns every one of those and a
-// column for them here would be a second, disagreeing answer. It is the same
-// call `shader-specs.ts` already makes in leaving the world box out of the
-// controls — the surface IS the canvas — one level up.
+// intended. Nothing here records a size, a padding or a corner: a cover takes
+// the shape of whatever it is embedded into, the way an image under
+// `object-fit: cover` does, so the host owns every one of those and a column
+// for them here would be a second, disagreeing answer. It is the same call
+// `shader-specs.ts` already makes in leaving the world box out of the controls
+// — the surface IS the canvas — one level up.
+//
+// `aspect` is the ONE exception, and it is an exception because it is not a
+// size: it is the shape the picture was JUDGED against. A god-ray fan tuned
+// until it read on a 9:16 poster is a different composition from the same
+// uniforms tuned on a 16:9 banner, and reopening the cover a month later
+// without that fact means re-deriving it by eye. So it is stored as a note the
+// playground reopens in, not as a frame the cover imposes: no consumer reads it
+// to shape anything, and a host that embeds this cover in a square still gets a
+// square. If it ever starts shaping something, the shapelessness above stops
+// being true and this comment is the one that has to change first.
 //
 // The validator is GENERATED from `SHADER_SPECS` rather than written out. That
 // table is the only place a uniform's range is written down, and it has already
@@ -48,6 +62,26 @@ const CoverColorSchema = z
   .transform((value) =>
     (value.length === 7 ? `${value}FF` : value).toUpperCase(),
   );
+
+/**
+ * The shape a cover was designed against — one of the app's own eleven ratios,
+ * from the single table every aspect in the app is written in.
+ *
+ * An ENUM rather than a free `"w/h"` string, so a cover cannot record a frame
+ * the app has no way of drawing: the playground's picker and the grid card's
+ * picker offer the same list, and a twelfth shape added there reaches this
+ * schema with no second edit.
+ */
+const CoverAspectSchema = z.enum(
+  Object.keys(ASPECT_RATIOS) as [DemoFrameAspectRatio, ...DemoFrameAspectRatio[]],
+);
+
+/**
+ * Where the playground opens, and what a cover saved before shapes were
+ * recorded reads as: the portrait poster the reference art is drawn on, which
+ * is the 380×680 card this playground has always shown.
+ */
+export const DEFAULT_COVER_ASPECT: DemoFrameAspectRatio = "9/16";
 
 /**
  * One control's validator, with the control's own default behind it.
@@ -120,6 +154,9 @@ function settingsSchemaFor(spec: ShaderSpec) {
         }
       : {}),
     extraColors,
+    // Defaulted like a control, and for the same reason: every cover saved
+    // before the playground had a frame is missing the key and must still open.
+    aspect: CoverAspectSchema.default(DEFAULT_COVER_ASPECT),
   });
 }
 
@@ -130,6 +167,8 @@ export interface CoverSettings {
   /** Present only for a shader that HAS a ground behind the fill. */
   colorBack?: string;
   extraColors: Record<string, string>;
+  /** The shape it was designed against — a note, not a frame. See above. */
+  aspect: DemoFrameAspectRatio;
 }
 
 /** A cover's content: which shader, and how it is set. */

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth/client";
 import { useThemeStore } from "@/store/theme";
 import { useEditorStore } from "@/store/editor";
 import { publishComponent, saveGridLayout } from "@/app/actions/grid";
@@ -25,6 +24,7 @@ import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
 import { createCover, saveCover } from "@/app/actions/cover";
 import { useCoverDraftStore } from "@/store/cover-draft";
+import { useIsAdmin } from "@/hooks/use-is-admin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,20 +115,19 @@ export function useCommandPalette(
   close: () => void,
   openKey = 0,
 ): CommandPaletteHandlers {
-  const { data: session } = authClient.useSession();
+  // Signed in, and the hydration guard that answer needs — see `useIsAdmin`.
+  const isAdmin = useIsAdmin();
 
-  // The admin session lives client-side (localStorage), invisible to the server,
-  // so the server always renders the logged-out tree. Gate every admin-only
-  // affordance behind `mounted` so the first client render matches that server
-  // HTML; the admin UI then appears one commit later. Without this guard the
-  // extra admin nodes on the first client render diverge from the server markup
-  // and React aborts hydration with error #418. (Same guard as `isDark` below.)
+  // The same guard, for the theme. `isDark` reads `matchMedia`, which the
+  // server cannot, so it has to hold its answer back for one render exactly as
+  // the admin state does. Its own flag rather than the hook's, because what the
+  // two are waiting for only looks like the same thing: one is waiting to be
+  // allowed to differ from the server, the other for a browser API to exist.
   const [mounted, setMounted] = useState(false);
   // Deliberate mount-flag flip: the one-commit-later render is the whole point
   // of the hydration guard described above (see error #418).
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
-  const isAdmin = mounted && !!session?.user;
 
   const pathname = usePathname();
   const router = useRouter();
@@ -391,10 +390,18 @@ export function useCommandPalette(
       });
       // A cover that has just been created has an id the URL does not know
       // about yet, and a refresh would land back on the blank route having lost
-      // it. `replace` rather than `push`: the blank route is where you WERE,
-      // not a place to go back to.
+      // it. `replace` rather than push: the blank route is where you WERE, not
+      // a place to go back to.
+      //
+      // The native History API rather than the router, which is Next's own
+      // supported shallow route (16.x docs, "Shallow routing on the client").
+      // A router navigation here asks the server for a page whose whole job is
+      // to fetch the cover and hand it down — the cover this draft is already
+      // holding — and the playground remounts around the identical answer: the
+      // shader torn down and recompiled, the panel rebuilt. Nothing needs
+      // fetching; only the address bar was out of date.
       if (!coverId) {
-        router.replace(`/playground/cover/${saved.id}`);
+        window.history.replaceState(null, "", `/playground/cover/${saved.id}`);
       }
       return true;
     } catch (err) {
@@ -668,6 +675,35 @@ export function useCommandPalette(
     close();
     await persistEditor();
   };
+
+  // ⌘S / Ctrl S — the key the palette's Save row has been advertising with a
+  // chip beside it. It has to be CLAIMED, or the browser answers first with
+  // Save Page, which is never what someone means inside an editor: the row
+  // said "this is what the key does" while the key opened a download dialog,
+  // which is exactly the label-that-lies failure `keyboard-shortcut.ts` exists
+  // to prevent.
+  //
+  // Bound on the same terms as the row it belongs to — only while an editor is
+  // open, and only for someone who can actually write. A visitor pressing it in
+  // the public playground keeps the browser's own behaviour, because taking the
+  // key away and then doing nothing with it is worse than not taking it.
+  const handleSaveRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    handleSaveRef.current = () => void handleSaveChanges();
+  });
+
+  useEffect(() => {
+    if (!isAdmin || editorKind === null) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      // Lowercase only: ⌘⇧S is a different gesture, and browsers report the
+      // shifted key as "S".
+      if (!hasShortcutModifier(event) || event.key !== "s") return;
+      event.preventDefault();
+      handleSaveRef.current();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAdmin, editorKind]);
 
   /**
    * Abandon the open editor and go, without being asked to confirm it.
