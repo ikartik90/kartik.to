@@ -26,6 +26,7 @@ import {
   getPointerPosition,
   useInputModality,
 } from "@/hooks/use-input-modality";
+import { useScrollHandoff } from "@/hooks/use-scroll-handoff";
 import { filterOptions, type OptionItem } from "@/utils/option-filter";
 import { Field, useOptionalField, type FieldSearchProps } from "./field";
 import { WireframeContent } from "../wireframe";
@@ -517,6 +518,11 @@ function OptionListListbox({
     emptyLabel,
   } = useOptionList("OptionList.Listbox");
   const listRef = useRef<HTMLDivElement>(null);
+
+  // A list that has run out is not the end of scrolling: the wheel carries on
+  // to whatever this list sits in — the docked panel, the page — rather than
+  // dying against the last row. Stops at a popover, which seals itself.
+  useScrollHandoff(listRef);
 
   // Keep the highlighted row in view AS IT MOVES — but scroll only THIS list's
   // own scroll box, never an ancestor. `Element.scrollIntoView` bubbles up every

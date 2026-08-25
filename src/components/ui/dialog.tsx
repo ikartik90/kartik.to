@@ -9,6 +9,7 @@ import {
 } from "react";
 import { cva, cx } from "../../../styled-system/css";
 import { preservePageScroll } from "@/utils/preserve-page-scroll";
+import { scrollBoundary } from "@/hooks/use-scroll-handoff";
 
 export type DialogAlign =
   | "top"
@@ -177,8 +178,13 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
     }
 
     return (
+      // A dialog is the end of the scroll as it is the end of the focus: the
+      // page behind it is not being read. `data-scroll-boundary` says so to
+      // `useScrollHandoff`, whose walk would otherwise pass straight through a
+      // panel that clips rather than scrolls.
       <dialog
         ref={ref}
+        {...scrollBoundary}
         className={cx(dialogRecipe({ align, justify }), className)}
         onClose={handleClose}
         onClick={handleClick}
