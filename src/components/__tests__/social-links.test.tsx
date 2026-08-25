@@ -8,10 +8,32 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// GemSmoke is WebGL; jsdom can't run it. Stand in with a marker element.
+// The mask pre-pass is canvas + WebGL work jsdom cannot do; resolve it at once,
+// so a hover here is the already-prepared case.
+const preparedMasks = vi.hoisted(() => new Map<string, { src: string }>());
+vi.mock("@/utils/gem-smoke-mask", () => ({
+  prepareGemSmokeMask: async (src: string) => {
+    preparedMasks.set(src, { src });
+    return preparedMasks.get(src);
+  },
+  preparedGemSmokeMask: (src: string) => preparedMasks.get(src) ?? null,
+}));
+
+// ShaderMount is WebGL; stand in with a marker element — one per mounted
+// instance, which is what this file counts.
 vi.mock("@paper-design/shaders-react", () => ({
-  GemSmoke: ({ image }: { image: string }) => (
-    <div data-social-icon-shader data-mask-src={image} data-shader-active="" />
+  ShaderMount: ({
+    uniforms,
+    ...props
+  }: {
+    uniforms: { u_image?: { src: string } };
+    "data-shader-active"?: string;
+  }) => (
+    <div
+      data-social-icon-shader
+      data-mask-src={uniforms.u_image?.src}
+      data-shader-active={props["data-shader-active"]}
+    />
   ),
 }));
 
@@ -29,21 +51,15 @@ describe("SocialLinks", () => {
 
     expect(screen.getByRole("link", { name: "GitHub" })).toBeDefined();
     expect(screen.getByRole("link", { name: "Follow me" })).toBeDefined();
-    expect(
-      screen.getByRole("link", { name: "LinkedIn" }),
-    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "LinkedIn" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Email address" })).toBeDefined();
 
     expect(
       document.querySelector("[data-social-tooltip]")?.textContent,
     ).toBeDefined();
-    expect(screen.getAllByText("GitHub").length).toBeGreaterThanOrEqual(
-      1,
-    );
+    expect(screen.getAllByText("GitHub").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Follow me").length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getAllByText("LinkedIn").length,
-    ).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("LinkedIn").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Email address").length).toBeGreaterThanOrEqual(
       1,
     );
@@ -122,29 +138,40 @@ describe("SocialLinks", () => {
     expect(emailItem?.getAttribute("data-tooltip-dismissed")).toBe("");
   });
 
-  it("mounts the WebGL shader only for the hovered icon (one context at a time)", () => {
+  it("points one shader at the hovered icon, and keeps it after the hover", async () => {
     render(<SocialLinks />);
 
-    // No shader (and no WebGL context) at rest — only the crisp SVG icons show.
+    // Nothing at rest — the row's single context is built in the background
+    // once the page has settled, not during hydration.
     expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
       0,
     );
 
     const githubLink = screen.getByRole("link", { name: "GitHub" });
-    fireEvent.mouseEnter(githubLink);
+    await act(async () => {
+      fireEvent.mouseEnter(githubLink);
+    });
+    // A second flush: claiming the icon is one commit, and the mask it needs
+    // resolving is the next.
+    await act(async () => {});
 
-    const shader = githubLink.querySelector("[data-social-icon-shader]");
-    expect(shader?.getAttribute("data-mask-src")).toBe(
+    const shaders = document.querySelectorAll("[data-social-icon-shader]");
+    // ONE for the whole row, wearing the hovered icon's mask — four contexts
+    // compiling the same program is what this replaced.
+    expect(shaders.length).toBe(1);
+    expect(shaders[0].getAttribute("data-mask-src")).toBe(
       "/social-shader-masks/octocat.svg",
     );
-    // Exactly one shader mounted across the whole list.
-    expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
-      1,
-    );
+    expect(shaders[0].getAttribute("data-shader-active")).toBe("");
 
-    fireEvent.mouseLeave(githubLink);
-    expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
-      0,
-    );
+    await act(async () => {
+      fireEvent.mouseLeave(githubLink);
+    });
+
+    const parked = document.querySelectorAll("[data-social-icon-shader]");
+    // Still mounted: tearing it down would mean compiling again on the next
+    // hover, which is the whole cost being avoided.
+    expect(parked.length).toBe(1);
+    expect(parked[0].getAttribute("data-shader-active")).toBeNull();
   });
 });

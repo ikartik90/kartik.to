@@ -8,6 +8,7 @@ import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PALETTE_INTENT_SCRIPT } from "@/utils/palette-intent";
 
 const switzer = localFont({
   src: "../../public/fonts/Switzer-Variable.woff2",
@@ -48,6 +49,14 @@ export default function RootLayout({
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
+        {/* Also synchronous, and for the same reason: the palette's own ⌘K
+            listener does not exist until the layout hydrates, so a press
+            before then is dropped. This one records it; the palette collects
+            it on mount (see palette-intent.ts). */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: PALETTE_INTENT_SCRIPT }}
         />
       </head>
       <body>

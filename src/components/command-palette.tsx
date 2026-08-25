@@ -16,6 +16,7 @@ import { useCommandPalette } from "@/hooks/use-command-palette";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
+import { takePaletteIntent } from "@/utils/palette-intent";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
 import DarkIcon from "@/assets/icons/dark.svg";
@@ -234,6 +235,9 @@ export function CommandPalette() {
     }
     window.addEventListener("keydown", handleKeyDown);
     const unsubscribe = subscribeCommandPalette(open);
+    // A ⌘K pressed while this page was still hydrating was recorded by the
+    // head script and is answered here — late, but not lost.
+    if (takePaletteIntent()) open();
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       unsubscribe();
