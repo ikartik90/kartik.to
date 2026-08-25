@@ -9,6 +9,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CommandPalette } from "../command-palette";
+import { HAS_CURSOR_QUERY } from "@/data/media-queries";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -61,10 +62,19 @@ vi.mock("@/app/actions/post", () => ({
   deleteDraft: vi.fn(),
 }));
 
-// jsdom does not implement matchMedia
+// jsdom does not implement matchMedia. Query-aware, because the palette asks it
+// TWO questions and they have different answers: whether the theme is dark, and
+// whether this device has a cursor — the second of which decides which input row
+// gets drawn. `hasCursor` is the device under test; a cursor by default, since
+// that is the palette every existing test below was written against.
+let hasCursor = true;
 Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: vi.fn().mockReturnValue({ matches: false }),
+  value: vi.fn((query: string) => ({
+    matches: query === HAS_CURSOR_QUERY ? hasCursor : false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })),
 });
 
 // ---------------------------------------------------------------------------
@@ -100,6 +110,7 @@ beforeEach(() => {
   // The shortcut is ⌘K on Apple hardware and Ctrl K everywhere else, so every
   // test that presses it has to say which keyboard it is pressing it on.
   stubPlatform("macOS");
+  hasCursor = true;
   mockUseSession.mockReturnValue({ data: null });
   mockPathname.mockReturnValue("/");
   mockPush.mockClear();
@@ -205,6 +216,128 @@ describe("CommandPalette", () => {
       const html = renderToString(<CommandPalette />);
       expect(html).toContain("Playground");
       expect(html).toContain("Cover Playground");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The input row
+  //
+  // Search is the palette's primary modality on a keyboard and its secondary
+  // one on a phone: a visitor holding a phone opened this to TAP something, and
+  // a field that takes focus on open answers a question they did not ask with
+  // half the screen full of keyboard. So the row is drawn from what the device
+  // can actually do — the same split `_hasCursor` makes everywhere else.
+  // -------------------------------------------------------------------------
+
+  describe("the input row, with a cursor", () => {
+    it("opens straight into the search field", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByPlaceholderText("Search…")).toBeDefined();
+    });
+
+    it("gives the field the focus, so you can just type", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(document.activeElement).toBe(
+        screen.getByPlaceholderText("Search…"),
+      );
+    });
+
+    // Esc is the way out on a keyboard, and saying so is the whole point of the
+    // hint. A close button beside it would be a second door to the same room.
+    it("names Esc as the way out, and offers no close button", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByText("to exit")).toBeDefined();
+      expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    });
+  });
+
+  describe("the input row, on a touch device", () => {
+    beforeEach(() => {
+      hasCursor = false;
+    });
+
+    it("opens with a search button instead of the field", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByRole("button", { name: "Search" })).toBeDefined();
+      expect(screen.queryByPlaceholderText("Search…")).toBeNull();
+    });
+
+    // There is no Esc key to name, so the row says the same thing as a control
+    // that can be pressed.
+    it("puts a close button where the Esc hint would be", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByRole("button", { name: "Close" })).toBeDefined();
+      expect(screen.queryByText("to exit")).toBeNull();
+    });
+
+    it("closes the palette when that button is pressed", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+      expect(dialog.close).toHaveBeenCalled();
+    });
+
+    it("reveals the field when the search button is pressed", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      expect(screen.getByPlaceholderText("Search…")).toBeDefined();
+      expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    });
+
+    // Asking for the field is asking to type in it — the tap that revealed it
+    // is the same tap that would otherwise have to land on it a second time.
+    it("hands the revealed field the focus", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      expect(document.activeElement).toBe(
+        screen.getByPlaceholderText("Search…"),
+      );
+    });
+
+    // The close button is the row's constant here: it is what the Esc hint is
+    // on a keyboard, and it does not go away for the field arriving.
+    it("keeps the close button beside the revealed field", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      expect(screen.getByRole("button", { name: "Close" })).toBeDefined();
+      expect(screen.queryByText("to exit")).toBeNull();
+    });
+
+    // Each open is a fresh one — the palette already clears the search term on
+    // open, and the row it is typed into resets with it.
+    it("collapses back to the button the next time it opens", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByRole("button", { name: "Search" })).toBeDefined();
+      expect(screen.queryByPlaceholderText("Search…")).toBeNull();
     });
   });
 

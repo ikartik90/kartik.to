@@ -10,15 +10,18 @@ import {
   menuItem,
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
+import { useHasCursor } from "@/hooks/use-has-cursor";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { takePaletteIntent } from "@/utils/palette-intent";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
+import CrossIcon from "@/assets/icons/cross.svg";
 import DarkIcon from "@/assets/icons/dark.svg";
 import LightIcon from "@/assets/icons/light.svg";
 import EditIcon from "@/assets/icons/edit.svg";
@@ -54,7 +57,15 @@ const inputStyle = css({
   flex: "1 0 0",
   background: "none",
   border: "none",
-  textStyle: "bodySmall",
+  // 16px on a touch device, and NOT because the field wants to be bigger there.
+  // Mobile Safari zooms the page in on any field it focuses whose text is under
+  // 16px, and the palette is already sized for the viewport it is in — so the
+  // zoom does not reveal anything, it just leaves the page scrolled sideways at
+  // a scale the reader has to pinch back out of. Sizing the text past the
+  // threshold is what declines it; the 14px row is the cursor's, where no
+  // browser does this.
+  textStyle: "bodyLarge",
+  _hasCursor: { textStyle: "bodySmall" },
   color: "text.body",
   focusVisibleRing: "none",
   _focusVisible: {
@@ -73,6 +84,23 @@ const hotkeyHintStyle = css({
   alignItems: "center",
   gap: "sm",
   flexShrink: 0,
+});
+
+// The row's own controls, on a device that has to be able to press them.
+//
+// An icon button pads its 20px glyph by 4px, so left alone its glyph would sit
+// 4px further in than the search icon it replaces and the row would step in and
+// out as the field is revealed. The negative inset pulls the BOX out by that
+// padding, leaving the glyph on the row's `paddingInline` exactly where the
+// icon was.
+const leadControlStyle = css({ marginInlineStart: "-sm" });
+
+// `auto` because the collapsed row has no field to flex it over — the two
+// controls would otherwise sit side by side at the left. Harmless once the
+// field arrives and does the pushing itself.
+const trailControlStyle = css({
+  marginInlineStart: "auto",
+  marginInlineEnd: "-sm",
 });
 
 const hotkeyKeyStyle = hotkey({ surface: "menu" });
@@ -125,6 +153,36 @@ export function CommandPalette() {
   const [openKey, setOpenKey] = useState(0);
 
   const close = () => dialogRef.current?.close();
+
+  /**
+   * Which palette this device gets.
+   *
+   * On a keyboard, search IS the palette: ⌘K then type, and the field takes the
+   * focus because the next thing that happens is typing. A phone opened this to
+   * TAP something — search is the secondary modality there, and a field that
+   * grabs focus on open answers a question nobody asked by filling half the
+   * screen with a keyboard. So the row collapses to its two controls and the
+   * field arrives only when it is asked for.
+   */
+  const hasCursor = useHasCursor();
+
+  /** Asked for the field on a touch device. Reset on every open. */
+  const [searching, setSearching] = useState(false);
+
+  /**
+   * Whether the palette is up.
+   *
+   * Only here to gate the field's `autoFocus`. `useHasCursor` settles one commit
+   * after hydration, which on a cursor device mounts the field for the first
+   * time while the dialog is still CLOSED — and an `autoFocus` honoured there
+   * would pull focus off the page the reader is actually on. Gating it on this
+   * costs nothing at open time, when the whole `Command` remounts anyway.
+   */
+  const [isOpen, setIsOpen] = useState(false);
+
+  // The field is the row's default with a cursor and its second state without
+  // one.
+  const showInput = hasCursor || searching;
 
   // The palette owns its own component picker rather than reaching for the
   // grid's: "New component…" has to work from any page, and the grid only
@@ -219,6 +277,10 @@ export function CommandPalette() {
     function open() {
       if (dialogRef.current?.open) return;
       dialogRef.current?.showModal();
+      setIsOpen(true);
+      // Every open is a fresh one: the search term is cleared by the remount,
+      // and on a touch device the row it was typed into resets with it.
+      setSearching(false);
       setOpenKey((k) => k + 1);
     }
     function handleKeyDown(e: KeyboardEvent) {
@@ -251,20 +313,52 @@ export function CommandPalette() {
         align="top-center"
         aria-label="Command palette"
         className={dialogPanel({ size: "sm" })}
+        onClose={() => setIsOpen(false)}
       >
         <Command key={openKey} loop className={css({ display: "contents" })}>
-          {/* Input row */}
+          {/* Input row — the same three seats on both devices, filled by what
+              each one can do. Leading: the search icon, a label on a keyboard
+              and a control on a phone. Trailing: the way out, named as the key
+              that does it where there is a key and drawn as the button that
+              does it where there is not. */}
           <div className={inputRowStyle} data-command-input-row>
-            <SearchIcon className={iconStyle} />
-            <Command.Input
-              autoFocus
-              placeholder="Search…"
-              className={inputStyle}
-            />
-            <div className={hotkeyHintStyle}>
-              <kbd className={hotkeyKeyStyle}>Esc</kbd>
-              <span className={hotkeyLabelStyle}>to exit</span>
-            </div>
+            {showInput ? (
+              <>
+                <SearchIcon className={iconStyle} />
+                <Command.Input
+                  // Asking for the field is asking to type in it — the tap that
+                  // revealed it should not have to land on it a second time.
+                  // See `isOpen` for why this is not simply `autoFocus`.
+                  autoFocus={isOpen}
+                  placeholder="Search…"
+                  className={inputStyle}
+                />
+              </>
+            ) : (
+              <Button
+                variant="icon"
+                className={leadControlStyle}
+                aria-label="Search"
+                onClick={() => setSearching(true)}
+              >
+                <SearchIcon />
+              </Button>
+            )}
+            {hasCursor ? (
+              <div className={hotkeyHintStyle}>
+                <kbd className={hotkeyKeyStyle}>Esc</kbd>
+                <span className={hotkeyLabelStyle}>to exit</span>
+              </div>
+            ) : (
+              <Button
+                variant="icon"
+                className={trailControlStyle}
+                aria-label="Close"
+                onClick={close}
+              >
+                <CrossIcon />
+              </Button>
+            )}
           </div>
 
           {/* Results */}

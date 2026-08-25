@@ -44,3 +44,18 @@ export function isBottomSheetLayout(): boolean {
     window.matchMedia(BOTTOM_SHEET_QUERY).matches
   );
 }
+
+/**
+ * There is a cursor on this device — a mouse or a trackpad, not a finger.
+ *
+ * The site's affordances split on it: hover chrome and keyboard-shortcut hints
+ * are an offer to a visitor who has the hardware to take them up, and are noise
+ * on a touch-first device where there is no pointer to reveal them with and no
+ * key to press. `panda.config.ts` defines its `hasCursor` condition from this,
+ * and the custom cursor in globals.css asks the same question.
+ *
+ * It is here rather than written out at each site because the command palette
+ * has to ask it in JS too: whether the search field takes focus the moment the
+ * palette opens is not something a stylesheet can decide.
+ */
+export const HAS_CURSOR_QUERY = "(hover: hover) and (pointer: fine)";
