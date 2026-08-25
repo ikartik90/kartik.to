@@ -222,21 +222,14 @@ describe("CommandPalette", () => {
   // -------------------------------------------------------------------------
   // The input row
   //
-  // Search is the palette's primary modality on a keyboard and its secondary
-  // one on a phone: a visitor holding a phone opened this to TAP something, and
-  // a field that takes focus on open answers a question they did not ask with
-  // half the screen full of keyboard. So the row is drawn from what the device
-  // can actually do — the same split `_hasCursor` makes everywhere else.
+  // The same field on every device — what differs is whether it takes the
+  // focus. On a keyboard search IS the palette: ⌘K, then type. A phone opened
+  // this to TAP something, and a field that grabs focus on open answers a
+  // question nobody asked by filling half the screen with a keyboard. So the
+  // field is there to be tapped, and waits to be.
   // -------------------------------------------------------------------------
 
   describe("the input row, with a cursor", () => {
-    it("opens straight into the search field", () => {
-      render(<CommandPalette />);
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-
-      expect(screen.getByPlaceholderText("Search…")).toBeDefined();
-    });
-
     it("gives the field the focus, so you can just type", () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
@@ -244,6 +237,14 @@ describe("CommandPalette", () => {
       expect(document.activeElement).toBe(
         screen.getByPlaceholderText("Search…"),
       );
+    });
+
+    it("keeps the rows' keyboard shortcut chips", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(list().getByText("⌘[")).toBeDefined();
     });
 
     // Esc is the way out on a keyboard, and saying so is the whole point of the
@@ -254,7 +255,6 @@ describe("CommandPalette", () => {
 
       expect(screen.getByText("to exit")).toBeDefined();
       expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
     });
   });
 
@@ -263,12 +263,22 @@ describe("CommandPalette", () => {
       hasCursor = false;
     });
 
-    it("opens with a search button instead of the field", () => {
+    it("still offers the field", () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      expect(screen.getByRole("button", { name: "Search" })).toBeDefined();
-      expect(screen.queryByPlaceholderText("Search…")).toBeNull();
+      expect(screen.getByPlaceholderText("Search…")).toBeDefined();
+    });
+
+    // The whole point: the field is there to be tapped, not to arrive with a
+    // keyboard already over half the screen.
+    it("leaves the field unfocused until it is asked for", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(document.activeElement).not.toBe(
+        screen.getByPlaceholderText("Search…"),
+      );
     });
 
     // There is no Esc key to name, so the row says the same thing as a control
@@ -291,53 +301,28 @@ describe("CommandPalette", () => {
       expect(dialog.close).toHaveBeenCalled();
     });
 
-    it("reveals the field when the search button is pressed", () => {
+    // A chip naming ⌘[ or Ctrl S is an offer a phone cannot take up — the same
+    // reason the Esc hint gives way to a button above it.
+    it("withholds the rows' keyboard shortcut chips", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByRole("button", { name: "Search" }));
-
-      expect(screen.getByPlaceholderText("Search…")).toBeDefined();
-      expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+      expect(list().getByText("Back to index")).toBeDefined();
+      expect(list().queryByText("⌘[")).toBeNull();
+      expect(list().queryByText("Ctrl [")).toBeNull();
     });
 
-    // Asking for the field is asking to type in it — the tap that revealed it
-    // is the same tap that would otherwise have to land on it a second time.
-    it("hands the revealed field the focus", () => {
+    it("filters on what is typed into it, as it does anywhere else", () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+      fireEvent.change(screen.getByPlaceholderText("Search…"), {
+        target: { value: "playground" },
+      });
 
-      expect(document.activeElement).toBe(
-        screen.getByPlaceholderText("Search…"),
-      );
-    });
-
-    // The close button is the row's constant here: it is what the Esc hint is
-    // on a keyboard, and it does not go away for the field arriving.
-    it("keeps the close button beside the revealed field", () => {
-      render(<CommandPalette />);
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-
-      fireEvent.click(screen.getByRole("button", { name: "Search" }));
-
-      expect(screen.getByRole("button", { name: "Close" })).toBeDefined();
-      expect(screen.queryByText("to exit")).toBeNull();
-    });
-
-    // Each open is a fresh one — the palette already clears the search term on
-    // open, and the row it is typed into resets with it.
-    it("collapses back to the button the next time it opens", () => {
-      render(<CommandPalette />);
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-      fireEvent.click(screen.getByRole("button", { name: "Search" }));
-
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-
-      expect(screen.getByRole("button", { name: "Search" })).toBeDefined();
-      expect(screen.queryByPlaceholderText("Search…")).toBeNull();
+      expect(list().getByText("Cover Playground")).toBeDefined();
+      expect(list().queryByText("Dark theme")).toBeNull();
     });
   });
 

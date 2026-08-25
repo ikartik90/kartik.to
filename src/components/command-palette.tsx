@@ -86,22 +86,13 @@ const hotkeyHintStyle = css({
   flexShrink: 0,
 });
 
-// The row's own controls, on a device that has to be able to press them.
+// The way out, on a device that has to be able to press it.
 //
-// An icon button pads its 20px glyph by 4px, so left alone its glyph would sit
-// 4px further in than the search icon it replaces and the row would step in and
-// out as the field is revealed. The negative inset pulls the BOX out by that
-// padding, leaving the glyph on the row's `paddingInline` exactly where the
-// icon was.
-const leadControlStyle = css({ marginInlineStart: "-sm" });
-
-// `auto` because the collapsed row has no field to flex it over — the two
-// controls would otherwise sit side by side at the left. Harmless once the
-// field arrives and does the pushing itself.
-const trailControlStyle = css({
-  marginInlineStart: "auto",
-  marginInlineEnd: "-sm",
-});
+// An icon button pads its 20px glyph by 4px, so left alone the cross would sit
+// 4px further from the edge than the Esc chip it stands in for. The negative
+// inset pulls the BOX out by that padding, leaving the glyph on the row's own
+// `paddingInline` — the same margin the search icon keeps at the other end.
+const closeButtonStyle = css({ marginInlineEnd: "-sm" });
 
 const hotkeyKeyStyle = hotkey({ surface: "menu" });
 
@@ -137,7 +128,8 @@ const groupHeadingStyle = css({
 const itemStyle = menuItem();
 
 // The row's own shortcut, held against the far end of it — the item says where
-// it goes, the chip says how to get there without opening this at all.
+// it goes, the chip says how to get there without opening this at all. Drawn
+// only where there is a keyboard to take the offer up; see `hasCursor`.
 const itemHotkeyStyle = cx(
   hotkey({ surface: "menu" }),
   css({ marginInlineStart: "auto" }),
@@ -157,17 +149,20 @@ export function CommandPalette() {
   /**
    * Which palette this device gets.
    *
-   * On a keyboard, search IS the palette: ⌘K then type, and the field takes the
-   * focus because the next thing that happens is typing. A phone opened this to
-   * TAP something — search is the secondary modality there, and a field that
-   * grabs focus on open answers a question nobody asked by filling half the
-   * screen with a keyboard. So the row collapses to its two controls and the
-   * field arrives only when it is asked for.
+   * The same field either way — what differs is whether it TAKES the focus, and
+   * what the row says beside it. On a keyboard search is the palette: ⌘K then
+   * type, so the field is focused because the next thing that happens is
+   * typing. A phone opened this to TAP something; the field is there to be
+   * tapped, and a field that grabs focus on open answers a question nobody
+   * asked by filling half the screen with a keyboard.
+   *
+   * It decides the row's other two seats for the same reason. The Esc hint
+   * names a key the device does not have, so a touch visitor gets a close
+   * button that does what Esc does; and the shortcut chips on the rows below
+   * name keys nothing can press, so they are withheld there too — the same
+   * split `_hasCursor` makes of the header's own ⌘K chip.
    */
   const hasCursor = useHasCursor();
-
-  /** Asked for the field on a touch device. Reset on every open. */
-  const [searching, setSearching] = useState(false);
 
   /**
    * Whether the palette is up.
@@ -179,10 +174,6 @@ export function CommandPalette() {
    * costs nothing at open time, when the whole `Command` remounts anyway.
    */
   const [isOpen, setIsOpen] = useState(false);
-
-  // The field is the row's default with a cursor and its second state without
-  // one.
-  const showInput = hasCursor || searching;
 
   // The palette owns its own component picker rather than reaching for the
   // grid's: "New component…" has to work from any page, and the grid only
@@ -278,9 +269,6 @@ export function CommandPalette() {
       if (dialogRef.current?.open) return;
       dialogRef.current?.showModal();
       setIsOpen(true);
-      // Every open is a fresh one: the search term is cleared by the remount,
-      // and on a touch device the row it was typed into resets with it.
-      setSearching(false);
       setOpenKey((k) => k + 1);
     }
     function handleKeyDown(e: KeyboardEvent) {
@@ -316,34 +304,19 @@ export function CommandPalette() {
         onClose={() => setIsOpen(false)}
       >
         <Command key={openKey} loop className={css({ display: "contents" })}>
-          {/* Input row — the same three seats on both devices, filled by what
-              each one can do. Leading: the search icon, a label on a keyboard
-              and a control on a phone. Trailing: the way out, named as the key
-              that does it where there is a key and drawn as the button that
-              does it where there is not. */}
+          {/* Input row — the same field on both devices, and a way out that is
+              named as the key that does it where there is a key and drawn as
+              the button that does it where there is not. */}
           <div className={inputRowStyle} data-command-input-row>
-            {showInput ? (
-              <>
-                <SearchIcon className={iconStyle} />
-                <Command.Input
-                  // Asking for the field is asking to type in it — the tap that
-                  // revealed it should not have to land on it a second time.
-                  // See `isOpen` for why this is not simply `autoFocus`.
-                  autoFocus={isOpen}
-                  placeholder="Search…"
-                  className={inputStyle}
-                />
-              </>
-            ) : (
-              <Button
-                variant="icon"
-                className={leadControlStyle}
-                aria-label="Search"
-                onClick={() => setSearching(true)}
-              >
-                <SearchIcon />
-              </Button>
-            )}
+            <SearchIcon className={iconStyle} />
+            <Command.Input
+              // Focused on a keyboard, where typing is what happens next.
+              // Waiting on a phone, where it is there to be TAPPED. See
+              // `isOpen` for why the cursor half is not simply `autoFocus`.
+              autoFocus={isOpen && hasCursor}
+              placeholder="Search…"
+              className={inputStyle}
+            />
             {hasCursor ? (
               <div className={hotkeyHintStyle}>
                 <kbd className={hotkeyKeyStyle}>Esc</kbd>
@@ -352,7 +325,7 @@ export function CommandPalette() {
             ) : (
               <Button
                 variant="icon"
-                className={trailControlStyle}
+                className={closeButtonStyle}
                 aria-label="Close"
                 onClick={close}
               >
@@ -373,7 +346,9 @@ export function CommandPalette() {
                 <Command.Item className={itemStyle} onSelect={handleBack}>
                   <ReturnIcon className={iconStyle} />
                   {backTarget.label}
-                  <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
+                  {hasCursor && (
+                    <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
+                  )}
                 </Command.Item>
               </Command.Group>
             )}
@@ -424,7 +399,9 @@ export function CommandPalette() {
                     >
                       <SaveIcon className={iconStyle} />
                       Save changes
-                      <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                      {hasCursor && (
+                        <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                      )}
                     </Command.Item>
                     <Command.Item
                       className={itemStyle}
