@@ -404,6 +404,27 @@ describe("CommandPalette", () => {
       fireEvent.keyDown(window, { key: "k", ctrlKey: true });
       expect(dialog.showModal).not.toHaveBeenCalled();
     });
+
+    // A press that landed before this component existed was recorded by the
+    // head script; mounting is when it gets answered (see palette-intent.ts).
+    it("opens for a ⌘K pressed before it hydrated", () => {
+      const intentWindow = window as Window & {
+        __takePaletteIntent?: () => boolean;
+      };
+      intentWindow.__takePaletteIntent = vi.fn().mockReturnValue(true);
+
+      render(<CommandPalette />);
+
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      expect(dialog.showModal).toHaveBeenCalledOnce();
+      delete intentWindow.__takePaletteIntent;
+    });
+
+    it("stays shut when nothing was pressed before it hydrated", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      expect(dialog.showModal).not.toHaveBeenCalled();
+    });
   });
 
   describe("⌘K toggle — close when open", () => {

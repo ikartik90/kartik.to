@@ -19,7 +19,7 @@ import TwitterIcon from "@/assets/icons/twitter.svg";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { css, cx } from "../../styled-system/css";
 import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
-import { SocialIconShader } from "./social-icon-shader";
+import { SocialIconShader, SocialShaderStage } from "./social-icon-shader";
 import { Button } from "./ui/button";
 import { Link } from "./ui/link";
 
@@ -355,23 +355,27 @@ export function SocialLinks() {
   }
 
   return (
-    <ul className={listStyle}>
-      {SOCIAL_ITEMS.map((item) => (
-        <SocialLinkItem
-          key={item.id}
-          item={item}
-          copySuccess={item.id === "email" && emailCopySuccess}
-          tooltipDismissed={dismissed[item.id] ?? false}
-          onMouseEnter={() => handleItemMouseEnter(item.id)}
-          onMouseLeave={() => handleItemMouseLeave(item.id)}
-          onDismiss={() =>
-            setDismissed((current) => ({ ...current, [item.id]: true }))
-          }
-          onEmailTriggerClick={handleEmailTriggerClick}
-          onEmailCopy={handleEmailCopySuccess}
-        />
-      ))}
-    </ul>
+    // The stage owns the row's single shader — one WebGL context moved to the
+    // hovered icon, rather than one parked in each.
+    <SocialShaderStage>
+      <ul className={listStyle}>
+        {SOCIAL_ITEMS.map((item) => (
+          <SocialLinkItem
+            key={item.id}
+            item={item}
+            copySuccess={item.id === "email" && emailCopySuccess}
+            tooltipDismissed={dismissed[item.id] ?? false}
+            onMouseEnter={() => handleItemMouseEnter(item.id)}
+            onMouseLeave={() => handleItemMouseLeave(item.id)}
+            onDismiss={() =>
+              setDismissed((current) => ({ ...current, [item.id]: true }))
+            }
+            onEmailTriggerClick={handleEmailTriggerClick}
+            onEmailCopy={handleEmailCopySuccess}
+          />
+        ))}
+      </ul>
+    </SocialShaderStage>
   );
 }
 
