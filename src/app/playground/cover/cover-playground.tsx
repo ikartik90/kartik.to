@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import {
   ColorPanels,
   GodRays,
@@ -8,9 +14,11 @@ import {
   Swirl,
   Warp,
 } from "@paper-design/shaders-react";
-import { css } from "../../../../styled-system/css";
+import { css, cx } from "../../../../styled-system/css";
 import { propertiesPanel } from "../../../../styled-system/recipes";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
+import { useSheetDrag } from "@/hooks/use-sheet-drag";
+import { isBottomSheetLayout } from "@/data/media-queries";
 import { useCoverDraftStore } from "@/store/cover-draft";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
 import { MenuButton } from "@/components/menu-button";
@@ -23,6 +31,9 @@ import { ColorInput } from "@/components/ui/input/color-input";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
 import { OptionList } from "@/components/ui/input/option-list";
 import { Typography } from "@/components/ui/typography";
+import { Tooltip } from "@/components/ui/tooltip";
+import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
+import CrossIcon from "@/assets/icons/cross.svg";
 import {
   SHADER_IDS,
   SHADER_SPECS,
@@ -69,12 +80,36 @@ const MAX_PIXELS = 1280 * 1280;
 // the canvas from the edges it is meant to reach. That inset is also why the
 // panel is `fixed` rather than a flex child: in flow it would sit inside the
 // padding instead of flush to the viewport's top, bottom and right.
+//
+// Two lengths the page hands down rather than each part working out for
+// itself, because they are the SAME division of the viewport read twice: the
+// canvas leaves room at its foot for the sheet, and the card sizes itself to
+// what is left. Written as one variable the other is derived from, so the two
+// cannot disagree about where the halfway line is.
+//
+//   --sheet-space  what the properties panel is holding: nothing while it is a
+//                  side rail (it is `fixed`, and the body's own inset already
+//                  answers for that), half the viewport while it is a sheet,
+//                  and nothing again once the sheet has been sent away.
+//   --card-space   everything the cover may NOT have: the sheet, the gutter
+//                  controls' band, and the page's own margins.
 const pageStyle = css({
   minHeight: "100dvh",
   backgroundColor: "bg.canvas",
   display: "flex",
   padding: "none",
   gap: 0,
+  "--sheet-space": "0px",
+  "--card-space": "calc(2 * token(spacing.xxl))",
+  _bottomSheet: {
+    "--sheet-space": "50dvh",
+    "--card-space":
+      "calc(var(--sheet-space) + token(spacing.5xl) + 2 * token(spacing.xxl))",
+  },
+  // The sheet is gone, so the canvas has the whole screen back. An attribute
+  // rather than a second media query: it outranks the one above wherever it is
+  // set, and means nothing at all in the orientations that have no sheet.
+  "&[data-sheet-dismissed]": { "--sheet-space": "0px" },
 });
 
 // The canvas: everything the panel leaves, with the cover in the middle of
@@ -88,6 +123,22 @@ const canvasStyle = css({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  // Under a sheet the canvas is only the top half, and the cover centres in
+  // THAT — otherwise it would centre on the whole screen and sit half behind
+  // the panel. The band the gutter controls occupy is kept clear at the same
+  // time: on a phone they overlay the picture rather than sitting beside it.
+  _bottomSheet: {
+    paddingBlockStart: "token(spacing.5xl)",
+    paddingBlockEnd: "var(--sheet-space)",
+    transition: "padding-block-end 200ms ease-out",
+  },
+  // The same phone on its side: a rail again, on a viewport globals.css does
+  // not inset for (that starts at 820px). MARGIN rather than padding, because
+  // what has to move is not just the picture — the gutter controls are
+  // absolutely positioned against this box, and an absolute child is laid out
+  // against the PADDING box, so padding would leave the theme toggle sitting
+  // underneath the rail.
+  _narrowRail: { marginInlineEnd: "token(sizes.propertiesPanelWidth)" },
 });
 
 // The gutter controls, in the seat they take everywhere else: an 80px band
@@ -125,17 +176,43 @@ const canvasChromeStyle = css({
 // shader fills it because Fit opens on `cover` — a ground with margins is just
 // a smaller picture — but Fit is a control now, so this is a default and not a
 // guarantee.
+// The card is 380×680 wherever there is room for it, and the same shape
+// smaller wherever there is not — a phone under a sheet, a phone on its side,
+// a short desktop window. Sized on ONE axis with the ratio doing the rest, so
+// it can never come out stretched: the width is the narrowest of what the
+// design asks for, what the viewport is, and what the height left over allows.
 const coverStyle = css({
   position: "relative",
   isolation: "isolate",
-  width: "380px",
-  height: "680px",
+  aspectRatio: "380 / 680",
+  width:
+    "min(380px, calc(100dvw - 2 * token(spacing.xxl)), calc((100dvh - var(--card-space)) * 380 / 680))",
+  transition: "width 200ms ease-out",
   borderRadius: "xxl",
   overflow: "hidden",
   backgroundColor: "bg.surface",
 });
 
 const layerStyle = css({ position: "absolute", inset: 0 });
+
+// The gutter row's right-hand end. The theme toggle used to answer the menu on
+// its own; the sheet's way back stands beside it, so the pair reads as one
+// group rather than a third control drifting somewhere else on the band.
+const chromeEndStyle = css({ display: "flex", alignItems: "center", gap: "md" });
+
+// Controls that only exist while the panel is a sheet: its close button, and
+// the button that brings it back. Both are meaningless against a docked rail —
+// there is nothing to close and nothing to reopen — so the media query is what
+// mounts them, and a phone turned on its side is back to the rail with neither
+// in sight and no state to put right.
+const sheetOnlyStyle = css({ display: "none", _bottomSheet: { display: "flex" } });
+
+// The header IS the grip. `touch-action: none` is what makes a downward drag
+// belong to the sheet instead of being read as a scroll of the panel under it
+// — without it the browser claims the gesture before the first pointermove
+// arrives. Scoped to the sheet, so the docked rail's header keeps every gesture
+// it has today.
+const sheetGripStyle = css({ _bottomSheet: { touchAction: "none" } });
 
 const rowStyle = css({ display: "flex", flexWrap: "wrap", gap: "sm" });
 
@@ -269,6 +346,19 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const spec = SHADER_SPECS[shaderId];
 
   const [copied, setCopied] = useState(false);
+
+  // Whether the sheet has been sent away. Read ONLY inside the bottom-sheet
+  // media query (see `panda.config.ts`), which is what makes rotating the phone
+  // the whole of the repair: in landscape the rail is back whatever this says.
+  const [dismissed, setDismissed] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
+  const { offset, dragHandlers } = useSheetDrag({
+    sheetRef: panelRef,
+    onDismiss: () => setDismissed(true),
+    // Asked at press time rather than watched: a docked rail's header is
+    // dragged by nobody, and the answer cannot change mid-gesture.
+    enabled: isBottomSheetLayout,
+  });
 
   // Adopt the cover this route was opened on — and RESET when there is none, so
   // arriving at the bare route after editing a saved one starts blank rather
@@ -411,7 +501,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   }
 
   return (
-    <main className={pageStyle}>
+    <main className={pageStyle} data-sheet-dismissed={dismissed || undefined}>
       <div className={canvasStyle}>
         <div className={coverStyle}>
           <ShaderStage
@@ -429,15 +519,57 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             instead. */}
         <div className={canvasChromeStyle}>
           <MenuButton />
-          <ThemeToggleButton />
+          <div className={chromeEndStyle}>
+            {dismissed && (
+              <Button
+                variant="icon"
+                className={sheetOnlyStyle}
+                aria-label="Properties"
+                onClick={() => setDismissed(false)}
+              >
+                <BottomSheetIcon />
+                <Button.Tooltip>
+                  <Tooltip.Text>Properties</Tooltip.Text>
+                </Button.Tooltip>
+              </Button>
+            )}
+            <ThemeToggleButton />
+          </div>
         </div>
       </div>
 
-      <aside className={panel.root} aria-label="Properties">
-        <div className={panel.header}>
+      {/* The rail, and the same panel along the bottom edge on a phone held
+          upright — one element either way, because it is one panel: the shape
+          is the recipe's media query, and the only thing this page adds is
+          whether the sheet has been sent away.
+
+          `translate` inline for the length of a drag and nothing after it: the
+          finger places the sheet while it is on it, and lets CSS have it back
+          at the end so the dismissed state (or the slide home) is not outranked
+          by a stale transform. */}
+      <aside
+        ref={panelRef}
+        className={panel.root}
+        aria-label="Properties"
+        data-dismissed={dismissed || undefined}
+        data-dragging={offset !== null || undefined}
+        style={offset !== null ? { translate: `0 ${offset}px` } : undefined}
+      >
+        <div className={cx(panel.header, sheetGripStyle)} {...dragHandlers}>
           <Typography tag="p" type="bodyLarge" className={panel.title}>
             Properties
           </Typography>
+          <Button
+            variant="icon"
+            className={sheetOnlyStyle}
+            aria-label="Close properties"
+            onClick={() => setDismissed(true)}
+          >
+            <CrossIcon />
+            <Button.Tooltip>
+              <Tooltip.Text>Close properties</Tooltip.Text>
+            </Button.Tooltip>
+          </Button>
         </div>
 
         <Group title="Shader">

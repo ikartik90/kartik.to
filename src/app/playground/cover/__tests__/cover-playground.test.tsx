@@ -83,3 +83,60 @@ describe("CoverPlayground theme toggle", () => {
     expect(container.querySelector("[data-theme]")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The panel as a BOTTOM SHEET. Which shape it takes is CSS — one media query,
+// stated once in `panda.config.ts` — so what is testable here is the state the
+// CSS keys off: whether the sheet has been sent away, and the control that
+// brings it back. Deliberately so: a phone turned on its side must find its
+// rail again, and it does that by nothing outside that media query ever
+// reading `data-dismissed`.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground bottom sheet", () => {
+  afterEach(cleanup);
+
+  const panel = () => screen.getByRole("complementary", { name: "Properties" });
+  const reopen = () => screen.queryByRole("button", { name: "Properties" });
+
+  it("opens with the panel up, and nothing offering to open it", () => {
+    render(<CoverPlayground />);
+
+    expect(panel().hasAttribute("data-dismissed")).toBe(false);
+    expect(reopen()).toBeNull();
+  });
+
+  it("sends the sheet away from the close button in its header", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground />);
+
+    await user.click(screen.getByRole("button", { name: "Close properties" }));
+
+    expect(panel().hasAttribute("data-dismissed")).toBe(true);
+  });
+
+  it("offers the way back beside the theme toggle, once it has gone", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<CoverPlayground />);
+
+    await user.click(screen.getByRole("button", { name: "Close properties" }));
+
+    const button = reopen();
+    const toggle = screen.getByRole("button", { name: "Light theme" });
+    expect(button).not.toBeNull();
+    // Beside the toggle, in the canvas's own gutter row — not a third thing
+    // floating somewhere else on the page.
+    expect(button?.parentElement).toBe(toggle.parentElement);
+    expect(container.querySelector("main > div")?.contains(button!)).toBe(true);
+  });
+
+  it("brings the sheet back, and stops offering to", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground />);
+
+    await user.click(screen.getByRole("button", { name: "Close properties" }));
+    await user.click(reopen()!);
+
+    expect(panel().hasAttribute("data-dismissed")).toBe(false);
+    expect(reopen()).toBeNull();
+  });
+});
