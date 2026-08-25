@@ -9,6 +9,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CommandPalette } from "../command-palette";
+import { HAS_CURSOR_QUERY } from "@/data/media-queries";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -61,10 +62,19 @@ vi.mock("@/app/actions/post", () => ({
   deleteDraft: vi.fn(),
 }));
 
-// jsdom does not implement matchMedia
+// jsdom does not implement matchMedia. Query-aware, because the palette asks it
+// TWO questions and they have different answers: whether the theme is dark, and
+// whether this device has a cursor — the second of which decides which input row
+// gets drawn. `hasCursor` is the device under test; a cursor by default, since
+// that is the palette every existing test below was written against.
+let hasCursor = true;
 Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: vi.fn().mockReturnValue({ matches: false }),
+  value: vi.fn((query: string) => ({
+    matches: query === HAS_CURSOR_QUERY ? hasCursor : false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })),
 });
 
 // ---------------------------------------------------------------------------
@@ -100,6 +110,7 @@ beforeEach(() => {
   // The shortcut is ⌘K on Apple hardware and Ctrl K everywhere else, so every
   // test that presses it has to say which keyboard it is pressing it on.
   stubPlatform("macOS");
+  hasCursor = true;
   mockUseSession.mockReturnValue({ data: null });
   mockPathname.mockReturnValue("/");
   mockPush.mockClear();
@@ -205,6 +216,113 @@ describe("CommandPalette", () => {
       const html = renderToString(<CommandPalette />);
       expect(html).toContain("Playground");
       expect(html).toContain("Cover Playground");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The input row
+  //
+  // The same field on every device — what differs is whether it takes the
+  // focus. On a keyboard search IS the palette: ⌘K, then type. A phone opened
+  // this to TAP something, and a field that grabs focus on open answers a
+  // question nobody asked by filling half the screen with a keyboard. So the
+  // field is there to be tapped, and waits to be.
+  // -------------------------------------------------------------------------
+
+  describe("the input row, with a cursor", () => {
+    it("gives the field the focus, so you can just type", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(document.activeElement).toBe(
+        screen.getByPlaceholderText("Search…"),
+      );
+    });
+
+    it("keeps the rows' keyboard shortcut chips", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(list().getByText("⌘[")).toBeDefined();
+    });
+
+    // Esc is the way out on a keyboard, and saying so is the whole point of the
+    // hint. A close button beside it would be a second door to the same room.
+    it("names Esc as the way out, and offers no close button", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByText("to exit")).toBeDefined();
+      expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    });
+  });
+
+  describe("the input row, on a touch device", () => {
+    beforeEach(() => {
+      hasCursor = false;
+    });
+
+    it("still offers the field", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByPlaceholderText("Search…")).toBeDefined();
+    });
+
+    // The whole point: the field is there to be tapped, not to arrive with a
+    // keyboard already over half the screen.
+    it("leaves the field unfocused until it is asked for", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(document.activeElement).not.toBe(
+        screen.getByPlaceholderText("Search…"),
+      );
+    });
+
+    // There is no Esc key to name, so the row says the same thing as a control
+    // that can be pressed.
+    it("puts a close button where the Esc hint would be", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByRole("button", { name: "Close" })).toBeDefined();
+      expect(screen.queryByText("to exit")).toBeNull();
+    });
+
+    it("closes the palette when that button is pressed", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+      expect(dialog.close).toHaveBeenCalled();
+    });
+
+    // A chip naming ⌘[ or Ctrl S is an offer a phone cannot take up — the same
+    // reason the Esc hint gives way to a button above it.
+    it("withholds the rows' keyboard shortcut chips", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(list().getByText("Back to index")).toBeDefined();
+      expect(list().queryByText("⌘[")).toBeNull();
+      expect(list().queryByText("Ctrl [")).toBeNull();
+    });
+
+    it("filters on what is typed into it, as it does anywhere else", () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.change(screen.getByPlaceholderText("Search…"), {
+        target: { value: "playground" },
+      });
+
+      expect(list().getByText("Cover Playground")).toBeDefined();
+      expect(list().queryByText("Dark theme")).toBeNull();
     });
   });
 

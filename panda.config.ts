@@ -1,6 +1,7 @@
 import { defineConfig, defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 import {
   BOTTOM_SHEET_QUERY,
+  HAS_CURSOR_QUERY,
   NARROW_RAIL_QUERY,
 } from "./src/data/media-queries";
 import { ASPECT_RATIOS } from "./src/utils/demo-frame-sizing";
@@ -216,7 +217,12 @@ export default defineConfig({
       // and are noise on a touch-first device, where there is no pointer to
       // reveal them with and no key to press. Same query the custom cursor is
       // gated on in globals.css — one definition of "cursor-first" for both.
-      hasCursor: "@media (hover: hover) and (pointer: fine)",
+      //
+      // Imported rather than written out, for the reason `bottomSheet` below
+      // is: the command palette has to ask this one in JS too (`useHasCursor`),
+      // and a stylesheet and a script disagreeing about what a cursor is would
+      // draw a keyboard hint on a device that cannot press it.
+      hasCursor: `@media ${HAS_CURSOR_QUERY}`,
       // The properties panel as a BOTTOM SHEET — see `BOTTOM_SHEET_QUERY` for
       // what the query says and why. Imported rather than written out, because
       // a pointer handler has to ask the browser the same question at press

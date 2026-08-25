@@ -10,15 +10,18 @@ import {
   menuItem,
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
+import { useHasCursor } from "@/hooks/use-has-cursor";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { takePaletteIntent } from "@/utils/palette-intent";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
+import CrossIcon from "@/assets/icons/cross.svg";
 import DarkIcon from "@/assets/icons/dark.svg";
 import LightIcon from "@/assets/icons/light.svg";
 import EditIcon from "@/assets/icons/edit.svg";
@@ -54,7 +57,15 @@ const inputStyle = css({
   flex: "1 0 0",
   background: "none",
   border: "none",
-  textStyle: "bodySmall",
+  // 16px on a touch device, and NOT because the field wants to be bigger there.
+  // Mobile Safari zooms the page in on any field it focuses whose text is under
+  // 16px, and the palette is already sized for the viewport it is in — so the
+  // zoom does not reveal anything, it just leaves the page scrolled sideways at
+  // a scale the reader has to pinch back out of. Sizing the text past the
+  // threshold is what declines it; the 14px row is the cursor's, where no
+  // browser does this.
+  textStyle: "bodyLarge",
+  _hasCursor: { textStyle: "bodySmall" },
   color: "text.body",
   focusVisibleRing: "none",
   _focusVisible: {
@@ -74,6 +85,14 @@ const hotkeyHintStyle = css({
   gap: "sm",
   flexShrink: 0,
 });
+
+// The way out, on a device that has to be able to press it.
+//
+// An icon button pads its 20px glyph by 4px, so left alone the cross would sit
+// 4px further from the edge than the Esc chip it stands in for. The negative
+// inset pulls the BOX out by that padding, leaving the glyph on the row's own
+// `paddingInline` — the same margin the search icon keeps at the other end.
+const closeButtonStyle = css({ marginInlineEnd: "-sm" });
 
 const hotkeyKeyStyle = hotkey({ surface: "menu" });
 
@@ -109,7 +128,8 @@ const groupHeadingStyle = css({
 const itemStyle = menuItem();
 
 // The row's own shortcut, held against the far end of it — the item says where
-// it goes, the chip says how to get there without opening this at all.
+// it goes, the chip says how to get there without opening this at all. Drawn
+// only where there is a keyboard to take the offer up; see `hasCursor`.
 const itemHotkeyStyle = cx(
   hotkey({ surface: "menu" }),
   css({ marginInlineStart: "auto" }),
@@ -125,6 +145,35 @@ export function CommandPalette() {
   const [openKey, setOpenKey] = useState(0);
 
   const close = () => dialogRef.current?.close();
+
+  /**
+   * Which palette this device gets.
+   *
+   * The same field either way — what differs is whether it TAKES the focus, and
+   * what the row says beside it. On a keyboard search is the palette: ⌘K then
+   * type, so the field is focused because the next thing that happens is
+   * typing. A phone opened this to TAP something; the field is there to be
+   * tapped, and a field that grabs focus on open answers a question nobody
+   * asked by filling half the screen with a keyboard.
+   *
+   * It decides the row's other two seats for the same reason. The Esc hint
+   * names a key the device does not have, so a touch visitor gets a close
+   * button that does what Esc does; and the shortcut chips on the rows below
+   * name keys nothing can press, so they are withheld there too — the same
+   * split `_hasCursor` makes of the header's own ⌘K chip.
+   */
+  const hasCursor = useHasCursor();
+
+  /**
+   * Whether the palette is up.
+   *
+   * Only here to gate the field's `autoFocus`. `useHasCursor` settles one commit
+   * after hydration, which on a cursor device mounts the field for the first
+   * time while the dialog is still CLOSED — and an `autoFocus` honoured there
+   * would pull focus off the page the reader is actually on. Gating it on this
+   * costs nothing at open time, when the whole `Command` remounts anyway.
+   */
+  const [isOpen, setIsOpen] = useState(false);
 
   // The palette owns its own component picker rather than reaching for the
   // grid's: "New component…" has to work from any page, and the grid only
@@ -219,6 +268,7 @@ export function CommandPalette() {
     function open() {
       if (dialogRef.current?.open) return;
       dialogRef.current?.showModal();
+      setIsOpen(true);
       setOpenKey((k) => k + 1);
     }
     function handleKeyDown(e: KeyboardEvent) {
@@ -251,20 +301,37 @@ export function CommandPalette() {
         align="top-center"
         aria-label="Command palette"
         className={dialogPanel({ size: "sm" })}
+        onClose={() => setIsOpen(false)}
       >
         <Command key={openKey} loop className={css({ display: "contents" })}>
-          {/* Input row */}
+          {/* Input row — the same field on both devices, and a way out that is
+              named as the key that does it where there is a key and drawn as
+              the button that does it where there is not. */}
           <div className={inputRowStyle} data-command-input-row>
             <SearchIcon className={iconStyle} />
             <Command.Input
-              autoFocus
+              // Focused on a keyboard, where typing is what happens next.
+              // Waiting on a phone, where it is there to be TAPPED. See
+              // `isOpen` for why the cursor half is not simply `autoFocus`.
+              autoFocus={isOpen && hasCursor}
               placeholder="Search…"
               className={inputStyle}
             />
-            <div className={hotkeyHintStyle}>
-              <kbd className={hotkeyKeyStyle}>Esc</kbd>
-              <span className={hotkeyLabelStyle}>to exit</span>
-            </div>
+            {hasCursor ? (
+              <div className={hotkeyHintStyle}>
+                <kbd className={hotkeyKeyStyle}>Esc</kbd>
+                <span className={hotkeyLabelStyle}>to exit</span>
+              </div>
+            ) : (
+              <Button
+                variant="icon"
+                className={closeButtonStyle}
+                aria-label="Close"
+                onClick={close}
+              >
+                <CrossIcon />
+              </Button>
+            )}
           </div>
 
           {/* Results */}
@@ -279,7 +346,9 @@ export function CommandPalette() {
                 <Command.Item className={itemStyle} onSelect={handleBack}>
                   <ReturnIcon className={iconStyle} />
                   {backTarget.label}
-                  <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
+                  {hasCursor && (
+                    <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
+                  )}
                 </Command.Item>
               </Command.Group>
             )}
@@ -330,7 +399,9 @@ export function CommandPalette() {
                     >
                       <SaveIcon className={iconStyle} />
                       Save changes
-                      <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                      {hasCursor && (
+                        <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                      )}
                     </Command.Item>
                     <Command.Item
                       className={itemStyle}
