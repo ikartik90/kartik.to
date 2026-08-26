@@ -91,9 +91,10 @@ import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 //                  and nothing again once the sheet has been sent away.
 //   --presets-space what the saved-covers strip is holding at the foot of the
 //                  canvas: nothing at all when there is no strip. Its own tiles
-//                  and padding (80 + 2×12) plus the four pixels it stands off
-//                  the bottom edge — the same tokens the pane itself is built
-//                  from, so the two cannot drift.
+//                  and padding (80 + 2×12), the band its unsaved marks hang in
+//                  above the plate (another 16), and the four pixels it stands
+//                  off the bottom edge — the same tokens the pane itself is
+//                  built from, so the two cannot drift.
 //   --card-space   everything the cover may NOT have: the sheet, the gutter
 //                  controls' band, the presets strip, and the page's own
 //                  margins.
@@ -127,7 +128,7 @@ const pageStyle = css({
   // variable — the same call the dismissed sheet's attribute makes below.
   "&:has([data-presets])": {
     "--presets-space":
-      "calc(token(spacing.5xl) + 2 * token(spacing.lg) + token(spacing.sm))",
+      "calc(token(spacing.5xl) + 2 * token(spacing.lg) + token(spacing.xl) + token(spacing.sm))",
   },
   // The sheet is gone, so the canvas has the whole screen back. An attribute
   // rather than a second media query: it outranks the one above wherever it is
