@@ -26,10 +26,22 @@ export type ShaderId =
   | "swirl"
   | "staticMeshGradient";
 
+/**
+ * Which group in the sidebar a control is drawn in. Omitted — the usual case —
+ * leaves it with the shader's own parameters.
+ *
+ * "colors" is for a control whose whole subject is one of the colours above it.
+ * A switch that decides whether a colour is painted at all belongs beside that
+ * colour's swatch, not stranded among the geometry sliders where its name is
+ * the only clue the two are related.
+ */
+export type ControlGroup = "colors";
+
 export interface SliderSpec {
   kind: "slider";
   key: string;
   label: string;
+  group?: ControlGroup;
   min: number;
   max: number;
   step: number;
@@ -40,6 +52,7 @@ export interface ToggleSpec {
   kind: "toggle";
   key: string;
   label: string;
+  group?: ControlGroup;
   value: boolean;
 }
 
@@ -47,6 +60,7 @@ export interface SelectSpec {
   kind: "select";
   key: string;
   label: string;
+  group?: ControlGroup;
   options: { value: string; label: string }[];
   value: string;
 }
@@ -153,39 +167,67 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     label: "Cosmic Track",
     maxColors: 10,
     hasColorBack: true,
-    extraColors: [],
+    // The rails are painted in a colour of their OWN rather than lifted out of
+    // the ramp. Borrowing the ramp tied the line to whatever the band happened
+    // to be showing under it — and the ramp peaks at its lightest colour in the
+    // middle of every band, so the rails blew out to white there while staying
+    // tinted at the ends, which reads as a fault rather than a decision.
+    extraColors: [{ key: "colorEdge", label: "Edge", value: "#FFFFFFFF" }],
     controls: [
-      // The reference's own slider — slides every band along the track at once.
-      { kind: "slider", key: "angle", label: "Angle", min: -4, max: 4, step: 0.01, value: 0 },
-      // How far Speed swings the set either side of Angle. Motion oscillates
+      // How thick a rail is drawn, in CSS pixels — and the switch as well, since
+      // 0 is no line at all. One control rather than a toggle beside a width:
+      // a switch that only ever gates another control is a step the value can
+      // take on its own, and two of them can disagree (on at zero thickness) in
+      // a way one cannot.
+      //
+      // A screen measurement rather than a track one, so it holds its weight
+      // where Tilt and Depth crush the far end of the track instead of thinning
+      // away with what it traces.
+      //
+      // Drawn with the COLOURS, beside the swatch it governs — see `group`.
+      { kind: "slider", key: "edgeThickness", label: "Edge Thickness", group: "colors", min: 0, max: 4, step: 0.05, value: 0 },
+      // Slides every band along the track at once. 0 parks the set at the
+      // frame's centre and -Apex puts it exactly on the apex, so the range has
+      // to cover Apex's own (0..5) with room for a band's length either side,
+      // or the far lobe is unreachable at a high Apex.
+      { kind: "slider", key: "phase", label: "Phase", min: -7, max: 7, step: 0.01, value: 0 },
+      // How far Speed swings the set either side of Phase. Motion oscillates
       // out and back rather than drifting one way, so the bands always return.
       { kind: "slider", key: "travel", label: "Travel", min: 0, max: 4, step: 0.01, value: 1.5 },
       // The gap between one band and the next. At 0 they advance as one flat
       // front; turning it up is what produces the reference's staircase.
       { kind: "slider", key: "stagger", label: "Stagger", min: -2, max: 2, step: 0.01, value: 0.45 },
-      // Which band the staircase is measured from, at the same step size. 1 runs
-      // it straight down the stack from the first band; 0 mirrors it about the
-      // middle band, so the outermost pair share an offset and the stagger grows
-      // from the centre outward.
-      { kind: "slider", key: "symmetry", label: "Symmetry", min: 0, max: 1, step: 0.01, value: 1 },
+      // Which band the staircase is measured from, at the same step size — the
+      // control walks the LEADER across the stack. 1 runs it straight down from
+      // the first band; 0 mirrors it about the middle band, so the outermost
+      // pair share an offset and the stagger grows from the centre outward; -1
+      // carries the walk on to the last band and the stack runs the other way.
+      { kind: "slider", key: "symmetry", label: "Symmetry", min: -1, max: 1, step: 0.01, value: 1 },
       // How far a band's single gradient spans along the track. Beyond its two
       // ends the track carries ground, not another copy of the palette.
       { kind: "slider", key: "rampLength", label: "Ramp Length", min: 0.05, max: 6, step: 0.01, value: 1.6 },
-      // The gap between adjacent ribbons. 0 is touching; raising it opens
-      // ground between them without moving them off their own tracks.
-      { kind: "slider", key: "spread", label: "Spread", min: 0, max: 0.95, step: 0.01, value: 0.25 },
-      // How wide the stack of ribbons is, from the centre outward. Narrowing it
-      // narrows every ribbon together — applied BEFORE the slots are cut, so they
-      // stay stuck edge to edge. Spread below is applied after, and separates them.
+      // The gap between adjacent ribbons, measured in RIBBON WIDTHS — 0 is
+      // touching, 1 puts a ribbon's worth of ground between them, 2 puts two.
+      // It widens the stack to make room rather than thinning the ribbons, so
+      // Bandwidth below owns how wide a ribbon is and this owns only how far
+      // apart they sit. Past the top of the range the outermost ribbons pass
+      // the fan's own silhouette and are clipped by it.
+      { kind: "slider", key: "spread", label: "Spread", min: 0, max: 3, step: 0.01, value: 0.25 },
+      // How WIDE each ribbon is — the stack's width at Spread 0, shared out
+      // between Band Count ribbons that sit edge to edge there. Independent of
+      // Spread, which only adds ground around them.
       { kind: "slider", key: "bandwidth", label: "Bandwidth", min: 0, max: 1, step: 0.01, value: 0.7 },
-      // How the ribbons meet. 0 is a sharp apex — a true point — and anything
-      // above rounds the convergence into a curve.
-      { kind: "slider", key: "roundness", label: "Roundness", min: 0, max: 1.5, step: 0.01, value: 0.35 },
+      // How the ribbons meet, and — the same thing — the track's HALF-WIDTH at
+      // the apex, in the same units as its width anywhere else. 0 is a true
+      // point; raising it opens the convergence into a curve and widens the
+      // waist with it. The range runs well past the frame on purpose: only
+      // there do the sides stop tapering and the track read as parallel.
+      { kind: "slider", key: "roundness", label: "Roundness", min: 0, max: 6, step: 0.01, value: 0.35 },
       // Where the fan converges, leftward from centre. The fan is symmetric
       // about its apex, so 0 puts it mid-frame and shows two mirrored lobes;
       // past the edge (the default) leaves one continuous track.
       { kind: "slider", key: "apex", label: "Apex", min: 0, max: 5, step: 0.01, value: 2.2 },
-      { kind: "slider", key: "bandCount", label: "Band Count", min: 1, max: 24, step: 1, value: 7 },
+      { kind: "slider", key: "bandCount", label: "Band Count", min: 1, max: 20, step: 1, value: 7 },
       { kind: "slider", key: "curve", label: "Curve", min: -2, max: 2, step: 0.01, value: 0.35 },
       // The angle the tracks make with the surface. 0 is flat-on; raising it
       // leans the plane away so the ribbons foreshorten toward a horizon.
@@ -196,11 +238,32 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "depth", label: "Depth", min: 0, max: 1, step: 0.01, value: 0 },
       { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, value: 0.55 },
       { kind: "slider", key: "tail", label: "Tail", min: 0, max: 1, step: 0.01, value: 0.25 },
+      // How far past its band a rail keeps running before it goes out, in ramp
+      // lengths. Its own control rather than a multiple of Tail because the two
+      // answer different questions — Tail is how softly a band ENDS, this is how
+      // far its rails OUTLIVE it. The two still start their fade together (see
+      // the shader), so this only ever moves where the rails finish.
+      { kind: "slider", key: "edgeTail", label: "Edge Tail", min: 0, max: 3, step: 0.01, value: 0.5 },
             // Ordered (Bayer) dither: quantises to fewer levels and patterns the
       // rounding. 0 is off; higher drops the level count and the crosshatch shows.
-      { kind: "slider", key: "dither", label: "Dither", min: 0, max: 1, step: 0.01, value: 0.35 },
+      { kind: "slider", key: "rampDither", label: "Ramp Dither", min: 0, max: 1, step: 0.01, value: 0.35 },
+      // How hard the RAILS are dithered — independent of Dither, so either can
+      // be on with the other off. The two share one matrix, and so one Dither
+      // Size.
+      //
+      // It runs to 2, not 1, and the second half is the point. A threshold can
+      // only bite on coverage below 1, and a rail's core IS 1 — so at 1 the
+      // stipple has reached everything it can (the flanks and the tail) and
+      // more threshold changes nothing. Past 1 the control lowers the coverage
+      // the threshold sees, opening the pattern across the whole line. The line
+      // thins as it goes, which is what more dither looks like.
+      { kind: "slider", key: "edgeDither", label: "Edge Dither", min: 0, max: 2, step: 0.01, value: 0 },
       // Size of one Bayer cell in DEVICE pixels — so on a 2x display 1 puts the
       // whole 8x8 matrix inside 4 CSS px, too fine to read. Raise to coarsen.
+      //
+      // Not "Ramp" anything: there is ONE matrix, and the ramp and the rails
+      // both read it. Two cell sizes would beat against each other where a rail
+      // crosses its own ribbon.
       { kind: "slider", key: "ditherSize", label: "Dither Size", min: 1, max: 12, step: 1, value: 3 },
       ...FRAMING_CONTROLS,
       ...MOTION_CONTROLS,
@@ -208,7 +271,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     defaults: {
       colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
       colorBack: "#12042BFF",
-      params: { angle: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, dither: 0.5, ditherSize: 3 },
+      params: { phase: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3 },
     },
   },
 

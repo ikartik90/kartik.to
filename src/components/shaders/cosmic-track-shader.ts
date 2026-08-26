@@ -34,8 +34,9 @@ precision mediump float;
 uniform vec4 u_colors[${COSMIC_TRACK_MAX_COLORS}];
 uniform float u_colorsCount;
 uniform vec4 u_colorBack;
+uniform vec4 u_colorEdge;
 
-uniform float u_angle;
+uniform float u_phase;
 uniform float u_travel;
 uniform float u_stagger;
 uniform float u_symmetry;
@@ -50,10 +51,18 @@ uniform float u_tilt;
 uniform float u_depth;
 uniform float u_softness;
 uniform float u_tail;
-uniform float u_dither;
+uniform float u_rampDither;
 uniform float u_ditherSize;
+uniform float u_edgeTail;
+uniform float u_edgeDither;
+uniform float u_edgeThickness;
 
 uniform float u_time;
+// Device pixels per CSS pixel, set by the mount. Read so the edge highlight's
+// hairline is a fixed width on the SCREEN rather than in the frame buffer —
+// otherwise it halves on a 2x display and halves again in an exported cover,
+// which pins the buffer higher still.
+uniform float u_pixelRatio;
 
 in vec2 v_objectUV;
 out vec4 fragColor;
@@ -71,6 +80,41 @@ out vec4 fragColor;
 // part of it changes something visible.
 #define DITHER_MAX_LEVELS 48.0
 #define DITHER_MIN_LEVELS 3.0
+
+// How far OPEN the rails' stipple goes at the top of u_edgeDither — the duty
+// the line's core is thresholded against once the control passes 1.
+//
+// It exists because a threshold has a hard ceiling that a mix factor cannot
+// lift. Dithering represents an INTERMEDIATE value with a pattern, and the core
+// of a rail is coverage 1 — there is nothing intermediate about it, so
+// step(coverThreshold, 1.) is 1 on every cell of the matrix and the core stays
+// solid however hard the control is pushed. The stipple can only ever land on
+// the antialiased flanks and the tail, which on a wide ribbon is a sliver of
+// the shape and on a two-pixel line is all there is.
+//
+// So past 1 the control stops asking how MUCH threshold and starts lowering
+// what the threshold is applied to. At 0.5 the core is asking for half its
+// pixels, so half the matrix lights and the pattern opens across the whole
+// line rather than clinging to its edges. The line is sparser for it, which is
+// not a side effect — a dithered rendering of "fully opaque" is fully opaque,
+// and the only way to see more pattern is to ask for less ink.
+#define EDGE_DITHER_OPEN 0.5
+
+// The edge highlight is described by three things, and none of them is a
+// constant any more:
+//
+//   • u_edgeThickness — the line's thickness in CSS PIXELS, and the switch as
+//     well, since 0 is no line at all. A screen measurement
+//     rather than a track one is the whole trick: u_tilt and u_depth crush the
+//     far end of the track, so a width in track units would thin away exactly
+//     where the structure gets hardest to read. The fwidth() below is what
+//     converts between the two, and u_pixelRatio between CSS and device pixels.
+//   • u_colorEdge — the line's colour, and its alpha the line's strength. Not a
+//     lift out of the ramp underneath, which tied the line to whatever its band
+//     was showing: the ramp peaks at its lightest colour in the middle of every
+//     band, so the rails blew out to white there and stayed tinted at the ends,
+//     from one constant that could not be right in both places.
+//   • u_edgeTail — how far past its band a rail runs before it goes out.
 
 // The exponent the surface curls with at u_depth 1.
 //
@@ -206,6 +250,16 @@ void main() {
   // into a smooth curve. It is a shape control, not the divide-by-zero guard —
   // the epsilon below stays private for that.
   //
+  // Read the formula at q = 0 and it is also, exactly, the fan's HALF-WIDTH at
+  // the apex — in the same units as its half-width anywhere else, which is what
+  // makes the two readings the same control rather than two that need
+  // reconciling. Every other x is sqrt(q² + u_roundness²), so the value is the
+  // floor the whole fan is measured from: the waist it never narrows past, and
+  // the amount the sides have to open by before they taper at all. Past the
+  // frame's own half-height the sqrt is dominated by u_roundness everywhere
+  // visible and the track reads as parallel-sided, which is why the control's
+  // range runs well beyond the picture.
+  //
   // u_roundness and u_apex ALONE decide this. The ramp phase must not reach the
   // geometry — in the reference, both ends of the ANGLE slider leave the
   // streamlines put and move only the colour along them.
@@ -228,17 +282,39 @@ void main() {
   float t = y / halfWidth;
   float across = clamp(t * .5 + .5, 0., 1.);
 
-  // The gradient's WIDTH: how much of the fan the stack of ribbons occupies,
-  // measured outward from the centre line.
+  // The GAP between ribbons, in RIBBON WIDTHS — and the stack GROWS to make room
+  // for it, rather than the ribbons shrinking to pay for it.
   //
-  // This COMPRESSES the whole stack rather than shrinking each ribbon inside a
-  // fixed slot. The ribbons stay stuck together — every one narrows as the
-  // stack narrows, and they remain edge to edge with no ground opening up
-  // between them. A per-slot fill fraction would separate them instead, which
-  // is a different effect entirely.
+  // That is the whole job of these two lines, and it is a cancellation. A gap
+  // has to come from somewhere: cut it out of a slot of fixed width and every
+  // ribbon thins as the set opens up, which is a different graphic rather than
+  // a more open one. So the slot is WIDENED by exactly the factor that the
+  // ribbon's share of it is NARROWED (see u_spread's reciprocal below), and the
+  // two cancel — a ribbon stays u_bandwidth / u_bandCount wide across the fan
+  // whatever u_spread is doing, and only the ground between them moves.
+  //
+  // Which leaves the two controls saying one thing each: u_bandwidth is how
+  // WIDE a ribbon is, u_spread is how far APART they sit. At 0 they touch and
+  // the set reads as one sheet, exactly as it did before this existed; at 1 the
+  // gap equals one ribbon; at 2, two.
+  //
+  // The fan is finite, so the set does run out of room: spread far enough and
+  // the outermost ribbons pass the silhouette at |t| = 1 and are clipped by it.
+  // That is the fan ending, not the control breaking — narrow u_bandwidth and
+  // they come back.
+  float period = 1. + max(u_spread, 0.);
+  float spreadWidth = u_bandwidth * period;
+
+  // How wide the STACK is across the fan, measured outward from the centre
+  // line: the ribbons' own width, times the room their gaps need.
+  //
+  // Note the division COMPRESSES the whole stack rather than shrinking each
+  // ribbon inside a fixed slot, which is what keeps the ribbons stuck together
+  // at spread 0 — every one narrows as u_bandwidth narrows, and they stay edge
+  // to edge with no ground opening between them.
   //
   // Independent of u_bandCount, which sets how many ribbons share the width.
-  float stack = (across - .5) / max(u_bandwidth, 1e-4) + .5;
+  float stack = (across - .5) / max(spreadWidth, 1e-4) + .5;
 
   // The stack's own outer boundary. Only a hairline unless softened — the
   // silhouette proper is handled below.
@@ -255,17 +331,16 @@ void main() {
   float index = floor(scaled);
   float f = scaled - index;
 
-  // The GAP between adjacent ribbons.
+  // The ribbon's share of its own slot, and the second half of the cancellation
+  // the stack width sets up above. Each ribbon fills this much of its slot,
+  // centred, and the remainder is ground.
   //
-  // Each ribbon fills only part of its slot, centred, and the remainder is
-  // ground — so raising u_spread pulls the ribbons apart without moving them
-  // off their own tracks. At 0 they touch and the set reads as one sheet.
-  //
-  // Note this is applied AFTER the floor() that creates slots, which is what
-  // separates the ribbons; u_bandwidth is applied BEFORE it, which is what
-  // keeps them contiguous while narrowing. Same shape of arithmetic, opposite
-  // effect, and the ordering is the whole difference.
-  float fill = clamp(1. - u_spread, 0., 1.);
+  // A RECIPROCAL, not (1 - u_spread): the slot was widened by period, so this
+  // has to narrow by exactly period for the ribbon to come out the same width
+  // it started. Subtracting instead is what used to thin the ribbons — the slot
+  // stayed put and the gap was taken out of the ribbon rather than added around
+  // it.
+  float fill = 1. / period;
   float halfBand = fill * .5;
   float offCentre = abs(f - .5);
 
@@ -275,7 +350,7 @@ void main() {
   float inBand =
     1. - smoothstep(halfBand - sideSoft, halfBand + sideSoft, offCentre);
 
-  // How far along the track the set has travelled. Time and u_angle are the
+  // How far along the track the set has travelled. Time and u_phase are the
   // SAME axis — animating is just Angle moving on its own, which is what makes
   // a moving shader and a dragged slider agree — so they add.
   //
@@ -284,7 +359,7 @@ void main() {
   // forward and back. A one-way ramp would carry the bands off once and never
   // bring them home. A sine rather than a triangle, so the turnarounds ease
   // instead of snapping direction.
-  float phase = u_angle + sin(u_time * DRIFT_RATE) * u_travel;
+  float phase = u_phase + sin(u_time * DRIFT_RATE) * u_travel;
 
   // Position within THIS band's own gradient: 0 where it starts, 1 where it
   // ends. u_stagger is the gap between one band and the next, which is what
@@ -320,8 +395,23 @@ void main() {
   //
   // Consequently the leader simply migrates: at 1 the offset floor belongs to
   // band 0, at 0 to the middle band, and every value between walks it inward.
+  //
+  // NEGATIVE carries the same walk on past the middle. Read what the control
+  // actually does and the extension writes itself: it moves the LEADER, the
+  // band whose offset is lowest and which therefore runs ahead of the rest. At
+  // 1 that is the first band, at 0 the middle one — so at -1 it should be the
+  // last, and the stack runs the other way down. sign() picks which end the
+  // linear arrangement points at and abs() how far toward it the blend has got,
+  // which keeps 0 the same V from both sides.
+  //
+  // Note the ARRANGEMENT is what this reaches, not a magnitude: at -1 exactly,
+  // the offsets are the mirror of those at +1, which is also what negating
+  // u_stagger would give. It is the values in BETWEEN that are the point — a
+  // half-mirrored stack is not a scaled anything, and there is no other control
+  // that reaches it.
   float fromCentre = 2. * abs(centred) - (bands - 1.) * .5;
-  float offset = mix(fromCentre, centred, clamp(u_symmetry, 0., 1.));
+  float symmetry = clamp(u_symmetry, -1., 1.);
+  float offset = mix(fromCentre, centred * sign(symmetry), abs(symmetry));
 
   // ALONG THE TRACK, not along the frame.
   //
@@ -332,18 +422,55 @@ void main() {
   // vertical lines in the frame, which reads as a horizontal gradient painted
   // across a fan that is running some other way.
   //
-  // UNSIGNED, and that is the whole fix for the centre seam. An earlier version
-  // signed this by sign(uv.x), which jumps by 2|y| as x crosses zero — a hard
-  // discontinuity straight down the middle, with the two sides out of step
-  // either side of it. Distance from the apex has no such flip, and with the
-  // apex outside the frame (see u_apex) it is monotonic across everything
-  // visible, so the track reads as one continuous run rather than two.
-  float alongTrack = length(vec2(q, y));
+  // SIGNED, and continuous — which is what lets a band cross the apex instead of
+  // being born and dying there.
+  //
+  // The obvious unsigned reading, length(vec2(q, y)), is a RADIUS: it cannot go
+  // below zero, so the lit set is not a segment travelling along the track but
+  // an ANNULUS about the apex, expanding and contracting. Wind the phase back
+  // past the apex and the ring collapses into it and vanishes, then re-expands
+  // on both lobes at once. There is no far side of the apex for the phase to
+  // reach, because there is no negative radius.
+  //
+  // The equally obvious fix, sign(q) * length(vec2(q, y)), is the one this
+  // shader used to reject, and rightly: it JUMPS by 2|y| as q crosses zero,
+  // because the apex is a point but the line q = 0 is a whole cross-section of
+  // the track, and every off-axis point on it sits at a radius of |y|. A hard
+  // seam straight down the middle, with the two sides out of step.
+  //
+  // This form has neither problem. Expand the radius on the fan and it comes
+  // apart into exactly two pieces:
+  //
+  //   rho^2 = q^2 + y^2 = q^2 (1 + t^2) + t^2 * roundness^2
+  //
+  // The first term is a perfect square and carries all of q's sign; the second
+  // is the THROAT, and it is the only reason the radius cannot reach zero off
+  // the axis. Dropping it leaves q * sqrt(1 + t^2), which is signed by q, is
+  // exactly zero along the whole of q = 0 (so there is nothing left to jump
+  // across), and far from the apex converges on the radius it replaces — t is
+  // bounded by the silhouette, so the factor never leaves [1, sqrt(2)].
+  //
+  // Read as a wavefront: the colour boundaries pass through the throat as a
+  // straight cross-section and open into circular arcs as they run out, which
+  // is what the boundary of an expanding front on this surface should look like.
+  //
+  // t is clamped to the silhouette for this one purpose. Nothing outside |t| > 1
+  // is drawn, so it changes no visible value — but at roundness 0 the raw t runs
+  // away near the apex, and t * t would overflow mediump into an inf that 0 * inf
+  // turns into a NaN across the whole band.
+  float tSpan = clamp(t, -1., 1.);
+  float alongTrack = q * sqrt(1. + tSpan * tSpan);
 
-  // Measured from the FRAME's centre, not the apex: alongTrack counts outward
-  // from the apex, so without subtracting u_apex the whole set would ride away
-  // from the viewport as the apex is pushed out, and Angle would have to be
-  // dialled back in by hand to compensate.
+  // Measured from the FRAME's centre, not the apex: alongTrack counts from the
+  // apex, so without subtracting u_apex the whole set would ride away from the
+  // viewport as the apex is pushed out, and Angle would have to be dialled back
+  // in by hand to compensate.
+  //
+  // Which also fixes what Angle MEANS, now that the coordinate is signed: 0
+  // parks the set at the frame's centre, -u_apex puts it exactly on the apex,
+  // and anything past that carries it through onto the far lobe. So Angle is
+  // the phase of the run end to end, and Travel swinging either side of it
+  // sweeps a band through the apex and back rather than pulsing out of it.
   float s =
     (alongTrack - u_apex - phase - offset * u_stagger) / u_rampLength + .5;
 
@@ -369,9 +496,27 @@ void main() {
   // runs out to the far colour at its midpoint and back again — 0 → 1 → 0 —
   // rather than sweeping the palette once end to end.
   //
-  // Note this triangle is bounded by the span, unlike a fract-based one that
-  // would tile the palette endlessly down the track.
-  float mirrored = 1. - abs(2. * clamp(s, 0., 1.) - 1.);
+  // Note this is bounded by the span, unlike a fract-based one that would tile
+  // the palette endlessly down the track.
+  //
+  // HELD at the top rather than turned around on the spot, and that is the fix
+  // for the colour the whole ramp is built to arrive at. Folding the palette
+  // puts every colour on the span TWICE — once climbing, once coming back —
+  // except the last, which a bare triangle touches for an instant and leaves.
+  // So the last colour got half the width of every other one while the
+  // second-to-last sat on both sides of it, and the arrival read as a seam in
+  // the second-to-last rather than as a colour of its own.
+  //
+  // Holding the peak for one segment is the reflected stop list with the middle
+  // colour DOUBLED instead of shared, which gives it the same width as its
+  // neighbours. The width falls straight out of that reading: doubling the
+  // middle stop makes 2 * count stops, so 2 * count - 1 segments across the
+  // span, and the plateau is exactly one of them. Halved here because it is
+  // measured from the midpoint outward.
+  float stops = max(u_colorsCount, 1.);
+  float hold = .5 / max(2. * stops - 1., 1.);
+  float fromMid = abs(clamp(s, 0., 1.) - .5);
+  float mirrored = 1. - max(fromMid - hold, 0.) / max(.5 - hold, 1e-4);
 
   vec4 ramp = rampAt(mirrored);
 
@@ -384,6 +529,138 @@ void main() {
   // here reads as those two bands fading away, which is a different effect from
   // the one the control is for.
   float inside = (1. - smoothstep(.99, 1., abs(t))) * onTrack * inStack * inBand;
+
+  // EDGE HIGHLIGHT — the RAILS of each track, traced as light.
+  //
+  // The point of it is that it reads PAST the fill. u_softness dissolves a
+  // ribbon's two sides into the ground and u_tail dissolves its ends, so at
+  // rest most of the set is a wash with no visible extent; the hairline follows
+  // the GEOMETRY instead of the coverage, so the whole fan reads as the lines
+  // the ribbons run along — including the ones that have faded out of the
+  // picture entirely.
+  //
+  // ONLY the two sides, and that is the whole shape of the effect. The
+  // along-track ends (s = 0 and s = 1) are edges too, and stroking them as well
+  // closes every ribbon into a box — which says "here is a tile" rather than
+  // "here is a track". Leaving them open lets each pair of rails run the full
+  // length of the fan and off the frame, so the track goes on endlessly and the
+  // gradient is simply what happens to be lit along a stretch of it.
+  //
+  // So the distance is to the slot's own fill, which runs to halfBand either
+  // side of its centre — the same quantity the fill is cut from, read here as
+  // an edge rather than as a mask.
+  //
+  // Converted from slot fractions into PIXELS by dividing by how far it moves
+  // per pixel, which is exactly what fwidth() measures. That conversion is the
+  // whole reason the line survives: u_tilt and u_depth crush the far end of the
+  // track, and a width measured in track units would thin away precisely where
+  // the structure is hardest to read.
+  //
+  // The rate is taken from stack, which is SMOOTH, never from the offCentre
+  // built on it — that folds at every slot boundary, and fwidth() across a fold
+  // reads the two sides as equal and reports a rate of nothing to do with the
+  // local geometry, which would punch dropouts into the line at exactly the
+  // places two ribbons meet.
+  //
+  // Computed unconditionally, above the branch that uses it. u_edges is a
+  // uniform, so branching on it is uniform control flow and a derivative inside
+  // would in fact be defined — but an fwidth costs nothing, and keeping it out
+  // of a branch is one less rule to be right about.
+  float acrossRate = max(fwidth(stack) * bands, 1e-5);
+
+  // Distance to the nearest RAIL, unsigned — so the stroke STRADDLES the rail
+  // instead of sitting inside the ribbon.
+  //
+  // Straddling is what makes coincident rails behave, and it is the whole
+  // reason this is an abs(). An inner stroke treats a rail as the outer
+  // boundary of a shape and antialiases against the ground beyond it — but at
+  // spread 0 there is no ground beyond it, only the next ribbon. Both sides
+  // then faded out against a neighbour that was never there, and two edges that
+  // are the SAME edge arrived as two lines with a dark seam between them.
+  // Measured from the rail, they coincide exactly and the seam cannot exist.
+  //
+  // It settles the other end of the same control too: near spread 1 the ribbon
+  // is thinner than the stroke, so its two rails simply overlap into one line,
+  // where an inner stroke had nowhere to go and thinned away to nothing.
+  float railPx = abs(offCentre - halfBand) / acrossRate;
+
+  float stroke = max(u_edgeThickness, 0.) * max(u_pixelRatio, 1.);
+  float halfStroke = stroke * .5;
+
+  // The stack's own outer boundary — the one thing a straddling stroke still
+  // has to be told, because offCentre is PINNED at .5 outside the stack (the
+  // clamp in scaled above). At spread 0 halfBand is .5 as well, so every
+  // fragment out there would read as sitting exactly on a rail and the whole
+  // ground would light up.
+  //
+  // Same derivative as acrossRate, in stack units rather than slot units, so it
+  // costs no second fwidth. The half-stroke of slack is deliberate: it lets the
+  // outermost rail hang its outer half over the edge of the stack, exactly as
+  // every rail inside the stack does.
+  float intoStack = min(stack, 1. - stack) * bands / acrossRate;
+
+  // The last factor is what lets 0 mean OFF, and it is not a special case: a
+  // line thinner than a pixel cannot be drawn thinner, only fainter, so its
+  // coverage falls with its width. That carries all the way down to nothing at
+  // zero, where the smoothstep alone would still have left half a pixel lit.
+  float edge = (1. - smoothstep(halfStroke - .5, halfStroke + .5, railPx)) *
+    clamp(intoStack + halfStroke + .5, 0., 1.) *
+    clamp(stroke, 0., 1.);
+
+  // The rail's own TAIL — the band's fade, carried onto the lines that flank it.
+  //
+  // Without this the rails are pure geometry, and pure geometry does not move:
+  // the set slides along the track while the lines sit still across the frame at
+  // one flat brightness, which reads as a grid ruled over the graphic rather
+  // than as part of it. Fading them along the track ties each rail to the band
+  // it belongs to, so a run leaving the frame takes its rails with it.
+  //
+  // The SAME expression as onTrack above, with one number changed — and that is
+  // the whole of it. Both fades begin at exactly the same place (tailSoft in
+  // from each end); only where they finish differs, the fill at the end of the
+  // span and the rail railReach past it.
+  //
+  // Starting them together is the part that matters. An earlier version held
+  // the rail at full strength across all of s and began its fade only once s
+  // was past the span — so through the fill's entire fade-out a fully lit rail
+  // lay over a dissolving band, and the rail's own fade began after the fill
+  // had already gone. Two separate events, with a seam between them, which
+  // reads as the tail sitting on top of the edge rather than the two being one
+  // thing going out together.
+  //
+  // The rail still outlives its fill, which is the point of the highlight: it
+  // is only part-way down where the fill reaches zero, and carries on from
+  // there. It just gets there continuously.
+  //
+  // Deliberately NOT a cap: the fade runs ALONG the rail, so nothing is ever
+  // drawn across the end. The track still reads as continuing; it just stops
+  // being lit, which is the difference between a tail and a box.
+  //
+  // Per band, since s carries that band's own stagger offset — so the rails
+  // fade in the same staircase the bands arrive in.
+  // Per band, since s carries that band's own stagger offset — so the rails
+  // fade in the same staircase the bands arrive in.
+  float railReach = max(u_edgeTail, 0.);
+  float railTail =
+    smoothstep(-railReach, tailSoft, s) * smoothstep(-railReach, tailSoft, 1. - s);
+
+  // The rail's own COVERAGE, kept apart from the fill's rather than folded into
+  // it — because an overlay that fades, in a colour of its own, cannot be a
+  // mix() toward the colour underneath.
+  //
+  // That was the mistake here. mix(ramp.rgb, u_colorEdge.rgb, lit) is right for
+  // the stroke's antialiased SIDES, where the line genuinely blends into what
+  // it sits on. It is wrong along the TAIL, where the line should keep its
+  // colour and only get fainter: fading the mix slid the rail back toward the
+  // band's own ramp, so an edge set to green tailed off through the band's
+  // pinks and creams and arrived somewhere else entirely. The edge colour and
+  // the edge tail were then two different colours, which is exactly what a
+  // crossfade is for and exactly what this is not.
+  //
+  // Composited OVER at the end instead. The rail is u_colorEdge at every point
+  // along its length and only its opacity moves — and the colour's own alpha is
+  // the highlight's strength, which is why there is no second control for it.
+  float railAlpha = edge * railTail * u_colorEdge.a;
 
   // Dither the RIBBON only, before it ever meets the ground.
   //
@@ -398,13 +675,34 @@ void main() {
   //
   // The matrix is read in DEVICE pixels (gl_FragCoord), so the grid is fixed to
   // the screen rather than scaling and rotating with the graphic.
-  if (u_dither > 0.) {
+  // Two dithers, INDEPENDENT of one another, sharing one matrix.
+  //
+  // Independent because a rail is a hairline and a ribbon is not: the threshold
+  // that makes a wide band read as being MADE of dither pixels does not stipple
+  // a two-pixel line, it cuts it into dashes and then into nothing. Either can
+  // be on with the other off, so the guard asks whether EITHER is doing
+  // something rather than gating the rails behind the ribbons' control.
+  //
+  // The same matrix on purpose, though. Two Bayer reads at different cell sizes
+  // would beat against each other where a rail crosses its own ribbon; one read
+  // means the rails' dots land in the ribbons' grid.
+  // Two halves of one control. Up to 1 it is how much of the threshold to take,
+  // exactly like u_rampDither; past 1 it opens the pattern into the core (see
+  // EDGE_DITHER_OPEN), which is the only place further dither can come from.
+  float edgeAmount = max(u_edgeDither, 0.);
+  float edgeDither = min(edgeAmount, 1.);
+  float edgeDuty = 1. - EDGE_DITHER_OPEN * clamp(edgeAmount - 1., 0., 1.);
+  if (u_rampDither > 0. || edgeDither > 0.) {
     float bayer = bayer8(gl_FragCoord.xy / max(u_ditherSize, 1.));
-    float threshold = bayer - .5;
 
-    // Colour: snap each channel to a few levels.
-    float levels = max(mix(DITHER_MAX_LEVELS, DITHER_MIN_LEVELS, u_dither), 2.);
-    ramp.rgb = clamp(floor(ramp.rgb * levels + threshold + .5) / levels, 0., 1.);
+    if (u_rampDither > 0.) {
+      // Colour: snap each channel to a few levels. The RAILS are not quantised
+      // with it — they are one flat colour already, and there is nothing in a
+      // single colour for a level count to find.
+      float threshold = bayer - .5;
+      float levels = max(mix(DITHER_MAX_LEVELS, DITHER_MIN_LEVELS, u_rampDither), 2.);
+      ramp.rgb = clamp(floor(ramp.rgb * levels + threshold + .5) / levels, 0., 1.);
+    }
 
     // COVERAGE, against the same matrix — and this is what actually makes the
     // image read as being MADE OF dither pixels rather than merely carrying a
@@ -415,7 +713,8 @@ void main() {
     // smooth alpha puts continuous tone straight back over most of the ribbon,
     // leaving the pattern visible only where coverage happens to land on 1.
     // Thresholding the coverage turns every one of those fades into stipple, so
-    // there is no continuous tone left anywhere in the foreground.
+    // there is no continuous tone left anywhere in the foreground — the band's
+    // own tail along the track included.
     //
     // The threshold is nudged off both ends rather than used raw. The matrix's
     // lowest cell is exactly 0, and step(0., 0.) is 1 — so a raw threshold turns
@@ -424,9 +723,14 @@ void main() {
     // Offsetting to (i + 0.5) / 64 keeps "no coverage" meaning no coverage.
     float coverThreshold = mix(1. / 128., 1. - 1. / 128., bayer);
 
-    // Mixed in by u_dither so the control still travels: at low values the soft
+    // Mixed in by each control so both still travel: at low values the soft
     // mask survives and the edges stay smooth; at the top it is fully binary.
-    inside = mix(inside, step(coverThreshold, inside), u_dither);
+    // Neither term reads the other's control, which is what makes them
+    // independent — mix by 0 is the identity, so a value of 0 on either side
+    // leaves that half of the graphic exactly as it was.
+    inside = mix(inside, step(coverThreshold, inside), u_rampDither);
+    railAlpha =
+      mix(railAlpha, step(coverThreshold, railAlpha * edgeDuty), edgeDither);
   }
 
   // Premultiplied compositing of fan over ground — see the note above.
@@ -434,6 +738,12 @@ void main() {
   float opacity = ramp.a * inside;
   color += (1. - opacity) * u_colorBack.rgb * u_colorBack.a;
   opacity += (1. - opacity) * u_colorBack.a;
+
+  // The rails last, over both. They are drawn ON the graphic rather than in it,
+  // and a rail that has run out past its band belongs over the ground just as
+  // readily as over a ribbon — so it composites against whatever ended up here.
+  color = u_colorEdge.rgb * railAlpha + color * (1. - railAlpha);
+  opacity = railAlpha + opacity * (1. - railAlpha);
 
   fragColor = vec4(color, opacity);
 }`;

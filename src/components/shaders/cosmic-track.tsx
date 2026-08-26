@@ -23,7 +23,7 @@ import { useShaderPolicy } from "./use-shader-policy";
 // layer of our own in between — the library's components call the mount
 // directly, and an extra wrapper here would only be a passthrough to drift.
 //
-// Consumers write `<CosmicTrack colors={…} angle={…} />` and never see a
+// Consumers write `<CosmicTrack colors={…} phase={…} />` and never see a
 // uniform or a mount, which is the whole point of the shape.
 // ---------------------------------------------------------------------------
 
@@ -39,7 +39,8 @@ export interface CosmicTrackProps
 function CosmicTrackImpl({
   colors = DEFAULT_COSMIC_TRACK.colors,
   colorBack = DEFAULT_COSMIC_TRACK.colorBack,
-  angle = DEFAULT_COSMIC_TRACK.angle,
+  colorEdge = DEFAULT_COSMIC_TRACK.colorEdge,
+  phase = DEFAULT_COSMIC_TRACK.phase,
   travel = DEFAULT_COSMIC_TRACK.travel,
   stagger = DEFAULT_COSMIC_TRACK.stagger,
   symmetry = DEFAULT_COSMIC_TRACK.symmetry,
@@ -54,8 +55,11 @@ function CosmicTrackImpl({
   depth = DEFAULT_COSMIC_TRACK.depth,
   softness = DEFAULT_COSMIC_TRACK.softness,
   tail = DEFAULT_COSMIC_TRACK.tail,
-  dither = DEFAULT_COSMIC_TRACK.dither,
+  rampDither = DEFAULT_COSMIC_TRACK.rampDither,
   ditherSize = DEFAULT_COSMIC_TRACK.ditherSize,
+  edgeTail = DEFAULT_COSMIC_TRACK.edgeTail,
+  edgeDither = DEFAULT_COSMIC_TRACK.edgeDither,
+  edgeThickness = DEFAULT_COSMIC_TRACK.edgeThickness,
 
   speed = 0,
   frame = 0,
@@ -78,7 +82,8 @@ function CosmicTrackImpl({
     ...toCosmicTrackUniforms({
       colors,
       colorBack,
-      angle,
+      colorEdge,
+      phase,
       travel,
       stagger,
       symmetry,
@@ -93,8 +98,11 @@ function CosmicTrackImpl({
       depth,
       softness,
       tail,
-      dither,
+      rampDither,
       ditherSize,
+      edgeTail,
+      edgeDither,
+      edgeThickness,
     }),
     u_fit: ShaderFitOptions[policy.fit],
     u_scale: scale,

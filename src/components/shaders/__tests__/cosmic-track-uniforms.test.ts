@@ -74,24 +74,24 @@ describe("toCosmicTrackUniforms", () => {
   });
 
   it("keeps the ramp phase and the fan geometry on separate uniforms", () => {
-    // The correction that matters: `angle` slides the gradient ALONG the
+    // The correction that matters: `phase` slides the gradient ALONG the
     // ribbons and must not touch their shape — the reference's streamlines sit
     // in identical positions at both ends of its ANGLE slider. `spread` is the
-    // geometry control `angle` was wrongly doubling as.
+    // geometry control `phase` was wrongly doubling as.
     const base = toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK);
     const turned = toCosmicTrackUniforms({
       ...DEFAULT_COSMIC_TRACK,
-      angle: DEFAULT_COSMIC_TRACK.angle + 0.6,
+      phase: DEFAULT_COSMIC_TRACK.phase + 0.6,
     });
 
-    expect(turned.u_angle).not.toBe(base.u_angle);
+    expect(turned.u_phase).not.toBe(base.u_phase);
     expect(turned.u_spread).toBe(base.u_spread);
     expect(turned.u_curve).toBe(base.u_curve);
   });
 
   it("carries a per-band stagger independent of the common offset", () => {
     // What makes the leading edges form a staircase instead of arriving
-    // together: every band sits at its own offset along the track. `angle`
+    // together: every band sits at its own offset along the track. `phase`
     // moves the whole set; `stagger` is the gap between neighbours.
     const base = toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK);
     const staggered = toCosmicTrackUniforms({
@@ -100,11 +100,11 @@ describe("toCosmicTrackUniforms", () => {
     });
 
     expect(staggered.u_stagger).not.toBe(base.u_stagger);
-    expect(staggered.u_angle).toBe(base.u_angle);
+    expect(staggered.u_phase).toBe(base.u_phase);
     expect(staggered.u_spread).toBe(base.u_spread);
   });
 
-  it("blends the two stagger arrangements with a symmetry in 0..1", () => {
+  it("blends the stagger arrangements with a symmetry in -1..1", () => {
     // 1 is the staircase the reference shows: each band offset one more step
     // along the track than the one before it, so the first leads and the last
     // trails by the full span. 0 mirrors the set about its middle band — the
@@ -119,8 +119,17 @@ describe("toCosmicTrackUniforms", () => {
       symmetry: 0,
     });
 
+    const reversed = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      symmetry: -1,
+    });
+
     expect(linear.u_symmetry).toBe(1);
     expect(mirrored.u_symmetry).toBe(0);
+    // -1 carries the walk past the middle band to the LAST one, so the stack
+    // runs the other way down. Reachable only here: `stagger` can negate every
+    // offset at once, but it cannot half-mirror the stack.
+    expect(reversed.u_symmetry).toBe(-1);
     // It picks the ARRANGEMENT only. The size of one step is still `stagger`,
     // so mirroring a set must not quietly resize its staircase.
     expect(mirrored.u_stagger).toBe(linear.u_stagger);
@@ -133,7 +142,7 @@ describe("toCosmicTrackUniforms", () => {
     const under = toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, symmetry: -3 });
 
     expect(over.u_symmetry).toBe(1);
-    expect(under.u_symmetry).toBe(0);
+    expect(under.u_symmetry).toBe(-1);
   });
 
   it("keeps depth in the range where the surface stays in front of the eye", () => {
@@ -155,10 +164,86 @@ describe("toCosmicTrackUniforms", () => {
     expect(toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_depth).toBe(0);
   });
 
+  it("treats an edge thickness of 0 as no edge at all, and rests there", () => {
+    // The thickness IS the switch — a separate toggle beside it would be a step
+    // this value can take on its own, and the two could disagree. Off at rest,
+    // so the shader renders exactly as it did before the highlight existed.
+    expect(DEFAULT_COSMIC_TRACK.edgeThickness).toBe(0);
+    expect(toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_edgeThickness).toBe(0);
+
+    const drawn = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      edgeThickness: 2.5,
+    });
+    expect(drawn.u_edgeThickness).toBe(2.5);
+  });
+
+  it("never sends a negative thickness", () => {
+    // Negative would flip the stroke's smoothstep inside out — not a thinner
+    // line but a lit band everywhere the line is not.
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeThickness: -3 })
+        .u_edgeThickness,
+    ).toBe(0);
+  });
+
+  it("converts the edge colour, alpha and all", () => {
+    // The alpha is the highlight's STRENGTH, not decoration: the shader
+    // crossfades the rail over the fill by it and contributes it as coverage,
+    // so a caller reaching for a softer line reaches for this.
+    const { u_colorEdge } = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      colorEdge: "#FF000080",
+    });
+
+    expect([u_colorEdge[0], u_colorEdge[1], u_colorEdge[2]]).toEqual([1, 0, 0]);
+    expect(u_colorEdge[3]).toBeCloseTo(0.5, 2);
+  });
+
+  it("keeps the rails' reach off the ends of the track", () => {
+    // A negative reach would invert the smoothstep the rails fade over, which
+    // is not a shorter tail but a rail that lights up where it should be gone.
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeTail: -2 }).u_edgeTail,
+    ).toBe(0);
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeTail: 1.25 }).u_edgeTail,
+    ).toBe(1.25);
+  });
+
+  it("clamps the edge's dither to the two stages it names", () => {
+    // The shader splits this: 0..1 is how much of the threshold to take, 1..2
+    // is how far the pattern opens into the line's core. Past 2 there is no
+    // third stage — only a duty driven negative.
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeDither: 4 })
+        .u_edgeDither,
+    ).toBe(2);
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeDither: -2 })
+        .u_edgeDither,
+    ).toBe(0);
+    // Past the threshold's own ceiling is reachable, which is the point of it.
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeDither: 1.6 })
+        .u_edgeDither,
+    ).toBe(1.6);
+  });
+
+  it("leaves the rails off the dither at rest", () => {
+    // A hairline has nowhere to put a stipple: the threshold cuts it into
+    // dashes rather than stippling it, so the default is off. The RIBBONS are
+    // dithered regardless — that is `dither`'s business, not this one.
+    expect(DEFAULT_COSMIC_TRACK.edgeDither).toBe(0);
+    expect(
+      toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_edgeDither,
+    ).toBe(0);
+  });
+
   it("passes the shape parameters through untouched", () => {
     const uniforms = toCosmicTrackUniforms({
       ...DEFAULT_COSMIC_TRACK,
-      angle: 0.42,
+      phase: 0.42,
       travel: 2.1,
       stagger: 0.31,
       symmetry: 0.4,
@@ -173,11 +258,11 @@ describe("toCosmicTrackUniforms", () => {
       depth: 0.5,
       softness: 0.8,
       tail: 0.05,
-      dither: 0.65,
+      rampDither: 0.65,
       ditherSize: 4,
     });
 
-    expect(uniforms.u_angle).toBe(0.42);
+    expect(uniforms.u_phase).toBe(0.42);
     expect(uniforms.u_travel).toBe(2.1);
     expect(uniforms.u_stagger).toBe(0.31);
     expect(uniforms.u_symmetry).toBe(0.4);
@@ -192,7 +277,7 @@ describe("toCosmicTrackUniforms", () => {
     expect(uniforms.u_depth).toBe(0.5);
     expect(uniforms.u_softness).toBe(0.8);
     expect(uniforms.u_tail).toBe(0.05);
-    expect(uniforms.u_dither).toBe(0.65);
+    expect(uniforms.u_rampDither).toBe(0.65);
     expect(uniforms.u_ditherSize).toBe(4);
   });
 

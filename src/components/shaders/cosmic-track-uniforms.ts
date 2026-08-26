@@ -27,17 +27,44 @@ export interface CosmicTrackParams {
   /** The flat ground the fan sits on. Alpha 0 makes the layer stackable. */
   colorBack: string;
   /**
-   * How far the whole set of bands has travelled along the track — the
-   * reference's ANGLE.
+   * The colour the rails are drawn in when `edges` is on.
+   *
+   * Its ALPHA is the highlight's strength — the rail is composited OVER the
+   * finished graphic at that opacity, so an opaque colour covers whatever is
+   * under the line and a half-transparent one veils it. That is why there is no
+   * separate intensity control.
+   *
+   * The line keeps this colour along its whole length, tail included. Only its
+   * opacity falls off, which is the difference between a highlight fading out
+   * and one turning into the colour beneath it.
+   *
+   * A colour of its own rather than the ribbon's own lifted toward white, which
+   * is what this used to be: the ramp reaches its lightest colour at the middle
+   * of every band, so a fixed lift blew the rails out to white there while
+   * leaving them tinted at the ends.
+   */
+  colorEdge: string;
+  /**
+   * How far the whole set of bands has travelled along the track — the phase of
+   * the run. (The reference calls this its ANGLE; it is not an angle in any
+   * geometric sense here, and naming it one invited exactly the confusion of
+   * looking for it among `tilt`, `curve` and `roundness`.)
+   *
+   * SIGNED about the apex, which is the part worth knowing: 0 parks the set at
+   * the frame's centre, `-apex` puts it exactly on the apex, and going past
+   * that carries it through onto the far lobe. So a band can be placed before
+   * the apex, on it, or after it, and `travel` swinging either side of this
+   * sweeps one through and back — rather than the set pulsing out of the apex
+   * and dying back into it, which is all an unsigned distance can express.
    *
    * It does NOT touch the geometry: at both ends of the reference's slider the
    * streamlines sit in identical positions, and only the bands' position along
    * them changes. Each band carries the same gradient and keeps it while it
    * moves. The fan’s own shape comes from `apex` and `roundness`.
    */
-  angle: number;
+  phase: number;
   /**
-   * How far the set swings either side of `angle` while animating.
+   * How far the set swings either side of `phase` while animating.
    *
    * Motion here OSCILLATES — the set runs out along the track and returns by
    * the same path, the way the reference's slider is dragged forward and back.
@@ -56,45 +83,66 @@ export interface CosmicTrackParams {
    * WHICH BAND the staircase is measured from — the arrangement, not the size
    * of a step (that stays `stagger`).
    *
-   * At 1 the offsets run straight down the stack: the first band leads, each
-   * one after it sits a step further back, and the last trails by the whole
-   * span. At 0 the stack is MIRRORED about its middle band — first and last
-   * share an offset, second and second-last share theirs, and so on — so the
-   * stagger grows outward from the CENTRE instead of from an edge.
+   * It walks the LEADER — the band that runs ahead of the rest — across the
+   * stack. At 1 the offsets run straight down from the first band, each one
+   * after it a step further back, and the last trails by the whole span. At 0
+   * the stack is MIRRORED about its middle band — first and last share an
+   * offset, second and second-last share theirs — so the stagger grows outward
+   * from the CENTRE. At -1 the walk carries on to the last band and the stack
+   * runs the other way down.
    *
-   * The two ends cover the same total spread, so turning this does not resize
-   * the staircase; it only moves which band leads it, and the values between
-   * walk the leader from the edge to the middle.
+   * Every arrangement covers the same total spread, so turning this does not
+   * resize the staircase; it only moves which band leads it.
+   *
+   * The two ENDS are mirrors, which negating `stagger` would also give. The
+   * values in between are what this reaches and nothing else does: a
+   * half-mirrored stack is not a scaled version of any of them.
    */
   symmetry: number;
   /**
-   * The GAP between adjacent ribbons.
+   * The GAP between adjacent ribbons, measured in RIBBON WIDTHS. 0 is touching,
+   * 1 puts a ribbon's worth of ground between them, 2 puts two.
    *
-   * Each ribbon fills only part of its slot, centred, with ground either side,
-   * so raising this pulls them apart without moving them off their own tracks.
-   * At 0 they touch and the set reads as one sheet.
+   * It makes room by WIDENING the stack, not by thinning the ribbons: the slot
+   * grows by the same factor the ribbon's share of it shrinks, so a ribbon is
+   * `bandwidth` / `bandCount` wide across the fan at every setting of this and
+   * only the ground between them moves.
    *
-   * The counterpart to `bandwidth`: this is applied AFTER the slots are cut, so
-   * it separates them; `bandwidth` is applied before, so it narrows them while
-   * they stay contiguous.
+   * The clean split with `bandwidth` is the point — that one owns how WIDE a
+   * ribbon is, this owns how far APART they sit, and neither reaches into the
+   * other.
+   *
+   * The fan is finite, so this does run out: spread far enough and the
+   * outermost ribbons pass the silhouette and are clipped by it. Narrow
+   * `bandwidth` to bring them back.
    */
   spread: number;
   /**
-   * The gradient’s WIDTH — how much of the fan the stack of ribbons occupies,
-   * measured outward from the centre line.
+   * How WIDE each ribbon is — the stack's full width across the fan at
+   * `spread` 0, shared out between `bandCount` ribbons sitting edge to edge.
    *
    * It compresses the whole stack, so every ribbon narrows together and they
-   * stay STUCK TOGETHER, edge to edge, with no ground opening between them.
-   * Independent of `spread` (the GAP between ribbons) and of `bandCount` (how
-   * many ribbons share the width).
+   * stay STUCK TOGETHER with no ground opening between them; opening ground is
+   * `spread`'s job, and it does that by widening the stack rather than by
+   * reaching back in here. So this stays the ribbon's width at every spread.
    */
   bandwidth: number;
   /**
-   * How rounded the convergence is where the ribbons meet.
+   * How rounded the convergence is where the ribbons meet — and, the same
+   * number read the other way, the fan's HALF-WIDTH at the apex.
    *
    * 0 converges to a true POINT — a sharp apex. Above it the turn is a smooth
    * curve, which is the default: the apex is an artefact of measuring the fan
    * with abs(x), not something the reference shows.
+   *
+   * The width reading is the one that matters when picking a value. The fan's
+   * half-width is sqrt(q² + roundness²) at every x, so this is the waist it
+   * never narrows past — and there is no ceiling to it. Take it beyond the
+   * frame's own half-height and the sqrt is dominated by this term everywhere
+   * visible: the sides stop tapering and the track runs parallel.
+   *
+   * What the ribbons actually occupy is `bandwidth` × this, so a narrow stack
+   * needs a proportionally larger value to fill the same frame.
    */
   roundness: number;
   /**
@@ -144,12 +192,21 @@ export interface CosmicTrackParams {
   /** Cross-band blur. 0 is a hard edge, 1 is a smooth wash. */
   softness: number;
   /**
-   * How far each band’s gradient fades out at its ENDS, along the track.
+   * How far each band’s gradient fades out at its ENDS, along the track — and,
+   * when `edges` is on, how far that band's rails trail past it before they
+   * dissolve.
    *
    * Only the ends. The fan’s outer silhouette keeps a fixed hairline, so
    * raising this lengthens the fade on every band without dissolving the first
    * and last ones — those sit against the silhouette, and softening it reads as
    * them disappearing rather than as a longer tail.
+   *
+   * The rails are given the same control rather than one of their own because
+   * they are the same idea applied to the same axis: without it they are pure
+   * geometry, and pure geometry does not move — the set slides along the track
+   * while the lines sit still at one flat brightness. Their reach runs well
+   * past the band's own span, so the highlight still reads past a fill this has
+   * already dissolved.
    */
   tail: number;
   /**
@@ -167,7 +224,7 @@ export interface CosmicTrackParams {
    * Applied to the FOREGROUND only — the ribbons. The ground is a flat fill
    * with nothing to dither, so quantising it would only stipple a clean colour.
    */
-  dither: number;
+  rampDither: number;
   /**
    * Size of one Bayer cell, in DEVICE pixels.
    *
@@ -177,13 +234,54 @@ export interface CosmicTrackParams {
    * than a pixel has nothing to land on.
    */
   ditherSize: number;
+  /**
+   * How far past its band a rail keeps running before it goes out, in ramp
+   * lengths. 0 puts it out with the fill.
+   *
+   * Separate from `tail` because the two answer different questions — `tail` is
+   * how softly a band ENDS, this is how far its rails OUTLIVE it. They still
+   * begin fading together, so this only moves where the rails finish.
+   */
+  edgeTail: number;
+  /**
+   * How hard the RAILS are dithered, 0..2 — independent of `dither`.
+   *
+   * Either can be on with the other off: a stippled set of ribbons under clean
+   * hairlines, or smooth ribbons ruled with dithered lines. The two share one
+   * Bayer matrix (and so one `ditherSize`), which keeps the rails' dots landing
+   * in the ribbons' own grid rather than beating against it.
+   *
+   * It runs to 2 because a threshold has a ceiling short of 1's worth of
+   * effect. Dithering represents an INTERMEDIATE value with a pattern, and a
+   * rail's core is coverage 1 — nothing intermediate to represent, so the
+   * stipple reaches only the antialiased flanks and the tail however hard the
+   * threshold is pushed. Past 1 this stops asking for more threshold and starts
+   * lowering the coverage the threshold sees, which opens the pattern across
+   * the whole line. The rail thins as it does: a dithered rendering of "fully
+   * opaque" is fully opaque, and the only way to see more pattern is to ask for
+   * less ink.
+   */
+  edgeDither: number;
+  /**
+   * How thick a rail is drawn, in CSS PIXELS — and whether one is drawn at all,
+   * since 0 is no line. One number rather than a switch beside a width: a
+   * switch that only gates another control is a step that value can take on its
+   * own, and two of them can disagree in a way one cannot.
+   *
+   * A screen measurement, not a track one, and deliberately: `tilt` and `depth`
+   * crush the far end of the track, so a width in the shader's own units would
+   * thin away precisely where the structure is hardest to read. Scaled by the
+   * mount's pixel ratio, so the line does not halve on a 2x display or halve
+   * again in an export that pins the buffer higher still.
+   */
+  edgeThickness: number;
 }
 
 /** A legible fan, and the row the playground's control table starts from. */
 export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
   colorBack: "#12042BFF",
-  angle: 0,
+  phase: 0,
   travel: 1.5,
   stagger: 0.45,
   symmetry: 1,
@@ -198,15 +296,19 @@ export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   depth: 0,
   softness: 0.55,
   tail: 0.25,
-  dither: 0.35,
+  rampDither: 0.35,
   ditherSize: 3,
+  colorEdge: "#FFFFFFFF",
+  edgeTail: 0.5,
+  edgeDither: 0,
+  edgeThickness: 0,
 };
 
 export interface CosmicTrackUniforms {
   u_colors: [number, number, number, number][];
   u_colorsCount: number;
   u_colorBack: [number, number, number, number];
-  u_angle: number;
+  u_phase: number;
   u_travel: number;
   u_stagger: number;
   u_symmetry: number;
@@ -221,8 +323,12 @@ export interface CosmicTrackUniforms {
   u_depth: number;
   u_softness: number;
   u_tail: number;
-  u_dither: number;
+  u_rampDither: number;
   u_ditherSize: number;
+  u_colorEdge: [number, number, number, number];
+  u_edgeTail: number;
+  u_edgeDither: number;
+  u_edgeThickness: number;
 }
 
 export function toCosmicTrackUniforms(
@@ -254,13 +360,13 @@ export function toCosmicTrackUniforms(
       number,
       number,
     ],
-    u_angle: params.angle,
+    u_phase: params.phase,
     u_travel: params.travel,
     u_stagger: params.stagger,
-    // Clamped rather than passed through: the shader MIXES between the two
+    // Clamped rather than passed through: the shader MIXES between the
     // arrangements, and `mix` extrapolates — past either end the bands are
-    // dragged beyond both, which is not a third look but a broken one.
-    u_symmetry: Math.min(Math.max(params.symmetry, 0), 1),
+    // dragged beyond all of them, which is not a fourth look but a broken one.
+    u_symmetry: Math.min(Math.max(params.symmetry, -1), 1),
     u_spread: params.spread,
     u_bandwidth: params.bandwidth,
     u_roundness: params.roundness,
@@ -276,7 +382,19 @@ export function toCosmicTrackUniforms(
     u_depth: Math.min(Math.max(params.depth, 0), 1),
     u_softness: params.softness,
     u_tail: params.tail,
-    u_dither: params.dither,
+    u_rampDither: params.rampDither,
     u_ditherSize: params.ditherSize,
+    u_colorEdge: getShaderColorFromString(params.colorEdge) as [
+      number,
+      number,
+      number,
+      number,
+    ],
+    u_edgeTail: Math.max(params.edgeTail, 0),
+    // Clamped to the two stages the shader splits this into — how much
+    // threshold (0..1) and how far open (1..2). Past 2 there is no third stage,
+    // only a duty driven negative.
+    u_edgeDither: Math.min(Math.max(params.edgeDither, 0), 2),
+    u_edgeThickness: Math.max(params.edgeThickness, 0),
   };
 }

@@ -19,6 +19,56 @@ describe("CoverContentSchema", () => {
     }
   });
 
+  // A control that gets RENAMED is the one case the two compatibility rules
+  // handle badly on their own: the old key is unknown so it is stripped, the
+  // new one is missing so it defaults, and a stored value is quietly replaced
+  // by the control's default. A cover saved before the rename would open
+  // looking wrong with nothing to say why.
+  it("carries a stored value across a renamed control", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const { phase: _dropped, ...withoutPhase } = settings.params;
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      // Exactly what a cover saved before `angle` became `phase` holds.
+      settings: { ...settings, params: { ...withoutPhase, angle: -2.4 } },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.params.phase).toBe(-2.4);
+    // The retired key does not survive alongside the one that replaced it.
+    expect(result.success && "angle" in result.data.settings.params).toBe(false);
+  });
+
+  it("carries a stored value across every renamed control", () => {
+    // One table, so a second rename is a row rather than a code path — but the
+    // row still has to be exercised, or the next one is added untested.
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const { phase: _p, rampDither: _d, ...rest } = settings.params;
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      settings: { ...settings, params: { ...rest, angle: -1.5, dither: 0.8 } },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.params.phase).toBe(-1.5);
+    expect(result.success && result.data.settings.params.rampDither).toBe(0.8);
+  });
+
+  it("prefers the current key when a stale one sits beside it", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      settings: {
+        ...settings,
+        params: { ...settings.params, phase: 1.5, angle: -2.4 },
+      },
+    });
+
+    expect(result.success && result.data.settings.params.phase).toBe(1.5);
+  });
+
   it("rejects a shader it has never heard of", () => {
     expect(
       CoverContentSchema.safeParse({

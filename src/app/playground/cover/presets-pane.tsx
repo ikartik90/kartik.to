@@ -102,11 +102,16 @@ const tileStyle = css({
   focusVisibleRing: "outside",
   // The one currently open is stated, not just implied by the URL — a strip of
   // near-identical swatches is exactly where you lose track of which is which.
+  //
+  // The brand hue, which is the token the focus ring already uses — selection
+  // is the app's one branded state, and a strip of covers is the last place a
+  // neutral ring would survive: it has to read as chrome against pictures that
+  // are themselves every colour.
   "&[aria-current='true']": {
     cursor: "default",
     outlineWidth: "token(spacing.xs)",
     outlineStyle: "solid",
-    outlineColor: "border.focus",
+    outlineColor: "border.focusRing",
     outlineOffset: "token(spacing.xs)",
   },
 });
