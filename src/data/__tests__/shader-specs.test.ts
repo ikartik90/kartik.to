@@ -144,6 +144,20 @@ describe("the spec table itself", () => {
     },
   );
 
+  // ONE decimal in the panel, everywhere. The readout's precision is taken from
+  // the step (see `formatSliderValue`), so this is the only place it is set —
+  // and a stray hundredth would show up as a control that reads to a different
+  // precision from the ones above and below it.
+  it.each(eachSpec)("%s: no slider asks for a second decimal", (_, spec) => {
+    for (const control of spec.controls) {
+      if (control.kind !== "slider") continue;
+      expect(
+        Number.isInteger(control.step * 10),
+        `${control.label} steps by ${control.step}`,
+      ).toBe(true);
+    }
+  });
+
   it.each(eachSpec)("%s: only shaders with a background take one", (_, spec) => {
     expect(spec.defaults.colorBack === undefined).toBe(!spec.hasColorBack);
   });

@@ -106,6 +106,70 @@ describe("useCoverDraftStore", () => {
     expect(useCoverDraftStore.getState().settings.aspect).toBe("4/3");
   });
 
+  // "Reset params" on a saved preset means BACK TO THE PRESET, not back to the
+  // shader's factory defaults: once a cover has been written, the thing you
+  // want to undo an experiment against is your own last save.
+  it("resets a loaded preset's params to what was saved, not to the defaults", () => {
+    const saved = {
+      ...savedSettings(SHADER_SPECS.swirl),
+      params: { ...defaultState(SHADER_SPECS.swirl).params, twist: 0.9 },
+    };
+    useCoverDraftStore.getState().load({
+      id: "cover-1",
+      title: "Dusk",
+      shaderId: "swirl",
+      settings: saved,
+    });
+    useCoverDraftStore.getState().setParam("twist", 0.1);
+    useCoverDraftStore.getState().resetParams();
+
+    expect(useCoverDraftStore.getState().settings.params).toEqual(saved.params);
+  });
+
+  // Every save re-baselines, because a save is what "last saved" MEANS — and
+  // the save path adopts what was stored through `load`, so this is the seam.
+  it("follows the latest save rather than the one the draft opened on", () => {
+    const spec = SHADER_SPECS.swirl;
+    const open = { ...savedSettings(spec), params: { ...defaultState(spec).params, twist: 0.9 } };
+    useCoverDraftStore.getState().load({ id: "cover-1", title: "Dusk", shaderId: "swirl", settings: open });
+
+    const committed = { ...open, params: { ...open.params, twist: 0.2 } };
+    useCoverDraftStore.getState().load({ id: "cover-1", title: "Dusk", shaderId: "swirl", settings: committed });
+    useCoverDraftStore.getState().setParam("twist", 0.7);
+    useCoverDraftStore.getState().resetParams();
+
+    expect(useCoverDraftStore.getState().settings.params.twist).toBe(0.2);
+  });
+
+  // Nothing has been saved to go back to, so the defaults are the only baseline
+  // there is.
+  it("resets an unsaved draft to the shader's defaults", () => {
+    useCoverDraftStore.getState().setParam("rampLength", 4);
+    useCoverDraftStore.getState().resetParams();
+
+    expect(useCoverDraftStore.getState().settings.params).toEqual(
+      defaultState(SHADER_SPECS.cosmicTrack).params,
+    );
+  });
+
+  // A saved cover's params belong to the shader it was saved on. Restoring them
+  // over a different shader's control table would write keys it has never heard
+  // of, so the baseline only applies where it fits.
+  it("resets to the defaults after switching off the saved cover's shader", () => {
+    useCoverDraftStore.getState().load({
+      id: "cover-1",
+      title: "Dusk",
+      shaderId: "swirl",
+      settings: { ...savedSettings(SHADER_SPECS.swirl), params: { ...defaultState(SHADER_SPECS.swirl).params, twist: 0.9 } },
+    });
+    useCoverDraftStore.getState().selectShader("godRays");
+    useCoverDraftStore.getState().resetParams();
+
+    expect(useCoverDraftStore.getState().settings.params).toEqual(
+      defaultState(SHADER_SPECS.godRays).params,
+    );
+  });
+
   it("opens a new draft on the default shape", () => {
     expect(useCoverDraftStore.getState().settings.aspect).toBe(
       DEFAULT_COVER_ASPECT,

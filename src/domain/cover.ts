@@ -131,6 +131,16 @@ const RENAMED_PARAMS: Record<string, string> = {
   // Renamed once the rails got a dither of their own: with two of them, the
   // bare word said which one only by being the older.
   dither: "rampDither",
+  // Renamed to say what they ARE rather than what they do to a curve, and to
+  // stop reading as a verb beside the nouns around them. The values carry over
+  // untouched: 1 was the fully eased swing under the old 0..2 range and still is
+  // under -1..1, and 0 was a linear one either way.
+  ease: "easing",
+  easeSkew: "easingBias",
+  // Renamed to say it the way the rest of the panel says a measurement, and to
+  // stop it reading as a property of the swatch it sits beside. Same number,
+  // same range — the stored value carries straight over.
+  edgeThickness: "edgeWidth",
 };
 
 /** Moves any stored value under a retired key onto the key that replaced it. */

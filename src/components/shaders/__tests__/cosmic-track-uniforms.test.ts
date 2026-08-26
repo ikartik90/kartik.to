@@ -168,22 +168,22 @@ describe("toCosmicTrackUniforms", () => {
     // The thickness IS the switch — a separate toggle beside it would be a step
     // this value can take on its own, and the two could disagree. Off at rest,
     // so the shader renders exactly as it did before the highlight existed.
-    expect(DEFAULT_COSMIC_TRACK.edgeThickness).toBe(0);
-    expect(toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_edgeThickness).toBe(0);
+    expect(DEFAULT_COSMIC_TRACK.edgeWidth).toBe(0);
+    expect(toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_edgeWidth).toBe(0);
 
     const drawn = toCosmicTrackUniforms({
       ...DEFAULT_COSMIC_TRACK,
-      edgeThickness: 2.5,
+      edgeWidth: 2.5,
     });
-    expect(drawn.u_edgeThickness).toBe(2.5);
+    expect(drawn.u_edgeWidth).toBe(2.5);
   });
 
   it("never sends a negative thickness", () => {
     // Negative would flip the stroke's smoothstep inside out — not a thinner
     // line but a lit band everywhere the line is not.
     expect(
-      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeThickness: -3 })
-        .u_edgeThickness,
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, edgeWidth: -3 })
+        .u_edgeWidth,
     ).toBe(0);
   });
 
@@ -293,5 +293,92 @@ describe("toCosmicTrackUniforms", () => {
 
     expect(uniforms.u_rampLength).toBeGreaterThan(0);
     expect(uniforms.u_bandCount).toBeGreaterThanOrEqual(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Easing — the SHAPE of the swing, apart from its size (`travel`) and its rate
+  // (the mount's own `speed`).
+  // ---------------------------------------------------------------------------
+
+  // The defaults have to reproduce the plain sine the shader animated on before
+  // these existed, or every saved cover starts moving differently. That is the
+  // TOP of the easing range, and deliberately: a fully eased turnaround was the
+  // shader's own choice long before there was a control to undo it.
+  it("defaults to the fully eased swing the shader has always had", () => {
+    const uniforms = toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK);
+
+    expect(uniforms.u_easing).toBe(1);
+    expect(uniforms.u_easingBias).toBe(0);
+  });
+
+  it("passes the easing through untouched", () => {
+    const uniforms = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      easing: -0.4,
+      easingBias: -0.6,
+    });
+
+    expect(uniforms.u_easing).toBe(-0.4);
+    expect(uniforms.u_easingBias).toBe(-0.6);
+  });
+
+  // Both are MIX FACTORS in the shader, and `mix` extrapolates: past either end
+  // the swing is dragged beyond the curves it is blending between, which is not
+  // a stronger ease but a broken one. Same reasoning as `symmetry`.
+  it("clamps the easing to the curves it blends between", () => {
+    const over = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      easing: 9,
+      easingBias: 4,
+    });
+    const under = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      easing: -3,
+      easingBias: -4,
+    });
+
+    expect(over.u_easing).toBe(1);
+    expect(over.u_easingBias).toBe(1);
+    expect(under.u_easing).toBe(-1);
+    expect(under.u_easingBias).toBe(-1);
+  });
+
+  // The rest at each end of the travel. 0 is the unbroken swing this had before
+  // the control existed, so it has to be the default.
+  it("defaults to no rest at the ends", () => {
+    expect(toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK).u_interval).toBe(0);
+  });
+
+  it("passes the rest through untouched", () => {
+    const uniforms = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      interval: 0.75,
+    });
+
+    expect(uniforms.u_interval).toBe(0.75);
+  });
+
+  // Measured in SWEEP LENGTHS, and it divides by (1 + interval) in the shader —
+  // so a negative one below -1 flips the sign of the whole half-cycle and the
+  // set runs backwards through its own rest.
+  it("clamps the rest to the range the shader can divide by", () => {
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, interval: -4 }).u_interval,
+    ).toBe(0);
+    expect(
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, interval: 9 }).u_interval,
+    ).toBe(2);
+  });
+
+  // 0 is the middle of the range now, not the bottom of it: no easing at all,
+  // which is a linear sweep. It has to survive the clamp rather than being
+  // treated as an absent value.
+  it("keeps a linear swing at zero", () => {
+    const uniforms = toCosmicTrackUniforms({
+      ...DEFAULT_COSMIC_TRACK,
+      easing: 0,
+    });
+
+    expect(uniforms.u_easing).toBe(0);
   });
 });

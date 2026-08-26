@@ -30,12 +30,29 @@ export type ShaderId =
  * Which group in the sidebar a control is drawn in. Omitted — the usual case —
  * leaves it with the shader's own parameters.
  *
- * "colors" is for a control whose whole subject is one of the colours above it.
- * A switch that decides whether a colour is painted at all belongs beside that
- * colour's swatch, not stranded among the geometry sliders where its name is
- * the only clue the two are related.
+ * "edge" is for the rails: how wide the line is, how sharply the fill it traces
+ * ends, and how far the line outlives that fill. The rails' COLOUR is not one of
+ * them — a colour belongs with the colours, and what these three share is the
+ * line rather than its ink.
+ *
+ * "motion" is for a control that shapes what MOVES. The shared block below owns
+ * the one control every animated shader has — its speed — and this is how a
+ * shader whose GLSL is ours adds timing of its own to the same group without
+ * pretending it is shared: the built-ins come from the library as finished
+ * programs, so a uniform we invented exists in exactly one of them.
+ *
+ * "dither" is for the ordered-dither controls, which are one mechanism read
+ * three ways: two strengths over a single Bayer matrix, and the cell size that
+ * matrix is sampled at. Left among the geometry sliders, only their names said
+ * they had anything to do with each other — and the size, which both strengths
+ * read, sat as far from them as any unrelated control.
+ *
+ * "ramp" is for where the colours SIT along the track and how they are shared
+ * out between the bands. It draws next to the colours themselves, because the
+ * ramp is those colours laid along the fan — leaving Parameters to hold the
+ * fan's own geometry, which the ramp is drawn on but does not decide.
  */
-export type ControlGroup = "colors";
+export type ControlGroup = "dither" | "edge" | "motion" | "ramp";
 
 export interface SliderSpec {
   kind: "slider";
@@ -113,10 +130,10 @@ export interface ShaderSpec {
 // box to a pixel and renders nothing at all. Controls whose only settings are
 // "no change" and "broken" are not properties of the shader worth showing.
 const FRAMING_CONTROLS: ControlSpec[] = [
-  { kind: "slider", key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.01, value: 1 },
+  { kind: "slider", key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.1, value: 1 },
   { kind: "slider", key: "rotation", label: "Rotation", min: 0, max: 360, step: 1, value: 0 },
-  { kind: "slider", key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.01, value: 0 },
-  { kind: "slider", key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.01, value: 0 },
+  { kind: "slider", key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.1, value: 0 },
+  { kind: "slider", key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.1, value: 0 },
 ];
 
 // Spread ONLY into a shader whose fragment shader actually samples `u_time`.
@@ -129,7 +146,7 @@ const FRAMING_CONTROLS: ControlSpec[] = [
 // Zero is not just "slow": the library cancels the rAF entirely at 0, so a
 // parked shader costs nothing per frame. Worth leaving here at rest.
 const MOTION_CONTROLS: ControlSpec[] = [
-  { kind: "slider", key: "speed", label: "Speed", min: 0, max: 2, step: 0.01, value: 0 },
+  { kind: "slider", key: "speed", label: "Speed", min: 0, max: 5, step: 0.1, value: 0 },
 ];
 
 /**
@@ -184,72 +201,93 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // where Tilt and Depth crush the far end of the track instead of thinning
       // away with what it traces.
       //
-      // Drawn with the COLOURS, beside the swatch it governs — see `group`.
-      { kind: "slider", key: "edgeThickness", label: "Edge Thickness", group: "colors", min: 0, max: 4, step: 0.05, value: 0 },
+      // Drawn with the other EDGE controls — see `group`. Not beside the swatch
+      // it shares a name with: a colour belongs with the colours, and what this
+      // has in common with Softness and Edge Tail is the line itself.
+      { kind: "slider", key: "edgeWidth", label: "Edge Width", group: "edge", min: 0, max: 4, step: 0.1, value: 0 },
       // Slides every band along the track at once. 0 parks the set at the
       // frame's centre and -Apex puts it exactly on the apex, so the range has
       // to cover Apex's own (0..5) with room for a band's length either side,
       // or the far lobe is unreachable at a high Apex.
-      { kind: "slider", key: "phase", label: "Phase", min: -7, max: 7, step: 0.01, value: 0 },
+      { kind: "slider", key: "phase", label: "Phase", group: "ramp", min: -7, max: 7, step: 0.1, value: 0 },
       // How far Speed swings the set either side of Phase. Motion oscillates
       // out and back rather than drifting one way, so the bands always return.
-      { kind: "slider", key: "travel", label: "Travel", min: 0, max: 4, step: 0.01, value: 1.5 },
+      { kind: "slider", key: "travel", label: "Travel", group: "ramp", min: 0, max: 4, step: 0.1, value: 1.5 },
+      // The swing's timing CURVE, drawn with Speed rather than here — how far
+      // it goes is a shape decision, how it gets there is a motion one.
+      //
+      // Signed about a linear swing: 0 is constant speed and a reversal on the
+      // spot, positive eases OUT of each sweep (decelerating into the end),
+      // negative eases IN. 1 is the sine this animated on before the control
+      // existed, which is why it defaults there rather than to the neutral
+      // middle — see `cosmic-track-uniforms`.
+      // How long the set rests at each end before starting back, in sweep
+      // lengths. Taken out of the half-cycle rather than added to it, so the
+      // cadence stays Speed's and only the crossing gets brisker.
+      { kind: "slider", key: "interval", label: "Interval", group: "motion", min: 0, max: 2, step: 0.1, value: 0 },
+      { kind: "slider", key: "easing", label: "Easing", group: "motion", min: -1, max: 1, step: 0.1, value: 1 },
+      // Where the speed sits within a sweep across the track. Easing shapes each
+      // sweep symmetrically; this is the one that makes a sweep's start differ
+      // from its end — positive pushes off fast and glides in, negative eases
+      // away and arrives fast. It inverts with the direction of travel, so the
+      // way back leans the same way relative to where it is going.
+      { kind: "slider", key: "easingBias", label: "Easing Bias", group: "motion", min: -1, max: 1, step: 0.1, value: 0 },
       // The gap between one band and the next. At 0 they advance as one flat
       // front; turning it up is what produces the reference's staircase.
-      { kind: "slider", key: "stagger", label: "Stagger", min: -2, max: 2, step: 0.01, value: 0.45 },
+      { kind: "slider", key: "stagger", label: "Stagger", group: "ramp", min: -2, max: 2, step: 0.1, value: 0.45 },
       // Which band the staircase is measured from, at the same step size — the
       // control walks the LEADER across the stack. 1 runs it straight down from
       // the first band; 0 mirrors it about the middle band, so the outermost
       // pair share an offset and the stagger grows from the centre outward; -1
       // carries the walk on to the last band and the stack runs the other way.
-      { kind: "slider", key: "symmetry", label: "Symmetry", min: -1, max: 1, step: 0.01, value: 1 },
+      { kind: "slider", key: "symmetry", label: "Symmetry", group: "ramp", min: -1, max: 1, step: 0.1, value: 1 },
       // How far a band's single gradient spans along the track. Beyond its two
       // ends the track carries ground, not another copy of the palette.
-      { kind: "slider", key: "rampLength", label: "Ramp Length", min: 0.05, max: 6, step: 0.01, value: 1.6 },
+      { kind: "slider", key: "rampLength", label: "Length", group: "ramp", min: 0.05, max: 10, step: 0.1, value: 1.6 },
       // The gap between adjacent ribbons, measured in RIBBON WIDTHS — 0 is
       // touching, 1 puts a ribbon's worth of ground between them, 2 puts two.
       // It widens the stack to make room rather than thinning the ribbons, so
       // Bandwidth below owns how wide a ribbon is and this owns only how far
       // apart they sit. Past the top of the range the outermost ribbons pass
       // the fan's own silhouette and are clipped by it.
-      { kind: "slider", key: "spread", label: "Spread", min: 0, max: 3, step: 0.01, value: 0.25 },
+      { kind: "slider", key: "spread", label: "Spread", min: 0, max: 3, step: 0.1, value: 0.25 },
       // How WIDE each ribbon is — the stack's width at Spread 0, shared out
       // between Band Count ribbons that sit edge to edge there. Independent of
       // Spread, which only adds ground around them.
-      { kind: "slider", key: "bandwidth", label: "Bandwidth", min: 0, max: 1, step: 0.01, value: 0.7 },
+      { kind: "slider", key: "bandwidth", label: "Bandwidth", min: 0, max: 1, step: 0.1, value: 0.7 },
       // How the ribbons meet, and — the same thing — the track's HALF-WIDTH at
       // the apex, in the same units as its width anywhere else. 0 is a true
       // point; raising it opens the convergence into a curve and widens the
       // waist with it. The range runs well past the frame on purpose: only
       // there do the sides stop tapering and the track read as parallel.
-      { kind: "slider", key: "roundness", label: "Roundness", min: 0, max: 6, step: 0.01, value: 0.35 },
+      { kind: "slider", key: "roundness", label: "Roundness", min: 0, max: 6, step: 0.1, value: 0.35 },
       // Where the fan converges, leftward from centre. The fan is symmetric
       // about its apex, so 0 puts it mid-frame and shows two mirrored lobes;
       // past the edge (the default) leaves one continuous track.
-      { kind: "slider", key: "apex", label: "Apex", min: 0, max: 5, step: 0.01, value: 2.2 },
-      { kind: "slider", key: "bandCount", label: "Band Count", min: 1, max: 20, step: 1, value: 7 },
-      { kind: "slider", key: "curve", label: "Curve", min: -2, max: 2, step: 0.01, value: 0.35 },
+      { kind: "slider", key: "apex", label: "Apex", min: 0, max: 5, step: 0.1, value: 2.2 },
+      { kind: "slider", key: "bandCount", label: "Count", min: 1, max: 20, step: 1, value: 7 },
+      { kind: "slider", key: "curve", label: "Curve", min: -2, max: 2, step: 0.1, value: 0.35 },
       // The angle the tracks make with the surface. 0 is flat-on; raising it
       // leans the plane away so the ribbons foreshorten toward a horizon.
-      { kind: "slider", key: "tilt", label: "Tilt", min: -1.5, max: 1.5, step: 0.01, value: 0.6 },
+      { kind: "slider", key: "tilt", label: "Tilt", min: -1.5, max: 1.5, step: 0.1, value: 0.6 },
       // Curls the surface the tracks lie on, through the same divide as Tilt —
       // so the bend arrives with foreshortening and the ribbons crowd where it
       // turns away. 0 is the flat sheet; Curve is the flat-glass counterpart.
-      { kind: "slider", key: "depth", label: "Depth", min: 0, max: 1, step: 0.01, value: 0 },
-      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, value: 0.55 },
-      { kind: "slider", key: "tail", label: "Tail", min: 0, max: 1, step: 0.01, value: 0.25 },
+      { kind: "slider", key: "depth", label: "Depth", min: 0, max: 1, step: 0.1, value: 0 },
+      { kind: "slider", key: "softness", label: "Softness", group: "edge", min: 0, max: 1, step: 0.1, value: 0.55 },
+      { kind: "slider", key: "tail", label: "Tail", group: "ramp", min: 0, max: 1, step: 0.1, value: 0.25 },
       // How far past its band a rail keeps running before it goes out, in ramp
       // lengths. Its own control rather than a multiple of Tail because the two
       // answer different questions — Tail is how softly a band ENDS, this is how
       // far its rails OUTLIVE it. The two still start their fade together (see
       // the shader), so this only ever moves where the rails finish.
-      { kind: "slider", key: "edgeTail", label: "Edge Tail", min: 0, max: 3, step: 0.01, value: 0.5 },
-            // Ordered (Bayer) dither: quantises to fewer levels and patterns the
+      { kind: "slider", key: "edgeTail", label: "Edge Tail", group: "edge", min: 0, max: 3, step: 0.1, value: 0.5 },
+      // Ordered (Bayer) dither: quantises to fewer levels and patterns the
       // rounding. 0 is off; higher drops the level count and the crosshatch shows.
-      { kind: "slider", key: "rampDither", label: "Ramp Dither", min: 0, max: 1, step: 0.01, value: 0.35 },
-      // How hard the RAILS are dithered — independent of Dither, so either can
-      // be on with the other off. The two share one matrix, and so one Dither
-      // Size.
+      { kind: "slider", key: "rampDither", label: "Ramp Dither", group: "dither", min: 0, max: 1, step: 0.1, value: 0.35 },
+      // How hard the RAILS are dithered — independent of Ramp Dither, so either
+      // can be on with the other off. The two share one matrix, and so one
+      // Dither Size.
       //
       // It runs to 2, not 1, and the second half is the point. A threshold can
       // only bite on coverage below 1, and a rail's core IS 1 — so at 1 the
@@ -257,21 +295,21 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // more threshold changes nothing. Past 1 the control lowers the coverage
       // the threshold sees, opening the pattern across the whole line. The line
       // thins as it goes, which is what more dither looks like.
-      { kind: "slider", key: "edgeDither", label: "Edge Dither", min: 0, max: 2, step: 0.01, value: 0 },
+      { kind: "slider", key: "edgeDither", label: "Edge Dither", group: "dither", min: 0, max: 2, step: 0.1, value: 0 },
       // Size of one Bayer cell in DEVICE pixels — so on a 2x display 1 puts the
       // whole 8x8 matrix inside 4 CSS px, too fine to read. Raise to coarsen.
       //
       // Not "Ramp" anything: there is ONE matrix, and the ramp and the rails
       // both read it. Two cell sizes would beat against each other where a rail
       // crosses its own ribbon.
-      { kind: "slider", key: "ditherSize", label: "Dither Size", min: 1, max: 12, step: 1, value: 3 },
+      { kind: "slider", key: "ditherSize", label: "Dither Size", group: "dither", min: 1, max: 12, step: 1, value: 3 },
       ...FRAMING_CONTROLS,
       ...MOTION_CONTROLS,
     ],
     defaults: {
       colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
       colorBack: "#12042BFF",
-      params: { phase: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3 },
+      params: { phase: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3, easing: 1, easingBias: 0, interval: 0 },
     },
   },
 
@@ -285,14 +323,14 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     hasColorBack: true,
     extraColors: [],
     controls: [
-      { kind: "slider", key: "density", label: "Density", min: 0.25, max: 7, step: 0.05, value: 2.2 },
-      { kind: "slider", key: "angle1", label: "Angle 1", min: -1, max: 1, step: 0.01, value: 0.1 },
-      { kind: "slider", key: "angle2", label: "Angle 2", min: -1, max: 1, step: 0.01, value: -0.1 },
-      { kind: "slider", key: "length", label: "Length", min: 0, max: 3, step: 0.01, value: 2.4 },
-      { kind: "slider", key: "blur", label: "Blur", min: 0, max: 0.5, step: 0.01, value: 0.28 },
-      { kind: "slider", key: "fadeIn", label: "Fade In", min: 0, max: 1, step: 0.01, value: 0.35 },
-      { kind: "slider", key: "fadeOut", label: "Fade Out", min: 0, max: 1, step: 0.01, value: 0.65 },
-      { kind: "slider", key: "gradient", label: "Gradient", min: 0, max: 1, step: 0.01, value: 1 },
+      { kind: "slider", key: "density", label: "Density", min: 0.25, max: 7, step: 0.1, value: 2.2 },
+      { kind: "slider", key: "angle1", label: "Angle 1", min: -1, max: 1, step: 0.1, value: 0.1 },
+      { kind: "slider", key: "angle2", label: "Angle 2", min: -1, max: 1, step: 0.1, value: -0.1 },
+      { kind: "slider", key: "length", label: "Length", min: 0, max: 3, step: 0.1, value: 2.4 },
+      { kind: "slider", key: "blur", label: "Blur", min: 0, max: 0.5, step: 0.1, value: 0.28 },
+      { kind: "slider", key: "fadeIn", label: "Fade In", min: 0, max: 1, step: 0.1, value: 0.35 },
+      { kind: "slider", key: "fadeOut", label: "Fade Out", min: 0, max: 1, step: 0.1, value: 0.65 },
+      { kind: "slider", key: "gradient", label: "Gradient", min: 0, max: 1, step: 0.1, value: 1 },
       { kind: "toggle", key: "edges", label: "Edge highlight", value: false },
       ...FRAMING_CONTROLS,
       ...MOTION_CONTROLS,
@@ -314,12 +352,12 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     hasColorBack: true,
     extraColors: [{ key: "colorBloom", label: "Bloom", value: LIME }],
     controls: [
-      { kind: "slider", key: "density", label: "Density", min: 0, max: 1, step: 0.01, value: 0.8 },
-      { kind: "slider", key: "intensity", label: "Intensity", min: 0, max: 1, step: 0.01, value: 0.55 },
-      { kind: "slider", key: "spotty", label: "Spotty", min: 0, max: 1, step: 0.01, value: 0.15 },
-      { kind: "slider", key: "midSize", label: "Mid Size", min: 0, max: 1, step: 0.01, value: 0.2 },
-      { kind: "slider", key: "midIntensity", label: "Mid Intensity", min: 0, max: 1, step: 0.01, value: 0.15 },
-      { kind: "slider", key: "bloom", label: "Bloom", min: 0, max: 1, step: 0.01, value: 0.45 },
+      { kind: "slider", key: "density", label: "Density", min: 0, max: 1, step: 0.1, value: 0.8 },
+      { kind: "slider", key: "intensity", label: "Intensity", min: 0, max: 1, step: 0.1, value: 0.55 },
+      { kind: "slider", key: "spotty", label: "Spotty", min: 0, max: 1, step: 0.1, value: 0.15 },
+      { kind: "slider", key: "midSize", label: "Mid Size", min: 0, max: 1, step: 0.1, value: 0.2 },
+      { kind: "slider", key: "midIntensity", label: "Mid Intensity", min: 0, max: 1, step: 0.1, value: 0.15 },
+      { kind: "slider", key: "bloom", label: "Bloom", min: 0, max: 1, step: 0.1, value: 0.45 },
       ...FRAMING_CONTROLS,
       ...MOTION_CONTROLS,
     ],
@@ -353,11 +391,11 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
         ],
         value: "stripes",
       },
-      { kind: "slider", key: "proportion", label: "Proportion", min: 0, max: 1, step: 0.01, value: 0.5 },
-      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, value: 0.9 },
-      { kind: "slider", key: "shapeScale", label: "Shape Scale", min: 0, max: 1, step: 0.01, value: 0.12 },
-      { kind: "slider", key: "distortion", label: "Distortion", min: 0, max: 1, step: 0.01, value: 0.15 },
-      { kind: "slider", key: "swirl", label: "Swirl", min: 0, max: 1, step: 0.01, value: 0.35 },
+      { kind: "slider", key: "proportion", label: "Proportion", min: 0, max: 1, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.1, value: 0.9 },
+      { kind: "slider", key: "shapeScale", label: "Shape Scale", min: 0, max: 1, step: 0.1, value: 0.12 },
+      { kind: "slider", key: "distortion", label: "Distortion", min: 0, max: 1, step: 0.1, value: 0.15 },
+      { kind: "slider", key: "swirl", label: "Swirl", min: 0, max: 1, step: 0.1, value: 0.35 },
       { kind: "slider", key: "swirlIterations", label: "Swirl Iterations", min: 0, max: 20, step: 1, value: 6 },
       ...FRAMING_CONTROLS,
       ...MOTION_CONTROLS,
@@ -378,12 +416,12 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     extraColors: [],
     controls: [
       { kind: "slider", key: "bandCount", label: "Band Count", min: 0, max: 15, step: 1, value: 6 },
-      { kind: "slider", key: "twist", label: "Twist", min: 0, max: 1, step: 0.01, value: 0.15 },
-      { kind: "slider", key: "center", label: "Center", min: 0, max: 1, step: 0.01, value: 0.4 },
-      { kind: "slider", key: "proportion", label: "Proportion", min: 0, max: 1, step: 0.01, value: 0.5 },
-      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, value: 0.9 },
-      { kind: "slider", key: "noise", label: "Noise", min: 0, max: 1, step: 0.01, value: 0.1 },
-      { kind: "slider", key: "noiseFrequency", label: "Noise Frequency", min: 0, max: 1, step: 0.01, value: 0.3 },
+      { kind: "slider", key: "twist", label: "Twist", min: 0, max: 1, step: 0.1, value: 0.15 },
+      { kind: "slider", key: "center", label: "Center", min: 0, max: 1, step: 0.1, value: 0.4 },
+      { kind: "slider", key: "proportion", label: "Proportion", min: 0, max: 1, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.1, value: 0.9 },
+      { kind: "slider", key: "noise", label: "Noise", min: 0, max: 1, step: 0.1, value: 0.1 },
+      { kind: "slider", key: "noiseFrequency", label: "Noise Frequency", min: 0, max: 1, step: 0.1, value: 0.3 },
       ...FRAMING_CONTROLS,
       ...MOTION_CONTROLS,
     ],
@@ -406,13 +444,13 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // A placement SEED, not a position — nudging it re-rolls the field rather
       // than sliding it, which is why it steps by whole numbers.
       { kind: "slider", key: "positions", label: "Positions", min: 0, max: 100, step: 1, value: 8 },
-      { kind: "slider", key: "waveX", label: "Wave X", min: 0, max: 1, step: 0.01, value: 0.3 },
-      { kind: "slider", key: "waveXShift", label: "Wave X Shift", min: 0, max: 1, step: 0.01, value: 0.5 },
-      { kind: "slider", key: "waveY", label: "Wave Y", min: 0, max: 1, step: 0.01, value: 0.3 },
-      { kind: "slider", key: "waveYShift", label: "Wave Y Shift", min: 0, max: 1, step: 0.01, value: 0.5 },
-      { kind: "slider", key: "mixing", label: "Mixing", min: 0, max: 1, step: 0.01, value: 0.6 },
-      { kind: "slider", key: "grainMixer", label: "Grain Mixer", min: 0, max: 1, step: 0.01, value: 0.2 },
-      { kind: "slider", key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.01, value: 0.1 },
+      { kind: "slider", key: "waveX", label: "Wave X", min: 0, max: 1, step: 0.1, value: 0.3 },
+      { kind: "slider", key: "waveXShift", label: "Wave X Shift", min: 0, max: 1, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "waveY", label: "Wave Y", min: 0, max: 1, step: 0.1, value: 0.3 },
+      { kind: "slider", key: "waveYShift", label: "Wave Y Shift", min: 0, max: 1, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "mixing", label: "Mixing", min: 0, max: 1, step: 0.1, value: 0.6 },
+      { kind: "slider", key: "grainMixer", label: "Grain Mixer", min: 0, max: 1, step: 0.1, value: 0.2 },
+      { kind: "slider", key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.1, value: 0.1 },
       ...FRAMING_CONTROLS,
       // No MOTION_CONTROLS: this shader's fragment shader never reads
       // `u_time`, so a Speed slider here would be a control that does

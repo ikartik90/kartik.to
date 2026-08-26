@@ -30,6 +30,7 @@ import { Typography } from "@/components/ui/typography";
 import { Tooltip } from "@/components/ui/tooltip";
 import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
+import ResetIcon from "@/assets/icons/reset.svg";
 import {
   SHADER_IDS,
   SHADER_SPECS,
@@ -283,9 +284,10 @@ const sheetOnlyStyle = css({ display: "none", _bottomSheet: { display: "flex" } 
 // it has today.
 const sheetGripStyle = css({ _bottomSheet: { touchAction: "none" } });
 
-const rowStyle = css({ display: "flex", flexWrap: "wrap", gap: "sm" });
-
-const captionStyle = css({ textStyle: "caption", color: "text.default/50" });
+// The header's trailing controls. Two on a phone, one on the rail — the close
+// button is the sheet's alone — so they are grouped rather than left to the
+// header's own `space-between`, which would push them to opposite ends.
+const headerActionsStyle = css({ display: "flex", alignItems: "center", gap: "xs" });
 
 /**
  * The docked panel, borrowed from the collection editor's media inspector —
@@ -376,7 +378,6 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const aspect = state.aspect;
   const [ratioWidth, ratioHeight] = ASPECT_RATIOS[aspect];
 
-  const [copied, setCopied] = useState(false);
 
   // Whether the sheet has been sent away. Read ONLY inside the bottom-sheet
   // media query (see `panda.config.ts`), which is what makes rotating the phone
@@ -418,7 +419,6 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   /** Switching shader re-seeds from that shader's defaults — its control table is a different shape. */
   function selectShader(next: ShaderId) {
     selectShaderInStore(next);
-    setCopied(false);
   }
 
   /** The shared blocks, in the order they are grouped — and what is left is the shader's own. */
@@ -430,18 +430,29 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // A control can name a group of its own, and one that does is drawn there
   // instead — see `ControlGroup`. Filtered out here rather than merely repeated
   // below, or it would render twice.
-  const colorControls = spec.controls.filter(
-    (control) => control.group === "colors",
+  const ditherControls = spec.controls.filter(
+    (control) => control.group === "dither",
+  );
+  const edgeControls = spec.controls.filter(
+    (control) => control.group === "edge",
+  );
+  const rampControls = spec.controls.filter(
+    (control) => control.group === "ramp",
   );
   const ownControls = spec.controls.filter(
     (control) => !shared.has(control.key) && control.group === undefined,
   );
   const framingControls = byKey(FRAMING_CONTROL_KEYS);
-  const motionControls = byKey(MOTION_CONTROL_KEYS);
+  // The shared Speed first, then whatever timing the shader owns itself. Speed
+  // leads because it is the gate: at 0 the mount cancels the frame loop and
+  // nothing below it can be seen doing anything.
+  const motionControls = [
+    ...byKey(MOTION_CONTROL_KEYS),
+    ...spec.controls.filter((control) => control.group === "motion"),
+  ];
 
   function setParam(key: string, value: number | boolean | string) {
     setParamInStore(key, value);
-    setCopied(false);
   }
 
   /**
@@ -456,39 +467,6 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
       colors.push(colors[colors.length - 1] ?? "#FFFFFFFF");
     }
     setColorsInStore(colors);
-  }
-
-  /** The settings as a JSX tag, ready to paste into a component. */
-  async function copyProps() {
-    const lines = [
-      ...Object.entries(state.params).map(([key, value]) =>
-        typeof value === "string"
-          ? `  ${key}="${value}"`
-          : typeof value === "boolean"
-            ? value
-              ? `  ${key}`
-              : ""
-            : `  ${key}={${value}}`,
-      ),
-      ...(state.colorBack ? [`  colorBack="${state.colorBack}"`] : []),
-      ...Object.entries(state.extraColors).map(
-        ([key, value]) => `  ${key}="${value}"`,
-      ),
-      `  colors={${JSON.stringify(state.colors)}}`,
-      `  fit="cover"`,
-    ].filter(Boolean);
-
-    const jsx = `<${spec.label.replace(/ /g, "")}\n${lines.join("\n")}\n/>`;
-
-    // A denied clipboard permission is a rejected promise, and an unhandled one
-    // in a dev tool is just noise in the console you were trying to read. Fall
-    // back to logging the tag — the point is to get the settings OUT.
-    try {
-      await navigator.clipboard.writeText(jsx);
-      setCopied(true);
-    } catch {
-      console.info(jsx);
-    }
   }
 
   /**
@@ -638,17 +616,30 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           <Typography tag="p" type="bodyLarge" className={panel.title}>
             Properties
           </Typography>
-          <Button
-            variant="icon"
-            className={sheetOnlyStyle}
-            aria-label="Close properties"
-            onClick={() => setDismissed(true)}
-          >
-            <CrossIcon />
-            <Button.Tooltip>
-              <Tooltip.Text>Close properties</Tooltip.Text>
-            </Button.Tooltip>
-          </Button>
+          <div className={headerActionsStyle}>
+            {/* "Reset", flat — the panel is what it acts on and the header is
+                where it says so. WHERE it resets to (the preset you opened, or
+                the shader's defaults where there is no preset) is the store's
+                to decide; spelling that out in the label would make the shortest
+                control in the header the wordiest thing in it. */}
+            <Button variant="icon" aria-label="Reset" onClick={resetParamsInStore}>
+              <ResetIcon />
+              <Button.Tooltip>
+                <Tooltip.Text>Reset</Tooltip.Text>
+              </Button.Tooltip>
+            </Button>
+            <Button
+              variant="icon"
+              className={sheetOnlyStyle}
+              aria-label="Close properties"
+              onClick={() => setDismissed(true)}
+            >
+              <CrossIcon />
+              <Button.Tooltip>
+                <Tooltip.Text>Close properties</Tooltip.Text>
+              </Button.Tooltip>
+            </Button>
+          </div>
         </div>
 
         <Group title="Shader">
@@ -726,13 +717,26 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             </Field>
           ))}
 
-          {/* Controls that belong to a colour rather than to the geometry —
-              the switch that decides whether one of the swatches above is
-              painted at all reads as a stray slider anywhere else. */}
-          {colorControls.map(renderControl)}
         </Group>
 
-        <Group title="Parameters">{ownControls.map(renderControl)}</Group>
+        {/* The fan itself, then what is drawn ON it: the ramp is laid along the
+            track, and the rails trace the bands the ramp fills. Reading order
+            follows that dependency rather than the control table's own. */}
+        <Group title="Track">{ownControls.map(renderControl)}</Group>
+
+        {/* Each absent entirely for a shader with none, rather than an empty
+            strip — the same rule Motion follows below. */}
+        {rampControls.length > 0 && (
+          <Group title="Ramp">{rampControls.map(renderControl)}</Group>
+        )}
+
+        {edgeControls.length > 0 && (
+          <Group title="Edge">{edgeControls.map(renderControl)}</Group>
+        )}
+
+        {ditherControls.length > 0 && (
+          <Group title="Dither">{ditherControls.map(renderControl)}</Group>
+        )}
 
         <Group title="Framing">{framingControls.map(renderControl)}</Group>
 
@@ -741,28 +745,6 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
         {motionControls.length > 0 && (
           <Group title="Motion">{motionControls.map(renderControl)}</Group>
         )}
-
-        <Group title="Output">
-          <div className={rowStyle}>
-            <Button size="sm" onClick={copyProps}>
-              {copied ? "Copied" : "Copy as JSX"}
-            </Button>
-            <Button
-              size="sm"
-              emphasis="tertiary"
-              onClick={() => {
-                resetParamsInStore();
-                setCopied(false);
-              }}
-            >
-              Reset params
-            </Button>
-          </div>
-          <p className={captionStyle}>
-            The defaults are a starting point, not a match — the last mile is
-            eyeballing.
-          </p>
-        </Group>
       </aside>
     </main>
   );
