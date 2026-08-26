@@ -121,8 +121,15 @@ export function AspectRail({
   // The square is the one shape with no orientation to read, and it is the only
   // thing this state is for: flipping a 1:1 card turns the LIST over while the
   // card itself stays square, so that a square can be taken straight to 3:4.
-  const [squareFlipped, setSquareFlipped] = useState(false);
-  const portrait = aspect === "1/1" ? squareFlipped : isPortraitAspect(aspect);
+  //
+  // It holds the ORIENTATION LAST SHOWN, never a tally of flips — which is the
+  // whole of the distinction, because a toggle drifts. Flipping a 9:16 already
+  // changes the orientation through `aspect`, so counting that flip here as
+  // well applied it twice, and the square then landed on whichever side the
+  // parity happened to fall. Every writer below sets this to the side actually
+  // on screen, so it cannot disagree with what the user is looking at.
+  const [squarePortrait, setSquarePortrait] = useState(false);
+  const portrait = aspect === "1/1" ? squarePortrait : isPortraitAspect(aspect);
 
   const shown = portrait ? PICKER_RATIOS.map(aspectCounterpart) : PICKER_RATIOS;
   const FlipIcon = portrait ? ToLandscapeIcon : ToPortraitIcon;
@@ -132,8 +139,20 @@ export function AspectRail({
   // making "make this portrait" a two-step job. A square has no other side, so
   // `aspectCounterpart` is a no-op for 1:1 and only the list changes.
   const flip = () => {
-    setSquareFlipped((was) => !was);
+    setSquarePortrait(!portrait);
     onPick(aspectCounterpart(aspect));
+  };
+
+  // Picking a shape carries the orientation across with it. It matters for
+  // exactly one destination — 1:1, which cannot say which side it is on — but
+  // it is recorded on EVERY pick rather than only that one, because the side
+  // being carried is the side on screen right now, and that is knowable here
+  // however the rail arrived at it: picked, flipped, or handed in from outside.
+  // Reaching for it only when the square is chosen would mean reconstructing it
+  // after the fact, which is the same mistake in a different place.
+  const pick = (ratio: DemoFrameAspectRatio) => {
+    setSquarePortrait(portrait);
+    onPick(ratio);
   };
 
   return (
@@ -158,7 +177,7 @@ export function AspectRail({
               key={ratio}
               aria-label={ratioLabel(ratio)}
               pressed={ratio === aspect}
-              onClick={() => onPick(ratio)}
+              onClick={() => pick(ratio)}
             >
               <RatioIcon className={iconStyle} />
             </OptionList.Option>

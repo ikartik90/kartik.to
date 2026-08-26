@@ -127,6 +127,47 @@ describe("AspectRail", () => {
     ).toBe("true");
   });
 
+  // Picking the square must not throw away the orientation you are working in.
+  // 1:1 is the one shape that cannot say which side it is on, so the rail has
+  // to carry that over from whatever was on screen when it was picked — landing
+  // in the other orientation turns a shape change into a shape change plus a
+  // flip nobody asked for.
+  it("stays in the orientation the square was picked from", async () => {
+    const user = userEvent.setup();
+    render(<Controlled aspect="9/16" />);
+    expect(rail()[0]).toBe("Switch to landscape");
+
+    await user.click(screen.getByRole("button", { name: "1:1" }));
+    expect(rail()[0]).toBe("Switch to landscape");
+    expect(screen.getByRole("button", { name: "3:4" })).toBeTruthy();
+  });
+
+  it("stays landscape when the square is picked from landscape", async () => {
+    const user = userEvent.setup();
+    render(<Controlled aspect="16/9" />);
+
+    await user.click(screen.getByRole("button", { name: "1:1" }));
+    expect(rail()[0]).toBe("Switch to portrait");
+    expect(screen.getByRole("button", { name: "4:3" })).toBeTruthy();
+  });
+
+  // The square's orientation is the one that was SHOWN, never a tally of how
+  // many times the flip has been pressed. A flip made on a shape that has its
+  // own orientation is already accounted for by that shape; counting it again
+  // leaves the square landing on whichever side the parity happens to fall.
+  it("does not let a flip made on a non-square shape decide the square's side", async () => {
+    const user = userEvent.setup();
+    render(<Controlled aspect="9/16" />);
+
+    // Portrait to landscape by the flip, so the rail is showing landscape...
+    await user.click(screen.getByRole("button", { name: /switch to landscape/i }));
+    expect(rail()[0]).toBe("Switch to portrait");
+
+    // ...and the square has to land there too, not on the other side.
+    await user.click(screen.getByRole("button", { name: "1:1" }));
+    expect(rail()[0]).toBe("Switch to portrait");
+  });
+
   // The hint is for a rail that REPLACED something and has to say how to get
   // back. A permanent one has nothing to exit, and a hint about a key that does
   // nothing is worse than no hint.

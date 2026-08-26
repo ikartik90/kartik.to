@@ -110,6 +110,45 @@ function controlSchema(control: ControlSpec): z.ZodTypeAny {
 }
 
 /**
+ * Controls that have been RENAMED, old key to new.
+ *
+ * Needed because the two forward-compatibility rules below combine badly for a
+ * rename: the old key is unknown so it is stripped, the new one is missing so
+ * it defaults, and a stored value is silently replaced by the control's default
+ * rather than failing loudly. That is the worst of both — a saved cover opens
+ * looking wrong and nothing says why. Moving the value across first turns a
+ * rename back into what it should be, which is nothing happening at all.
+ *
+ * Keyed by nothing but the name, since a param key is unique across the whole
+ * control table by construction; a shader that never had the old key simply has
+ * no such entry to move.
+ */
+const RENAMED_PARAMS: Record<string, string> = {
+  // `angle` was the reference's word for it and never meant an angle here — it
+  // is where the set sits along the track. Renamed once the coordinate became
+  // signed, at which point it reads as a phase end to end.
+  angle: "phase",
+  // Renamed once the rails got a dither of their own: with two of them, the
+  // bare word said which one only by being the older.
+  dither: "rampDither",
+};
+
+/** Moves any stored value under a retired key onto the key that replaced it. */
+function applyRenames(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  const params = { ...(value as Record<string, unknown>) };
+  for (const [was, now] of Object.entries(RENAMED_PARAMS)) {
+    // The new key wins if BOTH are present: a preset written since the rename
+    // is the authority on itself, and a stale key beside it is residue.
+    if (was in params && !(now in params)) params[now] = params[was];
+    delete params[was];
+  }
+  return params;
+}
+
+/**
  * The authored state for ONE shader.
  *
  * Unknown param keys are STRIPPED (Zod's default for an object), which is the
@@ -119,9 +158,12 @@ function controlSchema(control: ControlSpec): z.ZodTypeAny {
  * direction, which is the whole point of keeping the table as the source.
  */
 function settingsSchemaFor(spec: ShaderSpec) {
-  const params = z.object(
-    Object.fromEntries(
-      spec.controls.map((control) => [control.key, controlSchema(control)]),
+  const params = z.preprocess(
+    applyRenames,
+    z.object(
+      Object.fromEntries(
+        spec.controls.map((control) => [control.key, controlSchema(control)]),
+      ),
     ),
   );
 

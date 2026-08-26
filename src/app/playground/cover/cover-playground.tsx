@@ -427,8 +427,14 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
       .map((key) => spec.controls.find((control) => control.key === key))
       .filter((control) => control !== undefined);
   const shared = new Set([...FRAMING_CONTROL_KEYS, ...MOTION_CONTROL_KEYS]);
+  // A control can name a group of its own, and one that does is drawn there
+  // instead — see `ControlGroup`. Filtered out here rather than merely repeated
+  // below, or it would render twice.
+  const colorControls = spec.controls.filter(
+    (control) => control.group === "colors",
+  );
   const ownControls = spec.controls.filter(
-    (control) => !shared.has(control.key),
+    (control) => !shared.has(control.key) && control.group === undefined,
   );
   const framingControls = byKey(FRAMING_CONTROL_KEYS);
   const motionControls = byKey(MOTION_CONTROL_KEYS);
@@ -719,6 +725,11 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
               />
             </Field>
           ))}
+
+          {/* Controls that belong to a colour rather than to the geometry —
+              the switch that decides whether one of the swatches above is
+              painted at all reads as a stray slider anywhere else. */}
+          {colorControls.map(renderControl)}
         </Group>
 
         <Group title="Parameters">{ownControls.map(renderControl)}</Group>
