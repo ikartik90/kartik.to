@@ -373,8 +373,12 @@ export function CommandPalette() {
                     changes and exit" there is this same command. Two doors to
                     one room would have to agree forever.
 
-                    Publish and Unpublish are a document's alone: a cover has
-                    nothing to publish, and the homepage is already live. */}
+                    Publish and Unpublish are a document's alone here. The
+                    homepage is already live; a cover HAS a publication now, but
+                    its control is the one in the properties panel's header,
+                    beside Reset — both act on the saved row rather than on the
+                    page you are looking at, and two doors to one room would
+                    have to agree forever. */}
                 {editorKind ? (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>{editorTitle}</div>

@@ -5635,5 +5635,28 @@ export default defineConfig({
     },
   },
 
+  // The one global declaration this config makes, and it exists to correct a
+  // FALLBACK rather than to add a style.
+  //
+  // Panda's `focusVisibleRing` utility resolves its colour as
+  // `var(--focus-ring-color-prop, var(--global-color-focus-ring, #005FCC))`.
+  // Nothing here ever set that middle variable, so every focus ring in the app
+  // — every button, every tile, every field — was drawing the preset's
+  // hardcoded #005FCC blue. It reads as a browser default rather than as a
+  // mistake, which is exactly why it survived: the one place it is obvious is
+  // the presets strip, where a blue ring lands beside the brand-coloured ring
+  // that marks the open cover and the two plainly disagree.
+  //
+  // Pointed at the SAME token that ring uses, so the two are one colour by
+  // construction. A `var()` rather than a token reference because the semantic
+  // token is already theme-aware — it resolves to brand pink or brand orange
+  // under `_dark` on its own, and copying its value here would freeze one of
+  // the two.
+  globalCss: {
+    ":root": {
+      "--global-color-focus-ring": "var(--colors-border-focus-ring)",
+    },
+  },
+
   outdir: "styled-system",
 });

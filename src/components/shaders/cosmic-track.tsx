@@ -23,7 +23,7 @@ import { useShaderPolicy } from "./use-shader-policy";
 // layer of our own in between — the library's components call the mount
 // directly, and an extra wrapper here would only be a passthrough to drift.
 //
-// Consumers write `<CosmicTrack colors={…} phase={…} />` and never see a
+// Consumers write `<CosmicTrack colors={…} phaseDegrees={…} />` and never see a
 // uniform or a mount, which is the whole point of the shape.
 // ---------------------------------------------------------------------------
 
@@ -40,7 +40,7 @@ function CosmicTrackImpl({
   colors = DEFAULT_COSMIC_TRACK.colors,
   colorBack = DEFAULT_COSMIC_TRACK.colorBack,
   colorEdge = DEFAULT_COSMIC_TRACK.colorEdge,
-  phase = DEFAULT_COSMIC_TRACK.phase,
+  phaseDegrees = DEFAULT_COSMIC_TRACK.phaseDegrees,
   travel = DEFAULT_COSMIC_TRACK.travel,
   easing = DEFAULT_COSMIC_TRACK.easing,
   easingBias = DEFAULT_COSMIC_TRACK.easingBias,
@@ -86,7 +86,7 @@ function CosmicTrackImpl({
       colors,
       colorBack,
       colorEdge,
-      phase,
+      phaseDegrees,
       travel,
       easing,
       easingBias,

@@ -23,16 +23,19 @@ function Controlled({
   aspect: initial,
   onPick,
   exitHint,
+  markedAspects,
 }: {
   aspect: DemoFrameAspectRatio;
   onPick?: (aspect: DemoFrameAspectRatio) => void;
   exitHint?: boolean;
+  markedAspects?: readonly DemoFrameAspectRatio[];
 }) {
   const [aspect, setAspect] = useState(initial);
   return (
     <AspectRail
       aspect={aspect}
       exitHint={exitHint}
+      markedAspects={markedAspects}
       onPick={(next) => {
         setAspect(next);
         onPick?.(next);
@@ -177,5 +180,97 @@ describe("AspectRail", () => {
 
     rerender(<AspectRail aspect="1/1" onPick={vi.fn()} exitHint />);
     expect(rail().slice(-2)).toEqual(["|", "Esc to exit"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The unsaved-framing marks.
+//
+// A cover's framing is kept per shape, so work can be left unsaved in a frame
+// that is not on screen — and, since the rail shows one orientation at a time,
+// in one that is not even in the list. A mark under the shape says where it is;
+// a mark under the flip says it is on the other side.
+// ---------------------------------------------------------------------------
+describe("AspectRail marks", () => {
+  afterEach(cleanup);
+
+  /** Whether a given button carries the mark. */
+  const marked = (label: string) =>
+    !!screen
+      .getByRole("button", { name: label })
+      .querySelector("[data-unsaved]");
+
+  it("marks nothing when nothing has been reframed", () => {
+    render(<AspectRail aspect="4/3" onPick={vi.fn()} />);
+
+    expect(marked("4:3")).toBe(false);
+    expect(marked("16:9")).toBe(false);
+    expect(marked("Switch to portrait")).toBe(false);
+  });
+
+  it("marks the shapes it is given, and only those", () => {
+    render(
+      <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["16/9"]} />,
+    );
+
+    expect(marked("16:9")).toBe(true);
+    expect(marked("4:3")).toBe(false);
+    expect(marked("2:1")).toBe(false);
+  });
+
+  // The shape you are looking at is marked too. Its unsaved work is on screen,
+  // so the mark tells you nothing new — but a rule with an exception in it is
+  // one the reader has to hold, and a row where one dot is missing for reasons
+  // reads as a bug rather than as a rule.
+  it("marks the shape currently chosen", () => {
+    render(
+      <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["4/3"]} />,
+    );
+
+    expect(marked("4:3")).toBe(true);
+  });
+
+  // The rail is showing landscape, so a reframed 9:16 has no button to sit
+  // under. Without this its unsaved work would be invisible until you happened
+  // to flip — which is the whole thing these marks exist to prevent.
+  it("marks the flip when the unsaved shape is on the other side", () => {
+    render(
+      <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["9/16"]} />,
+    );
+
+    expect(marked("Switch to portrait")).toBe(true);
+    // And nowhere in the row itself, since 9:16 is not in it.
+    expect(marked("16:9")).toBe(false);
+  });
+
+  it("leaves the flip unmarked when every marked shape is in the row", () => {
+    render(
+      <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["16/9"]} />,
+    );
+
+    expect(marked("Switch to portrait")).toBe(false);
+  });
+
+  // Flipping shows the other orientation, so the marks change sides with it.
+  it("moves the marks across when the rail is turned over", async () => {
+    const user = userEvent.setup();
+    render(<Controlled aspect="4/3" markedAspects={["9/16"]} />);
+
+    expect(marked("Switch to portrait")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Switch to portrait" }));
+
+    expect(marked("9:16")).toBe(true);
+    expect(marked("Switch to landscape")).toBe(false);
+  });
+
+  // The square sits in both lists, so it can never be the reason the flip is
+  // marked — the flip would then point at a shape already on screen.
+  it("does not mark the flip for the square", () => {
+    render(
+      <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["1/1"]} />,
+    );
+
+    expect(marked("1:1")).toBe(true);
+    expect(marked("Switch to portrait")).toBe(false);
   });
 });

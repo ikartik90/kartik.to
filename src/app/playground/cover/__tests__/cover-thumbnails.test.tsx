@@ -32,6 +32,7 @@ const preset = (id: string, shaderId: ShaderId, updatedAt = "2026-01-01") =>
     settings: {
       ...defaultState(SHADER_SPECS[shaderId]),
       aspect: DEFAULT_COVER_ASPECT,
+      framing: {},
     },
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date(updatedAt),

@@ -99,6 +99,17 @@ export function useActionTooltip(children: ReactNode) {
     hasText,
     tooltipNode,
     hasTooltip: Boolean(tooltip),
+    /**
+     * Whether the label is up.
+     *
+     * Exposed so that anything drawn INSTEAD of the tooltip can be driven off
+     * the same fact rather than off `:hover`. The two look equivalent and are
+     * not: `:hover` is the browser's answer, recomputed on its own schedule and
+     * sticky when the DOM changes under a still pointer, while this is React's,
+     * set from `mouseenter`/`mouseleave`. A face that hides on one while its
+     * replacement appears on the other will eventually show both at once.
+     */
+    visible: hovered,
     show,
     hide,
   };

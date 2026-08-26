@@ -228,9 +228,12 @@ describe("MediaPropertiesPanel background section", () => {
     slider("Rotation").focus();
     await user.keyboard("{ArrowRight}");
 
+    // One STEP, which rotation takes in fifteens — the same stops the cover
+    // playground offers, so a background can be set to the turn a cover was
+    // authored at. See `@/utils/rotation`.
     expect(onEffectChange).toHaveBeenCalledExactlyOnceWith({
       ...DEFAULT_BACKGROUND_EFFECT,
-      rotation: 91,
+      rotation: 105,
     });
   });
 

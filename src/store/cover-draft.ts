@@ -6,7 +6,15 @@ import {
   type ParamValue,
   type ShaderId,
 } from "@/data/shader-specs";
-import { DEFAULT_COVER_ASPECT, type CoverContent, type CoverSettings } from "@/domain/cover";
+import {
+  DEFAULT_COVER_ASPECT,
+  FRAMING_DEFAULTS,
+  coverContentFor,
+  framingFor,
+  type CoverContent,
+  type CoverSettings,
+  type Framing,
+} from "@/domain/cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
@@ -25,10 +33,51 @@ import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 /** Where the playground opens: the first shader in the table. */
 const INITIAL_SHADER: ShaderId = SHADER_IDS[0];
 
+/**
+ * What the never-saved draft is buffered under.
+ *
+ * A cover's own id is a cuid, so this cannot collide with one — and it has to
+ * BE a key rather than `null`, because the buffers are an object and the new
+ * draft is as bufferable as any preset. The strip gives it a tile of its own
+ * for exactly as long as it is holding unsaved work.
+ */
+export const NEW_COVER_KEY = "new";
+
+/**
+ * A draft set aside while another one is being edited.
+ *
+ * Everything that makes the draft EXCEPT which cover it is — that is the key it
+ * is filed under. `savedParams` travels with it because Reset's baseline
+ * belongs to the cover rather than to the session, and `editedAspects` because
+ * the rail's marks have to come back saying what they said when you left.
+ */
+interface DraftBuffer {
+  title: string | null;
+  publishedAt: Date | null;
+  shaderId: ShaderId;
+  settings: CoverSettings;
+  editedAspects: DemoFrameAspectRatio[];
+  savedParams: {
+    shaderId: ShaderId;
+    params: CoverSettings["params"];
+    framing: CoverSettings["framing"];
+  } | null;
+}
+
 interface CoverDraftStore {
   /** The saved cover being edited, or null for one that has never been saved. */
   coverId: string | null;
   title: string | null;
+  /**
+   * When the saved cover went on show, and null while it is the author's alone
+   * — or while there is no saved cover at all.
+   *
+   * A fact about the ROW rather than about the picture, which is why it sits
+   * beside `coverId` and outside `settings`: nothing in the blob changes when a
+   * cover is published, and putting it in there would make publishing look like
+   * an edit to every consumer that diffs settings.
+   */
+  publishedAt: Date | null;
   shaderId: ShaderId;
   settings: CoverSettings;
   /**
@@ -46,13 +95,61 @@ interface CoverDraftStore {
    * Carries its shader because a saved cover's params only make sense over the
    * control table they were authored against — see `resetParams`.
    */
-  savedParams: { shaderId: ShaderId; params: CoverSettings["params"] } | null;
+  savedParams: {
+    shaderId: ShaderId;
+    params: CoverSettings["params"];
+    /** Every shape that was framed at the time, so Reset can restore the one on screen. */
+    framing: CoverSettings["framing"];
+  } | null;
+  /**
+   * The shapes whose framing has been MOVED since the cover was opened — what
+   * the rail marks, so unsaved work in a frame you are not looking at is not
+   * invisible.
+   *
+   * Edited, not merely visited, and that distinction is the whole reason this
+   * is state rather than a comparison: `setAspect` writes framing on the way
+   * into a shape and on the way out of one, so a rule that diffed against the
+   * saved cover would mark every shape you clicked through and mean nothing.
+   *
+   * An array rather than a Set because it is read straight out of the store by
+   * a component: a selector returning a fresh Set on every call would re-render
+   * the rail on every unrelated change.
+   */
+  editedAspects: DemoFrameAspectRatio[];
+  /**
+   * Unsaved edits to covers OTHER than the one on screen, keyed by cover id
+   * (and by `NEW_COVER_KEY` for the one that has never been saved).
+   *
+   * What lets the strip be walked freely while work is in progress: switching
+   * preset sets the current draft aside rather than asking whether to throw it
+   * away, so a preset can be opened to look at and the one you were tuning is
+   * still there when you come back. The tiles mark which ones are holding
+   * something.
+   *
+   * The ACTIVE draft is never in here — it is the fields above, and `isDirty`
+   * says whether it has anything unsaved. A buffer is written on the way out
+   * and consumed on the way back in, so nothing is ever counted twice.
+   *
+   * In memory only. A refresh is a clean slate, exactly as it was when there
+   * was one draft; the palette's exit question is what catches a deliberate
+   * departure.
+   */
+  buffers: Record<string, DraftBuffer>;
 
   selectShader: (shaderId: ShaderId) => void;
   setParam: (key: string, value: ParamValue) => void;
   setColors: (colors: string[]) => void;
   setColorBack: (colorBack: string) => void;
   setExtraColor: (key: string, value: string) => void;
+  /**
+   * One placement control, on the shape currently on screen and on no other.
+   *
+   * Separate from `setParam` because the two write to different places — the
+   * shader's uniforms are one set per cover, the placement is one set per shape
+   * — and a single action branching on the key would hide that split inside
+   * itself. See `@/domain/cover`.
+   */
+  setFraming: (key: string, value: number) => void;
   /**
    * The shape the cover is being designed against.
    *
@@ -62,6 +159,15 @@ interface CoverDraftStore {
    */
   setAspect: (aspect: DemoFrameAspectRatio) => void;
   setTitle: (title: string | null) => void;
+  /**
+   * Record that the saved cover has gone on show, or come back off it.
+   *
+   * Does NOT dirty the draft: publishing writes the row's own column and leaves
+   * the picture untouched, so a draft that was clean before the press has still
+   * got nothing unsaved in it. Dirtying it here would put a "discard changes?"
+   * question in front of an exit that would lose nothing.
+   */
+  setPublishedAt: (publishedAt: Date | null) => void;
   /**
    * The shader's uniforms back to their baseline, leaving the colours alone.
    *
@@ -74,23 +180,63 @@ interface CoverDraftStore {
     title: string | null;
     shaderId: ShaderId;
     settings: CoverSettings;
+    publishedAt: Date | null;
   }) => void;
-  /** Back to a blank draft on the first shader. */
+  /**
+   * Take up the never-saved draft — the strip's own tile for it.
+   *
+   * The counterpart to `load`: the same setting-aside on the way out and the
+   * same restoring on the way back in, for the one draft that has no cover id
+   * to be keyed by.
+   */
+  /**
+   * Adopt what was just WRITTEN — the save path's counterpart to `load`.
+   *
+   * Distinct from it because the two differ on the one question that matters
+   * here: `load` is a switch, so the draft it leaves behind is set aside, where
+   * this is a commit, so the draft it leaves behind has just been persisted and
+   * setting it aside would leave a phantom copy of work that is now in the
+   * database. Saving a never-saved draft is exactly that case — the id changes,
+   * so `load` could not tell it from opening a different cover.
+   */
+  commit: (cover: {
+    id: string;
+    title: string | null;
+    shaderId: ShaderId;
+    settings: CoverSettings;
+    publishedAt: Date | null;
+  }) => void;
+  openNewDraft: () => void;
+  /** Back to a blank draft, throwing away every buffered edit. The discard. */
   reset: () => void;
   /** Exactly what `CoverContentSchema` validates — see there. */
   toContent: () => CoverContent;
 }
 
-// The frame is carried IN rather than defaulted, because the two callers want
-// different things from it: a new draft opens on the default, and a shader
-// switch keeps whatever the author was designing against — the shape is a fact
-// about the cover, not about the shader mounted in it.
+// The frame and its framings are carried IN rather than defaulted, because the
+// two callers want different things from them: a new draft opens blank, and a
+// shader switch keeps whatever the author was designing against — the shape is
+// a fact about the cover, not about the shader mounted in it.
+//
+// The FRAMINGS survive a switch for the same reason and one better: the four
+// placement controls are the same four on every shader, spread from one array,
+// so unlike the params there is no key here the next shader has never heard of.
+// Wiping them would be throwing away work for a reason that does not apply.
+//
+// Through `coverContentFor` rather than `defaultState`, which is the domain's
+// own answer for "where does this shader open" run through the validator. It
+// matters here for one reason: `spec.controls` still lists the four placement
+// controls — it is the complete list of what a shader takes — so `defaultState`
+// puts them in `params`, where a cover does not keep them. Asking the schema is
+// what strips them, and it cannot fall behind the schema the way a second
+// filter written here would.
 const blank = (
   shaderId: ShaderId,
   aspect: DemoFrameAspectRatio = DEFAULT_COVER_ASPECT,
+  framing: CoverSettings["framing"] = {},
 ): { shaderId: ShaderId; settings: CoverSettings; isDirty: boolean } => ({
   shaderId,
-  settings: { ...defaultState(SHADER_SPECS[shaderId]), aspect },
+  settings: { ...coverContentFor(shaderId).settings, aspect, framing },
   isDirty: false,
 });
 
@@ -113,10 +259,61 @@ const savedParamsFor = (
     ? state.savedParams.params
     : null;
 
+/**
+ * The placement "Reset" would put back for the shape ON SCREEN — the saved
+ * one, or null where that shape was never framed at the last save.
+ *
+ * Not guarded by the shader, unlike the params above: the four placement
+ * controls are the same four whatever is mounted, so a saved placement is
+ * restorable over any shader. And only the shape on screen, because that is
+ * what the panel is showing — putting all eleven back would be a button
+ * quietly undoing work in ten frames you cannot see.
+ */
+const savedFramingFor = (
+  state: Pick<CoverDraftStore, "savedParams" | "settings">,
+): Framing | null =>
+  state.savedParams?.framing[state.settings.aspect] ?? null;
+
+/** The active draft, as it would be set aside — everything but which cover it is. */
+const snapshot = (state: CoverDraftStore): DraftBuffer => ({
+  title: state.title,
+  publishedAt: state.publishedAt,
+  shaderId: state.shaderId,
+  settings: state.settings,
+  editedAspects: state.editedAspects,
+  savedParams: state.savedParams,
+});
+
+/** What the active draft is buffered under while another is being edited. */
+const keyOf = (coverId: string | null) => coverId ?? NEW_COVER_KEY;
+
+/**
+ * Every cover holding unsaved work: the ones set aside, plus the one on screen
+ * if it has been touched.
+ *
+ * The strip marks its tiles off this, and the palette asks it before letting
+ * you leave — one answer, so the dot and the question cannot disagree about
+ * whether there is anything to lose.
+ */
+export const unsavedCoverKeys = (
+  state: Pick<CoverDraftStore, "buffers" | "isDirty" | "coverId">,
+): string[] => {
+  const keys = Object.keys(state.buffers);
+  return state.isDirty ? [...keys, keyOf(state.coverId)] : keys;
+};
+
+/** Whether anything anywhere in this session is unsaved. */
+export const hasUnsavedCoverWork = (
+  state: Pick<CoverDraftStore, "buffers" | "isDirty" | "coverId">,
+): boolean => state.isDirty || Object.keys(state.buffers).length > 0;
+
 export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   coverId: null,
   title: null,
+  publishedAt: null,
   savedParams: null,
+  editedAspects: [],
+  buffers: {},
   ...blank(INITIAL_SHADER),
 
   // A switch RE-SEEDS rather than merging: a shader's control table is a
@@ -125,7 +322,7 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   // silently losing whatever the panel was still showing.
   selectShader: (shaderId) =>
     set((state) => ({
-      ...blank(shaderId, state.settings.aspect),
+      ...blank(shaderId, state.settings.aspect, state.settings.framing),
       isDirty: true,
     })),
 
@@ -159,13 +356,66 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
       isDirty: true,
     })),
 
-  setAspect: (aspect) =>
+  // Writes onto the shape ON SCREEN, seeding it from the placement in force if
+  // it has never been framed — which is what turns "the shape inherits" into
+  // "the shape is its own" at the first nudge, with no separate flag saying
+  // which it is.
+  setFraming: (key, value) =>
     set((state) => ({
-      settings: { ...state.settings, aspect },
+      settings: {
+        ...state.settings,
+        framing: {
+          ...state.settings.framing,
+          [state.settings.aspect]: {
+            ...framingFor(state.settings),
+            [key]: value,
+          },
+        },
+      },
+      // Marked once, on the first slider that moves. The array is left ALONE
+      // when the shape is already in it, so the rail's prop keeps its identity
+      // and a drag does not re-render it on every frame.
+      editedAspects: state.editedAspects.includes(state.settings.aspect)
+        ? state.editedAspects
+        : [...state.editedAspects, state.settings.aspect],
       isDirty: true,
     })),
 
+  // Changing shape SEEDS the new one where it has never been framed, with the
+  // placement you arrived with — unchanged, whichever way round the new shape
+  // is. Inheriting beats opening on the defaults because judging is the whole
+  // point of the picker: you tune a fan on a poster, press the banner, and want
+  // to see THAT fan in a banner rather than an untouched shader. From the first
+  // nudge the shape is its own and inherits nothing again.
+  //
+  // NO automatic quarter turn on an orientation change. Turning the frame over
+  // is not a special case: 3:4 is a shape you have not framed yet, exactly like
+  // 2:1, and it is yours to reframe. A turn here would make this the one shape
+  // change that also edited a control.
+  //
+  // Written on arrival rather than derived on every read, so the answer is
+  // fixed the moment you first look at a shape. Derived lazily it would keep
+  // following whatever you had been on last, and the same shape would frame
+  // itself differently depending on the route you took to it.
+  setAspect: (aspect) =>
+    set((state) => {
+      if (aspect === state.settings.aspect) return state;
+      const current = framingFor(state.settings);
+      const framing = { ...state.settings.framing };
+      // The shape being LEFT is pinned on the way out, if it was never framed —
+      // so that what you come back to is what you left rather than a fresh
+      // derivation from wherever you have been since.
+      framing[state.settings.aspect] ??= current;
+      framing[aspect] ??= { ...current };
+      return {
+        settings: { ...state.settings, aspect, framing },
+        isDirty: true,
+      };
+    }),
+
   setTitle: (title) => set({ title, isDirty: true }),
+
+  setPublishedAt: (publishedAt) => set({ publishedAt }),
 
   // Params only. The colours are the part you spent the time on and the part a
   // shader switch would take away anyway, so "Reset params" that also dropped
@@ -180,32 +430,134 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   resetParams: () =>
     set((state) => {
       const saved = savedParamsFor(state);
+      const savedFraming = savedFramingFor(state);
       return {
         settings: {
           ...state.settings,
           params: saved
             ? { ...saved }
             : defaultState(SHADER_SPECS[state.shaderId]).params,
+          // The placement goes back too — it is in the panel this acts on, and
+          // leaving it behind would make Reset put half the sliders back. The
+          // shape on screen only; the other ten are not what you are looking
+          // at. Same baseline rule as the params: your own last save where
+          // there is one, and the table's starting point where there is not.
+          framing: {
+            ...state.settings.framing,
+            [state.settings.aspect]: savedFraming
+              ? { ...savedFraming }
+              : { ...FRAMING_DEFAULTS },
+          },
         },
+        // The shape on screen is back at its baseline, so there is nothing left
+        // on it to mark — and only that shape, exactly as the reset above
+        // reaches only that shape.
+        editedAspects: state.editedAspects.filter(
+          (aspect) => aspect !== state.settings.aspect,
+        ),
         isDirty: true,
       };
     }),
 
-  load: ({ id, title, shaderId, settings }) =>
-    set({
-      coverId: id,
-      title,
-      shaderId,
-      settings,
-      isDirty: false,
-      // What "last saved" means, kept in one place: a commit adopts what was
-      // STORED through this same action, so writing the cover re-baselines it
-      // exactly the way opening one does.
-      savedParams: { shaderId, params: settings.params },
+  load: ({ id, title, shaderId, settings, publishedAt }) =>
+    set((state) => {
+      const from = keyOf(state.coverId);
+      const buffers = { ...state.buffers };
+
+      // The SAME cover, which is a commit re-adopting what was stored rather
+      // than a switch to somewhere else — see `persistCover`. Setting it aside
+      // here would buffer the pre-save edits and then restore them over the
+      // save a line later, quietly undoing the write.
+      if (from !== id) {
+        // Set the current draft aside rather than asking whether to throw it
+        // away. This is the whole of what lets the strip be walked while work
+        // is in progress: you can open a preset to look at it and the one you
+        // were tuning is waiting where you left it.
+        if (state.isDirty) buffers[from] = snapshot(state);
+
+        const buffered = buffers[id];
+        if (buffered) {
+          // Consumed on the way in — the active draft is never also a buffer,
+          // so nothing counts as unsaved twice.
+          delete buffers[id];
+          return { ...buffered, coverId: id, buffers, isDirty: true };
+        }
+      } else {
+        delete buffers[id];
+      }
+
+      return {
+        buffers,
+        coverId: id,
+        title,
+        publishedAt,
+        shaderId,
+        settings,
+        isDirty: false,
+        // What "last saved" means, kept in one place: a commit adopts what was
+        // STORED through this same action, so writing the cover re-baselines it
+        // exactly the way opening one does — which includes forgetting which
+        // shapes had been reframed, since "since it was opened" starts here.
+        savedParams: { shaderId, params: settings.params, framing: settings.framing },
+        editedAspects: [],
+      };
     }),
 
+  commit: ({ id, title, shaderId, settings, publishedAt }) =>
+    set((state) => {
+      const buffers = { ...state.buffers };
+      // The draft that was written, under whichever key it was living — and any
+      // stale buffer for the row it became.
+      delete buffers[keyOf(state.coverId)];
+      delete buffers[id];
+      return {
+        buffers,
+        coverId: id,
+        title,
+        publishedAt,
+        shaderId,
+        settings,
+        isDirty: false,
+        savedParams: { shaderId, params: settings.params, framing: settings.framing },
+        editedAspects: [],
+      };
+    }),
+
+  openNewDraft: () =>
+    set((state) => {
+      if (state.coverId === null) return state;
+      const buffers = { ...state.buffers };
+      if (state.isDirty) buffers[keyOf(state.coverId)] = snapshot(state);
+
+      const buffered = buffers[NEW_COVER_KEY];
+      if (buffered) {
+        delete buffers[NEW_COVER_KEY];
+        return { ...buffered, coverId: null, buffers, isDirty: true };
+      }
+      return {
+        buffers,
+        coverId: null,
+        title: null,
+        publishedAt: null,
+        savedParams: null,
+        editedAspects: [],
+        ...blank(INITIAL_SHADER),
+      };
+    }),
+
+  // Throws away EVERY buffered edit, not just the one on screen. This is the
+  // palette's "Discard changes and exit", and a discard that left other covers'
+  // unsaved work behind would be a discard you had to press more than once.
   reset: () =>
-    set({ coverId: null, title: null, savedParams: null, ...blank(INITIAL_SHADER) }),
+    set({
+      coverId: null,
+      title: null,
+      publishedAt: null,
+      savedParams: null,
+      editedAspects: [],
+      buffers: {},
+      ...blank(INITIAL_SHADER),
+    }),
 
   toContent: () => {
     const { shaderId, settings } = get();

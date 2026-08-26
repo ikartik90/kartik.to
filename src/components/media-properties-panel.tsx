@@ -9,6 +9,11 @@ import { ColorInput } from "@/components/ui/input/color-input";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
 import { Slider } from "@/components/ui/input/slider";
 import {
+  ROTATION_MAX,
+  ROTATION_MIN,
+  ROTATION_STEP,
+} from "@/utils/rotation";
+import {
   BACKGROUND_EFFECT_MAX_COLORS,
   DEFAULT_BACKGROUND_EFFECT,
   DEFAULT_MEDIA_FIT,
@@ -72,7 +77,11 @@ const SLIDERS: {
   { key: "grainMixer", label: "Grain Mixer", min: 0, max: 1, step: 0.01 },
   { key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.01 },
   { key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.01 },
-  { key: "rotation", label: "Rotation", min: 0, max: 360, step: 1 },
+  // The app's ONE rotation control, not a copy of its numbers — this panel
+  // edits the same turn the cover playground's Framing group does, and a panel
+  // offering different stops would make a cover unreachable in the surface it
+  // was built for. See `@/utils/rotation`.
+  { key: "rotation", label: "Rotation", min: ROTATION_MIN, max: ROTATION_MAX, step: ROTATION_STEP },
   { key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.01 },
   { key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.01 },
 ];

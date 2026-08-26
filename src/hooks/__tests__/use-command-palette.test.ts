@@ -351,6 +351,7 @@ describe("useCommandPalette", () => {
         title: "Dusk",
         shaderId: "swirl",
         settings: useCoverDraftStore.getState().settings,
+        publishedAt: null,
       });
       (saveCover as Mock).mockResolvedValue({
         id: "cover-9",
@@ -419,6 +420,7 @@ describe("useCommandPalette", () => {
         title: "Dusk",
         shaderId: "swirl",
         settings: useCoverDraftStore.getState().settings,
+        publishedAt: null,
       });
       (saveCover as Mock).mockResolvedValue({
         id: "cover-9",

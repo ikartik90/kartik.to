@@ -3,7 +3,10 @@ import { SHADER_IDS, SHADER_SPECS, defaultState } from "@/data/shader-specs";
 import {
   CoverContentSchema,
   DEFAULT_COVER_ASPECT,
+  FRAMING_DEFAULTS,
   coverContentFor,
+  framingFor,
+  shaderParamsFor,
 } from "../cover";
 
 describe("CoverContentSchema", () => {
@@ -26,33 +29,36 @@ describe("CoverContentSchema", () => {
   // looking wrong with nothing to say why.
   it("carries a stored value across a renamed control", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
-    const { phase: _dropped, ...withoutPhase } = settings.params;
+    const { phaseDegrees: _dropped, ...withoutPhase } = settings.params;
 
     const result = CoverContentSchema.safeParse({
       shaderId: "cosmicTrack",
       // Exactly what a cover saved before `angle` became `phase` holds.
-      settings: { ...settings, params: { ...withoutPhase, angle: -2.4 } },
+      settings: { ...settings, params: { ...withoutPhase, angle: -7 } },
     });
 
     expect(result.success).toBe(true);
-    expect(result.success && result.data.settings.params.phase).toBe(-2.4);
-    // The retired key does not survive alongside the one that replaced it.
+    // Two migrations in a chain: `angle` became `phase`, and `phase` is now
+    // dialled in degrees — so a value from the very first naming still lands.
+    expect(result.success && result.data.settings.params.phaseDegrees).toBe(-90);
+    // The retired keys do not survive alongside the one that replaced them.
     expect(result.success && "angle" in result.data.settings.params).toBe(false);
+    expect(result.success && "phase" in result.data.settings.params).toBe(false);
   });
 
   it("carries a stored value across every renamed control", () => {
     // One table, so a second rename is a row rather than a code path — but the
     // row still has to be exercised, or the next one is added untested.
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
-    const { phase: _p, rampDither: _d, ...rest } = settings.params;
+    const { phaseDegrees: _p, rampDither: _d, ...rest } = settings.params;
 
     const result = CoverContentSchema.safeParse({
       shaderId: "cosmicTrack",
-      settings: { ...settings, params: { ...rest, angle: -1.5, dither: 0.8 } },
+      settings: { ...settings, params: { ...rest, angle: -7, dither: 0.8 } },
     });
 
     expect(result.success).toBe(true);
-    expect(result.success && result.data.settings.params.phase).toBe(-1.5);
+    expect(result.success && result.data.settings.params.phaseDegrees).toBe(-90);
     expect(result.success && result.data.settings.params.rampDither).toBe(0.8);
   });
 
@@ -92,15 +98,18 @@ describe("CoverContentSchema", () => {
 
   it("prefers the current key when a stale one sits beside it", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const { phaseDegrees: _dropped, ...withoutPhase } = settings.params;
     const result = CoverContentSchema.safeParse({
       shaderId: "cosmicTrack",
+      // Both namings of the same control, from two different eras. The later
+      // one is what the author last wrote; the earlier is residue.
       settings: {
         ...settings,
-        params: { ...settings.params, phase: 1.5, angle: -2.4 },
+        params: { ...withoutPhase, phase: 7, angle: -2.4 },
       },
     });
 
-    expect(result.success && result.data.settings.params.phase).toBe(1.5);
+    expect(result.success && result.data.settings.params.phaseDegrees).toBe(90);
   });
 
   it("rejects a shader it has never heard of", () => {
@@ -118,7 +127,7 @@ describe("CoverContentSchema", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const result = CoverContentSchema.safeParse({
       shaderId: "cosmicTrack",
-      settings: { ...settings, params: { ...settings.params, scale: 99 } },
+      settings: { ...settings, params: { ...settings.params, rampLength: 99 } },
     });
     expect(result.success).toBe(false);
   });
@@ -128,12 +137,18 @@ describe("CoverContentSchema", () => {
   // not fail on the leftover key.
   it("fills in a param the stored preset predates", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
-    const { scale: _dropped, ...withoutScale } = settings.params;
+    const { rampLength: _dropped, ...withoutRampLength } = settings.params;
     const parsed = CoverContentSchema.parse({
       shaderId: "cosmicTrack",
-      settings: { ...settings, params: withoutScale },
+      settings: { ...settings, params: withoutRampLength },
     });
-    expect(parsed.settings.params.scale).toBe(1);
+    // The CONTROL's own default, which is what a missing key falls back to —
+    // not the shader's `defaults.params` override, which is where the preset
+    // started rather than where the schema puts it back.
+    const control = SHADER_SPECS.cosmicTrack.controls.find(
+      (spec) => spec.key === "rampLength",
+    );
+    expect(parsed.settings.params.rampLength).toBe(control?.value);
   });
 
   it("strips a param the shader no longer has", () => {
@@ -237,6 +252,268 @@ describe("CoverContentSchema", () => {
         settings: { ...settings, aspect: "7/3" },
       }).success,
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Framing, per shape.
+//
+// The four placement controls are the only ones whose right value depends on
+// the SHAPE the cover is being looked at in — a fan tuned until it reads on a
+// 9:16 poster is not framed the same way on a 2:1 banner — so a cover keeps one
+// set per aspect ratio rather than one set full stop.
+// ---------------------------------------------------------------------------
+describe("framing", () => {
+  const content = (settings: unknown) =>
+    CoverContentSchema.parse({ shaderId: "cosmicTrack", settings });
+
+  it("keeps the placement controls out of the shader's own params", () => {
+    const parsed = content(defaultState(SHADER_SPECS.cosmicTrack));
+
+    for (const key of ["scale", "rotation", "offsetX", "offsetY"]) {
+      expect(key in parsed.settings.params).toBe(false);
+    }
+  });
+
+  // The forward-compatibility promise, for a cover written before framing was
+  // per-shape: its one set of placement values was tuned against the shape it
+  // was saved in, so that is the shape they belong to. Stripping them as
+  // unknown keys — which is what the params object would do on its own — would
+  // silently unframe every saved cover.
+  it("moves a stored cover's placement onto the shape it was saved in", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const parsed = content({
+      ...settings,
+      aspect: "2/1",
+      params: { ...settings.params, scale: 2.5, rotation: 45 },
+    });
+
+    expect(parsed.settings.framing["2/1"]).toMatchObject({
+      scale: 2.5,
+      rotation: 45,
+    });
+  });
+
+  it("leaves every other shape unframed", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const parsed = content({
+      ...settings,
+      aspect: "2/1",
+      params: { ...settings.params, scale: 2.5 },
+    });
+
+    expect(parsed.settings.framing["1/2"]).toBeUndefined();
+    expect(parsed.settings.framing["9/16"]).toBeUndefined();
+  });
+
+  // A cover written since the split is the authority on itself — the params
+  // beside it are residue and must not overwrite what it says.
+  it("does not overwrite a shape that is already framed", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const parsed = content({
+      ...settings,
+      aspect: "2/1",
+      params: { ...settings.params, scale: 2.5 },
+      framing: { "2/1": { ...FRAMING_DEFAULTS, scale: 4 } },
+    });
+
+    expect(parsed.settings.framing["2/1"]?.scale).toBe(4);
+  });
+
+  // The same range enforcement the params get, for the same reason: a value the
+  // GPU would silently clamp is a slider lying about what it is doing.
+  it("rejects a placement outside the control's own range", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    expect(
+      CoverContentSchema.safeParse({
+        shaderId: "cosmicTrack",
+        settings: { ...settings, framing: { "1/1": { scale: 99 } } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a shape the app cannot draw", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const parsed = content({
+      ...settings,
+      framing: { "7/3": { ...FRAMING_DEFAULTS } },
+    });
+
+    expect("7/3" in parsed.settings.framing).toBe(false);
+  });
+});
+
+// Rotation reads -180..180 with zero in the middle, so that a turn either way
+// from square-on is a move away from zero rather than a wrap through 360.
+describe("rotation", () => {
+  const content = (framing: unknown) =>
+    CoverContentSchema.parse({
+      shaderId: "cosmicTrack",
+      settings: { ...defaultState(SHADER_SPECS.cosmicTrack), framing },
+    });
+
+  it("accepts both ends of the range and the zero between them", () => {
+    for (const rotation of [-180, -90, 0, 90, 180]) {
+      expect(content({ "1/1": { rotation } }).settings.framing["1/1"]?.rotation).toBe(
+        rotation,
+      );
+    }
+  });
+
+  // An angle is MODULAR, unlike every other control here — so a rotation past
+  // the end of the range is wrapped rather than refused. 400° names the same
+  // picture as 40°, so a slider showing 40 is telling the truth, which is the
+  // whole reason the other controls enforce their ranges instead of clamping.
+  // (Scale has no such reading: 99 is not another way of writing a scale the
+  // shader can draw, and `framing` above pins that it is still rejected.)
+  it("wraps a rotation past the end of the range rather than refusing it", () => {
+    expect(content({ "1/1": { rotation: 400 } }).settings.framing["1/1"]?.rotation).toBe(40);
+    expect(content({ "1/1": { rotation: -400 } }).settings.framing["1/1"]?.rotation).toBe(-40);
+  });
+
+  it("still rejects a rotation that is not a number at all", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    expect(
+      CoverContentSchema.safeParse({
+        shaderId: "cosmicTrack",
+        settings: { ...settings, framing: { "1/1": { rotation: "sideways" } } },
+      }).success,
+    ).toBe(false);
+  });
+
+  // Every cover saved while the control ran 0..360 holds a rotation this range
+  // has no room for, and the schema ENFORCES its ranges rather than clamping —
+  // so without this a preset tuned to 270° would stop opening at all. The
+  // wrapped value is the same angle, so the picture is untouched; clamping to
+  // 180 would have quietly re-tuned it.
+  it("carries a rotation saved under the old 0-360 range across", () => {
+    expect(content({ "1/1": { rotation: 270 } }).settings.framing["1/1"]?.rotation).toBe(-90);
+    expect(content({ "1/1": { rotation: 360 } }).settings.framing["1/1"]?.rotation).toBe(0);
+    expect(content({ "1/1": { rotation: 181 } }).settings.framing["1/1"]?.rotation).toBe(-179);
+  });
+
+  // The same wrap has to reach the placement lifted out of `params`, which is
+  // where every cover saved before framing was per-shape keeps its rotation.
+  it("wraps a rotation lifted out of a legacy preset's params", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const parsed = CoverContentSchema.parse({
+      shaderId: "cosmicTrack",
+      settings: {
+        ...settings,
+        aspect: "2/1",
+        params: { ...settings.params, rotation: 270 },
+      },
+    });
+
+    expect(parsed.settings.framing["2/1"]?.rotation).toBe(-90);
+  });
+
+  // A value already inside the range is left exactly as it is — 180 must not
+  // become -180 just because the two name the same angle. The slider would jump
+  // from one end of the track to the other for no reason the author can see.
+  it("leaves a rotation already in range untouched", () => {
+    expect(content({ "1/1": { rotation: 180 } }).settings.framing["1/1"]?.rotation).toBe(180);
+  });
+});
+
+// Phase became a degree dial, reading and stepping like the Rotation beside it.
+// Its stored numbers had to be re-expressed, which is the one migration in this
+// file that changes a value rather than moving it.
+describe("phase", () => {
+  /**
+   * A stored blob holding ONLY these params — every other control fills in from
+   * its own default. Sparse on purpose: a cover saved before the degree dial
+   * has no `phaseDegrees` key at all, and merging today's defaults in would
+   * hand it one and hide the migration under the new-key-wins rule.
+   */
+  const parse = (params: Record<string, unknown>) =>
+    CoverContentSchema.parse({
+      shaderId: "cosmicTrack",
+      settings: { ...defaultState(SHADER_SPECS.cosmicTrack), params },
+    }).settings.params;
+
+  // A cover saved under the old -7..7 track-unit scale holds a number the new
+  // dial would read as a few degrees. Carried across by the SCALE the two share
+  // — a QUARTER turn is the seven units the old control ran to — so the picture
+  // is the one that was saved.
+  it("carries a phase saved under the old track-unit scale across", () => {
+    expect(parse({ phase: 7 }).phaseDegrees).toBe(90);
+    expect(parse({ phase: -7 }).phaseDegrees).toBe(-90);
+    expect(parse({ phase: 3.5 }).phaseDegrees).toBe(45);
+  });
+
+  // Rounded onto the dial's own stops, because a value between them is one the
+  // control cannot express: the slider would show the nearest stop while the
+  // shader drew something else, and the moment you touched it the original
+  // would be gone for good. Off by at most half a step, and only for a cover
+  // saved before the dial existed.
+  it("rounds a converted phase onto the dial's stops", () => {
+    // 1.0 track units is 12.9° — a stop and a bit under a stop away.
+    expect(parse({ phase: 1 }).phaseDegrees).toBe(15);
+    expect(parse({ phase: 0.1 }).phaseDegrees).toBe(0);
+  });
+
+  // Square-on is the one value that means the same in either scale, so it must
+  // not be converted a second time when the cover is read again.
+  it("leaves a phase already dialled in degrees alone", () => {
+    expect(parse({ phaseDegrees: 90 }).phaseDegrees).toBe(90);
+    expect(parse({ phaseDegrees: 0 }).phaseDegrees).toBe(0);
+  });
+
+  // The old key wins nothing where the new one is present: a cover written
+  // since the dial is the authority on itself.
+  it("prefers the degree dial when a stale track-unit key sits beside it", () => {
+    expect(parse({ phase: 7, phaseDegrees: 45 }).phaseDegrees).toBe(45);
+  });
+
+  // The rename chain from the reference's original word still lands: `angle`
+  // became `phase`, and `phase` is now dialled in degrees.
+  it("carries the reference's original `angle` all the way through", () => {
+    expect(parse({ angle: 3.5 }).phaseDegrees).toBe(45);
+  });
+});
+
+describe("framingFor", () => {
+  it("gives the shape's own framing where it has one", () => {
+    const settings = {
+      ...defaultState(SHADER_SPECS.cosmicTrack),
+      aspect: "4/3" as const,
+      framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 2 } },
+    };
+
+    expect(framingFor(settings).scale).toBe(2);
+  });
+
+  // An unframed shape is not a broken one: it reads as the table's own starting
+  // point, which is where every control opens before anybody moves it.
+  it("falls back to the defaults for a shape nobody has framed", () => {
+    const settings = {
+      ...defaultState(SHADER_SPECS.cosmicTrack),
+      aspect: "4/3" as const,
+      framing: {},
+    };
+
+    expect(framingFor(settings)).toEqual(FRAMING_DEFAULTS);
+  });
+});
+
+describe("shaderParamsFor", () => {
+  // The canvas takes ONE object. The split is about where a value is kept, not
+  // about what the shader is given, so this is the seam that puts them back
+  // together — and the framing wins, because a stale placement key surviving in
+  // params would otherwise outrank the frame you are looking at.
+  it("hands the shader its uniforms with the current frame's placement over them", () => {
+    const settings = {
+      ...defaultState(SHADER_SPECS.cosmicTrack),
+      aspect: "4/3" as const,
+      framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 3 } },
+    };
+
+    const params = shaderParamsFor(settings);
+    expect(params.scale).toBe(3);
+    expect(params.rampLength).toBe(
+      defaultState(SHADER_SPECS.cosmicTrack).params.rampLength,
+    );
   });
 });
 

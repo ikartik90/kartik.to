@@ -46,9 +46,20 @@ export interface CosmicTrackParams {
   colorEdge: string;
   /**
    * How far the whole set of bands has travelled along the track — the phase of
-   * the run. (The reference calls this its ANGLE; it is not an angle in any
-   * geometric sense here, and naming it one invited exactly the confusion of
-   * looking for it among `tilt`, `curve` and `roundness`.)
+   * the run — DIALLED IN DEGREES, where a QUARTER turn is the full reach in one
+   * direction.
+   *
+   * The degrees are a SCALE, not a geometry. This is a distance along the
+   * track, in the same units as `apex` and `rampLength`, and the run does not
+   * repeat — which is why the dial stops at a QUARTER turn either way rather
+   * than matching the rotation beside it. A dial running to ±180 would imply a
+   * full turn, and invite the reading that its two ends meet; ±90 reads as a
+   * deflection either way from square-on, which is what this actually is. (The reference called this its ANGLE, and it was
+   * renamed for exactly that reason — naming it one invited looking for it
+   * among `tilt`, `curve` and `roundness`.) What the degrees buy is a dial that
+   * reads and steps like the rotation beside it, which is what the author asked
+   * of it; `TRACK_UNITS_PER_DEGREE` is where the fiction is converted away, and
+   * everything below this line is in track units.
    *
    * SIGNED about the apex, which is the part worth knowing: 0 parks the set at
    * the frame's centre, `-apex` puts it exactly on the apex, and going past
@@ -62,9 +73,9 @@ export interface CosmicTrackParams {
    * them changes. Each band carries the same gradient and keeps it while it
    * moves. The fan’s own shape comes from `apex` and `roundness`.
    */
-  phase: number;
+  phaseDegrees: number;
   /**
-   * How far the set swings either side of `phase` while animating.
+   * How far the set swings either side of `phaseDegrees` while animating.
    *
    * Motion here OSCILLATES — the set runs out along the track and returns by
    * the same path, the way the reference's slider is dragged forward and back.
@@ -353,11 +364,23 @@ export interface CosmicTrackParams {
   edgeWidth: number;
 }
 
+/**
+ * The track distance one degree of `phaseDegrees` buys.
+ *
+ * A QUARTER TURN is the full reach in one direction — the seven track units the
+ * control ran to before it was dialled in degrees — so this conversion is
+ * exactly what turns every previously saved phase into the same picture. It is
+ * a scale and nothing more: see `phaseDegrees` for why the run is not periodic
+ * and the degrees are not geometry.
+ */
+const TRACK_UNITS_PER_QUARTER_TURN = 7;
+export const TRACK_UNITS_PER_DEGREE = TRACK_UNITS_PER_QUARTER_TURN / 90;
+
 /** A legible fan, and the row the playground's control table starts from. */
 export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
   colorBack: "#12042BFF",
-  phase: 0,
+  phaseDegrees: 0,
   travel: 1.5,
   easing: 1,
   easingBias: 0,
@@ -442,7 +465,9 @@ export function toCosmicTrackUniforms(
       number,
       number,
     ],
-    u_phase: params.phase,
+    // The one place the degrees are converted away — the shader is in track
+    // units end to end, and every comment in it says so.
+    u_phase: params.phaseDegrees * TRACK_UNITS_PER_DEGREE,
     u_travel: params.travel,
     // Both are mix factors, so both are clamped for the reason `symmetry` is:
     // `mix` extrapolates, and past either end the swing is dragged beyond the

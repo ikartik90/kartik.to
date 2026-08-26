@@ -1,5 +1,8 @@
 import { z } from "zod";
 import {
+  FRAMING_CONTROLS,
+  FRAMING_CONTROL_KEYS,
+  PHASE_STEP,
   SHADER_IDS,
   SHADER_SPECS,
   defaultState,
@@ -12,6 +15,8 @@ import {
   ASPECT_RATIOS,
   type DemoFrameAspectRatio,
 } from "@/utils/demo-frame-sizing";
+import { wrapRotation } from "@/utils/rotation";
+import { TRACK_UNITS_PER_DEGREE } from "@/components/shaders/cosmic-track-uniforms";
 
 // ---------------------------------------------------------------------------
 // Cover — a saved shader background, authored in the playground and reused
@@ -27,7 +32,7 @@ import {
 // — the surface IS the canvas — one level up.
 //
 // `aspect` is the ONE exception, and it is an exception because it is not a
-// size: it is the shape the picture was JUDGED against. A god-ray fan tuned
+// size: it is the shape the picture is JUDGED in. A god-ray fan tuned
 // until it read on a 9:16 poster is a different composition from the same
 // uniforms tuned on a 16:9 banner, and reopening the cover a month later
 // without that fact means re-deriving it by eye. So it is stored as a note the
@@ -35,6 +40,23 @@ import {
 // to shape anything, and a host that embeds this cover in a square still gets a
 // square. If it ever starts shaping something, the shapelessness above stops
 // being true and this comment is the one that has to change first.
+//
+// FRAMING is kept per shape, and that is the other thing `aspect` now pays for.
+// The four placement controls — scale, rotation, and the two offsets — are the
+// only ones whose right value depends on the shape you are looking at: the same
+// fan needs a different crop on a 2:1 banner than on a 9:16 poster, where every
+// other uniform means exactly what it meant before. So `params` holds what the
+// shader is, `framing` holds one placement per ratio, and `shaderParamsFor`
+// puts them back together on the way to the canvas. Neither is complete on its
+// own, which is the point: there is one place a placement for a given shape can
+// live, and no way for two of them to disagree.
+//
+// EVERY ratio is its own, including the two halves of an orientation pair.
+// Turning the frame over is not a special case here and deliberately gets no
+// automatic quarter turn: 3:4 is simply a shape you have not framed yet, which
+// opens on the placement you arrived with and is then yours to reframe, exactly
+// like 2:1 or 6:5. An automatic turn would be the one shape change that also
+// edited a control, and undoing it by hand is worse than never having it.
 //
 // The validator is GENERATED from `SHADER_SPECS` rather than written out. That
 // table is the only place a uniform's range is written down, and it has already
@@ -110,6 +132,92 @@ function controlSchema(control: ControlSpec): z.ZodTypeAny {
 }
 
 /**
+ * A rotation saved under the old 0..360 range, brought into the signed
+ * -180..180 the control reads today.
+ *
+ * The value migration that a range change needs, and the counterpart to
+ * `RENAMED_PARAMS`: there the key moved and the value meant the same thing,
+ * here the key is the same and the number has to be re-expressed. Without it a
+ * cover tuned to 270° would stop opening — the schema ENFORCES its ranges
+ * rather than clamping, on purpose, because a slider reading a number the
+ * picture does not have is worse than a rejected save.
+ *
+ * WRAPPED rather than clamped, because 270 and -90 are the same angle: the
+ * picture is untouched and only the way it is written down has changed.
+ * Clamping to 180 would have quietly re-tuned every cover that used the far
+ * half of the old range.
+ *
+ * The wrap itself is `@/utils/rotation`'s, shared with the background effect on
+ * a media node — a cover reused as a background must not be described one way
+ * here and another way there.
+ */
+function normaliseRotation(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  const framing = { ...(value as Record<string, unknown>) };
+  if (typeof framing.rotation === "number") {
+    framing.rotation = wrapRotation(framing.rotation);
+  }
+  return framing;
+}
+
+/**
+ * One shape's placement: the four framing controls, with their own ranges and
+ * their own defaults behind them.
+ *
+ * Generated from the same array the sidebar renders, so a fifth placement
+ * control is one line there and reaches this schema, the defaults below and the
+ * per-shape map for free.
+ */
+const FramingSchema = z.preprocess(
+  normaliseRotation,
+  z.object(
+    Object.fromEntries(
+      FRAMING_CONTROLS.map((control) => [control.key, controlSchema(control)]),
+    ),
+  ),
+);
+
+/** How the graphic sits in ONE frame — see `FRAMING_CONTROLS`. */
+export type Framing = Record<string, number>;
+
+/**
+ * Where a shape opens before anybody has framed it.
+ *
+ * PARSED from an empty object rather than written out, because every field of
+ * `FramingSchema` already carries its control's default: asking the schema is
+ * the one reading that cannot drift from the table the sliders are built from.
+ */
+export const FRAMING_DEFAULTS: Framing = FramingSchema.parse({}) as Framing;
+
+/**
+ * Every shape's placement, keyed by ratio — and PARTIAL, deliberately.
+ *
+ * A missing key is the honest record of "nobody has framed this shape", which
+ * is a different fact from "framed at the defaults" and the one the playground
+ * needs: a shape being looked at for the first time inherits the placement you
+ * arrived with (see `seedFraming`), where a shape you have already framed keeps
+ * what you gave it. A complete record would have to invent an answer for ten
+ * shapes nobody had opened, and the difference would be gone.
+ *
+ * An OBJECT over the eleven known keys rather than a `z.record`, so a ratio the
+ * app cannot draw is stripped on the way in the same way an unknown param is —
+ * a stored placement for a shape with no frame to draw it in is residue, not a
+ * reason to refuse the whole cover.
+ */
+const CoverFramingSchema = z
+  .object(
+    Object.fromEntries(
+      (Object.keys(ASPECT_RATIOS) as DemoFrameAspectRatio[]).map((aspect) => [
+        aspect,
+        FramingSchema.optional(),
+      ]),
+    ),
+  )
+  .default({});
+
+/**
  * Controls that have been RENAMED, old key to new.
  *
  * Needed because the two forward-compatibility rules below combine badly for a
@@ -143,6 +251,47 @@ const RENAMED_PARAMS: Record<string, string> = {
   edgeThickness: "edgeWidth",
 };
 
+/**
+ * Controls whose stored VALUE has to be re-expressed, not merely moved.
+ *
+ * The counterpart to `RENAMED_PARAMS` above, and separate from it on purpose:
+ * that table's whole promise is that nothing happens to the number, and folding
+ * a conversion into it would quietly break the one thing it guarantees. A
+ * rename with a value change is a different act, and this is where it is
+ * written down.
+ *
+ * Keyed on the OLD name, which is also what makes the migration idempotent: the
+ * old key is gone once it has been converted, so a cover read twice is not
+ * converted twice. That is why the key changes at all — the two scales overlap
+ * near zero, so no amount of looking at a bare number can tell a stored 0.5 in
+ * the old units from a legitimate 0.5 in the new.
+ *
+ * Runs AFTER the renames, so a chain still lands: the reference's `angle`
+ * becomes `phase`, and `phase` is then dialled in degrees.
+ */
+const RESCALED_PARAMS: {
+  was: string;
+  now: string;
+  convert: (value: number) => number;
+}[] = [
+  {
+    // Phase was a signed distance along the track, -7..7. It is now dialled in
+    // degrees so that it reads like a dial, with a QUARTER turn standing for
+    // the full reach the old control had — so this is the conversion that keeps
+    // every saved cover looking the way it looked.
+    //
+    // ROUNDED onto the dial's own stops, because a value between them is one
+    // the control cannot express: the slider would show the nearest stop while
+    // the shader drew something else, and the first touch of the control would
+    // lose the original for good. At most half a step, and only for a cover
+    // saved before the dial existed.
+    was: "phase",
+    now: "phaseDegrees",
+    convert: (value) =>
+      Math.round(value / TRACK_UNITS_PER_DEGREE / PHASE_STEP) * PHASE_STEP,
+  },
+];
+
 /** Moves any stored value under a retired key onto the key that replaced it. */
 function applyRenames(value: unknown): unknown {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -158,6 +307,30 @@ function applyRenames(value: unknown): unknown {
   return params;
 }
 
+/** Re-expresses any stored value whose scale has changed — see `RESCALED_PARAMS`. */
+function applyRescales(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  const params = { ...(value as Record<string, unknown>) };
+  for (const { was, now, convert } of RESCALED_PARAMS) {
+    if (!(was in params)) continue;
+    const stored = params[was];
+    // The new key wins if BOTH are present, exactly as a rename does: a cover
+    // written since the change is the authority on itself.
+    if (typeof stored === "number" && !(now in params)) {
+      params[now] = convert(stored);
+    }
+    delete params[was];
+  }
+  return params;
+}
+
+/** Every stored-params migration, in the order they have to run. */
+function migrateParams(value: unknown): unknown {
+  return applyRescales(applyRenames(value));
+}
+
 /**
  * The authored state for ONE shader.
  *
@@ -167,12 +340,66 @@ function applyRenames(value: unknown): unknown {
  * stored preset survives the control table changing under it in either
  * direction, which is the whole point of keeping the table as the source.
  */
+/**
+ * Moves a stored cover's ONE placement onto the shape it was saved in.
+ *
+ * The migration for every cover written before framing was per-shape. Those
+ * four keys sat in `params`, where the object schema would now strip them as
+ * unknown — silently unframing every saved cover, which is precisely the
+ * failure `RENAMED_PARAMS` exists to prevent one control at a time. The values
+ * were tuned against the shape the cover was saved in, so that is the shape
+ * they belong to; every other shape is left unframed, to inherit the first time
+ * it is opened.
+ *
+ * At the SETTINGS level rather than inside the params preprocess, because it
+ * needs `aspect`, which is the params' sibling and not its own field.
+ *
+ * A cover written since the split wins outright: a placement already recorded
+ * for that shape is what the author last chose, and a stale params key beside
+ * it is residue.
+ */
+function liftFraming(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  const settings = { ...(value as Record<string, unknown>) };
+  const raw = settings.params;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return settings;
+  }
+
+  const params = { ...(raw as Record<string, unknown>) };
+  const lifted: Record<string, unknown> = {};
+  for (const key of FRAMING_CONTROL_KEYS) {
+    if (key in params) {
+      lifted[key] = params[key];
+      delete params[key];
+    }
+  }
+  settings.params = params;
+  if (Object.keys(lifted).length === 0) return settings;
+
+  const stored = settings.framing;
+  const framing = { ...(typeof stored === "object" && stored !== null ? stored : {}) } as Record<string, unknown>;
+  const aspect =
+    typeof settings.aspect === "string" ? settings.aspect : DEFAULT_COVER_ASPECT;
+  if (!(aspect in framing)) framing[aspect] = lifted;
+  settings.framing = framing;
+  return settings;
+}
+
 function settingsSchemaFor(spec: ShaderSpec) {
+  // The shader's OWN uniforms. The placement controls are filtered out rather
+  // than merely ignored: `spec.controls` is the complete list of what the
+  // shader takes, and this is the layer that decides a placement is stored per
+  // shape instead of once.
   const params = z.preprocess(
-    applyRenames,
+    migrateParams,
     z.object(
       Object.fromEntries(
-        spec.controls.map((control) => [control.key, controlSchema(control)]),
+        spec.controls
+          .filter((control) => !FRAMING_CONTROL_KEYS.includes(control.key))
+          .map((control) => [control.key, controlSchema(control)]),
       ),
     ),
   );
@@ -186,7 +413,7 @@ function settingsSchemaFor(spec: ShaderSpec) {
     ),
   );
 
-  return z.object({
+  return z.preprocess(liftFraming, z.object({
     params,
     colors: z
       .array(CoverColorSchema)
@@ -209,7 +436,8 @@ function settingsSchemaFor(spec: ShaderSpec) {
     // Defaulted like a control, and for the same reason: every cover saved
     // before the playground had a frame is missing the key and must still open.
     aspect: CoverAspectSchema.default(DEFAULT_COVER_ASPECT),
-  });
+    framing: CoverFramingSchema,
+  }));
 }
 
 /** How a cover is set: the shader's uniforms and the colours it is given. */
@@ -219,9 +447,36 @@ export interface CoverSettings {
   /** Present only for a shader that HAS a ground behind the fill. */
   colorBack?: string;
   extraColors: Record<string, string>;
-  /** The shape it was designed against — a note, not a frame. See above. */
+  /** The shape it is being judged in — a note, not a frame. See above. */
   aspect: DemoFrameAspectRatio;
+  /**
+   * How the graphic sits in each shape that has been framed.
+   *
+   * Partial: a shape with no entry has never been framed, and opens on the
+   * placement you arrived with. See `CoverFramingSchema` and `seedFraming`.
+   */
+  framing: Partial<Record<DemoFrameAspectRatio, Framing>>;
 }
+
+/** How the graphic sits in the shape the cover is currently being judged in. */
+export function framingFor(settings: CoverSettings): Framing {
+  return settings.framing[settings.aspect] ?? FRAMING_DEFAULTS;
+}
+
+/**
+ * Everything the mounted shader is handed: its own uniforms, with the current
+ * frame's placement over them.
+ *
+ * The split is about where a value is KEPT, and the canvas takes one object —
+ * so this is the seam that puts the two halves back together, and every surface
+ * that draws a cover goes through it. The placement wins the overlap, which
+ * only matters for a cover mid-migration: a stale placement key left in params
+ * must not outrank the frame you are looking at.
+ */
+export function shaderParamsFor(settings: CoverSettings): Params {
+  return { ...settings.params, ...framingFor(settings) };
+}
+
 
 /** A cover's content: which shader, and how it is set. */
 export interface CoverContent {
@@ -276,6 +531,17 @@ export const CoverSchema = z.object({
   untitledIndex: z.number().int().nullable().optional(),
   shaderId: z.enum(SHADER_IDS as [ShaderId, ...ShaderId[]]),
   settings: z.unknown(),
+  /**
+   * When the cover went on show, and null while it is the author's alone.
+   *
+   * The DATE rather than a boolean, matching `Post.publishedAt`: it records
+   * when as well as whether, and a boolean beside a timestamp is the pair that
+   * eventually disagrees. Nothing reads the moment yet — what every read of the
+   * library does with it is ask whether it is null (see `getCovers`) — but the
+   * cheap column is the one that can answer "since when" later without a
+   * migration.
+   */
+  publishedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

@@ -157,6 +157,14 @@ model Cover {
   // ramp, the ground — as one blob, because they are only meaningful together
   // and only validatable together. See `CoverContentSchema`.
   settings      Json
+  // When the cover went on show, and null while it is the author's alone. The
+  // same nullable-timestamp shape `Post` uses, for the same reason: it records
+  // WHEN as well as whether, and taking a cover back is clearing a column
+  // rather than destroying the work.
+  //
+  // The playground is public, so this is the column that decides what a visitor
+  // is shown — every read of the library filters on it (see `getCovers`).
+  publishedAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
