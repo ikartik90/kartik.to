@@ -77,7 +77,7 @@ function ButtonRoot(
   }: ButtonProps,
   ref: React.Ref<HTMLButtonElement>,
 ) {
-  const { content, hasText, tooltipNode, hasTooltip, show, hide } =
+  const { content, hasText, tooltipNode, hasTooltip, visible, show, hide } =
     useActionTooltip(children);
   const resolvedVariant = variant ?? (hasText ? "text" : "icon");
   const resolvedEmphasis =
@@ -100,6 +100,11 @@ function ButtonRoot(
           onMouseLeave?.(event);
           if (hasTooltip) hide();
         }}
+        // Says the tooltip is up, for anything drawn INSTEAD of it — see
+        // `MenuButton`'s shortcut chip. A sibling keying off `:hover` would be
+        // answering a different question from the tooltip's own, and the two
+        // drift apart on any event the browser and React see differently.
+        data-tooltip-visible={visible || undefined}
         {...rest}
       >
         <WireframeContent>{content}</WireframeContent>

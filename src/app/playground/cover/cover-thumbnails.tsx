@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { SHADER_SPECS } from "@/data/shader-specs";
-import type { Cover, CoverContent } from "@/domain/cover";
+import { shaderParamsFor, type Cover, type CoverContent } from "@/domain/cover";
 import { ShaderStage } from "./shader-stage";
 
 // ---------------------------------------------------------------------------
@@ -229,7 +229,7 @@ export function CoverThumbnails({ presets, onCaptured }: CoverThumbnailsProps) {
         // A still, whatever the cover was saved at: the tile is a photograph,
         // and an animating one would be a rAF per frame spent on a picture
         // nobody is watching. Zero also stops the library's loop outright.
-        params={{ ...current.settings.params, speed: 0 }}
+        params={{ ...shaderParamsFor(current.settings), speed: 0 }}
         colors={current.settings.colors}
         colorBack={current.settings.colorBack}
         extraColors={current.settings.extraColors}

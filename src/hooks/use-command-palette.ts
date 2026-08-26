@@ -23,7 +23,7 @@ import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
 import { createCover, saveCover } from "@/app/actions/cover";
-import { useCoverDraftStore } from "@/store/cover-draft";
+import { hasUnsavedCoverWork, useCoverDraftStore } from "@/store/cover-draft";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 
 // ---------------------------------------------------------------------------
@@ -230,8 +230,12 @@ export function useCommandPalette(
   const wouldLoseWork = () => {
     if (!isAdmin) return false;
     switch (editorKind) {
+      // Every cover holding something, not just the one on screen. The strip
+      // lets you move between presets freely and sets each draft aside as you
+      // go, so "unsaved work" is no longer a fact about the open cover — and an
+      // exit that only checked that one would drop the rest without asking.
       case "cover":
-        return useCoverDraftStore.getState().isDirty;
+        return hasUnsavedCoverWork(useCoverDraftStore.getState());
       // TWO drafts, one page — the homepage is a document with a grid in it and
       // either half can be the dirty one. See `persistGrid`.
       case "grid":
@@ -382,11 +386,18 @@ export function useCommandPalette(
       // is what makes the panel read the same as the row. It also clears the
       // dirty flag, which is what stops "Discard changes" offering to throw
       // away work that has just been written.
-      useCoverDraftStore.getState().load({
+      // COMMIT rather than load: the draft on screen has just been written, so
+      // it must not be set aside as unsaved work — see the store.
+      useCoverDraftStore.getState().commit({
         id: saved.id,
         title: saved.title ?? null,
         shaderId: saved.shaderId,
         settings: saved.settings,
+        // Whether the row is on show, carried back with it. A save never
+        // changes it — `saveCover` does not touch the column — but reading it
+        // off what was stored is what keeps the panel's publish button
+        // answering to the database rather than to a copy of it.
+        publishedAt: saved.publishedAt,
       });
       // A cover that has just been created has an id the URL does not know
       // about yet, and a refresh would land back on the blank route having lost

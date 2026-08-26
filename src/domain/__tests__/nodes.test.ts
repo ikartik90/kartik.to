@@ -50,8 +50,39 @@ describe("BackgroundEffectSchema", () => {
     expect(() => BackgroundEffectSchema.parse({ waveY: -0.1 })).toThrow();
   });
 
-  it("rejects a rotation outside 0-360", () => {
-    expect(() => BackgroundEffectSchema.parse({ rotation: 400 })).toThrow();
+  // Signed about zero, the same range the cover playground turns a shader
+  // through — a cover authored there is reused as a background here, and one
+  // picture must not be described two ways.
+  it("takes a rotation anywhere in the signed range", () => {
+    for (const rotation of [-180, -90, 0, 90, 180]) {
+      expect(BackgroundEffectSchema.parse({ rotation }).rotation).toBe(rotation);
+    }
+  });
+
+  // Every effect saved under the old 0..360 range holds an angle this range has
+  // no room for, and the field ENFORCES its range rather than clamping — so
+  // without the wrap a background tuned to 270° would stop parsing and take the
+  // node with it. Wrapped, not clamped: 270 and -90 are the same picture.
+  it("carries a rotation saved under the old 0-360 range across", () => {
+    expect(BackgroundEffectSchema.parse({ rotation: 270 }).rotation).toBe(-90);
+    expect(BackgroundEffectSchema.parse({ rotation: 360 }).rotation).toBe(0);
+  });
+
+  // An angle is MODULAR, unlike every other control here, so a value past the
+  // end is wrapped rather than refused — 400° names the same picture as 40°.
+  // The waves and offsets above have no such reading and are still rejected.
+  it("wraps a rotation past the end of the range rather than refusing it", () => {
+    expect(BackgroundEffectSchema.parse({ rotation: 400 }).rotation).toBe(40);
+  });
+
+  it("still rejects a rotation that is not a number", () => {
+    expect(() => BackgroundEffectSchema.parse({ rotation: "sideways" })).toThrow();
+  });
+
+  // What a freshly enabled effect opens on: the three-quarter turn it has
+  // always had, written the way the signed range reads it.
+  it("opens on the turn it has always had, in the new notation", () => {
+    expect(DEFAULT_BACKGROUND_EFFECT.rotation).toBe(-90);
   });
 
   it("rejects an offset outside -1..1", () => {

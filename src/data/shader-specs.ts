@@ -1,3 +1,32 @@
+import {
+  ROTATION_MAX,
+  ROTATION_MIN,
+  ROTATION_STEP,
+} from "@/utils/rotation";
+
+/**
+ * The Phase dial: a QUARTER turn of deflection either way, on the same 15°
+ * stops the Rotation control uses.
+ *
+ * Its own constants rather than rotation's, and the difference is the point.
+ * Phase is a signed DISTANCE along the track dialled in degrees so that it
+ * reads like a dial — but the run does not repeat, so a ±180 range would imply
+ * a full turn and invite the reading that its two ends are the same place. They
+ * are opposite ends of the track. ±90 says deflection either way from
+ * square-on, which is true of it.
+ *
+ * Not imported from `@/utils/rotation` for the same reason: that module is the
+ * app's one ROTATION control, and phase is not one. The shared 15 is written
+ * again here deliberately — the two dials snap alike because that reads well,
+ * not because one is the other.
+ *
+ * The degrees convert to track units in exactly one place, on the way to the
+ * uniform — see `TRACK_UNITS_PER_DEGREE`.
+ */
+export const PHASE_MIN = -90;
+export const PHASE_MAX = 90;
+export const PHASE_STEP = 15;
+
 // ---------------------------------------------------------------------------
 // The shader playground's table of contents.
 //
@@ -121,6 +150,15 @@ export interface ShaderSpec {
 // read first and the framing sits together at the foot of the sidebar wherever
 // you are.
 //
+// They belong to every shader equally, which is why they are one array spread
+// six times rather than six copies — and it is also why a cover STORES them
+// apart from the rest: these four are the only controls whose right value
+// depends on the shape the cover is being looked at in, so a cover keeps one
+// set per aspect ratio rather than one set full stop. `spec.controls` stays the
+// complete list of what a shader takes; where each value lives is
+// `@/domain/cover`'s to decide, and `shaderParamsFor` is what puts the two back
+// together on the way to the canvas.
+//
 // The rest of `ShaderSizingParams` is deliberately absent. `fit` and the world
 // box (`worldWidth`/`worldHeight`, and the `originX`/`originY` that only
 // position that box) describe how the shader's coordinate space maps onto a
@@ -129,9 +167,20 @@ export interface ShaderSpec {
 // do nothing you can see; `fit: none` against a zero-size world collapses the
 // box to a pixel and renders nothing at all. Controls whose only settings are
 // "no change" and "broken" are not properties of the shader worth showing.
-const FRAMING_CONTROLS: ControlSpec[] = [
+export const FRAMING_CONTROLS: ControlSpec[] = [
   { kind: "slider", key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.1, value: 1 },
-  { kind: "slider", key: "rotation", label: "Rotation", min: 0, max: 360, step: 1, value: 0 },
+  // SIGNED, about a zero in the middle of the track, rather than 0..360. The
+  // control names a turn away from square-on, and which way you turned is the
+  // thing you are choosing — under 0..360 one of the two directions was only
+  // reachable by running the slider almost all the way to the far end, and the
+  // neutral setting sat on the boundary where the two ends meet. Covers saved
+  // under the old range are carried across by `@/domain/cover`, since 270 and
+  // -90 are the same angle.
+  // Range and step from the app's ONE rotation control, not written out here:
+  // a cover tuned in this playground is reused as a background elsewhere, and
+  // a panel offering different stops would make a cover unreachable in the
+  // surface it was built for. See `@/utils/rotation`.
+  { kind: "slider", key: "rotation", label: "Rotation", min: ROTATION_MIN, max: ROTATION_MAX, step: ROTATION_STEP, value: 0 },
   { kind: "slider", key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.1, value: 0 },
   { kind: "slider", key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.1, value: 0 },
 ];
@@ -209,7 +258,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // frame's centre and -Apex puts it exactly on the apex, so the range has
       // to cover Apex's own (0..5) with room for a band's length either side,
       // or the far lobe is unreachable at a high Apex.
-      { kind: "slider", key: "phase", label: "Phase", group: "ramp", min: -7, max: 7, step: 0.1, value: 0 },
+      { kind: "slider", key: "phaseDegrees", label: "Phase", group: "ramp", min: PHASE_MIN, max: PHASE_MAX, step: PHASE_STEP, value: 0 },
       // How far Speed swings the set either side of Phase. Motion oscillates
       // out and back rather than drifting one way, so the bands always return.
       { kind: "slider", key: "travel", label: "Travel", group: "ramp", min: 0, max: 4, step: 0.1, value: 1.5 },
@@ -309,7 +358,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     defaults: {
       colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
       colorBack: "#12042BFF",
-      params: { phase: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3, easing: 1, easingBias: 0, interval: 0 },
+      params: { phaseDegrees: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3, easing: 1, easingBias: 0, interval: 0 },
     },
   },
 

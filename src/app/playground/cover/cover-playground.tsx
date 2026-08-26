@@ -15,6 +15,8 @@ import { useSheetDrag } from "@/hooks/use-sheet-drag";
 import { isBottomSheetLayout } from "@/data/media-queries";
 import { useCoverDraftStore } from "@/store/cover-draft";
 import { AspectRail } from "@/components/aspect-rail";
+import { deleteCover, publishCover, unpublishCover } from "@/app/actions/cover";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PresetsPane } from "./presets-pane";
 import { ShaderStage } from "./shader-stage";
 import { MenuButton } from "@/components/menu-button";
@@ -30,7 +32,10 @@ import { Typography } from "@/components/ui/typography";
 import { Tooltip } from "@/components/ui/tooltip";
 import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
+import PublishIcon from "@/assets/icons/publish.svg";
 import ResetIcon from "@/assets/icons/reset.svg";
+import TrashIcon from "@/assets/icons/trash.svg";
+import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import {
   SHADER_IDS,
   SHADER_SPECS,
@@ -39,7 +44,7 @@ import {
   type ControlSpec,
   type ShaderId,
 } from "@/data/shader-specs";
-import type { CoverSettings } from "@/domain/cover";
+import { framingFor, shaderParamsFor, type CoverSettings } from "@/domain/cover";
 import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
@@ -85,10 +90,10 @@ import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 //                  answers for that), half the viewport while it is a sheet,
 //                  and nothing again once the sheet has been sent away.
 //   --presets-space what the saved-covers strip is holding at the foot of the
-//                  canvas: nothing at all for a visitor, who is not shown one.
-//                  Its own tiles and padding (80 + 2×12) plus the four pixels
-//                  it stands off the bottom edge — the same tokens the pane
-//                  itself is built from, so the two cannot drift.
+//                  canvas: nothing at all when there is no strip. Its own tiles
+//                  and padding (80 + 2×12) plus the four pixels it stands off
+//                  the bottom edge — the same tokens the pane itself is built
+//                  from, so the two cannot drift.
 //   --card-space   everything the cover may NOT have: the sheet, the gutter
 //                  controls' band, the presets strip, and the page's own
 //                  margins.
@@ -110,11 +115,17 @@ const pageStyle = css({
   _bottomSheet: {
     "--sheet-space": "50dvh",
   },
-  // Signed in, so the strip is on screen and the picture gives up its band.
-  // An attribute rather than a prop threaded into every style, for the reason
-  // the dismissed sheet is one: the page owns the arithmetic, and the parts
-  // read it off one variable.
-  "&[data-presets]": {
+  // A strip is on screen, so the picture gives up its band. Asked of the PANE
+  // rather than of the session, because "is there a strip" is no longer the
+  // same question as "is the author signed in": a visitor is shown the
+  // published covers, and gets no strip only when there are none. The pane is
+  // the one thing that knows, and `:has()` is what lets it say so without the
+  // page holding a second copy of the list to count.
+  //
+  // The arithmetic stays here, which is the half that was always right: the
+  // page owns the division of the viewport and every part reads it off one
+  // variable — the same call the dismissed sheet's attribute makes below.
+  "&:has([data-presets])": {
     "--presets-space":
       "calc(token(spacing.5xl) + 2 * token(spacing.lg) + token(spacing.sm))",
   },
@@ -202,14 +213,17 @@ const canvasChromeStyle = css({
 // A hairline and nothing else. The card's rail buys elevation as well because
 // it floats over a picture; this one stands on the page's own ground, where a
 // shadow would be an object casting one onto the surface it is lying on.
+//
+// NOT clipped, which it used to be. The clip guarded a corner the `md` rail's
+// own 6px inset already guards — its buttons never reach the rail's edge, so
+// there is nothing there to square it off — and it cost the one thing the rail
+// now has to let out: the unsaved-framing dots, which hang beneath the buttons
+// and outside the rail on purpose. See `AspectRail`'s `markedAspects`.
 const aspectRailStyle = css({
   borderWidth: "token(spacing.3xs)",
   borderStyle: "solid",
   borderColor: "border.divider",
-  // The end chips are square (the `md` rail keeps its buttons' own 4px
-  // corners), so the row is clipped to the rail's corner rather than being
-  // allowed to square it off.
-  overflow: "hidden",
+  overflow: "visible",
 });
 
 // The cover the reference art is drawn on: portrait, generously rounded. The
@@ -339,6 +353,8 @@ export interface OpenedCover {
   title: string | null;
   shaderId: ShaderId;
   settings: CoverSettings;
+  /** When it went on show, and null while it is the author's alone. */
+  publishedAt: Date | null;
 }
 
 export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
@@ -355,8 +371,20 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const setExtraColorInStore = useCoverDraftStore(
     (draft) => draft.setExtraColor,
   );
+  const setFramingInStore = useCoverDraftStore((draft) => draft.setFraming);
   const setAspectInStore = useCoverDraftStore((draft) => draft.setAspect);
   const resetParamsInStore = useCoverDraftStore((draft) => draft.resetParams);
+  const setPublishedAtInStore = useCoverDraftStore(
+    (draft) => draft.setPublishedAt,
+  );
+  // Which of the two things the header's publish button is, and whether it has
+  // a saved row to act on at all.
+  const savedCoverId = useCoverDraftStore((draft) => draft.coverId);
+  const publishedAt = useCoverDraftStore((draft) => draft.publishedAt);
+  const isDirty = useCoverDraftStore((draft) => draft.isDirty);
+  // Which shapes have been reframed since the cover was opened — the rail marks
+  // them, so unsaved work in a frame that is not on screen is not invisible.
+  const editedAspects = useCoverDraftStore((draft) => draft.editedAspects);
 
   // This page's rail is the propertiesPanel RECIPE rather than the component —
   // the component is a dismissible dialog, and a playground whose whole content
@@ -366,18 +394,85 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
 
-  // The saved library is the author's, and so is the strip that shows it: the
-  // playground is public, but everything the strip does reads or writes the
-  // database. One answer, used twice — what to draw, and how much room the
-  // picture has to give up for it.
+  // What the AUTHOR is shown on top of the playground everybody gets: the
+  // shader picker, and the button that puts a cover on show. Both are about
+  // authoring a cover rather than looking at one — a visitor takes up a
+  // published preset and pushes it around, which needs neither.
+  //
+  // What to draw, never what may be done: `publishCover` checks the session
+  // again on the server, and this answers false for one render after hydration
+  // by design — see `useIsAdmin`.
   const isAdmin = useIsAdmin();
+
+  /**
+   * Whether the header's shared slot is offering to DELETE rather than to
+   * reset — which it does exactly when there is nothing left to reset.
+   *
+   * `!isDirty` is that condition: the draft goes clean only on a load or a
+   * save, so a clean draft IS the saved preset and Reset would put back what
+   * is already there. Reading the store's own flag rather than comparing the
+   * two states keeps one answer to "has this been touched" — the same one the
+   * palette asks before offering to discard work.
+   *
+   * A never-saved draft keeps Reset: there is no row for a Delete to name.
+   * And the swap is only safe because of the direction it runs in — in every
+   * state where Reset would do something, Reset is what is in the slot, so a
+   * press aimed at Reset can never land on Delete.
+   */
+  const canDelete = isAdmin && savedCoverId !== null && !isDirty;
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  /** Remove the saved preset, and go back to a blank draft. */
+  async function deletePreset() {
+    if (!savedCoverId || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteCover(savedCoverId);
+      // The cover does NOT stay on screen: deleting is a deliberate "I do not
+      // want this", and leaving it in the panel would invite re-saving the
+      // thing just thrown away. The URL stops naming a row that no longer
+      // exists — replaced rather than pushed, since the deleted cover is not
+      // somewhere to go back to.
+      useCoverDraftStore.getState().reset();
+      window.history.replaceState(null, "", "/playground/cover");
+    } catch (err) {
+      // A failed delete must not look like a successful one: the row is still
+      // there, so the playground must still be holding it.
+      console.error("Failed to delete the preset:", err);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  /** Put the saved cover on show, or take it back off. */
+  const [publishing, setPublishing] = useState(false);
+  async function togglePublished() {
+    if (!savedCoverId || publishing) return;
+    setPublishing(true);
+    try {
+      // The row is the authority on its own state: what comes back is what is
+      // recorded, rather than a date this button made up and hoped matched.
+      const saved = publishedAt
+        ? await unpublishCover(savedCoverId)
+        : await publishCover(savedCoverId);
+      setPublishedAtInStore(saved.publishedAt);
+    } catch (err) {
+      // Leaves the button saying what is still true. A failed publish that
+      // flipped the icon anyway would be the worse outcome by far: the strip
+      // would go on showing the cover to nobody while the panel claimed it was
+      // out.
+      console.error("Failed to change the cover's publication:", err);
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   // The frame, and the two numbers the card is drawn from. Looked up in the
   // app's one table of shapes rather than split off the key, so a ratio that is
   // not in it cannot reach the CSS.
   const aspect = state.aspect;
   const [ratioWidth, ratioHeight] = ASPECT_RATIOS[aspect];
-
 
   // Whether the sheet has been sent away. Read ONLY inside the bottom-sheet
   // media query (see `panda.config.ts`), which is what makes rotating the phone
@@ -408,7 +503,11 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
       if (store.coverId === cover.id) return;
       store.load(cover);
     } else {
-      store.reset();
+      // The never-saved draft, taken up rather than blanked: arriving at the
+      // bare route must not throw away work tuned before the first save. If
+      // nothing is held it opens blank, exactly as `reset` used to leave it —
+      // and `reset` is now the discard alone.
+      store.openNewDraft();
     }
     // Keyed on the ID, not the object: a server component hands down a fresh
     // prop object on every render, and depending on that identity would re-seed
@@ -451,7 +550,21 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
     ...spec.controls.filter((control) => control.group === "motion"),
   ];
 
+  // The placement controls are stored per SHAPE and the rest per cover, so the
+  // panel has to know which of the two a row is writing to. Read and write are
+  // one pair rather than a second copy of `renderControl` — the switch over
+  // control kinds is the thing that must not be duplicated (see there), and
+  // where a value lives is orthogonal to what kind of control shows it.
+  const isFramingControl = (key: string) => FRAMING_CONTROL_KEYS.includes(key);
+  const framing = framingFor(state);
+  const valueOf = (key: string) =>
+    isFramingControl(key) ? framing[key] : state.params[key];
+
   function setParam(key: string, value: number | boolean | string) {
+    if (isFramingControl(key)) {
+      setFramingInStore(key, Number(value));
+      return;
+    }
     setParamInStore(key, value);
   }
 
@@ -480,7 +593,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
       return (
         <Field size="sm" key={control.key} data-property-control>
           <Switch
-            checked={Boolean(state.params[control.key])}
+            checked={Boolean(valueOf(control.key))}
             onCheckedChange={(checked) => setParam(control.key, checked)}
           />
           <Field.Label>{control.label}</Field.Label>
@@ -494,7 +607,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           <Field.Label>{control.label}</Field.Label>
           <SegmentedControl
             options={control.options}
-            value={String(state.params[control.key])}
+            value={String(valueOf(control.key))}
             onValueChange={(value) => setParam(control.key, value)}
           />
         </Field>
@@ -508,7 +621,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           min={control.min}
           max={control.max}
           step={control.step}
-          value={Number(state.params[control.key])}
+          value={Number(valueOf(control.key))}
           onValueChange={(value) => setParam(control.key, value)}
         />
       </Field>
@@ -516,11 +629,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   }
 
   return (
-    <main
-      className={pageStyle}
-      data-sheet-dismissed={dismissed || undefined}
-      data-presets={isAdmin || undefined}
-    >
+    <main className={pageStyle} data-sheet-dismissed={dismissed || undefined}>
       <div className={canvasStyle}>
         <div
           className={coverStyle}
@@ -534,7 +643,9 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
         >
           <ShaderStage
             spec={spec}
-            params={state.params}
+            // Both halves, put back together — the shader's own uniforms with
+            // the current shape's placement over them. See `shaderParamsFor`.
+            params={shaderParamsFor(state)}
             colors={state.colors}
             colorBack={state.colorBack}
             extraColors={state.extraColors}
@@ -568,6 +679,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
               ariaLabel="Preview aspect ratio"
               aspect={aspect}
               onPick={setAspectInStore}
+              markedAspects={editedAspects}
             />
           </div>
 
@@ -591,8 +703,12 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
 
         {/* The saved covers, along the foot of the canvas. Inside it rather
             than fixed to the viewport, so the strip gives the properties rail
-            the same room the rest of this page does — see `presets-pane`. */}
-        {isAdmin && <PresetsPane />}
+            the same room the rest of this page does — see `presets-pane`.
+
+            Mounted for everybody: the pane decides what is in it and whether
+            there is anything to draw at all, and the page reserves its band off
+            whether it drew one. */}
+        <PresetsPane />
       </div>
 
       {/* The rail, and the same panel along the bottom edge on a phone held
@@ -622,12 +738,66 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
                 the shader's defaults where there is no preset) is the store's
                 to decide; spelling that out in the label would make the shortest
                 control in the header the wordiest thing in it. */}
-            <Button variant="icon" aria-label="Reset" onClick={resetParamsInStore}>
-              <ResetIcon />
-              <Button.Tooltip>
-                <Tooltip.Text>Reset</Tooltip.Text>
-              </Button.Tooltip>
-            </Button>
+            {canDelete ? (
+              <Button
+                variant="icon"
+                aria-label="Delete preset"
+                disabled={deleting}
+                onClick={() => setPendingDelete(true)}
+              >
+                <TrashIcon />
+                <Button.Tooltip>
+                  <Tooltip.Text>Delete preset</Tooltip.Text>
+                </Button.Tooltip>
+              </Button>
+            ) : (
+              <Button
+                variant="icon"
+                aria-label="Reset"
+                onClick={resetParamsInStore}
+              >
+                <ResetIcon />
+                <Button.Tooltip>
+                  <Tooltip.Text>Reset</Tooltip.Text>
+                </Button.Tooltip>
+              </Button>
+            )}
+
+            {/* Whether this cover is on show — one button, because it is one
+                fact with two settings, and a pair sitting side by side would
+                always have one of them inert.
+
+                Beside Reset rather than in the command palette, which is where
+                an article's Publish lives. The difference is what the control
+                acts on: a post's publish acts on the page you are looking at,
+                where this acts on the SAVED ROW behind the panel — the same
+                thing Reset restores from — so it belongs in the panel's own
+                header with it.
+
+                It publishes what was last SAVED, not what is in the panel: ⌘S
+                is the one press that decides between creating a row and
+                updating one, and a second control making that decision would be
+                two doors to one room. Which is also why it is disabled until
+                there is a row — there is nothing yet for "publish this" to
+                name.
+
+                The author's alone, and nothing here is what enforces that:
+                `publishCover` asks the server. */}
+            {isAdmin && (
+              <Button
+                variant="icon"
+                aria-label={publishedAt ? "Unpublish" : "Publish"}
+                disabled={!savedCoverId || publishing}
+                onClick={() => void togglePublished()}
+              >
+                {publishedAt ? <UnpublishIcon /> : <PublishIcon />}
+                <Button.Tooltip>
+                  <Tooltip.Text>
+                    {publishedAt ? "Unpublish" : "Publish"}
+                  </Tooltip.Text>
+                </Button.Tooltip>
+              </Button>
+            )}
             <Button
               variant="icon"
               className={sheetOnlyStyle}
@@ -642,32 +812,40 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           </div>
         </div>
 
-        <Group title="Shader">
-          {/* A list rather than a row of chips: six names read as a set to pick
+        {/* The shader itself is the AUTHOR's choice, so a visitor is not shown
+            this group. What they came for is the cover in front of them — the
+            preset they opened, with its own controls under it — and a picker
+            that swapped it for a bare `godRays` would throw that cover away
+            with nothing to get it back. The panel below still gives them every
+            control the mounted shader has. */}
+        {isAdmin && (
+          <Group title="Shader">
+            {/* A list rather than a row of chips: six names read as a set to pick
               ONE of, and the selected row says which is mounted without the
               reader having to compare button emphases. `sm` because the panel's
               own rows are 24px — a 32px-pitch list inside it would be the
               loudest thing in the rail. */}
-          <OptionList
-            size="sm"
-            // The recipe's own width is the 208px popover pitch it shares with
-            // the calendar. In here the panel is the frame, so the list takes
-            // the column it was given — `utilities` outranks `recipes`, which
-            // is what lets a consumer widen it without a variant.
-            className={css({ width: "token(spacing.full)" })}
-            value={shaderId}
-            onValueChange={(value) => selectShader(value as ShaderId)}
-          >
-            <Field.Search placeholder="Search…" />
-            <OptionList.Listbox aria-label="Shader">
-              {SHADER_IDS.map((id) => (
-                <OptionList.Option key={id} value={id}>
-                  {SHADER_SPECS[id].label}
-                </OptionList.Option>
-              ))}
-            </OptionList.Listbox>
-          </OptionList>
-        </Group>
+            <OptionList
+              size="sm"
+              // The recipe's own width is the 208px popover pitch it shares with
+              // the calendar. In here the panel is the frame, so the list takes
+              // the column it was given — `utilities` outranks `recipes`, which
+              // is what lets a consumer widen it without a variant.
+              className={css({ width: "token(spacing.full)" })}
+              value={shaderId}
+              onValueChange={(value) => selectShader(value as ShaderId)}
+            >
+              <Field.Search placeholder="Search…" />
+              <OptionList.Listbox aria-label="Shader">
+                {SHADER_IDS.map((id) => (
+                  <OptionList.Option key={id} value={id}>
+                    {SHADER_SPECS[id].label}
+                  </OptionList.Option>
+                ))}
+              </OptionList.Listbox>
+            </OptionList>
+          </Group>
+        )}
 
         <Group title="Colours">
           <Field size="sm" data-property-control>
@@ -716,7 +894,6 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
               />
             </Field>
           ))}
-
         </Group>
 
         {/* The fan itself, then what is drawn ON it: the ramp is laid along the
@@ -738,7 +915,14 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           <Group title="Dither">{ditherControls.map(renderControl)}</Group>
         )}
 
-        <Group title="Framing">{framingControls.map(renderControl)}</Group>
+        {/* Named for the SHAPE it applies to, because it applies to one: these
+            four are kept per aspect ratio, and a heading reading plain
+            "Framing" beside ten other framings you cannot see would be the
+            panel's only lie. The rest of the panel has no such suffix because
+            the rest of it is the cover's, whatever shape you are in. */}
+        <Group title={`Framing ${aspect.replace("/", ":")}`}>
+          {framingControls.map(renderControl)}
+        </Group>
 
         {/* Absent entirely for a shader that never samples time, rather than
             present and inert — see `MOTION_CONTROLS`. */}
@@ -746,6 +930,18 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           <Group title="Motion">{motionControls.map(renderControl)}</Group>
         )}
       </aside>
+
+      {/* Deleting a preset is the one act here that cannot be undone with a
+          second press — unlike unpublishing, which puts it straight back — so
+          it is the one that asks. */}
+      <ConfirmDialog
+        open={pendingDelete}
+        title="Delete Preset"
+        message="You are about to delete this preset. This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => void deletePreset()}
+        onClose={() => setPendingDelete(false)}
+      />
     </main>
   );
 }

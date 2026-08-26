@@ -21,13 +21,32 @@ import type { ShaderId } from "@/data/shader-specs";
 // what NORMALISES on the way in (six-digit colours padded, retired keys
 // stripped, missing ones defaulted), so parsing here is what keeps one shape in
 // the column rather than whatever a given build happened to send.
+//
+// READING is public and WRITING is the author's, which is a split the file used
+// to not have: every action required the admin session, so the playground's
+// preset strip was the author's alone. A visitor can now walk into the
+// playground and take up a saved cover — but only one that has been PUBLISHED,
+// which is `publishedAt`'s whole job. The gate is here rather than in the
+// components that draw the strip: a component decides what to draw, and this is
+// the layer that decides what may be seen.
 // ---------------------------------------------------------------------------
 
-async function requireAdmin(): Promise<void> {
+/**
+ * Whether the caller is the author — the question `requireAdmin` throws on.
+ *
+ * Separate from it because the reads need the ANSWER rather than the throw:
+ * they serve everybody and only the size of the answer changes. Written once,
+ * so the two can never come to different conclusions about the same session.
+ */
+async function isAdmin(): Promise<boolean> {
   const { data: session } = await auth.getSession();
-  if (!session?.user?.email || session.user.email !== env.ADMIN_GITHUB_ID) {
-    throw new Error("Unauthorized");
-  }
+  return (
+    !!session?.user?.email && session.user.email === env.ADMIN_GITHUB_ID
+  );
+}
+
+async function requireAdmin(): Promise<void> {
+  if (!(await isAdmin())) throw new Error("Unauthorized");
 }
 
 /** The row as the app holds it, with the blob parsed back into content. */
@@ -37,6 +56,7 @@ function parseCover(row: {
   untitledIndex: number | null;
   shaderId: string;
   settings: unknown;
+  publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }): Cover & CoverContent {
@@ -59,17 +79,32 @@ function parseCover(row: {
  * editing it — the row reshuffling under the pointer that is using it.
  */
 export async function getCovers(): Promise<(Cover & CoverContent)[]> {
-  await requireAdmin();
-  const rows = await prisma.cover.findMany({ orderBy: { createdAt: "desc" } });
+  // A visitor is shown the PUBLISHED covers and no others. The playground is
+  // public and so is its strip, but saving is how the author keeps a half-tuned
+  // idea overnight — and a library that showed those would turn every save into
+  // an act of publishing, which is the pressure that stops you saving.
+  const rows = await prisma.cover.findMany({
+    where: (await isAdmin()) ? {} : { publishedAt: { not: null } },
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map(parseCover);
 }
 
+/**
+ * One saved cover, by id — the route `/playground/cover/[id]` opens on.
+ *
+ * An unpublished cover answers NULL to a visitor rather than throwing, and the
+ * difference matters: the route turns null into a 404, so "not published" and
+ * "no such cover" are indistinguishable from outside. An Unauthorized here
+ * would have said a cover by that id exists.
+ */
 export async function getCover(
   id: string,
 ): Promise<(Cover & CoverContent) | null> {
-  await requireAdmin();
   const row = await prisma.cover.findUnique({ where: { id } });
-  return row ? parseCover(row) : null;
+  if (!row) return null;
+  if (!row.publishedAt && !(await isAdmin())) return null;
+  return parseCover(row);
 }
 
 export async function createCover({
@@ -130,6 +165,47 @@ export async function saveCover({
       shaderId: content.shaderId,
       settings: content.settings as object,
     },
+  });
+  return parseCover(row);
+}
+
+/**
+ * Put a cover on show — which is what makes it visible to anybody but the
+ * author, in the strip and at its own route.
+ *
+ * The SAVED cover, not what is currently in the panel: publishing and saving
+ * are separate presses here exactly as they are for an article, so that ⌘S
+ * stays the only thing that decides between creating and updating a row.
+ */
+export async function publishCover(
+  id: string,
+): Promise<Cover & CoverContent> {
+  await requireAdmin();
+  const row = await prisma.cover.update({
+    where: { id },
+    data: { publishedAt: new Date() },
+  });
+  return parseCover(row);
+}
+
+/**
+ * Take a cover back off show, without destroying it.
+ *
+ * Clearing the date rather than deleting the row, the same call `unpublishPost`
+ * makes: the cover is still the author's to open, tune and put back out, and
+ * the destructive half of "remove this" is `deleteCover`.
+ *
+ * No confirmation in front of it, unlike unpublishing an article. This one is
+ * undone by pressing the same button again, and `ConfirmDialog` is for what
+ * cannot be.
+ */
+export async function unpublishCover(
+  id: string,
+): Promise<Cover & CoverContent> {
+  await requireAdmin();
+  const row = await prisma.cover.update({
+    where: { id },
+    data: { publishedAt: null },
   });
   return parseCover(row);
 }

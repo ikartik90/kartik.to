@@ -35,6 +35,19 @@ vi.mock("../shader-stage", () => ({
   ),
 }));
 
+// Who is asking. The strip is public now, so most of what follows is only true
+// of one of the two — signed IN by default, because the author's is the strip
+// with every control on it; the visitor's is its own block at the foot.
+const mockUseSession = vi.fn();
+vi.mock("@/lib/auth/client", () => ({
+  authClient: { useSession: () => mockUseSession() },
+}));
+
+/** Signed in as the author, and signed out as anybody else. */
+const signedIn = () =>
+  mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
+const signedOut = () => mockUseSession.mockReturnValue({ data: null });
+
 // The strip navigates nowhere — it puts a preset in the draft and corrects the
 // URL in place. `next/navigation` is stubbed anyway, so a stray `useRouter`
 // creeping back in fails loudly rather than being answered by a real router.
@@ -54,15 +67,23 @@ const { getCovers, createCover } = await import("@/app/actions/cover");
 const settingsFor = (shaderId: keyof typeof SHADER_SPECS) => ({
   ...defaultState(SHADER_SPECS[shaderId]),
   aspect: DEFAULT_COVER_ASPECT,
+  framing: {},
 });
 
-/** A saved cover as the action hands it over. */
+/**
+ * A saved cover as the action hands it over.
+ *
+ * Published, because that is what a cover in a VISITOR's strip is — the action
+ * hands them no other kind. It makes no difference to the author's strip, which
+ * is shown both.
+ */
 const preset = (id: string, title: string | null, colors: string[]) => ({
   id,
   title,
   untitledIndex: title ? null : 1,
   shaderId: "cosmicTrack" as const,
   settings: { ...settingsFor("cosmicTrack"), colors },
+  publishedAt: new Date("2026-01-01"),
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
 });
@@ -83,6 +104,7 @@ describe("PresetsPane", () => {
       this.dispatchEvent(new Event("close"));
     });
 
+    signedIn();
     clearThumbnailCache();
     HTMLCanvasElement.prototype.toDataURL = vi.fn(
       () => "data:image/png;base64,PICTURE",
@@ -113,6 +135,18 @@ describe("PresetsPane", () => {
     within(screen.getByRole("group", { name: "Presets" }))
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label"));
+
+  // The author's blank draft is theirs to keep: they arrived to make a new
+  // cover, and they have both a shader picker and an add tile to do it with.
+  // Opening them on their newest cover instead would take that away.
+  it("leaves the author's blank draft alone", async () => {
+    (getCovers as Mock).mockResolvedValue([preset("c", "Newest", ["#FFFFFFFF"])]);
+    render(<PresetsPane />);
+
+    await screen.findByRole("button", { name: "Newest" });
+    expect(useCoverDraftStore.getState().coverId).toBeNull();
+    expect(path()).toBe("/playground/cover");
+  });
 
   it("offers a way to add one even with nothing saved yet", async () => {
     render(<PresetsPane />);
@@ -199,6 +233,7 @@ describe("PresetsPane", () => {
         title: "Dusk",
         shaderId: "cosmicTrack",
         settings: settingsFor("cosmicTrack"),
+        publishedAt: null,
       });
     });
     await waitFor(() => expect(getCovers).toHaveBeenCalledTimes(2));
@@ -283,6 +318,7 @@ describe("PresetsPane", () => {
       title: "Dusk",
       shaderId: "cosmicTrack",
       settings: settingsFor("cosmicTrack"),
+      publishedAt: null,
     });
     render(<PresetsPane />);
 
@@ -297,44 +333,196 @@ describe("PresetsPane", () => {
 
   // Opening a preset LEAVES what is being tuned. One stray press on a strip of
   // near-identical tiles would otherwise throw away an afternoon.
-  it("asks before opening a preset over unsaved work", async () => {
+  // Opening one no longer asks, and that is the point of the strip: the draft
+  // you were tuning is SET ASIDE rather than thrown away, so a preset can be
+  // opened to look at while another is in progress. The question survives on
+  // the way out of the editor, where work actually goes missing.
+  it("opens a preset over unsaved work without asking", async () => {
     const user = userEvent.setup();
     (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
 
-    useCoverDraftStore.getState().setParam("scale", 2);
+    useCoverDraftStore.getState().setParam("rampLength", 4);
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
 
-    expect(useCoverDraftStore.getState().coverId).toBeNull();
-    expect(asking()).toBe(true);
-  });
-
-  it("opens it once the loss is accepted", async () => {
-    const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
-    render(<PresetsPane />);
-
-    useCoverDraftStore.getState().setParam("scale", 2);
-    await user.click(await screen.findByRole("button", { name: "Dusk" }));
-    await user.click(
-      screen.getByRole("button", { name: "Discard changes and open" }),
-    );
-
+    expect(asking()).toBe(false);
     expect(useCoverDraftStore.getState().coverId).toBe("a");
     expect(path()).toBe("/playground/cover/a");
   });
 
-  it("stays put when the question is declined", async () => {
+  it("hands the work back when the draft is taken up again", async () => {
+    const user = userEvent.setup();
+    (getCovers as Mock).mockResolvedValue([
+      preset("a", "Dusk", ["#FFFFFFFF"]),
+      preset("b", "Dawn", ["#000000FF"]),
+    ]);
+    render(<PresetsPane />);
+
+    await user.click(await screen.findByRole("button", { name: "Dusk" }));
+    useCoverDraftStore.getState().setParam("rampLength", 4);
+    await user.click(screen.getByRole("button", { name: "Dawn" }));
+    await user.click(screen.getByRole("button", { name: "Dusk" }));
+
+    expect(useCoverDraftStore.getState().settings.params.rampLength).toBe(4);
+    expect(useCoverDraftStore.getState().isDirty).toBe(true);
+  });
+
+  // --- What the tiles mark --------------------------------------------------
+
+  /** Whether a tile carries the unsaved mark. */
+  const marked = (label: string) =>
+    !!screen
+      .getByRole("button", { name: label })
+      .parentElement?.querySelector("[data-unsaved]");
+
+  it("marks a preset holding work you cannot see", async () => {
+    const user = userEvent.setup();
+    (getCovers as Mock).mockResolvedValue([
+      preset("a", "Dusk", ["#FFFFFFFF"]),
+      preset("b", "Dawn", ["#000000FF"]),
+    ]);
+    render(<PresetsPane />);
+
+    await user.click(await screen.findByRole("button", { name: "Dusk" }));
+    useCoverDraftStore.getState().setParam("rampLength", 4);
+    await user.click(screen.getByRole("button", { name: "Dawn" }));
+
+    expect(marked("Dusk")).toBe(true);
+    expect(marked("Dawn")).toBe(false);
+  });
+
+  it("marks the preset on screen once it is touched", async () => {
     const user = userEvent.setup();
     (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
 
-    useCoverDraftStore.getState().setParam("scale", 2);
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(marked("Dusk")).toBe(false);
+
+    await act(async () => {
+      useCoverDraftStore.getState().setParam("rampLength", 4);
+    });
+    expect(marked("Dusk")).toBe(true);
+  });
+
+  // --- The never-saved draft ------------------------------------------------
+  //
+  // It has no row and so no id, but it is as openable as any preset — and
+  // without a tile, work tuned before the first save would be the one thing the
+  // strip could not give back.
+  it("gives the unsaved new draft a tile of its own, marked", async () => {
+    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    render(<PresetsPane />);
+    await screen.findByRole("button", { name: "Dusk" });
+
+    expect(screen.queryByRole("button", { name: "Unsaved draft" })).toBeNull();
+
+    await act(async () => {
+      useCoverDraftStore.getState().setParam("rampLength", 4);
+    });
+    expect(marked("Unsaved draft")).toBe(true);
+  });
+
+  it("takes the new draft back up, with its work", async () => {
+    const user = userEvent.setup();
+    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    render(<PresetsPane />);
+    await screen.findByRole("button", { name: "Dusk" });
+
+    await act(async () => {
+      useCoverDraftStore.getState().setParam("rampLength", 4);
+    });
+    await user.click(screen.getByRole("button", { name: "Dusk" }));
+    await user.click(screen.getByRole("button", { name: "Unsaved draft" }));
 
     expect(useCoverDraftStore.getState().coverId).toBeNull();
+    expect(useCoverDraftStore.getState().settings.params.rampLength).toBe(4);
     expect(path()).toBe("/playground/cover");
-    expect(asking()).toBe(false);
+  });
+
+  // --- Signed out -----------------------------------------------------------
+  //
+  // The playground is public and so is the strip. What a visitor gets is the
+  // PUBLISHED library — `getCovers` is the one that decides that, and is
+  // already mocked here, so what these pin is the half this component owns: the
+  // add tile is the author's, and a strip with nothing in it is no strip.
+  describe("for a visitor", () => {
+    beforeEach(signedOut);
+
+    it("offers no way to add one", async () => {
+      (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+      render(<PresetsPane />);
+
+      await screen.findByRole("button", { name: "Dusk" });
+      expect(screen.queryByRole("button", { name: "New preset" })).toBeNull();
+    });
+
+    // Opening one is the same act it is for the author: the cover lands in the
+    // draft and every control on the page is theirs to push around. What is
+    // missing is only the writing.
+    it("still opens a preset into the draft", async () => {
+      const user = userEvent.setup();
+      (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+      render(<PresetsPane />);
+
+      await user.click(await screen.findByRole("button", { name: "Dusk" }));
+
+      expect(useCoverDraftStore.getState().coverId).toBe("a");
+      expect(path()).toBe("/playground/cover/a");
+    });
+
+    // What a visitor ARRIVES on. They cannot pick a shader and cannot save one,
+    // so a blank draft is not a starting point for them — it is a cover nobody
+    // published, sitting above a strip whose one tile reads as unselected. The
+    // newest published cover is the only honest thing to open on.
+    it("opens on the newest published cover", async () => {
+      (getCovers as Mock).mockResolvedValue([
+        preset("c", "Newest", ["#FFFFFFFF"]),
+        preset("a", "Oldest", ["#FF0000FF"]),
+      ]);
+      render(<PresetsPane />);
+
+      await waitFor(() =>
+        expect(useCoverDraftStore.getState().coverId).toBe("c"),
+      );
+      // The same act as pressing the tile, which is what makes the tile read as
+      // the one open rather than leaving the strip looking untouched.
+      expect(
+        (await screen.findByRole("button", { name: "Newest" })).getAttribute(
+          "aria-current",
+        ),
+      ).toBe("true");
+      expect(path()).toBe("/playground/cover/c");
+      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+    });
+
+    // The route already handed the playground a cover, so there is nothing to
+    // choose — arriving at `/playground/cover/<id>` must not be redirected to
+    // whatever happens to be newest.
+    it("leaves a cover the route was opened on alone", async () => {
+      (getCovers as Mock).mockResolvedValue([preset("c", "Newest", ["#FFFFFFFF"])]);
+      useCoverDraftStore.getState().load({
+        id: "a",
+        title: "Oldest",
+        shaderId: "cosmicTrack",
+        settings: settingsFor("cosmicTrack"),
+        publishedAt: new Date("2026-01-01"),
+      });
+      render(<PresetsPane />);
+
+      await waitFor(() => expect(getCovers).toHaveBeenCalled());
+      expect(useCoverDraftStore.getState().coverId).toBe("a");
+    });
+
+    // No library, so no bar: the author always has the add tile and so always
+    // has a strip, but a rounded strip holding nothing is chrome describing an
+    // absence — and the page reserves its band off whether one was drawn.
+    it("draws no strip at all when nothing has been published", async () => {
+      const { container } = render(<PresetsPane />);
+
+      await waitFor(() => expect(getCovers).toHaveBeenCalled());
+      expect(screen.queryByRole("group", { name: "Presets" })).toBeNull();
+      expect(container.querySelector("[data-presets]")).toBeNull();
+    });
   });
 });

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { css } from "../../styled-system/css";
 import { inlineEditRow, menuIcon } from "../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
+import { UnsavedDot } from "@/components/unsaved-dot";
 import {
   aspectCounterpart,
   isPortraitAspect,
@@ -85,6 +87,45 @@ const ratioLabel = (aspect: DemoFrameAspectRatio) => aspect.replace("/", ":");
 
 const iconStyle = menuIcon();
 
+// Every option is the anchor its own mark hangs from, and has to let it out.
+//
+// Applied to ALL of them rather than only the marked ones, so the box a dot is
+// measured against is the same box whether or not there is a dot in it — a
+// button that became positioned only while marked would be one whose geometry
+// depended on its state. `position: relative` with no offsets moves nothing.
+//
+// Without the anchor the dot resolves its percentage against the nearest
+// positioned ancestor, which on the cover playground is the 80px gutter band —
+// the dot then hangs 80px down the canvas instead of 12px under its button.
+//
+// `overflow` is the other half, and it is the half that is invisible to a test:
+// the option recipe clips its own box, so a dot hung outside it is measurable
+// in the DOM, correct in every assertion, and painted nowhere. Utilities outrank
+// recipes in Panda, which is what lets this be undone per consumer rather than
+// by a variant nobody else wants. Nothing in this rail's options needs clipping
+// — each holds one icon.
+const markAnchorStyle = css({ position: "relative", overflow: "visible" });
+
+// And the list around them, which clips too. Scoped to this rail rather than
+// loosened in the recipe, for the reason above.
+const rowStyle = css({ overflow: "visible" });
+
+// Where a rail's mark hangs: BELOW the button, and outside the rail entirely.
+//
+// Outside rather than tucked into the rail's own inset, because the rail is a
+// row of controls and this is not one — it is a note about a control, and a
+// note drawn inside the chrome reads as another thing to press.
+//
+// `100%` is the button's own bottom edge (see `markAnchorStyle`), and the 12px
+// past it clears the 6px the `md` toolbar insets its buttons by and the rail's
+// hairline, leaving the dot a few pixels clear in the band below. The consumer
+// has to allow it out — see the cover playground's `aspectRailStyle`.
+const markStyle = css({
+  insetBlockStart: "calc(token(spacing.full) + token(spacing.lg))",
+});
+
+const Mark = () => <UnsavedDot className={markStyle} />;
+
 // The Esc hint, borrowed slot-wise from the shared inline-edit shell so a
 // picker and the editor's link field wear the SAME hint rather than two that
 // drift. Only the three hint slots are used — the recipe's `root` is a field
@@ -105,6 +146,18 @@ export interface AspectRailProps {
   exitHint?: boolean;
   /** Names the row. Defaults to what it is. */
   ariaLabel?: string;
+  /**
+   * Shapes carrying unsaved work, marked with a brand dot beneath them.
+   *
+   * OPT-IN, because the rail is shared: a grid card's placement toolbar picks a
+   * shape and has nothing to leave unsaved, and a mark there would be a dot
+   * that never lights. Only the cover playground has framing per shape.
+   *
+   * A shape in the orientation NOT on screen cannot carry its own mark, so the
+   * flip control carries it instead — otherwise the one case these exist for
+   * (work in a frame you are not looking at) is the one they would miss.
+   */
+  markedAspects?: readonly DemoFrameAspectRatio[];
 }
 
 export function AspectRail({
@@ -112,6 +165,7 @@ export function AspectRail({
   onPick,
   exitHint = false,
   ariaLabel = "Aspect ratio",
+  markedAspects,
 }: AspectRailProps) {
   // Which orientation's shapes are shown is DERIVED from the chosen shape, not
   // held — so a picker whose aspect changes from outside it (a saved cover
@@ -131,8 +185,20 @@ export function AspectRail({
   const [squarePortrait, setSquarePortrait] = useState(false);
   const portrait = aspect === "1/1" ? squarePortrait : isPortraitAspect(aspect);
 
-  const shown = portrait ? PICKER_RATIOS.map(aspectCounterpart) : PICKER_RATIOS;
+  // Widened off `PICKER_RATIOS`'s own literal tuple, which is the landscape six
+  // — the row holds either orientation, and `markedOffRow` below asks it about
+  // shapes from both.
+  const shown: readonly DemoFrameAspectRatio[] = portrait
+    ? PICKER_RATIOS.map(aspectCounterpart)
+    : PICKER_RATIOS;
   const FlipIcon = portrait ? ToLandscapeIcon : ToPortraitIcon;
+
+  // A marked shape the row cannot show is the flip's to announce. Derived from
+  // `shown` rather than from the orientation, so the square — which is in both
+  // lists — can never send the mark to the flip and point at a button that is
+  // already on screen.
+  const marked = markedAspects ?? [];
+  const markedOffRow = marked.some((ratio) => !shown.includes(ratio));
 
   // The card turns over with the list. Flipping only the view would strand the
   // current shape in the orientation you just left, leaving nothing pressed and
@@ -156,17 +222,19 @@ export function AspectRail({
   };
 
   return (
-    <OptionList direction="inline">
+    <OptionList direction="inline" className={rowStyle}>
       <OptionList.Toolbar aria-label={ariaLabel}>
         {/* Named for what it DOES, not for the state it is in: "Switch to
             portrait" is unambiguous read alone, where a button called
             "Landscape" is either a statement or an instruction depending on who
             is reading it. */}
         <OptionList.Option
+          className={markAnchorStyle}
           aria-label={portrait ? "Switch to landscape" : "Switch to portrait"}
           onClick={flip}
         >
           <FlipIcon className={iconStyle} />
+          {markedOffRow && <Mark />}
         </OptionList.Option>
         <OptionList.Divider />
 
@@ -175,11 +243,13 @@ export function AspectRail({
           return (
             <OptionList.Option
               key={ratio}
+              className={markAnchorStyle}
               aria-label={ratioLabel(ratio)}
               pressed={ratio === aspect}
               onClick={() => pick(ratio)}
             >
               <RatioIcon className={iconStyle} />
+              {marked.includes(ratio) && <Mark />}
             </OptionList.Option>
           );
         })}

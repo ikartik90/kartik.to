@@ -30,6 +30,14 @@ import { Tooltip } from "./ui/tooltip";
 // out of the way. `visibility` rather than `display` so the button never moves,
 // on the tooltip's own 150ms ease-out so one hands over to the other.
 //
+// Keyed off the TOOLTIP being up, not off `:hover`, and that is the whole of
+// why they cannot both be on screen. They looked equivalent and were not: the
+// tooltip is React state set from `mouseenter`/`mouseleave`, where `:hover` is
+// the browser's own — recomputed on its own schedule, and sticky when the DOM
+// changes under a pointer that has not moved. Two answers to "is the cursor
+// here" is two answers, and the pair drifted apart on whichever events the two
+// disagreed about. One fact now drives both faces.
+//
 // Both faces are cursor-first by nature — `_hasCursor` withholds the chip from
 // a device with no key to press, exactly as hover withholds the tooltip from a
 // device with no pointer to reveal it. A touch visitor gets the icon and its
@@ -40,7 +48,7 @@ const shortcutStyle = css({
   transitionProperty: "opacity, visibility",
   transitionDuration: "150ms",
   transitionTimingFunction: "ease-out",
-  "button:hover ~ &": {
+  "button[data-tooltip-visible] ~ &": {
     opacity: 0,
     visibility: "hidden",
   },

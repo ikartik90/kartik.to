@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { z } from "zod";
 import { isVideoSource, sourceExtension } from "@/utils/media-source";
+import { ROTATION_MAX, ROTATION_MIN, wrapRotation } from "@/utils/rotation";
 
 // ---------------------------------------------------------------------------
 // Marks — inline formatting annotations attached to text nodes
@@ -173,7 +174,30 @@ const BackgroundColorSchema = z
   .string()
   .regex(/^#[0-9a-fA-F]{8}$/, "Expected an #RRGGBBAA colour");
 
-export const BackgroundEffectSchema = z.object({
+/**
+ * Brings a stored rotation into the signed range before the field validates it.
+ *
+ * The migration every effect saved under the old 0..360 range needs, and it has
+ * to run here rather than in the field: the field ENFORCES its range (a slider
+ * reading a number the picture does not have is worse than a rejected save), so
+ * a stored 270 would be refused and take the whole node down with it. The wrap
+ * is the same one the cover playground uses, and 270 and -90 are one angle, so
+ * nothing about the picture changes.
+ */
+function normaliseEffectRotation(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+  const effect = { ...(value as Record<string, unknown>) };
+  if (typeof effect.rotation === "number") {
+    effect.rotation = wrapRotation(effect.rotation);
+  }
+  return effect;
+}
+
+export const BackgroundEffectSchema = z.preprocess(
+  normaliseEffectRotation,
+  z.object({
   colors: z
     .array(BackgroundColorSchema)
     .min(1)
@@ -190,10 +214,28 @@ export const BackgroundEffectSchema = z.object({
   grainMixer: z.number().min(0).max(1).default(0),
   grainOverlay: z.number().min(0).max(1).default(0),
   scale: z.number().min(0.01).max(4).default(1),
-  rotation: z.number().min(0).max(360).default(270),
+  /**
+   * SIGNED about zero, and the range is the app's one rotation range rather
+   * than a copy — this is the same turn the cover playground's Framing group
+   * applies, and a cover authored there is meant to be reused as a background
+   * here. Two descriptions of one picture is exactly what a hand-kept copy
+   * eventually becomes.
+   *
+   * The default is the three-quarter turn this effect has always opened on,
+   * written the way the range now reads it: -90 and 270 are one angle, so the
+   * picture is unchanged and only the notation moved. Every stored effect gets
+   * the same treatment on the way in — see `wrapRotation` in the preprocess
+   * above, without which an effect saved at 270 would stop parsing outright.
+   */
+  rotation: z
+    .number()
+    .min(ROTATION_MIN)
+    .max(ROTATION_MAX)
+    .default(wrapRotation(270)),
   offsetX: z.number().min(-1).max(1).default(0),
   offsetY: z.number().min(-1).max(1).default(0),
-});
+  }),
+);
 
 export type BackgroundEffect = z.infer<typeof BackgroundEffectSchema>;
 

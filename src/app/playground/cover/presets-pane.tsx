@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { menuIcon } from "../../../../styled-system/recipes";
 import { createCover, getCovers } from "@/app/actions/cover";
-import { ConfirmDialog } from "@/components/confirm-dialog";
-import { useCoverDraftStore } from "@/store/cover-draft";
+import { UnsavedDot } from "@/components/unsaved-dot";
+import { useIsAdmin } from "@/hooks/use-is-admin";
+import {
+  NEW_COVER_KEY,
+  unsavedCoverKeys,
+  useCoverDraftStore,
+} from "@/store/cover-draft";
 import { coverSwatch } from "@/utils/cover-swatch";
 import type { Cover, CoverContent } from "@/domain/cover";
 import {
@@ -25,10 +30,29 @@ import AddIcon from "@/assets/icons/add.svg";
 // is a strip rather than a dialog — a dialog would put the saved work and the
 // work in progress in different places, and comparing them is the whole use.
 //
-// Signed-in only, and the caller is what enforces that (see the playground):
-// saving reads and writes the database, so a visitor would be shown a row of
-// controls that answer with an error. `getCovers` refuses them a second time on
-// the server, which is the check that actually protects anything.
+// PUBLIC, and the strip is not the same strip for everybody: `getCovers` hands
+// a visitor the covers that have been PUBLISHED and hands the author every one
+// of them, so what a visitor sees is a finished library rather than a bench
+// with half-tuned experiments on it. Opening one is the same act either way —
+// it lands in the draft and can be pushed around freely — and nothing a visitor
+// does reaches the database, because every write here asks the server again.
+//
+// Which is why the ADD tile is the author's alone. It is the one control that
+// would answer a visitor with an error, and the whole of what signing in adds
+// to this strip.
+//
+// And it is why a visitor ARRIVES on the newest published cover rather than on
+// a blank draft. A blank draft is a starting point only if you can do something
+// with it: the author picks a shader and saves one, where a visitor has neither
+// control — so the bare route opening on the control table's first shader shows
+// them a cover nobody published, above a strip whose one tile reads as
+// unselected. See `openOnArrival`.
+//
+// The pane draws NOTHING at all rather than an empty bar: a visitor arriving
+// before anything has been published has no library, and a lone rounded strip
+// with nothing in it is chrome describing an absence. It is also what the page
+// reads to decide whether to reserve the band the strip stands in — see
+// `data-presets` below.
 //
 // Local to this route, per the two-page rule. Nothing else has a preset strip
 // yet; if a second surface grows one, this moves to `src/components`.
@@ -129,6 +153,23 @@ const addTileStyle = css({
   _disabled: { cursor: "progress", opacity: 0.5 },
 });
 
+// A tile and the mark that hangs over it. The mark cannot be a child of the
+// tile: the tile clips its own box so the cover's picture fills the corner, and
+// a dot inside it would be cut off — the same trap the rail's dot fell into.
+const tileSlotStyle = css({ position: "relative", display: "flex" });
+
+// ABOVE the tile, where the rail's sits below its button — the two marks read
+// as one idea seen twice.
+//
+// INSIDE the pane, though, unlike the rail's. The strip scrolls horizontally
+// once it outgrows its width, and a scroll container clips on both axes
+// whatever the block axis is set to, so a dot hung outside would be cut off the
+// moment the library got long. The pane's own 12px padding is the room, and 8px
+// clears the 4px selection ring the open tile draws around itself.
+const tileMarkStyle = css({
+  insetBlockEnd: "calc(token(spacing.full) + token(spacing.md))",
+});
+
 const addIconStyle = menuIcon();
 
 /** What a preset is called — the same naming an untitled draft gets in the palette. */
@@ -154,12 +195,17 @@ function presetName(preset: Preset): string {
  * is is editor state, not a place you travelled to — clicking through six
  * presets should not leave six entries to walk back out through.
  */
-function adoptPreset(preset: Preset) {
-  useCoverDraftStore.getState().load({
+function adoptPreset(preset: Preset, committed = false) {
+  const draft = useCoverDraftStore.getState();
+  // A cover that was just WRITTEN is committed rather than loaded: loading it
+  // would set the draft it came from aside as unsaved work that is now in the
+  // database. See the store's `commit`.
+  (committed ? draft.commit : draft.load)({
     id: preset.id,
     title: preset.title ?? null,
     shaderId: preset.shaderId,
     settings: preset.settings,
+    publishedAt: preset.publishedAt,
   });
   window.history.replaceState(null, "", `/playground/cover/${preset.id}`);
 }
@@ -167,6 +213,16 @@ function adoptPreset(preset: Preset) {
 export function PresetsPane() {
   const coverId = useCoverDraftStore((draft) => draft.coverId);
   const isDirty = useCoverDraftStore((draft) => draft.isDirty);
+  const buffers = useCoverDraftStore((draft) => draft.buffers);
+  const openNewDraft = useCoverDraftStore((draft) => draft.openNewDraft);
+  // Which covers are holding unsaved work — the ones set aside, plus the one on
+  // screen if it has been touched. One answer, shared with the palette's exit
+  // question, so a marked tile and a "you have unsaved changes" cannot disagree.
+  const unsaved = new Set(unsavedCoverKeys({ buffers, isDirty, coverId }));
+  // What to DRAW, never what may be done: the add tile's write is checked again
+  // on the server, and this answers false for one render after hydration by
+  // design — see `useIsAdmin`.
+  const isAdmin = useIsAdmin();
 
   const [presets, setPresets] = useState<Preset[]>([]);
   // The pictures, keyed by preset-and-edit. Seeded from what has already been
@@ -176,8 +232,12 @@ export function PresetsPane() {
     thumbnailSnapshot,
   );
   const [saving, setSaving] = useState(false);
-  /** The preset a confirmed answer would open — set only while the question is up. */
-  const [pendingOpen, setPendingOpen] = useState<Preset | null>(null);
+  /**
+   * Whether the arrival choice has been made. ONCE per mount, and a ref rather
+   * than state because nothing renders from it: re-running it later would take
+   * a visitor off a preset they had chosen and put them back on the newest.
+   */
+  const opened = useRef(false);
 
   // Commits, counted. What the re-read below wants is the EVENT — work was
   // written — and not the state: keyed on `isDirty` itself it would re-run the
@@ -211,14 +271,40 @@ export function PresetsPane() {
       .then((rows) => {
         if (live) setPresets(rows);
       })
-      // A visitor who reaches this component gets an Unauthorized throw rather
-      // than a list. Nothing to show and nothing to say — the strip is not
-      // theirs — so it stays empty rather than reporting a failure.
+      // A library that cannot be read is a strip with nothing in it, which for
+      // a visitor is no strip at all. Nothing to show and nothing worth saying
+      // about it, so it fails quietly rather than reporting into the page.
       .catch(() => {});
     return () => {
       live = false;
     };
   }, [coverId, tracked.commits]);
+
+  /**
+   * What a visitor opens on: the newest published cover.
+   *
+   * Adopted through the same path a press on its tile takes, which is what
+   * makes the tile read as the one open — the strip marks `aria-current` off
+   * the draft's id, so loading the cover any other way would show the right
+   * picture above a strip that looked untouched.
+   *
+   * The author is left alone. Their blank draft is a starting point they can
+   * actually use, and `useIsAdmin` has settled by the time this can run: it
+   * flips on the first commit after mount, which is before any `getCovers`
+   * promise can resolve.
+   *
+   * Skipped entirely when the draft is already holding something — the `[id]`
+   * route hands the playground a cover before this mounts, and a visitor who
+   * asked for one cover must not be moved to another.
+   */
+  useEffect(() => {
+    if (isAdmin || opened.current || presets.length === 0) return;
+    const draft = useCoverDraftStore.getState();
+    if (draft.coverId !== null || draft.isDirty) return;
+    opened.current = true;
+    // Newest first, as `getCovers` hands them over — not re-derived here.
+    adoptPreset(presets[0]);
+  }, [isAdmin, presets]);
 
   /**
    * Add the cover being tuned to the library.
@@ -239,12 +325,13 @@ export function PresetsPane() {
     try {
       const { title, shaderId, settings } = useCoverDraftStore.getState();
       const saved = await createCover({ title, shaderId, settings });
+
       // Adopted from what was STORED rather than from what was sent: the schema
       // normalises on the way in, so this is what makes the panel read the same
       // as the row. Same shallow URL correction as opening one — the draft is
       // already the cover that was just written, and asking the server for it
       // would only tear the playground down and rebuild it around the answer.
-      adoptPreset(saved as Preset);
+      adoptPreset(saved as Preset, true);
     } catch (err) {
       // Leaves the draft exactly as it was: a failed write must not look like a
       // successful one, and the work is still in the panel to try again with.
@@ -255,38 +342,88 @@ export function PresetsPane() {
   }
 
   /**
-   * Open a preset — after asking, if that would throw work away.
+   * Open a preset. No question, and that is the point of the strip now.
    *
-   * Two answers rather than the palette's three. "Save changes" is a command
-   * that already exists twice over (⌘S, and the palette's own), and a third
-   * copy of the create-or-update decision living in a strip of thumbnails is
-   * the duplication that decision's own brief warns about. Cancel, save, come
-   * back.
+   * It used to ask whether to throw the current draft away, which made the
+   * library unusable for the thing a library is for: you could not open one
+   * cover to look at while tuning another. The draft is SET ASIDE instead (see
+   * the store's `buffers`) and handed back untouched when you return, so
+   * moving between presets costs nothing and there is nothing to warn about.
+   *
+   * The question survives where it is still true — on the way OUT of the
+   * editor, which is where work actually goes missing, and where the palette
+   * asks it about every cover holding something rather than only this one.
    */
   function openPreset(preset: Preset) {
     if (preset.id === coverId) return;
-    if (useCoverDraftStore.getState().isDirty) {
-      setPendingOpen(preset);
-      return;
-    }
     adoptPreset(preset);
   }
 
+  /** Take up the never-saved draft, which the strip gives a tile of its own. */
+  function openNew() {
+    if (coverId === null) return;
+    openNewDraft();
+    window.history.replaceState(null, "", "/playground/cover");
+  }
+
+  // Nothing to show: a visitor before anything has been published. The author
+  // always has at least the add tile, so this is never their case.
+  if (!isAdmin && presets.length === 0) return null;
+
   return (
     <>
-      <div className={paneStyle} role="group" aria-label="Presets">
+      {/* `data-presets` is what the page reserves the strip's band off — the
+          pane is the one thing that knows whether there is a strip, and the
+          page owns the arithmetic. See `pageStyle`. */}
+      <div className={paneStyle} role="group" aria-label="Presets" data-presets>
         {/* First, and fixed there: it is the only tile that is not one of the
             saved covers, and a control that moved as the library grew would be
-            somewhere different every time you reached for it. */}
-        <button
-          type="button"
-          className={`${tileStyle} ${addTileStyle}`}
-          aria-label="New preset"
-          disabled={saving}
-          onClick={() => void addPreset()}
-        >
-          <AddIcon className={addIconStyle} />
-        </button>
+            somewhere different every time you reached for it.
+
+            The author's alone — it is the one control in the strip that writes,
+            and a visitor pressing it would get an error back from the server. */}
+        {isAdmin && (
+          <button
+            type="button"
+            className={`${tileStyle} ${addTileStyle}`}
+            aria-label="New preset"
+            disabled={saving}
+            onClick={() => void addPreset()}
+          >
+            <AddIcon className={addIconStyle} />
+          </button>
+        )}
+
+        {/* The never-saved draft, for exactly as long as it is holding
+            something. It has no row and so no id, but it is as openable as any
+            preset — and without a tile, work tuned before the first save would
+            be the one thing the strip could not give back.
+
+            Its own tile rather than the add tile's dot, because the add tile
+            already means something else: it duplicates whatever is on screen
+            into a NEW preset, and a control that sometimes did that and
+            sometimes navigated would be the same button doing two things. */}
+        {isAdmin && unsaved.has(NEW_COVER_KEY) && (
+          <div className={tileSlotStyle}>
+            <button
+              type="button"
+              className={tileStyle}
+              aria-label="Unsaved draft"
+              aria-current={coverId === null ? "true" : undefined}
+              // Painted from its own ramp. There is no photograph of it — the
+              // thumbnailer works off saved rows — and the ramp is what a tile
+              // shows until one has been taken anyway.
+              style={{
+                background: coverSwatch(
+                  (buffers[NEW_COVER_KEY]?.settings ??
+                    useCoverDraftStore.getState().settings) as Preset["settings"],
+                ),
+              }}
+              onClick={openNew}
+            />
+            <UnsavedDot className={tileMarkStyle} />
+          </div>
+        )}
 
         {/* Newest first — the order `getCovers` hands them over in, kept rather
             than re-derived here. See that action for why it is by creation and
@@ -294,24 +431,30 @@ export function PresetsPane() {
         {presets.map((preset) => {
           const picture = thumbnails[thumbnailKey(preset)];
           return (
-            <button
-              key={preset.id}
-              type="button"
-              className={tileStyle}
-              aria-label={presetName(preset)}
-              aria-current={preset.id === coverId ? "true" : undefined}
-              // The cover itself, photographed once off-screen — the tile
-              // cannot MOUNT one, because a context per tile is a strip that
-              // goes blank at around sixteen presets. Its ramp stands in until
-              // the picture has been taken: a colour that is already right
-              // beats an empty square that resolves into the same thing.
-              style={
-                picture
-                  ? { backgroundImage: `url(${picture})`, backgroundSize: "cover" }
-                  : { background: coverSwatch(preset.settings) }
-              }
-              onClick={() => openPreset(preset)}
-            />
+            <div className={tileSlotStyle} key={preset.id}>
+              <button
+                type="button"
+                className={tileStyle}
+                aria-label={presetName(preset)}
+                aria-current={preset.id === coverId ? "true" : undefined}
+                // The cover itself, photographed once off-screen — the tile
+                // cannot MOUNT one, because a context per tile is a strip that
+                // goes blank at around sixteen presets. Its ramp stands in until
+                // the picture has been taken: a colour that is already right
+                // beats an empty square that resolves into the same thing.
+                style={
+                  picture
+                    ? { backgroundImage: `url(${picture})`, backgroundSize: "cover" }
+                    : { background: coverSwatch(preset.settings) }
+                }
+                onClick={() => openPreset(preset)}
+              />
+              {/* Held work, on a cover you may not be looking at. The picture
+                  below is the one that was SAVED, so without this the tile
+                  would show a cover that is not what taking it up would give
+                  you back. */}
+              {unsaved.has(preset.id) && <UnsavedDot className={tileMarkStyle} />}
+            </div>
           );
         })}
       </div>
@@ -323,17 +466,6 @@ export function PresetsPane() {
         onCaptured={(key, url) =>
           setThumbnails((was) => ({ ...was, [key]: url }))
         }
-      />
-
-      <ConfirmDialog
-        open={pendingOpen !== null}
-        title="Unsaved Changes"
-        message="You have unsaved changes to this cover. Opening a preset will discard them."
-        confirmLabel="Discard changes and open"
-        onConfirm={() => {
-          if (pendingOpen) adoptPreset(pendingOpen);
-        }}
-        onClose={() => setPendingOpen(null)}
       />
     </>
   );

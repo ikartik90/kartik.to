@@ -4,13 +4,14 @@ import { getCover } from "@/app/actions/cover";
 import { CoverPlayground } from "../cover-playground";
 
 // ---------------------------------------------------------------------------
-// A SAVED cover, reopened for editing.
+// A SAVED cover, reopened.
 //
-// The only admin-gated part of the playground, and gated by the action rather
-// than by this file: `getCover` requires the admin session, so a visitor asking
-// for a cover id gets the same 404 the routes that write to the database give.
-// The playground itself stays public at the bare route — tuning a shader is not
-// a privilege, and only the saved library is.
+// Public for a PUBLISHED cover and a 404 for anything else, and that decision
+// is the action's rather than this file's: `getCover` hands a visitor a
+// published cover and answers null for one that is still the author's, which
+// arrives here indistinguishable from a cover that does not exist. Tuning a
+// shader is not a privilege — a visitor may open a published preset and play
+// with it, and nothing they do is written anywhere.
 // ---------------------------------------------------------------------------
 
 interface Props {
@@ -24,10 +25,11 @@ export const metadata: Metadata = {
 export default async function EditCoverPage({ params }: Props) {
   const { id } = await params;
 
-  // A thrown Unauthorized from the action is a visitor asking after the
-  // library, which must answer exactly as a missing cover does — otherwise the
-  // difference between the two responses says a cover by that id exists.
-  const cover = await getCover(id).catch(() => null);
+  // Null covers both cases on purpose — no such cover, and a cover a visitor
+  // may not see — because the two must answer identically. A caught throw would
+  // have been the same protection; `getCover` returning null is what makes the
+  // catch unnecessary rather than what makes it safe.
+  const cover = await getCover(id);
   if (!cover) notFound();
 
   return (
@@ -37,6 +39,7 @@ export default async function EditCoverPage({ params }: Props) {
         title: cover.title ?? null,
         shaderId: cover.shaderId,
         settings: cover.settings,
+        publishedAt: cover.publishedAt,
       }}
     />
   );

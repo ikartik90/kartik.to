@@ -81,7 +81,7 @@ describe("toCosmicTrackUniforms", () => {
     const base = toCosmicTrackUniforms(DEFAULT_COSMIC_TRACK);
     const turned = toCosmicTrackUniforms({
       ...DEFAULT_COSMIC_TRACK,
-      phase: DEFAULT_COSMIC_TRACK.phase + 0.6,
+      phaseDegrees: DEFAULT_COSMIC_TRACK.phaseDegrees + 15,
     });
 
     expect(turned.u_phase).not.toBe(base.u_phase);
@@ -243,7 +243,7 @@ describe("toCosmicTrackUniforms", () => {
   it("passes the shape parameters through untouched", () => {
     const uniforms = toCosmicTrackUniforms({
       ...DEFAULT_COSMIC_TRACK,
-      phase: 0.42,
+      phaseDegrees: 45,
       travel: 2.1,
       stagger: 0.31,
       symmetry: 0.4,
@@ -262,7 +262,6 @@ describe("toCosmicTrackUniforms", () => {
       ditherSize: 4,
     });
 
-    expect(uniforms.u_phase).toBe(0.42);
     expect(uniforms.u_travel).toBe(2.1);
     expect(uniforms.u_stagger).toBe(0.31);
     expect(uniforms.u_symmetry).toBe(0.4);
@@ -279,6 +278,29 @@ describe("toCosmicTrackUniforms", () => {
     expect(uniforms.u_tail).toBe(0.05);
     expect(uniforms.u_rampDither).toBe(0.65);
     expect(uniforms.u_ditherSize).toBe(4);
+  });
+
+  // Phase is the one parameter that is NOT passed through: the control is
+  // dialled in degrees so it reads like the rotation beside it, and the shader
+  // is in track units end to end. This is where the two meet, and it is the
+  // only place they do.
+  it("converts the phase dial's degrees into track units", () => {
+    const at = (phaseDegrees: number) =>
+      toCosmicTrackUniforms({ ...DEFAULT_COSMIC_TRACK, phaseDegrees }).u_phase;
+
+    // A QUARTER turn is the full reach in one direction — the seven track units
+    // the control ran to before it was dialled in degrees, so every phase saved
+    // under the old scale converts to the same picture. The dial stops there
+    // rather than at a half turn, because the run does not repeat and a ±180
+    // dial would imply that its two ends meet.
+    expect(at(90)).toBeCloseTo(7, 10);
+    expect(at(-90)).toBeCloseTo(-7, 10);
+    // Square-on is the one value that means the same in either scale.
+    expect(at(0)).toBe(0);
+    // And it is LINEAR, not an angle: half the deflection is half the distance,
+    // not the sine of anything.
+    expect(at(45)).toBeCloseTo(3.5, 10);
+    expect(at(-45)).toBeCloseTo(-3.5, 10);
   });
 
   it("guards the divisors the shader cannot take at zero", () => {

@@ -6,10 +6,13 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
+import { DEFAULT_COVER_ASPECT, shaderParamsFor } from "@/domain/cover";
 import type { ThemeMode } from "@/store/theme";
 
 // Every shader the playground can mount, stubbed. They all end in a
@@ -37,6 +40,8 @@ vi.mock("@/app/actions/cover", () => ({
   createCover: vi.fn(),
   saveCover: vi.fn(),
   deleteCover: vi.fn(),
+  publishCover: vi.fn(),
+  unpublishCover: vi.fn(),
 }));
 
 const mockUseSession = vi.fn().mockReturnValue({ data: null });
@@ -67,6 +72,38 @@ Object.defineProperty(window, "matchMedia", {
 
 const { CoverPlayground } = await import("../cover-playground");
 const { useCoverDraftStore } = await import("@/store/cover-draft");
+const { getCovers, publishCover, unpublishCover, deleteCover } = await import(
+  "@/app/actions/cover"
+);
+
+/** Signed in as the author, and signed out as anybody else. */
+const signedIn = () =>
+  mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
+const signedOut = () => mockUseSession.mockReturnValue({ data: null });
+
+const SETTINGS = {
+  ...defaultState(SHADER_SPECS.cosmicTrack),
+  aspect: DEFAULT_COVER_ASPECT,
+  framing: {},
+};
+
+/** A saved cover this route was opened on, still the author's alone. */
+const savedCover = {
+  id: "cover-1",
+  title: "Dusk",
+  shaderId: "cosmicTrack" as const,
+  settings: SETTINGS,
+  publishedAt: null,
+};
+
+/** One row as `getCovers` hands it over — published, which is the only kind a visitor is given. */
+const publishedCover = {
+  ...savedCover,
+  untitledIndex: null,
+  publishedAt: new Date("2026-01-01"),
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+};
 
 describe("CoverPlayground theme toggle", () => {
   beforeEach(() => {
@@ -197,7 +234,9 @@ describe("CoverPlayground reset control", () => {
         rampLength: 4,
       },
       aspect: "9/16" as const,
+      framing: {},
     },
+    publishedAt: null,
   };
 
   const resetButton = () => screen.getByRole("button", { name: "Reset" });
@@ -519,7 +558,9 @@ describe("CoverPlayground aspect toolbar", () => {
           settings: {
             ...defaultState(SHADER_SPECS.swirl),
             aspect: "3/2",
+            framing: {},
           },
+          publishedAt: null,
         }}
       />,
     );
@@ -533,27 +574,287 @@ describe("CoverPlayground aspect toolbar", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The presets strip — the author's saved covers, along the foot of the canvas.
+// Deleting a preset — the header's second control.
 //
-// Signed-in only. The playground itself is public and stays public: tuning a
-// shader is not a privilege, and only the saved library is.
+// Reset and Delete share ONE slot, and which of them is in it says what there
+// is to do: while the draft has unsaved work the button undoes it, and once
+// there is nothing to undo it removes the preset instead. So you can never
+// reach for Reset and get Delete — in every state where Reset would do
+// something, Reset is what is there.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground delete", () => {
+  beforeEach(() => {
+    useCoverDraftStore.getState().reset();
+    signedIn();
+    (getCovers as Mock).mockResolvedValue([]);
+    (deleteCover as Mock).mockReset();
+    (deleteCover as Mock).mockResolvedValue(undefined);
+    window.history.replaceState(null, "", "/playground/cover/cover-1");
+
+    // jsdom ships no `<dialog>` behaviour. The same stub the palette's tests
+    // use: `open` is what the confirm's own effect and every query key off.
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute("open", "");
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
+    });
+  });
+  afterEach(cleanup);
+
+  const deleteButton = () =>
+    screen.queryByRole("button", { name: "Delete preset" });
+  const reset = () => screen.queryByRole("button", { name: "Reset" });
+  /**
+   * Whether THIS question is up.
+   *
+   * Addressed by its own title, not by `querySelector("dialog")`: the presets
+   * strip mounts a confirm of its own, so a bare dialog query returns whichever
+   * happens to be first in the tree — which is the strip's, permanently closed.
+   * Read off `open` rather than off the words in it, since a confirm is always
+   * mounted and only toggles that attribute.
+   */
+  const asking = () =>
+    !!document
+      .querySelector('dialog[aria-label="Delete Preset"]')
+      ?.hasAttribute("open");
+
+  it("offers Delete on a saved preset with nothing left to reset", async () => {
+    render(<CoverPlayground cover={savedCover} />);
+
+    await waitFor(() => expect(deleteButton()).not.toBeNull());
+    expect(reset()).toBeNull();
+  });
+
+  // The moment there is work to undo, the slot goes back to being Reset —
+  // which is what makes the swap safe to press blind.
+  it("goes back to Reset the moment the draft is edited", async () => {
+    render(<CoverPlayground cover={savedCover} />);
+    await waitFor(() => expect(deleteButton()).not.toBeNull());
+
+    act(() => useCoverDraftStore.getState().setParam("rampLength", 4));
+
+    expect(reset()).not.toBeNull();
+    expect(deleteButton()).toBeNull();
+  });
+
+  // Nothing saved is nothing to delete: the blank route opens on a draft that
+  // has never been written, and a Delete there would name no row.
+  it("keeps Reset on a draft that has never been saved", async () => {
+    render(<CoverPlayground />);
+
+    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    expect(reset()).not.toBeNull();
+    expect(deleteButton()).toBeNull();
+  });
+
+  // A visitor cannot delete, and the server refuses them a second time.
+  it("withholds Delete from a visitor", async () => {
+    signedOut();
+    render(<CoverPlayground cover={savedCover} />);
+
+    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    expect(deleteButton()).toBeNull();
+    expect(reset()).not.toBeNull();
+  });
+
+  it("asks before deleting, and deletes nothing until it is answered", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click((await screen.findByRole("button", { name: "Delete preset" })));
+
+    expect(asking()).toBe(true);
+    expect(deleteCover).not.toHaveBeenCalled();
+  });
+
+  // Deleting is a deliberate "I do not want this", so the cover does not stay
+  // on screen: the draft goes back to blank and the URL stops naming a row that
+  // no longer exists.
+  it("removes the preset and returns to a blank draft", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete preset" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteCover).toHaveBeenCalledWith("cover-1"));
+    await waitFor(() =>
+      expect(useCoverDraftStore.getState().coverId).toBeNull(),
+    );
+    expect(window.location.pathname).toBe("/playground/cover");
+  });
+
+  it("stays put when the question is declined", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete preset" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(deleteCover).not.toHaveBeenCalled();
+    expect(useCoverDraftStore.getState().coverId).toBe("cover-1");
+  });
+
+  // A failed delete must not look like a successful one: the row is still
+  // there, so the playground must still be holding it.
+  it("leaves the draft alone when the delete fails", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    (deleteCover as Mock).mockRejectedValue(new Error("no"));
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete preset" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteCover).toHaveBeenCalled());
+    expect(useCoverDraftStore.getState().coverId).toBe("cover-1");
+    expect(window.location.pathname).toBe("/playground/cover/cover-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Framing, per shape — the four placement controls kept one set per aspect
+// ratio, so a cover can be framed one way as a poster and another as a banner.
+//
+// Driven through the RAIL and the sliders rather than through the store, so the
+// panel and the rule behind it are tested as one thing. The rules themselves
+// are `@/domain/cover`'s and the store's own tests.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground framing", () => {
+  beforeEach(() => {
+    useCoverDraftStore.getState().reset();
+    signedOut();
+    (getCovers as Mock).mockResolvedValue([]);
+  });
+  afterEach(cleanup);
+
+  const rail = () => screen.getByRole("toolbar", { name: "Preview aspect ratio" });
+  const pick = (ratio: string) =>
+    fireEvent.click(within(rail()).getByRole("button", { name: ratio }));
+  const flip = (to: "portrait" | "landscape") =>
+    fireEvent.click(
+      within(rail()).getByRole("button", { name: `Switch to ${to}` }),
+    );
+
+  /** The Framing group's slider for one control, read off the panel. */
+  const framingSlider = (label: string) => {
+    const group = screen.getByRole("group", { name: /^Framing/ });
+    return within(group)
+      .getAllByRole("slider")
+      .find((node) => node.closest("[data-field]")?.textContent?.startsWith(label));
+  };
+
+  // The heading names the SHAPE, because the sliders under it apply to one. A
+  // panel reading plain "Framing" beside ten other framings you cannot see
+  // would be the only thing on it that lies.
+  it("names the shape its placement controls apply to", () => {
+    render(<CoverPlayground />);
+
+    expect(screen.getByRole("group", { name: "Framing 9:16" })).toBeTruthy();
+    flip("landscape");
+    expect(screen.getByRole("group", { name: "Framing 16:9" })).toBeTruthy();
+  });
+
+  // Two shapes of ONE orientation, so nothing here is the quarter turn — what
+  // is under test is that each shape holds its own. Rotation rather than scale
+  // because its step lands on whole numbers, where scale's grid starts at 0.01
+  // and the slider would report 3.01 for a stored 3.
+  it("keeps a placement per shape, and gives each one back", () => {
+    render(<CoverPlayground />);
+    flip("landscape");
+
+    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    pick("4:3");
+    act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
+
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("-90");
+    pick("16:9");
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
+  });
+
+  // Turning the frame over is not a special case — the other side is a shape
+  // you have not framed yet, and it opens on what you arrived with so that
+  // reframing it is yours to do rather than yours to undo.
+  it("carries the placement across an orientation change, unchanged", () => {
+    render(<CoverPlayground />);
+
+    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    flip("landscape");
+
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
+  });
+
+  // And then the two sides are framed apart, which is the point of the split.
+  it("lets the two sides of an orientation pair be framed apart", () => {
+    render(<CoverPlayground />);
+
+    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    flip("landscape");
+    act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
+
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("-90");
+    flip("portrait");
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
+  });
+
+  // A different crop of the same composition, so nothing turns.
+  it("carries the placement between shapes of one orientation", () => {
+    render(<CoverPlayground />);
+
+    flip("landscape");
+    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    pick("4:3");
+
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
+  });
+
+  // The placement is what the CANVAS is given — the split is about where a
+  // value is kept, and the shader takes one object. Read off the store rather
+  // than the stubbed canvas, which draws nothing in jsdom.
+  it("hands the shader the placement of the shape on screen", () => {
+    render(<CoverPlayground />);
+
+    act(() => useCoverDraftStore.getState().setFraming("scale", 2));
+    const { settings } = useCoverDraftStore.getState();
+
+    expect(shaderParamsFor(settings).scale).toBe(2);
+    expect("scale" in settings.params).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The presets strip — the saved covers, along the foot of the canvas.
+//
+// PUBLIC. A visitor is shown the covers that have been published and can open
+// any of them; what signing in adds is the add tile, which is the pane's own
+// business (see `presets-pane`). What this file owns is where the strip sits
+// and the band the picture gives up for it.
 // ---------------------------------------------------------------------------
 describe("CoverPlayground presets", () => {
   beforeEach(() => {
     useCoverDraftStore.getState().reset();
-    mockUseSession.mockReturnValue({ data: null });
+    signedOut();
+    (getCovers as Mock).mockResolvedValue([]);
   });
   afterEach(cleanup);
 
   const strip = () => screen.queryByRole("group", { name: "Presets" });
 
-  it("shows a visitor no strip at all", () => {
+  it("shows a visitor with nothing published no strip at all", async () => {
     render(<CoverPlayground />);
+
+    await waitFor(() => expect(getCovers).toHaveBeenCalled());
     expect(strip()).toBeNull();
   });
 
   it("gives the author theirs, in the canvas", async () => {
-    mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
+    signedIn();
     const { container } = render(<CoverPlayground />);
 
     // One commit later than the first render, deliberately: the session is
@@ -563,15 +864,174 @@ describe("CoverPlayground presets", () => {
     expect(container.querySelector("main > div")?.contains(strip())).toBe(true);
   });
 
+  it("gives a visitor the published library, in the same place", async () => {
+    (getCovers as Mock).mockResolvedValue([publishedCover]);
+    const { container } = render(<CoverPlayground />);
+
+    await waitFor(() => expect(strip()).not.toBeNull());
+    expect(container.querySelector("main > div")?.contains(strip())).toBe(true);
+  });
+
   // The picture gives up the band the strip stands in, the way it already gives
   // up the gutter row: chrome must not cover the thing being judged.
-  it("makes the page reserve the strip's band, and only then", async () => {
-    const { container, rerender } = render(<CoverPlayground />);
+  //
+  // Reserved off whether a strip was DRAWN rather than off the session, which
+  // is what makes the visitor case work — the page reads `data-presets` on the
+  // pane through `:has()`, which jsdom applies no styles for, so what is
+  // asserted here is that the pane says so and that the page can see it.
+  it("marks the strip so the page can reserve its band, and only then", async () => {
+    const { container } = render(<CoverPlayground />);
     const main = () => container.querySelector("main");
-    expect(main()?.hasAttribute("data-presets")).toBe(false);
 
-    mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
-    rerender(<CoverPlayground />);
-    await waitFor(() => expect(main()?.hasAttribute("data-presets")).toBe(true));
+    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    expect(main()?.querySelector("[data-presets]")).toBeNull();
+
+    cleanup();
+    signedIn();
+    const signedInRender = render(<CoverPlayground />);
+
+    await waitFor(() =>
+      expect(
+        signedInRender.container.querySelector("main [data-presets]"),
+      ).not.toBeNull(),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the author is shown on top of the playground everybody gets: the shader
+// picker, and the button that puts a cover on show.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground authoring controls", () => {
+  beforeEach(() => {
+    useCoverDraftStore.getState().reset();
+    signedOut();
+    (getCovers as Mock).mockResolvedValue([]);
+    (publishCover as Mock).mockReset();
+    (unpublishCover as Mock).mockReset();
+  });
+  afterEach(cleanup);
+
+  const shaderGroup = () => screen.queryByRole("group", { name: "Shader" });
+  const publishButton = () => screen.queryByRole("button", { name: "Publish" });
+  const unpublishButton = () =>
+    screen.queryByRole("button", { name: "Unpublish" });
+
+  // A visitor came for the cover in front of them. A picker that swapped it for
+  // a bare shader would throw that cover away with nothing to get it back —
+  // while every control BELOW it acts on the cover they are looking at, which
+  // is the whole of what they can play with.
+  it("withholds the shader picker from a visitor, and keeps its controls", () => {
+    render(<CoverPlayground />);
+
+    expect(shaderGroup()).toBeNull();
+    expect(screen.getByRole("group", { name: "Colours" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Framing/ })).toBeTruthy();
+  });
+
+  it("gives the author the shader picker", async () => {
+    signedIn();
+    render(<CoverPlayground />);
+
+    await waitFor(() => expect(shaderGroup()).not.toBeNull());
+  });
+
+  it("offers a visitor no way to publish", async () => {
+    render(<CoverPlayground cover={savedCover} />);
+
+    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    expect(publishButton()).toBeNull();
+    expect(unpublishButton()).toBeNull();
+  });
+
+  // In the panel's own header, beside the Reset/Delete slot: all of them act on
+  // the saved row behind the panel rather than on the page you are looking at.
+  // The slot reads Delete here rather than Reset, because a freshly opened
+  // cover has nothing left to reset — see the delete suite below.
+  it("stands beside the header's other control", async () => {
+    signedIn();
+    render(<CoverPlayground cover={savedCover} />);
+
+    await waitFor(() => expect(publishButton()).not.toBeNull());
+    const header = screen.getByText("Properties").parentElement;
+    expect(header?.contains(publishButton())).toBe(true);
+    expect(
+      header?.contains(screen.getByRole("button", { name: "Delete preset" })),
+    ).toBe(true);
+  });
+
+  // Nothing has been written yet, so there is no row for "publish this" to
+  // name. ⌘S is the one press that decides between creating a row and updating
+  // one; a second control making that decision would be two doors to one room.
+  it("cannot publish a cover that has never been saved", async () => {
+    signedIn();
+    render(<CoverPlayground />);
+
+    await waitFor(() => expect(publishButton()).not.toBeNull());
+    expect(publishButton()).toHaveProperty("disabled", true);
+  });
+
+  it("publishes the saved cover, and turns into its own undo", async () => {
+    signedIn();
+    const user = userEvent.setup();
+    (publishCover as Mock).mockResolvedValue({ publishedAt: new Date("2026-02-01") });
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click(await screen.findByRole("button", { name: "Publish" }));
+
+    expect(publishCover).toHaveBeenCalledWith("cover-1");
+    // The row is the authority on its own state, so the button follows what
+    // came back rather than a guess it made on the way out.
+    await waitFor(() => expect(unpublishButton()).not.toBeNull());
+    expect(useCoverDraftStore.getState().publishedAt).toEqual(
+      new Date("2026-02-01"),
+    );
+  });
+
+  it("opens a published cover offering to take it back off", async () => {
+    signedIn();
+    const user = userEvent.setup();
+    (unpublishCover as Mock).mockResolvedValue({ publishedAt: null });
+    render(
+      <CoverPlayground
+        cover={{ ...savedCover, publishedAt: new Date("2026-02-01") }}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Unpublish" }));
+
+    expect(unpublishCover).toHaveBeenCalledWith("cover-1");
+    await waitFor(() => expect(publishButton()).not.toBeNull());
+  });
+
+  // Publishing writes the row's own column and leaves the picture alone, so it
+  // must not leave the draft claiming unsaved work — the palette would then put
+  // a "discard changes?" question in front of an exit that would lose nothing.
+  it("does not dirty the draft", async () => {
+    signedIn();
+    const user = userEvent.setup();
+    (publishCover as Mock).mockResolvedValue({ publishedAt: new Date("2026-02-01") });
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click(await screen.findByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(unpublishButton()).not.toBeNull());
+    expect(useCoverDraftStore.getState().isDirty).toBe(false);
+  });
+
+  // A failed write must not look like a successful one: the strip would go on
+  // showing the cover to nobody while the panel claimed it was out.
+  it("leaves the button saying what is still true when the write fails", async () => {
+    signedIn();
+    const user = userEvent.setup();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    (publishCover as Mock).mockRejectedValue(new Error("no"));
+    render(<CoverPlayground cover={savedCover} />);
+
+    await user.click(await screen.findByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(publishCover).toHaveBeenCalled());
+    expect(publishButton()).not.toBeNull();
+    expect(useCoverDraftStore.getState().publishedAt).toBeNull();
   });
 });
