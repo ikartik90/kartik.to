@@ -76,7 +76,7 @@ export default function MenuPreviewPage() {
       })}
     >
       <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
-        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.default/50" })}>
           Selection toolbar — inline OptionList.Toolbar (full converge)
         </h2>
         <div className={pill}>
@@ -151,7 +151,7 @@ export default function MenuPreviewPage() {
           it — so a pressed chip reads as a filled segment of one continuous
           bar rather than a rounded pill floating in a rounded box. */}
       <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
-        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.default/50" })}>
           Small toolbar — size=&quot;sm&quot; (28px, no padding, no gap)
         </h2>
         <div className={pillSmall}>
@@ -191,7 +191,7 @@ export default function MenuPreviewPage() {
       </section>
 
       <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
-        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.default/50" })}>
           Slash menu — plain-tone block OptionList.Listbox
         </h2>
         <div className={panel}>
@@ -213,7 +213,7 @@ export default function MenuPreviewPage() {
           would have destroyed it. The slash list beside it keeps every glyph
           and bars only the labels. */}
       <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
-        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.default/50" })}>
           Wireframed — an icon toolbar has no text to replace
         </h2>
         <Wireframe>
@@ -237,7 +237,7 @@ export default function MenuPreviewPage() {
       </section>
 
       <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
-        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.default/50" })}>
           Wireframed slash menu — icons kept, labels barred
         </h2>
         <Wireframe>
@@ -257,7 +257,7 @@ export default function MenuPreviewPage() {
       </section>
 
       <section className={css({ display: "flex", flexDirection: "column", gap: "lg" })}>
-        <h2 className={css({ textStyle: "caption", color: "text.muted" })}>
+        <h2 className={css({ textStyle: "caption", color: "text.default/50" })}>
           Loading slash menu — rows whose labels are not known yet
         </h2>
         <Wireframe mode="loading">
