@@ -72,6 +72,82 @@ export interface CosmicTrackParams {
    */
   travel: number;
   /**
+   * How the swing's turnarounds are shaped — its timing curve, apart from how
+   * far it goes (`travel`) and how fast (the mount's own `speed`).
+   *
+   * Signed about a LINEAR swing. 0 is that: constant speed, reversing on the
+   * spot, which reads as a mechanism rather than as drift. Toward 1 the set
+   * decelerates into each end and accelerates out of it — easing out of the
+   * sweep — reaching at 1 the sine this shader animated on before the control
+   * existed. Toward -1 it eases IN instead, hurrying into the turnaround and
+   * lingering mid-travel.
+   *
+   * 1 is the default rather than the neutral 0 because the eased turnaround is
+   * the shader's own long-standing choice — a sine rather than a triangle, so
+   * the set turns instead of snapping direction. The control exists to undo
+   * that deliberately, not to have it undone by omission.
+   */
+  easing: number;
+  /**
+   * Where the speed sits within a sweep across the track — pushing off one end
+   * of the travel fast and gliding into the other, or the reverse.
+   *
+   * 0 spends the sweep evenly, which is what a sine does. Positive leaves the
+   * end it is at quickly and arrives at the far one slowly; negative eases away
+   * and arrives fast.
+   *
+   * It INVERTS with the direction of travel, so the way back leans the same way
+   * relative to where it is going: one gesture repeated, not a fast pass
+   * followed by a slow one. That is what the sweeps are cut at the extremes
+   * for — a single lean laid over the whole cycle takes the opposite sign on
+   * its second half, which is the version this replaced.
+   *
+   * Distinct from `easing`, which shapes each sweep symmetrically about its
+   * middle. This is the one that makes the start of a sweep differ from its end.
+   *
+   * The sweeps keep half the cycle each whatever this is set to — the shaping
+   * integrates to exactly 1 across a sweep, so the extremes cannot be moved,
+   * only the time between them redistributed.
+   *
+   * At 1 the set carries 65% of a sweep's travel into its first quarter, against
+   * 15% at rest. The shader gets there by applying its warp twice rather than by
+   * deepening it once, which is forced: a single pass cannot lean harder without
+   * stalling mid-sweep.
+   *
+   * The set therefore ARRIVES at a different speed from the one the next sweep
+   * leaves at, and that is not a defect to be designed out — it is what a lean
+   * is. A rate that decelerates the whole way across a sweep cannot also finish
+   * where it started; forcing it to climb back at the end instead, which is the
+   * obvious repair, throws away the deceleration exactly where it was working.
+   *
+   * `interval` is what answers it: a rest between the strokes leaves nothing for
+   * the eye to compare. At `interval` 0 a strong negative bias will read as a
+   * bounce off the far end, because that is what accelerating into a turnaround
+   * looks like.
+   */
+  easingBias: number;
+  /**
+   * How long the set RESTS at each end of its travel before starting back, in
+   * sweep lengths — 1 sits still for as long as the crossing itself takes.
+   *
+   * 0 is the unbroken swing this had before the control existed: the set arrives
+   * and reverses in the same instant.
+   *
+   * Taken OUT of the half-cycle rather than added to it, so the swing keeps the
+   * cadence `speed` sets and the crossing gets brisker as the rest grows. A rest
+   * that lengthened the period would be this control quietly doing Speed's job.
+   *
+   * The reason to want one: with the two strokes adjacent, a sweep that ends
+   * fast beside a reverse that starts slow reads as a bounce off a wall, however
+   * continuous the speed across the turn is. A rest does not make that asymmetry
+   * smaller — it removes the comparison.
+   *
+   * At `easing` 1 the set glides to a stop and glides away again, because full
+   * easing already zeroes the speed at a turnaround. Below 1 it stops and starts
+   * abruptly at the ends of the rest, which is what less easing means.
+   */
+  interval: number;
+  /**
    * The offset between one band and the next, along the track.
    *
    * This is what makes the leading edges form a staircase rather than arriving
@@ -274,7 +350,7 @@ export interface CosmicTrackParams {
    * mount's pixel ratio, so the line does not halve on a 2x display or halve
    * again in an export that pins the buffer higher still.
    */
-  edgeThickness: number;
+  edgeWidth: number;
 }
 
 /** A legible fan, and the row the playground's control table starts from. */
@@ -283,6 +359,9 @@ export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   colorBack: "#12042BFF",
   phase: 0,
   travel: 1.5,
+  easing: 1,
+  easingBias: 0,
+  interval: 0,
   stagger: 0.45,
   symmetry: 1,
   spread: 0.25,
@@ -301,7 +380,7 @@ export const DEFAULT_COSMIC_TRACK: CosmicTrackParams = {
   colorEdge: "#FFFFFFFF",
   edgeTail: 0.5,
   edgeDither: 0,
-  edgeThickness: 0,
+  edgeWidth: 0,
 };
 
 export interface CosmicTrackUniforms {
@@ -310,6 +389,9 @@ export interface CosmicTrackUniforms {
   u_colorBack: [number, number, number, number];
   u_phase: number;
   u_travel: number;
+  u_easing: number;
+  u_easingBias: number;
+  u_interval: number;
   u_stagger: number;
   u_symmetry: number;
   u_spread: number;
@@ -328,7 +410,7 @@ export interface CosmicTrackUniforms {
   u_colorEdge: [number, number, number, number];
   u_edgeTail: number;
   u_edgeDither: number;
-  u_edgeThickness: number;
+  u_edgeWidth: number;
 }
 
 export function toCosmicTrackUniforms(
@@ -362,6 +444,15 @@ export function toCosmicTrackUniforms(
     ],
     u_phase: params.phase,
     u_travel: params.travel,
+    // Both are mix factors, so both are clamped for the reason `symmetry` is:
+    // `mix` extrapolates, and past either end the swing is dragged beyond the
+    // curves it is blending between — not a stronger ease, a broken one.
+    u_easing: Math.min(Math.max(params.easing, -1), 1),
+    u_easingBias: Math.min(Math.max(params.easingBias, -1), 1),
+    // Floored at 0 and capped: the shader divides a half-cycle by (1 + this), so
+    // anything at or below -1 inverts the half-cycle and runs the set backwards
+    // through its own rest.
+    u_interval: Math.min(Math.max(params.interval, 0), 2),
     u_stagger: params.stagger,
     // Clamped rather than passed through: the shader MIXES between the
     // arrangements, and `mix` extrapolates — past either end the bands are
@@ -395,6 +486,6 @@ export function toCosmicTrackUniforms(
     // threshold (0..1) and how far open (1..2). Past 2 there is no third stage,
     // only a duty driven negative.
     u_edgeDither: Math.min(Math.max(params.edgeDither, 0), 2),
-    u_edgeThickness: Math.max(params.edgeThickness, 0),
+    u_edgeWidth: Math.max(params.edgeWidth, 0),
   };
 }

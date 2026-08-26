@@ -38,6 +38,9 @@ uniform vec4 u_colorEdge;
 
 uniform float u_phase;
 uniform float u_travel;
+uniform float u_easing;
+uniform float u_easingBias;
+uniform float u_interval;
 uniform float u_stagger;
 uniform float u_symmetry;
 uniform float u_spread;
@@ -55,7 +58,7 @@ uniform float u_rampDither;
 uniform float u_ditherSize;
 uniform float u_edgeTail;
 uniform float u_edgeDither;
-uniform float u_edgeThickness;
+uniform float u_edgeWidth;
 
 uniform float u_time;
 // Device pixels per CSS pixel, set by the mount. Read so the edge highlight's
@@ -70,6 +73,14 @@ out vec4 fragColor;
 // Radians per second of the swing at speed 1. Slow, because this is a ground:
 // the set should breathe along the track, not march.
 #define DRIFT_RATE 0.35
+
+#define HALF_PI 1.5707963
+#define PI 3.1415927
+
+// How hard the bias may bend a sweep's timing. Under 1 on purpose — the warped
+// rate is 1 + bias*cos, so 1 would stall the set dead at one end of its travel
+// and anything past it would run that stretch backwards.
+#define BIAS_DEPTH 0.8
 
 // Quantisation levels per channel at the two ends of the dither control.
 //
@@ -103,7 +114,7 @@ out vec4 fragColor;
 // The edge highlight is described by three things, and none of them is a
 // constant any more:
 //
-//   • u_edgeThickness — the line's thickness in CSS PIXELS, and the switch as
+//   • u_edgeWidth — the line's thickness in CSS PIXELS, and the switch as
 //     well, since 0 is no line at all. A screen measurement
 //     rather than a track one is the whole trick: u_tilt and u_depth crush the
 //     far end of the track, so a width in track units would thin away exactly
@@ -149,6 +160,34 @@ float bayer2(vec2 a) {
 
 #define bayer4(a) (bayer2(.5 * (a)) * .25 + bayer2(a))
 #define bayer8(a) (bayer4(.5 * (a)) * .25 + bayer2(a))
+
+// One pass of the bias warp: re-times a sweep's progress without moving its
+// ends. Named rather than inlined because it is applied twice — see main().
+//
+// Its rate is 1 + bias*BIAS_DEPTH*cos(PI * along) — highest leaving one end,
+// falling steadily, lowest arriving at the other. Integrating to exactly 1
+// across the sweep is what pins the ends: the control decides how the time
+// between them is spent, never how much of it there is.
+//
+// MONOTONE is the property that matters, and it was worth a wrong turn to
+// learn. The rate necessarily ends somewhere other than it starts, so a sweep
+// arrives at a different speed from the one the next leaves at — and with the
+// two laid end to end that difference is a step, which is what a strong bias
+// reads as at Interval 0: a bounce off the far end rather than a turn.
+//
+// The obvious repair is a rate pinned to 1 at BOTH ends, and it is a trap. A
+// rate that starts and finishes at 1 while still averaging 1 cannot fall the
+// whole way — it has to climb back at the finish. So the set slows, slows,
+// slows, and then speeds up again in the last tenth before stopping dead, which
+// is a far worse artefact than the one it cures: the deceleration the control
+// exists to produce is thrown away exactly where it was working.
+//
+// So the step stays, and INTERVAL is what answers it — a rest between the
+// strokes, where a difference in speed either side has nothing to be compared
+// against. See u_interval in main().
+float leanSweep(float along) {
+  return along + u_easingBias * BIAS_DEPTH * sin(PI * along) / PI;
+}
 
 // The ramp read across the fan. Walks only the colours actually supplied —
 // u_colorsCount is the real count, the array tail is padding.
@@ -357,9 +396,126 @@ void main() {
   // It OSCILLATES rather than drifting: the set runs out along the track and
   // returns by the same path, mirroring the reference's slider being dragged
   // forward and back. A one-way ramp would carry the bands off once and never
-  // bring them home. A sine rather than a triangle, so the turnarounds ease
-  // instead of snapping direction.
-  float phase = u_phase + sin(u_time * DRIFT_RATE) * u_travel;
+  // bring them home.
+  //
+  // WHICH curve it swings on is u_easing's, and the sine this used to be flat
+  // is only one end of that range — see below. All of this is a function of TIME
+  // alone, so it is one value across the whole frame: constant per draw, no
+  // divergence, and the compiler is welcome to it.
+  float clock = u_time * DRIFT_RATE;
+  float swung = sin(clock);
+
+  // The LINEAR swing — a triangle wave, and the same one the sine is a shaped
+  // version of. asin(sin(clock)) IS that triangle — it unfolds to clock on the
+  // first quarter cycle and reflects on every one after — which is what makes it
+  // exactly in step with the sine rather than merely the same period. Built
+  // this way rather than from fract(clock / TWO_PI) because clock grows without
+  // bound and this shader is mediump: a fract of a large number is noise
+  // within minutes, while sin/cos hand back bounded values that stay exact.
+  float linear = asin(swung) / HALF_PI;
+
+  // Where in the cycle we are, rebuilt from the triangle plus which way it is
+  // going. Needed only by the skew, and only because a triangle alone cannot
+  // tell the outward stroke from the return — both read the same going up as
+  // coming down. The fract here is of a quarter-turn at most, so it costs
+  // nothing in precision.
+  float rising = step(0., cos(clock));
+  float cycle = mix(.5 - linear * .25, fract(linear * .25), rising);
+
+  // SKEW — where the speed sits within a SWEEP: pushing off one end of the
+  // travel fast and gliding into the other, or the reverse.
+  //
+  // Per sweep, and that is the whole point. A single warp laid over the cycle
+  // is the obvious way to lean an oscillation, and it is wrong here: a sine of
+  // the cycle takes the opposite sign on the second half, so the set would
+  // hurry one way across the track and dawdle back. The lean has to INVERT with
+  // the direction of travel to read as one gesture — push off, glide in, every
+  // time — rather than as a fast pass followed by a slow one.
+  //
+  // So the cycle is cut at the two extremes into the sweeps it is actually made
+  // of, and the same profile is applied inside each. They keep half the cycle
+  // apiece; only the distribution of speed within them moves.
+  //
+  // A sine again, for the reason it was one before: the rate is 1 + skew*cos,
+  // which bends the timing continuously instead of hinging it, so the set never
+  // changes speed on the spot mid-sweep. It integrates to exactly 1 over the
+  // sweep, which is what pins the extremes where they are — the control cannot
+  // move them, only decide how the time between them is spent.
+  //
+  // Kept under 1 so the rate never reaches zero: at 1 the set would stall dead
+  // at one end, and past it that stretch would run backwards — a stutter, not a
+  // stronger lean.
+  // TWICE, which is what makes the control worth reaching for. One pass carries
+  // 31% of a sweep's travel into its first quarter at full bias; two carry 65%,
+  // against 15% at rest. Rates compose by multiplying, so a second pass doubles
+  // the lean.
+  //
+  // Composing rather than deepening, and that is forced: the rate is
+  // 1 + bias*BIAS_DEPTH*cos, so a depth of 1 would stall the set dead at one end
+  // and anything past it would run that stretch backwards. There is no room
+  // left in the constant. There is room in the composition, which cannot stall
+  // — a product of positive rates is positive — and which keeps both of
+  // leanSweep's guarantees, since each pass already has them.
+  float sweep = (cycle - .25) * 2.;
+  float along = fract(sweep);
+
+  // INTERVAL — a rest at each end of the travel, before the set starts back.
+  //
+  // Measured in SWEEP LENGTHS, so 1 rests for as long as the crossing takes. A
+  // half-cycle is then rest + sweep = (1 + interval) sweeps, and the rest is
+  // interval / (1 + interval) of it.
+  //
+  // It sits at the START of a half-cycle, which is the instant the set arrives:
+  // the sweeps are cut at the extremes, so along = 0 IS the turnaround. Clamped
+  // below at 0 rather than allowed to run negative, since the shader divides by
+  // what is left over.
+  //
+  // The period does not change — the rest is taken OUT of the half-cycle rather
+  // than added to it, so the swing keeps the cadence Speed sets and the crossing
+  // simply gets brisker as the rest grows. Adding to it instead would have this
+  // control quietly slowing the whole animation, which is Speed's to do.
+  //
+  // What it buys is the recoil going away, and it is the ONLY thing that can.
+  // A leaning sweep arrives at a different speed from the one the next leaves
+  // at — see leanSweep, where that is shown to be unavoidable in any rate that
+  // falls the whole way across the sweep. With the two strokes adjacent the eye
+  // compares them and calls it a bounce. A rest between them is not a smaller
+  // asymmetry; it is nothing left to compare.
+  float rest = u_interval / (1. + u_interval);
+  float held = clamp((along - rest) / max(1. - rest, 1e-4), 0., 1.);
+
+  float eased = leanSweep(leanSweep(held));
+
+  // Which end this sweep is leaving. They alternate, and this is what carries
+  // the profile across the turnaround unflipped: the sweep back is the sweep
+  // out, mirrored, so it leans the same way relative to where it is going.
+  float leaving = mod(floor(sweep), 2.) < .5 ? 1. : -1.;
+
+  // The triangle, walked sweep by sweep. At skew 0 this lands back on linear.
+  float retimed = leaving * (1. - 2. * eased);
+
+  // EASING — how the turnarounds are shaped, signed about a LINEAR swing.
+  //
+  // 0 is that linear swing: constant speed, reversing on the spot. Toward 1 the
+  // set decelerates into each end and accelerates out of it, reaching the sine
+  // this shader animated on before the control existed — which is why 1 is the
+  // default rather than the neutral 0. Toward -1 it does the opposite, hurrying
+  // into the turnaround and lingering mid-travel.
+  //
+  // One mix does both signs, because the negative half IS the positive half
+  // reflected through the linear swing: mix(x, s, -1) is 2x - s, the curve as
+  // far below the straight line as the sine is above it. Nothing to branch on,
+  // and no second curve to keep in step with the first.
+  //
+  // That reflection stays monotone, which is the thing to check before trusting
+  // it: its slope is 2 - (PI/2)cos, never less than about 0.43, so the swing
+  // always advances. The obvious alternative — inverting the sine with asin —
+  // does not: its slope runs to infinity at the turnaround, so ANY negative
+  // value would snap rather than the range easing into it.
+  float shaped = sin(retimed * HALF_PI);
+  float swing = mix(retimed, shaped, u_easing);
+
+  float phase = u_phase + swing * u_travel;
 
   // Position within THIS band's own gradient: 0 where it starts, 1 where it
   // ends. u_stagger is the gap between one band and the next, which is what
@@ -584,7 +740,7 @@ void main() {
   // where an inner stroke had nowhere to go and thinned away to nothing.
   float railPx = abs(offCentre - halfBand) / acrossRate;
 
-  float stroke = max(u_edgeThickness, 0.) * max(u_pixelRatio, 1.);
+  float stroke = max(u_edgeWidth, 0.) * max(u_pixelRatio, 1.);
   float halfStroke = stroke * .5;
 
   // The stack's own outer boundary — the one thing a straddling stroke still

@@ -51,6 +51,13 @@ interface TooltipFit {
  * and paints underneath the rail. Same slide, measured against the edge that is
  * actually there.
  *
+ * Unless the cursor is ON the rail — then the rail is not in the way, it is
+ * what is being pointed at, and its own controls' labels belong over it. The
+ * reserved strip exists to keep a label drawn over the PAGE from sliding under
+ * the panel; applied to a control INSIDE the panel it does the reverse, throwing
+ * that label out into the page. The pointer's own x answers which case this is,
+ * with no need to know what element it came from.
+ *
  * The label can still be too wide for the container — a long one on a phone.
  * Then the slide would carry it off the far edge, and it stops at `EDGE_GAP`
  * from that one instead: it gives up hanging from the cursor before it gives up
@@ -69,10 +76,15 @@ export function getCursorTooltipPosition(
 
   if (!fit) return { left: `${anchor}px`, top: `${top}px` };
 
+  // See above: a pointer inside the reserved strip is on the panel, so the
+  // whole viewport is its label's to use.
+  const reserved = fit.reservedRight ?? 0;
+  const onReserved = clientX >= fit.viewportWidth - reserved;
+
   // The furthest right the label may start and still leave the gap. Both the
   // test and the landing place, so the slide can only ever end exactly on the
   // gap it was checking for.
-  const usableRight = fit.viewportWidth - (fit.reservedRight ?? 0);
+  const usableRight = fit.viewportWidth - (onReserved ? 0 : reserved);
   const rightmost = usableRight - EDGE_GAP - fit.width;
 
   if (anchor <= rightmost) return { left: `${anchor}px`, top: `${top}px` };

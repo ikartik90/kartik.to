@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
@@ -161,6 +168,259 @@ describe("CoverPlayground bottom sheet", () => {
 
     expect(panel().hasAttribute("data-dismissed")).toBe(false);
     expect(reopen()).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Reset params" — the button that undoes an experiment.
+//
+// WHERE it undoes to depends on what is behind the draft — the preset you
+// opened, or the shader's defaults where no preset has been saved — and that is
+// the store's to decide, not the label's. So what is worth asserting here is
+// which of the two the button actually lands on.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground reset control", () => {
+  beforeEach(() => useCoverDraftStore.getState().reset());
+  afterEach(cleanup);
+
+  // Opened THROUGH THE ROUTE'S PROP, which is how a preset actually arrives:
+  // the page seeds the draft from it on mount, and would reset a draft seeded
+  // any other way straight back to blank.
+  const saved = {
+    id: "cover-1",
+    title: "Dusk",
+    shaderId: "cosmicTrack" as const,
+    settings: {
+      ...defaultState(SHADER_SPECS.cosmicTrack),
+      params: {
+        ...defaultState(SHADER_SPECS.cosmicTrack).params,
+        rampLength: 4,
+      },
+      aspect: "9/16" as const,
+    },
+  };
+
+  const resetButton = () => screen.getByRole("button", { name: "Reset" });
+
+  // In the panel's own header, opposite the heading — it acts on everything
+  // below it, so it belongs to the panel rather than sitting in a section that
+  // is only one of the things it resets.
+  it("stands in the panel header, opposite the heading", () => {
+    render(<CoverPlayground />);
+    const header = screen.getByText("Properties").parentElement;
+
+    expect(header?.contains(resetButton())).toBe(true);
+  });
+
+  // Driven through the control itself rather than the store action, so the
+  // header button and the rule behind it are tested as one thing.
+  it("puts the params back to the preset's, not the table's", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground cover={saved} />);
+
+    act(() => useCoverDraftStore.getState().setParam("rampLength", 9));
+    await user.click(resetButton());
+
+    expect(useCoverDraftStore.getState().settings.params.rampLength).toBe(4);
+  });
+
+  // A preset's params belong to the shader it was authored on, so switching
+  // away has to leave the baseline behind with it. Driven through the store
+  // rather than the popover: WHICH control picks the shader is not what this is
+  // about.
+  it("falls back to the new shader's defaults after a switch", () => {
+    render(<CoverPlayground cover={saved} />);
+
+    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+    act(() => useCoverDraftStore.getState().setParam("density", 9));
+    fireEvent.click(resetButton());
+
+    expect(useCoverDraftStore.getState().settings.params).toEqual(
+      defaultState(SHADER_SPECS.godRays).params,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Motion group — what MOVES, kept together.
+//
+// Speed is shared by every shader that samples time. A shader can also put its
+// own timing controls here, which is not the same as them being shared: they
+// are that shader's uniforms, and only it has them.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground motion group", () => {
+  beforeEach(() => useCoverDraftStore.getState().reset());
+  afterEach(cleanup);
+
+  const motionGroup = () => screen.getByRole("group", { name: "Motion" });
+
+  const labelsIn = (group: HTMLElement) =>
+    Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
+
+  it("gathers a shader's own timing controls in with the shared Speed", () => {
+    render(<CoverPlayground />);
+
+    expect(labelsIn(motionGroup())).toEqual(
+      expect.arrayContaining(["Speed", "Interval", "Easing", "Easing Bias"]),
+    );
+  });
+
+  // They are the shader's uniforms, not the shared block's, so they must not
+  // also appear among the geometry sliders the panel groups by default.
+  it("keeps them out of the shader's own parameters", () => {
+    render(<CoverPlayground />);
+    const params = screen.getByRole("group", { name: "Track" });
+
+    expect(labelsIn(params)).not.toContain("Easing");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Ramp group — where the colours SIT along the track, and how they are
+// shared out between the bands.
+//
+// Under Track, because it is drawn ON the track: the fan's geometry is decided
+// first and the ramp is laid along it. What stays in Track is that geometry,
+// which the ramp is drawn on but does not decide.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground ramp group", () => {
+  beforeEach(() => useCoverDraftStore.getState().reset());
+  afterEach(cleanup);
+
+  const labelsIn = (group: HTMLElement) =>
+    Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
+
+  it("gathers the ramp controls into one section", () => {
+    render(<CoverPlayground />);
+
+    expect(labelsIn(screen.getByRole("group", { name: "Ramp" }))).toEqual([
+      "Phase",
+      "Travel",
+      "Stagger",
+      "Symmetry",
+      // Not "Ramp Length" — the section already says ramp.
+      "Length",
+      "Tail",
+    ]);
+  });
+
+  it("takes them out of the shader's own parameters", () => {
+    render(<CoverPlayground />);
+    const params = labelsIn(screen.getByRole("group", { name: "Track" }));
+
+    for (const label of ["Phase", "Travel", "Stagger", "Symmetry", "Length", "Tail"]) {
+      expect(params).not.toContain(label);
+    }
+  });
+
+  // The fan's geometry stays where it was — the split is between where the
+  // colours sit and what they are drawn on, not a wholesale emptying.
+  it("leaves the fan's own geometry in Track", () => {
+    render(<CoverPlayground />);
+
+    expect(labelsIn(screen.getByRole("group", { name: "Track" }))).toEqual(
+      expect.arrayContaining(["Spread", "Bandwidth", "Roundness", "Apex"]),
+    );
+  });
+
+  it("is absent for a shader that has none", () => {
+    render(<CoverPlayground />);
+    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+
+    expect(screen.queryByRole("group", { name: "Ramp" })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Edge group — the rails, and how hard a band meets what is beside it.
+//
+// The rails' COLOUR stays with the other swatches; what gathers here is the
+// three numbers that decide how the edge reads: how wide the line is, how
+// sharply the fill ends, and how far the line outlives the fill.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground edge group", () => {
+  beforeEach(() => useCoverDraftStore.getState().reset());
+  afterEach(cleanup);
+
+  const labelsIn = (group: HTMLElement) =>
+    Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
+
+  it("gathers the edge controls into one section", () => {
+    render(<CoverPlayground />);
+
+    expect(labelsIn(screen.getByRole("group", { name: "Edge" }))).toEqual([
+      "Edge Width",
+      "Softness",
+      "Edge Tail",
+    ]);
+  });
+
+  it("takes them out of the shader's own parameters", () => {
+    render(<CoverPlayground />);
+    const params = labelsIn(screen.getByRole("group", { name: "Track" }));
+
+    for (const label of ["Edge Width", "Softness", "Edge Tail"]) {
+      expect(params).not.toContain(label);
+    }
+  });
+
+  // The swatch is not one of them: a colour belongs with the colours.
+  it("leaves the rails' colour with the other swatches", () => {
+    render(<CoverPlayground />);
+    const colours = labelsIn(screen.getByRole("group", { name: "Colours" }));
+
+    expect(colours).toContain("Edge");
+    expect(colours).not.toContain("Edge Width");
+  });
+
+  it("is absent for a shader that has none", () => {
+    render(<CoverPlayground />);
+    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+
+    expect(screen.queryByRole("group", { name: "Edge" })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Dither group — the ordered-dither controls, kept together.
+//
+// They are one mechanism read three ways: two strengths over a single Bayer
+// matrix, and the cell size that matrix is sampled at. Scattered among the
+// geometry sliders, only their names said they were related.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground dither group", () => {
+  beforeEach(() => useCoverDraftStore.getState().reset());
+  afterEach(cleanup);
+
+  const labelsIn = (group: HTMLElement) =>
+    Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
+
+  it("gathers the dither controls into one section", () => {
+    render(<CoverPlayground />);
+
+    expect(labelsIn(screen.getByRole("group", { name: "Dither" }))).toEqual([
+      "Ramp Dither",
+      "Edge Dither",
+      "Dither Size",
+    ]);
+  });
+
+  it("takes them out of the shader's own parameters", () => {
+    render(<CoverPlayground />);
+    const params = labelsIn(screen.getByRole("group", { name: "Track" }));
+
+    expect(params).not.toContain("Ramp Dither");
+    expect(params).not.toContain("Edge Dither");
+    expect(params).not.toContain("Dither Size");
+  });
+
+  // A shader with no dither controls must not grow an empty strip for them —
+  // the same rule the Motion group follows.
+  it("is absent for a shader that has none", () => {
+    render(<CoverPlayground />);
+    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+
+    expect(screen.queryByRole("group", { name: "Dither" })).toBeNull();
   });
 });
 

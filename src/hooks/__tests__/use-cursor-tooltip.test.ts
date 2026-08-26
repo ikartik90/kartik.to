@@ -104,10 +104,15 @@ describe("useCursorTooltip", () => {
     const { result } = renderHook(() => useCursorTooltip(false));
     result.current.ref.current = el;
 
-    // window.innerWidth is 1024 in jsdom, so the usable edge is 692 and the
-    // label may start no further right than 692 - 4 - 73. Anchored at 915 it
+    // window.innerWidth is 1024 in jsdom, so the panel holds 692 rightwards and
+    // the label may start no further right than 692 - 4 - 73. Anchored at 665 it
     // slides back to exactly that, and drops the 2px a shifted label drops.
-    act(() => result.current.seed(900, 200));
+    //
+    // The pointer is at 650 — ON THE PAGE, just short of the panel's edge, which
+    // is the case this is about: a label that fits the viewport and would paint
+    // under the rail. A pointer PAST 692 is on the rail itself and keeps the
+    // whole viewport, which is `getCursorTooltipPosition`'s own to test.
+    act(() => result.current.seed(650, 200));
 
     expect(el.style.left).toBe("615px");
     expect(el.style.top).toBe("219px");

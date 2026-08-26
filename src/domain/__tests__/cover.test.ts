@@ -56,6 +56,40 @@ describe("CoverContentSchema", () => {
     expect(result.success && result.data.settings.params.rampDither).toBe(0.8);
   });
 
+  // `ease`/`easeSkew` were renamed to say what they are rather than what they do
+  // to a curve. The VALUES carry over unchanged on purpose: 1 was the fully
+  // eased swing under the old 0..2 range and still is under -1..1, and 0 was a
+  // linear one either way — so the rename is a rename, not a re-tuning.
+  it("carries the easing controls across their rename", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const { easing: _e, easingBias: _b, ...rest } = settings.params;
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      settings: { ...settings, params: { ...rest, ease: 0.4, easeSkew: -0.7 } },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.params.easing).toBe(0.4);
+    expect(result.success && result.data.settings.params.easingBias).toBe(-0.7);
+  });
+
+  // `edgeThickness` became `edgeWidth` — the same measurement, said the way the
+  // rest of the panel says it. Range and meaning are untouched, so the stored
+  // value carries straight over.
+  it("carries the rails' width across its rename", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    const { edgeWidth: _w, ...rest } = settings.params;
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      settings: { ...settings, params: { ...rest, edgeThickness: 2.5 } },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.params.edgeWidth).toBe(2.5);
+  });
+
   it("prefers the current key when a stale one sits beside it", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const result = CoverContentSchema.safeParse({

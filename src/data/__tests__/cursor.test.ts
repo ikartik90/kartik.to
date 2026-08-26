@@ -82,6 +82,19 @@ describe("getCursorTooltipPosition", () => {
       ).toEqual({ left: "915px", top: "217px" });
     });
 
+    // The rail is only in the way of a label drawn over the PAGE. A control
+    // inside the rail opens its own label there, and sliding that one out into
+    // the page is the panel's own tooltips being pushed off the panel.
+    it("gives the whole viewport back to a pointer already on the panel", () => {
+      expect(
+        getCursorTooltipPosition(1100, 200, {
+          width: 73,
+          viewportWidth: 1280,
+          reservedRight: 332,
+        }),
+      ).toEqual({ left: "1115px", top: "217px" });
+    });
+
     it("still pins clear of the left edge when it fits nowhere", () => {
       expect(
         getCursorTooltipPosition(200, 200, {

@@ -39,6 +39,14 @@ interface CoverDraftStore {
    * read clean, or the command would claim work that does not exist.
    */
   isDirty: boolean;
+  /**
+   * The params the draft was last LOADED OR SAVED with, and the shader they
+   * belong to. Null for a draft that has never been written.
+   *
+   * Carries its shader because a saved cover's params only make sense over the
+   * control table they were authored against — see `resetParams`.
+   */
+  savedParams: { shaderId: ShaderId; params: CoverSettings["params"] } | null;
 
   selectShader: (shaderId: ShaderId) => void;
   setParam: (key: string, value: ParamValue) => void;
@@ -54,7 +62,11 @@ interface CoverDraftStore {
    */
   setAspect: (aspect: DemoFrameAspectRatio) => void;
   setTitle: (title: string | null) => void;
-  /** The shader's uniforms back to their defaults, leaving the colours alone. */
+  /**
+   * The shader's uniforms back to their baseline, leaving the colours alone.
+   *
+   * The baseline is the saved preset where there is one — see `savedParams`.
+   */
   resetParams: () => void;
   /** Adopt a saved cover — opens clean, because nothing has been changed yet. */
   load: (cover: {
@@ -82,9 +94,29 @@ const blank = (
   isDirty: false,
 });
 
+/**
+ * The params "Reset params" would put back — the SAVED preset's, or null where
+ * there is no save to go back to.
+ *
+ * Null covers two cases on purpose: a draft that has never been written, and
+ * one whose shader has been switched away from the saved cover's. A preset's
+ * params belong to the control table they were authored against, so restoring
+ * them over a different shader would write keys it has never heard of — the
+ * same silent loss `selectShader` re-seeds to avoid. Switching BACK finds the
+ * baseline still there and usable.
+ *
+ */
+const savedParamsFor = (
+  state: Pick<CoverDraftStore, "savedParams" | "shaderId">,
+): CoverSettings["params"] | null =>
+  state.savedParams && state.savedParams.shaderId === state.shaderId
+    ? state.savedParams.params
+    : null;
+
 export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   coverId: null,
   title: null,
+  savedParams: null,
   ...blank(INITIAL_SHADER),
 
   // A switch RE-SEEDS rather than merging: a shader's control table is a
@@ -138,19 +170,42 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   // Params only. The colours are the part you spent the time on and the part a
   // shader switch would take away anyway, so "Reset params" that also dropped
   // the ramp would be the destructive reading of a button that does not warn.
+  //
+  // Back to the SAVED preset where there is one, and only to the factory
+  // defaults where there is not: once a cover has been written, the thing an
+  // experiment wants undoing against is your own last save, not the table's
+  // starting point — which on a tuned preset is somewhere you have never been.
+  //
+  // Which baseline applies is `savedParamsFor`'s to answer — see there.
   resetParams: () =>
-    set((state) => ({
-      settings: {
-        ...state.settings,
-        params: defaultState(SHADER_SPECS[state.shaderId]).params,
-      },
-      isDirty: true,
-    })),
+    set((state) => {
+      const saved = savedParamsFor(state);
+      return {
+        settings: {
+          ...state.settings,
+          params: saved
+            ? { ...saved }
+            : defaultState(SHADER_SPECS[state.shaderId]).params,
+        },
+        isDirty: true,
+      };
+    }),
 
   load: ({ id, title, shaderId, settings }) =>
-    set({ coverId: id, title, shaderId, settings, isDirty: false }),
+    set({
+      coverId: id,
+      title,
+      shaderId,
+      settings,
+      isDirty: false,
+      // What "last saved" means, kept in one place: a commit adopts what was
+      // STORED through this same action, so writing the cover re-baselines it
+      // exactly the way opening one does.
+      savedParams: { shaderId, params: settings.params },
+    }),
 
-  reset: () => set({ coverId: null, title: null, ...blank(INITIAL_SHADER) }),
+  reset: () =>
+    set({ coverId: null, title: null, savedParams: null, ...blank(INITIAL_SHADER) }),
 
   toContent: () => {
     const { shaderId, settings } = get();
