@@ -8,6 +8,7 @@ import {
   comboboxPopover,
 } from "../../../../styled-system/recipes";
 import { Popover } from "@/components/ui/popover";
+import { usePickerPin } from "@/hooks/use-picker-pin";
 import {
   clampOpacity,
   formatColor,
@@ -75,11 +76,15 @@ export function ColorInput({
   const [opacityDraft, setOpacityDraft] = useState<string | null>(null);
 
   const [open, setOpen] = useState(false);
+  // Where the picker opens, read off this swatch ONCE. See the hook: the panel
+  // used to track the swatch through the rail's scroll, and now holds still.
+  const pin = usePickerPin();
   const uid = useId();
   const swatchRef = useRef<HTMLButtonElement>(null);
 
   const closePicker = () => {
     setOpen(false);
+    pin.unpin();
     // Back to the swatch, not the hex box: the trigger is where the keyboard
     // left off, and it is still the thing the picker belongs to.
     swatchRef.current?.focus();
@@ -137,10 +142,14 @@ export function ColorInput({
         aria-label="Edit colour"
         disabled={disabled}
         className={styles.swatch}
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
-        // Named only while open, so exactly one element in the document ever
-        // carries it — the rule every anchored popover here follows.
-        style={{ anchorName: open ? "--color-picker" : undefined }}
+        onClick={() => {
+          setOpen((wasOpen) => {
+            // Read BEFORE the panel exists, off the swatch as it stands now.
+            if (wasOpen) pin.unpin();
+            else pin.pin(swatchRef.current);
+            return !wasOpen;
+          });
+        }}
       >
         {/* The colour composites OVER the frame's checkerboard, so a partial
             opacity reads as partial rather than as a paler colour. */}
@@ -208,6 +217,8 @@ export function ColorInput({
           portal
           ignoreSelector={keepOpenFor}
           onDismiss={dismiss}
+          containerRef={pin.ref}
+          style={{ top: pin.top }}
         >
           <ColorPicker
             value={value}

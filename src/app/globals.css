@@ -48,7 +48,7 @@ body {
    own box rather than a style anything themes or overrides.
 
    From `md` (820px, `breakpoints.md` in panda.config.ts) up only. The panel is
-   332px wide and capped at `100vw`; on a phone giving that up would leave a
+   360px wide and capped at `100vw`; on a phone giving that up would leave a
    column too narrow to edit in, so below this it goes on overlaying, which is
    what it has always done.
 

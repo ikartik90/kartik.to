@@ -12,7 +12,7 @@
 
 /**
  * The properties panel is a bottom sheet rather than a side rail: a phone held
- * upright, where a 332px rail would take most of the width and leave a column
+ * upright, where a 360px rail would take most of the width and leave a column
  * too narrow to judge a picture in. Turned on its side the same phone has width
  * to spare and goes back to the rail — this asks about the shape of the
  * viewport, not about the device.

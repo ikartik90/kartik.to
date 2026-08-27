@@ -10,7 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
-import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
+import type { ShaderId } from "@/data/shader-specs";
+import { coverContentFor, type ThemedColor } from "@/domain/cover";
 import { useCoverDraftStore } from "@/store/cover-draft";
 
 // The actions are `"use server"` files importing `@/lib/env`, which validates
@@ -63,8 +64,11 @@ const { PresetsPane } = await import("../presets-pane");
 const { clearThumbnailCache } = await import("../cover-thumbnails");
 const { getCovers, createCover } = await import("@/app/actions/cover");
 
-const settingsFor = (shaderId: keyof typeof SHADER_SPECS) => ({
-  ...defaultState(SHADER_SPECS[shaderId]),
+// Parsed rather than authored: the spec table writes one colour per stop and a
+// cover holds a light/dark pair each, so a fixture built from `defaultState`
+// alone is not the shape the pane is handed.
+const settingsFor = (shaderId: ShaderId) => ({
+  ...coverContentFor(shaderId).settings,
   framing: {},
 });
 
@@ -80,7 +84,12 @@ const preset = (id: string, title: string | null, colors: string[]) => ({
   title,
   untitledIndex: title ? null : 1,
   shaderId: "cosmicTrack" as const,
-  settings: { ...settingsFor("cosmicTrack"), colors },
+  // One colour per stop at the call site, split into the pair a cover holds —
+  // these fixtures are about WHICH cover is on screen, not about theming it.
+  settings: {
+    ...settingsFor("cosmicTrack"),
+    colors: colors.map((color) => ({ light: color, dark: color })),
+  },
   publishedAt: new Date("2026-01-01"),
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
@@ -379,7 +388,7 @@ describe("PresetsPane", () => {
     // Read AT THE MOMENT of the call, not after — the whole question is what is
     // true when the page is told it may draw.
     let idWhenTold: string | null | undefined;
-    let coloursWhenTold: string[] | undefined;
+    let coloursWhenTold: ThemedColor[] | undefined;
     const onSettled = vi.fn(() => {
       const draft = useCoverDraftStore.getState();
       idWhenTold = draft.coverId;
@@ -390,7 +399,9 @@ describe("PresetsPane", () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalled());
 
     expect(idWhenTold).toBe("a");
-    expect(coloursWhenTold).toEqual(["#FFFFFFFF"]);
+    expect(coloursWhenTold).toEqual([
+      { light: "#FFFFFFFF", dark: "#FFFFFFFF" },
+    ]);
   });
 
   // The author is not moved onto anybody's cover — their blank draft IS the

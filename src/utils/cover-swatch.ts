@@ -15,7 +15,14 @@
 // in the order they were authored.
 // ---------------------------------------------------------------------------
 
-/** What a tile needs off a cover: its ramp, and the ground behind it. */
+/**
+ * What a tile needs off a cover: its ramp, and the ground behind it.
+ *
+ * FLAT colours, not the pairs a cover stores — a tile is painted on one ground
+ * at a time, so the caller resolves the pair (`paletteFor`) and hands over what
+ * it wants drawn. Keeping the choice out here is what lets the strip paint in
+ * the page's theme while the preview card stands in the other one.
+ */
 export interface CoverSwatchSource {
   colors: string[];
   colorBack?: string;

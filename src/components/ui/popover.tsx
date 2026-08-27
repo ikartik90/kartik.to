@@ -65,6 +65,18 @@ type PopoverProps = {
    * (its synthesized anchor is article-relative), so this is ignored there.
    */
   portal?: boolean;
+  /**
+   * Inline styles for the container — for a position the RECIPE cannot state
+   * because it is measured at open time. The colour picker's pinned `top` is
+   * the case that introduced it; see `usePickerPin`.
+   */
+  style?: React.CSSProperties;
+  /**
+   * The container element, handed out as it mounts. For a caller that has to
+   * MEASURE the popover — again, the picker's clamp. The dismiss logic keeps
+   * its own ref regardless, so this cannot take the shell's away.
+   */
+  containerRef?: (node: HTMLDivElement | null) => void;
   onDismiss: () => void;
   children: React.ReactNode;
 } & (
@@ -88,6 +100,8 @@ export function Popover({
   dismissOnReflow = false,
   ignoreSelector,
   portal = false,
+  style,
+  containerRef: onContainer,
   onDismiss,
   children,
 }: PopoverProps) {
@@ -102,8 +116,12 @@ export function Popover({
   // the attribute `useScrollHandoff` looks for.
   const container = (
     <div
-      ref={containerRef}
+      ref={(node) => {
+        containerRef.current = node;
+        onContainer?.(node);
+      }}
       className={className}
+      style={style}
       role={role}
       aria-label={ariaLabel}
       {...scrollBoundary}

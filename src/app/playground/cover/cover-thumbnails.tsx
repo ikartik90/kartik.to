@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { SHADER_SPECS } from "@/data/shader-specs";
-import { shaderParamsFor, type Cover, type CoverContent } from "@/domain/cover";
+import {
+  paletteFor,
+  shaderParamsFor,
+  type Cover,
+  type CoverContent,
+  type CoverTheme,
+} from "@/domain/cover";
 import { ShaderStage } from "./shader-stage";
 
 // ---------------------------------------------------------------------------
@@ -42,8 +48,16 @@ type Preset = Cover & CoverContent;
  * id alone and changes everything about how it looks, and a cache that could not
  * tell those apart would keep showing the old picture until a reload.
  */
-export function thumbnailKey(preset: Preset): string {
-  return `${preset.id}:${new Date(preset.updatedAt).getTime()}`;
+export function thumbnailKey(
+  preset: Preset,
+  theme: CoverTheme = "light",
+): string {
+  // The THEME is part of the identity of a picture, not merely of the request
+  // for one. A cover holds a colour per ground, so the same preset at the same
+  // `updatedAt` is two different photographs — and without this the strip would
+  // keep showing the light one after the site went dark, with nothing to
+  // invalidate it but an edit.
+  return `${preset.id}:${new Date(preset.updatedAt).getTime()}:${theme}`;
 }
 
 /**
@@ -56,9 +70,10 @@ export function thumbnailKey(preset: Preset): string {
 export function captureOrder(
   presets: Preset[],
   captured: ReadonlySet<string>,
+  theme: CoverTheme = "light",
 ): Preset[] {
   const pending = presets.filter(
-    (preset) => !captured.has(thumbnailKey(preset)),
+    (preset) => !captured.has(thumbnailKey(preset, theme)),
   );
   const byShader = new Map<string, Preset[]>();
   for (const preset of pending) {
@@ -145,9 +160,15 @@ const CAPTURE_FRAMES = 30;
 export interface CoverThumbnailsProps {
   presets: Preset[];
   onCaptured: (key: string, dataUrl: string) => void;
+  /** Which ground to photograph on — the strip's, which is the page's. */
+  theme: CoverTheme;
 }
 
-export function CoverThumbnails({ presets, onCaptured }: CoverThumbnailsProps) {
+export function CoverThumbnails({
+  presets,
+  onCaptured,
+  theme,
+}: CoverThumbnailsProps) {
   // Where the queue was up to. An index rather than a shrinking list, so a
   // capture that fails cannot leave its preset at the head of the queue forever.
   const [index, setIndex] = useState(0);
@@ -162,10 +183,16 @@ export function CoverThumbnails({ presets, onCaptured }: CoverThumbnailsProps) {
   const queue = useMemo(() => {
     // An edited preset leaves a picture of its old self behind; nothing else
     // will ever ask for it again.
-    const live = new Set(presets.map(thumbnailKey));
+    // Both grounds stay live: flipping the site's theme must not throw away the
+    // pictures taken on the other one, or every flip back costs the whole strip
+    // a re-photograph.
+    const live = new Set([
+      ...presets.map((preset) => thumbnailKey(preset, "light")),
+      ...presets.map((preset) => thumbnailKey(preset, "dark")),
+    ]);
     for (const key of cache.keys()) if (!live.has(key)) cache.delete(key);
-    return captureOrder(presets, new Set(cache.keys()));
-  }, [presets]);
+    return captureOrder(presets, new Set(cache.keys()), theme);
+  }, [presets, theme]);
 
   // A new queue starts at its own beginning. Written as a state reset keyed on
   // the queue rather than as an effect, so the render that receives a new list
@@ -222,6 +249,9 @@ export function CoverThumbnails({ presets, onCaptured }: CoverThumbnailsProps) {
   if (!current) return null;
 
   const spec = SHADER_SPECS[current.shaderId];
+  // Resolved onto the ground the strip is painting on — see `thumbnailKey`,
+  // which is what keeps the picture and the cache entry in step.
+  const palette = paletteFor(current.settings, theme);
   return (
     <div ref={hostRef} className={rendererStyle} aria-hidden>
       <ShaderStage
@@ -233,9 +263,11 @@ export function CoverThumbnails({ presets, onCaptured }: CoverThumbnailsProps) {
         // placement per shape and names none of them as its own, so the shape
         // the picture is drawn in is what picks — and that is this 80px square.
         params={{ ...shaderParamsFor(current.settings, "1/1"), speed: 0 }}
-        colors={current.settings.colors}
-        colorBack={current.settings.colorBack}
-        extraColors={current.settings.extraColors}
+        colors={palette.colors}
+        // Spelled out rather than spread: `paletteFor` leaves the key OFF a
+        // shader with no ground, and the stage's prop is required-but-optional.
+        colorBack={palette.colorBack}
+        extraColors={palette.extraColors}
         maxPixelCount={THUMBNAIL_PIXELS}
         minPixelRatio={THUMBNAIL_SCALE}
         webGlContextAttributes={{ preserveDrawingBuffer: true }}

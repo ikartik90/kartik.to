@@ -89,6 +89,55 @@ const CoverColorSchema = z
     (value.length === 7 ? `${value}FF` : value).toUpperCase(),
   );
 
+/**
+ * A colour a cover holds: one for each ground it can be read on.
+ *
+ * EVERY colour is a pair — the ramp's stops, the background and the rails alike
+ * — because a cover is embedded in a page that has a theme, and a fan tuned to
+ * read on paper is not the same fan on ink. Two covers would have been the
+ * other answer, and it is the wrong one: everything else about them (the
+ * shader, its uniforms, the framing per shape) would then exist twice with
+ * nothing keeping the copies in step.
+ *
+ * A BARE STRING on the way in becomes the same colour twice, which is both the
+ * migration for every cover written before the split and the rule for authoring
+ * by hand — `shader-specs.ts` still writes one colour per stop, because a
+ * reference palette read off the artwork has no opinion about themes until
+ * somebody gives it one. "I have not chosen a dark colour" and "the dark colour
+ * is the light one" are the same state deliberately: a pair that has never been
+ * split is indistinguishable from one split into two identical halves, so there
+ * is no third thing for the panel to render or the schema to carry.
+ */
+const ThemedColorSchema = z.preprocess(
+  (value) =>
+    typeof value === "string" ? { light: value, dark: value } : value,
+  z.object({ light: CoverColorSchema, dark: CoverColorSchema }),
+);
+
+/** Which ground a colour is being read on. */
+export type CoverTheme = "light" | "dark";
+
+/** One colour, per ground. See {@link ThemedColorSchema}. */
+export interface ThemedColor {
+  light: string;
+  dark: string;
+}
+
+/**
+ * One colour on both grounds — an unsplit pair.
+ *
+ * The same thing `ThemedColorSchema` does to a bare string on the way in, in
+ * the form a DEFAULT has to be written: Zod types `.default()` against a
+ * schema's output, so the spec table's `"#FFFFFFFF"` cannot be handed over
+ * as-is even though a stored one parses. Written once here rather than as
+ * `{ light: v, dark: v }` at each of the three sites, so the rule that an
+ * unchosen dark colour is the light one lives in one place.
+ */
+function themed(color: string): ThemedColor {
+  return { light: color, dark: color };
+}
+
+
 
 /**
  * Where the playground opens, every time.
@@ -409,7 +458,7 @@ function settingsSchemaFor(spec: ShaderSpec) {
     Object.fromEntries(
       spec.extraColors.map((extra) => [
         extra.key,
-        CoverColorSchema.default(extra.value),
+        ThemedColorSchema.default(themed(extra.value)),
       ]),
     ),
   );
@@ -417,10 +466,10 @@ function settingsSchemaFor(spec: ShaderSpec) {
   return z.preprocess(liftFraming, z.object({
     params,
     colors: z
-      .array(CoverColorSchema)
+      .array(ThemedColorSchema)
       .min(1)
       .max(spec.maxColors)
-      .default(() => [...spec.defaults.colors]),
+      .default(() => spec.defaults.colors.map(themed)),
     // Present exactly when the shader HAS a ground. Omitting the key for a mesh
     // gradient is what strips a stored `colorBack` on the way in: there, the
     // fill is opaque and a background colour is not merely unused but
@@ -428,8 +477,8 @@ function settingsSchemaFor(spec: ShaderSpec) {
     // picture that is not true of it.
     ...(spec.hasColorBack
       ? {
-          colorBack: CoverColorSchema.default(
-            spec.defaults.colorBack ?? "#000000FF",
+          colorBack: ThemedColorSchema.default(
+            themed(spec.defaults.colorBack ?? "#000000FF"),
           ),
         }
       : {}),
@@ -447,10 +496,10 @@ function settingsSchemaFor(spec: ShaderSpec) {
 /** How a cover is set: the shader's uniforms and the colours it is given. */
 export interface CoverSettings {
   params: Params;
-  colors: string[];
+  colors: ThemedColor[];
   /** Present only for a shader that HAS a ground behind the fill. */
-  colorBack?: string;
-  extraColors: Record<string, string>;
+  colorBack?: ThemedColor;
+  extraColors: Record<string, ThemedColor>;
   /**
    * How the graphic sits in each shape that has been framed.
    *
@@ -491,6 +540,43 @@ export function shaderParamsFor(
   aspect: DemoFrameAspectRatio,
 ): Params {
   return { ...settings.params, ...framingFor(settings, aspect) };
+}
+
+/** What a mounted shader is handed once a ground has been chosen. */
+export interface CoverPalette {
+  colors: string[];
+  /** Present only for a shader that HAS a ground behind the fill. */
+  colorBack?: string;
+  extraColors: Record<string, string>;
+}
+
+/**
+ * Every colour the cover holds, resolved onto ONE ground.
+ *
+ * The companion to `shaderParamsFor`, and the same kind of seam: the canvas
+ * takes flat colours, a cover stores pairs, and this is the one place the
+ * choice between them is made. Which theme is the CALLER's to know — the
+ * playground asks for the one its preview card is standing in, which is not
+ * necessarily the page's; a cover embedded in an article asks for the article's.
+ *
+ * `colorBack` stays ABSENT rather than becoming undefined for a shader with no
+ * ground, so the object can be spread onto a component whose prop is optional
+ * without handing it a key it has no meaning for.
+ */
+export function paletteFor(
+  settings: CoverSettings,
+  theme: CoverTheme,
+): CoverPalette {
+  return {
+    colors: settings.colors.map((color) => color[theme]),
+    ...(settings.colorBack ? { colorBack: settings.colorBack[theme] } : {}),
+    extraColors: Object.fromEntries(
+      Object.entries(settings.extraColors).map(([key, color]) => [
+        key,
+        color[theme],
+      ]),
+    ),
+  };
 }
 
 

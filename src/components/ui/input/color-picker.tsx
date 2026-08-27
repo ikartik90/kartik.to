@@ -34,6 +34,7 @@ import { Combobox } from "./combobox";
 import { Field, useField } from "./field";
 import { Slider } from "./slider";
 import CloseIcon from "@/assets/icons/cross.svg";
+import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
 // ColorPicker — the panel a colour swatch opens (Figma 1066:2338): a
@@ -86,6 +87,7 @@ type ColorPickerContextValue = {
   commitHex: (hex: string) => void;
   commitOpacity: (opacity: number) => void;
   onClose?: () => void;
+  onRemove?: () => void;
   title: string;
   autoFocus: boolean;
   styles: ColorPickerStyles;
@@ -106,6 +108,15 @@ export interface ColorPickerProps {
   onValueChange: (value: string) => void;
   /** Fired by the header's close chip. Left off, no chip is drawn. */
   onClose?: () => void;
+  /**
+   * Fired by the header's trash chip — drop the thing this colour belongs to.
+   *
+   * Left off, no chip is drawn, which is the case for every colour that is a
+   * PROPERTY of something (a ground, a rail): there is nothing to remove, only
+   * a value to change. It is the ramp's stops that can leave, and the caller is
+   * the one that knows whether this is the last of them.
+   */
+  onRemove?: () => void;
   /** The header's text. */
   title?: string;
   disabled?: boolean;
@@ -124,6 +135,7 @@ function ColorPickerRoot({
   value,
   onValueChange,
   onClose,
+  onRemove,
   title = "Color Picker",
   disabled = false,
   autoFocus = false,
@@ -177,6 +189,7 @@ function ColorPickerRoot({
     },
     commitOpacity: (next) => emit(formatColor(hex, next)),
     onClose,
+    onRemove,
     title,
     autoFocus,
     styles,
@@ -214,14 +227,26 @@ function ColorPickerRoot({
   );
 }
 
-/** The title strip, and the chip that sends the picker away. */
+/**
+ * The title strip, and the chips at the end of it.
+ *
+ * Trash BEFORE close, and the order is the point: close is the one control
+ * every panel in the app puts last, so anything else has to arrive to its left
+ * rather than displace it. The destructive chip is also the one that must not
+ * be where a hand goes by habit to dismiss.
+ */
 function ColorPickerHeader() {
-  const { title, onClose, styles } = usePicker("ColorPicker.Header");
+  const { title, onClose, onRemove, styles } = usePicker("ColorPicker.Header");
   return (
     <header className={styles.header}>
       <Typography tag="p" type="bodySmall" className={styles.title}>
         {title}
       </Typography>
+      {onRemove && (
+        <Button variant="icon" aria-label="Remove colour" onClick={onRemove}>
+          <TrashIcon />
+        </Button>
+      )}
       {onClose && (
         <Button variant="icon" aria-label="Close" onClick={onClose}>
           <CloseIcon />

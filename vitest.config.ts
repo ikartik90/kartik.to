@@ -27,7 +27,12 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     // Playwright specs also match the default `*.spec.ts` glob; without this
     // Vitest picks them up and dies on `@playwright/test`'s runner imports.
-    exclude: [...configDefaults.exclude, "e2e/**"],
+    //
+    // `.claude/worktrees/**` for the same reason ESLint ignores it: a worktree
+    // is a full checkout that runs its own suite from its own root, and one
+    // left behind at an older commit fails tests that pass here — 21 of them,
+    // which is enough noise to hide a real regression in the tree you edited.
+    exclude: [...configDefaults.exclude, "e2e/**", ".claude/worktrees/**"],
   },
   resolve: {
     alias: {
