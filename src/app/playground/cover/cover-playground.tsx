@@ -97,9 +97,23 @@ import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 //                  above the plate (another 16), and the four pixels it stands
 //                  off the bottom edge — the same tokens the pane itself is
 //                  built from, so the two cannot drift.
-//   --card-space   everything the cover may NOT have: the sheet, the gutter
-//                  controls' band, the presets strip, and the page's own
-//                  margins.
+//   --canvas-band  the room reserved above AND below the picture: whichever of
+//                  the two pieces of chrome is taller, mirrored. Mirrored
+//                  because a picture centred between two UNEQUAL bands is not
+//                  centred in the viewport — it used to sit 22px high with a
+//                  strip on screen and 40px low without one, since the gutter
+//                  row is 80 and the strip is 124. Taking the larger of the two
+//                  on both sides costs the picture some height and buys the one
+//                  thing a thing being judged should have, which is the middle
+//                  of the screen.
+//
+//                  The SHEET is deliberately not in it. It is not chrome over
+//                  the picture, it is a panel that takes the bottom half of the
+//                  phone — so the canvas is the top half, and the picture
+//                  centres in THAT. Mirroring it would reserve half the screen
+//                  above the picture as well and leave nothing to draw in.
+//   --card-space   everything the cover may NOT have: the sheet, both bands,
+//                  and the page's own margins.
 //
 // One declaration rather than one per layout, which `--sheet-space` is what
 // makes possible: it is 0px wherever there is no sheet, so the same expression
@@ -113,8 +127,9 @@ const pageStyle = css({
   gap: 0,
   "--sheet-space": "0px",
   "--presets-space": "0px",
+  "--canvas-band": "max(token(spacing.5xl), var(--presets-space))",
   "--card-space":
-    "calc(var(--sheet-space) + var(--presets-space) + token(spacing.5xl) + 2 * token(spacing.xxl))",
+    "calc(var(--sheet-space) + 2 * var(--canvas-band) + 2 * token(spacing.xxl))",
   _bottomSheet: {
     "--sheet-space": "50dvh",
   },
@@ -149,20 +164,19 @@ const canvasStyle = css({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  // The gutter band is RESERVED — the cover centres in what is left under it,
-  // not in the whole canvas. It used to be reserved only under a sheet, where
-  // the menu and the theme toggle would otherwise sit on the picture; the
-  // aspect rail is what makes it a rule everywhere, because that one is in the
-  // middle of the band and would lie across the top of any cover wide enough to
-  // reach it. Chrome must not cover the thing being judged.
-  paddingBlockStart: "token(spacing.5xl)",
-  // And the foot of it is the presets strip's, on the same grounds. Under a
-  // sheet the canvas is only the top half as well, and the cover centres in
-  // what is left of THAT — otherwise it would centre on the whole screen and
-  // sit half behind the panel. Both lengths in one declaration, because
+  // The same band above and below, so the picture lands in the middle of what
+  // it is being looked at in. Chrome must not cover the thing being judged —
+  // the gutter row's controls above, the presets strip below — and reserving
+  // each side only what its own chrome needs left the picture off-centre by the
+  // difference between them. See `--canvas-band`.
+  //
+  // The sheet is added to the FOOT alone: it is the bottom half of a phone
+  // rather than chrome over the picture, so the canvas becomes the top half and
+  // the picture centres in that. One declaration for both, because
   // `--sheet-space` is 0px wherever there is no sheet.
-  paddingBlockEnd: "calc(var(--sheet-space) + var(--presets-space))",
-  transition: "padding-block-end 200ms ease-out",
+  paddingBlockStart: "var(--canvas-band)",
+  paddingBlockEnd: "calc(var(--sheet-space) + var(--canvas-band))",
+  transition: "padding-block 200ms ease-out",
   // The same phone on its side: a rail again, on a viewport globals.css does
   // not inset for (that starts at 820px). MARGIN rather than padding, because
   // what has to move is not just the picture — the gutter controls are
@@ -198,9 +212,27 @@ const canvasChromeStyle = css({
   maxWidth:
     "min(token(sizes.articleShowcase), calc(token(spacing.full) - 2 * token(spacing.xxl)))",
   height: "token(spacing.5xl)",
-  display: "flex",
+
+  // Three columns with EQUAL outer ones, so the middle sits on the row's own
+  // midline whatever the ends weigh.
+  //
+  // It was `space-between`, which centres the middle item between the two ends
+  // rather than on the midline — and the ends are not equal: the menu carries
+  // its ⌘K chip at 58.6px against the theme toggle's 28, which put the aspect
+  // rail 15.3px right of centre. That went unnoticed until the presets strip
+  // arrived underneath it, because the strip IS centred on this box, and two
+  // centred things disagreeing by fifteen pixels reads as a mistake even when
+  // neither is obviously wrong on its own.
+  //
+  // What the flex reading bought was collision safety — an end that grew would
+  // slide the rail over instead of running into it. Measured rather than
+  // assumed: at the narrowest viewport this page draws (375px, row 335px) the
+  // ends and the rail come to 298px, and 330px with the sheet dismissed and its
+  // extra button on the right. It fits with room either way, so the safety was
+  // paying for a case that does not arise.
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
   alignItems: "center",
-  justifyContent: "space-between",
 });
 
 // The aspect rail's box: the app's shared toolbar, hugging its contents.
@@ -285,7 +317,15 @@ const coverStyle = css({
 // The gutter row's right-hand end. The theme toggle used to answer the menu on
 // its own; the sheet's way back stands beside it, so the pair reads as one
 // group rather than a third control drifting somewhere else on the band.
-const chromeEndStyle = css({ display: "flex", alignItems: "center", gap: "md" });
+// Pushed to its own column's far edge — a grid item fills its column by
+// default, which would leave the toggle floating at the column's left rather
+// than against the showcase's right edge where it belongs.
+const chromeEndStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+  justifySelf: "end",
+});
 
 // Controls that only exist while the panel is a sheet: its close button, and
 // the button that brings it back. Both are meaningless against a docked rail —
