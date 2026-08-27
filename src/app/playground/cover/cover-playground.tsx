@@ -426,7 +426,8 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const publishedAt = useCoverDraftStore((draft) => draft.publishedAt);
   const isDirty = useCoverDraftStore((draft) => draft.isDirty);
   // Which shapes have been reframed since the cover was opened — the rail marks
-  // them, so unsaved work in a frame that is not on screen is not invisible.
+  // them for the AUTHOR, so unsaved work in a frame that is not on screen is
+  // not invisible. See where it is handed to the rail.
   const editedAspects = useCoverDraftStore((draft) => draft.editedAspects);
 
   /**
@@ -443,12 +444,34 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
    * stands in, which is the same thing an article's component demos do while
    * their module loads — one way of waiting, across the site.
    *
-   * It waits for the LIBRARY READ and not for the shader's first frame: the
-   * shader library reports nothing when it paints, so anything past this point
-   * would be a guess dressed up as an event.
+   * The question is asked of the DRAFT, never of the route, and that is the
+   * whole of it: "a cover was handed down" and "the draft is holding it" are
+   * different claims, and everything on this page reads the draft.
+   *
+   * On the bare route the strip answers, once it has adopted (see the pane's
+   * `onSettled`, arranged so it cannot fire early). On a routed one the draft
+   * answers for itself — it is holding that id, or it is not yet.
+   *
+   * Asking the route instead is what put another cover's numbers on screen for
+   * the length of a hard load: `cover !== undefined` is true during the SERVER
+   * render, where the draft has been seeded by nothing at all and is still five
+   * colours deep in the control table's first shader. That markup paints before
+   * a line of JavaScript runs, so no effect — layout or otherwise — can pull it
+   * back. Asked of the draft, the server draws the preloader instead, and the
+   * rail arrives once hydration has seeded it.
+   *
+   * It does not wait for the shader's first frame: the shader library reports
+   * nothing when it paints, so anything past this point would be a guess
+   * dressed up as an event.
    */
-  const [libraryRead, setLibraryRead] = useState(false);
-  const ready = cover !== undefined || libraryRead;
+  const [settled, setSettled] = useState(false);
+  const [drawn, setDrawn] = useState(false);
+  // Latched once true. The author pressing "New preset" on this route empties
+  // the draft's id while the route's own `cover` stays what it was — the URL is
+  // corrected with `replaceState`, which re-renders no server component — so a
+  // live comparison would take the rail away again mid-session.
+  if (!drawn && (cover ? savedCoverId === cover.id : settled)) setDrawn(true);
+  const ready = drawn;
   const trickle = useTrickleProgress(!ready);
 
   // This page's rail is the propertiesPanel RECIPE rather than the component —
@@ -750,7 +773,13 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
               ariaLabel="Preview aspect ratio"
               aspect={aspect}
               onPick={setAspectInStore}
-              markedAspects={editedAspects}
+              // The author's alone. A visitor moves these controls too — the
+              // cover is theirs to play with — so their draft goes dirty just
+              // the same, but the mark means "work you have not written" and
+              // there is nothing here for them to write it to. Unmarked rather
+              // than marked-and-inert, because a dot that appears and never
+              // resolves is a dot pointing at a save they cannot reach.
+              markedAspects={isAdmin ? editedAspects : undefined}
             />
           </div>
 
@@ -779,7 +808,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             Mounted for everybody: the pane decides what is in it and whether
             there is anything to draw at all, and the page reserves its band off
             whether it drew one. */}
-        <PresetsPane onLibraryRead={() => setLibraryRead(true)} />
+        <PresetsPane onSettled={() => setSettled(true)} />
       </div>
 
       {/* The rail, and the same panel along the bottom edge on a phone held
@@ -787,54 +816,67 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           is the recipe's media query, and the only thing this page adds is
           whether the sheet has been sent away.
 
+          On the SAME answer the cover waits for, and it has to be: every
+          control here reads the draft, and until the library lands the draft is
+          holding the control table's first shader. A rail drawn before then is
+          a column of numbers describing a cover nobody published, swapped out
+          underneath the reader a round trip later — and a reader who started
+          pushing those sliders would lose the edit. Mounting it late is also
+          what plays its slide-in (`propertiesPanelIn`, on the recipe's root),
+          so it arrives WITH the cover it describes rather than sitting there
+          through the wait. The page keeps the rail's width reserved throughout
+          (see `usePropertiesPanelInset`), so nothing under it moves when it
+          lands — the preloader stands exactly where the cover will.
+
           `translate` inline for the length of a drag and nothing after it: the
           finger places the sheet while it is on it, and lets CSS have it back
           at the end so the dismissed state (or the slide home) is not outranked
           by a stale transform. */}
-      <aside
-        ref={panelRef}
-        className={panel.root}
-        aria-label="Properties"
-        data-dismissed={dismissed || undefined}
-        data-dragging={offset !== null || undefined}
-        style={offset !== null ? { translate: `0 ${offset}px` } : undefined}
-      >
-        <div className={cx(panel.header, sheetGripStyle)} {...dragHandlers}>
-          <Typography tag="p" type="bodyLarge" className={panel.title}>
-            Properties
-          </Typography>
-          <div className={headerActionsStyle}>
-            {/* "Reset", flat — the panel is what it acts on and the header is
+      {ready && (
+        <aside
+          ref={panelRef}
+          className={panel.root}
+          aria-label="Properties"
+          data-dismissed={dismissed || undefined}
+          data-dragging={offset !== null || undefined}
+          style={offset !== null ? { translate: `0 ${offset}px` } : undefined}
+        >
+          <div className={cx(panel.header, sheetGripStyle)} {...dragHandlers}>
+            <Typography tag="p" type="bodyLarge" className={panel.title}>
+              Properties
+            </Typography>
+            <div className={headerActionsStyle}>
+              {/* "Reset", flat — the panel is what it acts on and the header is
                 where it says so. WHERE it resets to (the preset you opened, or
                 the shader's defaults where there is no preset) is the store's
                 to decide; spelling that out in the label would make the shortest
                 control in the header the wordiest thing in it. */}
-            {canDelete ? (
-              <Button
-                variant="icon"
-                aria-label="Delete preset"
-                disabled={deleting}
-                onClick={() => setPendingDelete(true)}
-              >
-                <TrashIcon />
-                <Button.Tooltip>
-                  <Tooltip.Text>Delete preset</Tooltip.Text>
-                </Button.Tooltip>
-              </Button>
-            ) : (
-              <Button
-                variant="icon"
-                aria-label="Reset"
-                onClick={resetParamsInStore}
-              >
-                <ResetIcon />
-                <Button.Tooltip>
-                  <Tooltip.Text>Reset</Tooltip.Text>
-                </Button.Tooltip>
-              </Button>
-            )}
+              {canDelete ? (
+                <Button
+                  variant="icon"
+                  aria-label="Delete preset"
+                  disabled={deleting}
+                  onClick={() => setPendingDelete(true)}
+                >
+                  <TrashIcon />
+                  <Button.Tooltip>
+                    <Tooltip.Text>Delete preset</Tooltip.Text>
+                  </Button.Tooltip>
+                </Button>
+              ) : (
+                <Button
+                  variant="icon"
+                  aria-label="Reset"
+                  onClick={resetParamsInStore}
+                >
+                  <ResetIcon />
+                  <Button.Tooltip>
+                    <Tooltip.Text>Reset</Tooltip.Text>
+                  </Button.Tooltip>
+                </Button>
+              )}
 
-            {/* Whether this cover is on show — one button, because it is one
+              {/* Whether this cover is on show — one button, because it is one
                 fact with two settings, and a pair sitting side by side would
                 always have one of them inert.
 
@@ -854,153 +896,156 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
 
                 The author's alone, and nothing here is what enforces that:
                 `publishCover` asks the server. */}
-            {isAdmin && (
+              {isAdmin && (
+                <Button
+                  variant="icon"
+                  aria-label={publishedAt ? "Unpublish" : "Publish"}
+                  disabled={!savedCoverId || publishing}
+                  onClick={() => void togglePublished()}
+                >
+                  {publishedAt ? <UnpublishIcon /> : <PublishIcon />}
+                  <Button.Tooltip>
+                    <Tooltip.Text>
+                      {publishedAt ? "Unpublish" : "Publish"}
+                    </Tooltip.Text>
+                  </Button.Tooltip>
+                </Button>
+              )}
               <Button
                 variant="icon"
-                aria-label={publishedAt ? "Unpublish" : "Publish"}
-                disabled={!savedCoverId || publishing}
-                onClick={() => void togglePublished()}
+                className={sheetOnlyStyle}
+                aria-label="Close properties"
+                onClick={() => setDismissed(true)}
               >
-                {publishedAt ? <UnpublishIcon /> : <PublishIcon />}
+                <CrossIcon />
                 <Button.Tooltip>
-                  <Tooltip.Text>
-                    {publishedAt ? "Unpublish" : "Publish"}
-                  </Tooltip.Text>
+                  <Tooltip.Text>Close properties</Tooltip.Text>
                 </Button.Tooltip>
               </Button>
-            )}
-            <Button
-              variant="icon"
-              className={sheetOnlyStyle}
-              aria-label="Close properties"
-              onClick={() => setDismissed(true)}
-            >
-              <CrossIcon />
-              <Button.Tooltip>
-                <Tooltip.Text>Close properties</Tooltip.Text>
-              </Button.Tooltip>
-            </Button>
+            </div>
           </div>
-        </div>
 
-        {/* The shader itself is the AUTHOR's choice, so a visitor is not shown
+          {/* The shader itself is the AUTHOR's choice, so a visitor is not shown
             this group. What they came for is the cover in front of them — the
             preset they opened, with its own controls under it — and a picker
             that swapped it for a bare `godRays` would throw that cover away
             with nothing to get it back. The panel below still gives them every
             control the mounted shader has. */}
-        {isAdmin && (
-          <Group title="Shader">
-            {/* A list rather than a row of chips: six names read as a set to pick
+          {isAdmin && (
+            <Group title="Shader">
+              {/* A list rather than a row of chips: six names read as a set to pick
               ONE of, and the selected row says which is mounted without the
               reader having to compare button emphases. `sm` because the panel's
               own rows are 24px — a 32px-pitch list inside it would be the
               loudest thing in the rail. */}
-            <OptionList
-              size="sm"
-              // The recipe's own width is the 208px popover pitch it shares with
-              // the calendar. In here the panel is the frame, so the list takes
-              // the column it was given — `utilities` outranks `recipes`, which
-              // is what lets a consumer widen it without a variant.
-              className={css({ width: "token(spacing.full)" })}
-              value={shaderId}
-              onValueChange={(value) => selectShader(value as ShaderId)}
-            >
-              <Field.Search placeholder="Search…" />
-              <OptionList.Listbox aria-label="Shader">
-                {SHADER_IDS.map((id) => (
-                  <OptionList.Option key={id} value={id}>
-                    {SHADER_SPECS[id].label}
-                  </OptionList.Option>
-                ))}
-              </OptionList.Listbox>
-            </OptionList>
-          </Group>
-        )}
-
-        <Group title="Colours">
-          <Field size="sm" data-property-control>
-            <Field.Label>Count</Field.Label>
-            <Slider
-              min={1}
-              max={spec.maxColors}
-              step={1}
-              value={state.colors.length}
-              onValueChange={setColorCount}
-            />
-          </Field>
-
-          {state.colors.map((color, index) => (
-            <Field size="sm" key={index} data-property-control>
-              <Field.Label>{`Colour ${index + 1}`}</Field.Label>
-              <ColorInput
-                value={color}
-                onValueChange={(value) =>
-                  setColorsInStore(
-                    state.colors.map((existing, i) =>
-                      i === index ? value : existing,
-                    ),
-                  )
-                }
-              />
-            </Field>
-          ))}
-
-          {spec.hasColorBack && state.colorBack && (
-            <Field size="sm" data-property-control>
-              <Field.Label>Background</Field.Label>
-              <ColorInput
-                value={state.colorBack}
-                onValueChange={(value) => setColorBackInStore(value)}
-              />
-            </Field>
+              <OptionList
+                size="sm"
+                // The recipe's own width is the 208px popover pitch it shares with
+                // the calendar. In here the panel is the frame, so the list takes
+                // the column it was given — `utilities` outranks `recipes`, which
+                // is what lets a consumer widen it without a variant.
+                className={css({ width: "token(spacing.full)" })}
+                value={shaderId}
+                onValueChange={(value) => selectShader(value as ShaderId)}
+              >
+                <Field.Search placeholder="Search…" />
+                <OptionList.Listbox aria-label="Shader">
+                  {SHADER_IDS.map((id) => (
+                    <OptionList.Option key={id} value={id}>
+                      {SHADER_SPECS[id].label}
+                    </OptionList.Option>
+                  ))}
+                </OptionList.Listbox>
+              </OptionList>
+            </Group>
           )}
 
-          {spec.extraColors.map((extra) => (
-            <Field size="sm" key={extra.key} data-property-control>
-              <Field.Label>{extra.label}</Field.Label>
-              <ColorInput
-                value={state.extraColors[extra.key]}
-                onValueChange={(value) => setExtraColorInStore(extra.key, value)}
+          <Group title="Colours">
+            <Field size="sm" data-property-control>
+              <Field.Label>Count</Field.Label>
+              <Slider
+                min={1}
+                max={spec.maxColors}
+                step={1}
+                value={state.colors.length}
+                onValueChange={setColorCount}
               />
             </Field>
-          ))}
-        </Group>
 
-        {/* The fan itself, then what is drawn ON it: the ramp is laid along the
+            {state.colors.map((color, index) => (
+              <Field size="sm" key={index} data-property-control>
+                <Field.Label>{`Colour ${index + 1}`}</Field.Label>
+                <ColorInput
+                  value={color}
+                  onValueChange={(value) =>
+                    setColorsInStore(
+                      state.colors.map((existing, i) =>
+                        i === index ? value : existing,
+                      ),
+                    )
+                  }
+                />
+              </Field>
+            ))}
+
+            {spec.hasColorBack && state.colorBack && (
+              <Field size="sm" data-property-control>
+                <Field.Label>Background</Field.Label>
+                <ColorInput
+                  value={state.colorBack}
+                  onValueChange={(value) => setColorBackInStore(value)}
+                />
+              </Field>
+            )}
+
+            {spec.extraColors.map((extra) => (
+              <Field size="sm" key={extra.key} data-property-control>
+                <Field.Label>{extra.label}</Field.Label>
+                <ColorInput
+                  value={state.extraColors[extra.key]}
+                  onValueChange={(value) =>
+                    setExtraColorInStore(extra.key, value)
+                  }
+                />
+              </Field>
+            ))}
+          </Group>
+
+          {/* The fan itself, then what is drawn ON it: the ramp is laid along the
             track, and the rails trace the bands the ramp fills. Reading order
             follows that dependency rather than the control table's own. */}
-        <Group title="Track">{ownControls.map(renderControl)}</Group>
+          <Group title="Track">{ownControls.map(renderControl)}</Group>
 
-        {/* Each absent entirely for a shader with none, rather than an empty
+          {/* Each absent entirely for a shader with none, rather than an empty
             strip — the same rule Motion follows below. */}
-        {rampControls.length > 0 && (
-          <Group title="Ramp">{rampControls.map(renderControl)}</Group>
-        )}
+          {rampControls.length > 0 && (
+            <Group title="Ramp">{rampControls.map(renderControl)}</Group>
+          )}
 
-        {edgeControls.length > 0 && (
-          <Group title="Edge">{edgeControls.map(renderControl)}</Group>
-        )}
+          {edgeControls.length > 0 && (
+            <Group title="Edge">{edgeControls.map(renderControl)}</Group>
+          )}
 
-        {ditherControls.length > 0 && (
-          <Group title="Dither">{ditherControls.map(renderControl)}</Group>
-        )}
+          {ditherControls.length > 0 && (
+            <Group title="Dither">{ditherControls.map(renderControl)}</Group>
+          )}
 
-        {/* Named for the SHAPE it applies to, because it applies to one: these
+          {/* Named for the SHAPE it applies to, because it applies to one: these
             four are kept per aspect ratio, and a heading reading plain
             "Framing" beside ten other framings you cannot see would be the
             panel's only lie. The rest of the panel has no such suffix because
             the rest of it is the cover's, whatever shape you are in. */}
-        <Group title={`Framing ${aspect.replace("/", ":")}`}>
-          {framingControls.map(renderControl)}
-        </Group>
+          <Group title={`Framing ${aspect.replace("/", ":")}`}>
+            {framingControls.map(renderControl)}
+          </Group>
 
-        {/* Absent entirely for a shader that never samples time, rather than
+          {/* Absent entirely for a shader that never samples time, rather than
             present and inert — see `MOTION_CONTROLS`. */}
-        {motionControls.length > 0 && (
-          <Group title="Motion">{motionControls.map(renderControl)}</Group>
-        )}
-      </aside>
+          {motionControls.length > 0 && (
+            <Group title="Motion">{motionControls.map(renderControl)}</Group>
+          )}
+        </aside>
+      )}
 
       {/* Deleting a preset is the one act here that cannot be undone with a
           second press — unlike unpublishing, which puts it straight back — so

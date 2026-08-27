@@ -365,6 +365,69 @@ describe("PresetsPane", () => {
     expect(useCoverDraftStore.getState().isDirty).toBe(true);
   });
 
+  // --- Telling the page it may draw -----------------------------------------
+  //
+  // The page holds the cover AND the properties rail back on this signal, so
+  // what it has to mean is "the draft is holding what it is going to hold" —
+  // not "the fetch came back". Between those two moments the draft is still on
+  // the control table's first shader, and a rail drawn there is a column of
+  // numbers belonging to a cover nobody published.
+  it("does not report settled until the draft holds the cover it opens on", async () => {
+    signedOut();
+    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+
+    // Read AT THE MOMENT of the call, not after — the whole question is what is
+    // true when the page is told it may draw.
+    let idWhenTold: string | null | undefined;
+    let coloursWhenTold: string[] | undefined;
+    const onSettled = vi.fn(() => {
+      const draft = useCoverDraftStore.getState();
+      idWhenTold = draft.coverId;
+      coloursWhenTold = draft.settings.colors;
+    });
+
+    render(<PresetsPane onSettled={onSettled} />);
+    await waitFor(() => expect(onSettled).toHaveBeenCalled());
+
+    expect(idWhenTold).toBe("a");
+    expect(coloursWhenTold).toEqual(["#FFFFFFFF"]);
+  });
+
+  // The author is not moved onto anybody's cover — their blank draft IS the
+  // final state, so the signal must not wait for an adoption that never comes.
+  it("reports settled for the author, who is left on their own draft", async () => {
+    signedIn();
+    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    const onSettled = vi.fn();
+
+    render(<PresetsPane onSettled={onSettled} />);
+    await waitFor(() => expect(onSettled).toHaveBeenCalled());
+    expect(useCoverDraftStore.getState().coverId).toBeNull();
+  });
+
+  // Nothing to adopt is an answer too, and the page must not wait forever on it.
+  it("reports settled when the library cannot be read", async () => {
+    signedOut();
+    (getCovers as Mock).mockRejectedValue(new Error("no"));
+    const onSettled = vi.fn();
+
+    render(<PresetsPane onSettled={onSettled} />);
+    await waitFor(() => expect(onSettled).toHaveBeenCalled());
+  });
+
+  it("reports settled only once, however the strip re-reads", async () => {
+    signedOut();
+    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    const onSettled = vi.fn();
+
+    render(<PresetsPane onSettled={onSettled} />);
+    await waitFor(() => expect(onSettled).toHaveBeenCalled());
+    await act(async () => {
+      useCoverDraftStore.getState().setParam("rampLength", 4);
+    });
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
   // --- What the tiles mark --------------------------------------------------
 
   /** Whether a tile carries the unsaved mark. */
@@ -446,6 +509,30 @@ describe("PresetsPane", () => {
   // add tile is the author's, and a strip with nothing in it is no strip.
   describe("for a visitor", () => {
     beforeEach(signedOut);
+
+    // A visitor can move the controls — the cover is theirs to play with — so
+    // their draft goes dirty like anyone's. The mark means "work you have not
+    // written" and they have nowhere to write it, so for them it is a dot that
+    // appears and never resolves.
+    it("marks no tile, having no save to be behind on", async () => {
+      const user = userEvent.setup();
+      (getCovers as Mock).mockResolvedValue([
+        preset("a", "Dusk", ["#FFFFFFFF"]),
+        preset("b", "Dawn", ["#000000FF"]),
+      ]);
+      render(<PresetsPane />);
+
+      await user.click(await screen.findByRole("button", { name: "Dusk" }));
+      await act(async () => {
+        useCoverDraftStore.getState().setParam("rampLength", 4);
+      });
+      expect(useCoverDraftStore.getState().isDirty).toBe(true);
+      expect(marked("Dusk")).toBe(false);
+
+      await user.click(screen.getByRole("button", { name: "Dawn" }));
+      expect(marked("Dusk")).toBe(false);
+    });
+
 
     it("offers no way to add one", async () => {
       (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
