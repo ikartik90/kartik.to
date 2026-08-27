@@ -58,6 +58,15 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "styled-system/**",
+    // An agent's worktree is a FULL checkout of this repo — its own `src/`, its
+    // own generated `styled-system/`. Linting from the root would lint all of
+    // it a second time, and the patterns above cannot stop that: a flat-config
+    // ignore with no leading `**/` is anchored to the directory THIS file sits
+    // in, so `styled-system/**` covers ours and none of theirs. Left in, one
+    // stale worktree put 1927 errors and 8886 warnings in front of a source
+    // tree that reports zero of either, which is the same as having no lint
+    // gate at all. A worktree lints itself, from its own root.
+    ".claude/worktrees/**",
   ]),
 ]);
 
