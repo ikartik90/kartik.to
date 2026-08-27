@@ -1,14 +1,20 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent } from "react";
 import { cx } from "../../../../styled-system/css";
-import { colorField } from "../../../../styled-system/recipes";
+import {
+  colorField,
+  colorPickerPopover,
+  comboboxPopover,
+} from "../../../../styled-system/recipes";
+import { Popover } from "@/components/ui/popover";
 import {
   clampOpacity,
   formatColor,
   parseColor,
   sanitizeHex,
 } from "@/utils/color-value";
+import { ColorPicker } from "./color-picker";
 import { Field, useField } from "./field";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +34,11 @@ import { Field, useField } from "./field";
 // ONE value in, one value out: `#RRGGBBAA`. The split into "six digits and a
 // percentage" is a fact about the EDITOR, not about the colour, so it lives
 // here and never reaches the document — see `@/utils/color-value`.
+//
+// The swatch is also the field's TRIGGER: pressing it opens the ColorPicker
+// beside the properties rail (Figma 1066:2338). The picker speaks the same
+// `#RRGGBBAA` this field does, so the two are simply two ends of one value —
+// type it here, or reach for it there, and neither has to know about the other.
 // ---------------------------------------------------------------------------
 
 export interface ColorInputProps {
@@ -63,6 +74,34 @@ export function ColorInput({
   const [hexDraft, setHexDraft] = useState<string | null>(null);
   const [opacityDraft, setOpacityDraft] = useState<string | null>(null);
 
+  const [open, setOpen] = useState(false);
+  const uid = useId();
+  const swatchRef = useRef<HTMLButtonElement>(null);
+
+  const closePicker = () => {
+    setOpen(false);
+    // Back to the swatch, not the hex box: the trigger is where the keyboard
+    // left off, and it is still the thing the picker belongs to.
+    swatchRef.current?.focus();
+  };
+
+  // The one press outside the picker that must NOT dismiss it: THIS swatch, so
+  // pressing it again toggles rather than closing-then-reopening. Only this
+  // one — a press on a NEIGHBOURING colour's swatch does close this picker,
+  // which is what keeps two of them from standing on the same CSS anchor name.
+  const keepOpenFor = `[data-color-swatch="${uid}"]`;
+
+  const dismiss = () => {
+    // The format menu is a popover of its own, nested inside this one, and
+    // Escape reaches BOTH: `useDismiss` listens at the document, and this
+    // popover mounted first so its listener runs first. Without this guard the
+    // keypress meant for the menu would take the whole picker with it. The
+    // class comes from the recipe rather than being written out, so the two
+    // cannot drift apart.
+    if (document.querySelector(`.${comboboxPopover()}`)) return;
+    closePicker();
+  };
+
   const hex = hexDraft ?? committed.hex;
   const opacity = opacityDraft ?? String(committed.opacity);
 
@@ -84,14 +123,32 @@ export function ColorInput({
 
   return (
     <Field.Frame className={className}>
-      <span className={styles.swatch} aria-hidden>
+      <button
+        ref={swatchRef}
+        type="button"
+        // Carries `data-control` for the same reason the opacity box does: the
+        // field lights up while it is engaged. `aria-expanded` is in that same
+        // selector, so the field stays lit for as long as the picker is open —
+        // the Combobox trigger's arrangement exactly.
+        data-control
+        data-color-swatch={uid}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="Edit colour"
+        disabled={disabled}
+        className={styles.swatch}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        // Named only while open, so exactly one element in the document ever
+        // carries it — the rule every anchored popover here follows.
+        style={{ anchorName: open ? "--color-picker" : undefined }}
+      >
         {/* The colour composites OVER the frame's checkerboard, so a partial
             opacity reads as partial rather than as a paler colour. */}
         <span
           className={styles.swatchFill}
           style={{ backgroundColor: value }}
         />
-      </span>
+      </button>
       <span className={styles.separator} aria-hidden />
       <Field.Control
         value={hex}
@@ -137,6 +194,32 @@ export function ColorInput({
           }
         }}
       />
+
+      {open && (
+        <Popover
+          className={colorPickerPopover()}
+          role="dialog"
+          ariaLabel="Color picker"
+          // Out to the body: the picker opens BESIDE the docked rail, and the
+          // rail is its own scroll container with `overflow: auto` — left in
+          // flow it would be cropped at the rail's edge, which is the one place
+          // it is not allowed to be. CSS anchor positioning still pins it to
+          // the swatch across the portal.
+          portal
+          ignoreSelector={keepOpenFor}
+          onDismiss={dismiss}
+        >
+          <ColorPicker
+            value={value}
+            onValueChange={onValueChange}
+            onClose={closePicker}
+            disabled={disabled}
+            // The trigger is outside the popover in the tab order, so without
+            // this the panel could be opened and never reached.
+            autoFocus
+          />
+        </Popover>
+      )}
     </Field.Frame>
   );
 }

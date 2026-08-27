@@ -482,6 +482,15 @@ export interface OptionListListboxProps extends HTMLAttributes<HTMLDivElement> {
   externalKeys?: boolean;
   /** Wrap the highlight around the ends when navigating. */
   loop?: boolean;
+  /**
+   * Put real focus on the highlighted row as soon as the list mounts — the
+   * search-less select's answer to "where does the keyboard land?". With a
+   * search present the input holds focus and drives the highlight through
+   * aria-activedescendant, so this is for the list that has no input to land
+   * in (see `Combobox`'s `search={false}`). Falls back to the first enabled
+   * row when nothing is selected.
+   */
+  autoFocus?: boolean;
 }
 
 /**
@@ -498,6 +507,7 @@ function OptionListListbox({
   onKeyDown,
   externalKeys = false,
   loop = false,
+  autoFocus = false,
   ...rest
 }: OptionListListboxProps) {
   const {
@@ -547,6 +557,18 @@ function OptionListListbox({
       list.scrollTop += elBox.bottom - listBox.bottom;
     }
   }, [activeValue, activeSource]);
+
+  // The search-less list takes focus itself. Once, on mount: re-running it as
+  // the highlight moves would fight the roving focus it hands over to, and
+  // yank focus back into a list the user has since tabbed out of.
+  useEffect(() => {
+    if (!autoFocus) return;
+    const list = listRef.current;
+    // The highlighted row if there is one (the selected value seeds it), else
+    // the first that can take focus — the roving tabindex marks whichever it
+    // is, so one query covers both.
+    list?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')?.focus();
+  }, [autoFocus]);
 
   // externalKeys: arrow/enter arrive at the document (focus is in the editor).
   // Capture them so they drive the highlight and commit before the editor reacts.

@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
@@ -81,6 +82,21 @@ const signedIn = () =>
   mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
 const signedOut = () => mockUseSession.mockReturnValue({ data: null });
 
+/**
+ * Render the bare route and wait for it to settle.
+ *
+ * The page draws neither the cover nor the properties rail until the library
+ * read lands — until then the draft is holding the control table's first
+ * shader, and a rail of those numbers describes a cover nobody published (see
+ * the preloader block). So a test that reaches for a control has to let that
+ * answer arrive first, exactly as a reader does.
+ */
+async function renderReady() {
+  const result = render(<CoverPlayground />);
+  await screen.findByRole("complementary", { name: "Properties" });
+  return result;
+}
+
 const SETTINGS = {
   ...defaultState(SHADER_SPECS.cosmicTrack),
   framing: {},
@@ -111,8 +127,8 @@ describe("CoverPlayground theme toggle", () => {
   });
   afterEach(cleanup);
 
-  it("carries the site's two gutter controls, in the canvas", () => {
-    const { container } = render(<CoverPlayground />);
+  it("carries the site's two gutter controls, in the canvas", async () => {
+    const { container } = await renderReady();
     const canvas = container.querySelector("main > div");
     const control = screen.getByRole("button", { name: "Light theme" });
     const menu = screen.getByRole("button", { name: "Menu" });
@@ -127,8 +143,8 @@ describe("CoverPlayground theme toggle", () => {
     expect(container.querySelectorAll("[data-theme-glyph]").length).toBe(2);
   });
 
-  it("makes the page give up the width its rail occupies", () => {
-    render(<CoverPlayground />);
+  it("makes the page give up the width its rail occupies", async () => {
+    await renderReady();
     // The rail here is the recipe, not the dismissible component, so the page
     // asks for the inset itself — the same one every other panel in the app
     // gets, rather than a width reserved a second way on this page.
@@ -137,11 +153,9 @@ describe("CoverPlayground theme toggle", () => {
 
   it("switches the whole site's theme, not a local one", async () => {
     const user = userEvent.setup();
-    const { container } = render(<CoverPlayground />);
+    const { container } = await renderReady();
 
-    await user.click(
-      screen.getByRole("button", { name: "Light theme" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Light theme" }));
 
     expect(mockSetMode).toHaveBeenCalledWith("light");
     // Nothing in the playground holds a theme of its own — no scoped override to
@@ -164,8 +178,8 @@ describe("CoverPlayground bottom sheet", () => {
   const panel = () => screen.getByRole("complementary", { name: "Properties" });
   const reopen = () => screen.queryByRole("button", { name: "Properties" });
 
-  it("opens with the panel up, and nothing offering to open it", () => {
-    render(<CoverPlayground />);
+  it("opens with the panel up, and nothing offering to open it", async () => {
+    await renderReady();
 
     expect(panel().hasAttribute("data-dismissed")).toBe(false);
     expect(reopen()).toBeNull();
@@ -173,7 +187,7 @@ describe("CoverPlayground bottom sheet", () => {
 
   it("sends the sheet away from the close button in its header", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground />);
+    await renderReady();
 
     await user.click(screen.getByRole("button", { name: "Close properties" }));
 
@@ -182,7 +196,7 @@ describe("CoverPlayground bottom sheet", () => {
 
   it("offers the way back beside the theme toggle, once it has gone", async () => {
     const user = userEvent.setup();
-    const { container } = render(<CoverPlayground />);
+    const { container } = await renderReady();
 
     await user.click(screen.getByRole("button", { name: "Close properties" }));
 
@@ -197,7 +211,7 @@ describe("CoverPlayground bottom sheet", () => {
 
   it("brings the sheet back, and stops offering to", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground />);
+    await renderReady();
 
     await user.click(screen.getByRole("button", { name: "Close properties" }));
     await user.click(reopen()!);
@@ -242,8 +256,8 @@ describe("CoverPlayground reset control", () => {
   // In the panel's own header, opposite the heading — it acts on everything
   // below it, so it belongs to the panel rather than sitting in a section that
   // is only one of the things it resets.
-  it("stands in the panel header, opposite the heading", () => {
-    render(<CoverPlayground />);
+  it("stands in the panel header, opposite the heading", async () => {
+    await renderReady();
     const header = screen.getByText("Properties").parentElement;
 
     expect(header?.contains(resetButton())).toBe(true);
@@ -294,8 +308,8 @@ describe("CoverPlayground motion group", () => {
   const labelsIn = (group: HTMLElement) =>
     Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
 
-  it("gathers a shader's own timing controls in with the shared Speed", () => {
-    render(<CoverPlayground />);
+  it("gathers a shader's own timing controls in with the shared Speed", async () => {
+    await renderReady();
 
     expect(labelsIn(motionGroup())).toEqual(
       expect.arrayContaining(["Speed", "Interval", "Easing", "Easing Bias"]),
@@ -304,8 +318,8 @@ describe("CoverPlayground motion group", () => {
 
   // They are the shader's uniforms, not the shared block's, so they must not
   // also appear among the geometry sliders the panel groups by default.
-  it("keeps them out of the shader's own parameters", () => {
-    render(<CoverPlayground />);
+  it("keeps them out of the shader's own parameters", async () => {
+    await renderReady();
     const params = screen.getByRole("group", { name: "Track" });
 
     expect(labelsIn(params)).not.toContain("Easing");
@@ -327,8 +341,8 @@ describe("CoverPlayground ramp group", () => {
   const labelsIn = (group: HTMLElement) =>
     Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
 
-  it("gathers the ramp controls into one section", () => {
-    render(<CoverPlayground />);
+  it("gathers the ramp controls into one section", async () => {
+    await renderReady();
 
     expect(labelsIn(screen.getByRole("group", { name: "Ramp" }))).toEqual([
       "Phase",
@@ -341,27 +355,34 @@ describe("CoverPlayground ramp group", () => {
     ]);
   });
 
-  it("takes them out of the shader's own parameters", () => {
-    render(<CoverPlayground />);
+  it("takes them out of the shader's own parameters", async () => {
+    await renderReady();
     const params = labelsIn(screen.getByRole("group", { name: "Track" }));
 
-    for (const label of ["Phase", "Travel", "Stagger", "Symmetry", "Length", "Tail"]) {
+    for (const label of [
+      "Phase",
+      "Travel",
+      "Stagger",
+      "Symmetry",
+      "Length",
+      "Tail",
+    ]) {
       expect(params).not.toContain(label);
     }
   });
 
   // The fan's geometry stays where it was — the split is between where the
   // colours sit and what they are drawn on, not a wholesale emptying.
-  it("leaves the fan's own geometry in Track", () => {
-    render(<CoverPlayground />);
+  it("leaves the fan's own geometry in Track", async () => {
+    await renderReady();
 
     expect(labelsIn(screen.getByRole("group", { name: "Track" }))).toEqual(
       expect.arrayContaining(["Spread", "Bandwidth", "Roundness", "Apex"]),
     );
   });
 
-  it("is absent for a shader that has none", () => {
-    render(<CoverPlayground />);
+  it("is absent for a shader that has none", async () => {
+    await renderReady();
     act(() => useCoverDraftStore.getState().selectShader("godRays"));
 
     expect(screen.queryByRole("group", { name: "Ramp" })).toBeNull();
@@ -382,8 +403,8 @@ describe("CoverPlayground edge group", () => {
   const labelsIn = (group: HTMLElement) =>
     Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
 
-  it("gathers the edge controls into one section", () => {
-    render(<CoverPlayground />);
+  it("gathers the edge controls into one section", async () => {
+    await renderReady();
 
     expect(labelsIn(screen.getByRole("group", { name: "Edge" }))).toEqual([
       "Edge Width",
@@ -392,8 +413,8 @@ describe("CoverPlayground edge group", () => {
     ]);
   });
 
-  it("takes them out of the shader's own parameters", () => {
-    render(<CoverPlayground />);
+  it("takes them out of the shader's own parameters", async () => {
+    await renderReady();
     const params = labelsIn(screen.getByRole("group", { name: "Track" }));
 
     for (const label of ["Edge Width", "Softness", "Edge Tail"]) {
@@ -402,16 +423,16 @@ describe("CoverPlayground edge group", () => {
   });
 
   // The swatch is not one of them: a colour belongs with the colours.
-  it("leaves the rails' colour with the other swatches", () => {
-    render(<CoverPlayground />);
+  it("leaves the rails' colour with the other swatches", async () => {
+    await renderReady();
     const colours = labelsIn(screen.getByRole("group", { name: "Colours" }));
 
     expect(colours).toContain("Edge");
     expect(colours).not.toContain("Edge Width");
   });
 
-  it("is absent for a shader that has none", () => {
-    render(<CoverPlayground />);
+  it("is absent for a shader that has none", async () => {
+    await renderReady();
     act(() => useCoverDraftStore.getState().selectShader("godRays"));
 
     expect(screen.queryByRole("group", { name: "Edge" })).toBeNull();
@@ -432,8 +453,8 @@ describe("CoverPlayground dither group", () => {
   const labelsIn = (group: HTMLElement) =>
     Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
 
-  it("gathers the dither controls into one section", () => {
-    render(<CoverPlayground />);
+  it("gathers the dither controls into one section", async () => {
+    await renderReady();
 
     expect(labelsIn(screen.getByRole("group", { name: "Dither" }))).toEqual([
       "Ramp Dither",
@@ -442,8 +463,8 @@ describe("CoverPlayground dither group", () => {
     ]);
   });
 
-  it("takes them out of the shader's own parameters", () => {
-    render(<CoverPlayground />);
+  it("takes them out of the shader's own parameters", async () => {
+    await renderReady();
     const params = labelsIn(screen.getByRole("group", { name: "Track" }));
 
     expect(params).not.toContain("Ramp Dither");
@@ -453,8 +474,8 @@ describe("CoverPlayground dither group", () => {
 
   // A shader with no dither controls must not grow an empty strip for them —
   // the same rule the Motion group follows.
-  it("is absent for a shader that has none", () => {
-    render(<CoverPlayground />);
+  it("is absent for a shader that has none", async () => {
+    await renderReady();
     act(() => useCoverDraftStore.getState().selectShader("godRays"));
 
     expect(screen.queryByRole("group", { name: "Dither" })).toBeNull();
@@ -478,8 +499,8 @@ describe("CoverPlayground aspect toolbar", () => {
   // It rides in the gutter row rather than travelling with the picture: the
   // frame is a property of the page, and it holds still while the cover
   // changes shape underneath it.
-  it("stands in the gutter row, between the menu and the theme toggle", () => {
-    render(<CoverPlayground />);
+  it("stands in the gutter row, between the menu and the theme toggle", async () => {
+    await renderReady();
     const rail = aspectRail();
     const menu = screen.getByRole("button", { name: "Menu" });
     const toggle = screen.getByRole("button", { name: "Light theme" });
@@ -505,8 +526,8 @@ describe("CoverPlayground aspect toolbar", () => {
   // SQUARE, every time. A cover records no shape of its own any more — it is
   // framed for all of them — so there is nothing to reopen in, and the neutral
   // frame is the one that shows the composition rather than a crop of it.
-  it("opens square", () => {
-    render(<CoverPlayground />);
+  it("opens square", async () => {
+    await renderReady();
     expect(
       aspectRail()
         .querySelector('button[aria-pressed="true"]')
@@ -518,7 +539,7 @@ describe("CoverPlayground aspect toolbar", () => {
   // state goes — into the draft the palette saves.
   it("records the shape on the draft", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground />);
+    await renderReady();
 
     await user.click(screen.getByRole("button", { name: "4:3" }));
 
@@ -530,7 +551,7 @@ describe("CoverPlayground aspect toolbar", () => {
   // uniforms read differently on a banner and on a poster.
   it("reshapes the preview to the chosen frame", async () => {
     const user = userEvent.setup();
-    const { container } = render(<CoverPlayground />);
+    const { container } = await renderReady();
     const cover = () =>
       container.querySelector<HTMLElement>("[data-cover-stage]");
 
@@ -582,6 +603,46 @@ describe("CoverPlayground aspect toolbar", () => {
 // reach for Reset and get Delete — in every state where Reset would do
 // something, Reset is what is there.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Who the unsaved marks are for.
+//
+// A visitor can move every control the mounted shader has — the panel is not
+// theirs to save FROM, it is theirs to play with — so a draft of theirs goes
+// dirty exactly as the author's does. The mark means "work you have not
+// written", and a visitor has nowhere to write it: for them it is a dot that
+// appears, never resolves, and points at a save they cannot reach.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground unsaved marks", () => {
+  beforeEach(() => {
+    useCoverDraftStore.getState().reset();
+    (getCovers as Mock).mockResolvedValue([]);
+  });
+  afterEach(cleanup);
+
+  const railMarked = () =>
+    !!screen
+      .getByRole("toolbar", { name: "Preview aspect ratio" })
+      .querySelector("[data-unsaved]");
+
+  it("marks the reframed shape for the author", async () => {
+    signedIn();
+    await renderReady();
+
+    expect(railMarked()).toBe(false);
+    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    expect(railMarked()).toBe(true);
+  });
+
+  it("marks nothing for a visitor, who has no save to be behind on", async () => {
+    signedOut();
+    await renderReady();
+
+    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    expect(useCoverDraftStore.getState().editedAspects).toContain("1/1");
+    expect(railMarked()).toBe(false);
+  });
+});
+
 describe("CoverPlayground delete", () => {
   beforeEach(() => {
     useCoverDraftStore.getState().reset();
@@ -646,7 +707,7 @@ describe("CoverPlayground delete", () => {
   // Nothing saved is nothing to delete: the blank route opens on a draft that
   // has never been written, and a Delete there would name no row.
   it("keeps Reset on a draft that has never been saved", async () => {
-    render(<CoverPlayground />);
+    await renderReady();
 
     await waitFor(() => expect(getCovers).toHaveBeenCalled());
     expect(reset()).not.toBeNull();
@@ -667,7 +728,9 @@ describe("CoverPlayground delete", () => {
     const user = userEvent.setup();
     render(<CoverPlayground cover={savedCover} />);
 
-    await user.click((await screen.findByRole("button", { name: "Delete preset" })));
+    await user.click(
+      await screen.findByRole("button", { name: "Delete preset" }),
+    );
 
     expect(asking()).toBe(true);
     expect(deleteCover).not.toHaveBeenCalled();
@@ -680,7 +743,9 @@ describe("CoverPlayground delete", () => {
     const user = userEvent.setup();
     render(<CoverPlayground cover={savedCover} />);
 
-    await user.click(await screen.findByRole("button", { name: "Delete preset" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Delete preset" }),
+    );
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteCover).toHaveBeenCalledWith("cover-1"));
@@ -694,7 +759,9 @@ describe("CoverPlayground delete", () => {
     const user = userEvent.setup();
     render(<CoverPlayground cover={savedCover} />);
 
-    await user.click(await screen.findByRole("button", { name: "Delete preset" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Delete preset" }),
+    );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(deleteCover).not.toHaveBeenCalled();
@@ -709,7 +776,9 @@ describe("CoverPlayground delete", () => {
     (deleteCover as Mock).mockRejectedValue(new Error("no"));
     render(<CoverPlayground cover={savedCover} />);
 
-    await user.click(await screen.findByRole("button", { name: "Delete preset" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Delete preset" }),
+    );
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteCover).toHaveBeenCalled());
@@ -736,6 +805,8 @@ describe("CoverPlayground preloader", () => {
   afterEach(cleanup);
 
   const stage = () => document.querySelector("[data-cover-stage]");
+  const panel = () =>
+    screen.queryByRole("complementary", { name: "Properties" });
 
   it("draws no cover until the library has been read", async () => {
     let settle: (rows: unknown[]) => void = () => {};
@@ -771,6 +842,67 @@ describe("CoverPlayground preloader", () => {
 
     expect(stage()).not.toBeNull();
   });
+
+  // The rail waits on the same answer the cover does. Every control on it
+  // reads the DRAFT, and until the library lands the draft is holding the
+  // control table's first shader — so a rail drawn now is a column of numbers
+  // describing a cover nobody published, which is then swapped out underneath
+  // the reader a round trip later. Worse than a rail that is not there yet: a
+  // reader who starts pushing those sliders loses the edit.
+  it("holds the properties rail back until the library has been read", async () => {
+    let settle: (rows: unknown[]) => void = () => {};
+    (getCovers as Mock).mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve as (rows: unknown[]) => void;
+      }),
+    );
+    render(<CoverPlayground />);
+
+    expect(panel()).toBeNull();
+
+    await act(async () => {
+      settle([]);
+    });
+    await waitFor(() => expect(panel()).not.toBeNull());
+  });
+
+  it("gives up waiting on the rail too when the library cannot be read", async () => {
+    (getCovers as Mock).mockRejectedValue(new Error("no"));
+    render(<CoverPlayground />);
+
+    await waitFor(() => expect(panel()).not.toBeNull());
+  });
+
+  it("draws a routed cover's rail straight away", () => {
+    render(<CoverPlayground cover={savedCover} />);
+
+    expect(panel()).not.toBeNull();
+  });
+
+  // The one the client-side checks above cannot see.
+  //
+  // A hard load paints the SERVER's markup before a line of JavaScript runs, so
+  // whatever the rail holds in that markup is on screen for the length of a
+  // hydration — and on the server the draft has been seeded by nothing at all.
+  // It is still on the control table's first shader, five colours deep, while
+  // the cover being opened has two. Drawing the rail there puts another cover's
+  // numbers on screen for as long as it takes the bundle to arrive, and no
+  // effect — layout or otherwise — can pull them back, because none of them has
+  // run yet.
+  it("ships no rail in the server's markup, whose draft has been seeded by nothing", () => {
+    const routed = {
+      ...savedCover,
+      settings: { ...SETTINGS, colors: ["#112233FF", "#445566FF"] },
+    };
+    const html = renderToStaticMarkup(<CoverPlayground cover={routed} />);
+
+    // Not the rail, and specifically not the numbers it would have been
+    // holding — the shader defaults, which belong to no cover anybody opened.
+    expect(html).not.toContain('aria-label="Properties"');
+    for (const colour of SETTINGS.colors) {
+      expect(html).not.toContain(colour.replace("#", "").slice(0, 6));
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -789,7 +921,8 @@ describe("CoverPlayground framing", () => {
   });
   afterEach(cleanup);
 
-  const rail = () => screen.getByRole("toolbar", { name: "Preview aspect ratio" });
+  const rail = () =>
+    screen.getByRole("toolbar", { name: "Preview aspect ratio" });
   const pick = (ratio: string) =>
     fireEvent.click(within(rail()).getByRole("button", { name: ratio }));
   const flip = (to: "portrait" | "landscape") =>
@@ -802,14 +935,16 @@ describe("CoverPlayground framing", () => {
     const group = screen.getByRole("group", { name: /^Framing/ });
     return within(group)
       .getAllByRole("slider")
-      .find((node) => node.closest("[data-field]")?.textContent?.startsWith(label));
+      .find((node) =>
+        node.closest("[data-field]")?.textContent?.startsWith(label),
+      );
   };
 
   // The heading names the SHAPE, because the sliders under it apply to one. A
   // panel reading plain "Framing" beside ten other framings you cannot see
   // would be the only thing on it that lies.
-  it("names the shape its placement controls apply to", () => {
-    render(<CoverPlayground />);
+  it("names the shape its placement controls apply to", async () => {
+    await renderReady();
 
     expect(screen.getByRole("group", { name: "Framing 1:1" })).toBeTruthy();
     pick("4:3");
@@ -820,15 +955,17 @@ describe("CoverPlayground framing", () => {
   // is under test is that each shape holds its own. Rotation rather than scale
   // because its step lands on whole numbers, where scale's grid starts at 0.01
   // and the slider would report 3.01 for a stored 3.
-  it("keeps a placement per shape, and gives each one back", () => {
-    render(<CoverPlayground />);
+  it("keeps a placement per shape, and gives each one back", async () => {
+    await renderReady();
     pick("16:9");
 
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
     pick("4:3");
     act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
 
-    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("-90");
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe(
+      "-90",
+    );
     pick("16:9");
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
   });
@@ -836,8 +973,8 @@ describe("CoverPlayground framing", () => {
   // Turning the frame over is not a special case — the other side is a shape
   // you have not framed yet, and it opens on what you arrived with so that
   // reframing it is yours to do rather than yours to undo.
-  it("carries the placement across an orientation change, unchanged", () => {
-    render(<CoverPlayground />);
+  it("carries the placement across an orientation change, unchanged", async () => {
+    await renderReady();
     // From a shape that HAS another side. The playground opens square, and a
     // square is neither orientation — flipping one turns the list over and
     // leaves the card where it is.
@@ -851,22 +988,24 @@ describe("CoverPlayground framing", () => {
   });
 
   // And then the two sides are framed apart, which is the point of the split.
-  it("lets the two sides of an orientation pair be framed apart", () => {
-    render(<CoverPlayground />);
+  it("lets the two sides of an orientation pair be framed apart", async () => {
+    await renderReady();
     pick("4:3");
 
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
     flip("portrait");
     act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
 
-    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("-90");
+    expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe(
+      "-90",
+    );
     flip("landscape");
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
   });
 
   // A different crop of the same composition, so nothing turns.
-  it("carries the placement between shapes of one orientation", () => {
-    render(<CoverPlayground />);
+  it("carries the placement between shapes of one orientation", async () => {
+    await renderReady();
 
     pick("16:9");
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
@@ -878,8 +1017,8 @@ describe("CoverPlayground framing", () => {
   // The placement is what the CANVAS is given — the split is about where a
   // value is kept, and the shader takes one object. Read off the store rather
   // than the stubbed canvas, which draws nothing in jsdom.
-  it("hands the shader the placement of the shape on screen", () => {
-    render(<CoverPlayground />);
+  it("hands the shader the placement of the shape on screen", async () => {
+    await renderReady();
 
     act(() => useCoverDraftStore.getState().setFraming("scale", 2));
     const { settings, aspect } = useCoverDraftStore.getState();
@@ -908,7 +1047,7 @@ describe("CoverPlayground presets", () => {
   const strip = () => screen.queryByRole("group", { name: "Presets" });
 
   it("shows a visitor with nothing published no strip at all", async () => {
-    render(<CoverPlayground />);
+    await renderReady();
 
     await waitFor(() => expect(getCovers).toHaveBeenCalled());
     expect(strip()).toBeNull();
@@ -916,7 +1055,7 @@ describe("CoverPlayground presets", () => {
 
   it("gives the author theirs, in the canvas", async () => {
     signedIn();
-    const { container } = render(<CoverPlayground />);
+    const { container } = await renderReady();
 
     // One commit later than the first render, deliberately: the session is
     // invisible to the server, so an admin-only node on the hydrating render
@@ -927,7 +1066,7 @@ describe("CoverPlayground presets", () => {
 
   it("gives a visitor the published library, in the same place", async () => {
     (getCovers as Mock).mockResolvedValue([publishedCover]);
-    const { container } = render(<CoverPlayground />);
+    const { container } = await renderReady();
 
     await waitFor(() => expect(strip()).not.toBeNull());
     expect(container.querySelector("main > div")?.contains(strip())).toBe(true);
@@ -941,7 +1080,7 @@ describe("CoverPlayground presets", () => {
   // pane through `:has()`, which jsdom applies no styles for, so what is
   // asserted here is that the pane says so and that the page can see it.
   it("marks the strip so the page can reserve its band, and only then", async () => {
-    const { container } = render(<CoverPlayground />);
+    const { container } = await renderReady();
     const main = () => container.querySelector("main");
 
     await waitFor(() => expect(getCovers).toHaveBeenCalled());
@@ -949,7 +1088,7 @@ describe("CoverPlayground presets", () => {
 
     cleanup();
     signedIn();
-    const signedInRender = render(<CoverPlayground />);
+    const signedInRender = await renderReady();
 
     await waitFor(() =>
       expect(
@@ -982,8 +1121,8 @@ describe("CoverPlayground authoring controls", () => {
   // a bare shader would throw that cover away with nothing to get it back —
   // while every control BELOW it acts on the cover they are looking at, which
   // is the whole of what they can play with.
-  it("withholds the shader picker from a visitor, and keeps its controls", () => {
-    render(<CoverPlayground />);
+  it("withholds the shader picker from a visitor, and keeps its controls", async () => {
+    await renderReady();
 
     expect(shaderGroup()).toBeNull();
     expect(screen.getByRole("group", { name: "Colours" })).toBeTruthy();
@@ -992,7 +1131,7 @@ describe("CoverPlayground authoring controls", () => {
 
   it("gives the author the shader picker", async () => {
     signedIn();
-    render(<CoverPlayground />);
+    await renderReady();
 
     await waitFor(() => expect(shaderGroup()).not.toBeNull());
   });
@@ -1026,7 +1165,7 @@ describe("CoverPlayground authoring controls", () => {
   // one; a second control making that decision would be two doors to one room.
   it("cannot publish a cover that has never been saved", async () => {
     signedIn();
-    render(<CoverPlayground />);
+    await renderReady();
 
     await waitFor(() => expect(publishButton()).not.toBeNull());
     expect(publishButton()).toHaveProperty("disabled", true);
@@ -1035,7 +1174,9 @@ describe("CoverPlayground authoring controls", () => {
   it("publishes the saved cover, and turns into its own undo", async () => {
     signedIn();
     const user = userEvent.setup();
-    (publishCover as Mock).mockResolvedValue({ publishedAt: new Date("2026-02-01") });
+    (publishCover as Mock).mockResolvedValue({
+      publishedAt: new Date("2026-02-01"),
+    });
     render(<CoverPlayground cover={savedCover} />);
 
     await user.click(await screen.findByRole("button", { name: "Publish" }));
@@ -1071,7 +1212,9 @@ describe("CoverPlayground authoring controls", () => {
   it("does not dirty the draft", async () => {
     signedIn();
     const user = userEvent.setup();
-    (publishCover as Mock).mockResolvedValue({ publishedAt: new Date("2026-02-01") });
+    (publishCover as Mock).mockResolvedValue({
+      publishedAt: new Date("2026-02-01"),
+    });
     render(<CoverPlayground cover={savedCover} />);
 
     await user.click(await screen.findByRole("button", { name: "Publish" }));
