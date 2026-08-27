@@ -22,8 +22,14 @@ const dotStyle = css({
   // Centred on whatever it is hung from; the consumer supplies the block edge.
   insetInlineStart: "token(spacing.half)",
   translate: "-50% 0",
-  width: "2.5px",
-  height: "2.5px",
+  // Sized by the consumer through a variable rather than a variant, because
+  // the two surfaces genuinely want different dots: the rail's hangs under a
+  // 28px chip in a 40px band and reads at 2.5px, where the strip's sits over an
+  // 80px tile and would disappear at that size. A variable also settles the
+  // cascade — a width passed through `className` would be a second atomic
+  // utility in the same layer, winning or losing on source order.
+  width: "var(--unsaved-dot-size, 2.5px)",
+  height: "var(--unsaved-dot-size, 2.5px)",
   // 50%, which is a CIRCLE only because the box is square — `radii` has no
   // `half`, and `token(radii.half)` silently resolves to nothing and draws a
   // square. `radii.full` would round it too, but that token is the pill
@@ -37,7 +43,8 @@ const dotStyle = css({
 });
 
 /**
- * @param className where it hangs — the consumer's own block offset. The
+ * @param className where it hangs — the consumer's own block offset, and
+ * `--unsaved-dot-size` if the default 2.5px is wrong for that surface. The
  * element it is positioned against must be `position: relative` and must not
  * clip its overflow, which is the half no test can see: a clipped dot is
  * measurable in the DOM, correct in every assertion, and painted nowhere.

@@ -83,22 +83,39 @@ const paneStyle = css({
   marginInline: "auto",
   zIndex: 1,
 
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "md",
-  padding: "lg",
-
   // Hugs its tiles until it runs out of room, then holds still and scrolls.
   // `max-content` is what keeps a library of two from drawing a 960px bar with
   // 800px of nothing in it.
   width: "max-content",
   maxWidth:
     "min(token(sizes.articleShowcase), calc(token(spacing.full) - 2 * token(spacing.xxl)))",
+
+  // The band the unsaved marks hang in, ABOVE the surface below and outside it.
+  //
+  // It is padding on the SCROLLER rather than space above it, and that is the
+  // whole reason this element and the surface are two elements now. A scroll
+  // container clips on both axes whatever the block axis asks for, so a mark
+  // drawn outside a scrolling strip is cut off the moment the library is long
+  // enough to scroll. Inside the scroller's own padding it is not clipped —
+  // the clip region is the padding box — and it is still outside the bordered
+  // surface, which is what the eye reads as the strip.
+  paddingBlockStart: "xl",
   overflowX: "auto",
   // A trackpad swipe that runs off the end of the strip must not be handed to
   // the browser as a back gesture — the page behind it is an editor with
   // unsaved work in it.
   overscrollBehaviorInline: "contain",
+});
+
+// The strip as it is SEEN: the rounded plate the tiles sit on. Split from the
+// scroller above so the marks have somewhere outside it to hang — it owns the
+// look and the row, and nothing about scrolling or where the pane sits.
+const surfaceStyle = css({
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "md",
+  padding: "lg",
+  width: "max-content",
 
   borderWidth: "token(spacing.3xs)",
   borderStyle: "solid",
@@ -158,16 +175,20 @@ const addTileStyle = css({
 // a dot inside it would be cut off — the same trap the rail's dot fell into.
 const tileSlotStyle = css({ position: "relative", display: "flex" });
 
-// ABOVE the tile, where the rail's sits below its button — the two marks read
-// as one idea seen twice.
+// ABOVE the tile and OUTSIDE the surface, where the rail's sits below its
+// button and outside the rail — the two marks read as one idea seen twice.
 //
-// INSIDE the pane, though, unlike the rail's. The strip scrolls horizontally
-// once it outgrows its width, and a scroll container clips on both axes
-// whatever the block axis is set to, so a dot hung outside would be cut off the
-// moment the library got long. The pane's own 12px padding is the room, and 8px
-// clears the 4px selection ring the open tile draws around itself.
+// 20px from the tile's top edge clears the surface's own 12px padding and its
+// hairline, leaving the dot about 7px clear of the plate — the same air the
+// rail's has under it. It lands in the scroller's block-start padding, which is
+// inside the clip region and outside the plate; see `paneStyle`.
+//
+// 4px rather than the rail's 2.5px. The rail hangs its mark under a 28px chip
+// in a 40px band, where this one sits over an 80px tile and would read as dirt
+// on the screen at that size.
 const tileMarkStyle = css({
-  insetBlockEnd: "calc(token(spacing.full) + token(spacing.md))",
+  insetBlockEnd: "calc(token(spacing.full) + token(spacing.xxl))",
+  "--unsaved-dot-size": "4px",
 });
 
 const addIconStyle = menuIcon();
@@ -210,7 +231,21 @@ function adoptPreset(preset: Preset, committed = false) {
   window.history.replaceState(null, "", `/playground/cover/${preset.id}`);
 }
 
-export function PresetsPane() {
+export interface PresetsPaneProps {
+  /**
+   * Called once the library has been read, however it went.
+   *
+   * The page waits for this before drawing the cover — a visitor at the bare
+   * route is taken to the newest published cover when the read lands, and
+   * showing them the control table's first shader until then would be showing
+   * a cover nobody published. Fired on FAILURE too: a library that cannot be
+   * read is an answer as much as an empty one is, and a page that waited
+   * forever for it would be worse than one that opens blank.
+   */
+  onLibraryRead?: () => void;
+}
+
+export function PresetsPane({ onLibraryRead }: PresetsPaneProps = {}) {
   const coverId = useCoverDraftStore((draft) => draft.coverId);
   const isDirty = useCoverDraftStore((draft) => draft.isDirty);
   const buffers = useCoverDraftStore((draft) => draft.buffers);
@@ -274,10 +309,17 @@ export function PresetsPane() {
       // A library that cannot be read is a strip with nothing in it, which for
       // a visitor is no strip at all. Nothing to show and nothing worth saying
       // about it, so it fails quietly rather than reporting into the page.
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (live) onLibraryRead?.();
+      });
     return () => {
       live = false;
     };
+    // `onLibraryRead` is left out on purpose: it is a notification, not an
+    // input, and an inline arrow from the page would re-read the library on
+    // every render of it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverId, tracked.commits]);
 
   /**
@@ -375,7 +417,8 @@ export function PresetsPane() {
       {/* `data-presets` is what the page reserves the strip's band off — the
           pane is the one thing that knows whether there is a strip, and the
           page owns the arithmetic. See `pageStyle`. */}
-      <div className={paneStyle} role="group" aria-label="Presets" data-presets>
+      <div className={paneStyle} data-presets>
+        <div className={surfaceStyle} role="group" aria-label="Presets">
         {/* First, and fixed there: it is the only tile that is not one of the
             saved covers, and a control that moved as the library grew would be
             somewhere different every time you reached for it.
@@ -457,6 +500,7 @@ export function PresetsPane() {
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* Draws the ones that have no picture yet, one at a time, and unmounts

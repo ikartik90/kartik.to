@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import { DEFAULT_COVER_ASPECT } from "@/domain/cover";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before the dynamic import of the module under test.
@@ -56,7 +55,6 @@ const NOW = new Date("2026-01-01T00:00:00.000Z");
 
 const SETTINGS = {
   ...defaultState(SHADER_SPECS.cosmicTrack),
-  aspect: DEFAULT_COVER_ASPECT,
   framing: {},
 };
 
