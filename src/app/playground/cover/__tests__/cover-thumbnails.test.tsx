@@ -2,7 +2,6 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import { DEFAULT_COVER_ASPECT } from "@/domain/cover";
 import type { ShaderId } from "@/data/shader-specs";
 
 // The stage is the real thing's only job — mounting a webgl2 context, which
@@ -31,7 +30,6 @@ const preset = (id: string, shaderId: ShaderId, updatedAt = "2026-01-01") =>
     shaderId,
     settings: {
       ...defaultState(SHADER_SPECS[shaderId]),
-      aspect: DEFAULT_COVER_ASPECT,
       framing: {},
     },
     createdAt: new Date("2026-01-01"),

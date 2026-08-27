@@ -231,7 +231,21 @@ function adoptPreset(preset: Preset, committed = false) {
   window.history.replaceState(null, "", `/playground/cover/${preset.id}`);
 }
 
-export function PresetsPane() {
+export interface PresetsPaneProps {
+  /**
+   * Called once the library has been read, however it went.
+   *
+   * The page waits for this before drawing the cover — a visitor at the bare
+   * route is taken to the newest published cover when the read lands, and
+   * showing them the control table's first shader until then would be showing
+   * a cover nobody published. Fired on FAILURE too: a library that cannot be
+   * read is an answer as much as an empty one is, and a page that waited
+   * forever for it would be worse than one that opens blank.
+   */
+  onLibraryRead?: () => void;
+}
+
+export function PresetsPane({ onLibraryRead }: PresetsPaneProps = {}) {
   const coverId = useCoverDraftStore((draft) => draft.coverId);
   const isDirty = useCoverDraftStore((draft) => draft.isDirty);
   const buffers = useCoverDraftStore((draft) => draft.buffers);
@@ -295,10 +309,17 @@ export function PresetsPane() {
       // A library that cannot be read is a strip with nothing in it, which for
       // a visitor is no strip at all. Nothing to show and nothing worth saying
       // about it, so it fails quietly rather than reporting into the page.
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (live) onLibraryRead?.();
+      });
     return () => {
       live = false;
     };
+    // `onLibraryRead` is left out on purpose: it is a notification, not an
+    // input, and an inline arrow from the page would re-read the library on
+    // every render of it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverId, tracked.commits]);
 
   /**

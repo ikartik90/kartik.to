@@ -12,7 +12,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import { DEFAULT_COVER_ASPECT, shaderParamsFor } from "@/domain/cover";
+import { FRAMING_DEFAULTS, shaderParamsFor } from "@/domain/cover";
 import type { ThemeMode } from "@/store/theme";
 
 // Every shader the playground can mount, stubbed. They all end in a
@@ -83,7 +83,6 @@ const signedOut = () => mockUseSession.mockReturnValue({ data: null });
 
 const SETTINGS = {
   ...defaultState(SHADER_SPECS.cosmicTrack),
-  aspect: DEFAULT_COVER_ASPECT,
   framing: {},
 };
 
@@ -233,7 +232,6 @@ describe("CoverPlayground reset control", () => {
         ...defaultState(SHADER_SPECS.cosmicTrack).params,
         rampLength: 4,
       },
-      aspect: "9/16" as const,
       framing: {},
     },
     publishedAt: null,
@@ -504,13 +502,16 @@ describe("CoverPlayground aspect toolbar", () => {
     expect(order[2].contains(toggle)).toBe(true);
   });
 
-  it("opens on the shape the draft is being designed at", () => {
+  // SQUARE, every time. A cover records no shape of its own any more — it is
+  // framed for all of them — so there is nothing to reopen in, and the neutral
+  // frame is the one that shows the composition rather than a crop of it.
+  it("opens square", () => {
     render(<CoverPlayground />);
     expect(
       aspectRail()
         .querySelector('button[aria-pressed="true"]')
         ?.getAttribute("aria-label"),
-    ).toBe("9:16");
+    ).toBe("1:1");
   });
 
   // The frame is a note on the cover, so it goes where the rest of the authored
@@ -519,9 +520,9 @@ describe("CoverPlayground aspect toolbar", () => {
     const user = userEvent.setup();
     render(<CoverPlayground />);
 
-    await user.click(screen.getByRole("button", { name: "1:1" }));
+    await user.click(screen.getByRole("button", { name: "4:3" }));
 
-    expect(useCoverDraftStore.getState().settings.aspect).toBe("1/1");
+    expect(useCoverDraftStore.getState().aspect).toBe("4/3");
     expect(useCoverDraftStore.getState().isDirty).toBe(true);
   });
 
@@ -533,22 +534,22 @@ describe("CoverPlayground aspect toolbar", () => {
     const cover = () =>
       container.querySelector<HTMLElement>("[data-cover-stage]");
 
-    expect(cover()?.style.getPropertyValue("--cover-w")).toBe("9");
-    expect(cover()?.style.getPropertyValue("--cover-h")).toBe("16");
+    // The card waits for the library read before it draws at all — see the
+    // preloader. Until then there is no stage to measure.
+    await waitFor(() => expect(cover()).not.toBeNull());
+    expect(cover()?.style.getPropertyValue("--cover-w")).toBe("1");
+    expect(cover()?.style.getPropertyValue("--cover-h")).toBe("1");
 
-    // The rail opens on the portrait list, since the poster it opens on is
-    // portrait — so a banner is one press away rather than a shape you have to
-    // go looking for.
-    await user.click(
-      screen.getByRole("button", { name: "Switch to landscape" }),
-    );
+    await user.click(screen.getByRole("button", { name: "16:9" }));
 
     expect(cover()?.style.getPropertyValue("--cover-w")).toBe("16");
     expect(cover()?.style.getPropertyValue("--cover-h")).toBe("9");
   });
 
   // A saved cover reopens in the frame it was designed in, not in the default.
-  it("opens a saved cover on its own shape", () => {
+  // A saved cover opens square too — it carries a placement for every shape and
+  // names none of them as the one to reopen in.
+  it("opens a saved cover square as well", () => {
     render(
       <CoverPlayground
         cover={{
@@ -557,8 +558,7 @@ describe("CoverPlayground aspect toolbar", () => {
           shaderId: "swirl",
           settings: {
             ...defaultState(SHADER_SPECS.swirl),
-            aspect: "3/2",
-            framing: {},
+            framing: { "3/2": { ...FRAMING_DEFAULTS, scale: 2 } },
           },
           publishedAt: null,
         }}
@@ -569,7 +569,7 @@ describe("CoverPlayground aspect toolbar", () => {
       aspectRail()
         .querySelector('button[aria-pressed="true"]')
         ?.getAttribute("aria-label"),
-    ).toBe("3:2");
+    ).toBe("1:1");
   });
 });
 
@@ -719,6 +719,61 @@ describe("CoverPlayground delete", () => {
 });
 
 // ---------------------------------------------------------------------------
+// The wait before the cover is drawn.
+//
+// A cover opened by ROUTE is settled before this component renders. The bare
+// route is the one that waits: a visitor arriving there is taken to the newest
+// published cover once the strip has read the library, and until that read
+// lands the draft holds the control table's first shader — a cover nobody
+// published, shown for a round trip and then swapped out underneath them.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground preloader", () => {
+  beforeEach(() => {
+    useCoverDraftStore.getState().reset();
+    signedOut();
+    (getCovers as Mock).mockResolvedValue([]);
+  });
+  afterEach(cleanup);
+
+  const stage = () => document.querySelector("[data-cover-stage]");
+
+  it("draws no cover until the library has been read", async () => {
+    let settle: (rows: unknown[]) => void = () => {};
+    (getCovers as Mock).mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve as (rows: unknown[]) => void;
+      }),
+    );
+    render(<CoverPlayground />);
+
+    expect(stage()).toBeNull();
+
+    await act(async () => {
+      settle([]);
+    });
+    await waitFor(() => expect(stage()).not.toBeNull());
+  });
+
+  // A library that cannot be read is an answer as much as an empty one is. A
+  // page that waited forever for it would be worse than one that opens blank.
+  it("gives up waiting when the library cannot be read", async () => {
+    (getCovers as Mock).mockRejectedValue(new Error("no"));
+    render(<CoverPlayground />);
+
+    await waitFor(() => expect(stage()).not.toBeNull());
+  });
+
+  // The route already handed the cover down, so there is nothing to wait for —
+  // and a preloader in front of a cover the server already fetched would be a
+  // wait invented for its own sake.
+  it("draws a routed cover straight away", () => {
+    render(<CoverPlayground cover={savedCover} />);
+
+    expect(stage()).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Framing, per shape — the four placement controls kept one set per aspect
 // ratio, so a cover can be framed one way as a poster and another as a banner.
 //
@@ -756,9 +811,9 @@ describe("CoverPlayground framing", () => {
   it("names the shape its placement controls apply to", () => {
     render(<CoverPlayground />);
 
-    expect(screen.getByRole("group", { name: "Framing 9:16" })).toBeTruthy();
-    flip("landscape");
-    expect(screen.getByRole("group", { name: "Framing 16:9" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Framing 1:1" })).toBeTruthy();
+    pick("4:3");
+    expect(screen.getByRole("group", { name: "Framing 4:3" })).toBeTruthy();
   });
 
   // Two shapes of ONE orientation, so nothing here is the quarter turn — what
@@ -767,7 +822,7 @@ describe("CoverPlayground framing", () => {
   // and the slider would report 3.01 for a stored 3.
   it("keeps a placement per shape, and gives each one back", () => {
     render(<CoverPlayground />);
-    flip("landscape");
+    pick("16:9");
 
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
     pick("4:3");
@@ -783,23 +838,29 @@ describe("CoverPlayground framing", () => {
   // reframing it is yours to do rather than yours to undo.
   it("carries the placement across an orientation change, unchanged", () => {
     render(<CoverPlayground />);
+    // From a shape that HAS another side. The playground opens square, and a
+    // square is neither orientation — flipping one turns the list over and
+    // leaves the card where it is.
+    pick("4:3");
 
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
-    flip("landscape");
+    flip("portrait");
 
+    expect(screen.getByRole("group", { name: "Framing 3:4" })).toBeTruthy();
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
   });
 
   // And then the two sides are framed apart, which is the point of the split.
   it("lets the two sides of an orientation pair be framed apart", () => {
     render(<CoverPlayground />);
+    pick("4:3");
 
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
-    flip("landscape");
+    flip("portrait");
     act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
 
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("-90");
-    flip("portrait");
+    flip("landscape");
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
   });
 
@@ -807,7 +868,7 @@ describe("CoverPlayground framing", () => {
   it("carries the placement between shapes of one orientation", () => {
     render(<CoverPlayground />);
 
-    flip("landscape");
+    pick("16:9");
     act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
     pick("4:3");
 
@@ -821,9 +882,9 @@ describe("CoverPlayground framing", () => {
     render(<CoverPlayground />);
 
     act(() => useCoverDraftStore.getState().setFraming("scale", 2));
-    const { settings } = useCoverDraftStore.getState();
+    const { settings, aspect } = useCoverDraftStore.getState();
 
-    expect(shaderParamsFor(settings).scale).toBe(2);
+    expect(shaderParamsFor(settings, aspect).scale).toBe(2);
     expect("scale" in settings.params).toBe(false);
   });
 });

@@ -17,6 +17,8 @@ import { useCoverDraftStore } from "@/store/cover-draft";
 import { AspectRail } from "@/components/aspect-rail";
 import { deleteCover, publishCover, unpublishCover } from "@/app/actions/cover";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DemoPreloader } from "@/components/demo-component";
+import { useTrickleProgress } from "@/hooks/use-demo-loader";
 import { PresetsPane } from "./presets-pane";
 import { ShaderStage } from "./shader-stage";
 import { MenuButton } from "@/components/menu-button";
@@ -387,6 +389,28 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // them, so unsaved work in a frame that is not on screen is not invisible.
   const editedAspects = useCoverDraftStore((draft) => draft.editedAspects);
 
+  /**
+   * Whether the cover on screen is the one that is going to stay there.
+   *
+   * A cover opened by ROUTE is settled before this component renders — the
+   * server fetched it. The bare route is the one that waits: a visitor arriving
+   * there is taken to the newest published cover once the strip has read the
+   * library (see `presets-pane`), and until that read lands the draft is
+   * holding the control table's first shader — a cover nobody published, shown
+   * for as long as a round trip takes and then swapped out underneath them.
+   *
+   * So the card does not render at all until the answer is in. The preloader
+   * stands in, which is the same thing an article's component demos do while
+   * their module loads — one way of waiting, across the site.
+   *
+   * It waits for the LIBRARY READ and not for the shader's first frame: the
+   * shader library reports nothing when it paints, so anything past this point
+   * would be a guess dressed up as an event.
+   */
+  const [libraryRead, setLibraryRead] = useState(false);
+  const ready = cover !== undefined || libraryRead;
+  const trickle = useTrickleProgress(!ready);
+
   // This page's rail is the propertiesPanel RECIPE rather than the component —
   // the component is a dismissible dialog, and a playground whose whole content
   // is the thing you click would close it on the first press with nothing left
@@ -472,7 +496,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // The frame, and the two numbers the card is drawn from. Looked up in the
   // app's one table of shapes rather than split off the key, so a ratio that is
   // not in it cannot reach the CSS.
-  const aspect = state.aspect;
+  const aspect = useCoverDraftStore((draft) => draft.aspect);
   const [ratioWidth, ratioHeight] = ASPECT_RATIOS[aspect];
 
   // Whether the sheet has been sent away. Read ONLY inside the bottom-sheet
@@ -557,7 +581,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // control kinds is the thing that must not be duplicated (see there), and
   // where a value lives is orthogonal to what kind of control shows it.
   const isFramingControl = (key: string) => FRAMING_CONTROL_KEYS.includes(key);
-  const framing = framingFor(state);
+  const framing = framingFor(state, aspect);
   const valueOf = (key: string) =>
     isFramingControl(key) ? framing[key] : state.params[key];
 
@@ -632,26 +656,32 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   return (
     <main className={pageStyle} data-sheet-dismissed={dismissed || undefined}>
       <div className={canvasStyle}>
-        <div
-          className={coverStyle}
-          data-cover-stage
-          style={
-            {
-              "--cover-w": ratioWidth,
-              "--cover-h": ratioHeight,
-            } as CSSProperties
-          }
-        >
-          <ShaderStage
-            spec={spec}
-            // Both halves, put back together — the shader's own uniforms with
-            // the current shape's placement over them. See `shaderParamsFor`.
-            params={shaderParamsFor(state)}
-            colors={state.colors}
-            colorBack={state.colorBack}
-            extraColors={state.extraColors}
-          />
-        </div>
+        {ready ? (
+          <div
+            className={coverStyle}
+            data-cover-stage
+            style={
+              {
+                "--cover-w": ratioWidth,
+                "--cover-h": ratioHeight,
+              } as CSSProperties
+            }
+          >
+            <ShaderStage
+              spec={spec}
+              // Both halves, put back together — the shader's own uniforms with
+              // the current shape's placement over them. See `shaderParamsFor`.
+              params={shaderParamsFor(state, aspect)}
+              colors={state.colors}
+              colorBack={state.colorBack}
+              extraColors={state.extraColors}
+            />
+          </div>
+        ) : (
+          // Capped at 99, as the demos' own is: the last percent belongs to the
+          // thing actually appearing, not to the wait for it.
+          <DemoPreloader value={Math.min(99, trickle * 100)} />
+        )}
 
         {/* The site's own two gutter controls, exactly as an article carries
             them — same button, same chip, same store. The playground has no
@@ -709,7 +739,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             Mounted for everybody: the pane decides what is in it and whether
             there is anything to draw at all, and the page reserves its band off
             whether it drew one. */}
-        <PresetsPane />
+        <PresetsPane onLibraryRead={() => setLibraryRead(true)} />
       </div>
 
       {/* The rail, and the same panel along the bottom edge on a phone held

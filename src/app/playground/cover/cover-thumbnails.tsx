@@ -229,7 +229,10 @@ export function CoverThumbnails({ presets, onCaptured }: CoverThumbnailsProps) {
         // A still, whatever the cover was saved at: the tile is a photograph,
         // and an animating one would be a rAF per frame spent on a picture
         // nobody is watching. Zero also stops the library's loop outright.
-        params={{ ...shaderParamsFor(current.settings), speed: 0 }}
+        // Framed for the SQUARE, because the tile is one. A cover holds a
+        // placement per shape and names none of them as its own, so the shape
+        // the picture is drawn in is what picks — and that is this 80px square.
+        params={{ ...shaderParamsFor(current.settings, "1/1"), speed: 0 }}
         colors={current.settings.colors}
         colorBack={current.settings.colorBack}
         extraColors={current.settings.extraColors}

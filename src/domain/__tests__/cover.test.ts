@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { SHADER_IDS, SHADER_SPECS, defaultState } from "@/data/shader-specs";
 import {
   CoverContentSchema,
-  DEFAULT_COVER_ASPECT,
   FRAMING_DEFAULTS,
   coverContentFor,
   framingFor,
@@ -226,33 +225,21 @@ describe("CoverContentSchema", () => {
   // rather than as a size: the aspect the picture was designed against, so
   // reopening it a month later reopens the frame it was judged in. Nothing
   // reading a cover is obliged to honour it — see the module comment.
-  it("keeps the aspect the cover was designed at", () => {
+  // A cover no longer records the shape it was judged in: it is framed for
+  // every shape, so the note said nothing the `framing` keys do not. Any value
+  // still in the column is dropped on the way in, the way every retired key is
+  // — the playground opens square whatever a stored cover used to say.
+  it("drops the shape a cover used to record", () => {
     const parsed = CoverContentSchema.parse({
       shaderId: "cosmicTrack",
       settings: { ...defaultState(SHADER_SPECS.cosmicTrack), aspect: "16/9" },
     });
-    expect(parsed.settings.aspect).toBe("16/9");
+    expect("aspect" in parsed.settings).toBe(false);
   });
 
-  it("opens a cover saved before shapes were recorded at the default", () => {
-    const parsed = CoverContentSchema.parse({
-      shaderId: "cosmicTrack",
-      settings: defaultState(SHADER_SPECS.cosmicTrack),
-    });
-    expect(parsed.settings.aspect).toBe(DEFAULT_COVER_ASPECT);
-  });
-
-  // A ratio the app cannot draw is a frame nothing can reopen in, so it is
-  // rejected rather than quietly replaced with the default.
-  it("rejects a shape that is not one of the app's ratios", () => {
-    const settings = defaultState(SHADER_SPECS.cosmicTrack);
-    expect(
-      CoverContentSchema.safeParse({
-        shaderId: "cosmicTrack",
-        settings: { ...settings, aspect: "7/3" },
-      }).success,
-    ).toBe(false);
-  });
+  // A ratio the app cannot draw is now only reachable as a `framing` key, and
+  // it is stripped there rather than refused — see "rejects a shape the app
+  // cannot draw" below.
 });
 
 // ---------------------------------------------------------------------------
@@ -477,11 +464,10 @@ describe("framingFor", () => {
   it("gives the shape's own framing where it has one", () => {
     const settings = {
       ...defaultState(SHADER_SPECS.cosmicTrack),
-      aspect: "4/3" as const,
       framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 2 } },
     };
 
-    expect(framingFor(settings).scale).toBe(2);
+    expect(framingFor(settings, "4/3").scale).toBe(2);
   });
 
   // An unframed shape is not a broken one: it reads as the table's own starting
@@ -489,11 +475,10 @@ describe("framingFor", () => {
   it("falls back to the defaults for a shape nobody has framed", () => {
     const settings = {
       ...defaultState(SHADER_SPECS.cosmicTrack),
-      aspect: "4/3" as const,
       framing: {},
     };
 
-    expect(framingFor(settings)).toEqual(FRAMING_DEFAULTS);
+    expect(framingFor(settings, "4/3")).toEqual(FRAMING_DEFAULTS);
   });
 });
 
@@ -505,11 +490,10 @@ describe("shaderParamsFor", () => {
   it("hands the shader its uniforms with the current frame's placement over them", () => {
     const settings = {
       ...defaultState(SHADER_SPECS.cosmicTrack),
-      aspect: "4/3" as const,
       framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 3 } },
     };
 
-    const params = shaderParamsFor(settings);
+    const params = shaderParamsFor(settings, "4/3");
     expect(params.scale).toBe(3);
     expect(params.rampLength).toBe(
       defaultState(SHADER_SPECS.cosmicTrack).params.rampLength,

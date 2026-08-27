@@ -11,7 +11,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import { DEFAULT_COVER_ASPECT } from "@/domain/cover";
 import { useCoverDraftStore } from "@/store/cover-draft";
 
 // The actions are `"use server"` files importing `@/lib/env`, which validates
@@ -66,7 +65,6 @@ const { getCovers, createCover } = await import("@/app/actions/cover");
 
 const settingsFor = (shaderId: keyof typeof SHADER_SPECS) => ({
   ...defaultState(SHADER_SPECS[shaderId]),
-  aspect: DEFAULT_COVER_ASPECT,
   framing: {},
 });
 

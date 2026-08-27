@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
 import {
-  DEFAULT_COVER_ASPECT,
   FRAMING_DEFAULTS,
   coverContentFor,
   framingFor,
@@ -24,7 +23,6 @@ import {
  */
 const savedSettings = (spec: (typeof SHADER_SPECS)[keyof typeof SHADER_SPECS]) => ({
   ...coverContentFor(spec.id).settings,
-  aspect: DEFAULT_COVER_ASPECT,
   framing: {},
 });
 
@@ -102,20 +100,21 @@ describe("useCoverDraftStore", () => {
     expect(content.settings).toEqual(savedSettings(SHADER_SPECS.warp));
   });
 
-  // The frame is a fact about the COVER, not about the shader in it — so it
-  // survives the one edit that throws everything else away.
-  it("keeps the designed-for shape across a shader switch", () => {
+  // A switch is a fresh load, so it opens SQUARE. The frame you were in
+  // belonged to the shader you were looking at, and carrying it over would
+  // start the new one on a crop chosen for the old one.
+  it("opens a switched-to shader square", () => {
     useCoverDraftStore.getState().setAspect("16/9");
     useCoverDraftStore.getState().selectShader("godRays");
 
-    expect(useCoverDraftStore.getState().settings.aspect).toBe("16/9");
+    expect(useCoverDraftStore.getState().aspect).toBe("1/1");
   });
 
   it("marks the draft dirty once the shape moves", () => {
-    useCoverDraftStore.getState().setAspect("1/1");
+    useCoverDraftStore.getState().setAspect("4/3");
 
     expect(useCoverDraftStore.getState().isDirty).toBe(true);
-    expect(useCoverDraftStore.getState().settings.aspect).toBe("1/1");
+    expect(useCoverDraftStore.getState().aspect).toBe("4/3");
   });
 
   // "Reset params" is about the shader's uniforms. The frame you chose to
@@ -124,7 +123,7 @@ describe("useCoverDraftStore", () => {
     useCoverDraftStore.getState().setAspect("4/3");
     useCoverDraftStore.getState().resetParams();
 
-    expect(useCoverDraftStore.getState().settings.aspect).toBe("4/3");
+    expect(useCoverDraftStore.getState().aspect).toBe("4/3");
   });
 
   // "Reset params" on a saved preset means BACK TO THE PRESET, not back to the
@@ -203,7 +202,7 @@ describe("useCoverDraftStore", () => {
   // cover can be framed one way as a poster and another as a banner. The store
   // is where "which set am I writing to" is decided; the rules for what a shape
   // inherits live in `@/domain/cover`.
-  const framing = () => framingFor(useCoverDraftStore.getState().settings);
+  const framing = () => framingFor(useCoverDraftStore.getState().settings, useCoverDraftStore.getState().aspect);
 
   it("writes a placement onto the shape on screen and no other", () => {
     useCoverDraftStore.getState().setAspect("4/3");
@@ -304,6 +303,10 @@ describe("useCoverDraftStore", () => {
     useCoverDraftStore.getState().setAspect("4/3");
     useCoverDraftStore.getState().setFraming("scale", 2);
     useCoverDraftStore.getState().selectShader("godRays");
+    // The switch opens square, so the work is found by going back to the shape
+    // it was done in — which is the point: the framings survive, the frame you
+    // happened to be in does not.
+    useCoverDraftStore.getState().setAspect("4/3");
 
     expect(framing().scale).toBe(2);
   });
@@ -331,11 +334,13 @@ describe("useCoverDraftStore", () => {
       shaderId: "swirl",
       settings: {
         ...savedSettings(SHADER_SPECS.swirl),
-        aspect: "4/3",
         framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 2 } },
       },
       publishedAt: null,
     });
+    // A load opens square, so the shape whose saved placement is under test has
+    // to be the one on screen before Reset can put it back.
+    useCoverDraftStore.getState().setAspect("4/3");
     useCoverDraftStore.getState().setFraming("scale", 3.5);
     useCoverDraftStore.getState().resetParams();
 
@@ -449,10 +454,11 @@ describe("useCoverDraftStore", () => {
     expect(useCoverDraftStore.getState().publishedAt).toBeNull();
   });
 
-  it("opens a new draft on the default shape", () => {
-    expect(useCoverDraftStore.getState().settings.aspect).toBe(
-      DEFAULT_COVER_ASPECT,
-    );
+  // Square, and stated as the literal rather than through the constant: what
+  // this pins is that the playground opens neutral, which a test reading the
+  // same constant the code does could not tell you.
+  it("opens a new draft square", () => {
+    expect(useCoverDraftStore.getState().aspect).toBe("1/1");
   });
 
   // --- Moving between presets with work in progress --------------------------
@@ -513,7 +519,7 @@ describe("useCoverDraftStore", () => {
     useCoverDraftStore.getState().load(cover("a"));
 
     expect(useCoverDraftStore.getState().editedAspects).toEqual(["16/9"]);
-    expect(useCoverDraftStore.getState().settings.aspect).toBe("16/9");
+    expect(useCoverDraftStore.getState().aspect).toBe("16/9");
   });
 
   // A save re-adopts what was STORED through this same action. Buffering there

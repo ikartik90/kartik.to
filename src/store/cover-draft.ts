@@ -56,6 +56,12 @@ interface DraftBuffer {
   publishedAt: Date | null;
   shaderId: ShaderId;
   settings: CoverSettings;
+  /**
+   * The shape you were looking at. Restored on the way back in, unlike a fresh
+   * load which always opens square — the buffer's job is handing the draft back
+   * as you left it, and the frame you were mid-comparison in is part of that.
+   */
+  aspect: DemoFrameAspectRatio;
   editedAspects: DemoFrameAspectRatio[];
   savedParams: {
     shaderId: ShaderId;
@@ -80,6 +86,15 @@ interface CoverDraftStore {
   publishedAt: Date | null;
   shaderId: ShaderId;
   settings: CoverSettings;
+  /**
+   * The shape the cover is being looked at in.
+   *
+   * The PLAYGROUND's state, not the cover's — a cover is framed for every shape
+   * and records none of them as its own (see `@/domain/cover`). Every fresh
+   * load opens square; only a draft handed back from a buffer keeps the frame
+   * it was left in.
+   */
+  aspect: DemoFrameAspectRatio;
   /**
    * Whether anything has moved since the draft was opened or last saved.
    *
@@ -213,12 +228,11 @@ interface CoverDraftStore {
   toContent: () => CoverContent;
 }
 
-// The frame and its framings are carried IN rather than defaulted, because the
-// two callers want different things from them: a new draft opens blank, and a
-// shader switch keeps whatever the author was designing against — the shape is
-// a fact about the cover, not about the shader mounted in it.
+// The framings are carried IN rather than defaulted, because the two callers
+// want different things from them: a new draft opens blank, and a shader switch
+// keeps what the author has already framed.
 //
-// The FRAMINGS survive a switch for the same reason and one better: the four
+// The FRAMINGS survive a switch, and the reason is a good one: the four
 // placement controls are the same four on every shader, spread from one array,
 // so unlike the params there is no key here the next shader has never heard of.
 // Wiping them would be throwing away work for a reason that does not apply.
@@ -232,11 +246,10 @@ interface CoverDraftStore {
 // filter written here would.
 const blank = (
   shaderId: ShaderId,
-  aspect: DemoFrameAspectRatio = DEFAULT_COVER_ASPECT,
   framing: CoverSettings["framing"] = {},
 ): { shaderId: ShaderId; settings: CoverSettings; isDirty: boolean } => ({
   shaderId,
-  settings: { ...coverContentFor(shaderId).settings, aspect, framing },
+  settings: { ...coverContentFor(shaderId).settings, framing },
   isDirty: false,
 });
 
@@ -270,9 +283,8 @@ const savedParamsFor = (
  * quietly undoing work in ten frames you cannot see.
  */
 const savedFramingFor = (
-  state: Pick<CoverDraftStore, "savedParams" | "settings">,
-): Framing | null =>
-  state.savedParams?.framing[state.settings.aspect] ?? null;
+  state: Pick<CoverDraftStore, "savedParams" | "aspect">,
+): Framing | null => state.savedParams?.framing[state.aspect] ?? null;
 
 /** The active draft, as it would be set aside — everything but which cover it is. */
 const snapshot = (state: CoverDraftStore): DraftBuffer => ({
@@ -280,6 +292,7 @@ const snapshot = (state: CoverDraftStore): DraftBuffer => ({
   publishedAt: state.publishedAt,
   shaderId: state.shaderId,
   settings: state.settings,
+  aspect: state.aspect,
   editedAspects: state.editedAspects,
   savedParams: state.savedParams,
 });
@@ -312,6 +325,7 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   title: null,
   publishedAt: null,
   savedParams: null,
+  aspect: DEFAULT_COVER_ASPECT,
   editedAspects: [],
   buffers: {},
   ...blank(INITIAL_SHADER),
@@ -320,9 +334,15 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   // different shape, so carrying the old params across would carry keys the new
   // shader has never heard of — which the schema would then strip on save,
   // silently losing whatever the panel was still showing.
+  //
+  // A switch is a fresh load, so it opens SQUARE — the frame you were in
+  // belonged to the shader you were looking at, and carrying it over would
+  // start the new one on a crop chosen for the old one. The framings survive,
+  // so returning to a shape you have already framed finds your work there.
   selectShader: (shaderId) =>
     set((state) => ({
-      ...blank(shaderId, state.settings.aspect, state.settings.framing),
+      ...blank(shaderId, state.settings.framing),
+      aspect: DEFAULT_COVER_ASPECT,
       isDirty: true,
     })),
 
@@ -366,8 +386,8 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
         ...state.settings,
         framing: {
           ...state.settings.framing,
-          [state.settings.aspect]: {
-            ...framingFor(state.settings),
+          [state.aspect]: {
+            ...framingFor(state.settings, state.aspect),
             [key]: value,
           },
         },
@@ -375,9 +395,9 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
       // Marked once, on the first slider that moves. The array is left ALONE
       // when the shape is already in it, so the rail's prop keeps its identity
       // and a drag does not re-render it on every frame.
-      editedAspects: state.editedAspects.includes(state.settings.aspect)
+      editedAspects: state.editedAspects.includes(state.aspect)
         ? state.editedAspects
-        : [...state.editedAspects, state.settings.aspect],
+        : [...state.editedAspects, state.aspect],
       isDirty: true,
     })),
 
@@ -399,16 +419,17 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
   // itself differently depending on the route you took to it.
   setAspect: (aspect) =>
     set((state) => {
-      if (aspect === state.settings.aspect) return state;
-      const current = framingFor(state.settings);
+      if (aspect === state.aspect) return state;
+      const current = framingFor(state.settings, state.aspect);
       const framing = { ...state.settings.framing };
       // The shape being LEFT is pinned on the way out, if it was never framed —
       // so that what you come back to is what you left rather than a fresh
       // derivation from wherever you have been since.
-      framing[state.settings.aspect] ??= current;
+      framing[state.aspect] ??= current;
       framing[aspect] ??= { ...current };
       return {
-        settings: { ...state.settings, aspect, framing },
+        settings: { ...state.settings, framing },
+        aspect,
         isDirty: true,
       };
     }),
@@ -444,7 +465,7 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
           // there is one, and the table's starting point where there is not.
           framing: {
             ...state.settings.framing,
-            [state.settings.aspect]: savedFraming
+            [state.aspect]: savedFraming
               ? { ...savedFraming }
               : { ...FRAMING_DEFAULTS },
           },
@@ -453,7 +474,7 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
         // on it to mark — and only that shape, exactly as the reset above
         // reaches only that shape.
         editedAspects: state.editedAspects.filter(
-          (aspect) => aspect !== state.settings.aspect,
+          (aspect) => aspect !== state.aspect,
         ),
         isDirty: true,
       };
@@ -493,6 +514,12 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
         publishedAt,
         shaderId,
         settings,
+        // SQUARE, every time. A cover records no shape of its own any more — it
+        // is framed for all of them — so there is nothing to reopen in, and the
+        // neutral frame is the one that shows the composition rather than a
+        // crop of it. A draft handed back from a buffer keeps what it was left
+        // in; that is the branch above.
+        aspect: DEFAULT_COVER_ASPECT,
         isDirty: false,
         // What "last saved" means, kept in one place: a commit adopts what was
         // STORED through this same action, so writing the cover re-baselines it
@@ -540,6 +567,7 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
         title: null,
         publishedAt: null,
         savedParams: null,
+        aspect: DEFAULT_COVER_ASPECT,
         editedAspects: [],
         ...blank(INITIAL_SHADER),
       };
@@ -554,6 +582,7 @@ export const useCoverDraftStore = create<CoverDraftStore>((set, get) => ({
       title: null,
       publishedAt: null,
       savedParams: null,
+      aspect: DEFAULT_COVER_ASPECT,
       editedAspects: [],
       buffers: {},
       ...blank(INITIAL_SHADER),

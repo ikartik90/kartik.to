@@ -31,17 +31,21 @@ import { TRACK_UNITS_PER_DEGREE } from "@/components/shaders/cosmic-track-unifor
 // `shader-specs.ts` already makes in leaving the world box out of the controls
 // — the surface IS the canvas — one level up.
 //
-// `aspect` is the ONE exception, and it is an exception because it is not a
-// size: it is the shape the picture is JUDGED in. A god-ray fan tuned
-// until it read on a 9:16 poster is a different composition from the same
-// uniforms tuned on a 16:9 banner, and reopening the cover a month later
-// without that fact means re-deriving it by eye. So it is stored as a note the
-// playground reopens in, not as a frame the cover imposes: no consumer reads it
-// to shape anything, and a host that embeds this cover in a square still gets a
-// square. If it ever starts shaping something, the shapelessness above stops
-// being true and this comment is the one that has to change first.
+// There is no exception, and there used to be one. A cover recorded the shape
+// it was last JUDGED in and reopened there — a note rather than a frame, on the
+// grounds that a god-ray fan tuned until it read on a 9:16 poster is a
+// different composition from the same uniforms tuned on a 16:9 banner, and
+// reopening a month later without that fact meant re-deriving it by eye.
 //
-// FRAMING is kept per shape, and that is the other thing `aspect` now pays for.
+// Framing per shape is what retired it. The fact the note carried is now
+// carried properly, by a placement filed under each ratio, so the note was
+// down to naming which of them you happened to look at last — a worse answer
+// than the neutral one, and one more thing in the column for a reader to
+// reconcile. The playground opens every cover square (see
+// `DEFAULT_COVER_ASPECT`) and which shape you are in is the playground's own
+// state, not the cover's.
+//
+// FRAMING is kept per shape, and it is what makes that possible.
 // The four placement controls — scale, rotation, and the two offsets — are the
 // only ones whose right value depends on the shape you are looking at: the same
 // fan needs a different crop on a 2:1 banner than on a 9:16 poster, where every
@@ -85,25 +89,22 @@ const CoverColorSchema = z
     (value.length === 7 ? `${value}FF` : value).toUpperCase(),
   );
 
-/**
- * The shape a cover was designed against — one of the app's own eleven ratios,
- * from the single table every aspect in the app is written in.
- *
- * An ENUM rather than a free `"w/h"` string, so a cover cannot record a frame
- * the app has no way of drawing: the playground's picker and the grid card's
- * picker offer the same list, and a twelfth shape added there reaches this
- * schema with no second edit.
- */
-const CoverAspectSchema = z.enum(
-  Object.keys(ASPECT_RATIOS) as [DemoFrameAspectRatio, ...DemoFrameAspectRatio[]],
-);
 
 /**
- * Where the playground opens, and what a cover saved before shapes were
- * recorded reads as: the portrait poster the reference art is drawn on, which
- * is the 380×680 card this playground has always shown.
+ * Where the playground opens, every time.
+ *
+ * The SQUARE, and it is a starting point rather than a remembered one. A cover
+ * used to record the shape it was last judged in and reopen there, back when it
+ * held one framing: which shape you had been looking at was the only clue to
+ * what that framing had been tuned for. A cover now holds a framing per shape,
+ * so there is nothing left for the note to say — and a shape picked once,
+ * months ago, is a worse answer than the neutral one.
+ *
+ * Neutral is why it is 1:1: it is the one shape that favours neither
+ * orientation, so the first thing you see is the composition rather than a crop
+ * of it.
  */
-export const DEFAULT_COVER_ASPECT: DemoFrameAspectRatio = "9/16";
+export const DEFAULT_COVER_ASPECT: DemoFrameAspectRatio = "1/1";
 
 /**
  * One control's validator, with the control's own default behind it.
@@ -433,9 +434,12 @@ function settingsSchemaFor(spec: ShaderSpec) {
         }
       : {}),
     extraColors,
-    // Defaulted like a control, and for the same reason: every cover saved
-    // before the playground had a frame is missing the key and must still open.
-    aspect: CoverAspectSchema.default(DEFAULT_COVER_ASPECT),
+    // No `aspect`. A cover used to record the shape it was last judged in, and
+    // reopening there was the point; now that it holds a framing per shape,
+    // that note says nothing the `framing` keys do not. It is left out rather
+    // than stored and ignored — a stored value nothing reads is one that
+    // eventually disagrees with something. Any still in the column is dropped
+    // on the way in, the way every retired key is.
     framing: CoverFramingSchema,
   }));
 }
@@ -447,8 +451,6 @@ export interface CoverSettings {
   /** Present only for a shader that HAS a ground behind the fill. */
   colorBack?: string;
   extraColors: Record<string, string>;
-  /** The shape it is being judged in — a note, not a frame. See above. */
-  aspect: DemoFrameAspectRatio;
   /**
    * How the graphic sits in each shape that has been framed.
    *
@@ -458,9 +460,20 @@ export interface CoverSettings {
   framing: Partial<Record<DemoFrameAspectRatio, Framing>>;
 }
 
-/** How the graphic sits in the shape the cover is currently being judged in. */
-export function framingFor(settings: CoverSettings): Framing {
-  return settings.framing[settings.aspect] ?? FRAMING_DEFAULTS;
+/**
+ * How the graphic sits in ONE shape.
+ *
+ * The shape is passed in rather than read off the cover, because a cover no
+ * longer has one: it is framed for every shape, and which of them you want is
+ * the caller's business — the playground asks for the frame on screen, a
+ * thumbnail asks for the square it is drawn in, and an embed would ask for the
+ * shape of the surface it fills.
+ */
+export function framingFor(
+  settings: CoverSettings,
+  aspect: DemoFrameAspectRatio,
+): Framing {
+  return settings.framing[aspect] ?? FRAMING_DEFAULTS;
 }
 
 /**
@@ -473,8 +486,11 @@ export function framingFor(settings: CoverSettings): Framing {
  * only matters for a cover mid-migration: a stale placement key left in params
  * must not outrank the frame you are looking at.
  */
-export function shaderParamsFor(settings: CoverSettings): Params {
-  return { ...settings.params, ...framingFor(settings) };
+export function shaderParamsFor(
+  settings: CoverSettings,
+  aspect: DemoFrameAspectRatio,
+): Params {
+  return { ...settings.params, ...framingFor(settings, aspect) };
 }
 
 
