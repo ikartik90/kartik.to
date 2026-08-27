@@ -200,6 +200,44 @@ const fieldValueBox = {
   },
 } as const;
 
+/** The 4px-square checkerboard an alpha ramp fades over. */
+const ALPHA_CHECKERBOARD =
+  "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)";
+
+/**
+ * One end-cap of a colour ramp.
+ *
+ * The field frame keeps 8px of inset at each end of a slider track, and a ramp
+ * that stopped at the track's edge leaves two flat bands of field fill inside a
+ * control whose entire job is to be a picture of a range. These fill them with
+ * the value the ramp ARRIVES at — the first colour on the left, the last on the
+ * right — so the ramp reads corner to corner.
+ *
+ * Drawn OUTSIDE the track rather than by insetting the gradient within it,
+ * which is the load-bearing part: the track stays exactly the width the thumb
+ * travels and the pointer reads, so the colour under the thumb is still the
+ * colour the thumb names. Insetting the gradient instead would slide the ramp
+ * out of step with the value by up to a pad's width. The frame's own
+ * `overflow: hidden` clips them to its rounded corner.
+ */
+const rampPad = {
+  content: '""',
+  position: "absolute",
+  insetBlock: 0,
+  width: "token(spacing.md)",
+  pointerEvents: "none",
+} as const;
+
+const rampPadStart = {
+  ...rampPad,
+  insetInlineStart: "calc(token(spacing.md) * -1)",
+} as const;
+
+const rampPadEnd = {
+  ...rampPad,
+  insetInlineEnd: "calc(token(spacing.md) * -1)",
+} as const;
+
 export default defineConfig({
   presets: [],
   preflight: true,
@@ -2687,6 +2725,63 @@ export default defineConfig({
           },
         }),
 
+        // Where that panel sits: hard against the docked properties rail, two
+        // pixels off it, and level with the swatch that opened it.
+        //
+        // The two axes come from different places ON PURPOSE. Horizontally it
+        // is pinned to the rail, not to its trigger — every colour field in the
+        // app lives in that rail, so the picker always appears in the same
+        // column whichever row was clicked, and it never lands ON the rail it
+        // is editing through. Vertically it tracks the swatch via `anchor()`,
+        // which is what keeps it beside its own row as the rail scrolls, with
+        // `flip-block` for a row too near the foot of the screen to open
+        // downwards from.
+        colorPickerPopover: defineRecipe({
+          className: "color-picker-popover",
+          description:
+            "The colour picker's shell: docked 2px inside the properties rail's leading edge at the rail's own width, level with the swatch that opened it (`anchor(top)`, flipping above for a row near the viewport foot). Fixed, so `position-try-fallbacks` measures overflow against the viewport — the slash menu's bargain. On a phone, where the rail is a sheet along the BOTTOM edge, 'beside the rail' has no meaning and it centres over the canvas instead.",
+          base: {
+            position: "fixed",
+            // Over the rail (50), because it is opened FROM the rail and must
+            // not slide under it.
+            zIndex: 60,
+            positionAnchor: "--color-picker",
+            top: "anchor(top)",
+            insetInlineEnd:
+              "calc(token(sizes.propertiesPanelWidth) + token(spacing.xs))",
+            width: "token(sizes.propertiesPanelWidth)",
+            positionTryFallbacks: "--color-picker-clamp",
+            backgroundColor: "bg.surface",
+            color: "text.body",
+            borderRadius: "md",
+            borderWidth: "token(spacing.3xs)",
+            borderStyle: "solid",
+            borderColor: "border.divider",
+            // Deliberately NOT clipped, which is the usual bargain for a
+            // rounded panel. The format menu covers its trigger and runs past
+            // the footer, and it has to live INSIDE this panel to be anchorable
+            // at all (see `Combobox`'s `portal`). Nothing here needs the clip:
+            // the parts are hairline-divided rows with no fill of their own, so
+            // none of them reaches a corner for the radius to cut.
+            overflow: "visible",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow:
+              "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+            // The rail has moved to the bottom edge and taken the whole width,
+            // so there is no column beside it to stand in. The picker becomes a
+            // floating panel over what is left of the canvas — the half of the
+            // screen the sheet deliberately leaves showing.
+            _bottomSheet: {
+              positionAnchor: "auto",
+              top: "token(spacing.lg)",
+              insetInline: "token(spacing.lg)",
+              width: "auto",
+              positionTryFallbacks: "none",
+            },
+          },
+        }),
+
         // The app's shared toolbar chrome: the box a row of icon controls sits
         // in — a hugging horizontal rail on `bg.surface` with a concentric
         // corner. Three surfaces drew this and each wrote the metrics out
@@ -4659,6 +4754,16 @@ export default defineConfig({
             // from a 100% one that happens to match the field fill, and the
             // opacity input would be editing something invisible.
             swatch: {
+              // A BUTTON now, not a plate: it opens the picker. The reset is
+              // here rather than on the element because the swatch is the
+              // trigger wherever a colour field is used, and a field that drew
+              // a native button border inside its own frame would be the one
+              // control in the app with two edges.
+              appearance: "none",
+              margin: "none",
+              padding: "none",
+              borderWidth: "0",
+              cursor: "pointer",
               position: "relative",
               flexShrink: 0,
               width: "token(spacing.xl)",
@@ -4699,6 +4804,211 @@ export default defineConfig({
             opacity: { ...fieldValueBox },
           },
         }),
+
+        // ---------------------------------------------------------------------
+        // The panel the colour swatch opens (Figma 1066:2338).
+        //
+        // Its width is `propertiesPanelWidth` and its footer is the panel's own
+        // 80 ∣ 8 ∣ 220 property row, because the picker stands two pixels off
+        // the docked rail and the two are read as one strip. Deriving it rather
+        // than restating 332px means widening a property field widens the
+        // picker with it, exactly as it widens the rail.
+        //
+        // Everything the picker DRAWS in — the map's gradients, the hue ramp —
+        // is stated in plain `white` / `black` / sRGB primaries rather than in
+        // theme tokens. Those are not colour decisions: they are the axes of
+        // the HSB solid the control is a picture of, and a themed "white" would
+        // put the wrong colour under the author's cursor. The chrome around
+        // them is tokenised like everything else.
+        // ---------------------------------------------------------------------
+        colorPicker: defineSlotRecipe({
+          className: "color-picker",
+          description:
+            "The colour picker's innards — a title strip, a saturation/brightness map over a hue ramp and an alpha ramp, and a footer of format menu ∣ channel fields. The map is a live picture of the HSB solid at the current hue (`--color-picker-hue`) and the alpha ramp fades to the current colour (`--color-picker-alpha-to`) over the swatch's checkerboard, both handed in as custom properties because they change with the value. Slots are drawn to the docked properties rail's own metrics — a 40px header, a 12px body, a 48px footer on the 80 ∣ 8 ∣ 220 property row — since the picker opens 2px off that rail and the two read as one strip (Figma 1066:2338).",
+          slots: [
+            "root",
+            "header",
+            "title",
+            "body",
+            "map",
+            "mapThumb",
+            "sliderTrack",
+            "hue",
+            "alpha",
+            "footer",
+            "format",
+            "fields",
+            "channel",
+          ],
+          base: {
+            // The column the parts stack in. The picker owns a wrapper of its
+            // own rather than sitting straight in the popover because the hue
+            // and the colour are handed to CSS as custom properties on it, and
+            // a shell that is only ever a shell has nowhere to put them.
+            root: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+            },
+            // The rail's header strip, not the dialog's: this panel stands
+            // beside the rail, so it takes the rail's 12px inset rather than
+            // the 8px a floating dialog curves at.
+            header: {
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "md",
+              height: "token(spacing.4xl)",
+              paddingInline: "lg",
+              borderBottomWidth: "token(spacing.3xs)",
+              borderBottomStyle: "solid",
+              borderBottomColor: "border.divider",
+              // One ink for the strip, so the close chip (an icon `action`,
+              // painted in `currentColor`) matches the title beside it.
+              color: "text.body",
+            },
+            title: {
+              minWidth: 0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            },
+            body: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: "md",
+              padding: "lg",
+            },
+
+            // The (saturation, brightness) plane at one hue: saturation runs
+            // left to right, brightness bottom to top. Three layers, painted
+            // back to front — the hue itself, white washing it out towards the
+            // left, black taking it down towards the bottom. That IS the
+            // definition of the plane, which is why the two gradients are
+            // white and black rather than surface tokens: the corner the
+            // author drags into has to be the colour they picked.
+            map: {
+              position: "relative",
+              width: "token(spacing.full)",
+              aspectRatio: "1 / 1",
+              borderRadius: "sm",
+              cursor: "crosshair",
+              // Claim the pan gesture, exactly as the slider's track does —
+              // otherwise a touch drag scrolls the rail instead of picking.
+              touchAction: "none",
+              backgroundColor: "var(--color-picker-hue)",
+              backgroundImage:
+                "linear-gradient(to top, black, transparent), linear-gradient(to right, white, transparent)",
+              // A pale colour needs an edge against a pale surface — the same
+              // hairline the swatch draws around itself.
+              boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+              _disabled: { cursor: "not-allowed", opacity: 0.5 },
+            },
+            // A ring, not a dot: the colour under it is the thing being
+            // chosen, so the cursor must not cover it. Light ring, dark halo —
+            // one of the two always has contrast, on any colour in the plane.
+            mapThumb: {
+              position: "absolute",
+              width: "token(spacing.xl)",
+              height: "token(spacing.xl)",
+              borderRadius: "full",
+              transform: "translate(-50%, -50%)",
+              boxShadow:
+                "inset 0 0 0 2px token(colors.neutral.100), 0 0 0 0.5px color-mix(in srgb, var(--colors-neutral-900) 40%, transparent), inset 0 0 0 2.5px color-mix(in srgb, var(--colors-neutral-900) 40%, transparent)",
+              pointerEvents: "none",
+            },
+
+            // The two ramps are `Slider`s wearing their own track. The track is
+            // left at the width the frame gives it — the ramp reaches the
+            // frame's corners through the end-caps below, not by growing.
+            sliderTrack: {
+              // Pinned to the field's RESTING ink, and it does NOT follow the
+              // frame into the brand accent on focus as every other slider's
+              // thumb does: an orange handle halfway along a rainbow is a
+              // handle you cannot find. Nothing else about the focus state
+              // changes — frame, hairline and number all still light up.
+              //
+              // Above the end-caps, so a thumb parked at either end of the
+              // range is not half-covered by the pad it is standing against.
+              "& [data-slider-thumb]": {
+                backgroundColor: "field.text.default",
+                zIndex: 1,
+              },
+            },
+            // Hue is an angle, so the ramp ends where it begins — and both
+            // end-caps are therefore the same red.
+            hue: {
+              backgroundImage:
+                "linear-gradient(to right, #FF0000 0%, #FFFF00 16.667%, #00FF00 33.333%, #00FFFF 50%, #0000FF 66.667%, #FF00FF 83.333%, #FF0000 100%)",
+              "&::before": { ...rampPadStart, backgroundColor: "#FF0000" },
+              "&::after": { ...rampPadEnd, backgroundColor: "#FF0000" },
+            },
+            // Transparent → the colour itself, over the swatch's checkerboard
+            // so the transparent end reads as transparent rather than as the
+            // field's own fill. The caps carry the same two ends: bare
+            // checkerboard on the left, the colour at full strength on the
+            // right.
+            alpha: {
+              backgroundColor: "field.bg.default",
+              backgroundImage: `linear-gradient(to right, transparent, var(--color-picker-alpha-to)), ${ALPHA_CHECKERBOARD}`,
+              backgroundSize: "auto, token(spacing.md) token(spacing.md)",
+              "&::before": {
+                ...rampPadStart,
+                backgroundColor: "field.bg.default",
+                backgroundImage: ALPHA_CHECKERBOARD,
+                // One whole tile to the left of the track's own, so the two
+                // patterns stay in phase across the seam.
+                backgroundSize: "token(spacing.md) token(spacing.md)",
+              },
+              "&::after": {
+                ...rampPadEnd,
+                backgroundColor: "var(--color-picker-alpha-to)",
+              },
+            },
+
+            // 48px = the 40px strip plus the 8px the taller row needs, the same
+            // arithmetic the `lg` field height uses.
+            footer: {
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "md",
+              height: "calc(token(spacing.4xl) + token(spacing.md))",
+              paddingInline: "lg",
+              borderTopWidth: "token(spacing.3xs)",
+              borderTopStyle: "solid",
+              borderTopColor: "border.divider",
+            },
+            // The property row, one column each: the label's width for the
+            // format menu, the field's for the channels.
+            //
+            // Doubled, and it is load-bearing for the same reason
+            // `fieldValueBox` is: both of these land on a `<Field>` root, which
+            // carries the `field` recipe's own `width: 100%`. Panda emits slot
+            // recipes ALPHABETICALLY inside `@layer recipes.slots`, so
+            // `.field__root` lands after `.color-picker__fields` and wins on
+            // source order at equal specificity — the channel box would take
+            // the whole footer and squeeze the format menu to nothing.
+            format: { "&&": { flex: "1 1 0", minWidth: 0, width: "auto" } },
+            fields: {
+              "&&": {
+                flex: "0 0 auto",
+                width: "token(sizes.propertyRowField)",
+              },
+            },
+            // One channel of however many the current format has. Tabular,
+            // because three of them change together under a dragging cursor.
+            channel: {
+              flex: "1 1 0",
+              minWidth: 0,
+              fontVariantNumeric: "tabular-nums",
+              textTransform: "uppercase",
+            },
+          },
+        }),
+
 
         // The properties panel for an image's background effect — a header, a
         // column of label ∣ control rows, and the remove action (Figma 845:7223).
@@ -5655,6 +5965,17 @@ export default defineConfig({
   globalCss: {
     ":root": {
       "--global-color-focus-ring": "var(--colors-border-focus-ring)",
+    },
+    // The colour picker's overflow answer, and a CLAMP rather than the
+    // `flip-block` every other anchored menu here uses. Flipping puts a 492px
+    // panel's BOTTOM on its trigger, which for a row low on the screen throws
+    // the whole thing off the top — the panel is taller than the distance it
+    // would be flipping across. Pinning it to the foot of the viewport instead
+    // keeps every row of it on screen and gives up only the level-with-the-row
+    // alignment, which is the part that was never load-bearing.
+    "@position-try --color-picker-clamp": {
+      top: "auto",
+      bottom: "token(spacing.lg)",
     },
   },
 

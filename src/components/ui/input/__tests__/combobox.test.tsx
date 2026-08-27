@@ -170,3 +170,65 @@ describe("search", () => {
     expect(document.activeElement).toBe(trigger());
   });
 });
+
+describe("search={false}", () => {
+  it("opens the listbox with no search box, for a menu too short to filter", () => {
+    renderCombobox({ search: false });
+    fireEvent.click(trigger());
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    // The dressed search input takes role=combobox, not searchbox — see the
+    // OptionList root. Its absence is what "no search" means here.
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("moves focus onto the selected option instead, so the keyboard still has somewhere to land", () => {
+    renderCombobox({ search: false, defaultValue: "grapes" });
+    fireEvent.click(trigger());
+    expect(document.activeElement).toBe(
+      screen.getByRole("option", { name: "Grapes" }),
+    );
+  });
+
+  it("falls back to the first option when nothing is selected", () => {
+    renderCombobox({ search: false });
+    fireEvent.click(trigger());
+    expect(document.activeElement).toBe(
+      screen.getByRole("option", { name: "Apple" }),
+    );
+  });
+
+  it("still selects on click, closes, and restores focus to the trigger", () => {
+    const onValueChange = vi.fn();
+    renderCombobox({ search: false, onValueChange });
+    fireEvent.click(trigger());
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Banana"));
+    expect(onValueChange).toHaveBeenCalledWith("banana");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+  });
+});
+
+describe("size", () => {
+  it("opens a small list for a small field, so the menu keeps the field's pitch", () => {
+    render(
+      <Field size="sm">
+        <Field.Label>Fruit</Field.Label>
+        <Combobox>
+          {OPTIONS.map((o) => (
+            <Combobox.Option key={o.value} value={o.value}>
+              {o.label}
+            </Combobox.Option>
+          ))}
+        </Combobox>
+      </Field>,
+    );
+    fireEvent.click(trigger());
+    expect(screen.getByRole("listbox").className).toMatch(/size_sm/);
+  });
+
+  it("keeps the base list for the field sizes that have no small counterpart", () => {
+    renderCombobox();
+    fireEvent.click(trigger());
+    expect(screen.getByRole("listbox").className).toMatch(/size_md/);
+  });
+});
