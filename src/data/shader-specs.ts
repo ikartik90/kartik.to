@@ -644,6 +644,22 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // opens parked reads as a fault — which is why Speed is the one control
       // this shader moves off its own default and this is not.
       { kind: "slider", key: "parallax", label: "Parallax", group: "motion", min: 0, max: 1, step: 0.1, value: 0 },
+      // How likely a comet is to change lane rather than run through the tail
+      // of the other comet in its own. It steps ONE lane, left or right at
+      // random, at the cell its head was on when it got halfway into that
+      // tail, and finishes its run there — the trail bending at that cell
+      // rather than moving across with the head.
+      //
+      // Its own lane's other slot is the only comet it can catch, and that is
+      // what makes it affordable rather than a search: they share an axis and
+      // a lane, and a lane carries at most two. A trail crossing perpendicular
+      // belongs to some other lane, and nothing bounds which one.
+      //
+      // 0 is FREE rather than merely invisible — the shader skips the search
+      // and narrows its lane walk back — which is why this is a slider with a
+      // real off rather than a toggle: the middle is a field where some comets
+      // give way and some do not, which is the one worth looking at.
+      { kind: "slider", key: "swerve", label: "Swerve", group: "motion", min: 0, max: 1, step: 0.1, value: 1 },
       { kind: "slider", key: "easing", label: "Easing", group: "motion", min: -1, max: 1, step: 0.1, value: 1 },
       { kind: "slider", key: "easingBias", label: "Easing Bias", group: "motion", min: -1, max: 1, step: 0.1, value: 0 },
       ...FRAMING_CONTROLS,

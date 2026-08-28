@@ -83,6 +83,60 @@ describe("pixelCometsFragmentShader", () => {
     expect(/step\(at, /.test(pixelCometsFragmentShader)).toBe(false);
   });
 
+  // THE SWERVE. A comet that catches the tail of the other comet in its lane
+  // steps one lane sideways and finishes its run there.
+  //
+  // Its OWN lane's other slot is the only comet it can catch, and that is what
+  // makes the check affordable rather than a search: they share an axis and a
+  // lane, and a lane carries at most COMET_SLOTS. Anything crossing
+  // perpendicular belongs to somebody else's lane, and nothing bounds which
+  // one, so a fragment would have to sweep every lane along the run to find it.
+  //
+  // Tested against the other comet's BASE path — where it would be had it not
+  // swerved itself. Reading its real path is circular: two slots in a lane each
+  // asking the other what it did.
+  it("swerves a comet that catches the other one in its lane", () => {
+    expect(pixelCometsFragmentShader).toContain("vec3 otherComet(");
+    // How far into the other's tail this comet's head has got, in cells, and
+    // the half that fires it.
+    expect(pixelCometsFragmentShader).toContain(
+      "float pen = other.y * (other.x - posA);",
+    );
+    expect(pixelCometsFragmentShader).toContain("pen <= .5 * g_tailCells");
+  });
+
+  // The trail keeps the lane it was LAID in. The switch is a step in the trail
+  // at the cell the head switched on, not the whole trail moving across — so
+  // the lane a stretch of ink sits in is read at that stretch's own distance
+  // along the run, never at the head's.
+  it("bends the trail at the cell the head switched on", () => {
+    expect(pixelCometsFragmentShader).toContain(
+      "float shiftStep = toStep >= switchAt ? sideStep : 0.;",
+    );
+    expect(pixelCometsFragmentShader).toContain(
+      "float onLaneStep = abs(laneOffset + shiftStep) < .5 ? 1. : 0.;",
+    );
+    // The head's own bloom reads the shift at the HEAD, and the trail's at the
+    // nearest lit point — both distinct from the fragment's own stretch.
+    expect(pixelCometsFragmentShader).toContain(
+      "float shiftHead = headAt >= switchAt ? sideStep : 0.;",
+    );
+    expect(pixelCometsFragmentShader).toContain(
+      "float shiftNear = toNear >= switchAt ? sideStep : 0.;",
+    );
+  });
+
+  // Free when off, not merely invisible — the same bargain the glow radii
+  // strike with their strengths. The sampling below is the most expensive thing
+  // in the shader, and a field with no swerving must not pay for it.
+  it("does not look for traffic when nothing may swerve", () => {
+    expect(pixelCometsFragmentShader).toContain("if (u_swerve > 0.)");
+    // And the walk only widens by the lane a swerve can reach.
+    expect(pixelCometsFragmentShader).toContain(
+      "int swerveLanes = u_swerve > 0. ? 1 : 0;",
+    );
+  });
+
   // Falloff 0 is NO falloff: a trail whose last cell is as opaque as its first.
   //
   // It could not be while the curve was normalised. The subtraction that made
@@ -122,7 +176,9 @@ describe("pixelCometsFragmentShader", () => {
     expect(pixelCometsFragmentShader).toContain(
       "float alongToHead = ahead - clamp(ahead, -u_headStretch, 0.);",
     );
-    expect(pixelCometsFragmentShader).toContain("length(vec2(perp, alongToHead))");
+    // `perpHead`, not `perp`: a comet that has swerved is one lane off the lane
+    // being walked, and its bloom is centred on the lane its HEAD is in.
+    expect(pixelCometsFragmentShader).toContain("length(vec2(perpHead, alongToHead))");
     // The isotropic reading it started as: one radius in every direction.
     expect(
       /length\(vec2\(perp, alongFree - headCell\)\)/.test(pixelCometsFragmentShader),
@@ -207,9 +263,12 @@ describe("pixelCometsFragmentShader", () => {
   it("spreads the depth over the run, leaving the cycle alone", () => {
     expect(pixelCometsFragmentShader).toContain("float runCells = timing.x * depth;");
 
+    const opens = pixelCometsFragmentShader.indexOf("vec2 timingFor");
+    // The function's OWN body, closed at its own brace. Slicing to the next
+    // declaration instead swept up whatever came to sit between them.
     const timingFor = pixelCometsFragmentShader.slice(
-      pixelCometsFragmentShader.indexOf("vec2 timingFor"),
-      pixelCometsFragmentShader.indexOf("void addMover"),
+      opens,
+      pixelCometsFragmentShader.indexOf("\n}", opens) + 2,
     );
     expect(timingFor).not.toBe("");
     expect(timingFor).not.toContain("u_parallax");

@@ -173,6 +173,28 @@ export interface PixelCometsParams {
    */
   parallax: number;
   /**
+   * How likely a comet is to change lane rather than run through the tail of
+   * the other comet in its own. 0 for none, and free rather than merely
+   * invisible — the shader skips the whole search.
+   *
+   * It steps ONE lane, left or right at random, at the cell its head was on
+   * when it got halfway into the other's tail, and finishes its run there. The
+   * trail bends at that cell rather than moving across with the head: the ink
+   * already laid keeps the lane it was laid in.
+   *
+   * Its own lane's other slot is the only comet it can catch, and that is what
+   * makes it affordable rather than a search — they share an axis and a lane,
+   * and a lane carries at most two. A trail crossing perpendicular belongs to
+   * some other lane, and nothing bounds which, so finding one would mean
+   * sweeping every lane along the run for every comet at every fragment.
+   *
+   * WHERE it switches is sampled at four points along the run rather than
+   * solved for. A trail here is derived, not remembered, so "the instant it
+   * first got halfway in" is a question about when, and with `easing` on the
+   * motion has no analytic inverse.
+   */
+  swerve: number;
+  /**
    * How far behind the head the trail is still lit, in CELLS. 0 leaves the head
    * alone on the grid.
    *
@@ -360,6 +382,7 @@ export interface PixelCometsUniforms {
   u_originMax: number;
   u_travelSpans: number;
   u_parallax: number;
+  u_swerve: number;
   u_tail: number;
   u_tailBlend: number;
   u_falloff: number;
@@ -392,6 +415,7 @@ export const DEFAULT_PIXEL_COMETS: PixelCometsParams = {
   originMax: 2,
   travelSpans: 1.5,
   parallax: 0,
+  swerve: 1,
   tail: 14,
   tailBlend: 0,
   falloff: 0.6,
@@ -472,6 +496,11 @@ export function toPixelCometsUniforms(params: PixelCometsParams): PixelCometsUni
     // depth can reach nought, which is not a slow comet but a run of no length
     // at all. No ceiling — past 1 the near plane simply comes nearer.
     u_parallax: Math.max(params.parallax, 0),
+    // Clamped BOTH ways, unlike the floors around it: it is read as odds
+    // against a hash, so past 1 there is nothing further to buy and under 0 the
+    // comparison can only fail. 0 is the field running straight through itself,
+    // and the shader skips the search entirely there.
+    u_swerve: clamp(params.swerve, 0, 1),
     u_tail: Math.max(params.tail, 0),
     // A MIX factor, so it is clamped for the reason cosmic track clamps its
     // own: `mix` extrapolates, and past either end the fade is dragged beyond
