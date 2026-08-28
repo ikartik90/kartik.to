@@ -1,7 +1,7 @@
 import { getShaderColorFromString } from "@paper-design/shaders";
 
 // ---------------------------------------------------------------------------
-// Nexus — friendly props in, GLSL uniforms out.
+// Pixel Comets — friendly props in, GLSL uniforms out.
 //
 // A pure module for the same reason `cosmic-track-uniforms` is one: jsdom has
 // no WebGL and every suite that renders a shader mocks the library wholesale,
@@ -10,7 +10,7 @@ import { getShaderColorFromString } from "@paper-design/shaders";
 // ---------------------------------------------------------------------------
 
 /** Matches `uniform vec4 u_colors[8]` in the fragment shader. Keep in step. */
-export const NEXUS_MAX_COLORS = 8;
+export const PIXEL_COMETS_MAX_COLORS = 8;
 
 /**
  * How far a glow may reach, in CELLS — and the shader's neighbourhood radius,
@@ -31,7 +31,7 @@ export const NEXUS_MAX_COLORS = 8;
  * no way to know that, so the range in `SHADER_SPECS` is written against this
  * constant rather than beside it.
  */
-export const NEXUS_MAX_GLOW_REACH = 3;
+export const PIXEL_COMETS_MAX_GLOW_REACH = 3;
 
 /**
  * The floor on a pixel, in CSS pixels. Under one the lattice is finer than the
@@ -41,10 +41,10 @@ export const NEXUS_MAX_GLOW_REACH = 3;
  */
 const MIN_PIXEL_SIZE = 1;
 
-export interface NexusParams {
+export interface PixelCometsParams {
   /**
    * The palette a mover is drawn from — each one hashes to a single stop and
-   * keeps it for its whole life. Up to `NEXUS_MAX_COLORS`.
+   * keeps it for its whole life. Up to `PIXEL_COMETS_MAX_COLORS`.
    *
    * A LIST, not a ramp: nothing here interpolates between two stops, because a
    * mover is one pixel and a pixel is one colour. So the count of colours is
@@ -104,36 +104,74 @@ export interface NexusParams {
    * number breathes around it the way a random field does.
    *
    * It saturates rather than errors past what the lattice can hold (see
-   * `NEXUS_SLOTS` in the shader): a lane carries at most two movers at a time,
+   * `COMET_SLOTS` in the shader): a lane carries at most two movers at a time,
    * so a coarse grid on a small card runs out of room before the slider does.
    */
   count: number;
   /**
-   * WHICH movers, at the same count.
+   * The band of distances from the CENTRE a mover may be born in, measured in
+   * HALF-FRAMES along its own lane: 0 is the centre, 1 is the frame's edge, 2
+   * is half a frame beyond it.
    *
-   * Not a count of its own, which is the thing worth being clear about: the
-   * indices a field spawns on come from hashing the lane against something, and
-   * if `count` were the only thing hashed there would be exactly ONE
-   * twenty-mover arrangement — the only way to see a different one would be to
-   * ask for twenty-one, which is also a different number of movers.
+   * Half-frames rather than cells, and it is the one measurement here that
+   * could not have been in cells. A cell is a fixed size on screen, so the
+   * distance to the frame's edge is a different number of them at every Pixel
+   * Size and on every card — and "born outside the frame" is exactly the
+   * setting this control exists to offer. Against the frame it is 1, always.
    *
-   * The field churns on its own (every mover dies and a fresh one takes its
-   * slot), so this does not fix a layout so much as the whole sequence. Without
-   * it two presets at the same count would run pixel-for-pixel identical for
-   * ever.
+   * The two ends are not sorted. `mix` covers the same band either way round,
+   * which is what lets a min be dragged past its max without the field
+   * collapsing while the slider is in flight.
+   *
+   * A distance and not a position: which side of the centre a mover appears on
+   * is the shader's own coin toss, and whichever side it is, the mover marches
+   * BACK at the centre. That is why raising the far end reads as a field
+   * converging on the middle rather than as one drifting across it.
    */
-  seed: number;
+  originMin: number;
+  originMax: number;
   /**
-   * How far a mover runs before it stops emitting, in CELLS.
+   * How far a mover runs before it stops emitting, in the same HALF-FRAMES.
    *
    * Not how long it is VISIBLE: when the head stops, the trail it has already
    * laid keeps fading, so the mover outlives its run by `tail`. That is the
    * difference between a comet and a light being switched off — and it is why
    * this is a distance rather than a lifetime.
    *
-   * A mover that reaches the frame's edge before this simply leaves.
+   * The frame unit is what makes the top of this control mean something. In
+   * cells the same setting crossed the card at one Pixel Size and stranded a
+   * mover in mid-air at another; here 2 is edge to edge whatever the lattice is
+   * doing, and the panel's ceiling is set so that a mover born at the furthest
+   * origin still leaves by the far side.
+   *
+   * `tail` is still in CELLS, and deliberately so: a trail is a handful of
+   * pixels, which is a fact about the lattice rather than about the frame. The
+   * two used to share a unit and be read against each other; they no longer
+   * can, because they are no longer the same kind of measurement.
    */
-  travel: number;
+  travelSpans: number;
+  /**
+   * How much the comets' speeds are spread apart, 0 for one flat plane.
+   *
+   * Each comet is handed a DEPTH and a nearer one covers more ground in the
+   * same cycle, which is a comet moving faster. Nothing else about it changes:
+   * a head is one cell wide by construction, so the near plane cannot be drawn
+   * bigger, and the ratio between two crossing times is the only depth cue a
+   * lattice this rigid has. It is also the strongest — parallax is what the eye
+   * reads depth from when everything else is held equal.
+   *
+   * It only ever brings a comet NEARER: `travelSpans` names the far plane, and
+   * spreading the other way would leave the slowest stranded inside the frame
+   * at a Travel whose whole promise is that they leave.
+   *
+   * The field thins a little as this rises, and the reason is the effect
+   * working: a nearer comet crosses sooner, so it spends less of its life on
+   * the card. `count` is the dial for that. It is deliberately NOT corrected
+   * for here — how much of a run lands on screen depends on `travelSpans` too,
+   * so a correction would overshoot at a short run as badly as it helped at a
+   * long one.
+   */
+  parallax: number;
   /**
    * How far behind the head the trail is still lit, in CELLS. 0 leaves the head
    * alone on the grid.
@@ -200,10 +238,35 @@ export interface NexusParams {
   /** How bright the bloom around the HEAD is. 0 is a flat pixel. */
   headGlow: number;
   /**
-   * How far that bloom reaches, in cells. Capped at `NEXUS_MAX_GLOW_REACH` —
+   * How far that bloom reaches, in cells. Capped at `PIXEL_COMETS_MAX_GLOW_REACH` —
    * past it the halo is clipped square rather than made larger.
    */
   headRadius: number;
+  /**
+   * How far the head's bloom is smeared BACKWARDS, in cells, at the far plane.
+   * 0 is the bare radial glow.
+   *
+   * Motion blur on a radial glow, which is what a moving body's light does:
+   * inertia drags the circle out opposite to the direction of travel. The shape
+   * is the union of every position the circle held over the exposure — a
+   * capsule, round at both ends, with the head at its leading cap — so it
+   * reaches no further AHEAD than the bare circle ever did, and everything the
+   * control adds goes behind.
+   *
+   * DIALLED, not derived from how fast the comet is going. Speed is the honest
+   * reading of an exposure and it was written that way first; what it costs is
+   * a streak length nothing on the panel names, drifting with `parallax` and
+   * `travelSpans`, so the one thing you cannot do is set the look you want and
+   * keep it.
+   *
+   * `headRadius` keeps naming the half-width ACROSS the lane and only the
+   * along-lane axis stretches, which is not merely a choice about which number
+   * means what. The across-lane reach is what the shader's neighbourhood walk is
+   * sized against — see `PIXEL_COMETS_MAX_GLOW_REACH` — so stretching that way
+   * would push the bloom past the lanes being walked and clip it square. Along
+   * the lane it is free.
+   */
+  headStretch: number;
   /**
    * How bright the bloom along the TRAIL is. Its own control rather than a
    * fraction of `headGlow` because the two answer different questions: a head
@@ -283,7 +346,7 @@ export interface NexusParams {
   easingBias: number;
 }
 
-export interface NexusUniforms {
+export interface PixelCometsUniforms {
   u_colors: [number, number, number, number][];
   u_colorsCount: number;
   u_colorBack: [number, number, number, number];
@@ -291,13 +354,16 @@ export interface NexusUniforms {
   u_colorGridMajor: [number, number, number, number];
   u_pixelSize: number;
   u_count: number;
-  u_seed: number;
-  u_travel: number;
+  u_originMin: number;
+  u_originMax: number;
+  u_travelSpans: number;
+  u_parallax: number;
   u_tail: number;
   u_tailBlend: number;
   u_falloff: number;
   u_headGlow: number;
   u_headRadius: number;
+  u_headStretch: number;
   u_tailGlow: number;
   u_tailRadius: number;
   u_gridWidth: number;
@@ -313,20 +379,23 @@ export interface NexusUniforms {
  * the only saturated thing on the card, so they have to be able to sit beside
  * each other without any two of them reading as the same pixel.
  */
-export const DEFAULT_NEXUS: NexusParams = {
+export const DEFAULT_PIXEL_COMETS: PixelCometsParams = {
   colors: ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#00E5FF"],
   colorBack: "#080B12FF",
   colorGrid: "#A8C0FF29",
   colorGridMajor: "#A8C0FF5C",
   pixelSize: 8,
   count: 30,
-  seed: 0,
-  travel: 40,
+  originMin: 0,
+  originMax: 2,
+  travelSpans: 1.5,
+  parallax: 0,
   tail: 14,
   tailBlend: 0,
   falloff: 0.6,
   headGlow: 0.8,
   headRadius: 1.2,
+  headStretch: 2,
   tailGlow: 0.4,
   tailRadius: 0.8,
   gridWidth: 2,
@@ -338,8 +407,8 @@ export const DEFAULT_NEXUS: NexusParams = {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-export function toNexusUniforms(params: NexusParams): NexusUniforms {
-  const given = params.colors.slice(0, NEXUS_MAX_COLORS);
+export function toPixelCometsUniforms(params: PixelCometsParams): PixelCometsUniforms {
+  const given = params.colors.slice(0, PIXEL_COMETS_MAX_COLORS);
   // An empty list would leave every mover indexing an unset slot and drawing
   // black holes in the ground. A caller mistake should degrade to one colour,
   // not to a fault.
@@ -354,7 +423,7 @@ export function toNexusUniforms(params: NexusParams): NexusUniforms {
   // reports the REAL count, or a mover's hash lands in the padding and the
   // palette silently gains a duplicate of its last stop.
   const padded = [...converted];
-  while (padded.length < NEXUS_MAX_COLORS) {
+  while (padded.length < PIXEL_COMETS_MAX_COLORS) {
     padded.push(converted[converted.length - 1]);
   }
 
@@ -386,11 +455,21 @@ export function toNexusUniforms(params: NexusParams): NexusUniforms {
     // Floored at 0. Negative odds would fail every comparison in the shader and
     // empty the field, which reads as a broken shader rather than a still one.
     u_count: Math.max(params.count, 0),
-    u_seed: params.seed,
-    // Floored at one CELL. At zero the head has nowhere to go, so the mover
-    // spawns and dies in place — and the run's length divides the progress, so
-    // it would take the field with it.
-    u_travel: Math.max(params.travel, 1),
+    // Floored at the centre, not sorted. A distance from the centre has no
+    // sign — the side is the shader's coin toss — so a negative here would be
+    // the same band written backwards; and the two ends are left in whatever
+    // order they came in because `mix` spans them either way.
+    u_originMin: Math.max(params.originMin, 0),
+    u_originMax: Math.max(params.originMax, 0),
+    // Floored at nothing rather than at one cell. How many cells a run is
+    // worth is not known until the frame is, so the one-cell floor — without
+    // which the head has nowhere to go and the run's length divides the
+    // progress to nothing — moved into the shader, where the frame is.
+    u_travelSpans: Math.max(params.travelSpans, 0),
+    // Floored at a flat field. Below zero the spread runs the wrong way and a
+    // depth can reach nought, which is not a slow comet but a run of no length
+    // at all. No ceiling — past 1 the near plane simply comes nearer.
+    u_parallax: Math.max(params.parallax, 0),
     u_tail: Math.max(params.tail, 0),
     // A MIX factor, so it is clamped for the reason cosmic track clamps its
     // own: `mix` extrapolates, and past either end the fade is dragged beyond
@@ -404,9 +483,16 @@ export function toNexusUniforms(params: NexusParams): NexusUniforms {
     u_headGlow: Math.max(params.headGlow, 0),
     // Capped at the shader's own lane reach. Past it the halo is not larger,
     // only clipped — and clipped square, which reads as a bug.
-    u_headRadius: clamp(params.headRadius, 0, NEXUS_MAX_GLOW_REACH),
+    u_headRadius: clamp(params.headRadius, 0, PIXEL_COMETS_MAX_GLOW_REACH),
+    // Floored at no smear, which is the bare radial glow and a real setting. A
+    // negative one would clamp against a segment running the wrong way and put
+    // the blur in FRONT of the comet, which is the one direction inertia cannot
+    // throw it. No ceiling, and no cap against the glow reach either: that cap
+    // guards the LANE WALK, which only the across-lane radius can outrun — see
+    // the bloom itself.
+    u_headStretch: Math.max(params.headStretch, 0),
     u_tailGlow: Math.max(params.tailGlow, 0),
-    u_tailRadius: clamp(params.tailRadius, 0, NEXUS_MAX_GLOW_REACH),
+    u_tailRadius: clamp(params.tailRadius, 0, PIXEL_COMETS_MAX_GLOW_REACH),
     u_gridWidth: Math.max(params.gridWidth, 0),
     // Rounded and floored: the shader counts lines with it, so a fractional
     // "every 3.5th" has no meaning, and a negative one would send `mod` looking

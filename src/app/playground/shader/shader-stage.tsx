@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 import { css } from "../../../../styled-system/css";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
-import { Nexus } from "@/components/shaders/nexus";
+import { PixelComets } from "@/components/shaders/pixel-comets";
 import type { Params, ShaderSpec } from "@/data/shader-specs";
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ export function ShaderStage({
   switch (spec.id) {
     case "cosmicTrack":
       return <CosmicTrack {...(props as ComponentProps<typeof CosmicTrack>)} />;
-    case "nexus":
-      return <Nexus {...(props as ComponentProps<typeof Nexus>)} />;
+    case "pixelComets":
+      return <PixelComets {...(props as ComponentProps<typeof PixelComets>)} />;
   }
 }

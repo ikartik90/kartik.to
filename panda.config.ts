@@ -4897,6 +4897,69 @@ export default defineConfig({
                   "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)",
                 backgroundSize: "token(spacing.md) token(spacing.md)",
               },
+              // EMPTY, said out loud: hatched with the frame's own hairline.
+              //
+              // The wash alone did not say it. `field.bg.default` is the fill
+              // every input in the rail rests on, so a blank cell read as a
+              // swatch holding that colour rather than as one holding none —
+              // and on a ramp, "there is a colour here" and "there is room
+              // here" are the two things a cell has to tell apart.
+              //
+              // SHADING rather than a single strike through the middle. A lone
+              // diagonal is a mark laid ON a cell — it reads as a cell that has
+              // been crossed out, which is a different claim from an empty one.
+              // Ruled at a 2.8px pitch the lines stop being a mark and become a
+              // tone, which is what a blank should be: a texture you look past,
+              // not a symbol you read.
+              //
+              // The ink is the frame's own hairline exactly: 0.5px of
+              // `field.border.default`, so the shading and the edge around it
+              // are one piece of drawing rather than two weights of line.
+              //
+              // ONE line in a TILED 4px square, and every part of that is
+              // load-bearing.
+              //
+              //   • Tiled rather than `repeating-linear-gradient`. A repeating
+              //     gradient is rasterised as one image across the whole box,
+              //     so every line lands on a different subpixel phase: at 0.5px
+              //     the coverage of a device pixel then differs line to line and
+              //     the hatching draws visibly uneven, some rules darker than
+              //     their neighbours. A `background-size` tile is rendered once
+              //     and repeated, so every line is the SAME rasterisation and
+              //     the tone is even. The tile is a whole number of CSS pixels
+              //     for the same reason — a fractional one would put each
+              //     repeat back on its own phase.
+              //
+              //   • One line per tile rather than two. Two would alternate
+              //     between two phases within the tile and bring the unevenness
+              //     back at half the period.
+              //
+              //   • That line is the tile's own corner-to-corner diagonal — the
+              //     band at 50%, which for a square at 135deg is exactly it.
+              //     Corner to corner is what makes the tiling seamless: each
+              //     line ends where the next tile's begins, so they run on as
+              //     unbroken diagonals across the cell rather than breaking at
+              //     every tile edge. The pitch is then the tile over root two,
+              //     which is the 2.8px above.
+              //
+              // Stops are measured ALONG the gradient line, perpendicular to the
+              // band, so the 0.5px is a true width whatever angle the tile works
+              // out to — no aspect-ratio arithmetic, which matters because the
+              // cell's 36×28 is a consequence of the column the grid is drawn in
+              // (see `grid`) and not a number this recipe knows.
+              //
+              // Under the add glyph rather than replacing it: the shading says
+              // what the cell IS, the glyph says what pressing it would do, and
+              // the glyph is drawn over it on hover (see `icon`).
+              "&:not([data-swatch-filled])::before": {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                backgroundImage:
+                  "linear-gradient(135deg, transparent calc(50% - 0.25px), var(--colors-field-border-default) calc(50% - 0.25px), var(--colors-field-border-default) calc(50% + 0.25px), transparent calc(50% + 0.25px))",
+                backgroundSize: "token(spacing.sm) token(spacing.sm)",
+              },
               // A blank that cannot take a colour — a full ramp, or a grid
               // given no `onAdd`. Every other blank is pressable, so this is
               // the one case that offers nothing and says so by not lighting
@@ -5377,10 +5440,27 @@ export default defineConfig({
               gap: "md",
               height: "token(spacing.4xl)",
               paddingInline: "lg",
-              // A shadow, for the reason the root's hairline is one: as a
-              // border it took half a pixel off the strip's own height, which
-              // left the chips in it centred a quarter pixel high. See `root`.
-              boxShadow: "inset 0 -0.5px 0 var(--colors-border-divider)",
+              // Two shadows: the panel's own edge, and this strip's underline.
+              //
+              // The edge has to be REDRAWN here, and that is the fill above
+              // paying for itself. The root's hairline is an INSET shadow, so
+              // it paints over the root's background but under every child's —
+              // and this child is opaque, full-bleed and 40px tall, so it hid
+              // the panel's edge for exactly its own height. The panel looked
+              // like a rail whose left border began below its title.
+              //
+              // `--panel-hairline` rather than the edge written out, so this
+              // follows the dock: the left edge on a docked rail, the top one
+              // on a sheet, decided once on `root` (see there). The sheet had
+              // the same fault for the same reason — its top edge is under this
+              // header — and the same declaration answers both.
+              //
+              // A shadow for the underline too, for the reason the root's edge
+              // is one: as a border it took half a pixel off the strip's own
+              // height, which left the chips in it centred a quarter pixel
+              // high. See `root`.
+              boxShadow:
+                "var(--panel-hairline), inset 0 -0.5px 0 var(--colors-border-divider)",
               // The whole strip is one ink, stated ONCE here (Figma 845:7232).
               // The buttons in it are `action`'s icon variant, which paints in
               // `currentColor` precisely so a toolbar decides its own ink —

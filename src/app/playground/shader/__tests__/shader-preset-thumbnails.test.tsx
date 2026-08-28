@@ -43,19 +43,22 @@ const preset = (id: string, shaderId = "cosmicTrack", updatedAt = "2026-01-01") 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 
+// The ground is passed at every call rather than defaulted. It used to default
+// to "light", which is how a picture came to be filed under a ground it was not
+// drawn on — see the key's own note.
 describe("thumbnailKey", () => {
   // Keyed on the EDIT, not just the row: a preset that has been retuned is a
   // different picture under the same id, and a cache that could not tell them
   // apart would show the old one until a reload.
   it("changes when the preset is edited", () => {
-    expect(thumbnailKey(preset("a", "cosmicTrack", "2026-01-01"))).not.toBe(
-      thumbnailKey(preset("a", "cosmicTrack", "2026-02-02")),
-    );
+    expect(
+      thumbnailKey(preset("a", "cosmicTrack", "2026-01-01"), "light"),
+    ).not.toBe(thumbnailKey(preset("a", "cosmicTrack", "2026-02-02"), "light"));
   });
 
   it("is stable for the same preset at the same edit", () => {
-    expect(thumbnailKey(preset("a", "cosmicTrack"))).toBe(
-      thumbnailKey(preset("a", "cosmicTrack")),
+    expect(thumbnailKey(preset("a", "cosmicTrack"), "light")).toBe(
+      thumbnailKey(preset("a", "cosmicTrack"), "light"),
     );
   });
 });
@@ -74,6 +77,7 @@ describe("captureOrder", () => {
         preset("d", "otherShader"),
       ],
       new Set(),
+      "light",
     );
     expect(order.map((p) => p.shaderId)).toEqual([
       "cosmicTrack",
@@ -87,14 +91,21 @@ describe("captureOrder", () => {
     const done = preset("a", "cosmicTrack");
     const order = captureOrder(
       [done, preset("b", "otherShader")],
-      new Set([thumbnailKey(done)]),
+      new Set([thumbnailKey(done, "light")]),
+      "light",
     );
     expect(order.map((p) => p.id)).toEqual(["b"]);
   });
 
   it("is empty once every preset has a picture", () => {
     const presets = [preset("a", "cosmicTrack"), preset("b", "otherShader")];
-    expect(captureOrder(presets, new Set(presets.map((preset) => thumbnailKey(preset))))).toEqual([]);
+    expect(
+      captureOrder(
+        presets,
+        new Set(presets.map((preset) => thumbnailKey(preset, "light"))),
+        "light",
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -130,10 +141,43 @@ describe("ShaderPresetThumbnails", () => {
     await waitFor(() => expect(Object.keys(captured)).toHaveLength(2), {
       timeout: 3000,
     });
-    expect(captured[thumbnailKey(presets[0])]).toContain("cosmicTrack");
-    expect(captured[thumbnailKey(presets[1])]).toContain("cosmicTrack");
+    expect(captured[thumbnailKey(presets[0], "light")]).toContain("cosmicTrack");
+    expect(captured[thumbnailKey(presets[1], "light")]).toContain("cosmicTrack");
     // Two pictures, not one picture counted twice.
-    expect(thumbnailKey(presets[0])).not.toBe(thumbnailKey(presets[1]));
+    expect(thumbnailKey(presets[0], "light")).not.toBe(
+      thumbnailKey(presets[1], "light"),
+    );
+  });
+
+  // A picture is filed under the ground it was DRAWN on.
+  //
+  // It was filed under "light" whatever it was drawn on — `thumbnailKey`'s
+  // default, taken by a call that forgot to pass the theme — so on a dark site
+  // the strip asked for a key nothing had ever written and every tile fell back
+  // to its ramp swatch: a gradient where a photograph should be. The light key
+  // meanwhile held a dark photograph, so switching back showed the wrong ground.
+  //
+  // The `light` half of this is as load-bearing as the `dark` half: writing
+  // BOTH keys would hide the fault behind a tile that happened to look right.
+  it("files a picture under the ground it was drawn on", async () => {
+    const captured: Record<string, string> = {};
+    const presets = [preset("a")];
+
+    render(
+      <ShaderPresetThumbnails
+        presets={presets}
+        theme="dark"
+        onCaptured={(key, url) => {
+          captured[key] = url;
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(Object.keys(captured)).toHaveLength(1), {
+      timeout: 3000,
+    });
+    expect(captured[thumbnailKey(presets[0], "dark")]).toContain("cosmicTrack");
+    expect(captured[thumbnailKey(presets[0], "light")]).toBeUndefined();
   });
 
   // Nothing left to draw means nothing mounted: the renderer holds a webgl2

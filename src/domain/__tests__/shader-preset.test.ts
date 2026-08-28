@@ -467,6 +467,74 @@ describe("phase", () => {
   });
 });
 
+// Travel stopped being a number of cells and became a share of the FRAME, so
+// that the top of the slider carries a comet out the far side whatever the
+// pixel size. A count of cells and a count of half-frames are different
+// quantities, so the stored numbers had to be re-expressed.
+describe("travel", () => {
+  const parse = (params: Record<string, unknown>) =>
+    ShaderPresetContentSchema.parse({
+      shaderId: "pixelComets",
+      settings: { ...defaultState(SHADER_SPECS.pixelComets), params },
+    }).settings.params;
+
+  // There is no exact conversion — how many cells a half-frame is worth
+  // depends on the card and the pixel size, neither of which a stored preset
+  // records. So it is carried by the scale the two DEFAULTS share: a preset
+  // left at the old default opens on the new one, and everything else keeps
+  // its proportion to it.
+  it("carries a travel saved in cells across on the defaults' own scale", () => {
+    expect(parse({ travel: 40 }).travelSpans).toBe(1.5);
+    expect(parse({ travel: 80 }).travelSpans).toBe(3);
+  });
+
+  // A run of one cell was a legal saving and converts to a twenty-sixth of a
+  // stop, which the slider cannot show and the shader would read as a comet
+  // that never leaves. Held on the first stop instead — the shortest run the
+  // control can express.
+  it("holds a run too short to express on the slider's first stop", () => {
+    expect(parse({ travel: 1 }).travelSpans).toBe(0.1);
+  });
+
+  // Onto the slider's own stops, for the reason phase is: a value between them
+  // is one the control cannot show, so the first touch would lose it.
+  it("rounds a converted travel onto the slider's stops", () => {
+    expect(parse({ travel: 41 }).travelSpans).toBe(1.5);
+    expect(parse({ travel: 55 }).travelSpans).toBe(2.1);
+  });
+
+  it("leaves a travel already measured in half-frames alone", () => {
+    expect(parse({ travelSpans: 2.5 }).travelSpans).toBe(2.5);
+  });
+
+  it("prefers the new measure when a stale cell count sits beside it", () => {
+    expect(parse({ travel: 40, travelSpans: 3 }).travelSpans).toBe(3);
+  });
+
+  // Cosmic Track has a `travel` of its OWN, in units that did not change — a
+  // migration keyed on the param name alone would rename it out from under
+  // every preset saved on that shader, and the value would come back as
+  // whatever today's default happens to be. A param name is only unique within
+  // a shader, so a conversion has to name the shader it belongs to.
+  it("leaves the other shader's own travel where it is", () => {
+    const params = ShaderPresetContentSchema.parse({
+      shaderId: "cosmicTrack",
+      settings: { ...defaultState(SHADER_SPECS.cosmicTrack), params: { travel: 3 } },
+    }).settings.params;
+
+    expect(params.travel).toBe(3);
+    expect("travelSpans" in params).toBe(false);
+  });
+
+  // Seed is RETIRED rather than renamed: it hashed the lanes, and the two
+  // controls that took its place are distances. Nothing about a stored seed
+  // says anything about where a comet should be born, so it is dropped the way
+  // any unknown key is — see the schema's own note.
+  it("drops a stored seed rather than reading it as a distance", () => {
+    expect("seed" in parse({ seed: 42 })).toBe(false);
+  });
+});
+
 describe("framingFor", () => {
   it("gives the shape's own framing where it has one", () => {
     const settings = {

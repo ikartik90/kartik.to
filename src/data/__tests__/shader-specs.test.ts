@@ -170,7 +170,7 @@ describe("extraColorRows", () => {
   });
 
   it("collapses colours naming the same row, keeping the table's order", () => {
-    const rows = extraColorRows(SHADER_SPECS.nexus);
+    const rows = extraColorRows(SHADER_SPECS.pixelComets);
     const grid = rows.find((row) => row.label === "Grid");
 
     expect(grid?.colors.map((color) => color.key)).toEqual([
