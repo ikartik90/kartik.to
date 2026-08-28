@@ -22,8 +22,8 @@ import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
-import { createCover, saveCover } from "@/app/actions/cover";
-import { hasUnsavedCoverWork, useCoverDraftStore } from "@/store/cover-draft";
+import { createShaderPreset, saveShaderPreset } from "@/app/actions/shader-preset";
+import { hasUnsavedShaderPresetWork, useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ import { useIsAdmin } from "@/hooks/use-is-admin";
  * Discard command and one unsaved-work question serve all three, instead of
  * three near-copies that have to be kept saying the same thing.
  */
-export type EditorKind = "cover" | "grid" | "document" | null;
+export type EditorKind = "shaderPreset" | "grid" | "document" | null;
 
 export interface CommandPaletteHandlers {
   isAdmin: boolean;
@@ -68,7 +68,7 @@ export interface CommandPaletteHandlers {
   handleBack: () => void;
   /**
    * Which editor is open, if any — and so which set of exits applies. Also
-   * names the palette's group, since "This Cover" / "This Page" / "This
+   * names the palette's group, since "This Preset" / "This Page" / "This
    * Article" are the same heading in three wordings.
    */
   editorKind: EditorKind;
@@ -77,10 +77,10 @@ export interface CommandPaletteHandlers {
   /** Abandon whatever editor is open and leave. */
   handleDiscardAndExit: () => void;
   handleThemeToggle: () => void;
-  /** Open the cover playground — public, so this is offered logged out too. */
-  handleCoverPlayground: () => void;
+  /** Open the shader playground — public, so this is offered logged out too. */
+  handleShaderPlayground: () => void;
   /** On the playground — which is an editor, so it has the same exits. */
-  isCoverPlayground: boolean;
+  isShaderPlayground: boolean;
   /**
    * Where a blocked exit was headed, or null. Non-null means the author asked
    * to leave an editor with unsaved work in it and has been asked what to do.
@@ -143,16 +143,16 @@ export function useCommandPalette(
   // needs its own branch or it would be offered an article's exits.
   const isHomeEditMode = pathname === "/edit/home";
 
-  // The playground, either freshly opened or reopened on a saved cover. Both,
+  // The playground, either freshly opened or reopened on a saved preset. Both,
   // because Save means "create" on one and "update" on the other but the group
   // offering it is the same group.
-  const isCoverPlayground = /^\/playground\/cover(\/[^/]+)?$/.test(pathname);
+  const isShaderPlayground = /^\/playground\/shader(\/[^/]+)?$/.test(pathname);
 
   // Which editor is open. Ordered most-specific first: `/edit/home` also
   // satisfies the generic edit-mode test, and it edits a GRID rather than a
   // document.
-  const editorKind: EditorKind = isCoverPlayground
-    ? "cover"
+  const editorKind: EditorKind = isShaderPlayground
+    ? "shaderPreset"
     : isHomeEditMode
       ? "grid"
       : isEditMode
@@ -230,12 +230,12 @@ export function useCommandPalette(
   const wouldLoseWork = () => {
     if (!isAdmin) return false;
     switch (editorKind) {
-      // Every cover holding something, not just the one on screen. The strip
+      // Every preset holding something, not just the one on screen. The strip
       // lets you move between presets freely and sets each draft aside as you
-      // go, so "unsaved work" is no longer a fact about the open cover — and an
-      // exit that only checked that one would drop the rest without asking.
-      case "cover":
-        return hasUnsavedCoverWork(useCoverDraftStore.getState());
+      // go, so "unsaved work" is no longer a fact about the open preset — and
+      // an exit that only checked that one would drop the rest without asking.
+      case "shaderPreset":
+        return hasUnsavedShaderPresetWork(useShaderPresetDraftStore.getState());
       // TWO drafts, one page — the homepage is a document with a grid in it and
       // either half can be the dirty one. See `persistGrid`.
       case "grid":
@@ -354,13 +354,13 @@ export function useCommandPalette(
   // because they are a place you go to WRITE and then come back from. The
   // playground is somewhere you go to look, and the way back is the index link
   // it already draws.
-  const handleCoverPlayground = () => {
+  const handleShaderPlayground = () => {
     close();
-    router.push("/playground/cover");
+    router.push("/playground/shader");
   };
 
   /**
-   * Write the cover being tuned. Shared by ⌘S and by the palette's two save
+   * Write the preset being tuned. Shared by ⌘S and by the palette's two save
    * commands, which differ ONLY in where they leave you afterwards.
    *
    * Create or update is decided by whether the draft carries an id, not by the
@@ -375,12 +375,12 @@ export function useCommandPalette(
    * can decline to — leaving on a failed write would strand the work on a page
    * the author can no longer see.
    */
-  const persistCover = async (): Promise<boolean> => {
-    const { coverId, title, shaderId, settings } = useCoverDraftStore.getState();
+  const persistShaderPreset = async (): Promise<boolean> => {
+    const { shaderPresetId, title, shaderId, settings } = useShaderPresetDraftStore.getState();
     try {
-      const saved = coverId
-        ? await saveCover({ id: coverId, shaderId, settings })
-        : await createCover({ title, shaderId, settings });
+      const saved = shaderPresetId
+        ? await saveShaderPreset({ id: shaderPresetId, shaderId, settings })
+        : await createShaderPreset({ title, shaderId, settings });
       // Adopt what was STORED rather than what was sent: the schema normalises
       // on the way in (six-digit colours padded, retired keys dropped), so this
       // is what makes the panel read the same as the row. It also clears the
@@ -388,18 +388,18 @@ export function useCommandPalette(
       // away work that has just been written.
       // COMMIT rather than load: the draft on screen has just been written, so
       // it must not be set aside as unsaved work — see the store.
-      useCoverDraftStore.getState().commit({
+      useShaderPresetDraftStore.getState().commit({
         id: saved.id,
         title: saved.title ?? null,
         shaderId: saved.shaderId,
         settings: saved.settings,
         // Whether the row is on show, carried back with it. A save never
-        // changes it — `saveCover` does not touch the column — but reading it
-        // off what was stored is what keeps the panel's publish button
-        // answering to the database rather than to a copy of it.
+        // changes it — `saveShaderPreset` does not touch the column — but
+        // reading it off what was stored is what keeps the panel's publish
+        // button answering to the database rather than to a copy of it.
         publishedAt: saved.publishedAt,
       });
-      // A cover that has just been created has an id the URL does not know
+      // A preset that has just been created has an id the URL does not know
       // about yet, and a refresh would land back on the blank route having lost
       // it. `replace` rather than push: the blank route is where you WERE, not
       // a place to go back to.
@@ -407,16 +407,16 @@ export function useCommandPalette(
       // The native History API rather than the router, which is Next's own
       // supported shallow route (16.x docs, "Shallow routing on the client").
       // A router navigation here asks the server for a page whose whole job is
-      // to fetch the cover and hand it down — the cover this draft is already
+      // to fetch the preset and hand it down — the preset this draft is already
       // holding — and the playground remounts around the identical answer: the
       // shader torn down and recompiled, the panel rebuilt. Nothing needs
       // fetching; only the address bar was out of date.
-      if (!coverId) {
-        window.history.replaceState(null, "", `/playground/cover/${saved.id}`);
+      if (!shaderPresetId) {
+        window.history.replaceState(null, "", `/playground/shader/${saved.id}`);
       }
       return true;
     } catch (err) {
-      console.error("Failed to save the cover:", err);
+      console.error("Failed to save the preset:", err);
       return false;
     }
   };
@@ -517,14 +517,14 @@ export function useCommandPalette(
    * Write the document being edited, and STAY in the editor.
    *
    * It used to navigate to the read page, which was the same "thrown out
-   * mid-session" fault ⌘S had on the cover: saving is how you keep going, not
+   * mid-session" fault ⌘S had on the preset: saving is how you keep going, not
    * how you finish. Leaving is `Back to …` or Discard, both of which say so.
    *
    * A draft that has never been written has no id and no slug, so the URL is
    * still `/edit/new` after one is minted for it. `replace` rather than `push`,
-   * for the reason a first-saved cover replaces: `/edit/new` is where you WERE,
-   * not a place to go back to — and a refresh from it would start a second
-   * empty draft rather than reopening this one.
+   * for the reason a first-saved preset replaces: `/edit/new` is where you
+   * WERE, not a place to go back to — and a refresh from it would start a
+   * second empty draft rather than reopening this one.
    */
   const persistDocument = async (): Promise<boolean> => {
     const { draftId, title, document, category } = useEditorStore.getState();
@@ -654,8 +654,8 @@ export function useCommandPalette(
    */
   const persistEditor = async (): Promise<boolean> => {
     switch (editorKind) {
-      case "cover":
-        return persistCover();
+      case "shaderPreset":
+        return persistShaderPreset();
       case "grid":
         return persistGrid();
       case "document":
@@ -668,8 +668,8 @@ export function useCommandPalette(
   /** Drop the open editor's buffer. Nothing was written, so nothing is undone. */
   const discardEditor = () => {
     switch (editorKind) {
-      case "cover":
-        useCoverDraftStore.getState().reset();
+      case "shaderPreset":
+        useShaderPresetDraftStore.getState().reset();
         return;
       case "grid":
         useGridDraftStore.getState().reset();
@@ -757,8 +757,8 @@ export function useCommandPalette(
     backTarget,
     handleBack,
     handleThemeToggle,
-    handleCoverPlayground,
-    isCoverPlayground,
+    handleShaderPlayground,
+    isShaderPlayground,
     editorKind,
     handleSaveChanges,
     handleDiscardAndExit,

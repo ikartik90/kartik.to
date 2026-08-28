@@ -13,9 +13,9 @@ import { useIsAdmin } from "@/hooks/use-is-admin";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { useSheetDrag } from "@/hooks/use-sheet-drag";
 import { isBottomSheetLayout } from "@/data/media-queries";
-import { useCoverDraftStore } from "@/store/cover-draft";
+import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 import { AspectRail } from "@/components/aspect-rail";
-import { deleteCover, publishCover, unpublishCover } from "@/app/actions/cover";
+import { deleteShaderPreset, publishShaderPreset, unpublishShaderPreset } from "@/app/actions/shader-preset";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DemoPreloader } from "@/components/demo-component";
 import { useTrickleProgress } from "@/hooks/use-demo-loader";
@@ -53,16 +53,16 @@ import {
   framingFor,
   paletteFor,
   shaderParamsFor,
-  type CoverSettings,
-  type CoverTheme,
+  type ShaderPresetSettings,
+  type ShaderPresetTheme,
   type ThemedColor,
-} from "@/domain/cover";
+} from "@/domain/shader-preset";
 import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
-// Cover Playground — where a cover's background is tuned, on its way to being
+// Shader Playground — where a preset's background is tuned, on its way to being
 // published as a component. The art it is aimed at is the fanned light blades
-// and soft colour washes of the reference covers.
+// and soft colour washes of the reference presets.
 //
 // One shader is mounted at a time, which is deliberate: every paper-shaders
 // instance holds its OWN webgl2 context, the library pools nothing and
@@ -101,7 +101,7 @@ import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 //                  side rail (it is `fixed`, and the body's own inset already
 //                  answers for that), half the viewport while it is a sheet,
 //                  and nothing again once the sheet has been sent away.
-//   --presets-space what the saved-covers strip is holding at the foot of the
+//   --presets-space what the saved-presets strip is holding at the foot of the
 //                  canvas: nothing at all when there is no strip. Its own tiles
 //                  and padding (80 + 2×12), the band its unsaved marks hang in
 //                  above the plate (another 16), and the four pixels it stands
@@ -122,7 +122,7 @@ import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 //                  phone — so the canvas is the top half, and the picture
 //                  centres in THAT. Mirroring it would reserve half the screen
 //                  above the picture as well and leave nothing to draw in.
-//   --card-space   everything the cover may NOT have: the sheet, both bands,
+//   --card-space   everything the preset may NOT have: the sheet, both bands,
 //                  and the page's own margins.
 //
 // One declaration rather than one per layout, which `--sheet-space` is what
@@ -146,7 +146,7 @@ const pageStyle = css({
   // A strip is on screen, so the picture gives up its band. Asked of the PANE
   // rather than of the session, because "is there a strip" is no longer the
   // same question as "is the author signed in": a visitor is shown the
-  // published covers, and gets no strip only when there are none. The pane is
+  // published presets, and gets no strip only when there are none. The pane is
   // the one thing that knows, and `:has()` is what lets it say so without the
   // page holding a second copy of the list to count.
   //
@@ -163,8 +163,8 @@ const pageStyle = css({
   "&[data-sheet-dismissed]": { "--sheet-space": "0px" },
 });
 
-// The canvas: everything the panel leaves, with the cover in the middle of
-// THAT rather than of the viewport, so the panel never covers the thing being
+// The canvas: everything the panel leaves, with the preset in the middle of
+// THAT rather than of the viewport, so the panel never presets the thing being
 // judged. Positioned because the theme control sits in its corner. It takes no
 // ground of its own — the page's `bg.canvas` is already the right one, in
 // whichever theme is in force.
@@ -175,7 +175,7 @@ const canvasStyle = css({
   alignItems: "center",
   justifyContent: "center",
   // The same band above and below, so the picture lands in the middle of what
-  // it is being looked at in. Chrome must not cover the thing being judged —
+  // it is being looked at in. Chrome must not preset the thing being judged —
   // the gutter row's controls above, the presets strip below — and reserving
   // each side only what its own chrome needs left the picture off-centre by the
   // difference between them. See `--canvas-band`.
@@ -249,7 +249,7 @@ const canvasChromeStyle = css({
 //
 // It rides in the GUTTER ROW, between the menu and the theme toggle, rather
 // than travelling with the picture. The frame is a property of the page here —
-// there is one cover, and this says what shape you are looking at it in — so it
+// there is one preset, and this says what shape you are looking at it in — so it
 // belongs with the page's other two controls, holding still while the picture
 // changes shape underneath it. (A grid card's rail is the opposite case: it
 // belongs to one card among many and has to point at it, which is why that one
@@ -271,8 +271,8 @@ const aspectRailStyle = css({
   overflow: "visible",
 });
 
-// The cover the reference art is drawn on: portrait, generously rounded. The
-// shader fills it because Fit opens on `cover` — a ground with margins is just
+// The preset the reference art is drawn on: portrait, generously rounded. The
+// shader fills it because Fit opens on `preset` — a ground with margins is just
 // a smaller picture — but Fit is a control now, so this is a default and not a
 // guarantee.
 // The card is as large as its chosen shape fits, and the same shape smaller
@@ -281,14 +281,14 @@ const aspectRailStyle = css({
 // can never come out stretched: the width is the narrowest of four numbers, the
 // last two of which read the space that is actually left.
 //
-// `--cover-w` / `--cover-h` are the chosen frame, written inline by the page
+// `--preset-w` / `--preset-h` are the chosen frame, written inline by the page
 // (see `ASPECT_RATIOS`, the app's one list of shapes). They are the numerator
 // and denominator rather than a ready-made `aspect-ratio` string because the
 // same pair is needed twice — once as the ratio, once as the multiplier that
 // turns a height budget into a width — and a single string could only serve
 // the first.
 //
-// `--cover-max` is the box the card fits INSIDE, on both axes: 680px, the
+// `--preset-max` is the box the card fits INSIDE, on both axes: 680px, the
 // height the 380×680 poster this page opened on has always had. Capping the
 // long side rather than the width is what keeps a banner from running off the
 // screen and a poster from shrinking when it did not have to — at 9:16 the two
@@ -302,19 +302,19 @@ const aspectRailStyle = css({
 // it, arriving edge to edge with the page's 20px margins eaten. A percentage
 // resolves against the box the card is actually centred in, which is the box
 // the margins belong to.
-const coverStyle = css({
+const shaderPresetStyle = css({
   position: "relative",
   isolation: "isolate",
-  "--cover-max": "680px",
-  aspectRatio: "var(--cover-w) / var(--cover-h)",
+  "--preset-max": "680px",
+  aspectRatio: "var(--preset-w) / var(--preset-h)",
   width:
-    "min(var(--cover-max), calc(var(--cover-max) * var(--cover-w) / var(--cover-h)), calc(token(spacing.full) - 2 * token(spacing.xxl)), calc((100dvh - var(--card-space)) * var(--cover-w) / var(--cover-h)))",
+    "min(var(--preset-max), calc(var(--preset-max) * var(--preset-w) / var(--preset-h)), calc(token(spacing.full) - 2 * token(spacing.xxl)), calc((100dvh - var(--card-space)) * var(--preset-w) / var(--preset-h)))",
   transition: "width 200ms ease-out",
   borderRadius: "xxl",
   overflow: "hidden",
-  // NO ground of its own, deliberately. A cover's own background is a colour it
+  // NO ground of its own, deliberately. A preset's own background is a colour it
   // holds — `colorBack`, with its alpha — and taking that to zero has to mean
-  // what it says: you are looking THROUGH the cover, at the page. A plate
+  // what it says: you are looking THROUGH the preset, at the page. A plate
   // underneath would make the transparency a lie, and a quiet one, since
   // `bg.surface` is close enough to the canvas behind it to read as "the
   // background did not change" rather than as "something else is showing".
@@ -363,7 +363,7 @@ const headerActionsStyle = css({ display: "flex", alignItems: "center", gap: "xs
  *
  * The component is not usable here: it is a dismissible dialog (Escape, or a
  * press anywhere outside it) wrapping a `Popover`, and on a page whose entire
- * content is the thing you click, the first click on the cover would slide the
+ * content is the thing you click, the first click on the preset would slide the
  * panel away with nothing left to bring it back. The recipe is the part worth
  * reusing — flush to the viewport's top, bottom and right edge, its own scroll
  * container, a sticky header over the sections — and taking it directly is what
@@ -400,50 +400,50 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** A saved cover this page was opened on, if it was opened on one. */
-export interface OpenedCover {
+/** A saved preset this page was opened on, if it was opened on one. */
+export interface OpenedShaderPreset {
   id: string;
   title: string | null;
   shaderId: ShaderId;
-  settings: CoverSettings;
+  settings: ShaderPresetSettings;
   /** When it went on show, and null while it is the author's alone. */
   publishedAt: Date | null;
 }
 
-export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
+export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
   // The draft lives in a STORE rather than in this component, because the
   // commands that commit it — "Save changes and exit", ⌘S — are in the command
   // palette, which is mounted in the root layout and knows nothing about the
-  // page under it. See `@/store/cover-draft`.
-  const shaderId = useCoverDraftStore((draft) => draft.shaderId);
-  const state = useCoverDraftStore((draft) => draft.settings);
-  const selectShaderInStore = useCoverDraftStore((draft) => draft.selectShader);
-  const setParamInStore = useCoverDraftStore((draft) => draft.setParam);
-  const setColorsInStore = useCoverDraftStore((draft) => draft.setColors);
-  const setColorBackInStore = useCoverDraftStore((draft) => draft.setColorBack);
-  const setExtraColorInStore = useCoverDraftStore(
+  // page under it. See `@/store/shader-preset-draft`.
+  const shaderId = useShaderPresetDraftStore((draft) => draft.shaderId);
+  const state = useShaderPresetDraftStore((draft) => draft.settings);
+  const selectShaderInStore = useShaderPresetDraftStore((draft) => draft.selectShader);
+  const setParamInStore = useShaderPresetDraftStore((draft) => draft.setParam);
+  const setColorsInStore = useShaderPresetDraftStore((draft) => draft.setColors);
+  const setColorBackInStore = useShaderPresetDraftStore((draft) => draft.setColorBack);
+  const setExtraColorInStore = useShaderPresetDraftStore(
     (draft) => draft.setExtraColor,
   );
-  const setFramingInStore = useCoverDraftStore((draft) => draft.setFraming);
-  const setAspectInStore = useCoverDraftStore((draft) => draft.setAspect);
-  const resetParamsInStore = useCoverDraftStore((draft) => draft.resetParams);
-  const setPublishedAtInStore = useCoverDraftStore(
+  const setFramingInStore = useShaderPresetDraftStore((draft) => draft.setFraming);
+  const setAspectInStore = useShaderPresetDraftStore((draft) => draft.setAspect);
+  const resetParamsInStore = useShaderPresetDraftStore((draft) => draft.resetParams);
+  const setPublishedAtInStore = useShaderPresetDraftStore(
     (draft) => draft.setPublishedAt,
   );
   // Which of the two things the header's publish button is, and whether it has
   // a saved row to act on at all.
-  const savedCoverId = useCoverDraftStore((draft) => draft.coverId);
-  const publishedAt = useCoverDraftStore((draft) => draft.publishedAt);
-  const isDirty = useCoverDraftStore((draft) => draft.isDirty);
-  // Which shapes have been reframed since the cover was opened — the rail marks
+  const savedShaderPresetId = useShaderPresetDraftStore((draft) => draft.shaderPresetId);
+  const publishedAt = useShaderPresetDraftStore((draft) => draft.publishedAt);
+  const isDirty = useShaderPresetDraftStore((draft) => draft.isDirty);
+  // Which shapes have been reframed since the preset was opened — the rail marks
   // them for the AUTHOR, so unsaved work in a frame that is not on screen is
   // not invisible. See where it is handed to the rail.
-  const editedAspects = useCoverDraftStore((draft) => draft.editedAspects);
+  const editedAspects = useShaderPresetDraftStore((draft) => draft.editedAspects);
 
   // ---------------------------------------------------------------------
-  // Which GROUND the cover is being judged on.
+  // Which GROUND the preset is being judged on.
   //
-  // A cover holds a colour per theme, so "what does this look like" has two
+  // A preset holds a colour per theme, so "what does this look like" has two
   // answers and the page has to be standing on one of them. It stands on the
   // site's by default and can be sent to the other without taking the site
   // with it: the rail, the strip and the chrome stay where the visitor put
@@ -457,18 +457,18 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // until the author says otherwise.
   // ---------------------------------------------------------------------
   const { isDark } = useThemeToggle();
-  const pageTheme: CoverTheme = isDark ? "dark" : "light";
-  const [groundOverride, setGroundOverride] = useState<CoverTheme | null>(null);
+  const pageTheme: ShaderPresetTheme = isDark ? "dark" : "light";
+  const [groundOverride, setGroundOverride] = useState<ShaderPresetTheme | null>(null);
   const ground = groundOverride ?? pageTheme;
 
   /**
-   * Whether the cover on screen is the one that is going to stay there.
+   * Whether the preset on screen is the one that is going to stay there.
    *
-   * A cover opened by ROUTE is settled before this component renders — the
+   * A preset opened by ROUTE is settled before this component renders — the
    * server fetched it. The bare route is the one that waits: a visitor arriving
-   * there is taken to the newest published cover once the strip has read the
+   * there is taken to the newest published preset once the strip has read the
    * library (see `presets-pane`), and until that read lands the draft is
-   * holding the control table's first shader — a cover nobody published, shown
+   * holding the control table's first shader — a preset nobody published, shown
    * for as long as a round trip takes and then swapped out underneath them.
    *
    * So the card does not render at all until the answer is in. The preloader
@@ -476,15 +476,15 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
    * their module loads — one way of waiting, across the site.
    *
    * The question is asked of the DRAFT, never of the route, and that is the
-   * whole of it: "a cover was handed down" and "the draft is holding it" are
+   * whole of it: "a preset was handed down" and "the draft is holding it" are
    * different claims, and everything on this page reads the draft.
    *
    * On the bare route the strip answers, once it has adopted (see the pane's
    * `onSettled`, arranged so it cannot fire early). On a routed one the draft
    * answers for itself — it is holding that id, or it is not yet.
    *
-   * Asking the route instead is what put another cover's numbers on screen for
-   * the length of a hard load: `cover !== undefined` is true during the SERVER
+   * Asking the route instead is what put another preset's numbers on screen for
+   * the length of a hard load: `preset !== undefined` is true during the SERVER
    * render, where the draft has been seeded by nothing at all and is still five
    * colours deep in the control table's first shader. That markup paints before
    * a line of JavaScript runs, so no effect — layout or otherwise — can pull it
@@ -498,10 +498,10 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const [settled, setSettled] = useState(false);
   const [drawn, setDrawn] = useState(false);
   // Latched once true. The author pressing "New preset" on this route empties
-  // the draft's id while the route's own `cover` stays what it was — the URL is
+  // the draft's id while the route's own `preset` stays what it was — the URL is
   // corrected with `replaceState`, which re-renders no server component — so a
   // live comparison would take the rail away again mid-session.
-  if (!drawn && (cover ? savedCoverId === cover.id : settled)) setDrawn(true);
+  if (!drawn && (preset ? savedShaderPresetId === preset.id : settled)) setDrawn(true);
   const ready = drawn;
   const trickle = useTrickleProgress(!ready);
 
@@ -514,11 +514,11 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   const spec = SHADER_SPECS[shaderId];
 
   // What the AUTHOR is shown on top of the playground everybody gets: the
-  // shader picker, and the button that puts a cover on show. Both are about
-  // authoring a cover rather than looking at one — a visitor takes up a
+  // shader picker, and the button that puts a preset on show. Both are about
+  // authoring a preset rather than looking at one — a visitor takes up a
   // published preset and pushes it around, which needs neither.
   //
-  // What to draw, never what may be done: `publishCover` checks the session
+  // What to draw, never what may be done: `publishShaderPreset` checks the session
   // again on the server, and this answers false for one render after hydration
   // by design — see `useIsAdmin`.
   const isAdmin = useIsAdmin();
@@ -538,23 +538,23 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
    * state where Reset would do something, Reset is what is in the slot, so a
    * press aimed at Reset can never land on Delete.
    */
-  const canDelete = isAdmin && savedCoverId !== null && !isDirty;
+  const canDelete = isAdmin && savedShaderPresetId !== null && !isDirty;
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   /** Remove the saved preset, and go back to a blank draft. */
   async function deletePreset() {
-    if (!savedCoverId || deleting) return;
+    if (!savedShaderPresetId || deleting) return;
     setDeleting(true);
     try {
-      await deleteCover(savedCoverId);
-      // The cover does NOT stay on screen: deleting is a deliberate "I do not
+      await deleteShaderPreset(savedShaderPresetId);
+      // The preset does NOT stay on screen: deleting is a deliberate "I do not
       // want this", and leaving it in the panel would invite re-saving the
       // thing just thrown away. The URL stops naming a row that no longer
-      // exists — replaced rather than pushed, since the deleted cover is not
+      // exists — replaced rather than pushed, since the deleted preset is not
       // somewhere to go back to.
-      useCoverDraftStore.getState().reset();
-      window.history.replaceState(null, "", "/playground/cover");
+      useShaderPresetDraftStore.getState().reset();
+      window.history.replaceState(null, "", "/playground/shader");
     } catch (err) {
       // A failed delete must not look like a successful one: the row is still
       // there, so the playground must still be holding it.
@@ -564,24 +564,24 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
     }
   }
 
-  /** Put the saved cover on show, or take it back off. */
+  /** Put the saved preset on show, or take it back off. */
   const [publishing, setPublishing] = useState(false);
   async function togglePublished() {
-    if (!savedCoverId || publishing) return;
+    if (!savedShaderPresetId || publishing) return;
     setPublishing(true);
     try {
       // The row is the authority on its own state: what comes back is what is
       // recorded, rather than a date this button made up and hoped matched.
       const saved = publishedAt
-        ? await unpublishCover(savedCoverId)
-        : await publishCover(savedCoverId);
+        ? await unpublishShaderPreset(savedShaderPresetId)
+        : await publishShaderPreset(savedShaderPresetId);
       setPublishedAtInStore(saved.publishedAt);
     } catch (err) {
       // Leaves the button saying what is still true. A failed publish that
       // flipped the icon anyway would be the worse outcome by far: the strip
-      // would go on showing the cover to nobody while the panel claimed it was
+      // would go on showing the preset to nobody while the panel claimed it was
       // out.
-      console.error("Failed to change the cover's publication:", err);
+      console.error("Failed to change the preset's publication:", err);
     } finally {
       setPublishing(false);
     }
@@ -590,7 +590,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // The frame, and the two numbers the card is drawn from. Looked up in the
   // app's one table of shapes rather than split off the key, so a ratio that is
   // not in it cannot reach the CSS.
-  const aspect = useCoverDraftStore((draft) => draft.aspect);
+  const aspect = useShaderPresetDraftStore((draft) => draft.aspect);
   const [ratioWidth, ratioHeight] = ASPECT_RATIOS[aspect];
 
   // Whether the sheet has been sent away. Read ONLY inside the bottom-sheet
@@ -606,21 +606,21 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
     enabled: isBottomSheetLayout,
   });
 
-  // Adopt the cover this route was opened on — and RESET when there is none, so
+  // Adopt the preset this route was opened on — and RESET when there is none, so
   // arriving at the bare route after editing a saved one starts blank rather
-  // than silently continuing to edit the last cover under a URL that claims to
+  // than silently continuing to edit the last preset under a URL that claims to
   // be a new one. Keyed on the id, so re-renders do not re-seed over live edits.
-  const coverId = cover?.id;
+  const shaderPresetId = preset?.id;
   useEffect(() => {
-    const store = useCoverDraftStore.getState();
-    if (cover) {
-      // Already holding this one — do NOT re-seed. ⌘S on a never-saved cover
+    const store = useShaderPresetDraftStore.getState();
+    if (preset) {
+      // Already holding this one — do NOT re-seed. ⌘S on a never-saved preset
       // creates the row and then replaces the URL with its id, so this route
-      // mounts a moment later carrying a cover the draft is already editing.
+      // mounts a moment later carrying a preset the draft is already editing.
       // Loading it again would throw away anything tuned during that gap, which
       // is exactly the window the author is most likely to still be working in.
-      if (store.coverId === cover.id) return;
-      store.load(cover);
+      if (store.shaderPresetId === preset.id) return;
+      store.load(preset);
     } else {
       // The never-saved draft, taken up rather than blanked: arriving at the
       // bare route must not throw away work tuned before the first save. If
@@ -632,7 +632,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
     // prop object on every render, and depending on that identity would re-seed
     // the draft over whatever was being edited each time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverId]);
+  }, [shaderPresetId]);
 
   /** Switching shader re-seeds from that shader's defaults — its control table is a different shape. */
   function selectShader(next: ShaderId) {
@@ -669,7 +669,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
     ...spec.controls.filter((control) => control.group === "motion"),
   ];
 
-  // The placement controls are stored per SHAPE and the rest per cover, so the
+  // The placement controls are stored per SHAPE and the rest per preset, so the
   // panel has to know which of the two a row is writing to. Read and write are
   // one pair rather than a second copy of `renderControl` — the switch over
   // control kinds is the thing that must not be duplicated (see there), and
@@ -781,12 +781,12 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
       <div className={canvasStyle}>
         {ready ? (
           <div
-            className={coverStyle}
-            data-cover-stage
+            className={shaderPresetStyle}
+            data-preset-stage
             style={
               {
-                "--cover-w": ratioWidth,
-                "--cover-h": ratioHeight,
+                "--preset-w": ratioWidth,
+                "--preset-h": ratioHeight,
               } as CSSProperties
             }
           >
@@ -817,14 +817,14 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
         <div className={canvasChromeStyle}>
           <MenuButton />
 
-          {/* The frame the cover is being designed against.
+          {/* The frame the preset is being designed against.
 
-              It shapes the PREVIEW and nothing else: a cover is shapeless, and
+              It shapes the PREVIEW and nothing else: a preset is shapeless, and
               every surface that embeds one gives it that surface's own shape.
               What it is for is judging — the same fan of light reads as a
               poster and as a banner differently, and this is how you look at
               both — and the shape is kept on the draft so that reopening the
-              cover reopens the frame it was judged in. See `@/domain/cover`.
+              preset reopens the frame it was judged in. See `@/domain/shader-preset`.
 
               A third item in a `space-between` row, which is what centres it
               BETWEEN the two ends rather than on the band's own midline. The
@@ -838,7 +838,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
               aspect={aspect}
               onPick={setAspectInStore}
               // The author's alone. A visitor moves these controls too — the
-              // cover is theirs to play with — so their draft goes dirty just
+              // preset is theirs to play with — so their draft goes dirty just
               // the same, but the mark means "work you have not written" and
               // there is nothing here for them to write it to. Unmarked rather
               // than marked-and-inert, because a dot that appears and never
@@ -865,7 +865,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           </div>
         </div>
 
-        {/* The saved covers, along the foot of the canvas. Inside it rather
+        {/* The saved presets, along the foot of the canvas. Inside it rather
             than fixed to the viewport, so the strip gives the properties rail
             the same room the rest of this page does — see `presets-pane`.
 
@@ -880,17 +880,17 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           is the recipe's media query, and the only thing this page adds is
           whether the sheet has been sent away.
 
-          On the SAME answer the cover waits for, and it has to be: every
+          On the SAME answer the preset waits for, and it has to be: every
           control here reads the draft, and until the library lands the draft is
           holding the control table's first shader. A rail drawn before then is
-          a column of numbers describing a cover nobody published, swapped out
+          a column of numbers describing a preset nobody published, swapped out
           underneath the reader a round trip later — and a reader who started
           pushing those sliders would lose the edit. Mounting it late is also
           what plays its slide-in (`propertiesPanelIn`, on the recipe's root),
-          so it arrives WITH the cover it describes rather than sitting there
+          so it arrives WITH the preset it describes rather than sitting there
           through the wait. The page keeps the rail's width reserved throughout
           (see `usePropertiesPanelInset`), so nothing under it moves when it
-          lands — the preloader stands exactly where the cover will.
+          lands — the preloader stands exactly where the preset will.
 
           `translate` inline for the length of a drag and nothing after it: the
           finger places the sheet while it is on it, and lets CSS have it back
@@ -940,7 +940,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
                 </Button>
               )}
 
-              {/* Whether this cover is on show — one button, because it is one
+              {/* Whether this preset is on show — one button, because it is one
                 fact with two settings, and a pair sitting side by side would
                 always have one of them inert.
 
@@ -959,12 +959,12 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
                 name.
 
                 The author's alone, and nothing here is what enforces that:
-                `publishCover` asks the server. */}
+                `publishShaderPreset` asks the server. */}
               {isAdmin && (
                 <Button
                   variant="icon"
                   aria-label={publishedAt ? "Unpublish" : "Publish"}
-                  disabled={!savedCoverId || publishing}
+                  disabled={!savedShaderPresetId || publishing}
                   onClick={() => void togglePublished()}
                 >
                   {publishedAt ? <UnpublishIcon /> : <PublishIcon />}
@@ -990,9 +990,9 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
           </div>
 
           {/* The shader itself is the AUTHOR's choice, so a visitor is not shown
-            this group. What they came for is the cover in front of them — the
+            this group. What they came for is the preset in front of them — the
             preset they opened, with its own controls under it — and a picker
-            that swapped it for a bare `godRays` would throw that cover away
+            that swapped it for a bare `godRays` would throw that preset away
             with nothing to get it back. The panel below still gives them every
             control the mounted shader has. */}
           {isAdmin && (
@@ -1127,7 +1127,7 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             four are kept per aspect ratio, and a heading reading plain
             "Framing" beside ten other framings you cannot see would be the
             panel's only lie. The rest of the panel has no such suffix because
-            the rest of it is the cover's, whatever shape you are in. */}
+            the rest of it is the preset's, whatever shape you are in. */}
           <Group title={`Framing ${aspect.replace("/", ":")}`}>
             {framingControls.map(renderControl)}
           </Group>

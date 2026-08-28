@@ -112,14 +112,14 @@ model Component {
   updatedAt   DateTime  @updatedAt
 }
 
-// A saved shader background, authored in the cover playground and reused
+// A saved shader background, authored in the shader playground and reused
 // wherever a surface wants a ground: a picture or a clip in a collection, a
 // component's backdrop.
 //
 // A TABLE of its own rather than columns on `Component`, and the distinction is
 // the same one that table's own comment draws. A `Component` row PUBLISHES
 // something that already exists in code — `componentId` is a foreign key in
-// spirit to `src/components/demo/registry.ts`. A cover has nothing to point at,
+// spirit to `src/components/demo/registry.ts`. A preset has nothing to point at,
 // because its settings ARE the artefact. Folding the two together would mean a
 // nullable "which demo" beside a nullable "which shader", which is a table
 // admitting it holds two kinds of row, and every existing read of `Component`
@@ -129,16 +129,16 @@ model Component {
 // edited in one place, which is the plainest case there is for its own table.
 //
 // SHAPELESS. There is deliberately no aspect, width, padding or corner here: a
-// cover takes the shape of whatever it is embedded into, the way an image under
+// preset takes the shape of whatever it is embedded into, the way an image under
 // `object-fit: cover` does, so the HOST owns all of that. A column for it here
 // would be a second answer that could disagree with the host's. That is also
-// why there is no `gridIndex`/`gridSpan` — a cover is a background, not a card,
+// why there is no `gridIndex`/`gridSpan` — a preset is a background, not a card,
 // and giving it a seat would put a third table into `saveGridLayout`'s fan-out
 // for a thing that is never placed on its own.
-model Cover {
+model ShaderPreset {
   id            String   @id @default(cuid())
-  // What the palette calls it when listing saved covers. Nullable with an
-  // index beside it, exactly as `Post` does it: a cover is worth saving before
+  // What the palette calls it when listing saved presets. Nullable with an
+  // index beside it, exactly as `Post` does it: a preset is worth saving before
   // it is worth naming, and "Untitled 2" is a better handle than a cuid.
   title         String?
   untitledIndex Int?
@@ -151,19 +151,19 @@ model Cover {
   // single source the Zod layer derives its validator from. A database enum
   // would be a second copy, and adding a seventh shader would turn a one-line
   // code change into a schema migration. Nothing writes this except through
-  // `CoverContentSchema`.
+  // `ShaderPresetContentSchema`.
   shaderId      String
   // Everything whose SHAPE depends on `shaderId` — the uniforms, the colour
   // ramp, the ground — as one blob, because they are only meaningful together
-  // and only validatable together. See `CoverContentSchema`.
+  // and only validatable together. See `ShaderPresetContentSchema`.
   settings      Json
-  // When the cover went on show, and null while it is the author's alone. The
+  // When the preset went on show, and null while it is the author's alone. The
   // same nullable-timestamp shape `Post` uses, for the same reason: it records
-  // WHEN as well as whether, and taking a cover back is clearing a column
+  // WHEN as well as whether, and taking a preset back is clearing a column
   // rather than destroying the work.
   //
   // The playground is public, so this is the column that decides what a visitor
-  // is shown — every read of the library filters on it (see `getCovers`).
+  // is shown — every read of the library filters on it (see `getShaderPresets`).
   publishedAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

@@ -145,28 +145,28 @@ export interface ShaderSpec {
   defaults: ShaderDefaults;
 }
 
-// How the graphic is FRAMED in the cover — the four sizing props that visibly
+// How the graphic is FRAMED in the preset — the four sizing props that visibly
 // move it. Spread LAST into each control table so a shader's own parameters
 // read first and the framing sits together at the foot of the sidebar wherever
 // you are.
 //
 // They belong to every shader equally, which is why they are one array spread
-// six times rather than six copies — and it is also why a cover STORES them
+// six times rather than six copies — and it is also why a preset STORES them
 // apart from the rest: these four are the only controls whose right value
-// depends on the shape the cover is being looked at in, so a cover keeps one
+// depends on the shape the preset is being looked at in, so a preset keeps one
 // set per aspect ratio rather than one set full stop. `spec.controls` stays the
 // complete list of what a shader takes; where each value lives is
-// `@/domain/cover`'s to decide, and `shaderParamsFor` is what puts the two back
-// together on the way to the canvas.
+// `@/domain/shader-preset`'s to decide, and `shaderParamsFor` is what puts the
+// two back together on the way to the canvas.
 //
 // The rest of `ShaderSizingParams` is deliberately absent. `fit` and the world
 // box (`worldWidth`/`worldHeight`, and the `originX`/`originY` that only
 // position that box) describe how the shader's coordinate space maps onto a
-// canvas — and here the cover IS the canvas, pinned at `fit="cover"` by the page
-// so the ground has no margins. Left at the canvas size, origin and world size
-// do nothing you can see; `fit: none` against a zero-size world collapses the
-// box to a pixel and renders nothing at all. Controls whose only settings are
-// "no change" and "broken" are not properties of the shader worth showing.
+// canvas — and here the preset IS the canvas, pinned at `fit="cover"` by the
+// page so the ground has no margins. Left at the canvas size, origin and world
+// size do nothing you can see; `fit: none` against a zero-size world collapses
+// the box to a pixel and renders nothing at all. Controls whose only settings
+// are "no change" and "broken" are not properties of the shader worth showing.
 export const FRAMING_CONTROLS: ControlSpec[] = [
   { kind: "slider", key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.1, value: 1 },
   // SIGNED, about a zero in the middle of the track, rather than 0..360. The
@@ -174,11 +174,11 @@ export const FRAMING_CONTROLS: ControlSpec[] = [
   // thing you are choosing — under 0..360 one of the two directions was only
   // reachable by running the slider almost all the way to the far end, and the
   // neutral setting sat on the boundary where the two ends meet. Covers saved
-  // under the old range are carried across by `@/domain/cover`, since 270 and
-  // -90 are the same angle.
+  // under the old range are carried across by `@/domain/shader-preset`, since
+  // 270 and -90 are the same angle.
   // Range and step from the app's ONE rotation control, not written out here:
-  // a cover tuned in this playground is reused as a background elsewhere, and
-  // a panel offering different stops would make a cover unreachable in the
+  // a preset tuned in this playground is reused as a background elsewhere, and
+  // a panel offering different stops would make a preset unreachable in the
   // surface it was built for. See `@/utils/rotation`.
   { kind: "slider", key: "rotation", label: "Rotation", min: ROTATION_MIN, max: ROTATION_MAX, step: ROTATION_STEP, value: 0 },
   { kind: "slider", key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.1, value: 0 },
@@ -327,12 +327,13 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "tail", label: "Tail", group: "ramp", min: 0, max: 1, step: 0.1, value: 0.25 },
       // How far past its band a rail keeps running before it goes out, in ramp
       // lengths. Its own control rather than a multiple of Tail because the two
-      // answer different questions — Tail is how softly a band ENDS, this is how
-      // far its rails OUTLIVE it. The two still start their fade together (see
-      // the shader), so this only ever moves where the rails finish.
+      // answer different questions — Tail is how softly a band ENDS, this is
+      // how far its rails OUTLIVE it. The two still start their fade together
+      // (see the shader), so this only ever moves where the rails finish.
       { kind: "slider", key: "edgeTail", label: "Edge Tail", group: "edge", min: 0, max: 3, step: 0.1, value: 0.5 },
       // Ordered (Bayer) dither: quantises to fewer levels and patterns the
-      // rounding. 0 is off; higher drops the level count and the crosshatch shows.
+      // rounding. 0 is off; higher drops the level count and the crosshatch
+      // shows.
       { kind: "slider", key: "rampDither", label: "Ramp Dither", group: "dither", min: 0, max: 1, step: 0.1, value: 0.35 },
       // How hard the RAILS are dithered — independent of Ramp Dither, so either
       // can be on with the other off. The two share one matrix, and so one

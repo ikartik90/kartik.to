@@ -20,8 +20,8 @@ describe("getBackTarget", () => {
   // `/playground` is a prefix with no page behind it, so the climb finds no
   // real ancestor and lands on the floor — which is the right answer here, and
   // the case that would catch a blind parent offering `/playground` instead.
-  it("sends the cover playground back to the index", () => {
-    expect(getBackTarget("/playground/cover")).toEqual({
+  it("sends the shader playground back to the index", () => {
+    expect(getBackTarget("/playground/shader")).toEqual({
       href: "/",
       label: "index",
     });

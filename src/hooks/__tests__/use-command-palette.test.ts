@@ -3,7 +3,7 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { useCommandPalette } from "../use-command-palette";
-import { useCoverDraftStore } from "@/store/cover-draft";
+import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 import { useEditorStore } from "@/store/editor";
 import { useGridDraftStore } from "@/store/grid-draft";
 
@@ -43,12 +43,12 @@ vi.mock("@/utils/open-in-new-tab", () => ({
 // Every action module is stubbed, not just for isolation: they are
 // `"use server"` files that import `@/lib/env`, which validates DATABASE_URL and
 // friends at import time and throws in a test run that has no `.env`.
-vi.mock("@/app/actions/cover", () => ({
-  getCovers: vi.fn().mockResolvedValue([]),
-  getCover: vi.fn(),
-  createCover: vi.fn(),
-  saveCover: vi.fn(),
-  deleteCover: vi.fn(),
+vi.mock("@/app/actions/shader-preset", () => ({
+  getShaderPresets: vi.fn().mockResolvedValue([]),
+  getShaderPreset: vi.fn(),
+  createShaderPreset: vi.fn(),
+  saveShaderPreset: vi.fn(),
+  deleteShaderPreset: vi.fn(),
 }));
 
 vi.mock("@/app/actions/grid", () => ({
@@ -174,26 +174,26 @@ describe("useCommandPalette", () => {
   });
 
   // -------------------------------------------------------------------------
-  // The cover playground
+  // The shader playground
   // -------------------------------------------------------------------------
 
-  describe("isCoverPlayground", () => {
+  describe("isShaderPlayground", () => {
     it("is true on the bare playground route", () => {
-      mockPathname.mockReturnValue("/playground/cover");
+      mockPathname.mockReturnValue("/playground/shader");
       const { result } = renderHook(() => useCommandPalette(close));
-      expect(result.current.isCoverPlayground).toBe(true);
+      expect(result.current.isShaderPlayground).toBe(true);
     });
 
-    it("is true on a saved cover's route", () => {
-      mockPathname.mockReturnValue("/playground/cover/abc123");
+    it("is true on a saved preset's route", () => {
+      mockPathname.mockReturnValue("/playground/shader/abc123");
       const { result } = renderHook(() => useCommandPalette(close));
-      expect(result.current.isCoverPlayground).toBe(true);
+      expect(result.current.isShaderPlayground).toBe(true);
     });
 
     it("is false elsewhere", () => {
       mockPathname.mockReturnValue("/writing/my-post");
       const { result } = renderHook(() => useCommandPalette(close));
-      expect(result.current.isCoverPlayground).toBe(false);
+      expect(result.current.isShaderPlayground).toBe(false);
     });
   });
 
@@ -234,22 +234,22 @@ describe("useCommandPalette", () => {
     };
 
     beforeEach(async () => {
-      mockPathname.mockReturnValue("/playground/cover");
-      useCoverDraftStore.getState().reset();
-      const cover = await import("@/app/actions/cover");
-      (cover.createCover as Mock).mockReset();
-      (cover.createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+      mockPathname.mockReturnValue("/playground/shader");
+      useShaderPresetDraftStore.getState().reset();
+      const preset = await import("@/app/actions/shader-preset");
+      (preset.createShaderPreset as Mock).mockReset();
+      (preset.createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
       mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
       stubApple();
     });
 
     it("saves the open editor, and takes the key off the browser", async () => {
-      const { createCover } = await import("@/app/actions/cover");
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
@@ -257,7 +257,7 @@ describe("useCommandPalette", () => {
         event = pressSave();
       });
 
-      expect(createCover).toHaveBeenCalledOnce();
+      expect(createShaderPreset).toHaveBeenCalledOnce();
       // Unclaimed, this is the browser's Save Page dialog.
       expect(event.defaultPrevented).toBe(true);
     });
@@ -266,7 +266,7 @@ describe("useCommandPalette", () => {
     // alone: the browser's own behaviour is at least a behaviour.
     it("leaves the key alone away from an editor", async () => {
       mockPathname.mockReturnValue("/");
-      const { createCover } = await import("@/app/actions/cover");
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
@@ -274,13 +274,13 @@ describe("useCommandPalette", () => {
         event = pressSave();
       });
 
-      expect(createCover).not.toHaveBeenCalled();
+      expect(createShaderPreset).not.toHaveBeenCalled();
       expect(event.defaultPrevented).toBe(false);
     });
 
     it("leaves the key alone for a visitor, who has nothing to save to", async () => {
       mockUseSession.mockReturnValue({ data: null });
-      const { createCover } = await import("@/app/actions/cover");
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
@@ -288,14 +288,14 @@ describe("useCommandPalette", () => {
         event = pressSave();
       });
 
-      expect(createCover).not.toHaveBeenCalled();
+      expect(createShaderPreset).not.toHaveBeenCalled();
       expect(event.defaultPrevented).toBe(false);
     });
 
     // ⌘⇧S is a different gesture, and the browser reports the shifted key as
     // an uppercase "S".
     it("does not answer the shifted key", async () => {
-      const { createCover } = await import("@/app/actions/cover");
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
       renderHook(() => useCommandPalette(close));
 
       await act(async () => {
@@ -309,64 +309,64 @@ describe("useCommandPalette", () => {
         );
       });
 
-      expect(createCover).not.toHaveBeenCalled();
+      expect(createShaderPreset).not.toHaveBeenCalled();
     });
   });
 
-  describe("handleSaveChanges — the cover", () => {
+  describe("handleSaveChanges — the preset", () => {
     beforeEach(async () => {
-      mockPathname.mockReturnValue("/playground/cover");
-      window.history.replaceState(null, "", "/playground/cover");
-      useCoverDraftStore.getState().reset();
-      const cover = await import("@/app/actions/cover");
-      (cover.createCover as Mock).mockReset();
-      (cover.saveCover as Mock).mockReset();
+      mockPathname.mockReturnValue("/playground/shader");
+      window.history.replaceState(null, "", "/playground/shader");
+      useShaderPresetDraftStore.getState().reset();
+      const preset = await import("@/app/actions/shader-preset");
+      (preset.createShaderPreset as Mock).mockReset();
+      (preset.saveShaderPreset as Mock).mockReset();
     });
 
     // Create or update is decided by the DRAFT, not the route — after a create
     // the two disagree until the navigation lands, and the store is what knows.
     it("creates when the draft has never been saved", async () => {
-      const { createCover, saveCover } = await import("@/app/actions/cover");
-      (createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+      const { createShaderPreset, saveShaderPreset } = await import("@/app/actions/shader-preset");
+      (createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(createCover).toHaveBeenCalledOnce();
-      expect(saveCover).not.toHaveBeenCalled();
+      expect(createShaderPreset).toHaveBeenCalledOnce();
+      expect(saveShaderPreset).not.toHaveBeenCalled();
       // The saved row's id comes back into the draft, so a second ⌘S updates
-      // the cover just written rather than creating a duplicate of it.
-      expect(useCoverDraftStore.getState().coverId).toBe("cover-1");
+      // the preset just written rather than creating a duplicate of it.
+      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("preset-1");
     });
 
-    it("updates the cover the draft was opened on", async () => {
-      const { createCover, saveCover } = await import("@/app/actions/cover");
-      useCoverDraftStore.getState().load({
-        id: "cover-9",
+    it("updates the preset the draft was opened on", async () => {
+      const { createShaderPreset, saveShaderPreset } = await import("@/app/actions/shader-preset");
+      useShaderPresetDraftStore.getState().load({
+        id: "preset-9",
         title: "Dusk",
         shaderId: "swirl",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
         publishedAt: null,
       });
-      (saveCover as Mock).mockResolvedValue({
-        id: "cover-9",
+      (saveShaderPreset as Mock).mockResolvedValue({
+        id: "preset-9",
         title: "Dusk",
         shaderId: "swirl",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(saveCover).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "cover-9" }),
+      expect(saveShaderPreset).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "preset-9" }),
       );
-      expect(createCover).not.toHaveBeenCalled();
+      expect(createShaderPreset).not.toHaveBeenCalled();
     });
 
     // A failed write must not look like a successful one. The palette closes
@@ -375,12 +375,12 @@ describe("useCommandPalette", () => {
     // ⌘S is a SAVE, not an exit. The whole point of the shortcut is to keep
     // working, so the one thing it must never do is navigate.
     it("stays on the page", async () => {
-      const { createCover } = await import("@/app/actions/cover");
-      (createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      (createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
@@ -389,94 +389,94 @@ describe("useCommandPalette", () => {
       expect(mockPush).not.toHaveBeenCalled();
     });
 
-    // Saving a never-saved cover gives it an id, and the URL has to catch up or
+    // Saving a never-saved preset gives it an id, and the URL has to catch up or
     // a refresh would land back on the blank route and lose the connection.
     // `replace`, not `push`: the blank route is not a place to go back to.
-    it("takes on the new cover's URL without adding a history entry", async () => {
-      const { createCover } = await import("@/app/actions/cover");
-      (createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+    it("takes on the new preset's URL without adding a history entry", async () => {
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      (createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      // Corrected in PLACE, not navigated to: the draft already holds the cover
+      // Corrected in PLACE, not navigated to: the draft already holds the preset
       // that was just written, and asking the router for its route would fetch
-      // that same cover back and remount the playground around it.
-      expect(window.location.pathname).toBe("/playground/cover/cover-1");
+      // that same preset back and remount the playground around it.
+      expect(window.location.pathname).toBe("/playground/shader/preset-1");
       expect(mockReplace).not.toHaveBeenCalled();
       expect(mockPush).not.toHaveBeenCalled();
     });
 
-    it("does not re-write the URL when updating a cover already open", async () => {
-      const { saveCover } = await import("@/app/actions/cover");
-      mockPathname.mockReturnValue("/playground/cover/cover-9");
-      useCoverDraftStore.getState().load({
-        id: "cover-9",
+    it("does not re-write the URL when updating a preset already open", async () => {
+      const { saveShaderPreset } = await import("@/app/actions/shader-preset");
+      mockPathname.mockReturnValue("/playground/shader/preset-9");
+      useShaderPresetDraftStore.getState().load({
+        id: "preset-9",
         title: "Dusk",
         shaderId: "swirl",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
         publishedAt: null,
       });
-      (saveCover as Mock).mockResolvedValue({
-        id: "cover-9",
+      (saveShaderPreset as Mock).mockResolvedValue({
+        id: "preset-9",
         title: "Dusk",
         shaderId: "swirl",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
-      window.history.replaceState(null, "", "/playground/cover/cover-9");
+      window.history.replaceState(null, "", "/playground/shader/preset-9");
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(window.location.pathname).toBe("/playground/cover/cover-9");
+      expect(window.location.pathname).toBe("/playground/shader/preset-9");
       expect(mockReplace).not.toHaveBeenCalled();
     });
 
     it("leaves the draft clean, so there is nothing left to discard", async () => {
-      const { createCover } = await import("@/app/actions/cover");
-      useCoverDraftStore.getState().setParam("scale", 2);
-      (createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
+      (createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+      expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
     });
 
     it("keeps the draft when the write fails", async () => {
-      const { createCover } = await import("@/app/actions/cover");
-      (createCover as Mock).mockRejectedValue(new Error("nope"));
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      (createShaderPreset as Mock).mockRejectedValue(new Error("nope"));
       vi.spyOn(console, "error").mockImplementation(() => {});
-      useCoverDraftStore.getState().setParam("scale", 2);
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(useCoverDraftStore.getState().settings.params.scale).toBe(2);
+      expect(useShaderPresetDraftStore.getState().settings.params.scale).toBe(2);
       expect(mockPush).not.toHaveBeenCalled();
     });
   });
 
-  describe("leaving a dirty cover", () => {
+  describe("leaving a dirty preset", () => {
     beforeEach(async () => {
-      mockPathname.mockReturnValue("/playground/cover");
+      mockPathname.mockReturnValue("/playground/shader");
       mockUseSession.mockReturnValue({
         data: { user: { id: "admin-id", email: "admin@example.com" } },
       });
-      useCoverDraftStore.getState().reset();
-      const cover = await import("@/app/actions/cover");
-      (cover.createCover as Mock).mockReset();
-      (cover.saveCover as Mock).mockReset();
+      useShaderPresetDraftStore.getState().reset();
+      const preset = await import("@/app/actions/shader-preset");
+      (preset.createShaderPreset as Mock).mockReset();
+      (preset.saveShaderPreset as Mock).mockReset();
     });
 
     it("goes straight back when nothing has been tuned", () => {
@@ -495,7 +495,7 @@ describe("useCommandPalette", () => {
     // ("Save changes and exit") that cannot be carried out.
     it("does not stop a visitor who has no way to save", () => {
       mockUseSession.mockReturnValue({ data: null });
-      useCoverDraftStore.getState().setParam("scale", 2);
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleBack());
@@ -505,7 +505,7 @@ describe("useCommandPalette", () => {
     });
 
     it("asks instead of navigating when there is unsaved work", () => {
-      useCoverDraftStore.getState().setParam("scale", 2);
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleBack());
@@ -515,40 +515,40 @@ describe("useCommandPalette", () => {
     });
 
     it("saves and then leaves when that is the answer", async () => {
-      const { createCover } = await import("@/app/actions/cover");
-      useCoverDraftStore.getState().setParam("scale", 2);
-      (createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
+      (createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleBack());
       await act(() => result.current.confirmExitSave());
 
-      expect(createCover).toHaveBeenCalledOnce();
+      expect(createShaderPreset).toHaveBeenCalledOnce();
       expect(mockPush).toHaveBeenCalledWith("/");
     });
 
     it("leaves without writing when the answer is discard", async () => {
-      const { createCover, saveCover } = await import("@/app/actions/cover");
-      useCoverDraftStore.getState().setParam("scale", 2);
+      const { createShaderPreset, saveShaderPreset } = await import("@/app/actions/shader-preset");
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleBack());
       act(() => result.current.confirmExitDiscard());
 
-      expect(createCover).not.toHaveBeenCalled();
-      expect(saveCover).not.toHaveBeenCalled();
+      expect(createShaderPreset).not.toHaveBeenCalled();
+      expect(saveShaderPreset).not.toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/");
-      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+      expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
     });
 
     // Cancel is not a quieter discard — the tuning has to survive it intact.
     it("keeps the work and stays put when cancelled", () => {
-      useCoverDraftStore.getState().setParam("scale", 2);
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleBack());
@@ -556,19 +556,19 @@ describe("useCommandPalette", () => {
 
       expect(mockPush).not.toHaveBeenCalled();
       expect(result.current.pendingExit).toBeNull();
-      expect(useCoverDraftStore.getState().settings.params.scale).toBe(2);
-      expect(useCoverDraftStore.getState().isDirty).toBe(true);
+      expect(useShaderPresetDraftStore.getState().settings.params.scale).toBe(2);
+      expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
     });
 
-    // A cover just written is clean, so the same press now simply goes.
+    // A preset just written is clean, so the same press now simply goes.
     it("stops asking once the work has been saved", async () => {
-      const { createCover } = await import("@/app/actions/cover");
-      useCoverDraftStore.getState().setParam("scale", 2);
-      (createCover as Mock).mockResolvedValue({
-        id: "cover-1",
+      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
+      (createShaderPreset as Mock).mockResolvedValue({
+        id: "preset-1",
         title: null,
         shaderId: "cosmicTrack",
-        settings: useCoverDraftStore.getState().settings,
+        settings: useShaderPresetDraftStore.getState().settings,
       });
 
       const { result } = renderHook(() => useCommandPalette(close));
@@ -580,28 +580,28 @@ describe("useCommandPalette", () => {
     });
   });
 
-  describe("handleDiscardAndExit — the cover", () => {
+  describe("handleDiscardAndExit — the preset", () => {
     beforeEach(async () => {
-      mockPathname.mockReturnValue("/playground/cover");
-      useCoverDraftStore.getState().reset();
-      const cover = await import("@/app/actions/cover");
-      (cover.createCover as Mock).mockReset();
-      (cover.saveCover as Mock).mockReset();
+      mockPathname.mockReturnValue("/playground/shader");
+      useShaderPresetDraftStore.getState().reset();
+      const preset = await import("@/app/actions/shader-preset");
+      (preset.createShaderPreset as Mock).mockReset();
+      (preset.saveShaderPreset as Mock).mockReset();
     });
 
     // Nothing was ever written, so this is a no-op plus a navigation — the same
     // shape as the grid's "Discard and exit".
     it("drops the draft and leaves without writing", async () => {
-      const { saveCover, createCover } = await import("@/app/actions/cover");
-      useCoverDraftStore.getState().setParam("scale", 2);
+      const { saveShaderPreset, createShaderPreset } = await import("@/app/actions/shader-preset");
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleDiscardAndExit());
 
-      expect(useCoverDraftStore.getState().isDirty).toBe(false);
-      expect(useCoverDraftStore.getState().coverId).toBeNull();
-      expect(saveCover).not.toHaveBeenCalled();
-      expect(createCover).not.toHaveBeenCalled();
+      expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
+      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBeNull();
+      expect(saveShaderPreset).not.toHaveBeenCalled();
+      expect(createShaderPreset).not.toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/");
     });
 
@@ -611,7 +611,7 @@ describe("useCommandPalette", () => {
       mockUseSession.mockReturnValue({
         data: { user: { id: "admin-id", email: "admin@example.com" } },
       });
-      useCoverDraftStore.getState().setParam("scale", 2);
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleDiscardAndExit());
@@ -632,12 +632,12 @@ describe("useCommandPalette", () => {
       });
       useEditorStore.getState().reset();
       useGridDraftStore.getState().reset();
-      useCoverDraftStore.getState().reset();
+      useShaderPresetDraftStore.getState().reset();
     });
 
     // The point of the whole change: ⌘S commits and leaves you where you were,
     // in every editor. An article editor that navigated to the read page was
-    // the same "thrown out mid-session" bug the cover had.
+    // the same "thrown out mid-session" bug the preset had.
     it("keeps you in the document editor", async () => {
       mockPathname.mockReturnValue("/edit/my-post");
       useEditorStore.getState().setDraftId("existing-id");
@@ -651,7 +651,7 @@ describe("useCommandPalette", () => {
     });
 
     // A brand-new draft has no id until it is written, so the URL has to catch
-    // up — replace, not push, exactly as a first-saved cover does.
+    // up — replace, not push, exactly as a first-saved preset does.
     it("takes on the new draft's edit URL without a history entry", async () => {
       mockPathname.mockReturnValue("/edit/new");
 
@@ -692,7 +692,7 @@ describe("useCommandPalette", () => {
       });
       useEditorStore.getState().reset();
       useGridDraftStore.getState().reset();
-      useCoverDraftStore.getState().reset();
+      useShaderPresetDraftStore.getState().reset();
     });
 
     // #94 withheld Back in edit mode so a bare "back" could not discard

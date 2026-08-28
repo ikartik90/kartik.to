@@ -92,7 +92,7 @@ describe("useCursorTooltip", () => {
   // body (globals.css, keyed off `data-properties-panel`), which is the app's
   // one answer to how much of the right edge is already spoken for. The
   // positioner has to read it, or a label near the panel is placed on screen
-  // and painted underneath it — which is what the cover playground's theme
+  // and painted underneath it — which is what the shader playground's theme
   // toggle did.
   it("treats a docked panel's column as taken", () => {
     const el = document.createElement("div");

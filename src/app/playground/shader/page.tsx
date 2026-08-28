@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { CoverPlayground } from "./cover-playground";
+import { ShaderPlayground } from "./shader-playground";
 
 // ---------------------------------------------------------------------------
-// Cover Playground — where a cover's background is tuned before it is published
-// as a component.
+// Shader Playground — where a preset's background is tuned before it is
+// published as a component.
 //
 // PUBLIC, and reached the way everything else on this site is reached: ⌘K, then
 // the Playground group. It began life as an admin tool under `/edit`, gated to
@@ -22,10 +22,10 @@ import { CoverPlayground } from "./cover-playground";
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: "Cover Playground",
-  description: "Tune a cover's shader background and copy it out as JSX.",
+  title: "Shader Playground",
+  description: "Tune a preset's shader background and copy it out as JSX.",
 };
 
-export default function CoverPlaygroundPage() {
-  return <CoverPlayground />;
+export default function ShaderPlaygroundPage() {
+  return <ShaderPlayground />;
 }

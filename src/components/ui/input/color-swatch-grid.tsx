@@ -11,7 +11,7 @@ import { ColorPicker } from "./color-picker";
 import AddIcon from "@/assets/icons/add.svg";
 
 // ---------------------------------------------------------------------------
-// ColorSwatchGrid — a cover's ramp, drawn as the colours themselves
+// ColorSwatchGrid — a preset's ramp, drawn as the colours themselves
 // (Figma 1088:2591):
 //
 //   <Field size="sm" data-property-control>

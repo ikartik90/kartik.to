@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "panda codegen --silent && next dev",
     "dev:https": "panda codegen --silent && next dev --experimental-https",
-    "build": "prisma generate && panda codegen --silent && next build",
+    "build": "prisma migrate deploy && prisma generate && panda codegen --silent && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "db:deploy": "prisma migrate deploy",
+    "db:status": "prisma migrate status"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

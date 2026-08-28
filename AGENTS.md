@@ -53,8 +53,10 @@ Project Root
 - **Panda Codegen**: `npx panda codegen`
 - **Dev**: `npm run dev`
 - **Prisma Generate**: `npx prisma generate` (Run after schema changes)
-- **Database Push**: `npx prisma db push` (Sync local schema to Neon)
-- **Vercel Build**: `npm run build` (Ensure Panda and Prisma generate before build)
+- **Database Migrate**: `npm run db:migrate` (Author a migration from schema changes and apply it locally)
+- **Database Deploy**: `npm run db:deploy` (Apply pending migrations; run by `npm run build`)
+- **Database Status**: `npm run db:status` (Check which migrations the database has)
+- **Vercel Build**: `npm run build` (Migrates, then ensures Panda and Prisma generate before build)
 - **Lint**: `npm run lint`
 - **Type Check**: `npx tsc --noEmit`
 - **Test**: `npm test`

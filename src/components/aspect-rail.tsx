@@ -30,7 +30,7 @@ import Ratio916Icon from "@/assets/icons/ratio-9-16.svg";
 //
 // The ROW only — no rail of its own. The two surfaces that hold it want
 // different boxes: on a grid card it replaces the placement toolbar inside that
-// toolbar's existing chrome, and in the cover playground it stands over the
+// toolbar's existing chrome, and in the shader playground it stands over the
 // canvas in a rail of its own. What is shared is the CONTENT — which shapes,
 // in which order, under which glyphs, and what flipping one means — and that is
 // exactly what is worth having one copy of.
@@ -95,7 +95,7 @@ const iconStyle = menuIcon();
 // depended on its state. `position: relative` with no offsets moves nothing.
 //
 // Without the anchor the dot resolves its percentage against the nearest
-// positioned ancestor, which on the cover playground is the 80px gutter band —
+// positioned ancestor, which on the shader playground is the 80px gutter band —
 // the dot then hangs 80px down the canvas instead of 12px under its button.
 //
 // `overflow` is the other half, and it is the half that is invisible to a test:
@@ -119,7 +119,7 @@ const rowStyle = css({ overflow: "visible" });
 // `100%` is the button's own bottom edge (see `markAnchorStyle`), and the 12px
 // past it clears the 6px the `md` toolbar insets its buttons by and the rail's
 // hairline, leaving the dot a few pixels clear in the band below. The consumer
-// has to allow it out — see the cover playground's `aspectRailStyle`.
+// has to allow it out — see the shader playground's `aspectRailStyle`.
 const markStyle = css({
   insetBlockStart: "calc(token(spacing.full) + token(spacing.lg))",
 });
@@ -151,7 +151,7 @@ export interface AspectRailProps {
    *
    * OPT-IN, because the rail is shared: a grid card's placement toolbar picks a
    * shape and has nothing to leave unsaved, and a mark there would be a dot
-   * that never lights. Only the cover playground has framing per shape.
+   * that never lights. Only the shader playground has framing per shape.
    *
    * A shape in the orientation NOT on screen cannot carry its own mark, so the
    * flip control carries it instead — otherwise the one case these exist for
@@ -168,7 +168,7 @@ export function AspectRail({
   markedAspects,
 }: AspectRailProps) {
   // Which orientation's shapes are shown is DERIVED from the chosen shape, not
-  // held — so a picker whose aspect changes from outside it (a saved cover
+  // held — so a picker whose aspect changes from outside it (a saved preset
   // loading into the playground a tick after mount) follows, instead of showing
   // a list with nothing pressed in it.
   //

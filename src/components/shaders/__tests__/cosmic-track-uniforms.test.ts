@@ -323,7 +323,7 @@ describe("toCosmicTrackUniforms", () => {
   // ---------------------------------------------------------------------------
 
   // The defaults have to reproduce the plain sine the shader animated on before
-  // these existed, or every saved cover starts moving differently. That is the
+  // these existed, or every saved preset starts moving differently. That is the
   // TOP of the easing range, and deliberately: a fully eased turnaround was the
   // shader's own choice long before there was a control to undo it.
   it("defaults to the fully eased swing the shader has always had", () => {

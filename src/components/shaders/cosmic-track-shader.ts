@@ -63,7 +63,7 @@ uniform float u_edgeWidth;
 uniform float u_time;
 // Device pixels per CSS pixel, set by the mount. Read so the edge highlight's
 // hairline is a fixed width on the SCREEN rather than in the frame buffer —
-// otherwise it halves on a 2x display and halves again in an exported cover,
+// otherwise it halves on a 2x display and halves again in an exported preset,
 // which pins the buffer higher still.
 uniform float u_pixelRatio;
 

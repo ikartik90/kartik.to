@@ -18,12 +18,12 @@ import type { Params, ShaderSpec } from "@/data/shader-specs";
 // Its own module because there are two callers now — the playground's preview
 // and the presets strip's thumbnailer — and they must mount the SAME thing: a
 // thumbnail drawn by a second, slightly different switch would be a picture of
-// a cover the page cannot produce.
+// a preset the page cannot produce.
 //
 // Every mount here costs a webgl2 context. The library pools nothing and
 // registers no `webglcontextlost` handler, so the two callers between them are
 // responsible for keeping the count down: the playground mounts exactly one,
-// and the thumbnailer mounts exactly one at a time. See `cover-thumbnails`.
+// and the thumbnailer mounts exactly one at a time. See `preset-thumbnails`.
 // ---------------------------------------------------------------------------
 
 /** The preview is at most 680×680 at 2×; no detail in a soft gradient survives above it. */
