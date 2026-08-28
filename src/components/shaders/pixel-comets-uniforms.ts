@@ -222,17 +222,19 @@ export interface PixelCometsParams {
   /**
    * How sharply the trail drops from one pixel to the next.
    *
-   * 0 is a straight ramp: it loses 1/`tail` of its brightness per cell, so at
-   * a tail of 14 the step between neighbours is 7% — and with `gridWidth` at 0
-   * there is no edge between them either, so the trail reads as one bar with a
-   * gradient on it rather than as pixels. Turning this up keeps a fixed
-   * FRACTION of the cell in front instead, which makes that step the same all
-   * along the trail and independent of how long the trail is.
+   * 0 is NO drop: every cell of the trail is as opaque as the head's, and it
+   * ends where `tail` says it ends. Turning this up keeps a fixed FRACTION of
+   * the cell in front, which makes the step from one pixel to the next the same
+   * all along the trail and independent of how long the trail is.
    *
-   * It shortens what you SEE without shortening `tail`: the curve still lands
-   * on zero at exactly `tail` cells, it just spends most of its brightness in
-   * the first few. Reach for `tail` to change the trail's length and for this
+   * It shortens what you SEE without shortening `tail`: the trail is `tail`
+   * cells long at every setting, and this decides how many of them are still
+   * bright enough to read. Reach for `tail` to change the length and for this
    * to change how much of it registers.
+   *
+   * The trail's END is a hard one at 0, necessarily — a trail that does not
+   * fade has to stop. From about a third up, the curve is already at a few per
+   * cent by the time it reaches the last cell and there is nothing to see.
    */
   falloff: number;
   /** How bright the bloom around the HEAD is. 0 is a flat pixel. */

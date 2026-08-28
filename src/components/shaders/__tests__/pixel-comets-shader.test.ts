@@ -83,6 +83,28 @@ describe("pixelCometsFragmentShader", () => {
     expect(/step\(at, /.test(pixelCometsFragmentShader)).toBe(false);
   });
 
+  // Falloff 0 is NO falloff: a trail whose last cell is as opaque as its first.
+  //
+  // It could not be while the curve was normalised. The subtraction that made
+  // it land on zero at exactly Tail cells was also what guaranteed a fade, so
+  // the flattest the control could reach was a straight ramp to nothing — and
+  // the soft end of the decay had to sit at .995 rather than 1 to keep that
+  // ratio off 0/0.
+  //
+  // The LENGTH is held by the gate now instead of by the curve, which is what
+  // frees the curve to be flat. Nothing else wanted the normalisation: at any
+  // real falloff the geometric curve is already at a fraction of a percent by
+  // the time it reaches the gate.
+  it("leaves the trail's two ends equally opaque at no falloff", () => {
+    expect(pixelCometsFragmentShader).toContain("#define COMET_DECAY_NONE 1.");
+    expect(pixelCometsFragmentShader).toContain(
+      "return pow(g_decay, d) * step(d, g_tailCells);",
+    );
+    // The normalisation it replaced, which divided the fade out to zero at the
+    // tail's end whatever the decay.
+    expect(pixelCometsFragmentShader).not.toContain("g_tailEnd");
+  });
+
   // The head's bloom is MOTION BLUR on a radial glow: the circle smeared along
   // the track it has just come down, all of it behind. A capsule, so the
   // distance is taken to the nearest point of the smear — which is what keeps

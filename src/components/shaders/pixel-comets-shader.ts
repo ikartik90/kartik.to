@@ -144,15 +144,17 @@ out vec4 fragColor;
 // What one cell of the trail keeps of the cell in front of it, at the two ends
 // of u_falloff. See trailFade — the control walks between these.
 //
-// The soft end is not 1, because at exactly 1 the curve is 0/0. Just under it
-// the same expression IS the straight line, to within a thousandth, which is
-// what lets one formula cover the whole slider instead of a mix between two.
+// The soft end is exactly 1: no falloff at all, a trail whose last cell is as
+// opaque as its first. It sat a thousandth under while the curve was
+// normalised, because that ratio is 0/0 at 1 — so the flattest the control
+// could reach was a straight ramp to nothing, which is a fade, and "no
+// falloff" was a setting the slider did not have.
 //
 // The hard end is where a step stops being a step and becomes an ending: at
 // .45 the third cell is already down to a fifth, so a trail reads as three or
 // four distinct pixels however long Tail is set. Lower would only be a shorter
 // trail wearing a longer one's number.
-#define COMET_DECAY_SOFT 0.995
+#define COMET_DECAY_NONE 1.
 #define COMET_DECAY_HARD 0.45
 
 // ---------------------------------------------------------------------------
@@ -168,7 +170,6 @@ out vec4 fragColor;
 float g_tailCells;
 float g_chance;
 float g_decay;
-float g_tailEnd;
 
 // One axis's run, life and clock: (runCells, lifeCells, cycles).
 //
@@ -234,17 +235,20 @@ float leanRun(float along) {
 // that step the same everywhere along the trail and independent of how long
 // the trail is.
 //
-// The subtraction is what still lands it on zero at exactly Tail cells, so the
-// control shortens the trail's READ without lying about its length. And as the
-// decay approaches 1 the whole expression becomes the straight ramp — the
-// limit of (p^d - p^T)/(1 - p^T) as p goes to 1 is (T - d)/T — which is why
-// one formula covers the slider end to end rather than a blend between two.
+// Tail's LENGTH is held by the gate, not by the curve, and that is what lets
+// the curve go flat. It used to be held by a subtraction — (p^d - p^T) over
+// (1 - p^T), which lands on zero at exactly T whatever the decay — and the
+// price was that every setting faded: the ending and the fade were the same
+// mechanism, so there was no way to ask for one without the other. The gate
+// costs nothing that was being paid for: at any real falloff the curve is at a
+// fraction of a percent by the time it arrives there, and at no falloff the
+// step IS the ending the control is asking for.
 float trailFade(float behind) {
   float d = clamp(behind - .5, 0., 1e5);
-  // A tail of zero is the head alone on the grid: a real setting, and the one
-  // value the ratio above cannot express (its denominator goes to nothing).
+  // A tail of zero is the head alone on the grid, and the gate below would
+  // otherwise light the cell behind it too.
   if (g_tailCells < 1e-3) return step(d, 0.);
-  return clamp((pow(g_decay, d) - g_tailEnd) / max(1. - g_tailEnd, 1e-6), 0., 1.);
+  return pow(g_decay, d) * step(d, g_tailCells);
 }
 
 // The palette, indexed rather than interpolated. A mover is one pixel and a
@@ -613,12 +617,10 @@ void main() {
   vec2 downTiming = timingFor(frame.y);
   vec2 acrossTiming = timingFor(frame.x);
 
-  // The trail's curve — see trailFade. Both of these are constant over the
-  // frame, and the pow() for the end point is the reason they are hoisted: it
-  // would otherwise be paid once per lane per fragment for a number that never
+  // The trail's curve — see trailFade. Constant over the frame, and hoisted
+  // rather than worked out once per lane per fragment for a number that never
   // varies.
-  g_decay = mix(COMET_DECAY_SOFT, COMET_DECAY_HARD, clamp(u_falloff, 0., 1.));
-  g_tailEnd = pow(g_decay, max(g_tailCells, 1e-4));
+  g_decay = mix(COMET_DECAY_NONE, COMET_DECAY_HARD, clamp(u_falloff, 0., 1.));
 
   // Count is a number of MOVERS, so it is shared out over the slots a frame
   // holds — then corrected for the spawn band reaching outside the frame, which

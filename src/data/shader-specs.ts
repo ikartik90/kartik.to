@@ -545,16 +545,19 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       { kind: "slider", key: "tailBlend", label: "Tail Blend", min: 0, max: 1, step: 0.1, value: 0 },
       // How sharply the trail drops from one pixel to the next.
       //
-      // 0 is a straight ramp, which loses 1/Tail per cell — 7% at the default
-      // Tail, and with Grid Width at 0 there is no edge between neighbours
-      // either, so the trail reads as one bar with a gradient on it. Turning
-      // this up keeps a fixed FRACTION of the cell in front instead, so the
-      // step is the same all along the trail and does not thin out as Tail
+      // 0 is no drop at all: every cell of the trail is as opaque as the
+      // head's, and it ends where Tail says it ends. Turning this up keeps a
+      // fixed FRACTION of the cell in front, so the step from one pixel to the
+      // next is the same all along the trail and does not thin out as Tail
       // grows.
       //
-      // It shortens what you SEE without shortening Tail: the curve still lands
-      // on zero at exactly Tail cells, it just spends most of its brightness in
-      // the first few.
+      // It shortens what you SEE without shortening Tail: the trail is Tail
+      // cells long at every setting, and this decides how many of them are
+      // still bright enough to read.
+      //
+      // The end is a HARD one at 0, necessarily — a trail that does not fade
+      // has to stop. From about a third up the curve is at a few per cent by
+      // the time it gets there and there is nothing left to see.
       { kind: "slider", key: "falloff", label: "Falloff", min: 0, max: 1, step: 0.1, value: 0.6 },
       // The size of one PIXEL, in CSS pixels — a 10 is a ten-by-ten pixel, and on
       // a 1.5x display it lands on fifteen device pixels and still reads as ten.
