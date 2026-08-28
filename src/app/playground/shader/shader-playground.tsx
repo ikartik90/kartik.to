@@ -21,6 +21,7 @@ import { DemoPreloader } from "@/components/demo-component";
 import { useTrickleProgress } from "@/hooks/use-demo-loader";
 import { PresetsPane } from "./presets-pane";
 import { ShaderStage } from "./shader-stage";
+import { useDraftHistory } from "./use-draft-history";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
@@ -411,6 +412,12 @@ export interface OpenedShaderPreset {
 }
 
 export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
+  // ⌘Z / ⌘⇧Z over the draft. Here rather than in the palette, which owns the
+  // shortcuts that COMMIT a draft (⌘S) — undo never leaves the page and has no
+  // meaning off it, so it belongs to the surface being edited, exactly as the
+  // article editor's own history does.
+  useDraftHistory();
+
   // The draft lives in a STORE rather than in this component, because the
   // commands that commit it — "Save changes and exit", ⌘S — are in the command
   // palette, which is mounted in the root layout and knows nothing about the
@@ -1004,11 +1011,12 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
               loudest thing in the rail. */}
               <OptionList
                 size="sm"
-                // The recipe's own width is the 208px popover pitch it shares with
-                // the calendar. In here the panel is the frame, so the list takes
-                // the column it was given — `utilities` outranks `recipes`, which
-                // is what lets a consumer widen it without a variant.
-                className={css({ width: "token(spacing.full)" })}
+                // The recipe's own width is the 208px popover pitch it shares
+                // with the calendar. In here the panel is the frame, so the
+                // list takes the column it was given — and stops where every
+                // other row does, leaving the reserved action column open (see
+                // `controlPanel`'s `data-property-block`).
+                data-property-block
                 value={shaderId}
                 onValueChange={(value) => selectShader(value as ShaderId)}
               >

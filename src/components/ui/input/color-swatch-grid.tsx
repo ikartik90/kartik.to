@@ -87,11 +87,19 @@ export function ColorSwatchGrid({
   const cellsRef = useRef<Map<number, HTMLButtonElement>>(new Map());
   const pin = usePickerPin();
 
-  // The one cell that may be pressed to grow the ramp — the first gap. `null`
-  // once the ramp fills its ceiling, which is what takes the affordance away
-  // rather than leaving a button that declines.
-  const addIndex =
-    onAdd && values.length < capacity ? values.length : null;
+  // Whether an empty cell may be pressed to grow the ramp. False once the ramp
+  // fills its ceiling, which is what takes the affordance away rather than
+  // leaving a button that declines.
+  //
+  // EVERY blank offers it, not just the first gap. Where a colour lands is
+  // still the first gap — the ramp is dense and a stop never appears in the
+  // seventh slot with nothing before it — but where you may PRESS is a
+  // different question, and a row of identical blanks of which only one is live
+  // is a target you have to find rather than one you can hit.
+  const canAdd = Boolean(onAdd) && values.length < capacity;
+
+  // Where the next colour lands, which is also the cell the picker opens on.
+  const addIndex = values.length;
 
   const closePicker = () => {
     const wasOpen = openIndex;
@@ -106,6 +114,19 @@ export function ColorSwatchGrid({
   // grid, so pressing another colour moves the panel to it in a single click
   // instead of closing and needing a second.
   const keepOpenFor = `[data-swatch-grid="${uid}"]`;
+
+  // Grow the ramp and open the picker on the stop that was just made. Adding is
+  // the START of choosing a colour: leaving it at the append would put a colour
+  // nobody picked into the ramp and make the author click the same cell again.
+  //
+  // Pinned to the cell the colour LANDS in rather than the one that was
+  // pressed, because the picker opens level with the swatch it edits and those
+  // are only the same cell when the first gap is the one you hit.
+  function addAndOpen() {
+    onAdd?.();
+    pin.pin(cellsRef.current.get(addIndex) ?? null);
+    setOpenIndex(addIndex);
+  }
 
   function openAt(index: number) {
     // Re-pressing the open cell closes it; pressing a different one moves the
@@ -123,7 +144,7 @@ export function ColorSwatchGrid({
       <div className={styles.grid} role="group" aria-label={ariaLabel}>
         {Array.from({ length: capacity }, (_, index) => {
           const color = values[index];
-          const isAdd = index === addIndex;
+          const offersAdd = !color && canAdd;
           return (
             <button
               key={index}
@@ -134,14 +155,16 @@ export function ColorSwatchGrid({
               }}
               data-swatch-grid={uid}
               // Read by the recipe to reveal the add glyph on hover — a
-              // marker rather than a variant, because whether a cell is THE
-              // addable one changes with the ramp's length on every edit.
-              data-swatch-add={isAdd || undefined}
+              // marker rather than a variant, because whether a cell is still
+              // blank changes with the ramp's length on every edit.
+              data-swatch-add={offersAdd || undefined}
               // Draws the checkerboard under the colour. Only where there IS
               // one — see the recipe.
               data-swatch-filled={color ? "" : undefined}
-              // Inert past the first gap: there is nowhere for a colour to go.
-              disabled={!color && !isAdd}
+              // Inert only where the ramp cannot grow at all — a full ramp,
+              // or a grid given no `onAdd`. There is nowhere for a colour to
+              // go, so the cell says so by not lighting up.
+              disabled={!color && !offersAdd}
               aria-haspopup={color ? "dialog" : undefined}
               aria-expanded={color ? openIndex === index : undefined}
               // A ramp's cells are numbered because their POSITION is what
@@ -150,19 +173,19 @@ export function ColorSwatchGrid({
               // row's own name instead of being a second "Colour 1" in a panel
               // that already has ten of them.
               aria-label={
-                isAdd
+                offersAdd
                   ? "Add a colour"
                   : capacity === 1
                     ? ariaLabel
                     : `Colour ${index + 1}`
               }
               className={styles.cell}
-              onClick={() => (isAdd ? onAdd?.() : openAt(index))}
+              onClick={() => (offersAdd ? addAndOpen() : openAt(index))}
             >
               {color ? (
                 <span className={styles.fill} style={{ backgroundColor: color }} />
               ) : (
-                isAdd && <AddIcon aria-hidden className={styles.icon} />
+                offersAdd && <AddIcon aria-hidden className={styles.icon} />
               )}
             </button>
           );

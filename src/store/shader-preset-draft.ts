@@ -71,6 +71,27 @@ interface DraftBuffer {
   } | null;
 }
 
+/**
+ * One step in the undo stack — the authored PICTURE and nothing else.
+ *
+ * Narrower than `DraftBuffer` on purpose. That carries `publishedAt` and
+ * `savedParams` because setting a draft aside has to hand back everything about
+ * it; those are facts the SERVER owns, and an undo that took a preset off show
+ * would be undoing something the author never did in this panel.
+ *
+ * `editedAspects` IS here, because it is what the aspect rail marks: step a
+ * framing edit back without it and the rail goes on claiming unsaved work in a
+ * shape that no longer has any.
+ */
+export interface ShaderPresetHistoryStep {
+  shaderId: ShaderId;
+  settings: ShaderPresetSettings;
+  editedAspects: DemoFrameAspectRatio[];
+}
+
+/** Maximum number of undo steps retained — the article editor's ceiling. */
+const MAX_HISTORY = 100;
+
 interface ShaderPresetDraftStore {
   /** The saved preset being edited, or null for one that has never been saved. */
   shaderPresetId: string | null;
@@ -151,6 +172,17 @@ interface ShaderPresetDraftStore {
    * departure.
    */
   buffers: Record<string, DraftBuffer>;
+  /**
+   * The undo stack for the draft on screen, oldest first, with the state it
+   * OPENED in at the floor — so ⌘Z walks back to where you came in and stops.
+   *
+   * Per draft, not per session: opening another preset starts a new one (see
+   * `load`). Undo crossing that line would pull a different preset's colours
+   * into the one in front of you, which is not a step back by any reading.
+   */
+  history: ShaderPresetHistoryStep[];
+  /** Where in `history` the draft currently stands. */
+  historyIndex: number;
 
   selectShader: (shaderId: ShaderId) => void;
   setParam: (key: string, value: ParamValue) => void;
@@ -231,6 +263,21 @@ interface ShaderPresetDraftStore {
   }) => void;
   openNewDraft: () => void;
   /** Back to a blank draft, throwing away every buffered edit. The discard. */
+  /**
+   * Record the current picture as a step, if it differs from the one already at
+   * the top.
+   *
+   * Called on a DEBOUNCE by the playground rather than from each action: a
+   * slider drag emits a value per frame, and one step per frame would bury
+   * every other edit in the stack. The equality check is what makes that safe
+   * to call freely — a settled slider back where it started records nothing,
+   * and so does a debounce firing after an undo.
+   */
+  pushHistory: () => void;
+  /** Step back one. A no-op at the floor. */
+  undo: () => void;
+  /** Step forward one. A no-op at the top. */
+  redo: () => void;
   reset: () => void;
   /** Exactly what `ShaderPresetContentSchema` validates — see there. */
   toContent: () => ShaderPresetContent;
@@ -305,6 +352,31 @@ const snapshot = (state: ShaderPresetDraftStore): DraftBuffer => ({
   savedParams: state.savedParams,
 });
 
+/** The authored picture, as one undo step. */
+const step = (
+  state: Pick<ShaderPresetDraftStore, "shaderId" | "settings" | "editedAspects">,
+): ShaderPresetHistoryStep => ({
+  shaderId: state.shaderId,
+  settings: state.settings,
+  editedAspects: state.editedAspects,
+});
+
+/**
+ * Whether two steps are the same picture.
+ *
+ * By serialisation rather than by reference: every action rebuilds `settings`
+ * around the key it touched, so a slider dragged out and back lands on an
+ * equal-but-fresh object every time. `settings` is the blob that goes to the
+ * database as JSON, so it is serialisable by construction.
+ */
+const sameStep = (a: ShaderPresetHistoryStep, b: ShaderPresetHistoryStep) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+/** A history holding one step: the state a draft opens in, and its floor. */
+const historyFrom = (
+  state: Pick<ShaderPresetDraftStore, "shaderId" | "settings" | "editedAspects">,
+) => ({ history: [step(state)], historyIndex: 0 });
+
 /** What the active draft is buffered under while another is being edited. */
 const keyOf = (shaderPresetId: string | null) => shaderPresetId ?? NEW_SHADER_PRESET_KEY;
 
@@ -337,6 +409,7 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
   editedAspects: [],
   buffers: {},
   ...blank(INITIAL_SHADER),
+  ...historyFrom({ ...blank(INITIAL_SHADER), editedAspects: [] }),
 
   // A switch RE-SEEDS rather than merging: a shader's control table is a
   // different shape, so carrying the old params across would carry keys the new
@@ -509,7 +582,16 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
           // Consumed on the way in — the active draft is never also a buffer,
           // so nothing counts as unsaved twice.
           delete buffers[id];
-          return { ...buffered, shaderPresetId: id, buffers, isDirty: true };
+          return {
+            ...buffered,
+            shaderPresetId: id,
+            buffers,
+            isDirty: true,
+            // A draft handed back from a buffer comes back as it was LEFT, and
+            // that is where its history starts again: the steps that made it
+            // belong to a visit that has ended.
+            ...historyFrom(buffered),
+          };
         }
       } else {
         delete buffers[id];
@@ -535,6 +617,10 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
         // shapes had been reframed, since "since it was opened" starts here.
         savedParams: { shaderId, params: settings.params, framing: settings.framing },
         editedAspects: [],
+        // A new draft, so a new stack with this preset at the floor. Undo must
+        // not cross from one preset into another: stepping back into the
+        // colours of the one you were looking at before is not a step back.
+        ...historyFrom({ shaderId, settings, editedAspects: [] }),
       };
     }),
 
@@ -567,7 +653,13 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
       const buffered = buffers[NEW_SHADER_PRESET_KEY];
       if (buffered) {
         delete buffers[NEW_SHADER_PRESET_KEY];
-        return { ...buffered, shaderPresetId: null, buffers, isDirty: true };
+        return {
+          ...buffered,
+          shaderPresetId: null,
+          buffers,
+          isDirty: true,
+          ...historyFrom(buffered),
+        };
       }
       return {
         buffers,
@@ -578,6 +670,7 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
         aspect: DEFAULT_SHADER_PRESET_ASPECT,
         editedAspects: [],
         ...blank(INITIAL_SHADER),
+        ...historyFrom({ ...blank(INITIAL_SHADER), editedAspects: [] }),
       };
     }),
 
@@ -585,6 +678,35 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
   // palette's "Discard changes and exit", and a discard that left other
   // presets' unsaved work behind would be a discard you had to press more than
   // once.
+  pushHistory: () => {
+    const state = get();
+    const next = step(state);
+    const top = state.history[state.historyIndex];
+    if (top && sameStep(top, next)) return;
+    // Everything ahead of where we stand is a branch the author has left: a
+    // fresh edit after an undo drops it, which is what stops redo restoring a
+    // value that was moved away from.
+    const trimmed = state.history.slice(0, state.historyIndex + 1);
+    const history = [...trimmed, next].slice(-MAX_HISTORY);
+    set({ history, historyIndex: history.length - 1 });
+  },
+
+  undo: () => {
+    const { history, historyIndex } = get();
+    if (historyIndex <= 0) return;
+    const index = historyIndex - 1;
+    // Dirty either way: stepping back to where you came in still leaves a draft
+    // that differs from the row behind it until it is written.
+    set({ ...history[index], historyIndex: index, isDirty: true });
+  },
+
+  redo: () => {
+    const { history, historyIndex } = get();
+    if (historyIndex >= history.length - 1) return;
+    const index = historyIndex + 1;
+    set({ ...history[index], historyIndex: index, isDirty: true });
+  },
+
   reset: () =>
     set({
       shaderPresetId: null,
@@ -595,6 +717,7 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
       editedAspects: [],
       buffers: {},
       ...blank(INITIAL_SHADER),
+      ...historyFrom({ ...blank(INITIAL_SHADER), editedAspects: [] }),
     }),
 
   toContent: () => {

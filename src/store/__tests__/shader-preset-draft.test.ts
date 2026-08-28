@@ -609,3 +609,112 @@ describe("useShaderPresetDraftStore", () => {
     expect(hasUnsavedShaderPresetWork(useShaderPresetDraftStore.getState())).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Undo / redo.
+//
+// The same snapshot stack the article editor keeps (`src/store/editor.ts`), over
+// the authored picture rather than over the document: the shader, its settings,
+// and which shapes the rail is marking as reframed. Not `publishedAt` and not
+// `savedParams` — those are facts the SERVER owns, and an undo that took a
+// preset off show would be undoing something the author never did here.
+// ---------------------------------------------------------------------------
+
+describe("useShaderPresetDraftStore history", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
+
+  const paramKey = "u_colorEdgeStrength";
+  const setAndPush = (value: number) => {
+    useShaderPresetDraftStore.getState().setParam(paramKey, value);
+    useShaderPresetDraftStore.getState().pushHistory();
+  };
+  const paramNow = () =>
+    useShaderPresetDraftStore.getState().settings.params[paramKey];
+
+  it("opens with the draft's own state as the floor", () => {
+    const state = useShaderPresetDraftStore.getState();
+    expect(state.history).toHaveLength(1);
+    expect(state.historyIndex).toBe(0);
+  });
+
+  it("steps back to the value before the edit", () => {
+    const before = paramNow();
+    setAndPush(0.25);
+    expect(paramNow()).toBe(0.25);
+
+    useShaderPresetDraftStore.getState().undo();
+    expect(paramNow()).toBe(before);
+  });
+
+  it("steps forward again", () => {
+    setAndPush(0.25);
+    useShaderPresetDraftStore.getState().undo();
+    useShaderPresetDraftStore.getState().redo();
+    expect(paramNow()).toBe(0.25);
+  });
+
+  // The floor is the state the draft opened in: there is nothing behind it to
+  // go back to, and a press that did nothing is better than one that empties
+  // the panel.
+  it("does not step back past the state it opened in", () => {
+    const opened = paramNow();
+    setAndPush(0.25);
+    const store = useShaderPresetDraftStore.getState();
+    store.undo();
+    store.undo();
+    store.undo();
+    expect(paramNow()).toBe(opened);
+    expect(useShaderPresetDraftStore.getState().historyIndex).toBe(0);
+  });
+
+  // A new edit after an undo is a new branch — what was undone is gone, which
+  // is what every undo stack does and what stops redo restoring a value the
+  // author has since moved away from.
+  it("drops the redo stack once a fresh edit lands", () => {
+    setAndPush(0.25);
+    setAndPush(0.5);
+    useShaderPresetDraftStore.getState().undo();
+    setAndPush(0.75);
+
+    useShaderPresetDraftStore.getState().redo();
+    expect(paramNow()).toBe(0.75);
+  });
+
+  // A push that records nothing is a press wasted: a slider settling back where
+  // it started, or the debounce firing twice on one edit.
+  it("ignores a push that changes nothing", () => {
+    setAndPush(0.25);
+    const depth = useShaderPresetDraftStore.getState().history.length;
+    useShaderPresetDraftStore.getState().pushHistory();
+    expect(useShaderPresetDraftStore.getState().history).toHaveLength(depth);
+  });
+
+  // Opening another preset is not an edit to this one. Undo crossing that line
+  // would pull a DIFFERENT preset's colours into the one on screen.
+  it("starts a new history when another preset is opened", () => {
+    setAndPush(0.25);
+    useShaderPresetDraftStore.getState().load({
+      id: "preset-1",
+      title: "Dusk",
+      shaderId: "swirl",
+      settings: savedSettings(SHADER_SPECS.swirl),
+      publishedAt: null,
+    });
+
+    const state = useShaderPresetDraftStore.getState();
+    expect(state.history).toHaveLength(1);
+    expect(state.historyIndex).toBe(0);
+
+    state.undo();
+    expect(useShaderPresetDraftStore.getState().shaderId).toBe("swirl");
+  });
+
+  // Undo is an edit like any other as far as the exit question is concerned:
+  // stepping back to where you started still leaves a draft that differs from
+  // the row behind it until it is saved.
+  it("leaves the draft dirty", () => {
+    setAndPush(0.25);
+    useShaderPresetDraftStore.getState().undo();
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
+  });
+});

@@ -152,9 +152,9 @@ describe("CommandPalette", () => {
     // The playground is the one piece of the site's making-of that anybody can
     // walk into, so it is grouped like Settings rather than like Publish: no
     // session, no route condition, always in the list.
-    it("renders the Playground group", () => {
+    it("renders the Playgrounds group", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Playground")).toBeDefined();
+      expect(screen.getByText("Playgrounds")).toBeDefined();
     });
 
     it("offers the Shader Playground item", () => {
@@ -164,9 +164,9 @@ describe("CommandPalette", () => {
   });
 
   describe("when logged out", () => {
-    it("still offers the Playground group", () => {
+    it("still offers the Playgrounds group", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Playground")).toBeDefined();
+      expect(screen.getByText("Playgrounds")).toBeDefined();
       expect(screen.getByText("Shader Playground")).toBeDefined();
     });
 
@@ -212,9 +212,9 @@ describe("CommandPalette", () => {
       expect(html).toContain("Settings");
     });
 
-    it("renders the Playground group in the server render too", () => {
+    it("renders the Playgrounds group in the server render too", () => {
       const html = renderToString(<CommandPalette />);
-      expect(html).toContain("Playground");
+      expect(html).toContain("Playgrounds");
       expect(html).toContain("Shader Playground");
     });
   });
@@ -588,7 +588,7 @@ describe("CommandPalette", () => {
       mockPathname.mockReturnValue("/edit/new");
       render(<CommandPalette />);
 
-      expect(list().queryByText("Playground")).toBeNull();
+      expect(list().queryByText("Playgrounds")).toBeNull();
       expect(list().queryByText("Shader Playground")).toBeNull();
     });
 
@@ -596,7 +596,7 @@ describe("CommandPalette", () => {
       mockPathname.mockReturnValue("/edit/home");
       render(<CommandPalette />);
 
-      expect(list().queryByText("Playground")).toBeNull();
+      expect(list().queryByText("Playgrounds")).toBeNull();
       expect(list().queryByText("Shader Playground")).toBeNull();
     });
 
@@ -637,7 +637,7 @@ describe("CommandPalette", () => {
     it("stops advertising the playground once you are on it", () => {
       render(<CommandPalette />);
 
-      expect(list().queryByText("Playground")).toBeNull();
+      expect(list().queryByText("Playgrounds")).toBeNull();
       expect(list().queryByText("Shader Playground")).toBeNull();
     });
 

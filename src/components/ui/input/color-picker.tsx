@@ -234,6 +234,15 @@ function ColorPickerRoot({
  * every panel in the app puts last, so anything else has to arrive to its left
  * rather than displace it. The destructive chip is also the one that must not
  * be where a hand goes by habit to dismiss.
+ *
+ * The pair sits in its own box rather than as two more children of the strip.
+ * The strip used to spread its children with `space-between`, which divides the
+ * space between ALL of them — so Trash came to rest midway between the title
+ * and Close rather than next to it. Grouping them is what puts the cluster at
+ * the end, the way the properties panel's own header does it.
+ *
+ * The rule between them is drawn only when both are there: a divider hanging
+ * off a lone chip would separate it from nothing.
  */
 function ColorPickerHeader() {
   const { title, onClose, onRemove, styles } = usePicker("ColorPicker.Header");
@@ -242,15 +251,22 @@ function ColorPickerHeader() {
       <Typography tag="p" type="bodySmall" className={styles.title}>
         {title}
       </Typography>
-      {onRemove && (
-        <Button variant="icon" aria-label="Remove colour" onClick={onRemove}>
-          <TrashIcon />
-        </Button>
-      )}
-      {onClose && (
-        <Button variant="icon" aria-label="Close" onClick={onClose}>
-          <CloseIcon />
-        </Button>
+      {(onRemove || onClose) && (
+        <div className={styles.actions}>
+          {onRemove && (
+            <Button variant="icon" aria-label="Remove colour" onClick={onRemove}>
+              <TrashIcon />
+            </Button>
+          )}
+          {onRemove && onClose && (
+            <span aria-hidden className={styles.divider} />
+          )}
+          {onClose && (
+            <Button variant="icon" aria-label="Close" onClick={onClose}>
+              <CloseIcon />
+            </Button>
+          )}
+        </div>
       )}
     </header>
   );
