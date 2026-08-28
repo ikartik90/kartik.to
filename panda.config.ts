@@ -4848,7 +4848,7 @@ export default defineConfig({
         colorSwatchGrid: defineSlotRecipe({
           className: "color-swatch-grid",
           description:
-            "A cover's ramp as a five-column grid of 36×28 swatches — filled cells are the colours in order, the first empty one offers to add, and the rest are inert blanks. Each swatch is a button that opens the shared ColorPicker. Sized so the grid is exactly the properties rail's field column (Figma 1088:2591).",
+            "A shader preset's ramp as a five-column grid of 36×28 swatches — filled cells are the colours in order, and every empty one offers to add. Each swatch is a button that opens the shared ColorPicker: a filled cell on its own colour, a blank on the stop pressing it appends. Sized so the grid is exactly the properties rail's field column (Figma 1088:2591).",
           slots: ["grid", "cell", "fill", "icon"],
           base: {
             grid: {
@@ -4899,9 +4899,11 @@ export default defineConfig({
                 backgroundSize: "token(spacing.md) token(spacing.md)",
               },
               transition: "box-shadow 150ms ease",
-              // A cell past the first empty one. It is not a hole in the ramp —
-              // colours are dense, and the next one lands in the first gap — so
-              // it offers nothing and says so by not lighting up.
+              // A blank that cannot take a colour — a full ramp, or a grid
+              // given no `onAdd`. Every other blank is pressable, so this is
+              // the one case that offers nothing and says so by not lighting
+              // up. (Where the colour LANDS is still the first gap: the ramp is
+              // dense. Which cell you may press is a separate question.)
               "&:disabled": { cursor: "default" },
               _hover: {
                 boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-active)",
@@ -4917,9 +4919,15 @@ export default defineConfig({
             // background, because the checker occupies the background and the
             // two have to composite.
             fill: { position: "absolute", inset: 0 },
-            // The add glyph on the one cell that offers it. Drawn only on
-            // hover and on keyboard focus: at rest the row should read as a
-            // ramp and its remaining room, not as a strip of buttons.
+            // The add glyph, on whichever blank is under the pointer. Drawn
+            // only on hover and on keyboard focus: at rest the row should read
+            // as a ramp and its remaining room, not as a strip of buttons.
+            //
+            // It follows the pointer across the blanks rather than sitting on
+            // one of them. Pinned to the first gap it appeared to JUMP as you
+            // swept the row — the glyph lighting up a cell away from the one
+            // you were over — which read as the icon moving rather than as the
+            // row having a single live target.
             icon: {
               position: "relative",
               width: "token(spacing.xxl)",
@@ -4967,6 +4975,8 @@ export default defineConfig({
             "root",
             "header",
             "title",
+            "actions",
+            "divider",
             "body",
             "map",
             "mapThumb",
@@ -4995,7 +5005,6 @@ export default defineConfig({
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
               gap: "md",
               height: "token(spacing.4xl)",
               paddingInline: "lg",
@@ -5007,10 +5016,37 @@ export default defineConfig({
               color: "text.body",
             },
             title: {
+              // Takes the slack, rather than the strip spreading its children
+              // apart. `space-between` on the header divided the space between
+              // ALL of them, so a second chip landed midway between the title
+              // and Close instead of beside it; the panel's own header groups
+              // its chips at the end and this one has to read the same way.
+              flex: 1,
               minWidth: 0,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
+            },
+            // The chips at the end of the strip, in the gap the properties
+            // panel's own header actions use (`headerActionsStyle`) rather than
+            // the header's 12px — these are one cluster, not separate controls.
+            actions: {
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "xs",
+            },
+            // Between the chips, and the same hairline a tooltip puts between
+            // its label and a trailing glyph: a zero-width box carrying one
+            // border, so it takes no space of its own beyond the rule.
+            divider: {
+              flexShrink: 0,
+              width: 0,
+              alignSelf: "stretch",
+              marginBlock: "xs",
+              borderLeftWidth: "token(spacing.3xs)",
+              borderLeftStyle: "solid",
+              borderLeftColor: "border.divider",
             },
             body: {
               display: "flex",
@@ -5376,6 +5412,27 @@ export default defineConfig({
               alignItems: "stretch",
               gap: "md",
               padding: "lg",
+              // The panel's ink, the same one the header strip and every
+              // section header set. An icon `action` paints in `currentColor`,
+              // so without this the chip in a row's action column inherits the
+              // PAGE's `text.default` — a step brighter than everything around
+              // it (see the `text` slot) — and the one chip sitting among the
+              // controls reads darker than the identical chips in the header
+              // above it. Field labels and values name their own colours and
+              // are unaffected.
+              color: "text.body",
+              // A control that fills the panel rather than sitting in a
+              // labelled row — the shader list. It still stops where the FIELD
+              // column stops: the reserved action column runs unbroken from the
+              // header strip to the foot of the panel, and a control spanning
+              // it would be the one row that breaks that line. Same 36px every
+              // other row gives up, subtracted here because this one is not on
+              // the grid — which is the `text` slot's reasoning exactly, and
+              // the same expression.
+              "& [data-property-block]": {
+                width:
+                  "calc(token(spacing.full) - token(spacing.md) - token(sizes.propertyRowAction))",
+              },
               "& [data-property-control]": {
                 display: "grid",
                 gridTemplateColumns:

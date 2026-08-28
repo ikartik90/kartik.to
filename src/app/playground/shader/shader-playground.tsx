@@ -1004,11 +1004,12 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
               loudest thing in the rail. */}
               <OptionList
                 size="sm"
-                // The recipe's own width is the 208px popover pitch it shares with
-                // the calendar. In here the panel is the frame, so the list takes
-                // the column it was given — `utilities` outranks `recipes`, which
-                // is what lets a consumer widen it without a variant.
-                className={css({ width: "token(spacing.full)" })}
+                // The recipe's own width is the 208px popover pitch it shares
+                // with the calendar. In here the panel is the frame, so the
+                // list takes the column it was given — and stops where every
+                // other row does, leaving the reserved action column open (see
+                // `controlPanel`'s `data-property-block`).
+                data-property-block
                 value={shaderId}
                 onValueChange={(value) => selectShader(value as ShaderId)}
               >

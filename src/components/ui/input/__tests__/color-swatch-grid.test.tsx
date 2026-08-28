@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -32,24 +33,63 @@ describe("ColorSwatchGrid", () => {
   });
 
   // The ramp is DENSE — a colour lands in the first gap, never in the seventh —
-  // so exactly one cell may offer to add, and the rest must not look like they
-  // could take one.
-  it("offers to add on the first empty cell and on no other", () => {
+  // but WHERE it lands and where you may press are different questions. Every
+  // empty cell takes the press, because a row of identical blanks of which
+  // only one is live is a target you have to find rather than one you can hit.
+  it("offers to add on every empty cell", () => {
     renderGrid({ onAdd: noop });
-    expect(screen.getByRole("button", { name: "Add a colour" })).toBeTruthy();
+    // Ten cells, two filled — the other eight all offer the same thing.
+    expect(screen.getAllByRole("button", { name: "Add a colour" })).toHaveLength(
+      8,
+    );
 
     const inert = screen
       .getAllByRole("button")
       .filter((button) => button.hasAttribute("disabled"));
-    // Ten cells, two filled, one addable — the other seven take nothing.
-    expect(inert).toHaveLength(7);
+    expect(inert).toHaveLength(0);
   });
 
   it("appends through onAdd", async () => {
     const onAdd = vi.fn();
     renderGrid({ onAdd });
-    await userEvent.click(screen.getByRole("button", { name: "Add a colour" }));
+    const cells = screen.getAllByRole("button", { name: "Add a colour" });
+    await userEvent.click(cells[0]);
     expect(onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  // Pressing the LAST blank is the same act as pressing the first: one colour,
+  // appended. The press is not a choice of slot.
+  it("appends once from any empty cell, not into the cell pressed", async () => {
+    const onAdd = vi.fn();
+    renderGrid({ onAdd });
+    const cells = screen.getAllByRole("button", { name: "Add a colour" });
+    await userEvent.click(cells.at(-1)!);
+    expect(onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  // Adding is the start of choosing a colour, not the end of it: the press
+  // opens the picker on the stop it just made, so the ramp does not gain a
+  // default nobody asked for and then have to be clicked a second time.
+  it("opens the picker on the colour an empty cell just added", async () => {
+    function Harness() {
+      const [values, setValues] = useState(["#FFAB6FFF", "#FF4D97FF"]);
+      return (
+        <ColorSwatchGrid
+          ariaLabel="Ramp"
+          capacity={10}
+          values={values}
+          onValueChange={noop}
+          onAdd={() => setValues((v) => [...v, "#00FF00FF"])}
+        />
+      );
+    }
+    render(<Harness />);
+    const blanks = screen.getAllByRole("button", { name: "Add a colour" });
+    await userEvent.click(blanks.at(-1)!);
+
+    expect(screen.getByRole("dialog", { name: "Color picker" })).toBeTruthy();
+    // The stop it appended, not the one that was already there.
+    expect(screen.getByDisplayValue("00FF00")).toBeTruthy();
   });
 
   // A full ramp has nowhere to put another colour, so the affordance goes

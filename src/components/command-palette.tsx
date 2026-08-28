@@ -544,7 +544,7 @@ export function CommandPalette() {
               </>
             )}
 
-            {/* Playground — down here with Settings for the reason Settings is:
+            {/* Playgrounds — down here with Settings for the reason Settings is:
                 it is not about the page you are on. Nothing in it writes to the
                 site either — it reads a shader table, draws a canvas and hands
                 back a JSX tag — so unlike the groups above it there is no
@@ -555,7 +555,7 @@ export function CommandPalette() {
                 see `offersDestinations`. */}
             {offersDestinations && (
               <Command.Group className={groupStyle}>
-                <div className={groupHeadingStyle}>Playground</div>
+                <div className={groupHeadingStyle}>Playgrounds</div>
                 <Command.Item
                   className={itemStyle}
                   onSelect={handleShaderPlayground}
