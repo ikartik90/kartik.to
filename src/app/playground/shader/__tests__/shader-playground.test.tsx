@@ -685,6 +685,7 @@ describe("ShaderPlayground grid group", () => {
     expect(labelsIn(screen.getByRole("group", { name: "Motion" }))).toEqual([
       "Speed",
       "Parallax",
+      "Swerve",
       "Easing",
       "Easing Bias",
     ]);

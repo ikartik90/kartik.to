@@ -73,6 +73,7 @@ uniform float u_originMin;
 uniform float u_originMax;
 uniform float u_travelSpans;
 uniform float u_parallax;
+uniform float u_swerve;
 uniform float u_tail;
 uniform float u_tailBlend;
 uniform float u_falloff;
@@ -127,6 +128,20 @@ out vec4 fragColor;
 // mover crosses a card in a couple of seconds, which is the reference's tempo.
 #define CELLS_PER_SECOND 14.
 
+// How many points along a run are tested for traffic before a comet commits to
+// a lane, and so how finely the switch can be placed.
+//
+// The exact answer — the instant its head first reached halfway into the other
+// comet's tail — is not available: the trail is DERIVED rather than remembered
+// (see the header), so finding that instant means solving for WHEN, and with
+// easing on the motion is not analytically invertible. Sampling is what turns
+// that into arithmetic a fragment can afford.
+//
+// Four, because it is paid per live comet per fragment and the window a comet
+// spends inside another's tail is a fair slice of its run. More would place the
+// switch a little more finely; it would not find encounters four misses.
+#define SWERVE_SAMPLES 4
+
 // How much nearer than the far plane the nearest comet may come, at Parallax 1.
 //
 // Three, so the depths span one to four: the same cycle, four times the ground,
@@ -144,15 +159,17 @@ out vec4 fragColor;
 // What one cell of the trail keeps of the cell in front of it, at the two ends
 // of u_falloff. See trailFade — the control walks between these.
 //
-// The soft end is not 1, because at exactly 1 the curve is 0/0. Just under it
-// the same expression IS the straight line, to within a thousandth, which is
-// what lets one formula cover the whole slider instead of a mix between two.
+// The soft end is exactly 1: no falloff at all, a trail whose last cell is as
+// opaque as its first. It sat a thousandth under while the curve was
+// normalised, because that ratio is 0/0 at 1 — so the flattest the control
+// could reach was a straight ramp to nothing, which is a fade, and "no
+// falloff" was a setting the slider did not have.
 //
 // The hard end is where a step stops being a step and becomes an ending: at
 // .45 the third cell is already down to a fifth, so a trail reads as three or
 // four distinct pixels however long Tail is set. Lower would only be a shorter
 // trail wearing a longer one's number.
-#define COMET_DECAY_SOFT 0.995
+#define COMET_DECAY_NONE 1.
 #define COMET_DECAY_HARD 0.45
 
 // ---------------------------------------------------------------------------
@@ -168,7 +185,6 @@ out vec4 fragColor;
 float g_tailCells;
 float g_chance;
 float g_decay;
-float g_tailEnd;
 
 // One axis's run, life and clock: (runCells, lifeCells, cycles).
 //
@@ -234,17 +250,20 @@ float leanRun(float along) {
 // that step the same everywhere along the trail and independent of how long
 // the trail is.
 //
-// The subtraction is what still lands it on zero at exactly Tail cells, so the
-// control shortens the trail's READ without lying about its length. And as the
-// decay approaches 1 the whole expression becomes the straight ramp — the
-// limit of (p^d - p^T)/(1 - p^T) as p goes to 1 is (T - d)/T — which is why
-// one formula covers the slider end to end rather than a blend between two.
+// Tail's LENGTH is held by the gate, not by the curve, and that is what lets
+// the curve go flat. It used to be held by a subtraction — (p^d - p^T) over
+// (1 - p^T), which lands on zero at exactly T whatever the decay — and the
+// price was that every setting faded: the ending and the fade were the same
+// mechanism, so there was no way to ask for one without the other. The gate
+// costs nothing that was being paid for: at any real falloff the curve is at a
+// fraction of a percent by the time it arrives there, and at no falloff the
+// step IS the ending the control is asking for.
 float trailFade(float behind) {
   float d = clamp(behind - .5, 0., 1e5);
-  // A tail of zero is the head alone on the grid: a real setting, and the one
-  // value the ratio above cannot express (its denominator goes to nothing).
+  // A tail of zero is the head alone on the grid, and the gate below would
+  // otherwise light the cell behind it too.
   if (g_tailCells < 1e-3) return step(d, 0.);
-  return clamp((pow(g_decay, d) - g_tailEnd) / max(1. - g_tailEnd, 1e-6), 0., 1.);
+  return pow(g_decay, d) * step(d, g_tailCells);
 }
 
 // The palette, indexed rather than interpolated. A mover is one pixel and a
@@ -253,6 +272,40 @@ float trailFade(float behind) {
 vec4 colorAt(float r) {
   float count = max(u_colorsCount, 1.);
   return u_colors[int(clamp(floor(r * count), 0., count - 1.))];
+}
+
+// Where the OTHER comet in this lane has its head at a given point of the
+// clock, and whether it is there at all: (position along the lane, direction, 1
+// if alive).
+//
+// The lane's other slot is the only comet a comet can CATCH, and that is what
+// makes this affordable rather than a search: the two share an axis and a lane,
+// and a lane carries at most COMET_SLOTS. A trail crossing perpendicular
+// belongs to some other lane and nothing bounds which, so finding one would
+// mean sweeping every lane along the run — per fragment, per comet.
+//
+// It is the other comet's BASE path, before any swerve of its own. Reading its
+// real path is circular: two slots in a lane each asking the other what it did.
+// The cost is that a comet occasionally dodges one that had already moved,
+// which needs both slots alive, overlapping AND swerving to show at all.
+vec3 otherComet(float axis, float lane, float slot, float cyclesAt, float laneSpan, float baseRun) {
+  vec4 key = vec4(axis, lane, slot, 0.);
+  float ph = hash44(key * 1.7 + 11.3).x;
+  float clock = cyclesAt + ph;
+  float cyc = floor(clock);
+  float within = clock - cyc;
+
+  vec4 h = hash44(key + vec4(cyc * 7.13));
+  if (h.x >= g_chance) return vec3(0.);
+
+  float depth = 1. + u_parallax * PARALLAX_REACH * hash44(key * 3.1 + vec4(cyc * 19.7 + 5.3)).y;
+  float run = baseRun * depth;
+  float eased = leanRun(leanRun(within));
+  float progress = mix(eased, sin(eased * HALF_PI), u_easing);
+
+  float side = h.y < .5 ? -1. : 1.;
+  float start = side * mix(u_originMin, u_originMax, h.z) * laneSpan * .5;
+  return vec3(start - side * min(progress * (run + g_tailCells + 1.), run), -side, 1.);
 }
 
 // ---------------------------------------------------------------------------
@@ -264,10 +317,13 @@ vec4 colorAt(float r) {
 //   alongStep  the fragment's position along the lane, snapped to its cell's
 //   alongFree  centre, and where the fragment actually is. Both in cells;
 //              u_tailBlend chooses between them.
-//   perp       the fragment's offset from the lane's centre line, in cells.
-//   onLane     1 only for the fragment's OWN lane. This is what keeps the
-//              mover's core exactly one cell wide while its glow spills into
-//              the neighbours being walked either side of it.
+//   perp       the fragment's offset from the walked lane's centre line, in
+//              cells. A mover that has swerved is one lane off that, so every
+//              reading below takes its own shift back off this.
+//   laneOffset which of the walked lanes this is, as an offset from the
+//              fragment's own. A mover's core lands on the fragment only where
+//              this and its shift cancel — which is what keeps the core exactly
+//              one cell wide while its glow spills into the neighbours.
 //   laneSpan   the frame's extent along this lane, in cells. Half of it is the
 //              centre-to-edge distance, which is the unit the origin band and
 //              the run are both dialled in.
@@ -275,7 +331,7 @@ vec4 colorAt(float r) {
 // ---------------------------------------------------------------------------
 void addMover(
   float axis, float lane, float slot,
-  float alongStep, float alongFree, float perp, float onLane, float laneSpan,
+  float alongStep, float alongFree, float perp, float laneOffset, float laneSpan,
   vec2 timing,
   inout vec4 core, inout vec4 glow
 ) {
@@ -364,13 +420,76 @@ void addMover(
   float dir = -side;
   float start = side * mix(u_originMin, u_originMax, h.z) * laneSpan * .5;
 
+  // NOTHING THIS COMET HAS CAN REACH THIS FRAGMENT.
+  //
+  // A comet is a stretch along its lane — the trail between its spawn and its
+  // head — and both blooms reach a bounded distance past the ends of it. A
+  // fragment further along the lane than that is going to be handed a zero by
+  // every line below, so it is handed one here instead.
+  //
+  // It is worth more than the arithmetic it skips. A fragment walks nine lanes
+  // on each axis and asks both slots of each, and at any density worth looking
+  // at most of those comets are nowhere near it — so this is what pays for the
+  // swerve's own sampling, several times over.
+  //
+  // The swerve cannot move a comet ALONG its lane, only one lane sideways, so
+  // the bound holds whether or not it gave way.
+  float toStep = dir * (alongStep - start);
+  float reachPast = max(u_headStretch + u_headRadius, u_tailRadius) + 1.;
+  if (toStep < head - g_tailCells - reachPast ||
+      toStep > min(head, runCells) + reachPast) return;
+
+  // --- THE SWERVE ---------------------------------------------------------
+  //
+  // A comet that catches up on the tail of the other comet in its lane steps
+  // one lane sideways at the cell its head was on, and finishes its run there.
+  //
+  // WHERE it switches has to be found by sampling. The exact answer — the
+  // instant its head first reached halfway into the other's tail — would mean
+  // solving for WHEN, and a trail here is derived rather than remembered, so
+  // there is nothing to look up and, with easing on, nothing to invert either.
+  // Four points along the run is what makes it arithmetic.
+  //
+  // The whole block is skipped when nothing may swerve, so a field without it
+  // is FREE of it rather than merely not showing it — the bargain the glow
+  // radii strike with their strengths.
+  float sideStep = 0.;
+  float switchAt = 1e9;
+  if (u_swerve > 0.) {
+    vec4 sw = hash44(key * 5.7 + vec4(cycle * 3.9 + 41.3));
+    if (sw.x < u_swerve) {
+      // The lane's OTHER slot, which with COMET_SLOTS at 2 is the only one.
+      float otherSlot = 1. - slot;
+      float toSide = sw.y < .5 ? -1. : 1.;
+      for (int i = 1; i <= SWERVE_SAMPLES; i++) {
+        float w = float(i) / float(SWERVE_SAMPLES + 1);
+        float easedAt = leanRun(leanRun(w));
+        float progAt = mix(easedAt, sin(easedAt * HALF_PI), u_easing);
+        // This comet's head at that point of its own cycle, and the other's at
+        // the same moment. The clock is linear in time, so winding it back by a
+        // fraction of a cycle is a subtraction.
+        float headAtW = min(progAt * lifeCells, runCells);
+        float posA = start + dir * headAtW;
+        vec3 other = otherComet(axis, lane, otherSlot, cycles - (within - w), laneSpan, timing.x);
+        // How far into the other's tail this head has got, in cells: 0 at its
+        // head, g_tailCells at the far end of its trail. Half of it is the
+        // trigger, so a comet is well inside before it commits.
+        float pen = other.y * (other.x - posA);
+        if (other.z > .5 && pen >= 0. && pen <= .5 * g_tailCells) {
+          sideStep = toSide;
+          switchAt = headAtW;
+          break;
+        }
+      }
+    }
+  }
+
   vec4 tint = colorAt(h.w);
   float ink = tint.a;
 
   // How far the head had to travel to reach this fragment. Measured at the
   // cell's centre, where a whole cell shares one value and the trail steps down
   // in pixels; and where the fragment is, where it is a continuous gradient.
-  float toStep = dir * (alongStep - start);
   float toFree = dir * (alongFree - start);
   // u_tailBlend chooses where the fade's VALUE is read — and only its value.
   // The gates below are read at the cell's centre whatever it is set to.
@@ -392,6 +511,13 @@ void addMover(
   // Without the first term a long tail would light cells BEHIND the spawn point
   // at the moment of spawning; without the second the trail would keep being
   // laid after the run was over.
+  // WHICH LANE this stretch of trail sits in. Read at the fragment's own
+  // distance along the run, never at the head's: the cells already laid keep
+  // the lane they were laid in, which is what makes a switch a step in the
+  // trail rather than the whole trail moving across with the head.
+  float shiftStep = toStep >= switchAt ? sideStep : 0.;
+  float onLaneStep = abs(laneOffset + shiftStep) < .5 ? 1. : 0.;
+
   float onRun = step(-.5, toStep) * step(toStep, runCells + .5);
   float behindStep = head - toStep;
   float onTrail = step(-.5, behindStep) * onRun;
@@ -403,8 +529,8 @@ void addMover(
   float behind = head - at;
   float fade = trailFade(behind) * onTrail;
 
-  core.rgb += tint.rgb * (fade * ink * onLane);
-  core.a += fade * ink * onLane;
+  core.rgb += tint.rgb * (fade * ink * onLaneStep);
+  core.a += fade * ink * onLaneStep;
 
   // ---- the two blooms ----------------------------------------------------
   //
@@ -469,11 +595,16 @@ void addMover(
   // floor and then stops, so it reads as a bar that ends rather than a glow
   // that runs out. It is the fault the trail's own bloom below was caught with,
   // and it is fixed here the same way — see the taper there.
+  // The head's own lane, which is the one its bloom is centred on — a
+  // different reading from the core's above wherever the fragment's stretch of
+  // trail is on the far side of the switch from the head.
+  float shiftHead = headAt >= switchAt ? sideStep : 0.;
+  float perpHead = perp - shiftHead;
   float ahead = dir * (alongFree - headCell);
   float alongToHead = ahead - clamp(ahead, -u_headStretch, 0.);
   float back = clamp(-ahead, 0., u_headStretch);
   float fadeBack = 1. - back / max(u_headStretch, 1e-4);
-  float toHead = length(vec2(perp, alongToHead)) / max(u_headRadius * fadeBack, 1e-4);
+  float toHead = length(vec2(perpHead, alongToHead)) / max(u_headRadius * fadeBack, 1e-4);
   float headLit = u_headGlow * alive * fadeBack * pow(max(1. - toHead, 0.), 2.);
 
   // The lit stretch the TRAIL's bloom is thrown by: from the back of the last
@@ -521,6 +652,14 @@ void addMover(
   // that same value, or the halo is a smooth gradient laid over a stepped
   // trail — which is what the eye sees, so the trail stops reading as pixels
   // at all and starts reading as a gradient walking behind the head.
+  // And the lane of the ink that is actually throwing this halo, read at that
+  // nearest point. A segment straddling the switch is measured against one lane
+  // or the other rather than bending inside itself, which shows over the cell
+  // the switch is on and nowhere else.
+  float toNear = dir * (nearest - start);
+  float shiftNear = toNear >= switchAt ? sideStep : 0.;
+  float perpNear = perp - shiftNear;
+
   float amp = mix(floor(nearest) + .5, nearest, u_tailBlend);
   float behindNear = head - dir * (amp - start);
   float fadeNear = trailFade(behindNear);
@@ -548,7 +687,7 @@ void addMover(
   // and a soft one a long even one. Tail Radius still names the width at the
   // head, since the fade is 1 there at every falloff.
   float taper = mix(1., fadeNear, u_tailBlend);
-  float toTrail = length(vec2(perp, alongFree - nearest)) /
+  float toTrail = length(vec2(perpNear, alongFree - nearest)) /
     max(u_tailRadius * taper, 1e-4);
 
   // Only the BRIGHTNESS and the WIDTH are quantised, both of them through amp.
@@ -613,12 +752,10 @@ void main() {
   vec2 downTiming = timingFor(frame.y);
   vec2 acrossTiming = timingFor(frame.x);
 
-  // The trail's curve — see trailFade. Both of these are constant over the
-  // frame, and the pow() for the end point is the reason they are hoisted: it
-  // would otherwise be paid once per lane per fragment for a number that never
+  // The trail's curve — see trailFade. Constant over the frame, and hoisted
+  // rather than worked out once per lane per fragment for a number that never
   // varies.
-  g_decay = mix(COMET_DECAY_SOFT, COMET_DECAY_HARD, clamp(u_falloff, 0., 1.));
-  g_tailEnd = pow(g_decay, max(g_tailCells, 1e-4));
+  g_decay = mix(COMET_DECAY_NONE, COMET_DECAY_HARD, clamp(u_falloff, 0., 1.));
 
   // Count is a number of MOVERS, so it is shared out over the slots a frame
   // holds — then corrected for the spawn band reaching outside the frame, which
@@ -647,13 +784,15 @@ void main() {
     u_headGlow > 0. ? u_headRadius : 0.,
     u_tailGlow > 0. ? u_tailRadius : 0.
   );
-  int span = int(clamp(ceil(reach), 0., float(COMET_MAX_GLOW_LANES)));
+  // One lane wider when comets may swerve: a comet based in the lane next door
+  // can be running through this one for the second half of its life.
+  int swerveLanes = u_swerve > 0. ? 1 : 0;
+  int span = int(clamp(ceil(reach), 0., float(COMET_MAX_GLOW_LANES))) + swerveLanes;
 
   vec4 core = vec4(0.);
   vec4 glow = vec4(0.);
 
   for (int d = -span; d <= span; d++) {
-    float onLane = d == 0 ? 1. : 0.;
     float column = base.x + float(d);
     float row = base.y + float(d);
 
@@ -661,11 +800,11 @@ void main() {
       float slot = float(s);
       // Movers running along Y, in the columns either side of this fragment.
       addMover(0., column, slot,
-        base.y + .5, g.y, g.x - (column + .5), onLane, frame.y, downTiming,
+        base.y + .5, g.y, g.x - (column + .5), float(d), frame.y, downTiming,
         core, glow);
       // Movers running along X, in the rows either side of it.
       addMover(1., row, slot,
-        base.x + .5, g.x, g.y - (row + .5), onLane, frame.x, acrossTiming,
+        base.x + .5, g.x, g.y - (row + .5), float(d), frame.x, acrossTiming,
         core, glow);
     }
   }
