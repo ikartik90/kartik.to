@@ -104,9 +104,20 @@ const signedOut = () => mockUseSession.mockReturnValue({ data: null });
  */
 async function renderReady() {
   const result = render(<ShaderPlayground />);
-  await screen.findByRole("complementary", { name: "Properties" });
+  await screen.findByRole("complementary", { name: "Preset properties" });
   return result;
 }
+
+/**
+ * The "Preset actions" heading's own row — the strip the two controls that act
+ * on the preset sit against, rather than a line of their own beneath it.
+ *
+ * Walked from the title's text: the heading is a `Typography` inside the
+ * recipe's `sectionTitle`, and the row is that title's parent. Named here
+ * because three suites ask the same question of it.
+ */
+const presetActionsRow = () =>
+  screen.getByText("Preset actions").closest("div")!.parentElement!;
 
 // Parsed, not authored: `defaultState` is the spec table's shape (one colour
 // per stop) and a preset's is the schema's (a light/dark pair each). Going
@@ -180,18 +191,78 @@ describe("ShaderPlayground theme toggle", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The panel as a BOTTOM SHEET. Which shape it takes is CSS — one media query,
-// stated once in `panda.config.ts` — so what is testable here is the state the
-// CSS keys off: whether the sheet has been sent away, and the control that
-// brings it back. Deliberately so: a phone turned on its side must find its
-// rail again, and it does that by nothing outside that media query ever
-// reading `data-dismissed`.
+// "Preset actions" — the strip at the top of the panel.
+//
+// A section whose whole content is its heading: the two controls that act on
+// the PRESET (Reset or Delete, and Publish) sit against the title rather than
+// on a row of their own underneath it. They were in the panel's own header,
+// which is the wrong strip for them — that one names the panel and carries the
+// control that closes it, where these act on the thing the panel is editing.
 // ---------------------------------------------------------------------------
-describe("ShaderPlayground bottom sheet", () => {
+describe("ShaderPlayground preset actions", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
-  const panel = () => screen.getByRole("complementary", { name: "Properties" });
-  const reopen = () => screen.queryByRole("button", { name: "Properties" });
+  it("stands at the top of the panel", async () => {
+    await renderReady();
+    const panel = screen.getByRole("complementary", { name: "Preset properties" });
+
+    expect(panel.querySelector("section")).toBe(
+      presetActionsRow().parentElement,
+    );
+  });
+
+  // The heading's row IS the section. A control panel under it would put the
+  // buttons on a line of their own and leave the strip above them empty.
+  it("holds its controls against the heading, with no row beneath", async () => {
+    await renderReady();
+    const section = presetActionsRow().parentElement!;
+
+    expect(section.contains(screen.getByRole("button", { name: "Reset" }))).toBe(
+      true,
+    );
+    expect(
+      within(section).queryByRole("group", { name: "Preset actions" }),
+    ).toBeNull();
+  });
+
+  // The panel's own header keeps what belongs to the panel: its name, and the
+  // control that sends it away.
+  it("leaves the panel's header to the panel's own control", async () => {
+    await renderReady();
+    const header = screen.getByText("Preset properties").parentElement!;
+
+    expect(
+      header.contains(screen.getByRole("button", { name: "Close properties" })),
+    ).toBe(true);
+    expect(header.contains(screen.getByRole("button", { name: "Reset" }))).toBe(
+      false,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dismissing the panel — the sheet on a phone, the docked rail on a desktop.
+//
+// ONE state for both, and the way back is one control in one place: the aspect
+// rail's own toolbar, behind a separator. It used to be a sheet-only affair,
+// on the grounds that a phone turned on its side had to find its rail again —
+// which was the repair for a panel you could send away with nothing offering
+// to bring it back. There is a button now, in both layouts, so the state can
+// mean what it says.
+//
+// WHICH SHAPE the panel takes is CSS (one media query, stated once in
+// `panda.config.ts`), so what is testable here is the state that CSS keys off,
+// plus the page inset — the rail is `position: fixed`, so the width it stands
+// in is the page's to give back (see `usePropertiesPanelInset`).
+// ---------------------------------------------------------------------------
+describe("ShaderPlayground panel dismissal", () => {
+  afterEach(cleanup);
+
+  const panel = () => screen.getByRole("complementary", { name: "Preset properties" });
+  const reopen = () => screen.queryByRole("button", { name: "Preset properties" });
+  const railToolbar = () =>
+    screen.getByRole("toolbar", { name: "Preview aspect ratio" });
 
   it("opens with the panel up, and nothing offering to open it", async () => {
     await renderReady();
@@ -200,7 +271,7 @@ describe("ShaderPlayground bottom sheet", () => {
     expect(reopen()).toBeNull();
   });
 
-  it("sends the sheet away from the close button in its header", async () => {
+  it("sends the panel away from the close button in its header", async () => {
     const user = userEvent.setup();
     await renderReady();
 
@@ -209,22 +280,27 @@ describe("ShaderPlayground bottom sheet", () => {
     expect(panel().hasAttribute("data-dismissed")).toBe(true);
   });
 
-  it("offers the way back beside the theme toggle, once it has gone", async () => {
+  // In the RAIL's chrome, not beside the theme toggle where it used to stand.
+  // It is the one control on the band that acts on the panel, and the toggle is
+  // the page's — a third thing wedged in beside it read as part of that pair.
+  it("offers the way back in the aspect rail's toolbar, behind a separator", async () => {
     const user = userEvent.setup();
-    const { container } = await renderReady();
+    await renderReady();
 
     await user.click(screen.getByRole("button", { name: "Close properties" }));
 
     const button = reopen();
-    const toggle = screen.getByRole("button", { name: "Light theme" });
     expect(button).not.toBeNull();
-    // Beside the toggle, in the canvas's own gutter row — not a third thing
-    // floating somewhere else on the page.
-    expect(button?.parentElement).toBe(toggle.parentElement);
-    expect(container.querySelector("main > div")?.contains(button!)).toBe(true);
+    // The box the button stands in also holds the shapes — which is the rail's
+    // own chrome, not a second rail of its own somewhere on the band.
+    expect(button?.parentElement?.contains(railToolbar())).toBe(true);
+    // And behind a hairline: decorative, exactly as the rail's own dividers are.
+    expect(button?.previousElementSibling?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
   });
 
-  it("brings the sheet back, and stops offering to", async () => {
+  it("brings the panel back, and stops offering to", async () => {
     const user = userEvent.setup();
     await renderReady();
 
@@ -233,6 +309,22 @@ describe("ShaderPlayground bottom sheet", () => {
 
     expect(panel().hasAttribute("data-dismissed")).toBe(false);
     expect(reopen()).toBeNull();
+  });
+
+  // The rail is `position: fixed`, so the column it stands in is reserved by the
+  // page rather than taken by the panel. A collapsed rail that kept the inset
+  // would leave 360px of nothing beside a picture that could have used it.
+  it("hands the page its width back while the panel is away", async () => {
+    const user = userEvent.setup();
+    await renderReady();
+
+    expect(document.body.hasAttribute("data-properties-panel")).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Close properties" }));
+    expect(document.body.hasAttribute("data-properties-panel")).toBe(false);
+
+    await user.click(reopen()!);
+    expect(document.body.hasAttribute("data-properties-panel")).toBe(true);
   });
 });
 
@@ -268,14 +360,14 @@ describe("ShaderPlayground reset control", () => {
 
   const resetButton = () => screen.getByRole("button", { name: "Reset" });
 
-  // In the panel's own header, opposite the heading — it acts on everything
-  // below it, so it belongs to the panel rather than sitting in a section that
-  // is only one of the things it resets.
-  it("stands in the panel header, opposite the heading", async () => {
+  // Against the "Preset actions" heading, which is the section it belongs to:
+  // what it acts on is the PRESET — the saved row behind the panel and the
+  // draft in front of it — rather than the panel's own chrome, which is what
+  // the strip at the very top is for.
+  it("stands against the Preset actions heading", async () => {
     await renderReady();
-    const header = screen.getByText("Properties").parentElement;
 
-    expect(header?.contains(resetButton())).toBe(true);
+    expect(presetActionsRow().contains(resetButton())).toBe(true);
   });
 
   // Driven through the control itself rather than the store action, so the
@@ -291,20 +383,13 @@ describe("ShaderPlayground reset control", () => {
   });
 
   // A preset's params belong to the shader it was authored on, so switching
-  // away has to leave the baseline behind with it. Driven through the store
-  // rather than the popover: WHICH control picks the shader is not what this is
-  // about.
-  it("falls back to the new shader's defaults after a switch", () => {
-    render(<ShaderPlayground preset={saved} />);
-
-    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
-    act(() => useShaderPresetDraftStore.getState().setParam("density", 9));
-    fireEvent.click(resetButton());
-
-    expect(useShaderPresetDraftStore.getState().settings.params).toEqual(
-      defaultState(SHADER_SPECS.godRays).params,
-    );
-  });
+  // away has to leave the baseline behind with it.
+  //
+  // UNREACHABLE while `SHADER_SPECS` holds one shader — switching lands back on
+  // the shader the preset was saved on, so the baseline still fits and Reset
+  // rightly goes to the save rather than to the table. See the same todo in the
+  // store's own tests, where the guard lives.
+  it.todo("falls back to the new shader's defaults after a switch");
 });
 
 // ---------------------------------------------------------------------------
@@ -396,12 +481,10 @@ describe("ShaderPlayground ramp group", () => {
     );
   });
 
-  it("is absent for a shader that has none", async () => {
-    await renderReady();
-    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
-
-    expect(screen.queryByRole("group", { name: "Ramp" })).toBeNull();
-  });
+  // UNREACHABLE while every shader in the table carries these controls: the
+  // absence was driven by switching to one that does not, and the built-ins
+  // that did have gone. The guard is still on the group (`length > 0`).
+  it.todo("is absent for a shader that has none");
 });
 
 // ---------------------------------------------------------------------------
@@ -446,12 +529,10 @@ describe("ShaderPlayground edge group", () => {
     expect(colours).not.toContain("Edge Width");
   });
 
-  it("is absent for a shader that has none", async () => {
-    await renderReady();
-    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
-
-    expect(screen.queryByRole("group", { name: "Edge" })).toBeNull();
-  });
+  // UNREACHABLE while every shader in the table carries these controls: the
+  // absence was driven by switching to one that does not, and the built-ins
+  // that did have gone. The guard is still on the group (`length > 0`).
+  it.todo("is absent for a shader that has none");
 });
 
 // ---------------------------------------------------------------------------
@@ -489,20 +570,18 @@ describe("ShaderPlayground dither group", () => {
 
   // A shader with no dither controls must not grow an empty strip for them —
   // the same rule the Motion group follows.
-  it("is absent for a shader that has none", async () => {
-    await renderReady();
-    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
-
-    expect(screen.queryByRole("group", { name: "Dither" })).toBeNull();
-  });
+  // UNREACHABLE while every shader in the table carries these controls: the
+  // absence was driven by switching to one that does not, and the built-ins
+  // that did have gone. The guard is still on the group (`length > 0`).
+  it.todo("is absent for a shader that has none");
 });
 
 // ---------------------------------------------------------------------------
 // The aspect toolbar — the frame the preset is being designed against.
 //
 // A preset is SHAPELESS: nothing that embeds one reads this. It is a viewing
-// frame for the author (does this fan still read on a banner?) and a note the
-// draft carries, so reopening the preset reopens the shape it was judged in.
+// frame for the author (does this fan still read on a banner?) and nothing
+// more — moving it neither writes to the preset nor dirties the draft.
 // ---------------------------------------------------------------------------
 describe("ShaderPlayground aspect toolbar", () => {
   beforeEach(() => useShaderPresetDraftStore.getState().reset());
@@ -550,16 +629,17 @@ describe("ShaderPlayground aspect toolbar", () => {
     ).toBe("1:1");
   });
 
-  // The frame is a note on the preset, so it goes where the rest of the authored
-  // state goes — into the draft the palette saves.
-  it("records the shape on the draft", async () => {
+  // The frame is the PLAYGROUND's state, not the preset's — a viewing choice.
+  // So it moves the rail and nothing else: the draft has no less and no more
+  // unsaved work in it than it had before the press.
+  it("records the shape on the draft without dirtying it", async () => {
     const user = userEvent.setup();
     await renderReady();
 
     await user.click(screen.getByRole("button", { name: "4:3" }));
 
     expect(useShaderPresetDraftStore.getState().aspect).toBe("4/3");
-    expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
   });
 
   // And it reshapes the preview, which is the point of the control: the same
@@ -591,9 +671,9 @@ describe("ShaderPlayground aspect toolbar", () => {
         preset={{
           id: "preset-1",
           title: "Dusk",
-          shaderId: "swirl",
+          shaderId: "cosmicTrack",
           settings: {
-            ...shaderPresetContentFor("swirl").settings,
+            ...shaderPresetContentFor("cosmicTrack").settings,
             framing: { "3/2": { ...FRAMING_DEFAULTS, scale: 2 } },
           },
           publishedAt: null,
@@ -821,7 +901,7 @@ describe("ShaderPlayground preloader", () => {
 
   const stage = () => document.querySelector("[data-preset-stage]");
   const panel = () =>
-    screen.queryByRole("complementary", { name: "Properties" });
+    screen.queryByRole("complementary", { name: "Preset properties" });
 
   it("draws no preset until the library has been read", async () => {
     let settle: (rows: unknown[]) => void = () => {};
@@ -919,7 +999,7 @@ describe("ShaderPlayground preloader", () => {
 
     // Not the rail, and specifically not the numbers it would have been
     // holding — the shader defaults, which belong to no preset anybody opened.
-    expect(html).not.toContain('aria-label="Properties"');
+    expect(html).not.toContain('aria-label="Preset properties"');
     for (const colour of SETTINGS.colors) {
       expect(html).not.toContain(colour.light.replace("#", "").slice(0, 6));
     }
@@ -1169,15 +1249,15 @@ describe("ShaderPlayground authoring controls", () => {
   // the saved row behind the panel rather than on the page you are looking at.
   // The slot reads Delete here rather than Reset, because a freshly opened
   // preset has nothing left to reset — see the delete suite below.
-  it("stands beside the header's other control", async () => {
+  it("stands beside the section's other control", async () => {
     signedIn();
     render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await waitFor(() => expect(publishButton()).not.toBeNull());
-    const header = screen.getByText("Properties").parentElement;
-    expect(header?.contains(publishButton())).toBe(true);
+    const row = presetActionsRow();
+    expect(row.contains(publishButton()!)).toBe(true);
     expect(
-      header?.contains(screen.getByRole("button", { name: "Delete preset" })),
+      row.contains(screen.getByRole("button", { name: "Delete preset" })),
     ).toBe(true);
   });
 
@@ -1299,7 +1379,7 @@ describe("ShaderPlayground ground", () => {
 
   it("opens on the site's own theme, not on a fixed one", async () => {
     render(<ShaderPlayground preset={twoToned} />);
-    await screen.findByRole("complementary", { name: "Properties" });
+    await screen.findByRole("complementary", { name: "Preset properties" });
 
     expect(stageColors()).toBe("#111111FF,#222222FF");
   });
@@ -1307,7 +1387,7 @@ describe("ShaderPlayground ground", () => {
   it("follows the site when the site is light instead", async () => {
     mockMode.mockReturnValue("light");
     render(<ShaderPlayground preset={twoToned} />);
-    await screen.findByRole("complementary", { name: "Properties" });
+    await screen.findByRole("complementary", { name: "Preset properties" });
 
     expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
   });
@@ -1318,7 +1398,7 @@ describe("ShaderPlayground ground", () => {
   it("sends the card to the other ground and the site nowhere", async () => {
     const user = userEvent.setup();
     render(<ShaderPlayground preset={twoToned} />);
-    await screen.findByRole("complementary", { name: "Properties" });
+    await screen.findByRole("complementary", { name: "Preset properties" });
 
     await user.click(groundToggle());
 
@@ -1330,7 +1410,7 @@ describe("ShaderPlayground ground", () => {
   it("shows the glyph of the ground it would take you to", async () => {
     const user = userEvent.setup();
     render(<ShaderPlayground preset={twoToned} />);
-    await screen.findByRole("complementary", { name: "Properties" });
+    await screen.findByRole("complementary", { name: "Preset properties" });
 
     expect(
       screen.getByRole("button", { name: "Show the light colours" }),
@@ -1346,7 +1426,7 @@ describe("ShaderPlayground ground", () => {
   // the theme you never saw.
   it("writes an edit to the ground on screen and no other", async () => {
     render(<ShaderPlayground preset={twoToned} />);
-    await screen.findByRole("complementary", { name: "Properties" });
+    await screen.findByRole("complementary", { name: "Preset properties" });
 
     act(() =>
       useShaderPresetDraftStore.getState().setColors([

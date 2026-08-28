@@ -30,30 +30,31 @@ export const PHASE_STEP = 15;
 // ---------------------------------------------------------------------------
 // The shader playground's table of contents.
 //
-// One entry per shader worth pointing at the reference art (the Windsurf card
-// backgrounds: fanned light-blades, soft colour washes). Each entry carries
-// BOTH the control table — every uniform the page exposes, with the range the
-// shader's own docs give it — and the starting point those controls open on.
+// ONE entry, and the table is still a table. It carried five of the library's
+// built-ins alongside ours for a while — the playground began as an audition,
+// pointing each of them at the reference art (the Windsurf card backgrounds:
+// fanned light-blades, soft colour washes) to see which came closest. Cosmic
+// Track is what that audition produced, so the built-ins have gone: a picker
+// offering five shaders no preset uses is a menu of dead ends, and their
+// control tables were five more things to keep parsing.
+//
+// The SHAPE stays, because it is what everything downstream reads. `ShaderId`
+// is a union of one and `SHADER_SPECS` a record over it, so the domain schema,
+// the store and the stage all still ask the table rather than assuming the
+// answer — and a second shader is one entry here rather than a thread to pull
+// through five files.
 //
 // A table rather than a page full of hand-written rows, for the same reason
 // `media-properties-panel.tsx` uses one: the rows differ only in their four
 // numbers, and spelling them out invites the ranges to drift from the shader
-// they describe. Ranges below are transcribed from the `u_*` docblocks in
-// `node_modules/@paper-design/shaders/dist/shaders/*.d.ts` — if a control feels
-// clamped, check there before widening it here.
+// they describe.
 //
 // A shader's `defaults` are a STARTING POINT, not a match. They put you in the
 // right neighbourhood of the reference card; the page exists because the last
 // mile is eyeballing, not arithmetic.
 // ---------------------------------------------------------------------------
 
-export type ShaderId =
-  | "cosmicTrack"
-  | "colorPanels"
-  | "godRays"
-  | "warp"
-  | "swirl"
-  | "staticMeshGradient";
+export type ShaderId = "cosmicTrack";
 
 /**
  * Which group in the sidebar a control is drawn in. Omitted — the usual case —
@@ -211,23 +212,11 @@ export const MOTION_CONTROL_KEYS: string[] = MOTION_CONTROLS.map(
   (control) => control.key,
 );
 
-// The reference palette, read off the artwork. Named rather than inlined so the
-// same green means the same thing in every shader that reaches for it.
-const FOREST = "#0A3B2CFF";
-const EMERALD = "#12855FFF";
-const SPRING = "#3ECC85FF";
-const LIME = "#C6F24EFF";
-const PALE_LIME = "#E9F9B8FF";
-const PAPER = "#FBF6ECFF";
-const BLUSH = "#F6B3CEFF";
-const APRICOT = "#F5B183FF";
-const CORNFLOWER = "#5B7FD4FF";
-const DEEP_BLUE = "#2E4BA8FF";
-
 export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
-  // Ours — the only entry here that is not a library built-in. Everything else
-  // on this page is a shader we are auditing; this one is a shader we are
-  // building, and the controls are how it gets tuned.
+  // Ours, and now the only one: a shader we are BUILDING rather than one we
+  // are auditing, which is why its control table is the long one — every
+  // uniform its GLSL takes is a decision still being made, and the sliders are
+  // how it gets made.
   cosmicTrack: {
     id: "cosmicTrack",
     label: "Cosmic Track",
@@ -360,155 +349,6 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
       colorBack: "#12042BFF",
       params: { phaseDegrees: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3, easing: 1, easingBias: 0, interval: 0 },
-    },
-  },
-
-  // The closest thing in the library to the hero motif: tapered blades fanning
-  // around an axis, each carrying a gradient along its length. Push the axis
-  // off the top of the frame (negative Offset Y) and you have the card.
-  colorPanels: {
-    id: "colorPanels",
-    label: "Color Panels",
-    maxColors: 7,
-    hasColorBack: true,
-    extraColors: [],
-    controls: [
-      { kind: "slider", key: "density", label: "Density", min: 0.25, max: 7, step: 0.1, value: 2.2 },
-      { kind: "slider", key: "angle1", label: "Angle 1", min: -1, max: 1, step: 0.1, value: 0.1 },
-      { kind: "slider", key: "angle2", label: "Angle 2", min: -1, max: 1, step: 0.1, value: -0.1 },
-      { kind: "slider", key: "length", label: "Length", min: 0, max: 3, step: 0.1, value: 2.4 },
-      { kind: "slider", key: "blur", label: "Blur", min: 0, max: 0.5, step: 0.1, value: 0.28 },
-      { kind: "slider", key: "fadeIn", label: "Fade In", min: 0, max: 1, step: 0.1, value: 0.35 },
-      { kind: "slider", key: "fadeOut", label: "Fade Out", min: 0, max: 1, step: 0.1, value: 0.65 },
-      { kind: "slider", key: "gradient", label: "Gradient", min: 0, max: 1, step: 0.1, value: 1 },
-      { kind: "toggle", key: "edges", label: "Edge highlight", value: false },
-      ...FRAMING_CONTROLS,
-      ...MOTION_CONTROLS,
-    ],
-    defaults: {
-      colors: [EMERALD, SPRING, LIME, PALE_LIME],
-      colorBack: FOREST,
-      params: { density: 3.7, angle1: 0.55, angle2: -0.35, length: 0.9, blur: 0.2, fadeIn: 0.3, fadeOut: 0.7, gradient: 1, scale: 0.7, rotation: 90, offsetY: 0 },
-    },
-  },
-
-  // The other reading of the same motif: light shafts rather than solid blades.
-  // Softer and hazier than Color Panels, and the bloom tint is the strongest
-  // single lever on how the whole frame reads.
-  godRays: {
-    id: "godRays",
-    label: "God Rays",
-    maxColors: 5,
-    hasColorBack: true,
-    extraColors: [{ key: "colorBloom", label: "Bloom", value: LIME }],
-    controls: [
-      { kind: "slider", key: "density", label: "Density", min: 0, max: 1, step: 0.1, value: 0.8 },
-      { kind: "slider", key: "intensity", label: "Intensity", min: 0, max: 1, step: 0.1, value: 0.55 },
-      { kind: "slider", key: "spotty", label: "Spotty", min: 0, max: 1, step: 0.1, value: 0.15 },
-      { kind: "slider", key: "midSize", label: "Mid Size", min: 0, max: 1, step: 0.1, value: 0.2 },
-      { kind: "slider", key: "midIntensity", label: "Mid Intensity", min: 0, max: 1, step: 0.1, value: 0.15 },
-      { kind: "slider", key: "bloom", label: "Bloom", min: 0, max: 1, step: 0.1, value: 0.45 },
-      ...FRAMING_CONTROLS,
-      ...MOTION_CONTROLS,
-    ],
-    defaults: {
-      colors: [EMERALD, SPRING, LIME],
-      colorBack: FOREST,
-      extraColors: { colorBloom: LIME },
-      // Density is the whole ballgame: at 0.8 the shafts read as grass, at
-      // 0.3 they read as the broad soft blades in the art.
-      params: { density: 0.3, intensity: 0.6, spotty: 0.12, midSize: 0.1, midIntensity: 0.1, bloom: 0.5, scale: 1.2, offsetY: -0.85 },
-    },
-  },
-
-  // Not a fan at all, but `stripes` with a little swirl lands on the flowing
-  // ribbon look some of the cards have where the blades bend.
-  warp: {
-    id: "warp",
-    label: "Warp",
-    maxColors: 10,
-    hasColorBack: false,
-    extraColors: [],
-    controls: [
-      {
-        kind: "select",
-        key: "shape",
-        label: "Pattern",
-        options: [
-          { value: "stripes", label: "Stripes" },
-          { value: "checks", label: "Checks" },
-          { value: "edge", label: "Edge" },
-        ],
-        value: "stripes",
-      },
-      { kind: "slider", key: "proportion", label: "Proportion", min: 0, max: 1, step: 0.1, value: 0.5 },
-      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.1, value: 0.9 },
-      { kind: "slider", key: "shapeScale", label: "Shape Scale", min: 0, max: 1, step: 0.1, value: 0.12 },
-      { kind: "slider", key: "distortion", label: "Distortion", min: 0, max: 1, step: 0.1, value: 0.15 },
-      { kind: "slider", key: "swirl", label: "Swirl", min: 0, max: 1, step: 0.1, value: 0.35 },
-      { kind: "slider", key: "swirlIterations", label: "Swirl Iterations", min: 0, max: 20, step: 1, value: 6 },
-      ...FRAMING_CONTROLS,
-      ...MOTION_CONTROLS,
-    ],
-    defaults: {
-      colors: [FOREST, EMERALD, SPRING, LIME, PALE_LIME],
-      params: { shape: "stripes", softness: 0.95, shapeScale: 0.1, distortion: 0.12, swirl: 0.4, swirlIterations: 8, rotation: 14 },
-    },
-  },
-
-  // Sectoral bands around a centre. With `twist` near zero these are straight
-  // wedges — the fan again, from a third direction.
-  swirl: {
-    id: "swirl",
-    label: "Swirl",
-    maxColors: 10,
-    hasColorBack: true,
-    extraColors: [],
-    controls: [
-      { kind: "slider", key: "bandCount", label: "Band Count", min: 0, max: 15, step: 1, value: 6 },
-      { kind: "slider", key: "twist", label: "Twist", min: 0, max: 1, step: 0.1, value: 0.15 },
-      { kind: "slider", key: "center", label: "Center", min: 0, max: 1, step: 0.1, value: 0.4 },
-      { kind: "slider", key: "proportion", label: "Proportion", min: 0, max: 1, step: 0.1, value: 0.5 },
-      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.1, value: 0.9 },
-      { kind: "slider", key: "noise", label: "Noise", min: 0, max: 1, step: 0.1, value: 0.1 },
-      { kind: "slider", key: "noiseFrequency", label: "Noise Frequency", min: 0, max: 1, step: 0.1, value: 0.3 },
-      ...FRAMING_CONTROLS,
-      ...MOTION_CONTROLS,
-    ],
-    defaults: {
-      colors: [EMERALD, SPRING, LIME, PALE_LIME],
-      colorBack: FOREST,
-      params: { bandCount: 9, twist: 0.05, center: 0.2, softness: 0.95, scale: 1.6, offsetY: -0.7 },
-    },
-  },
-
-  // The soft-wash cards. This is the shader already shipping behind pictures in
-  // `background-effect.tsx`, so anything tuned here transfers straight over.
-  staticMeshGradient: {
-    id: "staticMeshGradient",
-    label: "Static Mesh Gradient",
-    maxColors: 10,
-    hasColorBack: false,
-    extraColors: [],
-    controls: [
-      // A placement SEED, not a position — nudging it re-rolls the field rather
-      // than sliding it, which is why it steps by whole numbers.
-      { kind: "slider", key: "positions", label: "Positions", min: 0, max: 100, step: 1, value: 8 },
-      { kind: "slider", key: "waveX", label: "Wave X", min: 0, max: 1, step: 0.1, value: 0.3 },
-      { kind: "slider", key: "waveXShift", label: "Wave X Shift", min: 0, max: 1, step: 0.1, value: 0.5 },
-      { kind: "slider", key: "waveY", label: "Wave Y", min: 0, max: 1, step: 0.1, value: 0.3 },
-      { kind: "slider", key: "waveYShift", label: "Wave Y Shift", min: 0, max: 1, step: 0.1, value: 0.5 },
-      { kind: "slider", key: "mixing", label: "Mixing", min: 0, max: 1, step: 0.1, value: 0.6 },
-      { kind: "slider", key: "grainMixer", label: "Grain Mixer", min: 0, max: 1, step: 0.1, value: 0.2 },
-      { kind: "slider", key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.1, value: 0.1 },
-      ...FRAMING_CONTROLS,
-      // No MOTION_CONTROLS: this shader's fragment shader never reads
-      // `u_time`, so a Speed slider here would be a control that does
-      // nothing. The name is the specification — it is STATIC.
-    ],
-    defaults: {
-      colors: [PAPER, APRICOT, BLUSH, CORNFLOWER, DEEP_BLUE],
-      params: { positions: 12, mixing: 0.75, waveY: 0.45, grainOverlay: 0.12 },
     },
   },
 };

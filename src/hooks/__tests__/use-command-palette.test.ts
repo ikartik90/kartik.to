@@ -349,14 +349,14 @@ describe("useCommandPalette", () => {
       useShaderPresetDraftStore.getState().load({
         id: "preset-9",
         title: "Dusk",
-        shaderId: "swirl",
+        shaderId: "cosmicTrack",
         settings: useShaderPresetDraftStore.getState().settings,
         publishedAt: null,
       });
       (saveShaderPreset as Mock).mockResolvedValue({
         id: "preset-9",
         title: "Dusk",
-        shaderId: "swirl",
+        shaderId: "cosmicTrack",
         settings: useShaderPresetDraftStore.getState().settings,
       });
 
@@ -418,14 +418,14 @@ describe("useCommandPalette", () => {
       useShaderPresetDraftStore.getState().load({
         id: "preset-9",
         title: "Dusk",
-        shaderId: "swirl",
+        shaderId: "cosmicTrack",
         settings: useShaderPresetDraftStore.getState().settings,
         publishedAt: null,
       });
       (saveShaderPreset as Mock).mockResolvedValue({
         id: "preset-9",
         title: "Dusk",
-        shaderId: "swirl",
+        shaderId: "cosmicTrack",
         settings: useShaderPresetDraftStore.getState().settings,
       });
 

@@ -36,16 +36,19 @@ describe("useShaderPresetDraftStore", () => {
     expect(state.isDirty).toBe(false);
   });
 
-  // Switching shader re-seeds: a different shader has a different control
-  // table, so carrying the old params over would be carrying keys it has never
-  // heard of.
+  // Switching shader RE-SEEDS rather than merging: a different shader has a
+  // different control table, so carrying the old params over would be carrying
+  // keys it has never heard of. The table holds one shader today, so the switch
+  // this exercises is the degenerate one — which still has to put the params
+  // back rather than leave the tuning in place.
   it("re-seeds from the new shader's defaults on a switch", () => {
-    useShaderPresetDraftStore.getState().selectShader("godRays");
+    useShaderPresetDraftStore.getState().setParam("rampLength", 4);
+    useShaderPresetDraftStore.getState().selectShader("cosmicTrack");
     const state = useShaderPresetDraftStore.getState();
 
-    expect(state.shaderId).toBe("godRays");
+    expect(state.shaderId).toBe("cosmicTrack");
     expect(state.settings.params).toEqual(
-      shaderPresetContentFor("godRays").settings.params,
+      shaderPresetContentFor("cosmicTrack").settings.params,
     );
   });
 
@@ -62,15 +65,15 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
-      settings: savedSettings(SHADER_SPECS.swirl),
+      shaderId: "cosmicTrack",
+      settings: savedSettings(SHADER_SPECS.cosmicTrack),
       publishedAt: null,
     });
 
     const state = useShaderPresetDraftStore.getState();
     expect(state.shaderPresetId).toBe("preset-1");
     expect(state.title).toBe("Dusk");
-    expect(state.shaderId).toBe("swirl");
+    expect(state.shaderId).toBe("cosmicTrack");
     // A preset just opened has no unsaved work in it, so the palette must not
     // offer to discard changes that do not exist.
     expect(state.isDirty).toBe(false);
@@ -80,8 +83,8 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
-      settings: savedSettings(SHADER_SPECS.swirl),
+      shaderId: "cosmicTrack",
+      settings: savedSettings(SHADER_SPECS.cosmicTrack),
       publishedAt: null,
     });
     useShaderPresetDraftStore.getState().reset();
@@ -93,11 +96,10 @@ describe("useShaderPresetDraftStore", () => {
   // The store hands the action layer exactly what the schema validates, so the
   // two cannot drift into disagreeing about the stored shape.
   it("hands back content in the shape the domain schema takes", () => {
-    useShaderPresetDraftStore.getState().selectShader("warp");
     const content = useShaderPresetDraftStore.getState().toContent();
 
-    expect(content.shaderId).toBe("warp");
-    expect(content.settings).toEqual(savedSettings(SHADER_SPECS.warp));
+    expect(content.shaderId).toBe("cosmicTrack");
+    expect(content.settings).toEqual(savedSettings(SHADER_SPECS.cosmicTrack));
   });
 
   // A switch is a fresh load, so it opens SQUARE. The frame you were in
@@ -105,16 +107,28 @@ describe("useShaderPresetDraftStore", () => {
   // start the new one on a crop chosen for the old one.
   it("opens a switched-to shader square", () => {
     useShaderPresetDraftStore.getState().setAspect("16/9");
-    useShaderPresetDraftStore.getState().selectShader("godRays");
+    useShaderPresetDraftStore.getState().selectShader("cosmicTrack");
 
     expect(useShaderPresetDraftStore.getState().aspect).toBe("1/1");
   });
 
-  it("marks the draft dirty once the shape moves", () => {
+  // Looking is not authoring. A preset is framed for every shape, so which one
+  // you are looking at is the playground's own state and moving it writes
+  // nothing to the preset and owes nothing to a save.
+  it("leaves the draft clean when only the shape moves", () => {
     useShaderPresetDraftStore.getState().setAspect("4/3");
 
-    expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
     expect(useShaderPresetDraftStore.getState().aspect).toBe("4/3");
+  });
+
+  it("writes no placement for a shape that was only looked at", () => {
+    useShaderPresetDraftStore.getState().setFraming("scale", 2);
+    useShaderPresetDraftStore.getState().setAspect("4/3");
+    useShaderPresetDraftStore.getState().setAspect("16/9");
+
+    const { framing } = useShaderPresetDraftStore.getState().settings;
+    expect(Object.keys(framing)).toEqual(["1/1"]);
   });
 
   // "Reset params" is about the shader's uniforms. The frame you chose to
@@ -131,17 +145,17 @@ describe("useShaderPresetDraftStore", () => {
   // want to undo an experiment against is your own last save.
   it("resets a loaded preset's params to what was saved, not to the defaults", () => {
     const saved = {
-      ...savedSettings(SHADER_SPECS.swirl),
-      params: { ...defaultState(SHADER_SPECS.swirl).params, twist: 0.9 },
+      ...savedSettings(SHADER_SPECS.cosmicTrack),
+      params: { ...defaultState(SHADER_SPECS.cosmicTrack).params, travel: 0.9 },
     };
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
+      shaderId: "cosmicTrack",
       settings: saved,
       publishedAt: null,
     });
-    useShaderPresetDraftStore.getState().setParam("twist", 0.1);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.1);
     useShaderPresetDraftStore.getState().resetParams();
 
     expect(useShaderPresetDraftStore.getState().settings.params).toEqual(saved.params);
@@ -150,20 +164,20 @@ describe("useShaderPresetDraftStore", () => {
   // Every save re-baselines, because a save is what "last saved" MEANS — and
   // the save path adopts what was stored through `load`, so this is the seam.
   it("follows the latest save rather than the one the draft opened on", () => {
-    const spec = SHADER_SPECS.swirl;
-    const open = { ...savedSettings(spec), params: { ...defaultState(spec).params, twist: 0.9 } };
+    const spec = SHADER_SPECS.cosmicTrack;
+    const open = { ...savedSettings(spec), params: { ...defaultState(spec).params, travel: 0.9 } };
     useShaderPresetDraftStore
       .getState()
-      .load({ id: "preset-1", title: "Dusk", shaderId: "swirl", settings: open, publishedAt: null });
+      .load({ id: "preset-1", title: "Dusk", shaderId: "cosmicTrack", settings: open, publishedAt: null });
 
-    const committed = { ...open, params: { ...open.params, twist: 0.2 } };
+    const committed = { ...open, params: { ...open.params, travel: 0.2 } };
     useShaderPresetDraftStore
       .getState()
-      .load({ id: "preset-1", title: "Dusk", shaderId: "swirl", settings: committed, publishedAt: null });
-    useShaderPresetDraftStore.getState().setParam("twist", 0.7);
+      .load({ id: "preset-1", title: "Dusk", shaderId: "cosmicTrack", settings: committed, publishedAt: null });
+    useShaderPresetDraftStore.getState().setParam("travel", 0.7);
     useShaderPresetDraftStore.getState().resetParams();
 
-    expect(useShaderPresetDraftStore.getState().settings.params.twist).toBe(0.2);
+    expect(useShaderPresetDraftStore.getState().settings.params.travel).toBe(0.2);
   });
 
   // Nothing has been saved to go back to, so the defaults are the only baseline
@@ -179,22 +193,14 @@ describe("useShaderPresetDraftStore", () => {
 
   // A saved preset's params belong to the shader it was saved on. Restoring
   // them over a different shader's control table would write keys it has never
-  // heard of, so the baseline only applies where it fits.
-  it("resets to the defaults after switching off the saved preset's shader", () => {
-    useShaderPresetDraftStore.getState().load({
-      id: "preset-1",
-      title: "Dusk",
-      shaderId: "swirl",
-      settings: { ...savedSettings(SHADER_SPECS.swirl), params: { ...defaultState(SHADER_SPECS.swirl).params, twist: 0.9 } },
-      publishedAt: null,
-    });
-    useShaderPresetDraftStore.getState().selectShader("godRays");
-    useShaderPresetDraftStore.getState().resetParams();
-
-    expect(useShaderPresetDraftStore.getState().settings.params).toEqual(
-      defaultState(SHADER_SPECS.godRays).params,
-    );
-  });
+  // heard of, so `savedParamsFor` drops the baseline where it does not fit.
+  //
+  // UNREACHABLE while `SHADER_SPECS` holds one shader: there is no second
+  // control table to switch onto, and faking an id the table has never had
+  // would be testing a state the app cannot produce. Left as a todo rather
+  // than deleted, because the guard it covers is still in the store and a
+  // second shader makes this the first thing to check.
+  it.todo("resets to the defaults after switching off the saved preset's shader");
 
   // --- Framing, per shape ---------------------------------------------------
   //
@@ -270,30 +276,21 @@ describe("useShaderPresetDraftStore", () => {
     expect(framing().rotation).toBe(30);
   });
 
-  // The shape being left is pinned on the way out, so that what you come back
-  // to is what you left rather than a fresh derivation from wherever you have
-  // been since.
-  it("comes back to the shape it left, not to a derivation of where it went", () => {
-    useShaderPresetDraftStore.getState().setAspect("4/3");
-    const before = framing();
-    useShaderPresetDraftStore.getState().setAspect("3/4");
-    useShaderPresetDraftStore.getState().setAspect("4/3");
-
-    expect(framing()).toEqual(before);
-  });
-
-  // Seeded ON ARRIVAL, so the answer is fixed the first time you look at a
-  // shape. Derived lazily it would keep following whatever you were on last,
-  // and going back to a shape after retuning another would silently reframe it.
-  it("holds a seeded shape still once it has been visited", () => {
+  // An unframed shape FOLLOWS the nearest framed one rather than holding a copy
+  // taken when you first looked at it. Retune the shape it is following and it
+  // follows that too — which is what makes it the same picture the preset will
+  // draw in a container of that shape, and not a snapshot of a visit.
+  it("keeps an unframed shape following the shape it inherits from", () => {
     useShaderPresetDraftStore.getState().setAspect("16/9");
     useShaderPresetDraftStore.getState().setFraming("scale", 2);
-    useShaderPresetDraftStore.getState().setAspect("4/3");
+    useShaderPresetDraftStore.getState().setAspect("2/1");
+    expect(framing().scale).toBe(2);
+
     useShaderPresetDraftStore.getState().setAspect("16/9");
     useShaderPresetDraftStore.getState().setFraming("scale", 4);
+    useShaderPresetDraftStore.getState().setAspect("2/1");
 
-    useShaderPresetDraftStore.getState().setAspect("4/3");
-    expect(framing().scale).toBe(2);
+    expect(framing().scale).toBe(4);
   });
 
   // The same four controls on every shader, spread from one array — so unlike
@@ -302,7 +299,7 @@ describe("useShaderPresetDraftStore", () => {
   it("keeps the placements across a shader switch", () => {
     useShaderPresetDraftStore.getState().setAspect("4/3");
     useShaderPresetDraftStore.getState().setFraming("scale", 2);
-    useShaderPresetDraftStore.getState().selectShader("godRays");
+    useShaderPresetDraftStore.getState().selectShader("cosmicTrack");
     // The switch opens square, so the work is found by going back to the shape
     // it was done in — which is the point: the framings survive, the frame you
     // happened to be in does not.
@@ -321,7 +318,13 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().setFraming("scale", 3);
     useShaderPresetDraftStore.getState().resetParams();
 
-    expect(framing()).toEqual(FRAMING_DEFAULTS);
+    // UNFRAMED, rather than framed at the defaults: the preset has no placement
+    // for this shape, so putting it back means going back to following the
+    // nearest shape that does — here the 4:3 still holding its own work.
+    expect(
+      useShaderPresetDraftStore.getState().settings.framing["16/9"],
+    ).toBeUndefined();
+    expect(framing().scale).toBe(2);
     expect(useShaderPresetDraftStore.getState().settings.framing["4/3"]?.scale).toBe(2);
   });
 
@@ -331,9 +334,9 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
+      shaderId: "cosmicTrack",
       settings: {
-        ...savedSettings(SHADER_SPECS.swirl),
+        ...savedSettings(SHADER_SPECS.cosmicTrack),
         framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 2 } },
       },
       publishedAt: null,
@@ -351,9 +354,9 @@ describe("useShaderPresetDraftStore", () => {
   //
   // The rail marks a shape whose framing has been touched since the preset was
   // opened, so unsaved work in a frame you are not looking at is not invisible.
-  // EDITED, not merely visited: `setAspect` writes framing on the way in and
-  // out (see above), so a rule that compared values would mark every shape you
-  // clicked through and mean nothing.
+  // EDITED, not merely visited: an unframed shape shows the nearest framed
+  // one's placement (see above), so a rule that compared what was on screen
+  // against the saved preset would mark every shape you clicked through.
   const edited = () => useShaderPresetDraftStore.getState().editedAspects;
 
   it("opens with no shape marked", () => {
@@ -367,7 +370,7 @@ describe("useShaderPresetDraftStore", () => {
     expect(edited()).toEqual(["4/3"]);
   });
 
-  // Browsing the rail is not editing, however much framing it writes.
+  // Browsing the rail is not editing, and writes nothing to be marked.
   it("marks nothing for a shape that was only looked at", () => {
     useShaderPresetDraftStore.getState().setAspect("4/3");
     useShaderPresetDraftStore.getState().setAspect("16/9");
@@ -406,8 +409,8 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
-      settings: savedSettings(SHADER_SPECS.swirl),
+      shaderId: "cosmicTrack",
+      settings: savedSettings(SHADER_SPECS.cosmicTrack),
       publishedAt: null,
     });
 
@@ -428,8 +431,8 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
-      settings: savedSettings(SHADER_SPECS.swirl),
+      shaderId: "cosmicTrack",
+      settings: savedSettings(SHADER_SPECS.cosmicTrack),
       publishedAt: at,
     });
 
@@ -467,20 +470,20 @@ describe("useShaderPresetDraftStore", () => {
   // throw it away, so a preset can be opened to look at while another is being
   // tuned and the tuning is still there on the way back. The strip marks which
   // presets are holding something.
-  const preset = (id: string, twist = 0.5) => ({
+  const preset = (id: string, travel = 0.5) => ({
     id,
     title: id,
-    shaderId: "swirl" as const,
+    shaderId: "cosmicTrack" as const,
     settings: {
-      ...savedSettings(SHADER_SPECS.swirl),
-      params: { ...defaultState(SHADER_SPECS.swirl).params, twist },
+      ...savedSettings(SHADER_SPECS.cosmicTrack),
+      params: { ...defaultState(SHADER_SPECS.cosmicTrack).params, travel },
     },
     publishedAt: null,
   });
 
   it("keeps a dirty draft when another preset is opened", () => {
     useShaderPresetDraftStore.getState().load(preset("a"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.9);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.9);
     useShaderPresetDraftStore.getState().load(preset("b"));
 
     expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("b");
@@ -489,12 +492,12 @@ describe("useShaderPresetDraftStore", () => {
 
   it("gives the work back on the way in, dirty as it was left", () => {
     useShaderPresetDraftStore.getState().load(preset("a"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.9);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.9);
     useShaderPresetDraftStore.getState().load(preset("b"));
     useShaderPresetDraftStore.getState().load(preset("a"));
 
     const state = useShaderPresetDraftStore.getState();
-    expect(state.settings.params.twist).toBe(0.9);
+    expect(state.settings.params.travel).toBe(0.9);
     expect(state.isDirty).toBe(true);
     // Consumed on the way in: the active draft is never also a buffer, or it
     // would count as unsaved twice.
@@ -505,7 +508,7 @@ describe("useShaderPresetDraftStore", () => {
     useShaderPresetDraftStore.getState().load(preset("a", 0.2));
     useShaderPresetDraftStore.getState().load(preset("b"));
 
-    expect(useShaderPresetDraftStore.getState().settings.params.twist).toBe(0.5);
+    expect(useShaderPresetDraftStore.getState().settings.params.travel).toBe(0.5);
     expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
   });
 
@@ -526,13 +529,13 @@ describe("useShaderPresetDraftStore", () => {
   // would file the pre-save edits and then restore them over the write.
   it("does not buffer a draft against itself when a save re-adopts it", () => {
     useShaderPresetDraftStore.getState().load(preset("a"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.9);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.9);
     useShaderPresetDraftStore.getState().load(preset("a", 0.9));
 
     const state = useShaderPresetDraftStore.getState();
     expect(state.isDirty).toBe(false);
     expect(state.buffers.a).toBeUndefined();
-    expect(state.settings.params.twist).toBe(0.9);
+    expect(state.settings.params.travel).toBe(0.9);
   });
 
   // The never-saved draft is as bufferable as any preset — it just has no id.
@@ -575,9 +578,9 @@ describe("useShaderPresetDraftStore", () => {
 
   it("counts the draft on screen as well as the ones set aside", () => {
     useShaderPresetDraftStore.getState().load(preset("a"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.9);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.9);
     useShaderPresetDraftStore.getState().load(preset("b"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.8);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.8);
 
     expect(unsavedShaderPresetKeys(useShaderPresetDraftStore.getState()).sort()).toEqual([
       "a",
@@ -590,7 +593,7 @@ describe("useShaderPresetDraftStore", () => {
   // screen.
   it("still reports unsaved work left in a preset you are not looking at", () => {
     useShaderPresetDraftStore.getState().load(preset("a"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.9);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.9);
     useShaderPresetDraftStore.getState().load(preset("b"));
 
     expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
@@ -601,7 +604,7 @@ describe("useShaderPresetDraftStore", () => {
   // you had to press more than once.
   it("throws away every buffered edit on a reset", () => {
     useShaderPresetDraftStore.getState().load(preset("a"));
-    useShaderPresetDraftStore.getState().setParam("twist", 0.9);
+    useShaderPresetDraftStore.getState().setParam("travel", 0.9);
     useShaderPresetDraftStore.getState().load(preset("b"));
     useShaderPresetDraftStore.getState().reset();
 
@@ -696,8 +699,8 @@ describe("useShaderPresetDraftStore history", () => {
     useShaderPresetDraftStore.getState().load({
       id: "preset-1",
       title: "Dusk",
-      shaderId: "swirl",
-      settings: savedSettings(SHADER_SPECS.swirl),
+      shaderId: "cosmicTrack",
+      settings: savedSettings(SHADER_SPECS.cosmicTrack),
       publishedAt: null,
     });
 
@@ -706,7 +709,7 @@ describe("useShaderPresetDraftStore history", () => {
     expect(state.historyIndex).toBe(0);
 
     state.undo();
-    expect(useShaderPresetDraftStore.getState().shaderId).toBe("swirl");
+    expect(useShaderPresetDraftStore.getState().shaderId).toBe("cosmicTrack");
   });
 
   // Undo is an edit like any other as far as the exit question is concerned:

@@ -2,7 +2,6 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import type { ShaderId } from "@/data/shader-specs";
 
 // The stage is the real thing's only job — mounting a webgl2 context, which
 // jsdom has none of. Stubbed with a canvas, because a canvas is exactly what
@@ -22,14 +21,21 @@ const {
   clearThumbnailCache,
 } = await import("../shader-preset-thumbnails");
 
-const preset = (id: string, shaderId: ShaderId, updatedAt = "2026-01-01") =>
+// The shader is a plain STRING here rather than a `ShaderId`, so that the two
+// pure functions below can be handed two different ones. `captureOrder` and
+// `thumbnailKey` treat the column as opaque — they group and hash it, they
+// never look it up — and the table holds a single shader today, so a real
+// second id does not exist to group against. Anything that MOUNTS is given the
+// real one, because the thumbnailer does look that up (see `SHADER_SPECS`
+// there); the settings come from the real spec either way.
+const preset = (id: string, shaderId = "cosmicTrack", updatedAt = "2026-01-01") =>
   ({
     id,
     title: id,
     untitledIndex: null,
     shaderId,
     settings: {
-      ...defaultState(SHADER_SPECS[shaderId]),
+      ...defaultState(SHADER_SPECS.cosmicTrack),
       framing: {},
     },
     createdAt: new Date("2026-01-01"),
@@ -42,14 +48,14 @@ describe("thumbnailKey", () => {
   // different picture under the same id, and a cache that could not tell them
   // apart would show the old one until a reload.
   it("changes when the preset is edited", () => {
-    expect(thumbnailKey(preset("a", "swirl", "2026-01-01"))).not.toBe(
-      thumbnailKey(preset("a", "swirl", "2026-02-02")),
+    expect(thumbnailKey(preset("a", "cosmicTrack", "2026-01-01"))).not.toBe(
+      thumbnailKey(preset("a", "cosmicTrack", "2026-02-02")),
     );
   });
 
   it("is stable for the same preset at the same edit", () => {
-    expect(thumbnailKey(preset("a", "swirl"))).toBe(
-      thumbnailKey(preset("a", "swirl")),
+    expect(thumbnailKey(preset("a", "cosmicTrack"))).toBe(
+      thumbnailKey(preset("a", "cosmicTrack")),
     );
   });
 });
@@ -62,32 +68,32 @@ describe("captureOrder", () => {
   it("groups what is left to capture by shader", () => {
     const order = captureOrder(
       [
-        preset("a", "swirl"),
-        preset("b", "godRays"),
-        preset("c", "swirl"),
-        preset("d", "godRays"),
+        preset("a", "cosmicTrack"),
+        preset("b", "otherShader"),
+        preset("c", "cosmicTrack"),
+        preset("d", "otherShader"),
       ],
       new Set(),
     );
     expect(order.map((p) => p.shaderId)).toEqual([
-      "swirl",
-      "swirl",
-      "godRays",
-      "godRays",
+      "cosmicTrack",
+      "cosmicTrack",
+      "otherShader",
+      "otherShader",
     ]);
   });
 
   it("leaves out anything already captured", () => {
-    const done = preset("a", "swirl");
+    const done = preset("a", "cosmicTrack");
     const order = captureOrder(
-      [done, preset("b", "godRays")],
+      [done, preset("b", "otherShader")],
       new Set([thumbnailKey(done)]),
     );
     expect(order.map((p) => p.id)).toEqual(["b"]);
   });
 
   it("is empty once every preset has a picture", () => {
-    const presets = [preset("a", "swirl"), preset("b", "godRays")];
+    const presets = [preset("a", "cosmicTrack"), preset("b", "otherShader")];
     expect(captureOrder(presets, new Set(presets.map((preset) => thumbnailKey(preset))))).toEqual([]);
   });
 });
@@ -103,9 +109,13 @@ describe("ShaderPresetThumbnails", () => {
   });
   afterEach(cleanup);
 
+  // Both on the real shader, because this one MOUNTS — and with one shader in
+  // the table "one at a time" is one group of two rather than two groups of
+  // one. What it proves is unchanged: every preset comes back with a picture of
+  // its own, taken through a single stage.
   it("hands back a picture for every preset, one shader at a time", async () => {
     const captured: Record<string, string> = {};
-    const presets = [preset("a", "swirl"), preset("b", "godRays")];
+    const presets = [preset("a"), preset("b")];
 
     render(
       <ShaderPresetThumbnails
@@ -120,15 +130,17 @@ describe("ShaderPresetThumbnails", () => {
     await waitFor(() => expect(Object.keys(captured)).toHaveLength(2), {
       timeout: 3000,
     });
-    expect(captured[thumbnailKey(presets[0])]).toContain("swirl");
-    expect(captured[thumbnailKey(presets[1])]).toContain("godRays");
+    expect(captured[thumbnailKey(presets[0])]).toContain("cosmicTrack");
+    expect(captured[thumbnailKey(presets[1])]).toContain("cosmicTrack");
+    // Two pictures, not one picture counted twice.
+    expect(thumbnailKey(presets[0])).not.toBe(thumbnailKey(presets[1]));
   });
 
   // Nothing left to draw means nothing mounted: the renderer holds a webgl2
   // context for as long as it is on screen, and the strip is at rest far more
   // often than it is capturing.
   it("unmounts itself once there is nothing left to capture", async () => {
-    const presets = [preset("a", "swirl")];
+    const presets = [preset("a", "cosmicTrack")];
     const { container } = render(
       <ShaderPresetThumbnails presets={presets} theme="light" onCaptured={() => {}} />,
     );
@@ -143,7 +155,7 @@ describe("ShaderPresetThumbnails", () => {
   // re-reads its list on every one, and re-rendering forty presets each time
   // would be forty contexts' worth of work for pictures already taken.
   it("does not redraw a preset it has already captured", async () => {
-    const presets = [preset("a", "swirl")];
+    const presets = [preset("a", "cosmicTrack")];
     const onCaptured = vi.fn();
 
     const first = render(

@@ -1,13 +1,6 @@
 "use client";
 
 import type { ComponentProps } from "react";
-import {
-  ColorPanels,
-  GodRays,
-  StaticMeshGradient,
-  Swirl,
-  Warp,
-} from "@paper-design/shaders-react";
 import { css } from "../../../../styled-system/css";
 import { CosmicTrack } from "@/components/shaders/cosmic-track";
 import type { Params, ShaderSpec } from "@/data/shader-specs";
@@ -58,10 +51,10 @@ export interface ShaderStageProps {
 }
 
 /**
- * Each component takes a different prop set, so the params object is spread in
- * wholesale — the control table is what guarantees the keys match the uniforms,
- * and `shader-specs.test.ts` is what guarantees the table does. A component
- * ignores anything it does not recognise.
+ * The params object is spread in wholesale — the control table is what
+ * guarantees the keys match the uniforms, and `shader-specs.test.ts` is what
+ * guarantees the table does. The component ignores anything it does not
+ * recognise.
  */
 export function ShaderStage({
   spec,
@@ -87,22 +80,13 @@ export function ShaderStage({
     webGlContextAttributes,
   };
 
+  // A SWITCH over one id, rather than the mount written straight out. The
+  // table is the list of shaders (see `shader-specs.ts`) and this is where an
+  // id becomes a component; collapsing it would move that mapping into an
+  // assumption, and the second shader would have to reinstate it. TypeScript
+  // reads the union, so a new id fails to compile here until it is mounted.
   switch (spec.id) {
     case "cosmicTrack":
       return <CosmicTrack {...(props as ComponentProps<typeof CosmicTrack>)} />;
-    case "colorPanels":
-      return <ColorPanels {...(props as ComponentProps<typeof ColorPanels>)} />;
-    case "godRays":
-      return <GodRays {...(props as ComponentProps<typeof GodRays>)} />;
-    case "warp":
-      return <Warp {...(props as ComponentProps<typeof Warp>)} />;
-    case "swirl":
-      return <Swirl {...(props as ComponentProps<typeof Swirl>)} />;
-    case "staticMeshGradient":
-      return (
-        <StaticMeshGradient
-          {...(props as ComponentProps<typeof StaticMeshGradient>)}
-        />
-      );
   }
 }
