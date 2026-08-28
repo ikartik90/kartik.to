@@ -77,11 +77,11 @@ test.describe("public routes", () => {
   // where an anonymous request got a 404. It writes nothing, so it is public
   // now — and 200-for-anonymous is the whole of that change, which makes this
   // the test that would catch the gate creeping back over it.
-  test("the cover playground is public", async ({ page, pageFailures }) => {
-    const response = await page.goto("/playground/cover");
+  test("the shader playground is public", async ({ page, pageFailures }) => {
+    const response = await page.goto("/playground/shader");
 
     expect(response?.status()).toBe(200);
-    await expect(page).toHaveTitle("Cover Playground");
+    await expect(page).toHaveTitle("Shader Playground");
     // The rail, which is the page — asserting it rules out an interstitial
     // that also answers 200 (see the dev-route note below).
     await expect(

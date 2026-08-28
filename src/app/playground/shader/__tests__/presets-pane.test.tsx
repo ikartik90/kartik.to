@@ -11,17 +11,17 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import type { ShaderId } from "@/data/shader-specs";
-import { coverContentFor, type ThemedColor } from "@/domain/cover";
-import { useCoverDraftStore } from "@/store/cover-draft";
+import { shaderPresetContentFor, type ThemedColor } from "@/domain/shader-preset";
+import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 
 // The actions are `"use server"` files importing `@/lib/env`, which validates
 // DATABASE_URL at import time and throws in a run with no `.env`.
-vi.mock("@/app/actions/cover", () => ({
-  getCovers: vi.fn().mockResolvedValue([]),
-  getCover: vi.fn(),
-  createCover: vi.fn(),
-  saveCover: vi.fn(),
-  deleteCover: vi.fn(),
+vi.mock("@/app/actions/shader-preset", () => ({
+  getShaderPresets: vi.fn().mockResolvedValue([]),
+  getShaderPreset: vi.fn(),
+  createShaderPreset: vi.fn(),
+  saveShaderPreset: vi.fn(),
+  deleteShaderPreset: vi.fn(),
 }));
 
 // The stage's whole job is a webgl2 context, which jsdom has none of. A canvas
@@ -61,21 +61,21 @@ vi.mock("next/navigation", () => ({
 const path = () => window.location.pathname;
 
 const { PresetsPane } = await import("../presets-pane");
-const { clearThumbnailCache } = await import("../cover-thumbnails");
-const { getCovers, createCover } = await import("@/app/actions/cover");
+const { clearThumbnailCache } = await import("../shader-preset-thumbnails");
+const { getShaderPresets, createShaderPreset } = await import("@/app/actions/shader-preset");
 
 // Parsed rather than authored: the spec table writes one colour per stop and a
-// cover holds a light/dark pair each, so a fixture built from `defaultState`
+// preset holds a light/dark pair each, so a fixture built from `defaultState`
 // alone is not the shape the pane is handed.
 const settingsFor = (shaderId: ShaderId) => ({
-  ...coverContentFor(shaderId).settings,
+  ...shaderPresetContentFor(shaderId).settings,
   framing: {},
 });
 
 /**
- * A saved cover as the action hands it over.
+ * A saved preset as the action hands it over.
  *
- * Published, because that is what a cover in a VISITOR's strip is — the action
+ * Published, because that is what a preset in a VISITOR's strip is — the action
  * hands them no other kind. It makes no difference to the author's strip, which
  * is shown both.
  */
@@ -84,8 +84,8 @@ const preset = (id: string, title: string | null, colors: string[]) => ({
   title,
   untitledIndex: title ? null : 1,
   shaderId: "cosmicTrack" as const,
-  // One colour per stop at the call site, split into the pair a cover holds —
-  // these fixtures are about WHICH cover is on screen, not about theming it.
+  // One colour per stop at the call site, split into the pair a preset holds —
+  // these fixtures are about WHICH preset is on screen, not about theming it.
   settings: {
     ...settingsFor("cosmicTrack"),
     colors: colors.map((color) => ({ light: color, dark: color })),
@@ -117,13 +117,13 @@ describe("PresetsPane", () => {
       () => "data:image/png;base64,PICTURE",
     );
 
-    useCoverDraftStore.getState().reset();
-    (getCovers as Mock).mockReset();
-    (getCovers as Mock).mockResolvedValue([]);
-    (createCover as Mock).mockReset();
+    useShaderPresetDraftStore.getState().reset();
+    (getShaderPresets as Mock).mockReset();
+    (getShaderPresets as Mock).mockResolvedValue([]);
+    (createShaderPreset as Mock).mockReset();
     mockPush.mockReset();
     mockReplace.mockReset();
-    window.history.replaceState(null, "", "/playground/cover");
+    window.history.replaceState(null, "", "/playground/shader");
   });
   afterEach(cleanup);
 
@@ -144,29 +144,29 @@ describe("PresetsPane", () => {
       .map((button) => button.getAttribute("aria-label"));
 
   // The author's blank draft is theirs to keep: they arrived to make a new
-  // cover, and they have both a shader picker and an add tile to do it with.
-  // Opening them on their newest cover instead would take that away.
+  // preset, and they have both a shader picker and an add tile to do it with.
+  // Opening them on their newest preset instead would take that away.
   it("leaves the author's blank draft alone", async () => {
-    (getCovers as Mock).mockResolvedValue([preset("c", "Newest", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("c", "Newest", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
 
     await screen.findByRole("button", { name: "Newest" });
-    expect(useCoverDraftStore.getState().coverId).toBeNull();
-    expect(path()).toBe("/playground/cover");
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBeNull();
+    expect(path()).toBe("/playground/shader");
   });
 
   it("offers a way to add one even with nothing saved yet", async () => {
     render(<PresetsPane />);
-    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
 
     expect(screen.getByRole("button", { name: "New preset" })).toBeTruthy();
   });
 
   // The action hands them over newest-first and the strip shows them in that
   // order — it does not re-sort, because a second answer to "what order are
-  // these in" is a second place for it to be wrong. See `getCovers`.
+  // these in" is a second place for it to be wrong. See `getShaderPresets`.
   it("shows the saved presets in the order it is given them", async () => {
-    (getCovers as Mock).mockResolvedValue([
+    (getShaderPresets as Mock).mockResolvedValue([
       preset("c", "Newest", ["#FFFFFFFF"]),
       preset("b", "Middle", ["#000000FF"]),
       preset("a", "Oldest", ["#FF0000FF"]),
@@ -178,18 +178,19 @@ describe("PresetsPane", () => {
   });
 
   it("names an untitled preset the way the palette names an untitled draft", async () => {
-    (getCovers as Mock).mockResolvedValue([preset("a", null, ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", null, ["#FFFFFFFF"])]);
     render(<PresetsPane />);
 
     expect(await screen.findByRole("button", { name: "Untitled 1" })).toBeTruthy();
   });
 
-  // The tile is painted from the cover's OWN ramp — see `coverSwatch` for why
-  // it cannot be the cover itself. Two presets, so this pins "painted from this
-  // one" rather than "painted"; the exact CSS is `coverSwatch`'s own test, and
-  // asserting it here would only be asserting how jsdom serialises a colour.
+  // The tile is painted from the preset's OWN ramp — see `shaderPresetSwatch`
+  // for why it cannot be the preset itself. Two presets, so this pins "painted
+  // from this one" rather than "painted"; the exact CSS is
+  // `shaderPresetSwatch`'s own test, and asserting it here would only be
+  // asserting how jsdom serialises a colour.
   it("paints each tile from its preset's colours", async () => {
-    (getCovers as Mock).mockResolvedValue([
+    (getShaderPresets as Mock).mockResolvedValue([
       preset("a", "Dusk", ["#2E6BFFFF", "#FFD9A0FF"]),
       preset("b", "Dawn", ["#FF4D97FF", "#12042BFF"]),
     ]);
@@ -203,10 +204,10 @@ describe("PresetsPane", () => {
   });
 
   // The swatch is a stand-in. What the strip is FOR is seeing what each preset
-  // actually looks like, which is a photograph of the cover taken off-screen —
-  // see `cover-thumbnails` for why it cannot be a live one.
-  it("replaces the ramp with a picture of the cover once one is drawn", async () => {
-    (getCovers as Mock).mockResolvedValue([
+  // actually looks like, which is a photograph of the preset taken off-screen —
+  // see `preset-thumbnails` for why it cannot be a live one.
+  it("replaces the ramp with a picture of the preset once one is drawn", async () => {
+    (getShaderPresets as Mock).mockResolvedValue([
       preset("a", "Dusk", ["#2E6BFFFF", "#FFD9A0FF"]),
     ]);
     render(<PresetsPane />);
@@ -221,21 +222,21 @@ describe("PresetsPane", () => {
 
   // A save is the other thing that can change the library — the row you were
   // editing now looks different. Missing it would leave that tile showing the
-  // picture the cover had before you touched it.
+  // picture the preset had before you touched it.
   it("re-reads the library when work is committed", async () => {
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
-    await waitFor(() => expect(getCovers).toHaveBeenCalledOnce());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalledOnce());
 
     // Mid-edit: nothing has been written, so nothing is re-read.
     await act(async () => {
-      useCoverDraftStore.getState().setParam("scale", 2);
+      useShaderPresetDraftStore.getState().setParam("scale", 2);
     });
-    expect(getCovers).toHaveBeenCalledOnce();
+    expect(getShaderPresets).toHaveBeenCalledOnce();
 
     // Committed — the store goes clean, exactly as a save leaves it.
     await act(async () => {
-      useCoverDraftStore.getState().load({
+      useShaderPresetDraftStore.getState().load({
         id: "a",
         title: "Dusk",
         shaderId: "cosmicTrack",
@@ -243,14 +244,14 @@ describe("PresetsPane", () => {
         publishedAt: null,
       });
     });
-    await waitFor(() => expect(getCovers).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalledTimes(2));
   });
 
   // --- Adding ---------------------------------------------------------------
 
   it("saves the draft as a new preset, and takes up editing that one", async () => {
     const user = userEvent.setup();
-    (createCover as Mock).mockResolvedValue({
+    (createShaderPreset as Mock).mockResolvedValue({
       id: "new-1",
       title: null,
       shaderId: "swirl",
@@ -258,21 +259,21 @@ describe("PresetsPane", () => {
     });
     render(<PresetsPane />);
 
-    useCoverDraftStore.getState().selectShader("swirl");
+    useShaderPresetDraftStore.getState().selectShader("swirl");
     await user.click(screen.getByRole("button", { name: "New preset" }));
 
     await waitFor(() =>
-      expect(createCover).toHaveBeenCalledWith(
+      expect(createShaderPreset).toHaveBeenCalledWith(
         expect.objectContaining({ shaderId: "swirl" }),
       ),
     );
     // Adopted: the draft is now that preset, its URL says so, and the work is
     // no longer unsaved. The URL is corrected in PLACE — asking the router for
-    // the cover's route would fetch a cover the page is already holding and
+    // the preset's route would fetch a preset the page is already holding and
     // remount the playground around the answer.
-    expect(useCoverDraftStore.getState().coverId).toBe("new-1");
-    expect(useCoverDraftStore.getState().isDirty).toBe(false);
-    expect(path()).toBe("/playground/cover/new-1");
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("new-1");
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
+    expect(path()).toBe("/playground/shader/new-1");
     expect(mockReplace).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
@@ -280,36 +281,36 @@ describe("PresetsPane", () => {
   it("leaves the draft alone when the save fails", async () => {
     const user = userEvent.setup();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    (createCover as Mock).mockRejectedValue(new Error("no"));
+    (createShaderPreset as Mock).mockRejectedValue(new Error("no"));
     render(<PresetsPane />);
 
     await user.click(screen.getByRole("button", { name: "New preset" }));
 
-    await waitFor(() => expect(createCover).toHaveBeenCalled());
-    expect(useCoverDraftStore.getState().coverId).toBeNull();
-    expect(path()).toBe("/playground/cover");
+    await waitFor(() => expect(createShaderPreset).toHaveBeenCalled());
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBeNull();
+    expect(path()).toBe("/playground/shader");
   });
 
   // --- Opening --------------------------------------------------------------
 
   // Opening one is a change of what the page HOLDS, not a trip to another page:
-  // the strip already has the whole cover, so it hands it to the draft and
+  // the strip already has the whole preset, so it hands it to the draft and
   // corrects the URL. Going through the router would fetch what is already in
   // hand and remount the playground — the shader torn down and recompiled —
   // around an identical answer.
   it("opens a preset into the draft without navigating", async () => {
     const user = userEvent.setup();
     const dusk = preset("a", "Dusk", ["#FFFFFFFF"]);
-    (getCovers as Mock).mockResolvedValue([dusk]);
+    (getShaderPresets as Mock).mockResolvedValue([dusk]);
     render(<PresetsPane />);
 
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
 
-    expect(useCoverDraftStore.getState().coverId).toBe("a");
-    expect(useCoverDraftStore.getState().shaderId).toBe("cosmicTrack");
-    // Opened clean: adopting a saved cover is not an edit to it.
-    expect(useCoverDraftStore.getState().isDirty).toBe(false);
-    expect(path()).toBe("/playground/cover/a");
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("a");
+    expect(useShaderPresetDraftStore.getState().shaderId).toBe("cosmicTrack");
+    // Opened clean: adopting a saved preset is not an edit to it.
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
+    expect(path()).toBe("/playground/shader/a");
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
@@ -319,8 +320,8 @@ describe("PresetsPane", () => {
   // as a broken one.
   it("marks the open preset as current, and does not reopen it", async () => {
     const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
-    useCoverDraftStore.getState().load({
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    useShaderPresetDraftStore.getState().load({
       id: "a",
       title: "Dusk",
       shaderId: "cosmicTrack",
@@ -333,7 +334,7 @@ describe("PresetsPane", () => {
     expect(tile.getAttribute("aria-current")).toBe("true");
 
     await user.click(tile);
-    expect(path()).toBe("/playground/cover");
+    expect(path()).toBe("/playground/shader");
   });
 
   // --- Unsaved work ---------------------------------------------------------
@@ -346,52 +347,52 @@ describe("PresetsPane", () => {
   // the way out of the editor, where work actually goes missing.
   it("opens a preset over unsaved work without asking", async () => {
     const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
 
-    useCoverDraftStore.getState().setParam("rampLength", 4);
+    useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
 
     expect(asking()).toBe(false);
-    expect(useCoverDraftStore.getState().coverId).toBe("a");
-    expect(path()).toBe("/playground/cover/a");
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("a");
+    expect(path()).toBe("/playground/shader/a");
   });
 
   it("hands the work back when the draft is taken up again", async () => {
     const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([
+    (getShaderPresets as Mock).mockResolvedValue([
       preset("a", "Dusk", ["#FFFFFFFF"]),
       preset("b", "Dawn", ["#000000FF"]),
     ]);
     render(<PresetsPane />);
 
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
-    useCoverDraftStore.getState().setParam("rampLength", 4);
+    useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     await user.click(screen.getByRole("button", { name: "Dawn" }));
     await user.click(screen.getByRole("button", { name: "Dusk" }));
 
-    expect(useCoverDraftStore.getState().settings.params.rampLength).toBe(4);
-    expect(useCoverDraftStore.getState().isDirty).toBe(true);
+    expect(useShaderPresetDraftStore.getState().settings.params.rampLength).toBe(4);
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
   });
 
   // --- Telling the page it may draw -----------------------------------------
   //
-  // The page holds the cover AND the properties rail back on this signal, so
+  // The page holds the preset AND the properties rail back on this signal, so
   // what it has to mean is "the draft is holding what it is going to hold" —
   // not "the fetch came back". Between those two moments the draft is still on
   // the control table's first shader, and a rail drawn there is a column of
-  // numbers belonging to a cover nobody published.
-  it("does not report settled until the draft holds the cover it opens on", async () => {
+  // numbers belonging to a preset nobody published.
+  it("does not report settled until the draft holds the preset it opens on", async () => {
     signedOut();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
 
     // Read AT THE MOMENT of the call, not after — the whole question is what is
     // true when the page is told it may draw.
     let idWhenTold: string | null | undefined;
     let coloursWhenTold: ThemedColor[] | undefined;
     const onSettled = vi.fn(() => {
-      const draft = useCoverDraftStore.getState();
-      idWhenTold = draft.coverId;
+      const draft = useShaderPresetDraftStore.getState();
+      idWhenTold = draft.shaderPresetId;
       coloursWhenTold = draft.settings.colors;
     });
 
@@ -404,22 +405,23 @@ describe("PresetsPane", () => {
     ]);
   });
 
-  // The author is not moved onto anybody's cover — their blank draft IS the
+  // The author is not moved onto anybody's preset — their blank draft IS the
   // final state, so the signal must not wait for an adoption that never comes.
   it("reports settled for the author, who is left on their own draft", async () => {
     signedIn();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     const onSettled = vi.fn();
 
     render(<PresetsPane onSettled={onSettled} />);
     await waitFor(() => expect(onSettled).toHaveBeenCalled());
-    expect(useCoverDraftStore.getState().coverId).toBeNull();
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBeNull();
   });
 
-  // Nothing to adopt is an answer too, and the page must not wait forever on it.
+  // Nothing to adopt is an answer too, and the page must not wait forever on
+  // it.
   it("reports settled when the library cannot be read", async () => {
     signedOut();
-    (getCovers as Mock).mockRejectedValue(new Error("no"));
+    (getShaderPresets as Mock).mockRejectedValue(new Error("no"));
     const onSettled = vi.fn();
 
     render(<PresetsPane onSettled={onSettled} />);
@@ -428,13 +430,13 @@ describe("PresetsPane", () => {
 
   it("reports settled only once, however the strip re-reads", async () => {
     signedOut();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     const onSettled = vi.fn();
 
     render(<PresetsPane onSettled={onSettled} />);
     await waitFor(() => expect(onSettled).toHaveBeenCalled());
     await act(async () => {
-      useCoverDraftStore.getState().setParam("rampLength", 4);
+      useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     });
     expect(onSettled).toHaveBeenCalledTimes(1);
   });
@@ -449,14 +451,14 @@ describe("PresetsPane", () => {
 
   it("marks a preset holding work you cannot see", async () => {
     const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([
+    (getShaderPresets as Mock).mockResolvedValue([
       preset("a", "Dusk", ["#FFFFFFFF"]),
       preset("b", "Dawn", ["#000000FF"]),
     ]);
     render(<PresetsPane />);
 
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
-    useCoverDraftStore.getState().setParam("rampLength", 4);
+    useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     await user.click(screen.getByRole("button", { name: "Dawn" }));
 
     expect(marked("Dusk")).toBe(true);
@@ -465,14 +467,14 @@ describe("PresetsPane", () => {
 
   it("marks the preset on screen once it is touched", async () => {
     const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
 
     await user.click(await screen.findByRole("button", { name: "Dusk" }));
     expect(marked("Dusk")).toBe(false);
 
     await act(async () => {
-      useCoverDraftStore.getState().setParam("rampLength", 4);
+      useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     });
     expect(marked("Dusk")).toBe(true);
   });
@@ -483,51 +485,51 @@ describe("PresetsPane", () => {
   // without a tile, work tuned before the first save would be the one thing the
   // strip could not give back.
   it("gives the unsaved new draft a tile of its own, marked", async () => {
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
     await screen.findByRole("button", { name: "Dusk" });
 
     expect(screen.queryByRole("button", { name: "Unsaved draft" })).toBeNull();
 
     await act(async () => {
-      useCoverDraftStore.getState().setParam("rampLength", 4);
+      useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     });
     expect(marked("Unsaved draft")).toBe(true);
   });
 
   it("takes the new draft back up, with its work", async () => {
     const user = userEvent.setup();
-    (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+    (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
     render(<PresetsPane />);
     await screen.findByRole("button", { name: "Dusk" });
 
     await act(async () => {
-      useCoverDraftStore.getState().setParam("rampLength", 4);
+      useShaderPresetDraftStore.getState().setParam("rampLength", 4);
     });
     await user.click(screen.getByRole("button", { name: "Dusk" }));
     await user.click(screen.getByRole("button", { name: "Unsaved draft" }));
 
-    expect(useCoverDraftStore.getState().coverId).toBeNull();
-    expect(useCoverDraftStore.getState().settings.params.rampLength).toBe(4);
-    expect(path()).toBe("/playground/cover");
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBeNull();
+    expect(useShaderPresetDraftStore.getState().settings.params.rampLength).toBe(4);
+    expect(path()).toBe("/playground/shader");
   });
 
   // --- Signed out -----------------------------------------------------------
   //
   // The playground is public and so is the strip. What a visitor gets is the
-  // PUBLISHED library — `getCovers` is the one that decides that, and is
+  // PUBLISHED library — `getShaderPresets` is the one that decides that, and is
   // already mocked here, so what these pin is the half this component owns: the
   // add tile is the author's, and a strip with nothing in it is no strip.
   describe("for a visitor", () => {
     beforeEach(signedOut);
 
-    // A visitor can move the controls — the cover is theirs to play with — so
+    // A visitor can move the controls — the preset is theirs to play with — so
     // their draft goes dirty like anyone's. The mark means "work you have not
     // written" and they have nowhere to write it, so for them it is a dot that
     // appears and never resolves.
     it("marks no tile, having no save to be behind on", async () => {
       const user = userEvent.setup();
-      (getCovers as Mock).mockResolvedValue([
+      (getShaderPresets as Mock).mockResolvedValue([
         preset("a", "Dusk", ["#FFFFFFFF"]),
         preset("b", "Dawn", ["#000000FF"]),
       ]);
@@ -535,9 +537,9 @@ describe("PresetsPane", () => {
 
       await user.click(await screen.findByRole("button", { name: "Dusk" }));
       await act(async () => {
-        useCoverDraftStore.getState().setParam("rampLength", 4);
+        useShaderPresetDraftStore.getState().setParam("rampLength", 4);
       });
-      expect(useCoverDraftStore.getState().isDirty).toBe(true);
+      expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
       expect(marked("Dusk")).toBe(false);
 
       await user.click(screen.getByRole("button", { name: "Dawn" }));
@@ -546,40 +548,40 @@ describe("PresetsPane", () => {
 
 
     it("offers no way to add one", async () => {
-      (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+      (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
       render(<PresetsPane />);
 
       await screen.findByRole("button", { name: "Dusk" });
       expect(screen.queryByRole("button", { name: "New preset" })).toBeNull();
     });
 
-    // Opening one is the same act it is for the author: the cover lands in the
+    // Opening one is the same act it is for the author: the preset lands in the
     // draft and every control on the page is theirs to push around. What is
     // missing is only the writing.
     it("still opens a preset into the draft", async () => {
       const user = userEvent.setup();
-      (getCovers as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
+      (getShaderPresets as Mock).mockResolvedValue([preset("a", "Dusk", ["#FFFFFFFF"])]);
       render(<PresetsPane />);
 
       await user.click(await screen.findByRole("button", { name: "Dusk" }));
 
-      expect(useCoverDraftStore.getState().coverId).toBe("a");
-      expect(path()).toBe("/playground/cover/a");
+      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("a");
+      expect(path()).toBe("/playground/shader/a");
     });
 
     // What a visitor ARRIVES on. They cannot pick a shader and cannot save one,
-    // so a blank draft is not a starting point for them — it is a cover nobody
+    // so a blank draft is not a starting point for them — it is a preset nobody
     // published, sitting above a strip whose one tile reads as unselected. The
-    // newest published cover is the only honest thing to open on.
-    it("opens on the newest published cover", async () => {
-      (getCovers as Mock).mockResolvedValue([
+    // newest published preset is the only honest thing to open on.
+    it("opens on the newest published preset", async () => {
+      (getShaderPresets as Mock).mockResolvedValue([
         preset("c", "Newest", ["#FFFFFFFF"]),
         preset("a", "Oldest", ["#FF0000FF"]),
       ]);
       render(<PresetsPane />);
 
       await waitFor(() =>
-        expect(useCoverDraftStore.getState().coverId).toBe("c"),
+        expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("c"),
       );
       // The same act as pressing the tile, which is what makes the tile read as
       // the one open rather than leaving the strip looking untouched.
@@ -588,16 +590,16 @@ describe("PresetsPane", () => {
           "aria-current",
         ),
       ).toBe("true");
-      expect(path()).toBe("/playground/cover/c");
-      expect(useCoverDraftStore.getState().isDirty).toBe(false);
+      expect(path()).toBe("/playground/shader/c");
+      expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
     });
 
-    // The route already handed the playground a cover, so there is nothing to
-    // choose — arriving at `/playground/cover/<id>` must not be redirected to
+    // The route already handed the playground a preset, so there is nothing to
+    // choose — arriving at `/playground/shader/<id>` must not be redirected to
     // whatever happens to be newest.
-    it("leaves a cover the route was opened on alone", async () => {
-      (getCovers as Mock).mockResolvedValue([preset("c", "Newest", ["#FFFFFFFF"])]);
-      useCoverDraftStore.getState().load({
+    it("leaves a preset the route was opened on alone", async () => {
+      (getShaderPresets as Mock).mockResolvedValue([preset("c", "Newest", ["#FFFFFFFF"])]);
+      useShaderPresetDraftStore.getState().load({
         id: "a",
         title: "Oldest",
         shaderId: "cosmicTrack",
@@ -606,8 +608,8 @@ describe("PresetsPane", () => {
       });
       render(<PresetsPane />);
 
-      await waitFor(() => expect(getCovers).toHaveBeenCalled());
-      expect(useCoverDraftStore.getState().coverId).toBe("a");
+      await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
+      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("a");
     });
 
     // No library, so no bar: the author always has the add tile and so always
@@ -616,7 +618,7 @@ describe("PresetsPane", () => {
     it("draws no strip at all when nothing has been published", async () => {
       const { container } = render(<PresetsPane />);
 
-      await waitFor(() => expect(getCovers).toHaveBeenCalled());
+      await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
       expect(screen.queryByRole("group", { name: "Presets" })).toBeNull();
       expect(container.querySelector("[data-presets]")).toBeNull();
     });

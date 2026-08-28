@@ -46,11 +46,11 @@ vi.mock("@/app/actions/grid", () => ({
   unpublishComponent: vi.fn(),
 }));
 
-vi.mock("@/app/actions/cover", () => ({
-  getCovers: vi.fn().mockResolvedValue([]),
-  createCover: vi.fn(),
-  saveCover: vi.fn(),
-  deleteCover: vi.fn(),
+vi.mock("@/app/actions/shader-preset", () => ({
+  getShaderPresets: vi.fn().mockResolvedValue([]),
+  createShaderPreset: vi.fn(),
+  saveShaderPreset: vi.fn(),
+  deleteShaderPreset: vi.fn(),
 }));
 
 vi.mock("@/app/actions/post", () => ({
@@ -157,9 +157,9 @@ describe("CommandPalette", () => {
       expect(screen.getByText("Playground")).toBeDefined();
     });
 
-    it("offers the Cover Playground item", () => {
+    it("offers the Shader Playground item", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Cover Playground")).toBeDefined();
+      expect(screen.getByText("Shader Playground")).toBeDefined();
     });
   });
 
@@ -167,7 +167,7 @@ describe("CommandPalette", () => {
     it("still offers the Playground group", () => {
       render(<CommandPalette />);
       expect(screen.getByText("Playground")).toBeDefined();
-      expect(screen.getByText("Cover Playground")).toBeDefined();
+      expect(screen.getByText("Shader Playground")).toBeDefined();
     });
 
     it("does not render the This Page group", () => {
@@ -215,7 +215,7 @@ describe("CommandPalette", () => {
     it("renders the Playground group in the server render too", () => {
       const html = renderToString(<CommandPalette />);
       expect(html).toContain("Playground");
-      expect(html).toContain("Cover Playground");
+      expect(html).toContain("Shader Playground");
     });
   });
 
@@ -321,7 +321,7 @@ describe("CommandPalette", () => {
         target: { value: "playground" },
       });
 
-      expect(list().getByText("Cover Playground")).toBeDefined();
+      expect(list().getByText("Shader Playground")).toBeDefined();
       expect(list().queryByText("Dark theme")).toBeNull();
     });
   });
@@ -409,7 +409,7 @@ describe("CommandPalette", () => {
       expect(list().getByText("This Article")).toBeDefined();
       expect(list().getByText("Dark theme")).toBeDefined();
       expect(list().getByText("Publish article")).toBeDefined();
-      // The same pair the cover and the grid get, worded identically.
+      // The same pair the preset and the grid get, worded identically.
       expect(list().getByText("Save changes")).toBeDefined();
       expect(list().getByText("Discard changes and exit")).toBeDefined();
       expect(list().queryByText("Save changes and exit")).toBeNull();
@@ -555,15 +555,15 @@ describe("CommandPalette", () => {
     });
   });
 
-  describe("Cover Playground", () => {
+  describe("Shader Playground", () => {
     it("routes to the playground and closes the palette", () => {
       render(<CommandPalette />);
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByText("Cover Playground"));
+      fireEvent.click(screen.getByText("Shader Playground"));
 
-      expect(mockPush).toHaveBeenCalledWith("/playground/cover");
+      expect(mockPush).toHaveBeenCalledWith("/playground/shader");
       expect(dialog.close).toHaveBeenCalledOnce();
     });
   });
@@ -581,7 +581,7 @@ describe("CommandPalette", () => {
     it("offers the playground from a page that is merely being read", () => {
       mockPathname.mockReturnValue("/writing/my-post");
       render(<CommandPalette />);
-      expect(list().getByText("Cover Playground")).toBeDefined();
+      expect(list().getByText("Shader Playground")).toBeDefined();
     });
 
     it("withholds it while a document is being edited", () => {
@@ -589,7 +589,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playground")).toBeNull();
-      expect(list().queryByText("Cover Playground")).toBeNull();
+      expect(list().queryByText("Shader Playground")).toBeNull();
     });
 
     it("withholds it while the grid is being edited", () => {
@@ -597,7 +597,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playground")).toBeNull();
-      expect(list().queryByText("Cover Playground")).toBeNull();
+      expect(list().queryByText("Shader Playground")).toBeNull();
     });
 
     // Settings is not a destination — it changes the page you are on rather
@@ -609,9 +609,9 @@ describe("CommandPalette", () => {
     });
   });
 
-  describe("This Cover — the playground's own exits", () => {
+  describe("This Preset — the playground's own exits", () => {
     beforeEach(() => {
-      mockPathname.mockReturnValue("/playground/cover");
+      mockPathname.mockReturnValue("/playground/shader");
       mockUseSession.mockReturnValue({
         data: { user: { id: "admin-id", email: "admin@example.com" } },
       });
@@ -625,7 +625,7 @@ describe("CommandPalette", () => {
     it("offers save in place and discard-and-exit", () => {
       render(<CommandPalette />);
 
-      expect(list().getByText("This Cover")).toBeDefined();
+      expect(list().getByText("This Preset")).toBeDefined();
       expect(list().getByText("Save changes")).toBeDefined();
       expect(list().getByText("Discard changes and exit")).toBeDefined();
       expect(list().queryByText("Save changes and exit")).toBeNull();
@@ -638,7 +638,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playground")).toBeNull();
-      expect(list().queryByText("Cover Playground")).toBeNull();
+      expect(list().queryByText("Shader Playground")).toBeNull();
     });
 
     // The chip has to sit on the command the key actually runs, written with
@@ -651,36 +651,36 @@ describe("CommandPalette", () => {
       expect(save?.textContent).toContain("⌘S");
     });
 
-    // The whole group is an admin affordance: a visitor can tune a cover all
+    // The whole group is an admin affordance: a visitor can tune a preset all
     // they like, but there is nothing for them to save it to.
     it("is not offered logged out", () => {
       mockUseSession.mockReturnValue({ data: null });
       render(<CommandPalette />);
 
-      expect(list().queryByText("This Cover")).toBeNull();
+      expect(list().queryByText("This Preset")).toBeNull();
       expect(list().queryByText("Save changes")).toBeNull();
       expect(list().queryByText("Discard changes and exit")).toBeNull();
       // The way IN stays hidden too, and for a different reason: that rule is
       // about the ROUTE, not the session — a visitor standing on the
       // playground has no more use for a command to the playground than the
       // author does.
-      expect(list().queryByText("Cover Playground")).toBeNull();
+      expect(list().queryByText("Shader Playground")).toBeNull();
     });
 
     it("is not offered on any other page", () => {
       mockPathname.mockReturnValue("/writing/my-post");
       render(<CommandPalette />);
 
-      expect(screen.queryByText("This Cover")).toBeNull();
+      expect(screen.queryByText("This Preset")).toBeNull();
     });
 
-    // A saved cover is reopened by id, so the group has to be offered on that
+    // A saved preset is reopened by id, so the group has to be offered on that
     // route too — and it is the route where Save UPDATES rather than creates.
-    it("is offered on a saved cover's own route", () => {
-      mockPathname.mockReturnValue("/playground/cover/cover-1");
+    it("is offered on a saved preset's own route", () => {
+      mockPathname.mockReturnValue("/playground/shader/preset-1");
       render(<CommandPalette />);
 
-      expect(screen.getByText("This Cover")).toBeDefined();
+      expect(screen.getByText("This Preset")).toBeDefined();
     });
   });
 
@@ -783,7 +783,7 @@ describe("CommandPalette — Navigate", () => {
     expect(list().getByText("Exit editor")).toBeDefined();
 
     cleanup();
-    mockPathname.mockReturnValue("/playground/cover");
+    mockPathname.mockReturnValue("/playground/shader");
     render(<CommandPalette />);
     expect(list().getByText("Exit editor")).toBeDefined();
   });
@@ -799,8 +799,8 @@ describe("CommandPalette — Navigate", () => {
   // It used to need excepting from edit mode to keep this; out of `/edit` it
   // simply is not in edit mode. The assertion stays either way — what it is
   // guarding is that the playground has a way back, not how it earns one.
-  it("keeps the cover playground's way out", () => {
-    mockPathname.mockReturnValue("/playground/cover");
+  it("keeps the shader playground's way out", () => {
+    mockPathname.mockReturnValue("/playground/shader");
     render(<CommandPalette />);
 
     expect(list().getByText("Exit editor")).toBeDefined();

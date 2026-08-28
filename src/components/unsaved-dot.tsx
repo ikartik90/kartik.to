@@ -6,7 +6,7 @@ import { css, cx } from "../../styled-system/css";
 // The unsaved-work mark: a 2.5px brand dot hung off the control it belongs to.
 //
 // Global because there are two of them now — the aspect rail marks a SHAPE
-// whose framing has moved, and the presets strip marks a COVER holding edits
+// whose framing has moved, and the presets strip marks a PRESET holding edits
 // that have not been written. They are the same claim about different nouns, so
 // what a dot IS lives here and only WHERE it hangs is the consumer's.
 //

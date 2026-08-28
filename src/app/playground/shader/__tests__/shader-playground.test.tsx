@@ -15,9 +15,9 @@ import type { Mock } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
 import {
   FRAMING_DEFAULTS,
-  coverContentFor,
+  shaderPresetContentFor,
   shaderParamsFor,
-} from "@/domain/cover";
+} from "@/domain/shader-preset";
 import type { ThemeMode } from "@/store/theme";
 
 // Every shader the playground can mount, stubbed. They all end in a
@@ -32,7 +32,7 @@ vi.mock("@paper-design/shaders-react", () => ({
 }));
 
 // Renders a MARKER rather than nothing, because what the mounted shader is
-// handed is now a question worth asking: a cover holds a colour per ground and
+// handed is now a question worth asking: a preset holds a colour per ground and
 // the card resolves the pair, so "which colours reached the canvas" is the only
 // honest way to test which ground the card is standing on. It stays out of the
 // server's markup either way — the stage is behind the page's `ready` gate.
@@ -46,14 +46,14 @@ vi.mock("@/components/shaders/cosmic-track", () => ({
 // validates DATABASE_URL at import time and throws in a run with no `.env`. The
 // session is stubbed alongside it: signed OUT by default, which is what a
 // visitor to this public playground is.
-vi.mock("@/app/actions/cover", () => ({
-  getCovers: vi.fn().mockResolvedValue([]),
-  getCover: vi.fn(),
-  createCover: vi.fn(),
-  saveCover: vi.fn(),
-  deleteCover: vi.fn(),
-  publishCover: vi.fn(),
-  unpublishCover: vi.fn(),
+vi.mock("@/app/actions/shader-preset", () => ({
+  getShaderPresets: vi.fn().mockResolvedValue([]),
+  getShaderPreset: vi.fn(),
+  createShaderPreset: vi.fn(),
+  saveShaderPreset: vi.fn(),
+  deleteShaderPreset: vi.fn(),
+  publishShaderPreset: vi.fn(),
+  unpublishShaderPreset: vi.fn(),
 }));
 
 const mockUseSession = vi.fn().mockReturnValue({ data: null });
@@ -82,10 +82,10 @@ Object.defineProperty(window, "matchMedia", {
   value: vi.fn(() => ({ matches: false })),
 });
 
-const { CoverPlayground } = await import("../cover-playground");
-const { useCoverDraftStore } = await import("@/store/cover-draft");
-const { getCovers, publishCover, unpublishCover, deleteCover } = await import(
-  "@/app/actions/cover"
+const { ShaderPlayground } = await import("../shader-playground");
+const { useShaderPresetDraftStore } = await import("@/store/shader-preset-draft");
+const { getShaderPresets, publishShaderPreset, unpublishShaderPreset, deleteShaderPreset } = await import(
+  "@/app/actions/shader-preset"
 );
 
 /** Signed in as the author, and signed out as anybody else. */
@@ -96,46 +96,46 @@ const signedOut = () => mockUseSession.mockReturnValue({ data: null });
 /**
  * Render the bare route and wait for it to settle.
  *
- * The page draws neither the cover nor the properties rail until the library
+ * The page draws neither the preset nor the properties rail until the library
  * read lands — until then the draft is holding the control table's first
- * shader, and a rail of those numbers describes a cover nobody published (see
+ * shader, and a rail of those numbers describes a preset nobody published (see
  * the preloader block). So a test that reaches for a control has to let that
  * answer arrive first, exactly as a reader does.
  */
 async function renderReady() {
-  const result = render(<CoverPlayground />);
+  const result = render(<ShaderPlayground />);
   await screen.findByRole("complementary", { name: "Properties" });
   return result;
 }
 
 // Parsed, not authored: `defaultState` is the spec table's shape (one colour
-// per stop) and a cover's is the schema's (a light/dark pair each). Going
-// through `coverContentFor` is what makes the fixture the thing the panel
+// per stop) and a preset's is the schema's (a light/dark pair each). Going
+// through `shaderPresetContentFor` is what makes the fixture the thing the panel
 // actually receives.
 const SETTINGS = {
-  ...coverContentFor("cosmicTrack").settings,
+  ...shaderPresetContentFor("cosmicTrack").settings,
   framing: {},
 };
 
-/** A saved cover this route was opened on, still the author's alone. */
-const savedCover = {
-  id: "cover-1",
+/** A saved preset this route was opened on, still the author's alone. */
+const savedShaderPreset = {
+  id: "preset-1",
   title: "Dusk",
   shaderId: "cosmicTrack" as const,
   settings: SETTINGS,
   publishedAt: null,
 };
 
-/** One row as `getCovers` hands it over — published, which is the only kind a visitor is given. */
-const publishedCover = {
-  ...savedCover,
+/** One row as `getShaderPresets` hands it over — published, which is the only kind a visitor is given. */
+const publishedShaderPreset = {
+  ...savedShaderPreset,
   untitledIndex: null,
   publishedAt: new Date("2026-01-01"),
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
 };
 
-describe("CoverPlayground theme toggle", () => {
+describe("ShaderPlayground theme toggle", () => {
   beforeEach(() => {
     mockMode.mockReturnValue("dark");
     mockSetMode.mockClear();
@@ -187,7 +187,7 @@ describe("CoverPlayground theme toggle", () => {
 // rail again, and it does that by nothing outside that media query ever
 // reading `data-dismissed`.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground bottom sheet", () => {
+describe("ShaderPlayground bottom sheet", () => {
   afterEach(cleanup);
 
   const panel = () => screen.getByRole("complementary", { name: "Properties" });
@@ -244,19 +244,19 @@ describe("CoverPlayground bottom sheet", () => {
 // the store's to decide, not the label's. So what is worth asserting here is
 // which of the two the button actually lands on.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground reset control", () => {
-  beforeEach(() => useCoverDraftStore.getState().reset());
+describe("ShaderPlayground reset control", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
   // Opened THROUGH THE ROUTE'S PROP, which is how a preset actually arrives:
   // the page seeds the draft from it on mount, and would reset a draft seeded
   // any other way straight back to blank.
   const saved = {
-    id: "cover-1",
+    id: "preset-1",
     title: "Dusk",
     shaderId: "cosmicTrack" as const,
     settings: {
-      ...coverContentFor("cosmicTrack").settings,
+      ...shaderPresetContentFor("cosmicTrack").settings,
       params: {
         ...defaultState(SHADER_SPECS.cosmicTrack).params,
         rampLength: 4,
@@ -282,12 +282,12 @@ describe("CoverPlayground reset control", () => {
   // header button and the rule behind it are tested as one thing.
   it("puts the params back to the preset's, not the table's", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground cover={saved} />);
+    render(<ShaderPlayground preset={saved} />);
 
-    act(() => useCoverDraftStore.getState().setParam("rampLength", 9));
+    act(() => useShaderPresetDraftStore.getState().setParam("rampLength", 9));
     await user.click(resetButton());
 
-    expect(useCoverDraftStore.getState().settings.params.rampLength).toBe(4);
+    expect(useShaderPresetDraftStore.getState().settings.params.rampLength).toBe(4);
   });
 
   // A preset's params belong to the shader it was authored on, so switching
@@ -295,13 +295,13 @@ describe("CoverPlayground reset control", () => {
   // rather than the popover: WHICH control picks the shader is not what this is
   // about.
   it("falls back to the new shader's defaults after a switch", () => {
-    render(<CoverPlayground cover={saved} />);
+    render(<ShaderPlayground preset={saved} />);
 
-    act(() => useCoverDraftStore.getState().selectShader("godRays"));
-    act(() => useCoverDraftStore.getState().setParam("density", 9));
+    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
+    act(() => useShaderPresetDraftStore.getState().setParam("density", 9));
     fireEvent.click(resetButton());
 
-    expect(useCoverDraftStore.getState().settings.params).toEqual(
+    expect(useShaderPresetDraftStore.getState().settings.params).toEqual(
       defaultState(SHADER_SPECS.godRays).params,
     );
   });
@@ -314,8 +314,8 @@ describe("CoverPlayground reset control", () => {
 // own timing controls here, which is not the same as them being shared: they
 // are that shader's uniforms, and only it has them.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground motion group", () => {
-  beforeEach(() => useCoverDraftStore.getState().reset());
+describe("ShaderPlayground motion group", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
   const motionGroup = () => screen.getByRole("group", { name: "Motion" });
@@ -349,8 +349,8 @@ describe("CoverPlayground motion group", () => {
 // first and the ramp is laid along it. What stays in Track is that geometry,
 // which the ramp is drawn on but does not decide.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground ramp group", () => {
-  beforeEach(() => useCoverDraftStore.getState().reset());
+describe("ShaderPlayground ramp group", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
   const labelsIn = (group: HTMLElement) =>
@@ -398,7 +398,7 @@ describe("CoverPlayground ramp group", () => {
 
   it("is absent for a shader that has none", async () => {
     await renderReady();
-    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
 
     expect(screen.queryByRole("group", { name: "Ramp" })).toBeNull();
   });
@@ -411,8 +411,8 @@ describe("CoverPlayground ramp group", () => {
 // three numbers that decide how the edge reads: how wide the line is, how
 // sharply the fill ends, and how far the line outlives the fill.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground edge group", () => {
-  beforeEach(() => useCoverDraftStore.getState().reset());
+describe("ShaderPlayground edge group", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
   const labelsIn = (group: HTMLElement) =>
@@ -448,7 +448,7 @@ describe("CoverPlayground edge group", () => {
 
   it("is absent for a shader that has none", async () => {
     await renderReady();
-    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
 
     expect(screen.queryByRole("group", { name: "Edge" })).toBeNull();
   });
@@ -461,8 +461,8 @@ describe("CoverPlayground edge group", () => {
 // matrix, and the cell size that matrix is sampled at. Scattered among the
 // geometry sliders, only their names said they were related.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground dither group", () => {
-  beforeEach(() => useCoverDraftStore.getState().reset());
+describe("ShaderPlayground dither group", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
   const labelsIn = (group: HTMLElement) =>
@@ -491,28 +491,28 @@ describe("CoverPlayground dither group", () => {
   // the same rule the Motion group follows.
   it("is absent for a shader that has none", async () => {
     await renderReady();
-    act(() => useCoverDraftStore.getState().selectShader("godRays"));
+    act(() => useShaderPresetDraftStore.getState().selectShader("godRays"));
 
     expect(screen.queryByRole("group", { name: "Dither" })).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// The aspect toolbar — the frame the cover is being designed against.
+// The aspect toolbar — the frame the preset is being designed against.
 //
-// A cover is SHAPELESS: nothing that embeds one reads this. It is a viewing
+// A preset is SHAPELESS: nothing that embeds one reads this. It is a viewing
 // frame for the author (does this fan still read on a banner?) and a note the
-// draft carries, so reopening the cover reopens the shape it was judged in.
+// draft carries, so reopening the preset reopens the shape it was judged in.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground aspect toolbar", () => {
-  beforeEach(() => useCoverDraftStore.getState().reset());
+describe("ShaderPlayground aspect toolbar", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
   const aspectRail = () =>
     screen.getByRole("toolbar", { name: "Preview aspect ratio" });
 
   // It rides in the gutter row rather than travelling with the picture: the
-  // frame is a property of the page, and it holds still while the cover
+  // frame is a property of the page, and it holds still while the preset
   // changes shape underneath it.
   it("stands in the gutter row, between the menu and the theme toggle", async () => {
     await renderReady();
@@ -538,7 +538,7 @@ describe("CoverPlayground aspect toolbar", () => {
     expect(order[2].contains(toggle)).toBe(true);
   });
 
-  // SQUARE, every time. A cover records no shape of its own any more — it is
+  // SQUARE, every time. A preset records no shape of its own any more — it is
   // framed for all of them — so there is nothing to reopen in, and the neutral
   // frame is the one that shows the composition rather than a crop of it.
   it("opens square", async () => {
@@ -550,7 +550,7 @@ describe("CoverPlayground aspect toolbar", () => {
     ).toBe("1:1");
   });
 
-  // The frame is a note on the cover, so it goes where the rest of the authored
+  // The frame is a note on the preset, so it goes where the rest of the authored
   // state goes — into the draft the palette saves.
   it("records the shape on the draft", async () => {
     const user = userEvent.setup();
@@ -558,8 +558,8 @@ describe("CoverPlayground aspect toolbar", () => {
 
     await user.click(screen.getByRole("button", { name: "4:3" }));
 
-    expect(useCoverDraftStore.getState().aspect).toBe("4/3");
-    expect(useCoverDraftStore.getState().isDirty).toBe(true);
+    expect(useShaderPresetDraftStore.getState().aspect).toBe("4/3");
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
   });
 
   // And it reshapes the preview, which is the point of the control: the same
@@ -567,33 +567,33 @@ describe("CoverPlayground aspect toolbar", () => {
   it("reshapes the preview to the chosen frame", async () => {
     const user = userEvent.setup();
     const { container } = await renderReady();
-    const cover = () =>
-      container.querySelector<HTMLElement>("[data-cover-stage]");
+    const preset = () =>
+      container.querySelector<HTMLElement>("[data-preset-stage]");
 
     // The card waits for the library read before it draws at all — see the
     // preloader. Until then there is no stage to measure.
-    await waitFor(() => expect(cover()).not.toBeNull());
-    expect(cover()?.style.getPropertyValue("--cover-w")).toBe("1");
-    expect(cover()?.style.getPropertyValue("--cover-h")).toBe("1");
+    await waitFor(() => expect(preset()).not.toBeNull());
+    expect(preset()?.style.getPropertyValue("--preset-w")).toBe("1");
+    expect(preset()?.style.getPropertyValue("--preset-h")).toBe("1");
 
     await user.click(screen.getByRole("button", { name: "16:9" }));
 
-    expect(cover()?.style.getPropertyValue("--cover-w")).toBe("16");
-    expect(cover()?.style.getPropertyValue("--cover-h")).toBe("9");
+    expect(preset()?.style.getPropertyValue("--preset-w")).toBe("16");
+    expect(preset()?.style.getPropertyValue("--preset-h")).toBe("9");
   });
 
-  // A saved cover reopens in the frame it was designed in, not in the default.
-  // A saved cover opens square too — it carries a placement for every shape and
+  // A saved preset reopens in the frame it was designed in, not in the default.
+  // A saved preset opens square too — it carries a placement for every shape and
   // names none of them as the one to reopen in.
-  it("opens a saved cover square as well", () => {
+  it("opens a saved preset square as well", () => {
     render(
-      <CoverPlayground
-        cover={{
-          id: "cover-1",
+      <ShaderPlayground
+        preset={{
+          id: "preset-1",
           title: "Dusk",
           shaderId: "swirl",
           settings: {
-            ...coverContentFor("swirl").settings,
+            ...shaderPresetContentFor("swirl").settings,
             framing: { "3/2": { ...FRAMING_DEFAULTS, scale: 2 } },
           },
           publishedAt: null,
@@ -627,10 +627,10 @@ describe("CoverPlayground aspect toolbar", () => {
 // written", and a visitor has nowhere to write it: for them it is a dot that
 // appears, never resolves, and points at a save they cannot reach.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground unsaved marks", () => {
+describe("ShaderPlayground unsaved marks", () => {
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
-    (getCovers as Mock).mockResolvedValue([]);
+    useShaderPresetDraftStore.getState().reset();
+    (getShaderPresets as Mock).mockResolvedValue([]);
   });
   afterEach(cleanup);
 
@@ -644,7 +644,7 @@ describe("CoverPlayground unsaved marks", () => {
     await renderReady();
 
     expect(railMarked()).toBe(false);
-    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", 30));
     expect(railMarked()).toBe(true);
   });
 
@@ -652,20 +652,20 @@ describe("CoverPlayground unsaved marks", () => {
     signedOut();
     await renderReady();
 
-    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
-    expect(useCoverDraftStore.getState().editedAspects).toContain("1/1");
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", 30));
+    expect(useShaderPresetDraftStore.getState().editedAspects).toContain("1/1");
     expect(railMarked()).toBe(false);
   });
 });
 
-describe("CoverPlayground delete", () => {
+describe("ShaderPlayground delete", () => {
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
+    useShaderPresetDraftStore.getState().reset();
     signedIn();
-    (getCovers as Mock).mockResolvedValue([]);
-    (deleteCover as Mock).mockReset();
-    (deleteCover as Mock).mockResolvedValue(undefined);
-    window.history.replaceState(null, "", "/playground/cover/cover-1");
+    (getShaderPresets as Mock).mockResolvedValue([]);
+    (deleteShaderPreset as Mock).mockReset();
+    (deleteShaderPreset as Mock).mockResolvedValue(undefined);
+    window.history.replaceState(null, "", "/playground/shader/preset-1");
 
     // jsdom ships no `<dialog>` behaviour. The same stub the palette's tests
     // use: `open` is what the confirm's own effect and every query key off.
@@ -701,7 +701,7 @@ describe("CoverPlayground delete", () => {
       ?.hasAttribute("open");
 
   it("offers Delete on a saved preset with nothing left to reset", async () => {
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await waitFor(() => expect(deleteButton()).not.toBeNull());
     expect(reset()).toBeNull();
@@ -710,10 +710,10 @@ describe("CoverPlayground delete", () => {
   // The moment there is work to undo, the slot goes back to being Reset —
   // which is what makes the swap safe to press blind.
   it("goes back to Reset the moment the draft is edited", async () => {
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
     await waitFor(() => expect(deleteButton()).not.toBeNull());
 
-    act(() => useCoverDraftStore.getState().setParam("rampLength", 4));
+    act(() => useShaderPresetDraftStore.getState().setParam("rampLength", 4));
 
     expect(reset()).not.toBeNull();
     expect(deleteButton()).toBeNull();
@@ -724,7 +724,7 @@ describe("CoverPlayground delete", () => {
   it("keeps Reset on a draft that has never been saved", async () => {
     await renderReady();
 
-    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
     expect(reset()).not.toBeNull();
     expect(deleteButton()).toBeNull();
   });
@@ -732,55 +732,55 @@ describe("CoverPlayground delete", () => {
   // A visitor cannot delete, and the server refuses them a second time.
   it("withholds Delete from a visitor", async () => {
     signedOut();
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
-    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
     expect(deleteButton()).toBeNull();
     expect(reset()).not.toBeNull();
   });
 
   it("asks before deleting, and deletes nothing until it is answered", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
 
     expect(asking()).toBe(true);
-    expect(deleteCover).not.toHaveBeenCalled();
+    expect(deleteShaderPreset).not.toHaveBeenCalled();
   });
 
-  // Deleting is a deliberate "I do not want this", so the cover does not stay
+  // Deleting is a deliberate "I do not want this", so the preset does not stay
   // on screen: the draft goes back to blank and the URL stops naming a row that
   // no longer exists.
   it("removes the preset and returns to a blank draft", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
-    await waitFor(() => expect(deleteCover).toHaveBeenCalledWith("cover-1"));
+    await waitFor(() => expect(deleteShaderPreset).toHaveBeenCalledWith("preset-1"));
     await waitFor(() =>
-      expect(useCoverDraftStore.getState().coverId).toBeNull(),
+      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBeNull(),
     );
-    expect(window.location.pathname).toBe("/playground/cover");
+    expect(window.location.pathname).toBe("/playground/shader");
   });
 
   it("stays put when the question is declined", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(deleteCover).not.toHaveBeenCalled();
-    expect(useCoverDraftStore.getState().coverId).toBe("cover-1");
+    expect(deleteShaderPreset).not.toHaveBeenCalled();
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("preset-1");
   });
 
   // A failed delete must not look like a successful one: the row is still
@@ -788,49 +788,49 @@ describe("CoverPlayground delete", () => {
   it("leaves the draft alone when the delete fails", async () => {
     const user = userEvent.setup();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    (deleteCover as Mock).mockRejectedValue(new Error("no"));
-    render(<CoverPlayground cover={savedCover} />);
+    (deleteShaderPreset as Mock).mockRejectedValue(new Error("no"));
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
-    await waitFor(() => expect(deleteCover).toHaveBeenCalled());
-    expect(useCoverDraftStore.getState().coverId).toBe("cover-1");
-    expect(window.location.pathname).toBe("/playground/cover/cover-1");
+    await waitFor(() => expect(deleteShaderPreset).toHaveBeenCalled());
+    expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("preset-1");
+    expect(window.location.pathname).toBe("/playground/shader/preset-1");
   });
 });
 
 // ---------------------------------------------------------------------------
-// The wait before the cover is drawn.
+// The wait before the preset is drawn.
 //
-// A cover opened by ROUTE is settled before this component renders. The bare
+// A preset opened by ROUTE is settled before this component renders. The bare
 // route is the one that waits: a visitor arriving there is taken to the newest
-// published cover once the strip has read the library, and until that read
-// lands the draft holds the control table's first shader — a cover nobody
+// published preset once the strip has read the library, and until that read
+// lands the draft holds the control table's first shader — a preset nobody
 // published, shown for a round trip and then swapped out underneath them.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground preloader", () => {
+describe("ShaderPlayground preloader", () => {
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
+    useShaderPresetDraftStore.getState().reset();
     signedOut();
-    (getCovers as Mock).mockResolvedValue([]);
+    (getShaderPresets as Mock).mockResolvedValue([]);
   });
   afterEach(cleanup);
 
-  const stage = () => document.querySelector("[data-cover-stage]");
+  const stage = () => document.querySelector("[data-preset-stage]");
   const panel = () =>
     screen.queryByRole("complementary", { name: "Properties" });
 
-  it("draws no cover until the library has been read", async () => {
+  it("draws no preset until the library has been read", async () => {
     let settle: (rows: unknown[]) => void = () => {};
-    (getCovers as Mock).mockReturnValue(
+    (getShaderPresets as Mock).mockReturnValue(
       new Promise((resolve) => {
         settle = resolve as (rows: unknown[]) => void;
       }),
     );
-    render(<CoverPlayground />);
+    render(<ShaderPlayground />);
 
     expect(stage()).toBeNull();
 
@@ -843,35 +843,35 @@ describe("CoverPlayground preloader", () => {
   // A library that cannot be read is an answer as much as an empty one is. A
   // page that waited forever for it would be worse than one that opens blank.
   it("gives up waiting when the library cannot be read", async () => {
-    (getCovers as Mock).mockRejectedValue(new Error("no"));
-    render(<CoverPlayground />);
+    (getShaderPresets as Mock).mockRejectedValue(new Error("no"));
+    render(<ShaderPlayground />);
 
     await waitFor(() => expect(stage()).not.toBeNull());
   });
 
-  // The route already handed the cover down, so there is nothing to wait for —
-  // and a preloader in front of a cover the server already fetched would be a
+  // The route already handed the preset down, so there is nothing to wait for —
+  // and a preloader in front of a preset the server already fetched would be a
   // wait invented for its own sake.
-  it("draws a routed cover straight away", () => {
-    render(<CoverPlayground cover={savedCover} />);
+  it("draws a routed preset straight away", () => {
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     expect(stage()).not.toBeNull();
   });
 
-  // The rail waits on the same answer the cover does. Every control on it
+  // The rail waits on the same answer the preset does. Every control on it
   // reads the DRAFT, and until the library lands the draft is holding the
   // control table's first shader — so a rail drawn now is a column of numbers
-  // describing a cover nobody published, which is then swapped out underneath
+  // describing a preset nobody published, which is then swapped out underneath
   // the reader a round trip later. Worse than a rail that is not there yet: a
   // reader who starts pushing those sliders loses the edit.
   it("holds the properties rail back until the library has been read", async () => {
     let settle: (rows: unknown[]) => void = () => {};
-    (getCovers as Mock).mockReturnValue(
+    (getShaderPresets as Mock).mockReturnValue(
       new Promise((resolve) => {
         settle = resolve as (rows: unknown[]) => void;
       }),
     );
-    render(<CoverPlayground />);
+    render(<ShaderPlayground />);
 
     expect(panel()).toBeNull();
 
@@ -882,14 +882,14 @@ describe("CoverPlayground preloader", () => {
   });
 
   it("gives up waiting on the rail too when the library cannot be read", async () => {
-    (getCovers as Mock).mockRejectedValue(new Error("no"));
-    render(<CoverPlayground />);
+    (getShaderPresets as Mock).mockRejectedValue(new Error("no"));
+    render(<ShaderPlayground />);
 
     await waitFor(() => expect(panel()).not.toBeNull());
   });
 
-  it("draws a routed cover's rail straight away", () => {
-    render(<CoverPlayground cover={savedCover} />);
+  it("draws a routed preset's rail straight away", () => {
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     expect(panel()).not.toBeNull();
   });
@@ -900,13 +900,13 @@ describe("CoverPlayground preloader", () => {
   // whatever the rail holds in that markup is on screen for the length of a
   // hydration — and on the server the draft has been seeded by nothing at all.
   // It is still on the control table's first shader, five colours deep, while
-  // the cover being opened has two. Drawing the rail there puts another cover's
+  // the preset being opened has two. Drawing the rail there puts another preset's
   // numbers on screen for as long as it takes the bundle to arrive, and no
   // effect — layout or otherwise — can pull them back, because none of them has
   // run yet.
   it("ships no rail in the server's markup, whose draft has been seeded by nothing", () => {
     const routed = {
-      ...savedCover,
+      ...savedShaderPreset,
       settings: {
         ...SETTINGS,
         colors: [
@@ -915,10 +915,10 @@ describe("CoverPlayground preloader", () => {
         ],
       },
     };
-    const html = renderToStaticMarkup(<CoverPlayground cover={routed} />);
+    const html = renderToStaticMarkup(<ShaderPlayground preset={routed} />);
 
     // Not the rail, and specifically not the numbers it would have been
-    // holding — the shader defaults, which belong to no cover anybody opened.
+    // holding — the shader defaults, which belong to no preset anybody opened.
     expect(html).not.toContain('aria-label="Properties"');
     for (const colour of SETTINGS.colors) {
       expect(html).not.toContain(colour.light.replace("#", "").slice(0, 6));
@@ -928,17 +928,17 @@ describe("CoverPlayground preloader", () => {
 
 // ---------------------------------------------------------------------------
 // Framing, per shape — the four placement controls kept one set per aspect
-// ratio, so a cover can be framed one way as a poster and another as a banner.
+// ratio, so a preset can be framed one way as a poster and another as a banner.
 //
 // Driven through the RAIL and the sliders rather than through the store, so the
 // panel and the rule behind it are tested as one thing. The rules themselves
-// are `@/domain/cover`'s and the store's own tests.
+// are `@/domain/shader-preset`'s and the store's own tests.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground framing", () => {
+describe("ShaderPlayground framing", () => {
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
+    useShaderPresetDraftStore.getState().reset();
     signedOut();
-    (getCovers as Mock).mockResolvedValue([]);
+    (getShaderPresets as Mock).mockResolvedValue([]);
   });
   afterEach(cleanup);
 
@@ -980,9 +980,9 @@ describe("CoverPlayground framing", () => {
     await renderReady();
     pick("16:9");
 
-    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", 30));
     pick("4:3");
-    act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", -90));
 
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe(
       "-90",
@@ -1001,7 +1001,7 @@ describe("CoverPlayground framing", () => {
     // leaves the card where it is.
     pick("4:3");
 
-    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", 30));
     flip("portrait");
 
     expect(screen.getByRole("group", { name: "Framing 3:4" })).toBeTruthy();
@@ -1013,9 +1013,9 @@ describe("CoverPlayground framing", () => {
     await renderReady();
     pick("4:3");
 
-    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", 30));
     flip("portrait");
-    act(() => useCoverDraftStore.getState().setFraming("rotation", -90));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", -90));
 
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe(
       "-90",
@@ -1029,7 +1029,7 @@ describe("CoverPlayground framing", () => {
     await renderReady();
 
     pick("16:9");
-    act(() => useCoverDraftStore.getState().setFraming("rotation", 30));
+    act(() => useShaderPresetDraftStore.getState().setFraming("rotation", 30));
     pick("4:3");
 
     expect(framingSlider("Rotation")?.getAttribute("aria-valuenow")).toBe("30");
@@ -1041,8 +1041,8 @@ describe("CoverPlayground framing", () => {
   it("hands the shader the placement of the shape on screen", async () => {
     await renderReady();
 
-    act(() => useCoverDraftStore.getState().setFraming("scale", 2));
-    const { settings, aspect } = useCoverDraftStore.getState();
+    act(() => useShaderPresetDraftStore.getState().setFraming("scale", 2));
+    const { settings, aspect } = useShaderPresetDraftStore.getState();
 
     expect(shaderParamsFor(settings, aspect).scale).toBe(2);
     expect("scale" in settings.params).toBe(false);
@@ -1050,18 +1050,18 @@ describe("CoverPlayground framing", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The presets strip — the saved covers, along the foot of the canvas.
+// The presets strip — the saved presets, along the foot of the canvas.
 //
-// PUBLIC. A visitor is shown the covers that have been published and can open
+// PUBLIC. A visitor is shown the presets that have been published and can open
 // any of them; what signing in adds is the add tile, which is the pane's own
 // business (see `presets-pane`). What this file owns is where the strip sits
 // and the band the picture gives up for it.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground presets", () => {
+describe("ShaderPlayground presets", () => {
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
+    useShaderPresetDraftStore.getState().reset();
     signedOut();
-    (getCovers as Mock).mockResolvedValue([]);
+    (getShaderPresets as Mock).mockResolvedValue([]);
   });
   afterEach(cleanup);
 
@@ -1070,7 +1070,7 @@ describe("CoverPlayground presets", () => {
   it("shows a visitor with nothing published no strip at all", async () => {
     await renderReady();
 
-    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
     expect(strip()).toBeNull();
   });
 
@@ -1086,7 +1086,7 @@ describe("CoverPlayground presets", () => {
   });
 
   it("gives a visitor the published library, in the same place", async () => {
-    (getCovers as Mock).mockResolvedValue([publishedCover]);
+    (getShaderPresets as Mock).mockResolvedValue([publishedShaderPreset]);
     const { container } = await renderReady();
 
     await waitFor(() => expect(strip()).not.toBeNull());
@@ -1094,7 +1094,7 @@ describe("CoverPlayground presets", () => {
   });
 
   // The picture gives up the band the strip stands in, the way it already gives
-  // up the gutter row: chrome must not cover the thing being judged.
+  // up the gutter row: chrome must not preset the thing being judged.
   //
   // Reserved off whether a strip was DRAWN rather than off the session, which
   // is what makes the visitor case work — the page reads `data-presets` on the
@@ -1104,7 +1104,7 @@ describe("CoverPlayground presets", () => {
     const { container } = await renderReady();
     const main = () => container.querySelector("main");
 
-    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
     expect(main()?.querySelector("[data-presets]")).toBeNull();
 
     cleanup();
@@ -1121,15 +1121,15 @@ describe("CoverPlayground presets", () => {
 
 // ---------------------------------------------------------------------------
 // What the author is shown on top of the playground everybody gets: the shader
-// picker, and the button that puts a cover on show.
+// picker, and the button that puts a preset on show.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground authoring controls", () => {
+describe("ShaderPlayground authoring controls", () => {
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
+    useShaderPresetDraftStore.getState().reset();
     signedOut();
-    (getCovers as Mock).mockResolvedValue([]);
-    (publishCover as Mock).mockReset();
-    (unpublishCover as Mock).mockReset();
+    (getShaderPresets as Mock).mockResolvedValue([]);
+    (publishShaderPreset as Mock).mockReset();
+    (unpublishShaderPreset as Mock).mockReset();
   });
   afterEach(cleanup);
 
@@ -1138,9 +1138,9 @@ describe("CoverPlayground authoring controls", () => {
   const unpublishButton = () =>
     screen.queryByRole("button", { name: "Unpublish" });
 
-  // A visitor came for the cover in front of them. A picker that swapped it for
-  // a bare shader would throw that cover away with nothing to get it back —
-  // while every control BELOW it acts on the cover they are looking at, which
+  // A visitor came for the preset in front of them. A picker that swapped it for
+  // a bare shader would throw that preset away with nothing to get it back —
+  // while every control BELOW it acts on the preset they are looking at, which
   // is the whole of what they can play with.
   it("withholds the shader picker from a visitor, and keeps its controls", async () => {
     await renderReady();
@@ -1158,9 +1158,9 @@ describe("CoverPlayground authoring controls", () => {
   });
 
   it("offers a visitor no way to publish", async () => {
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
-    await waitFor(() => expect(getCovers).toHaveBeenCalled());
+    await waitFor(() => expect(getShaderPresets).toHaveBeenCalled());
     expect(publishButton()).toBeNull();
     expect(unpublishButton()).toBeNull();
   });
@@ -1168,10 +1168,10 @@ describe("CoverPlayground authoring controls", () => {
   // In the panel's own header, beside the Reset/Delete slot: all of them act on
   // the saved row behind the panel rather than on the page you are looking at.
   // The slot reads Delete here rather than Reset, because a freshly opened
-  // cover has nothing left to reset — see the delete suite below.
+  // preset has nothing left to reset — see the delete suite below.
   it("stands beside the header's other control", async () => {
     signedIn();
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await waitFor(() => expect(publishButton()).not.toBeNull());
     const header = screen.getByText("Properties").parentElement;
@@ -1184,7 +1184,7 @@ describe("CoverPlayground authoring controls", () => {
   // Nothing has been written yet, so there is no row for "publish this" to
   // name. ⌘S is the one press that decides between creating a row and updating
   // one; a second control making that decision would be two doors to one room.
-  it("cannot publish a cover that has never been saved", async () => {
+  it("cannot publish a preset that has never been saved", async () => {
     signedIn();
     await renderReady();
 
@@ -1192,38 +1192,38 @@ describe("CoverPlayground authoring controls", () => {
     expect(publishButton()).toHaveProperty("disabled", true);
   });
 
-  it("publishes the saved cover, and turns into its own undo", async () => {
+  it("publishes the saved preset, and turns into its own undo", async () => {
     signedIn();
     const user = userEvent.setup();
-    (publishCover as Mock).mockResolvedValue({
+    (publishShaderPreset as Mock).mockResolvedValue({
       publishedAt: new Date("2026-02-01"),
     });
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(await screen.findByRole("button", { name: "Publish" }));
 
-    expect(publishCover).toHaveBeenCalledWith("cover-1");
+    expect(publishShaderPreset).toHaveBeenCalledWith("preset-1");
     // The row is the authority on its own state, so the button follows what
     // came back rather than a guess it made on the way out.
     await waitFor(() => expect(unpublishButton()).not.toBeNull());
-    expect(useCoverDraftStore.getState().publishedAt).toEqual(
+    expect(useShaderPresetDraftStore.getState().publishedAt).toEqual(
       new Date("2026-02-01"),
     );
   });
 
-  it("opens a published cover offering to take it back off", async () => {
+  it("opens a published preset offering to take it back off", async () => {
     signedIn();
     const user = userEvent.setup();
-    (unpublishCover as Mock).mockResolvedValue({ publishedAt: null });
+    (unpublishShaderPreset as Mock).mockResolvedValue({ publishedAt: null });
     render(
-      <CoverPlayground
-        cover={{ ...savedCover, publishedAt: new Date("2026-02-01") }}
+      <ShaderPlayground
+        preset={{ ...savedShaderPreset, publishedAt: new Date("2026-02-01") }}
       />,
     );
 
     await user.click(await screen.findByRole("button", { name: "Unpublish" }));
 
-    expect(unpublishCover).toHaveBeenCalledWith("cover-1");
+    expect(unpublishShaderPreset).toHaveBeenCalledWith("preset-1");
     await waitFor(() => expect(publishButton()).not.toBeNull());
   });
 
@@ -1233,43 +1233,43 @@ describe("CoverPlayground authoring controls", () => {
   it("does not dirty the draft", async () => {
     signedIn();
     const user = userEvent.setup();
-    (publishCover as Mock).mockResolvedValue({
+    (publishShaderPreset as Mock).mockResolvedValue({
       publishedAt: new Date("2026-02-01"),
     });
-    render(<CoverPlayground cover={savedCover} />);
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(await screen.findByRole("button", { name: "Publish" }));
 
     await waitFor(() => expect(unpublishButton()).not.toBeNull());
-    expect(useCoverDraftStore.getState().isDirty).toBe(false);
+    expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
   });
 
   // A failed write must not look like a successful one: the strip would go on
-  // showing the cover to nobody while the panel claimed it was out.
+  // showing the preset to nobody while the panel claimed it was out.
   it("leaves the button saying what is still true when the write fails", async () => {
     signedIn();
     const user = userEvent.setup();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    (publishCover as Mock).mockRejectedValue(new Error("no"));
-    render(<CoverPlayground cover={savedCover} />);
+    (publishShaderPreset as Mock).mockRejectedValue(new Error("no"));
+    render(<ShaderPlayground preset={savedShaderPreset} />);
 
     await user.click(await screen.findByRole("button", { name: "Publish" }));
 
-    await waitFor(() => expect(publishCover).toHaveBeenCalled());
+    await waitFor(() => expect(publishShaderPreset).toHaveBeenCalled());
     expect(publishButton()).not.toBeNull();
-    expect(useCoverDraftStore.getState().publishedAt).toBeNull();
+    expect(useShaderPresetDraftStore.getState().publishedAt).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Which GROUND the card is standing on. A cover holds a colour per theme, so
+// Which GROUND the card is standing on. A preset holds a colour per theme, so
 // the page has to choose one — and the choice belongs to the CARD alone: the
 // rail, the strip and the site's own toggle stay where the visitor put them.
 // ---------------------------------------------------------------------------
-describe("CoverPlayground ground", () => {
-  /** A cover whose two grounds are unmistakably different. */
+describe("ShaderPlayground ground", () => {
+  /** A preset whose two grounds are unmistakably different. */
   const twoToned = {
-    ...savedCover,
+    ...savedShaderPreset,
     settings: {
       ...SETTINGS,
       colors: [
@@ -1287,18 +1287,18 @@ describe("CoverPlayground ground", () => {
       name: /Show the (light|dark) colours/,
     });
 
-  // The draft survives a test, so a cover handed in as a prop is only adopted
+  // The draft survives a test, so a preset handed in as a prop is only adopted
   // by a store that has been put back to blank first — the same reset every
   // other block that opens through the route uses.
   beforeEach(() => {
-    useCoverDraftStore.getState().reset();
+    useShaderPresetDraftStore.getState().reset();
     mockMode.mockReturnValue("dark");
     mockSetMode.mockClear();
   });
   afterEach(cleanup);
 
   it("opens on the site's own theme, not on a fixed one", async () => {
-    render(<CoverPlayground cover={twoToned} />);
+    render(<ShaderPlayground preset={twoToned} />);
     await screen.findByRole("complementary", { name: "Properties" });
 
     expect(stageColors()).toBe("#111111FF,#222222FF");
@@ -1306,18 +1306,18 @@ describe("CoverPlayground ground", () => {
 
   it("follows the site when the site is light instead", async () => {
     mockMode.mockReturnValue("light");
-    render(<CoverPlayground cover={twoToned} />);
+    render(<ShaderPlayground preset={twoToned} />);
     await screen.findByRole("complementary", { name: "Properties" });
 
     expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
   });
 
-  // The whole point of the control: judge the cover on the other ground WITHOUT
+  // The whole point of the control: judge the preset on the other ground WITHOUT
   // taking the page there. Asserted against the site's theme store, which is
   // what the page's own toggle writes to.
   it("sends the card to the other ground and the site nowhere", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground cover={twoToned} />);
+    render(<ShaderPlayground preset={twoToned} />);
     await screen.findByRole("complementary", { name: "Properties" });
 
     await user.click(groundToggle());
@@ -1329,7 +1329,7 @@ describe("CoverPlayground ground", () => {
   // The glyph names where pressing it GOES, so it is the ground you are not on.
   it("shows the glyph of the ground it would take you to", async () => {
     const user = userEvent.setup();
-    render(<CoverPlayground cover={twoToned} />);
+    render(<ShaderPlayground preset={twoToned} />);
     await screen.findByRole("complementary", { name: "Properties" });
 
     expect(
@@ -1345,17 +1345,17 @@ describe("CoverPlayground ground", () => {
   // otherwise switching, tuning and switching back would have quietly retuned
   // the theme you never saw.
   it("writes an edit to the ground on screen and no other", async () => {
-    render(<CoverPlayground cover={twoToned} />);
+    render(<ShaderPlayground preset={twoToned} />);
     await screen.findByRole("complementary", { name: "Properties" });
 
     act(() =>
-      useCoverDraftStore.getState().setColors([
+      useShaderPresetDraftStore.getState().setColors([
         { light: "#AAAAAAFF", dark: "#999999FF" },
         { light: "#BBBBBBFF", dark: "#222222FF" },
       ]),
     );
 
-    const colors = useCoverDraftStore.getState().settings.colors;
+    const colors = useShaderPresetDraftStore.getState().settings.colors;
     expect(colors[0]).toEqual({ light: "#AAAAAAFF", dark: "#999999FF" });
   });
 });

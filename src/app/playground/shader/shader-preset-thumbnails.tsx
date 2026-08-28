@@ -6,24 +6,24 @@ import { SHADER_SPECS } from "@/data/shader-specs";
 import {
   paletteFor,
   shaderParamsFor,
-  type Cover,
-  type CoverContent,
-  type CoverTheme,
-} from "@/domain/cover";
+  type ShaderPreset,
+  type ShaderPresetContent,
+  type ShaderPresetTheme,
+} from "@/domain/shader-preset";
 import { ShaderStage } from "./shader-stage";
 
 // ---------------------------------------------------------------------------
-// Pictures of saved covers, drawn once each and kept.
+// Pictures of saved presets, drawn once each and kept.
 //
 // The strip has to show what a preset ACTUALLY looks like, and it cannot do
 // that by mounting one: every paper-shaders mount holds its own webgl2 context,
 // the library pools nothing, `dispose()` does not call `loseContext`, and there
-// is no `webglcontextlost` handler anywhere — so a strip of live covers would
+// is no `webglcontextlost` handler anywhere — so a strip of live presets would
 // spend a context per tile and go permanently blank somewhere around the
 // browser's sixteen, taking the playground's own preview down with it (the
 // oldest context is the one a browser drops).
 //
-// So exactly ONE cover is mounted at a time, off-screen, and photographed:
+// So exactly ONE preset is mounted at a time, off-screen, and photographed:
 // render it, read the canvas out as a PNG, move on to the next. The tiles show
 // the photographs, which cost nothing to keep on screen.
 //
@@ -32,7 +32,7 @@ import { ShaderStage } from "./shader-stage";
 //   • The queue is grouped by SHADER. The React wrapper creates its mount in an
 //     effect keyed on `fragmentShader` and updates everything else through
 //     `setUniforms`, so consecutive presets that share a shader reuse one
-//     context. A library of forty covers over six shaders costs six.
+//     context. A library of forty presets over six shaders costs six.
 //   • The renderer UNMOUNTS itself when the queue is empty, so the strip holds
 //     no context at rest.
 //
@@ -40,8 +40,8 @@ import { ShaderStage } from "./shader-stage";
 // buffer is cleared on composite and `toDataURL` returns an empty picture.
 // ---------------------------------------------------------------------------
 
-/** A saved cover as the action hands it over: the row, with its blob parsed. */
-type Preset = Cover & CoverContent;
+/** A saved preset as the action hands it over: the row, with its blob parsed. */
+type Preset = ShaderPreset & ShaderPresetContent;
 
 /**
  * A picture is of a preset AT AN EDIT, not of a preset — retuning one leaves the
@@ -50,10 +50,10 @@ type Preset = Cover & CoverContent;
  */
 export function thumbnailKey(
   preset: Preset,
-  theme: CoverTheme = "light",
+  theme: ShaderPresetTheme = "light",
 ): string {
   // The THEME is part of the identity of a picture, not merely of the request
-  // for one. A cover holds a colour per ground, so the same preset at the same
+  // for one. A preset holds a colour per ground, so the same preset at the same
   // `updatedAt` is two different photographs — and without this the strip would
   // keep showing the light one after the site went dark, with nothing to
   // invalidate it but an edit.
@@ -70,7 +70,7 @@ export function thumbnailKey(
 export function captureOrder(
   presets: Preset[],
   captured: ReadonlySet<string>,
-  theme: CoverTheme = "light",
+  theme: ShaderPresetTheme = "light",
 ): Preset[] {
   const pending = presets.filter(
     (preset) => !captured.has(thumbnailKey(preset, theme)),
@@ -85,7 +85,7 @@ export function captureOrder(
 }
 
 // Survives the component, which is the point: the strip re-reads its list every
-// time the draft opens a different cover, and re-photographing the whole library
+// time the draft opens a different preset, and re-photographing the whole library
 // on each of those would be the expensive half of this feature happening over
 // and over. Pruned against the current list on every pass, so an edited preset's
 // old picture does not sit here for the rest of the session.
@@ -134,7 +134,7 @@ const TILE_PX = 80;
  * at `max(devicePixelRatio, 2)` whenever the screen changes, so it is always
  * exactly 1:1; a photograph is taken once, on whatever screen happened to be
  * there, and shown on whatever screen comes later. Taken at 2 it is UPSCALED on
- * a 3× display — soft, in a strip whose whole job is showing what a cover
+ * a 3× display — soft, in a strip whose whole job is showing what a preset
  * actually looks like. Taken at 3 the worst case is a downscale, which is
  * supersampling and looks better than the alternative.
  *
@@ -152,23 +152,23 @@ const THUMBNAIL_PIXELS = THUMBNAIL_SIZE * THUMBNAIL_SIZE;
  * The first draw is a `requestAnimationFrame` behind an async uniform pass, and
  * the canvas has to have been sized by a ResizeObserver before there is anything
  * to read — so the capture is a poll rather than a timeout. Half a second is far
- * more than either takes; running out means something is wrong with this cover
+ * more than either takes; running out means something is wrong with this preset
  * in particular, and the tile keeps its colour swatch.
  */
 const CAPTURE_FRAMES = 30;
 
-export interface CoverThumbnailsProps {
+export interface ShaderPresetThumbnailsProps {
   presets: Preset[];
   onCaptured: (key: string, dataUrl: string) => void;
   /** Which ground to photograph on — the strip's, which is the page's. */
-  theme: CoverTheme;
+  theme: ShaderPresetTheme;
 }
 
-export function CoverThumbnails({
+export function ShaderPresetThumbnails({
   presets,
   onCaptured,
   theme,
-}: CoverThumbnailsProps) {
+}: ShaderPresetThumbnailsProps) {
   // Where the queue was up to. An index rather than a shrinking list, so a
   // capture that fails cannot leave its preset at the head of the queue forever.
   const [index, setIndex] = useState(0);
@@ -176,7 +176,7 @@ export function CoverThumbnails({
   // The picture taken for the preset BEFORE this one, which is the only thing a
   // too-early read could return: a reused mount keeps its last frame (that is
   // what `preserveDrawingBuffer` is for), so a capture that beat the redraw
-  // would quietly photograph the wrong cover. Two presets that genuinely look
+  // would quietly photograph the wrong preset. Two presets that genuinely look
   // identical cost this one the rest of its frame budget and are then accepted.
   const lastCapture = useRef<string | null>(null);
 
@@ -256,10 +256,10 @@ export function CoverThumbnails({
     <div ref={hostRef} className={rendererStyle} aria-hidden>
       <ShaderStage
         spec={spec}
-        // A still, whatever the cover was saved at: the tile is a photograph,
+        // A still, whatever the preset was saved at: the tile is a photograph,
         // and an animating one would be a rAF per frame spent on a picture
         // nobody is watching. Zero also stops the library's loop outright.
-        // Framed for the SQUARE, because the tile is one. A cover holds a
+        // Framed for the SQUARE, because the tile is one. A preset holds a
         // placement per shape and names none of them as its own, so the shape
         // the picture is drawn in is what picks — and that is this 80px square.
         params={{ ...shaderParamsFor(current.settings, "1/1"), speed: 0 }}

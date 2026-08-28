@@ -41,7 +41,7 @@ body {
    of its own and would otherwise lie over the very thing it is inspecting.
    `usePropertiesPanelInset` marks the body for as long as one is up — from
    anywhere: the collection's media inspector, the grid's card inspector, the
-   cover playground's rail — and this is what the mark means. One rule, so the
+   shader playground's rail — and this is what the mark means. One rule, so the
    three cannot reserve the width three slightly different ways.
 
    Structural, and so unlayered with the rest of this section: it is the page's

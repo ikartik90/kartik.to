@@ -3,12 +3,12 @@
 // is brought into them.
 //
 // A module of its own because there are three surfaces that turn a shader and
-// they must not disagree: the cover playground's Framing group, the background
-// effect on a media node, and the media properties panel that edits it. A cover
+// they must not disagree: the shader playground's Framing group, the background
+// effect on a media node, and the media properties panel that edits it. A preset
 // tuned in the playground is meant to be reused as a background elsewhere, so a
 // rotation that read -90 in one place and 270 in another would be the same
 // picture described two ways — and the panel offering a different set of stops
-// from the playground would make a cover unreachable in the surface it was
+// from the playground would make a preset unreachable in the surface it was
 // built for.
 //
 // This is the same call `demo-frame-sizing.ts` makes for aspect ratios, and for

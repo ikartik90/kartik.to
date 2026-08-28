@@ -4,17 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { auth } from "@/lib/auth/server";
 import {
-  CoverContentSchema,
-  type Cover,
-  type CoverContent,
-} from "@/domain/cover";
+  ShaderPresetContentSchema,
+  type ShaderPreset,
+  type ShaderPresetContent,
+} from "@/domain/shader-preset";
 import type { ShaderId } from "@/data/shader-specs";
 
 // ---------------------------------------------------------------------------
-// Mutations for saved covers — the shader backgrounds authored in the
+// Mutations for saved presets — the shader backgrounds authored in the
 // playground and reused wherever a surface wants a ground.
 //
-// Every write goes through `CoverContentSchema` rather than trusting the
+// Every write goes through `ShaderPresetContentSchema` rather than trusting the
 // caller's object. These actions are a public HTTP surface, not an internal
 // function call, so "the playground only ever sends valid params" is not a
 // guarantee this layer is allowed to make on its own — and the schema is also
@@ -25,7 +25,7 @@ import type { ShaderId } from "@/data/shader-specs";
 // READING is public and WRITING is the author's, which is a split the file used
 // to not have: every action required the admin session, so the playground's
 // preset strip was the author's alone. A visitor can now walk into the
-// playground and take up a saved cover — but only one that has been PUBLISHED,
+// playground and take up a saved preset — but only one that has been PUBLISHED,
 // which is `publishedAt`'s whole job. The gate is here rather than in the
 // components that draw the strip: a component decides what to draw, and this is
 // the layer that decides what may be seen.
@@ -50,7 +50,7 @@ async function requireAdmin(): Promise<void> {
 }
 
 /** The row as the app holds it, with the blob parsed back into content. */
-function parseCover(row: {
+function parseShaderPreset(row: {
   id: string;
   title: string | null;
   untitledIndex: number | null;
@@ -59,8 +59,8 @@ function parseCover(row: {
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-}): Cover & CoverContent {
-  const content = CoverContentSchema.parse({
+}): ShaderPreset & ShaderPresetContent {
+  const content = ShaderPresetContentSchema.parse({
     shaderId: row.shaderId,
     settings: row.settings,
   });
@@ -78,36 +78,36 @@ function parseCover(row: {
  * make a preset jump to the front of the row every time you pressed ⌘S while
  * editing it — the row reshuffling under the pointer that is using it.
  */
-export async function getCovers(): Promise<(Cover & CoverContent)[]> {
-  // A visitor is shown the PUBLISHED covers and no others. The playground is
+export async function getShaderPresets(): Promise<(ShaderPreset & ShaderPresetContent)[]> {
+  // A visitor is shown the PUBLISHED presets and no others. The playground is
   // public and so is its strip, but saving is how the author keeps a half-tuned
   // idea overnight — and a library that showed those would turn every save into
   // an act of publishing, which is the pressure that stops you saving.
-  const rows = await prisma.cover.findMany({
+  const rows = await prisma.shaderPreset.findMany({
     where: (await isAdmin()) ? {} : { publishedAt: { not: null } },
     orderBy: { createdAt: "desc" },
   });
-  return rows.map(parseCover);
+  return rows.map(parseShaderPreset);
 }
 
 /**
- * One saved cover, by id — the route `/playground/cover/[id]` opens on.
+ * One saved preset, by id — the route `/playground/shader/[id]` opens on.
  *
- * An unpublished cover answers NULL to a visitor rather than throwing, and the
+ * An unpublished preset answers NULL to a visitor rather than throwing, and the
  * difference matters: the route turns null into a 404, so "not published" and
- * "no such cover" are indistinguishable from outside. An Unauthorized here
- * would have said a cover by that id exists.
+ * "no such preset" are indistinguishable from outside. An Unauthorized here
+ * would have said a preset by that id exists.
  */
-export async function getCover(
+export async function getShaderPreset(
   id: string,
-): Promise<(Cover & CoverContent) | null> {
-  const row = await prisma.cover.findUnique({ where: { id } });
+): Promise<(ShaderPreset & ShaderPresetContent) | null> {
+  const row = await prisma.shaderPreset.findUnique({ where: { id } });
   if (!row) return null;
   if (!row.publishedAt && !(await isAdmin())) return null;
-  return parseCover(row);
+  return parseShaderPreset(row);
 }
 
-export async function createCover({
+export async function createShaderPreset({
   title,
   shaderId,
   settings,
@@ -115,22 +115,22 @@ export async function createCover({
   title?: string | null;
   shaderId: ShaderId;
   settings: unknown;
-}): Promise<Cover & CoverContent> {
+}): Promise<ShaderPreset & ShaderPresetContent> {
   await requireAdmin();
-  const content = CoverContentSchema.parse({ shaderId, settings });
+  const content = ShaderPresetContentSchema.parse({ shaderId, settings });
 
   // Named the way an untitled draft is, and counted the same way: the highest
-  // index so far plus one, so a deleted cover does not hand its number to the
+  // index so far plus one, so a deleted preset does not hand its number to the
   // next one and leave two "Untitled 3"s a month apart.
   let untitledIndex: number | null = null;
   if (!title?.trim()) {
-    const result = await prisma.cover.aggregate({
+    const result = await prisma.shaderPreset.aggregate({
       _max: { untitledIndex: true },
     });
     untitledIndex = (result._max.untitledIndex ?? 0) + 1;
   }
 
-  const row = await prisma.cover.create({
+  const row = await prisma.shaderPreset.create({
     data: {
       title: title?.trim() || null,
       untitledIndex,
@@ -138,10 +138,10 @@ export async function createCover({
       settings: content.settings as object,
     },
   });
-  return parseCover(row);
+  return parseShaderPreset(row);
 }
 
-export async function saveCover({
+export async function saveShaderPreset({
   id,
   title,
   shaderId,
@@ -151,11 +151,11 @@ export async function saveCover({
   title?: string | null;
   shaderId: ShaderId;
   settings: unknown;
-}): Promise<Cover & CoverContent> {
+}): Promise<ShaderPreset & ShaderPresetContent> {
   await requireAdmin();
-  const content = CoverContentSchema.parse({ shaderId, settings });
+  const content = ShaderPresetContentSchema.parse({ shaderId, settings });
 
-  const row = await prisma.cover.update({
+  const row = await prisma.shaderPreset.update({
     where: { id },
     data: {
       // `title` is only written when the caller has an opinion. Undefined is
@@ -166,51 +166,51 @@ export async function saveCover({
       settings: content.settings as object,
     },
   });
-  return parseCover(row);
+  return parseShaderPreset(row);
 }
 
 /**
- * Put a cover on show — which is what makes it visible to anybody but the
+ * Put a preset on show — which is what makes it visible to anybody but the
  * author, in the strip and at its own route.
  *
- * The SAVED cover, not what is currently in the panel: publishing and saving
+ * The SAVED preset, not what is currently in the panel: publishing and saving
  * are separate presses here exactly as they are for an article, so that ⌘S
  * stays the only thing that decides between creating and updating a row.
  */
-export async function publishCover(
+export async function publishShaderPreset(
   id: string,
-): Promise<Cover & CoverContent> {
+): Promise<ShaderPreset & ShaderPresetContent> {
   await requireAdmin();
-  const row = await prisma.cover.update({
+  const row = await prisma.shaderPreset.update({
     where: { id },
     data: { publishedAt: new Date() },
   });
-  return parseCover(row);
+  return parseShaderPreset(row);
 }
 
 /**
- * Take a cover back off show, without destroying it.
+ * Take a preset back off show, without destroying it.
  *
  * Clearing the date rather than deleting the row, the same call `unpublishPost`
- * makes: the cover is still the author's to open, tune and put back out, and
- * the destructive half of "remove this" is `deleteCover`.
+ * makes: the preset is still the author's to open, tune and put back out, and
+ * the destructive half of "remove this" is `deleteShaderPreset`.
  *
  * No confirmation in front of it, unlike unpublishing an article. This one is
  * undone by pressing the same button again, and `ConfirmDialog` is for what
  * cannot be.
  */
-export async function unpublishCover(
+export async function unpublishShaderPreset(
   id: string,
-): Promise<Cover & CoverContent> {
+): Promise<ShaderPreset & ShaderPresetContent> {
   await requireAdmin();
-  const row = await prisma.cover.update({
+  const row = await prisma.shaderPreset.update({
     where: { id },
     data: { publishedAt: null },
   });
-  return parseCover(row);
+  return parseShaderPreset(row);
 }
 
-export async function deleteCover(id: string): Promise<void> {
+export async function deleteShaderPreset(id: string): Promise<void> {
   await requireAdmin();
-  await prisma.cover.delete({ where: { id } });
+  await prisma.shaderPreset.delete({ where: { id } });
 }

@@ -50,8 +50,8 @@ describe("BackgroundEffectSchema", () => {
     expect(() => BackgroundEffectSchema.parse({ waveY: -0.1 })).toThrow();
   });
 
-  // Signed about zero, the same range the cover playground turns a shader
-  // through — a cover authored there is reused as a background here, and one
+  // Signed about zero, the same range the shader playground turns a shader
+  // through — a preset authored there is reused as a background here, and one
   // picture must not be described two ways.
   it("takes a rotation anywhere in the signed range", () => {
     for (const rotation of [-180, -90, 0, 90, 180]) {

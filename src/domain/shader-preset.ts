@@ -19,19 +19,19 @@ import { wrapRotation } from "@/utils/rotation";
 import { TRACK_UNITS_PER_DEGREE } from "@/components/shaders/cosmic-track-uniforms";
 
 // ---------------------------------------------------------------------------
-// Cover — a saved shader background, authored in the playground and reused
-// wherever a surface wants a ground: a picture or a clip in a collection, a
-// component's backdrop.
+// ShaderPreset — a saved shader background, authored in the playground and
+// reused wherever a surface wants a ground: a picture or a clip in a
+// collection, a component's backdrop.
 //
 // SHAPELESS, and the schema is where that is enforced rather than merely
-// intended. Nothing here records a size, a padding or a corner: a cover takes
+// intended. Nothing here records a size, a padding or a corner: a preset takes
 // the shape of whatever it is embedded into, the way an image under
 // `object-fit: cover` does, so the host owns every one of those and a column
 // for them here would be a second, disagreeing answer. It is the same call
 // `shader-specs.ts` already makes in leaving the world box out of the controls
 // — the surface IS the canvas — one level up.
 //
-// There is no exception, and there used to be one. A cover recorded the shape
+// There is no exception, and there used to be one. A preset recorded the shape
 // it was last JUDGED in and reopened there — a note rather than a frame, on the
 // grounds that a god-ray fan tuned until it read on a 9:16 poster is a
 // different composition from the same uniforms tuned on a 16:9 banner, and
@@ -41,9 +41,9 @@ import { TRACK_UNITS_PER_DEGREE } from "@/components/shaders/cosmic-track-unifor
 // carried properly, by a placement filed under each ratio, so the note was
 // down to naming which of them you happened to look at last — a worse answer
 // than the neutral one, and one more thing in the column for a reader to
-// reconcile. The playground opens every cover square (see
-// `DEFAULT_COVER_ASPECT`) and which shape you are in is the playground's own
-// state, not the cover's.
+// reconcile. The playground opens every preset square (see
+// `DEFAULT_SHADER_PRESET_ASPECT`) and which shape you are in is the
+// playground's own state, not the preset's.
 //
 // FRAMING is kept per shape, and it is what makes that possible.
 // The four placement controls — scale, rotation, and the two offsets — are the
@@ -82,7 +82,7 @@ import { TRACK_UNITS_PER_DEGREE } from "@/components/shaders/cosmic-track-unifor
  * one form in the database, so nothing downstream has to ask which it is
  * holding. Anything that is not a hex colour is still rejected.
  */
-const CoverColorSchema = z
+const ShaderPresetColorSchema = z
   .string()
   .regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, "Expected an #RRGGBB(AA) colour")
   .transform((value) =>
@@ -90,32 +90,33 @@ const CoverColorSchema = z
   );
 
 /**
- * A colour a cover holds: one for each ground it can be read on.
+ * A colour a preset holds: one for each ground it can be read on.
  *
  * EVERY colour is a pair — the ramp's stops, the background and the rails alike
- * — because a cover is embedded in a page that has a theme, and a fan tuned to
- * read on paper is not the same fan on ink. Two covers would have been the
+ * — because a preset is embedded in a page that has a theme, and a fan tuned to
+ * read on paper is not the same fan on ink. Two presets would have been the
  * other answer, and it is the wrong one: everything else about them (the
  * shader, its uniforms, the framing per shape) would then exist twice with
  * nothing keeping the copies in step.
  *
  * A BARE STRING on the way in becomes the same colour twice, which is both the
- * migration for every cover written before the split and the rule for authoring
- * by hand — `shader-specs.ts` still writes one colour per stop, because a
- * reference palette read off the artwork has no opinion about themes until
- * somebody gives it one. "I have not chosen a dark colour" and "the dark colour
- * is the light one" are the same state deliberately: a pair that has never been
- * split is indistinguishable from one split into two identical halves, so there
- * is no third thing for the panel to render or the schema to carry.
+ * migration for every preset written before the split and the rule for
+ * authoring by hand — `shader-specs.ts` still writes one colour per stop,
+ * because a reference palette read off the artwork has no opinion about themes
+ * until somebody gives it one. "I have not chosen a dark colour" and "the dark
+ * colour is the light one" are the same state deliberately: a pair that has
+ * never been split is indistinguishable from one split into two identical
+ * halves, so there is no third thing for the panel to render or the schema to
+ * carry.
  */
 const ThemedColorSchema = z.preprocess(
   (value) =>
     typeof value === "string" ? { light: value, dark: value } : value,
-  z.object({ light: CoverColorSchema, dark: CoverColorSchema }),
+  z.object({ light: ShaderPresetColorSchema, dark: ShaderPresetColorSchema }),
 );
 
 /** Which ground a colour is being read on. */
-export type CoverTheme = "light" | "dark";
+export type ShaderPresetTheme = "light" | "dark";
 
 /** One colour, per ground. See {@link ThemedColorSchema}. */
 export interface ThemedColor {
@@ -142,10 +143,10 @@ function themed(color: string): ThemedColor {
 /**
  * Where the playground opens, every time.
  *
- * The SQUARE, and it is a starting point rather than a remembered one. A cover
+ * The SQUARE, and it is a starting point rather than a remembered one. A preset
  * used to record the shape it was last judged in and reopen there, back when it
  * held one framing: which shape you had been looking at was the only clue to
- * what that framing had been tuned for. A cover now holds a framing per shape,
+ * what that framing had been tuned for. A preset now holds a framing per shape,
  * so there is nothing left for the note to say — and a shape picked once,
  * months ago, is a worse answer than the neutral one.
  *
@@ -153,7 +154,7 @@ function themed(color: string): ThemedColor {
  * orientation, so the first thing you see is the composition rather than a crop
  * of it.
  */
-export const DEFAULT_COVER_ASPECT: DemoFrameAspectRatio = "1/1";
+export const DEFAULT_SHADER_PRESET_ASPECT: DemoFrameAspectRatio = "1/1";
 
 /**
  * One control's validator, with the control's own default behind it.
@@ -188,17 +189,17 @@ function controlSchema(control: ControlSpec): z.ZodTypeAny {
  * The value migration that a range change needs, and the counterpart to
  * `RENAMED_PARAMS`: there the key moved and the value meant the same thing,
  * here the key is the same and the number has to be re-expressed. Without it a
- * cover tuned to 270° would stop opening — the schema ENFORCES its ranges
+ * preset tuned to 270° would stop opening — the schema ENFORCES its ranges
  * rather than clamping, on purpose, because a slider reading a number the
  * picture does not have is worse than a rejected save.
  *
  * WRAPPED rather than clamped, because 270 and -90 are the same angle: the
  * picture is untouched and only the way it is written down has changed.
- * Clamping to 180 would have quietly re-tuned every cover that used the far
+ * Clamping to 180 would have quietly re-tuned every preset that used the far
  * half of the old range.
  *
  * The wrap itself is `@/utils/rotation`'s, shared with the background effect on
- * a media node — a cover reused as a background must not be described one way
+ * a media node — a preset reused as a background must not be described one way
  * here and another way there.
  */
 function normaliseRotation(value: unknown): unknown {
@@ -254,9 +255,9 @@ export const FRAMING_DEFAULTS: Framing = FramingSchema.parse({}) as Framing;
  * An OBJECT over the eleven known keys rather than a `z.record`, so a ratio the
  * app cannot draw is stripped on the way in the same way an unknown param is —
  * a stored placement for a shape with no frame to draw it in is residue, not a
- * reason to refuse the whole cover.
+ * reason to refuse the whole preset.
  */
-const CoverFramingSchema = z
+const ShaderPresetFramingSchema = z
   .object(
     Object.fromEntries(
       (Object.keys(ASPECT_RATIOS) as DemoFrameAspectRatio[]).map((aspect) => [
@@ -273,7 +274,7 @@ const CoverFramingSchema = z
  * Needed because the two forward-compatibility rules below combine badly for a
  * rename: the old key is unknown so it is stripped, the new one is missing so
  * it defaults, and a stored value is silently replaced by the control's default
- * rather than failing loudly. That is the worst of both — a saved cover opens
+ * rather than failing loudly. That is the worst of both — a saved preset opens
  * looking wrong and nothing says why. Moving the value across first turns a
  * rename back into what it should be, which is nothing happening at all.
  *
@@ -311,7 +312,7 @@ const RENAMED_PARAMS: Record<string, string> = {
  * written down.
  *
  * Keyed on the OLD name, which is also what makes the migration idempotent: the
- * old key is gone once it has been converted, so a cover read twice is not
+ * old key is gone once it has been converted, so a preset read twice is not
  * converted twice. That is why the key changes at all — the two scales overlap
  * near zero, so no amount of looking at a bare number can tell a stored 0.5 in
  * the old units from a legitimate 0.5 in the new.
@@ -328,12 +329,12 @@ const RESCALED_PARAMS: {
     // Phase was a signed distance along the track, -7..7. It is now dialled in
     // degrees so that it reads like a dial, with a QUARTER turn standing for
     // the full reach the old control had — so this is the conversion that keeps
-    // every saved cover looking the way it looked.
+    // every saved preset looking the way it looked.
     //
     // ROUNDED onto the dial's own stops, because a value between them is one
     // the control cannot express: the slider would show the nearest stop while
     // the shader drew something else, and the first touch of the control would
-    // lose the original for good. At most half a step, and only for a cover
+    // lose the original for good. At most half a step, and only for a preset
     // saved before the dial existed.
     was: "phase",
     now: "phaseDegrees",
@@ -366,7 +367,7 @@ function applyRescales(value: unknown): unknown {
   for (const { was, now, convert } of RESCALED_PARAMS) {
     if (!(was in params)) continue;
     const stored = params[was];
-    // The new key wins if BOTH are present, exactly as a rename does: a cover
+    // The new key wins if BOTH are present, exactly as a rename does: a preset
     // written since the change is the authority on itself.
     if (typeof stored === "number" && !(now in params)) {
       params[now] = convert(stored);
@@ -391,20 +392,20 @@ function migrateParams(value: unknown): unknown {
  * direction, which is the whole point of keeping the table as the source.
  */
 /**
- * Moves a stored cover's ONE placement onto the shape it was saved in.
+ * Moves a stored preset's ONE placement onto the shape it was saved in.
  *
- * The migration for every cover written before framing was per-shape. Those
+ * The migration for every preset written before framing was per-shape. Those
  * four keys sat in `params`, where the object schema would now strip them as
- * unknown — silently unframing every saved cover, which is precisely the
+ * unknown — silently unframing every saved preset, which is precisely the
  * failure `RENAMED_PARAMS` exists to prevent one control at a time. The values
- * were tuned against the shape the cover was saved in, so that is the shape
+ * were tuned against the shape the preset was saved in, so that is the shape
  * they belong to; every other shape is left unframed, to inherit the first time
  * it is opened.
  *
  * At the SETTINGS level rather than inside the params preprocess, because it
  * needs `aspect`, which is the params' sibling and not its own field.
  *
- * A cover written since the split wins outright: a placement already recorded
+ * A preset written since the split wins outright: a placement already recorded
  * for that shape is what the author last chose, and a stale params key beside
  * it is residue.
  */
@@ -432,7 +433,7 @@ function liftFraming(value: unknown): unknown {
   const stored = settings.framing;
   const framing = { ...(typeof stored === "object" && stored !== null ? stored : {}) } as Record<string, unknown>;
   const aspect =
-    typeof settings.aspect === "string" ? settings.aspect : DEFAULT_COVER_ASPECT;
+    typeof settings.aspect === "string" ? settings.aspect : DEFAULT_SHADER_PRESET_ASPECT;
   if (!(aspect in framing)) framing[aspect] = lifted;
   settings.framing = framing;
   return settings;
@@ -483,18 +484,18 @@ function settingsSchemaFor(spec: ShaderSpec) {
         }
       : {}),
     extraColors,
-    // No `aspect`. A cover used to record the shape it was last judged in, and
+    // No `aspect`. A preset used to record the shape it was last judged in, and
     // reopening there was the point; now that it holds a framing per shape,
     // that note says nothing the `framing` keys do not. It is left out rather
     // than stored and ignored — a stored value nothing reads is one that
     // eventually disagrees with something. Any still in the column is dropped
     // on the way in, the way every retired key is.
-    framing: CoverFramingSchema,
+    framing: ShaderPresetFramingSchema,
   }));
 }
 
-/** How a cover is set: the shader's uniforms and the colours it is given. */
-export interface CoverSettings {
+/** How a preset is set: the shader's uniforms and the colours it is given. */
+export interface ShaderPresetSettings {
   params: Params;
   colors: ThemedColor[];
   /** Present only for a shader that HAS a ground behind the fill. */
@@ -504,7 +505,8 @@ export interface CoverSettings {
    * How the graphic sits in each shape that has been framed.
    *
    * Partial: a shape with no entry has never been framed, and opens on the
-   * placement you arrived with. See `CoverFramingSchema` and `seedFraming`.
+   * placement you arrived with. See `ShaderPresetFramingSchema` and
+   * `seedFraming`.
    */
   framing: Partial<Record<DemoFrameAspectRatio, Framing>>;
 }
@@ -512,14 +514,14 @@ export interface CoverSettings {
 /**
  * How the graphic sits in ONE shape.
  *
- * The shape is passed in rather than read off the cover, because a cover no
+ * The shape is passed in rather than read off the preset, because a preset no
  * longer has one: it is framed for every shape, and which of them you want is
  * the caller's business — the playground asks for the frame on screen, a
  * thumbnail asks for the square it is drawn in, and an embed would ask for the
  * shape of the surface it fills.
  */
 export function framingFor(
-  settings: CoverSettings,
+  settings: ShaderPresetSettings,
   aspect: DemoFrameAspectRatio,
 ): Framing {
   return settings.framing[aspect] ?? FRAMING_DEFAULTS;
@@ -531,19 +533,19 @@ export function framingFor(
  *
  * The split is about where a value is KEPT, and the canvas takes one object —
  * so this is the seam that puts the two halves back together, and every surface
- * that draws a cover goes through it. The placement wins the overlap, which
- * only matters for a cover mid-migration: a stale placement key left in params
+ * that draws a preset goes through it. The placement wins the overlap, which
+ * only matters for a preset mid-migration: a stale placement key left in params
  * must not outrank the frame you are looking at.
  */
 export function shaderParamsFor(
-  settings: CoverSettings,
+  settings: ShaderPresetSettings,
   aspect: DemoFrameAspectRatio,
 ): Params {
   return { ...settings.params, ...framingFor(settings, aspect) };
 }
 
 /** What a mounted shader is handed once a ground has been chosen. */
-export interface CoverPalette {
+export interface ShaderPresetPalette {
   colors: string[];
   /** Present only for a shader that HAS a ground behind the fill. */
   colorBack?: string;
@@ -551,22 +553,23 @@ export interface CoverPalette {
 }
 
 /**
- * Every colour the cover holds, resolved onto ONE ground.
+ * Every colour the preset holds, resolved onto ONE ground.
  *
  * The companion to `shaderParamsFor`, and the same kind of seam: the canvas
- * takes flat colours, a cover stores pairs, and this is the one place the
+ * takes flat colours, a preset stores pairs, and this is the one place the
  * choice between them is made. Which theme is the CALLER's to know — the
  * playground asks for the one its preview card is standing in, which is not
- * necessarily the page's; a cover embedded in an article asks for the article's.
+ * necessarily the page's; a preset embedded in an article asks for the
+ * article's.
  *
  * `colorBack` stays ABSENT rather than becoming undefined for a shader with no
  * ground, so the object can be spread onto a component whose prop is optional
  * without handing it a key it has no meaning for.
  */
 export function paletteFor(
-  settings: CoverSettings,
-  theme: CoverTheme,
-): CoverPalette {
+  settings: ShaderPresetSettings,
+  theme: ShaderPresetTheme,
+): ShaderPresetPalette {
   return {
     colors: settings.colors.map((color) => color[theme]),
     ...(settings.colorBack ? { colorBack: settings.colorBack[theme] } : {}),
@@ -580,10 +583,10 @@ export function paletteFor(
 }
 
 
-/** A cover's content: which shader, and how it is set. */
-export interface CoverContent {
+/** A preset's content: which shader, and how it is set. */
+export interface ShaderPresetContent {
   shaderId: ShaderId;
-  settings: CoverSettings;
+  settings: ShaderPresetSettings;
 }
 
 /**
@@ -592,8 +595,8 @@ export interface CoverContent {
  * meaningless on one. One branch per entry in the table, generated from it, so
  * the union cannot fall behind the shaders that exist.
  *
- * Typed as `CoverContent` rather than by inference, and the cast is the honest
- * move rather than a shortcut. `SHADER_IDS.map` yields an ARRAY where
+ * Typed as `ShaderPresetContent` rather than by inference, and the cast is the
+ * honest move rather than a shortcut. `SHADER_IDS.map` yields an ARRAY where
  * `discriminatedUnion` wants a tuple, so inference is lost either way; and what
  * it would infer is a union of six branches whose `params` keys are literal —
  * a type no caller here can use, since the panel indexes params by a `string`
@@ -601,7 +604,7 @@ export interface CoverContent {
  * consumers actually hold. The per-shader precision stays where it does the
  * work: at the parse.
  */
-export const CoverContentSchema = z.discriminatedUnion(
+export const ShaderPresetContentSchema = z.discriminatedUnion(
   "shaderId",
   SHADER_IDS.map((id) =>
     z.object({
@@ -609,43 +612,43 @@ export const CoverContentSchema = z.discriminatedUnion(
       settings: settingsSchemaFor(SHADER_SPECS[id]),
     }),
   ) as unknown as [z.ZodObject<z.ZodRawShape>, ...z.ZodObject<z.ZodRawShape>[]],
-) as unknown as z.ZodType<CoverContent>;
+) as unknown as z.ZodType<ShaderPresetContent>;
 
 /** Where a shader opens before anybody has tuned it — the table's own defaults. */
-export function coverContentFor(shaderId: ShaderId): CoverContent {
-  return CoverContentSchema.parse({
+export function shaderPresetContentFor(shaderId: ShaderId): ShaderPresetContent {
+  return ShaderPresetContentSchema.parse({
     shaderId,
     settings: defaultState(SHADER_SPECS[shaderId]),
   });
 }
 
 /**
- * A saved cover, as the database holds it.
+ * A saved preset, as the database holds it.
  *
  * `shaderId` is a column of its own rather than a key inside the blob: it is
  * the discriminant every read switches on, it is a closed set, and it is what a
  * future library view would group by. Everything whose shape DEPENDS on it
  * stays in the blob, where it travels as one validated unit.
  */
-export const CoverSchema = z.object({
+export const ShaderPresetSchema = z.object({
   id: z.string().min(1),
   title: z.string().nullable().optional(),
   untitledIndex: z.number().int().nullable().optional(),
   shaderId: z.enum(SHADER_IDS as [ShaderId, ...ShaderId[]]),
   settings: z.unknown(),
   /**
-   * When the cover went on show, and null while it is the author's alone.
+   * When the preset went on show, and null while it is the author's alone.
    *
    * The DATE rather than a boolean, matching `Post.publishedAt`: it records
    * when as well as whether, and a boolean beside a timestamp is the pair that
    * eventually disagrees. Nothing reads the moment yet — what every read of the
-   * library does with it is ask whether it is null (see `getCovers`) — but the
-   * cheap column is the one that can answer "since when" later without a
-   * migration.
+   * library does with it is ask whether it is null (see `getShaderPresets`) —
+   * but the cheap column is the one that can answer "since when" later without
+   * a migration.
    */
   publishedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
 
-export type Cover = z.infer<typeof CoverSchema>;
+export type ShaderPreset = z.infer<typeof ShaderPresetSchema>;

@@ -205,8 +205,8 @@ export function CommandPalette() {
     backTarget,
     handleBack,
     handleThemeToggle,
-    handleCoverPlayground,
-    isCoverPlayground,
+    handleShaderPlayground,
+    isShaderPlayground,
     editorKind,
     handleSaveChanges,
     handleDiscardAndExit,
@@ -245,12 +245,12 @@ export function CommandPalette() {
    */
   /**
    * The open editor's heading — one heading in three wordings, because "This
-   * Cover" / "This Page" / "This Article" all name the same thing: whatever is
+   * Preset" / "This Page" / "This Article" all name the same thing: whatever is
    * being edited right now.
    */
   const editorTitle =
-    editorKind === "cover"
-      ? "This Cover"
+    editorKind === "shaderPreset"
+      ? "This Preset"
       : editorKind === "grid"
         ? "This Page"
         : editCategory === "WORK"
@@ -258,7 +258,7 @@ export function CommandPalette() {
           : "This Article";
 
   const offersDestinations =
-    !isEditMode && !isHomeEditMode && !isCoverPlayground;
+    !isEditMode && !isHomeEditMode && !isShaderPlayground;
 
   useEffect(() => {
     // Guarded rather than toggling: `showModal()` on an already-open dialog
@@ -374,7 +374,7 @@ export function CommandPalette() {
                     one room would have to agree forever.
 
                     Publish and Unpublish are a document's alone here. The
-                    homepage is already live; a cover HAS a publication now, but
+                    homepage is already live; a preset HAS a publication now, but
                     its control is the one in the properties panel's header,
                     beside Reset — both act on the saved row rather than on the
                     page you are looking at, and two doors to one room would
@@ -558,10 +558,10 @@ export function CommandPalette() {
                 <div className={groupHeadingStyle}>Playground</div>
                 <Command.Item
                   className={itemStyle}
-                  onSelect={handleCoverPlayground}
+                  onSelect={handleShaderPlayground}
                 >
                   <ShaderIcon className={iconStyle} />
-                  Cover Playground
+                  Shader Playground
                 </Command.Item>
               </Command.Group>
             )}
@@ -583,7 +583,7 @@ export function CommandPalette() {
         </Command>
       </Dialog>
 
-      {/* Leaving a cover with unsaved work in it. THREE answers, because all
+      {/* Leaving a preset with unsaved work in it. THREE answers, because all
           three are things the author might mean and none is a rewording of
           another: keep it and go, drop it and go, or stay. Rendered here beside
           the other modals for the same reason they are — the palette has
@@ -591,7 +591,7 @@ export function CommandPalette() {
       <ConfirmDialog
         open={pendingExit !== null}
         title="Unsaved Changes"
-        message="You have unsaved changes to this cover. How do you want to proceed?"
+        message="You have unsaved changes to this preset. How do you want to proceed?"
         confirmLabel="Save changes and exit"
         onConfirm={() => void confirmExitSave()}
         alternate={{ label: "Discard changes", onClick: confirmExitDiscard }}

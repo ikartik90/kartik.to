@@ -101,7 +101,7 @@ describe("AspectRail", () => {
   });
 
   // Which orientation is shown is READ from the shape rather than remembered,
-  // so a rail whose shape arrives from elsewhere — a saved cover loading a tick
+  // so a rail whose shape arrives from elsewhere — a saved preset loading a tick
   // after the playground mounts — follows it instead of showing a list with
   // nothing pressed in it.
   it("follows a shape that changes from outside it", () => {
@@ -186,7 +186,7 @@ describe("AspectRail", () => {
 // ---------------------------------------------------------------------------
 // The unsaved-framing marks.
 //
-// A cover's framing is kept per shape, so work can be left unsaved in a frame
+// A preset's framing is kept per shape, so work can be left unsaved in a frame
 // that is not on screen — and, since the rail shows one orientation at a time,
 // in one that is not even in the list. A mark under the shape says where it is;
 // a mark under the flip says it is on the other side.

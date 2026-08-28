@@ -16,11 +16,11 @@ vi.mock("../shader-stage", () => ({
 }));
 
 const {
-  CoverThumbnails,
+  ShaderPresetThumbnails,
   captureOrder,
   thumbnailKey,
   clearThumbnailCache,
-} = await import("../cover-thumbnails");
+} = await import("../shader-preset-thumbnails");
 
 const preset = (id: string, shaderId: ShaderId, updatedAt = "2026-01-01") =>
   ({
@@ -92,7 +92,7 @@ describe("captureOrder", () => {
   });
 });
 
-describe("CoverThumbnails", () => {
+describe("ShaderPresetThumbnails", () => {
   beforeEach(() => {
     clearThumbnailCache();
     HTMLCanvasElement.prototype.toDataURL = vi.fn(function (
@@ -108,7 +108,7 @@ describe("CoverThumbnails", () => {
     const presets = [preset("a", "swirl"), preset("b", "godRays")];
 
     render(
-      <CoverThumbnails
+      <ShaderPresetThumbnails
         presets={presets}
         theme="light"
         onCaptured={(key, url) => {
@@ -130,7 +130,7 @@ describe("CoverThumbnails", () => {
   it("unmounts itself once there is nothing left to capture", async () => {
     const presets = [preset("a", "swirl")];
     const { container } = render(
-      <CoverThumbnails presets={presets} theme="light" onCaptured={() => {}} />,
+      <ShaderPresetThumbnails presets={presets} theme="light" onCaptured={() => {}} />,
     );
 
     expect(container.querySelector("canvas")).not.toBeNull();
@@ -140,20 +140,20 @@ describe("CoverThumbnails", () => {
   });
 
   // The cache is what makes navigating between presets free — the strip
-  // re-reads its list on every one, and re-rendering forty covers each time
+  // re-reads its list on every one, and re-rendering forty presets each time
   // would be forty contexts' worth of work for pictures already taken.
   it("does not redraw a preset it has already captured", async () => {
     const presets = [preset("a", "swirl")];
     const onCaptured = vi.fn();
 
     const first = render(
-      <CoverThumbnails presets={presets} theme="light" onCaptured={onCaptured} />,
+      <ShaderPresetThumbnails presets={presets} theme="light" onCaptured={onCaptured} />,
     );
     await waitFor(() => expect(onCaptured).toHaveBeenCalledOnce());
     first.unmount();
 
     const { container } = render(
-      <CoverThumbnails presets={presets} theme="light" onCaptured={vi.fn()} />,
+      <ShaderPresetThumbnails presets={presets} theme="light" onCaptured={vi.fn()} />,
     );
     expect(container.querySelector("canvas")).toBeNull();
   });

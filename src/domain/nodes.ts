@@ -181,7 +181,7 @@ const BackgroundColorSchema = z
  * to run here rather than in the field: the field ENFORCES its range (a slider
  * reading a number the picture does not have is worse than a rejected save), so
  * a stored 270 would be refused and take the whole node down with it. The wrap
- * is the same one the cover playground uses, and 270 and -90 are one angle, so
+ * is the same one the shader playground uses, and 270 and -90 are one angle, so
  * nothing about the picture changes.
  */
 function normaliseEffectRotation(value: unknown): unknown {
@@ -216,8 +216,8 @@ export const BackgroundEffectSchema = z.preprocess(
   scale: z.number().min(0.01).max(4).default(1),
   /**
    * SIGNED about zero, and the range is the app's one rotation range rather
-   * than a copy — this is the same turn the cover playground's Framing group
-   * applies, and a cover authored there is meant to be reused as a background
+   * than a copy — this is the same turn the shader playground's Framing group
+   * applies, and a preset authored there is meant to be reused as a background
    * here. Two descriptions of one picture is exactly what a hand-kept copy
    * eventually becomes.
    *

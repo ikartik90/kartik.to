@@ -78,8 +78,8 @@ const SLIDERS: {
   { key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.01 },
   { key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.01 },
   // The app's ONE rotation control, not a copy of its numbers — this panel
-  // edits the same turn the cover playground's Framing group does, and a panel
-  // offering different stops would make a cover unreachable in the surface it
+  // edits the same turn the shader playground's Framing group does, and a panel
+  // offering different stops would make a preset unreachable in the surface it
   // was built for. See `@/utils/rotation`.
   { key: "rotation", label: "Rotation", min: ROTATION_MIN, max: ROTATION_MAX, step: ROTATION_STEP },
   { key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.01 },
