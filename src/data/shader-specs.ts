@@ -30,19 +30,19 @@ export const PHASE_STEP = 15;
 // ---------------------------------------------------------------------------
 // The shader playground's table of contents.
 //
-// ONE entry, and the table is still a table. It carried five of the library's
-// built-ins alongside ours for a while — the playground began as an audition,
-// pointing each of them at the reference art (the Windsurf card backgrounds:
-// fanned light-blades, soft colour washes) to see which came closest. Cosmic
-// Track is what that audition produced, so the built-ins have gone: a picker
-// offering five shaders no preset uses is a menu of dead ends, and their
-// control tables were five more things to keep parsing.
+// TWO entries now, both ours. It carried five of the library's built-ins
+// alongside them for a while — the playground began as an audition, pointing
+// each of them at the reference art (the Windsurf card backgrounds: fanned
+// light-blades, soft colour washes) to see which came closest. Cosmic Track is
+// what that audition produced, so the built-ins have gone: a picker offering
+// five shaders no preset uses is a menu of dead ends, and their control tables
+// were five more things to keep parsing.
 //
-// The SHAPE stays, because it is what everything downstream reads. `ShaderId`
-// is a union of one and `SHADER_SPECS` a record over it, so the domain schema,
-// the store and the stage all still ask the table rather than assuming the
-// answer — and a second shader is one entry here rather than a thread to pull
-// through five files.
+// The SHAPE is what everything downstream reads, and the second shader is what
+// proved it was worth keeping through the year it held one: `ShaderId` is a
+// union and `SHADER_SPECS` a record over it, so the domain schema, the store
+// and the stage all ask the table rather than assuming the answer. Nexus cost
+// one entry here, one `case` in `shader-stage.tsx`, and nothing else.
 //
 // A table rather than a page full of hand-written rows, for the same reason
 // `media-properties-panel.tsx` uses one: the rows differ only in their four
@@ -54,7 +54,7 @@ export const PHASE_STEP = 15;
 // mile is eyeballing, not arithmetic.
 // ---------------------------------------------------------------------------
 
-export type ShaderId = "cosmicTrack";
+export type ShaderId = "cosmicTrack" | "nexus";
 
 /**
  * Which group in the sidebar a control is drawn in. Omitted — the usual case —
@@ -81,8 +81,23 @@ export type ShaderId = "cosmicTrack";
  * out between the bands. It draws next to the colours themselves, because the
  * ramp is those colours laid along the fan — leaving Parameters to hold the
  * fan's own geometry, which the ramp is drawn on but does not decide.
+ *
+ * "grid" is for the LATTICE a shader draws on rather than for what it draws:
+ * how big a cell is, how heavy the line between cells is. Its ink is not one of
+ * them, for the same reason the rails' colour is not an "edge" control.
+ *
+ * "glow" is for bloom — how bright it is and how far it reaches. Its own group
+ * because a shader that blooms two different things wants both strengths beside
+ * both reaches, and split across Parameters they read as four unrelated
+ * sliders that happen to share two words.
  */
-export type ControlGroup = "dither" | "edge" | "motion" | "ramp";
+export type ControlGroup =
+  | "dither"
+  | "edge"
+  | "glow"
+  | "grid"
+  | "motion"
+  | "ramp";
 
 export interface SliderSpec {
   kind: "slider";
@@ -122,6 +137,50 @@ export interface ExtraColorSpec {
   key: string;
   label: string;
   value: string;
+  /**
+   * Which control ROW this colour draws on. Extras naming the same row share
+   * one row and one swatch grid, in table order, under the FIRST of their
+   * labels; an extra naming none keeps a row to itself.
+   *
+   * For colours that are one decision in two parts — a lattice's minor and
+   * major ink — where a row each would state they were unrelated, and spend a
+   * label and a line of the panel doing it.
+   */
+  row?: string;
+}
+
+/** One drawn row of extra colours — see `ExtraColorSpec.row`. */
+export interface ExtraColorRow {
+  /** The row's visible label, which is its first colour's. */
+  label: string;
+  colors: ExtraColorSpec[];
+}
+
+/**
+ * A shader's extra colours as the panel draws them: one entry per row, in the
+ * order the table names them.
+ *
+ * Here rather than in the panel because it is a reading of the TABLE, and the
+ * table is the thing every surface asks rather than assuming — the same reason
+ * `defaultState` lives here. A row is a fact about the shader's colours, not
+ * about the sidebar that happens to show them.
+ */
+export function extraColorRows(spec: ShaderSpec): ExtraColorRow[] {
+  const rows: ExtraColorRow[] = [];
+  const byName = new Map<string, ExtraColorRow>();
+
+  for (const extra of spec.extraColors) {
+    const existing = extra.row === undefined ? undefined : byName.get(extra.row);
+    if (existing) {
+      existing.colors.push(extra);
+      continue;
+    }
+    const row: ExtraColorRow = { label: extra.label, colors: [extra] };
+    rows.push(row);
+    if (extra.row !== undefined) byName.set(extra.row, row);
+  }
+
+  return rows;
 }
 
 /** Where a shader's controls open — one starting point per shader. */
@@ -137,6 +196,17 @@ export interface ShaderDefaults {
 export interface ShaderSpec {
   id: ShaderId;
   label: string;
+  /**
+   * The heading the shader's OWN parameters are drawn under — the ones that
+   * name no group, and so are whatever this shader is made of.
+   *
+   * Per shader because the group has no shader-independent name. It read
+   * "Track" while the table held one entry, which was right for the fan and
+   * meaningless over Nexus's lattice; "Parameters" would be right for both and
+   * describe neither, and this panel is the one place a shader gets to say what
+   * its parts are called.
+   */
+  ownLabel: string;
   /** The shader's own `maxColorCount`. */
   maxColors: number;
   /** False for the mesh gradients, which are opaque fills with no background. */
@@ -220,6 +290,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   cosmicTrack: {
     id: "cosmicTrack",
     label: "Cosmic Track",
+    ownLabel: "Track",
     maxColors: 10,
     hasColorBack: true,
     // The rails are painted in a colour of their OWN rather than lifted out of
@@ -349,6 +420,155 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       colors: ["#2E6BFF", "#C89BFF", "#FFB3D9", "#FFD9A0", "#FFF3C4"],
       colorBack: "#12042BFF",
       params: { phaseDegrees: 0, stagger: 0.5, roundness: 0.4, apex: 2.4, rampLength: 1.8, spread: 0.25, bandwidth: 0.42, bandCount: 7, curve: 0.35, tilt: 0.6, softness: 0.55, tail: 0.3, rampDither: 0.5, ditherSize: 3, easing: 1, easingBias: 0, interval: 0 },
+    },
+  },
+
+  // Ours, and the second. After the Nexus One's live wallpaper and the Nexus
+  // 4's pixel fields: a lattice, and coloured pixels running its lanes for one
+  // of the four edges, each dragging a fading trail.
+  //
+  // Where Cosmic Track is one continuous surface read through a ramp, this is
+  // DISCRETE — a cell is lit or it is not — so almost every control here counts
+  // something (cells, movers, pixels) rather than scaling something. That is
+  // the reason the two share so few sliders despite sharing every framing one.
+  nexus: {
+    id: "nexus",
+    label: "Nexus",
+    ownLabel: "Field",
+    // Matches `NEXUS_MAX_COLORS` in `nexus-uniforms`, which is what sizes the
+    // uniform array — see `nexus-shader.test.ts`, which holds the two in step.
+    maxColors: 8,
+    hasColorBack: true,
+    // The lattice's two inks. A colour of their own rather than one of the
+    // movers': the grid is the ground they run on, and borrowing a mover's
+    // colour would tie the whole lattice to whichever pixel happened to spawn
+    // first.
+    //
+    // Low alpha is the setting, not a shy default. The reference's grid is a
+    // hint that the movers are travelling on SOMETHING; drawn at full strength
+    // it becomes the picture and the movers become decoration on it.
+    //
+    // The pair is a graph paper's: the same hue at two strengths, so the field
+    // reads at two scales at once rather than as two grids laid over each other.
+    // Major is inert until Major Grid is turned up, which is the bargain
+    // `colorEdge` and `edgeWidth` strike above — the colour is not the switch.
+    extraColors: [
+      { key: "colorGrid", label: "Grid", value: "#A8C0FF29", row: "grid" },
+      { key: "colorGridMajor", label: "Major", value: "#A8C0FF5C", row: "grid" },
+    ],
+    controls: [
+      // How many movers are alive at once, across the whole frame — an absolute
+      // number, so making the grid finer gives you smaller pixels rather than
+      // more of them.
+      //
+      // An EXPECTED count: the shader turns it into the odds any one lane fires
+      // (see there), so the live number breathes around it the way a random
+      // field does. It saturates at whatever the lattice can hold, which on a
+      // coarse grid over a small card is reached before the slider ends.
+      { kind: "slider", key: "count", label: "Count", min: 0, max: 120, step: 1, value: 30 },
+      // WHICH movers, at the same count — and nothing else. Its own control
+      // because the alternative is one dial doing two jobs: if the count were
+      // the only thing hashed there would be exactly ONE thirty-mover
+      // arrangement, and the only way to see a different one would be to ask
+      // for thirty-one.
+      { kind: "slider", key: "seed", label: "Seed", min: 0, max: 100, step: 1, value: 0 },
+      // How far a mover runs before it stops emitting, in CELLS — not how long
+      // it is visible, since the trail it has already laid keeps fading for
+      // `tail` cells after the head has gone.
+      { kind: "slider", key: "travel", label: "Travel", min: 1, max: 120, step: 1, value: 40 },
+      // How far behind the head the trail is still lit, in the same cells so the
+      // two can be read against each other. 0 leaves the head alone on the grid.
+      { kind: "slider", key: "tail", label: "Tail", min: 0, max: 60, step: 1, value: 14 },
+      // Whether the trail fades CELL BY CELL or as one gradient. 0 evaluates the
+      // fade at each cell's centre, so a cell is one flat value that dims in
+      // place and the trail steps down in whole pixels; 1 evaluates it where the
+      // fragment is. Both GLOWS follow it — a halo is cast by a pixel, so it
+      // carries that pixel's value (see `nexus-uniforms`, where leaving the two
+      // out of step is what made a stepped trail read as a smooth one).
+      //
+      // A slider rather than the switch it sounds like, because the middle is a
+      // real setting — it quantises part of the way, which reads as a stepped
+      // trail with its edges softened rather than as either end. The head stays
+      // a solid cell at every value; only the fade behind it is in question.
+      { kind: "slider", key: "tailBlend", label: "Tail Blend", min: 0, max: 1, step: 0.1, value: 0 },
+      // How sharply the trail drops from one pixel to the next.
+      //
+      // 0 is a straight ramp, which loses 1/Tail per cell — 7% at the default
+      // Tail, and with Grid Width at 0 there is no edge between neighbours
+      // either, so the trail reads as one bar with a gradient on it. Turning
+      // this up keeps a fixed FRACTION of the cell in front instead, so the
+      // step is the same all along the trail and does not thin out as Tail
+      // grows.
+      //
+      // It shortens what you SEE without shortening Tail: the curve still lands
+      // on zero at exactly Tail cells, it just spends most of its brightness in
+      // the first few.
+      { kind: "slider", key: "falloff", label: "Falloff", min: 0, max: 1, step: 0.1, value: 0.6 },
+      // The size of one PIXEL, in CSS pixels — a 10 is a ten-by-ten pixel, and on
+      // a 1.5x display it lands on fifteen device pixels and still reads as ten.
+      // The pixel, not the cell around it: Spread is added outside it.
+      //
+      // A SCREEN measurement rather than a count across the frame, so a pixel is
+      // the same size on a phone as on a lightbox instead of the grid getting
+      // finer as the card grows. Framing's Scale still scales it: those controls
+      // move a camera over the field, and the size named here is the one at
+      // Scale 1.
+      { kind: "slider", key: "pixelSize", label: "Pixel Size", group: "grid", min: 1, max: 20, step: 1, value: 8 },
+      // How thick a grid line is, in CSS pixels — and the switch as well, since
+      // 0 is no lattice at all and the pixels touch.
+      //
+      // ADDED to the pitch, never taken out of the pixel, and that is what makes
+      // the name honest: a line STROKED over a cell boundary takes its width out
+      // of the two cells it divides, so turning the grid up would shrink the
+      // pixels and Pixel Size would stop naming the pixel. Here the line is the
+      // space between one pixel and the next, so widening it pushes them apart.
+      //
+      // It is also what makes a stepped trail read AS pixels rather than as one
+      // bar with a gradient on it — abutting cells at neighbouring brightnesses
+      // give the eye no edge to find.
+      { kind: "slider", key: "gridWidth", label: "Grid Width", group: "grid", min: 0, max: 10, step: 0.5, value: 2 },
+      // Every how-manieth line is drawn in the Major swatch instead: graph
+      // paper. 0 is off and every line is the minor colour.
+      //
+      // A COUNT of cells rather than a size, so the block it rules off grows
+      // with Pixel Size and the paper keeps its proportions as the grid
+      // coarsens. Integer steps because it is a count — an "every 3.5th line"
+      // has nothing to point at.
+      //
+      // Major lines are the same WIDTH as minor ones. Widening them would have
+      // to take that width out of the two pixels either side, and a pixel beside
+      // a major line would then be smaller than one anywhere else — the fault
+      // Grid Width is added to the pitch to avoid. Their weight is the swatch's
+      // alpha instead.
+      { kind: "slider", key: "majorGrid", label: "Major Grid", group: "grid", min: 0, max: 15, step: 1, value: 8 },
+      { kind: "slider", key: "headGlow", label: "Head Glow", group: "glow", min: 0, max: 2, step: 0.1, value: 0.8 },
+      // Capped at the shader's own lane reach (`NEXUS_MAX_GLOW_REACH`), which is
+      // how far out a fragment looks for movers. A radius past it is not a wider
+      // halo but one clipped square at the lane boundary — so the range is the
+      // constant's, and `nexus-shader.test.ts` holds them together.
+      { kind: "slider", key: "headRadius", label: "Head Radius", group: "glow", min: 0, max: 3, step: 0.1, value: 1.2 },
+      // Its own strength rather than a fraction of the head's: a head flaring
+      // over a barely-lit trail is a spark, a flat head over a glowing trail is
+      // a light-pipe, and neither is reachable from one control.
+      { kind: "slider", key: "tailGlow", label: "Tail Glow", group: "glow", min: 0, max: 2, step: 0.1, value: 0.4 },
+      { kind: "slider", key: "tailRadius", label: "Tail Radius", group: "glow", min: 0, max: 3, step: 0.1, value: 0.8 },
+      { kind: "slider", key: "easing", label: "Easing", group: "motion", min: -1, max: 1, step: 0.1, value: 1 },
+      { kind: "slider", key: "easingBias", label: "Easing Bias", group: "motion", min: -1, max: 1, step: 0.1, value: 0 },
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
+    ],
+    defaults: {
+      // Google's four, plus the cyan the Nexus One's own wallpaper ran on. Four
+      // saturated colours on a near-black ground is the reference read plainly:
+      // the movers are the only vivid thing on the card, so no two of them may
+      // read as the same pixel.
+      colors: ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#00E5FF"],
+      colorBack: "#080B12FF",
+      // The one shader in the table that opens MOVING. Speed is 0 everywhere
+      // else because a fan parked mid-sweep is still the whole picture — here a
+      // parked field is a picture of trails with nothing making them, which
+      // reads as a bug rather than as a still.
+      params: { speed: 1 },
     },
   },
 };

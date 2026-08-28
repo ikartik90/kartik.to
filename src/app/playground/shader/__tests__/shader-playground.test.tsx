@@ -42,6 +42,16 @@ vi.mock("@/components/shaders/cosmic-track", () => ({
   ),
 }));
 
+// The same marker for the second shader, and it has to be its own mock: the
+// stage switches on the preset's `shaderId`, so a preset saved on Nexus mounts
+// THIS one — and unmocked it reaches `ShaderMount`, which the library mock
+// above does not carry.
+vi.mock("@/components/shaders/nexus", () => ({
+  Nexus: ({ colors }: { colors: string[] }) => (
+    <div data-testid="stage" data-colors={colors.join(",")} />
+  ),
+}));
+
 // The presets strip reaches the database, through a `"use server"` module that
 // validates DATABASE_URL at import time and throws in a run with no `.env`. The
 // session is stubbed alongside it: signed OUT by default, which is what a
@@ -533,6 +543,76 @@ describe("ShaderPlayground edge group", () => {
   // absence was driven by switching to one that does not, and the built-ins
   // that did have gone. The guard is still on the group (`length > 0`).
   it.todo("is absent for a shader that has none");
+});
+
+// ---------------------------------------------------------------------------
+// The Grid group and its two inks — Nexus's lattice.
+//
+// Rendered through the ROUTE'S PROP, which is how a second shader actually
+// reaches this panel: the picker that would otherwise switch to it is the
+// author's alone, so a preset saved on Nexus is the only way a reader ever sees
+// these controls.
+// ---------------------------------------------------------------------------
+describe("ShaderPlayground grid group", () => {
+  beforeEach(() => useShaderPresetDraftStore.getState().reset());
+  afterEach(cleanup);
+
+  const nexusPreset = {
+    id: "preset-2",
+    title: "Nexus",
+    shaderId: "nexus" as const,
+    settings: { ...shaderPresetContentFor("nexus").settings, framing: {} },
+    publishedAt: null,
+  };
+
+  async function renderNexus() {
+    const result = render(<ShaderPlayground preset={nexusPreset} />);
+    await screen.findByRole("complementary", { name: "Preset properties" });
+    return result;
+  }
+
+  const labelsIn = (group: HTMLElement) =>
+    Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
+
+  it("gathers the lattice controls into one section", async () => {
+    await renderNexus();
+
+    expect(labelsIn(screen.getByRole("group", { name: "Grid" }))).toEqual([
+      "Pixel Size",
+      "Grid Width",
+      "Major Grid",
+    ]);
+  });
+
+  it("draws the shader's own parameters under its own heading", async () => {
+    await renderNexus();
+
+    // `ownLabel`, not the hard-coded "Track" this panel used to carry — that
+    // one named the fan, and there is no fan here.
+    expect(screen.getByRole("group", { name: "Field" })).toBeTruthy();
+  });
+
+  // The point of `extraColorRows`: the major ink is a SWATCH BESIDE the minor
+  // one, not a row of its own. A row each would have said the two were
+  // unrelated, and spent a label and a line of the panel saying it.
+  it("puts both lattice inks on one row", async () => {
+    await renderNexus();
+    const colours = labelsIn(screen.getByRole("group", { name: "Colours" }));
+
+    expect(colours).toContain("Grid");
+    expect(colours).not.toContain("Major");
+  });
+
+  it("still names each ink for a reader who cannot see which is which", async () => {
+    await renderNexus();
+    const row = screen.getByRole("group", { name: "Grid colours" });
+
+    // Named by ROLE rather than numbered by position: "Colour 2" would say
+    // which one is on the right, and the thing worth knowing is that it is the
+    // major one.
+    expect(within(row).getByRole("button", { name: "Grid colour" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Major colour" })).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
