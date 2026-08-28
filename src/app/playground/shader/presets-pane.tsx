@@ -75,13 +75,19 @@ type Preset = ShaderPreset & ShaderPresetContent;
 // width, and on a phone on its side it is the box that has given up the margin
 // too.
 //
-// `--sheet-space` in the offset is the same variable the canvas uses: on a
-// phone under a bottom sheet the pane rides four pixels above the SHEET rather
-// than four above a viewport edge it cannot be seen at. Zero everywhere else,
-// so this is one expression and not a media query.
+// Four pixels off the canvas's own foot, in every layout — the sheet is not in
+// the offset. It used to be: the pane rode above the SHEET rather than above a
+// viewport edge it could not be seen at, which kept it visible and cost the
+// picture the room twice, once for the sheet and once for the strip stacked on
+// top of it. The sheet covers the strip instead now (`z-index: 50` against the
+// 1 below), and the canvas reserves whichever of the two is taller rather than
+// both — see `--canvas-foot`. What is lost is a strip you can reach without
+// putting the sheet away first, which is the right thing to lose: they are two
+// ways of choosing a preset and only one of them can have the bottom of the
+// screen.
 const paneStyle = css({
   position: "absolute",
-  insetBlockEnd: "calc(var(--sheet-space) + token(spacing.sm))",
+  insetBlockEnd: "token(spacing.sm)",
   insetInline: 0,
   marginInline: "auto",
   zIndex: 1,

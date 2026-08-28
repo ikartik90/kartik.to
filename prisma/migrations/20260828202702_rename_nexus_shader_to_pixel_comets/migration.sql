@@ -1,0 +1,13 @@
+-- Rename the `nexus` shader to `pixelComets`.
+--
+-- `shaderId` is a plain text column, so nothing here is a schema change and
+-- `prisma migrate diff` would author nothing: the constraint that makes this
+-- necessary lives in Zod, where `shaderId` is an enum over `SHADER_IDS`. A row
+-- left saying "nexus" parses as invalid rather than as an old name, and the
+-- preset stops loading — which is the same reason the shader's own rename
+-- could not simply be a label change.
+--
+-- Every deployment shares this database, so a preset saved from a preview build
+-- of the branch that added the shader is reachable from production. The `WHERE`
+-- makes it a no-op where there are none.
+UPDATE "ShaderPreset" SET "shaderId" = 'pixelComets' WHERE "shaderId" = 'nexus';

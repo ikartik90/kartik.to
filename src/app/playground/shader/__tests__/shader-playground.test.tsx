@@ -19,6 +19,7 @@ import {
   shaderParamsFor,
 } from "@/domain/shader-preset";
 import type { ThemeMode } from "@/store/theme";
+import { BOTTOM_SHEET_QUERY } from "@/data/media-queries";
 
 // Every shader the playground can mount, stubbed. They all end in a
 // `ShaderMount`, which asks for a webgl2 context jsdom does not have — and what
@@ -43,11 +44,11 @@ vi.mock("@/components/shaders/cosmic-track", () => ({
 }));
 
 // The same marker for the second shader, and it has to be its own mock: the
-// stage switches on the preset's `shaderId`, so a preset saved on Nexus mounts
+// stage switches on the preset's `shaderId`, so a preset saved on Pixel Comets mounts
 // THIS one — and unmocked it reaches `ShaderMount`, which the library mock
 // above does not carry.
-vi.mock("@/components/shaders/nexus", () => ({
-  Nexus: ({ colors }: { colors: string[] }) => (
+vi.mock("@/components/shaders/pixel-comets", () => ({
+  PixelComets: ({ colors }: { colors: string[] }) => (
     <div data-testid="stage" data-colors={colors.join(",")} />
   ),
 }));
@@ -90,6 +91,23 @@ vi.mock("@/store/theme", async (importOriginal) => ({
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn(() => ({ matches: false })),
+});
+
+/**
+ * Answer the bottom-sheet query for the rest of this test — a phone held
+ * upright. Every OTHER query keeps answering false, which is what keeps the
+ * theme resolution above untouched: `useThemeToggle` asks the same mock.
+ */
+const onBottomSheetLayout = () => {
+  (window.matchMedia as unknown as Mock).mockImplementation((query: string) => ({
+    matches: query === BOTTOM_SHEET_QUERY,
+  }));
+};
+
+afterEach(() => {
+  (window.matchMedia as unknown as Mock).mockImplementation(() => ({
+    matches: false,
+  }));
 });
 
 const { ShaderPlayground } = await import("../shader-playground");
@@ -279,6 +297,21 @@ describe("ShaderPlayground panel dismissal", () => {
 
     expect(panel().hasAttribute("data-dismissed")).toBe(false);
     expect(reopen()).toBeNull();
+  });
+
+  // A phone held upright opens with the sheet DOWN, which the docked rail does
+  // not: the sheet takes half the viewport, and half a phone is not enough to
+  // judge a picture in. So the panel is something you reach for there rather
+  // than something you dismiss, and the way back is on the band from the first
+  // paint. Seeded after mount rather than at first render — the answer needs
+  // `matchMedia`, which the server cannot ask, and an initial state that
+  // disagreed with the server's would be a hydration mismatch on `main`.
+  it("opens with the sheet collapsed on a phone held upright", async () => {
+    onBottomSheetLayout();
+    await renderReady();
+
+    expect(panel().hasAttribute("data-dismissed")).toBe(true);
+    expect(reopen()).not.toBeNull();
   });
 
   it("sends the panel away from the close button in its header", async () => {
@@ -539,6 +572,16 @@ describe("ShaderPlayground edge group", () => {
     expect(colours).not.toContain("Edge Width");
   });
 
+  // The stops' row is named by the SHADER, the same way its own parameter
+  // group is — see `colorsLabel`. "Ramp" is Cosmic Track's word for them:
+  // colours laid along the fan, read as one continuous gradient.
+  it("names the stops' row for what this shader lays them along", async () => {
+    await renderReady();
+    const colours = labelsIn(screen.getByRole("group", { name: "Colours" }));
+
+    expect(colours).toContain("Ramp");
+  });
+
   // UNREACHABLE while every shader in the table carries these controls: the
   // absence was driven by switching to one that does not, and the built-ins
   // that did have gone. The guard is still on the group (`length > 0`).
@@ -546,27 +589,27 @@ describe("ShaderPlayground edge group", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The Grid group and its two inks — Nexus's lattice.
+// The Grid group and its two inks — Pixel Comets' lattice.
 //
 // Rendered through the ROUTE'S PROP, which is how a second shader actually
 // reaches this panel: the picker that would otherwise switch to it is the
-// author's alone, so a preset saved on Nexus is the only way a reader ever sees
+// author's alone, so a preset saved on Pixel Comets is the only way a reader ever sees
 // these controls.
 // ---------------------------------------------------------------------------
 describe("ShaderPlayground grid group", () => {
   beforeEach(() => useShaderPresetDraftStore.getState().reset());
   afterEach(cleanup);
 
-  const nexusPreset = {
+  const pixelCometsPreset = {
     id: "preset-2",
-    title: "Nexus",
-    shaderId: "nexus" as const,
-    settings: { ...shaderPresetContentFor("nexus").settings, framing: {} },
+    title: "Pixel Comets",
+    shaderId: "pixelComets" as const,
+    settings: { ...shaderPresetContentFor("pixelComets").settings, framing: {} },
     publishedAt: null,
   };
 
-  async function renderNexus() {
-    const result = render(<ShaderPlayground preset={nexusPreset} />);
+  async function renderPixelComets() {
+    const result = render(<ShaderPlayground preset={pixelCometsPreset} />);
     await screen.findByRole("complementary", { name: "Preset properties" });
     return result;
   }
@@ -575,7 +618,7 @@ describe("ShaderPlayground grid group", () => {
     Array.from(group.querySelectorAll("label")).map((el) => el.textContent);
 
   it("gathers the lattice controls into one section", async () => {
-    await renderNexus();
+    await renderPixelComets();
 
     expect(labelsIn(screen.getByRole("group", { name: "Grid" }))).toEqual([
       "Pixel Size",
@@ -585,26 +628,99 @@ describe("ShaderPlayground grid group", () => {
   });
 
   it("draws the shader's own parameters under its own heading", async () => {
-    await renderNexus();
+    await renderPixelComets();
 
     // `ownLabel`, not the hard-coded "Track" this panel used to carry — that
-    // one named the fan, and there is no fan here.
-    expect(screen.getByRole("group", { name: "Field" })).toBeTruthy();
+    // one named the fan, and there is no fan here. Named for what the field is
+    // a field OF, since the panel already has a Grid group and a bare "Field"
+    // beside it read as a second name for the lattice.
+    expect(screen.getByRole("group", { name: "Comet Field" })).toBeTruthy();
+  });
+
+  // The comets' own controls, in the order the table names them — and the two
+  // that replaced Seed sit where it sat, between how many comets there are and
+  // how far each one runs.
+  //
+  // Seed is gone rather than moved: it hashed the lanes and did nothing else,
+  // and a control whose whole job is "a different arrangement of the same
+  // field" is not what these two do. The cost is that the arrangement is now
+  // fixed at a given Count, which is the trade the band is worth.
+  it("gathers the comets' own controls under the field's heading", async () => {
+    await renderPixelComets();
+
+    expect(labelsIn(screen.getByRole("group", { name: "Comet Field" }))).toEqual([
+      "Count",
+      "Origin Min",
+      "Origin Max",
+      "Travel",
+      "Tail",
+      "Tail Blend",
+      "Falloff",
+    ]);
+  });
+
+  // Head Stretch sits with the other bloom controls, next to the radius it
+  // shapes: the two together are the ellipse, one naming its width across the
+  // lane and the other how far it is drawn out along it.
+  it("gathers the bloom controls, with the head's stretch beside its radius", async () => {
+    await renderPixelComets();
+
+    expect(labelsIn(screen.getByRole("group", { name: "Glow" }))).toEqual([
+      "Head Glow",
+      "Head Radius",
+      "Head Stretch",
+      "Tail Glow",
+      "Tail Radius",
+    ]);
+  });
+
+  // Parallax sits with the other timing controls rather than with the comets'
+  // own, and it earns that by what you SEE it do: it hands each comet a depth
+  // and a nearer one covers more ground in the same cycle, which reads as one
+  // moving faster than another. That it does so by lengthening a run is the
+  // mechanism, not the control.
+  it("puts Parallax with the other timing controls", async () => {
+    await renderPixelComets();
+
+    expect(labelsIn(screen.getByRole("group", { name: "Motion" }))).toEqual([
+      "Speed",
+      "Parallax",
+      "Easing",
+      "Easing Bias",
+    ]);
   });
 
   // The point of `extraColorRows`: the major ink is a SWATCH BESIDE the minor
   // one, not a row of its own. A row each would have said the two were
   // unrelated, and spent a label and a line of the panel saying it.
   it("puts both lattice inks on one row", async () => {
-    await renderNexus();
+    await renderPixelComets();
     const colours = labelsIn(screen.getByRole("group", { name: "Colours" }));
 
     expect(colours).toContain("Grid");
     expect(colours).not.toContain("Major");
   });
 
+  // The same row, named by the other shader — and here the stops are not a
+  // ramp at all: each one is a whole comet's colour, kept for that comet's
+  // life, so nothing is read BETWEEN two of them. Calling that a ramp
+  // described a gradient the shader never draws.
+  it("names the stops' row for the comets they colour", async () => {
+    await renderPixelComets();
+    const colours = labelsIn(screen.getByRole("group", { name: "Colours" }));
+
+    expect(colours).toContain("Comets");
+    expect(colours).not.toContain("Ramp");
+  });
+
+  it("names that row for a reader who cannot see it", async () => {
+    await renderPixelComets();
+
+    expect(screen.getByRole("group", { name: "Comets colours" })).toBeTruthy();
+  });
+
   it("still names each ink for a reader who cannot see which is which", async () => {
-    await renderNexus();
+    await renderPixelComets();
     const row = screen.getByRole("group", { name: "Grid colours" });
 
     // Named by ROLE rather than numbered by position: "Colour 2" would say
@@ -670,31 +786,53 @@ describe("ShaderPlayground aspect toolbar", () => {
   const aspectRail = () =>
     screen.getByRole("toolbar", { name: "Preview aspect ratio" });
 
-  // It rides in the gutter row rather than travelling with the picture: the
-  // frame is a property of the page, and it holds still while the preset
-  // changes shape underneath it.
-  it("stands in the gutter row, between the menu and the theme toggle", async () => {
-    await renderReady();
-    const rail = aspectRail();
+  // The innermost box holding the page's two gutter controls. Found from the
+  // controls rather than named by class, so what is asserted is what sits
+  // together rather than what anything is called.
+  const gutterRow = () => {
     const menu = screen.getByRole("button", { name: "Menu" });
     const toggle = screen.getByRole("button", { name: "Light theme" });
-
-    // The row itself — the one box that holds all three. Found from the rail
-    // rather than named by class, so the assertion is about what sits together
-    // rather than about what anything is called.
-    // The INNERMOST such box — the canvas contains all three as well, and it is
-    // the row they share that this is about.
-    const band = Array.from(document.querySelectorAll("div"))
-      .filter(
-        (el) => el.contains(menu) && el.contains(toggle) && el.contains(rail),
-      )
+    return Array.from(document.querySelectorAll("div"))
+      .filter((el) => el.contains(menu) && el.contains(toggle))
       .pop();
-    const order = Array.from(band?.children ?? []);
+  };
 
-    expect(order.length).toBe(3);
+  // The row is the PAGE's two controls and nothing else. The rail stood between
+  // them until the row ran out of width on a phone (the ⌘K chip went under it),
+  // and a control that has to be in the row on one layout and under the card on
+  // another cannot live in the row's own box on either.
+  it("keeps the gutter row to the page's own two controls", async () => {
+    await renderReady();
+    const menu = screen.getByRole("button", { name: "Menu" });
+    const toggle = screen.getByRole("button", { name: "Light theme" });
+    const order = Array.from(gutterRow()?.children ?? []);
+
+    expect(order.length).toBe(2);
     expect(order[0].contains(menu)).toBe(true);
-    expect(order[1].contains(rail)).toBe(true);
-    expect(order[2].contains(toggle)).toBe(true);
+    expect(order[1].contains(toggle)).toBe(true);
+    expect(gutterRow()?.contains(aspectRail())).toBe(false);
+  });
+
+  // Which puts it in the CANVAS, beside the card it shapes — one seat in the
+  // markup, and two in the stylesheet: the gutter band on a desktop, and 8px
+  // under the card on a phone. WHICH of the two is CSS (`aspectRailStyle`), so
+  // what is testable here is the one thing both seats need, which is the rail
+  // sharing the card's box rather than the row's.
+  //
+  // After the row, never before it: that is the order a keyboard walks the page
+  // in — the page's controls, then the preset's — and on a phone it is also the
+  // order the two are read in down the screen.
+  it("stands with the card, after the gutter row", async () => {
+    await renderReady();
+    const rail = aspectRail();
+    const card = document.querySelector("[data-preset-stage]");
+    const canvas = card?.parentElement;
+    const kids = Array.from(canvas?.children ?? []);
+
+    expect(canvas?.contains(rail)).toBe(true);
+    expect(kids.findIndex((el) => el.contains(rail))).toBeGreaterThan(
+      kids.findIndex((el) => el === gutterRow()),
+    );
   });
 
   // SQUARE, every time. A preset records no shape of its own any more — it is
@@ -1484,6 +1622,34 @@ describe("ShaderPlayground ground", () => {
 
     expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
     expect(mockSetMode).not.toHaveBeenCalled();
+  });
+
+  // The SITE's toggle re-aims the card every time it moves, the panel's own
+  // control notwithstanding. That control is a PEEK at the other ground, not a
+  // second theme the card keeps: latched, it survived the site's toggle, so a
+  // page taken to the other theme and back showed the colours of the one it had
+  // left. Two moves to catch it — the first agrees with the peek by luck.
+  it("re-aims at the site's theme every time it changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ShaderPlayground preset={twoToned} />);
+    await screen.findByRole("complementary", { name: "Preset properties" });
+
+    // Peek at the light ground with the site still dark.
+    await user.click(groundToggle());
+    expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
+
+    // The site goes light — where the card already is, so nothing moves.
+    mockMode.mockReturnValue("light");
+    rerender(<ShaderPlayground preset={twoToned} />);
+    expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
+
+    // And back. The card has to come with it.
+    mockMode.mockReturnValue("dark");
+    rerender(<ShaderPlayground preset={twoToned} />);
+    expect(stageColors()).toBe("#111111FF,#222222FF");
+    expect(
+      screen.getByRole("button", { name: "Show the light colours" }),
+    ).toBeTruthy();
   });
 
   // The glyph names where pressing it GOES, so it is the ground you are not on.

@@ -27,6 +27,22 @@ export const PHASE_MIN = -90;
 export const PHASE_MAX = 90;
 export const PHASE_STEP = 15;
 
+/**
+ * The stop the two distance controls Pixel Comets measures against the FRAME —
+ * Origin and Travel — are dialled on.
+ *
+ * Exported because the stored-value migration rounds onto it: a converted
+ * travel landing between two stops is a number the slider cannot show, so the
+ * first touch of the control would lose the original. Here rather than written
+ * twice for the reason `PHASE_STEP` is here.
+ *
+ * One decimal, like every other slider on the page — see the spec table's own
+ * test. It is the coarser half of the trade the frame unit buys: forty stops
+ * across the whole range where cells offered a hundred and twenty, against a
+ * top of the slider that means the same thing at every pixel size.
+ */
+export const FRAME_DISTANCE_STEP = 0.1;
+
 // ---------------------------------------------------------------------------
 // The shader playground's table of contents.
 //
@@ -41,8 +57,9 @@ export const PHASE_STEP = 15;
 // The SHAPE is what everything downstream reads, and the second shader is what
 // proved it was worth keeping through the year it held one: `ShaderId` is a
 // union and `SHADER_SPECS` a record over it, so the domain schema, the store
-// and the stage all ask the table rather than assuming the answer. Nexus cost
-// one entry here, one `case` in `shader-stage.tsx`, and nothing else.
+// and the stage all ask the table rather than assuming the answer. Pixel
+// Comets cost one entry here, one `case` in `shader-stage.tsx`, and nothing
+// else.
 //
 // A table rather than a page full of hand-written rows, for the same reason
 // `media-properties-panel.tsx` uses one: the rows differ only in their four
@@ -54,7 +71,7 @@ export const PHASE_STEP = 15;
 // mile is eyeballing, not arithmetic.
 // ---------------------------------------------------------------------------
 
-export type ShaderId = "cosmicTrack" | "nexus";
+export type ShaderId = "cosmicTrack" | "pixelComets";
 
 /**
  * Which group in the sidebar a control is drawn in. Omitted — the usual case —
@@ -202,11 +219,24 @@ export interface ShaderSpec {
    *
    * Per shader because the group has no shader-independent name. It read
    * "Track" while the table held one entry, which was right for the fan and
-   * meaningless over Nexus's lattice; "Parameters" would be right for both and
-   * describe neither, and this panel is the one place a shader gets to say what
-   * its parts are called.
+   * meaningless over the lattice Pixel Comets draws; "Parameters" would be
+   * right for both and describe neither, and this panel is the one place a
+   * shader gets to say what its parts are called.
    */
   ownLabel: string;
+  /**
+   * What the shader calls the colours in its `colors` array — the row of
+   * swatches at the top of the Colours group.
+   *
+   * Per shader for the same reason `ownLabel` is, and it is the same kind of
+   * fact: the array is a list of stops to one shader and a list of whole
+   * objects to another, and only the shader knows which. Cosmic Track reads
+   * BETWEEN its stops — they are a gradient laid along the fan, so "Ramp" is
+   * what they are. Pixel Comets hands each comet one of them and that comet
+   * keeps it for its life, so nothing is interpolated and there is no ramp to
+   * name; they are the comets.
+   */
+  colorsLabel: string;
   /** The shader's own `maxColorCount`. */
   maxColors: number;
   /** False for the mesh gradients, which are opaque fills with no background. */
@@ -291,6 +321,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     id: "cosmicTrack",
     label: "Cosmic Track",
     ownLabel: "Track",
+    colorsLabel: "Ramp",
     maxColors: 10,
     hasColorBack: true,
     // The rails are painted in a colour of their OWN rather than lifted out of
@@ -431,12 +462,13 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
   // DISCRETE — a cell is lit or it is not — so almost every control here counts
   // something (cells, movers, pixels) rather than scaling something. That is
   // the reason the two share so few sliders despite sharing every framing one.
-  nexus: {
-    id: "nexus",
-    label: "Nexus",
-    ownLabel: "Field",
-    // Matches `NEXUS_MAX_COLORS` in `nexus-uniforms`, which is what sizes the
-    // uniform array — see `nexus-shader.test.ts`, which holds the two in step.
+  pixelComets: {
+    id: "pixelComets",
+    label: "Pixel Comets",
+    ownLabel: "Comet Field",
+    colorsLabel: "Comets",
+    // Matches `PIXEL_COMETS_MAX_COLORS` in `pixel-comets-uniforms`, which is what sizes the
+    // uniform array — see `pixel-comets-shader.test.ts`, which holds the two in step.
     maxColors: 8,
     hasColorBack: true,
     // The lattice's two inks. A colour of their own rather than one of the
@@ -466,16 +498,36 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // field does. It saturates at whatever the lattice can hold, which on a
       // coarse grid over a small card is reached before the slider ends.
       { kind: "slider", key: "count", label: "Count", min: 0, max: 120, step: 1, value: 30 },
-      // WHICH movers, at the same count — and nothing else. Its own control
-      // because the alternative is one dial doing two jobs: if the count were
-      // the only thing hashed there would be exactly ONE thirty-mover
-      // arrangement, and the only way to see a different one would be to ask
-      // for thirty-one.
-      { kind: "slider", key: "seed", label: "Seed", min: 0, max: 100, step: 1, value: 0 },
-      // How far a mover runs before it stops emitting, in CELLS — not how long
-      // it is visible, since the trail it has already laid keeps fading for
-      // `tail` cells after the head has gone.
-      { kind: "slider", key: "travel", label: "Travel", min: 1, max: 120, step: 1, value: 40 },
+      // WHERE a comet is born: the band of distances from the centre it may
+      // spawn in, measured in HALF-FRAMES. 0 is the centre, 1 is the frame's
+      // edge, and 2 is half a frame beyond it — so anything past 1 is a comet
+      // that arrives from off the card. It picks a side at random and marches
+      // back at the centre, which is what makes the far end of this band a
+      // field converging on the middle rather than drifting across it.
+      //
+      // Half-frames rather than cells, which the two controls below are still
+      // dialled in, and the difference is the point: a cell is a fixed size on
+      // SCREEN, so "outside the frame" in cells is a different number at every
+      // Pixel Size and every card. Measured against the frame it is 1,
+      // wherever you are.
+      //
+      // TWO controls rather than a spread about a middle, because the two ends
+      // are the two questions you actually have: how close in may one appear
+      // (0 lets them pop into being mid-card; raise it and they only ever
+      // arrive from outside), and how far out do they start.
+      { kind: "slider", key: "originMin", label: "Origin Min", min: 0, max: 2, step: FRAME_DISTANCE_STEP, value: 0 },
+      { kind: "slider", key: "originMax", label: "Origin Max", min: 0, max: 2, step: FRAME_DISTANCE_STEP, value: 2 },
+      // How far a comet runs before it stops emitting — not how long it is
+      // visible, since the trail it has already laid keeps fading for `tail`
+      // cells after the head has gone.
+      //
+      // In the same half-frames as the origin band above, and it has to be:
+      // the top of this slider is meant to carry a comet from the furthest
+      // origin right out the far side, and in cells whether it did depended on
+      // the pixel size. Four covers the furthest origin (2) plus the frame's
+      // own half (1) with room to spare — see `pixel-comets-shader.test.ts`,
+      // which holds the two ranges to that.
+      { kind: "slider", key: "travelSpans", label: "Travel", min: FRAME_DISTANCE_STEP, max: 4, step: FRAME_DISTANCE_STEP, value: 1.5 },
       // How far behind the head the trail is still lit, in the same cells so the
       // two can be read against each other. 0 leaves the head alone on the grid.
       { kind: "slider", key: "tail", label: "Tail", min: 0, max: 60, step: 1, value: 14 },
@@ -483,7 +535,7 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // fade at each cell's centre, so a cell is one flat value that dims in
       // place and the trail steps down in whole pixels; 1 evaluates it where the
       // fragment is. Both GLOWS follow it — a halo is cast by a pixel, so it
-      // carries that pixel's value (see `nexus-uniforms`, where leaving the two
+      // carries that pixel's value (see `pixel-comets-uniforms`, where leaving the two
       // out of step is what made a stepped trail read as a smooth one).
       //
       // A slider rather than the switch it sounds like, because the middle is a
@@ -542,16 +594,53 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // alpha instead.
       { kind: "slider", key: "majorGrid", label: "Major Grid", group: "grid", min: 0, max: 15, step: 1, value: 8 },
       { kind: "slider", key: "headGlow", label: "Head Glow", group: "glow", min: 0, max: 2, step: 0.1, value: 0.8 },
-      // Capped at the shader's own lane reach (`NEXUS_MAX_GLOW_REACH`), which is
+      // Capped at the shader's own lane reach (`PIXEL_COMETS_MAX_GLOW_REACH`), which is
       // how far out a fragment looks for movers. A radius past it is not a wider
       // halo but one clipped square at the lane boundary — so the range is the
-      // constant's, and `nexus-shader.test.ts` holds them together.
+      // constant's, and `pixel-comets-shader.test.ts` holds them together.
       { kind: "slider", key: "headRadius", label: "Head Radius", group: "glow", min: 0, max: 3, step: 0.1, value: 1.2 },
+      // How far that bloom is SMEARED BACKWARDS, in cells, at the far plane —
+      // motion blur on a radial glow, which is what a moving body's light does.
+      // Inertia drags the circle out opposite to the direction of travel, so
+      // the shape is the union of every position it held over the exposure: a
+      // capsule, round at both ends, with the head at its leading cap. It
+      // reaches no further AHEAD than the bare circle did, and 0 is that bare
+      // circle.
+      //
+      // Dialled rather than taken from how fast the comet is going. Speed is
+      // the honest reading of an exposure and it was written that way first;
+      // what it costs is a streak length nothing on the panel names, drifting
+      // with Parallax and Travel, so the one thing you cannot do is set the
+      // look you want and keep it.
+      //
+      // The radius above still names the half-width ACROSS the lane, and only
+      // this axis stretches. That is not a choice about which number means
+      // what: the across-lane reach is what the shader's neighbourhood walk is
+      // sized against, so stretching that way clips the bloom square at the
+      // lane boundary. Along the lane it is free — which is also why this one
+      // has no reach to be capped at, where Head Radius does.
+      { kind: "slider", key: "headStretch", label: "Head Stretch", group: "glow", min: 0, max: 12, step: 0.1, value: 2 },
       // Its own strength rather than a fraction of the head's: a head flaring
       // over a barely-lit trail is a spark, a flat head over a glowing trail is
       // a light-pipe, and neither is reachable from one control.
       { kind: "slider", key: "tailGlow", label: "Tail Glow", group: "glow", min: 0, max: 2, step: 0.1, value: 0.4 },
       { kind: "slider", key: "tailRadius", label: "Tail Radius", group: "glow", min: 0, max: 3, step: 0.1, value: 0.8 },
+      // How far apart the comets' SPEEDS are spread — 0 for one flat plane.
+      //
+      // Each comet is handed a depth, and a nearer one covers more ground in
+      // the same cycle: same time, more distance, so it crosses faster. A
+      // ratio between two crossing times is the only depth cue a lattice this
+      // rigid has — a head is one cell wide by construction, so the near plane
+      // cannot be drawn any bigger — and it is the one the eye reads anyway.
+      //
+      // With Motion rather than beside Travel, which it is measured against.
+      // What you SEE it do is change how fast a comet crosses; that it does so
+      // by lengthening a run is the mechanism, not the control.
+      //
+      // Off by default. A field that opens flat is a field, where one that
+      // opens parked reads as a fault — which is why Speed is the one control
+      // this shader moves off its own default and this is not.
+      { kind: "slider", key: "parallax", label: "Parallax", group: "motion", min: 0, max: 1, step: 0.1, value: 0 },
       { kind: "slider", key: "easing", label: "Easing", group: "motion", min: -1, max: 1, step: 0.1, value: 1 },
       { kind: "slider", key: "easingBias", label: "Easing Bias", group: "motion", min: -1, max: 1, step: 0.1, value: 0 },
       ...FRAMING_CONTROLS,

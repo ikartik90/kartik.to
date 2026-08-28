@@ -48,15 +48,21 @@ type Preset = ShaderPreset & ShaderPresetContent;
  * id alone and changes everything about how it looks, and a cache that could not
  * tell those apart would keep showing the old picture until a reload.
  */
-export function thumbnailKey(
-  preset: Preset,
-  theme: ShaderPresetTheme = "light",
-): string {
+export function thumbnailKey(preset: Preset, theme: ShaderPresetTheme): string {
   // The THEME is part of the identity of a picture, not merely of the request
   // for one. A preset holds a colour per ground, so the same preset at the same
   // `updatedAt` is two different photographs — and without this the strip would
   // keep showing the light one after the site went dark, with nothing to
   // invalidate it but an edit.
+  //
+  // REQUIRED, where it used to default to "light". A default here is not a
+  // convenience, it is a way to file a picture under a ground it was not drawn
+  // on: the capture below forgot to pass one, so every photograph taken on a
+  // dark site was filed as the light one. The dark key nothing had written was
+  // the key the strip then asked for, and every tile fell back to its ramp — a
+  // gradient in place of the picture — while the light key held a dark
+  // photograph for whenever the site went back. Required, that is a type error
+  // rather than a wrong picture.
   return `${preset.id}:${new Date(preset.updatedAt).getTime()}:${theme}`;
 }
 
@@ -70,7 +76,7 @@ export function thumbnailKey(
 export function captureOrder(
   presets: Preset[],
   captured: ReadonlySet<string>,
-  theme: ShaderPresetTheme = "light",
+  theme: ShaderPresetTheme,
 ): Preset[] {
   const pending = presets.filter(
     (preset) => !captured.has(thumbnailKey(preset, theme)),
@@ -222,8 +228,11 @@ export function ShaderPresetThumbnails({
           const url = canvas.toDataURL("image/png");
           if (url !== lastCapture.current || frames > CAPTURE_FRAMES) {
             lastCapture.current = url;
-            cache.set(thumbnailKey(current), url);
-            onCaptured(thumbnailKey(current), url);
+            // On the THEME it was drawn on — `palette` below resolves the
+            // preset onto that same ground, and the two have to agree or the
+            // picture is filed where nothing will look for it.
+            cache.set(thumbnailKey(current, theme), url);
+            onCaptured(thumbnailKey(current, theme), url);
             setIndex((was) => was + 1);
             return;
           }
@@ -243,7 +252,10 @@ export function ShaderPresetThumbnails({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [current, onCaptured]);
+    // `theme` is in here because the key written depends on it: a capture in
+    // flight when the site's theme changes must not file its picture under the
+    // ground it has just stopped drawing on.
+  }, [current, onCaptured, theme]);
 
   // Nothing left to draw, so nothing mounted — and no context held.
   if (!current) return null;

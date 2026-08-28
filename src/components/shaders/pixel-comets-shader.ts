@@ -1,9 +1,10 @@
-import { NEXUS_MAX_COLORS } from "./nexus-uniforms";
+import { PIXEL_COMETS_MAX_COLORS } from "./pixel-comets-uniforms";
 
 // ---------------------------------------------------------------------------
-// Nexus — coloured pixels running the lanes of a lattice, each dragging a
-// fading trail behind it. After the Nexus One's live wallpaper and the Nexus 4's
-// pixel fields.
+// Pixel Comets — coloured pixels running the lanes of a lattice, each
+// dragging a fading trail behind it. After the Nexus One's live wallpaper and
+// the Nexus 4's pixel fields, which are where the name it carried while it was
+// being built came from.
 //
 // Written against the same two contracts `cosmic-track-shader` is written
 // against — `v_objectUV` centred on 0 with the framing already applied, and
@@ -42,15 +43,15 @@ import { NEXUS_MAX_COLORS } from "./nexus-uniforms";
 // lane form is a couple of dozen tests per fragment however dense the field
 // gets, and the density control becomes exact rather than a guess.
 //
-// What it costs is the cap below: a lane holds at most NEXUS_SLOTS movers at
+// What it costs is the cap below: a lane holds at most COMET_SLOTS movers at
 // once. At any density the field is worth looking at, no one can see it.
 // ---------------------------------------------------------------------------
 
-export const nexusMeta = {
-  maxColorCount: NEXUS_MAX_COLORS,
+export const pixelCometsMeta = {
+  maxColorCount: PIXEL_COMETS_MAX_COLORS,
 } as const;
 
-export const nexusFragmentShader = `#version 300 es
+export const pixelCometsFragmentShader = `#version 300 es
 // HIGHP, where the rest of this repo's shaders are content with mediump.
 //
 // Everything here is placed by a hash, and a hash is precisely the operation
@@ -60,7 +61,7 @@ export const nexusFragmentShader = `#version 300 es
 // the only thing it has to look like.
 precision highp float;
 
-uniform vec4 u_colors[${NEXUS_MAX_COLORS}];
+uniform vec4 u_colors[${PIXEL_COMETS_MAX_COLORS}];
 uniform float u_colorsCount;
 uniform vec4 u_colorBack;
 uniform vec4 u_colorGrid;
@@ -68,13 +69,16 @@ uniform vec4 u_colorGridMajor;
 
 uniform float u_pixelSize;
 uniform float u_count;
-uniform float u_seed;
-uniform float u_travel;
+uniform float u_originMin;
+uniform float u_originMax;
+uniform float u_travelSpans;
+uniform float u_parallax;
 uniform float u_tail;
 uniform float u_tailBlend;
 uniform float u_falloff;
 uniform float u_headGlow;
 uniform float u_headRadius;
+uniform float u_headStretch;
 uniform float u_tailGlow;
 uniform float u_tailRadius;
 uniform float u_gridWidth;
@@ -110,31 +114,27 @@ out vec4 fragColor;
 // One reads as a rule the eye can find: at any real density you start noticing
 // that a column never holds two. Three is a third of the arithmetic again for a
 // coincidence that is already rare at two. So two.
-#define NEXUS_SLOTS 2
+#define COMET_SLOTS 2
 
 // The furthest a glow may reach, in cells — and so the widest neighbourhood a
-// fragment walks. Must match NEXUS_MAX_GLOW_REACH in the uniforms module, which
+// fragment walks. Must match PIXEL_COMETS_MAX_GLOW_REACH in the uniforms module, which
 // is where the control's range is clamped against it: a radius past this is not
 // a bigger halo, it is one clipped square at the lane boundary.
-#define NEXUS_MAX_GLOW_LANES 3
+#define COMET_MAX_GLOW_LANES 3
 
 // Cells per second at Speed 1. The mount has already scaled u_time by Speed, so
 // this is the only place the shader has an opinion about pace — enough that a
 // mover crosses a card in a couple of seconds, which is the reference's tempo.
 #define CELLS_PER_SECOND 14.
 
-// How much wider than the frame movers are spawned, so that turning the framing
-// does not empty the corners.
+// How much nearer than the far plane the nearest comet may come, at Parallax 1.
 //
-// The lattice is unbounded and the movers are not: they are drawn into a box,
-// and at rotation 45 the frame's own corners fall outside a box that fits it
-// square (by a factor of root two), leaving two bare wedges. Offsetting the
-// framing walks off the edge of the box the same way.
-//
-// Two covers any rotation with room for a modest offset. It is paid for
-// directly — a mover spawned into a box twice the frame is on screen half the
-// time, so the odds below are doubled to keep Count meaning what it says.
-#define NEXUS_SPAWN_SPREAD 2.
+// Three, so the depths span one to four: the same cycle, four times the ground,
+// and so four times the speed between the front of the field and the back. A
+// ratio rather than a difference is what the eye reads as depth, and four to
+// one is about where a field stops looking like one plane with a fast comet on
+// it and starts looking like two.
+#define PARALLAX_REACH 3.
 
 // How hard the bias may bend a run's timing. Carried from cosmic track, and
 // under 1 for the same reason: the warped rate is 1 + bias*cos, so 1 would
@@ -152,21 +152,52 @@ out vec4 fragColor;
 // .45 the third cell is already down to a fifth, so a trail reads as three or
 // four distinct pixels however long Tail is set. Lower would only be a shorter
 // trail wearing a longer one's number.
-#define NEXUS_DECAY_SOFT 0.995
-#define NEXUS_DECAY_HARD 0.45
+#define COMET_DECAY_SOFT 0.995
+#define COMET_DECAY_HARD 0.45
 
 // ---------------------------------------------------------------------------
-// Set once in main, read in addMover. Globals rather than seven more
-// parameters on a function that already takes ten — these are constants of the
-// FRAME, and threading them through per lane would say they varied.
+// Set once in main, read in addMover. Globals rather than more parameters on a
+// function that already takes ten — these are constants of the FRAME, and
+// threading them through per lane would say they varied.
+//
+// The run's own timing is NOT among them any more, and that is what the frame
+// unit cost: a run measured against the frame is a different number of cells
+// along a column than along a row, so it varies by AXIS and is passed in. See
+// timingFor.
 // ---------------------------------------------------------------------------
-float g_cycles;
-float g_runCells;
 float g_tailCells;
-float g_lifeCells;
 float g_chance;
 float g_decay;
 float g_tailEnd;
+
+// One axis's run, life and clock: (runCells, lifeCells, cycles).
+//
+// Per AXIS because Travel is a share of the FRAME and a frame is not always
+// square: two half-frames down a tall card is more cells than two across it.
+// Worked out twice in main rather than inside addMover, which a fragment calls
+// up to twenty-eight times.
+vec2 timingFor(float span) {
+  // Floored at one CELL, which is where that floor lives now that the control
+  // is not dialled in them. At zero the head has nowhere to go, so a mover
+  // spawns and dies in place — and the run divides its progress, so the zero
+  // would take the whole field with it rather than parking one mover.
+  float run = max(u_travelSpans * span * .5, 1.);
+  // The run, the drain, and ONE more cell.
+  //
+  // That last cell is the half at each end of the fade window, and without it
+  // the cycle ends with the final pixel still lit — faintly, but it is switched
+  // off rather than fading out, so every mover pops as it dies. The cost of
+  // carrying it is that a cycle is one cell longer than the two controls name,
+  // which nothing can see.
+  // One cycle is one mover's whole life, at the FAR plane — parallax lengthens
+  // a run without touching this, which is what lets a comet's depth be drawn
+  // from the cycle it is born in. See addMover.
+  //
+  // u_time is already scaled by Speed at the mount, so this is seconds at
+  // Speed 1.
+  float life = run + g_tailCells + 1.;
+  return vec2(run, u_time / max(life / CELLS_PER_SECOND, 1e-4));
+}
 
 // Hash without a trig call — sin() diverges between drivers at large arguments,
 // and "the field is arranged differently on that laptop" is not a bug anyone
@@ -229,7 +260,7 @@ vec4 colorAt(float r) {
 //
 //   axis       0 for a lane running along Y (a column), 1 for one along X.
 //   lane       that column's or row's index. Unbounded — the lattice is.
-//   slot       which of NEXUS_SLOTS movers in it.
+//   slot       which of COMET_SLOTS movers in it.
 //   alongStep  the fragment's position along the lane, snapped to its cell's
 //   alongFree  centre, and where the fragment actually is. Both in cells;
 //              u_tailBlend chooses between them.
@@ -237,19 +268,30 @@ vec4 colorAt(float r) {
 //   onLane     1 only for the fragment's OWN lane. This is what keeps the
 //              mover's core exactly one cell wide while its glow spills into
 //              the neighbours being walked either side of it.
-//   laneSpan   how long the spawn window is, in cells.
+//   laneSpan   the frame's extent along this lane, in cells. Half of it is the
+//              centre-to-edge distance, which is the unit the origin band and
+//              the run are both dialled in.
+//   timing     this axis's run at the far plane, and its clock — see timingFor.
 // ---------------------------------------------------------------------------
 void addMover(
   float axis, float lane, float slot,
   float alongStep, float alongFree, float perp, float onLane, float laneSpan,
+  vec2 timing,
   inout vec4 core, inout vec4 glow
 ) {
-  vec4 key = vec4(axis, lane, slot, u_seed);
+  float cycles = timing.y;
+
+  // No seed in the key. It used to carry one, so that two presets at the same
+  // Count could not run pixel-for-pixel identical — and the control that fed it
+  // is now the origin band, which is a measurement rather than a hash. What is
+  // left is fixed: one Count is one arrangement, and the field churns through
+  // that arrangement rather than through several.
+  vec4 key = vec4(axis, lane, slot, 0.);
 
   // Each lane-slot keeps its own offset into the cycle, or the whole field
   // would fire in unison and read as a heartbeat rather than as weather.
   float ph = hash44(key * 1.7 + 11.3).x;
-  float clock = g_cycles + ph;
+  float clock = cycles + ph;
   float cycle = floor(clock);
   float within = clock - cycle;
 
@@ -259,6 +301,31 @@ void addMover(
   // one arrangement and repeating it.
   vec4 h = hash44(key + vec4(cycle * 7.13));
   if (h.x >= g_chance) return;
+
+  // PARALLAX. Each comet is handed a DEPTH, and a nearer one covers more ground
+  // in the same cycle — same time, more distance, more speed. That is the whole
+  // of it: nothing else about the comet changes, because nothing else can. A
+  // head is one cell wide by construction, so the near plane cannot be drawn
+  // bigger; the ratio between how fast two of them cross is the only depth cue
+  // a lattice this rigid has, and it is the strongest one anyway.
+  //
+  // Never below 1. Travel names the FAR plane and parallax brings comets in
+  // front of it; letting it push the other way would strand the slowest ones
+  // inside the frame at the top of a slider whose whole promise is that they
+  // leave.
+  //
+  // Drawn per CYCLE rather than per lane, so a column is not permanently near —
+  // and that is only sound because the cycle is untouched by any of this (see
+  // timingFor). Vary the RATE instead, which is the obvious way to write it, and
+  // the draw becomes circular: the hash lives inside the cycle it would be
+  // choosing, so the boundary moves under the number that moved it.
+  //
+  // A hash of its own rather than a fifth component of h, whose four are spent
+  // on the fire test, the side, the distance and the colour. It is paid only by
+  // comets that exist, being drawn after the test above.
+  float depth = 1. + u_parallax * PARALLAX_REACH * hash44(key * 3.1 + vec4(cycle * 19.7 + 5.3)).y;
+  float runCells = timing.x * depth;
+  float lifeCells = runCells + g_tailCells + 1.;
 
   // How far through its own life this mover is, 0 to 1. The cycle IS that life,
   // so a lane holding a mover holds one for the whole of it — the next departs
@@ -274,16 +341,28 @@ void addMover(
   float shaped = sin(eased * HALF_PI);
   float progress = mix(eased, shaped, u_easing);
 
-  // How far the head has come. It runs PAST u_travel deliberately: the ink is
+  // How far the head has come. It runs PAST the run deliberately: the ink is
   // gated to the run below, so the overshoot is exactly the stretch where the
   // head is gone and the trail is still draining. That is what makes a mover
   // outlive its own run without anything having to remember that it did.
-  float head = progress * g_lifeCells;
+  float head = progress * lifeCells;
 
-  // One of the four edges. The axis was chosen by which lane this is; this is
-  // which way along it.
-  float dir = h.y < .5 ? -1. : 1.;
-  float start = (h.z - .5) * laneSpan * NEXUS_SPAWN_SPREAD;
+  // WHERE it is born, and which way it goes — one decision, not two.
+  //
+  // The side is a coin toss; how far out it lands is drawn from the band the
+  // two Origin controls name, in half-frames (laneSpan * .5 is the centre to
+  // the edge). Past 1 that puts the mover off the card, which is what the far
+  // end of the band is for: it arrives from outside rather than appearing in
+  // the middle of the picture.
+  //
+  // And it always marches BACK at the centre, which is why the direction is the
+  // side negated rather than a second toss. Drawn independently — which is how
+  // this worked at first — half of them ran outward from wherever they landed
+  // and were never seen, so pushing the band outside the frame emptied the card
+  // instead of filling it.
+  float side = h.y < .5 ? -1. : 1.;
+  float dir = -side;
+  float start = side * mix(u_originMin, u_originMax, h.z) * laneSpan * .5;
 
   vec4 tint = colorAt(h.w);
   float ink = tint.a;
@@ -313,7 +392,7 @@ void addMover(
   // Without the first term a long tail would light cells BEHIND the spawn point
   // at the moment of spawning; without the second the trail would keep being
   // laid after the run was over.
-  float onRun = step(-.5, toStep) * step(toStep, g_runCells + .5);
+  float onRun = step(-.5, toStep) * step(toStep, runCells + .5);
   float behindStep = head - toStep;
   float onTrail = step(-.5, behindStep) * onRun;
 
@@ -345,15 +424,57 @@ void addMover(
   // something that slides across that pixel reads as the glow coming loose
   // from the thing casting it. Blended by u_tailBlend, because a smooth trail's
   // head band slides continuously too and its bloom should go with it.
-  float headAt = min(head, g_runCells);
+  float headAt = min(head, runCells);
   float headPos = start + dir * headAt;
   float headCell = mix(floor(headPos) + .5, headPos, u_tailBlend);
   // Taken out over the last cell of the run, so the head dims rather than
   // vanishing on a frame boundary.
-  float alive = 1. - smoothstep(g_runCells, g_runCells + 1., head);
-  float toHead =
-    length(vec2(perp, alongFree - headCell)) / max(u_headRadius, 1e-4);
-  float headLit = u_headGlow * alive * pow(max(1. - toHead, 0.), 2.);
+  float alive = 1. - smoothstep(runCells, runCells + 1., head);
+  // The head's bloom is the radial glow it always was, with MOTION BLUR on it:
+  // the circle smeared along the track it has just come down. Inertia stretches
+  // it opposite to the direction of travel, so the whole of the stretch lies
+  // behind the comet and it reaches no further ahead than the bare circle ever
+  // did.
+  //
+  // A CAPSULE, built the way the trail's bloom below is built and for the same
+  // reason: the distance is taken to the nearest point of the smear rather than
+  // to the head, which keeps the glow round at both ends and at full width
+  // along the whole of it. That is what motion blur of a disc IS — the union of
+  // every position it held over the exposure. Clamping in the head's own frame,
+  // where the smear runs from -headStretch to 0, is what puts all of it behind:
+  // the shape's widest section is a band running back from the head rather than
+  // an axis through it, and the head sits at the leading cap.
+  //
+  // Only the ALONG-lane axis is stretched, and that is load-bearing rather than
+  // tidy: the across-lane reach is what the fragment's neighbourhood walk is
+  // sized against (see COMET_MAX_GLOW_LANES), so stretching THAT way would push
+  // the bloom past the lanes being walked and clip it square at the boundary.
+  // Along the lane it costs nothing at all — a fragment already asks every mover
+  // in its own lane whatever their distance along it.
+  //
+  // How far it smears is DIALLED, in cells, and not derived from how fast the
+  // comet is going. Speed is the honest reading of an exposure and it was tried
+  // here; what it costs is a length nothing on the panel names, drifting with
+  // Parallax and Travel, so the one thing you cannot do is set the streak you
+  // want and keep it. This is a look, and a look is dialled.
+  //
+  // And it FADES along the smear, which a true exposure would NOT: a uniform
+  // pass over the same ground is uniformly bright, so the honest capsule is a
+  // bar with a cap on each end however long you make it. What is being drawn
+  // here is inertia letting go, not a shutter left open.
+  //
+  // The fade scales the RADIUS as well as the brightness, and that is the whole
+  // difference between a comet and a bar. Dimming does not narrow: with the
+  // width held, the silhouette stays even until the light drops under the eye's
+  // floor and then stops, so it reads as a bar that ends rather than a glow
+  // that runs out. It is the fault the trail's own bloom below was caught with,
+  // and it is fixed here the same way — see the taper there.
+  float ahead = dir * (alongFree - headCell);
+  float alongToHead = ahead - clamp(ahead, -u_headStretch, 0.);
+  float back = clamp(-ahead, 0., u_headStretch);
+  float fadeBack = 1. - back / max(u_headStretch, 1e-4);
+  float toHead = length(vec2(perp, alongToHead)) / max(u_headRadius * fadeBack, 1e-4);
+  float headLit = u_headGlow * alive * fadeBack * pow(max(1. - toHead, 0.), 2.);
 
   // The lit stretch the TRAIL's bloom is thrown by: from the back of the last
   // surviving cell to the back of the HEAD's — the head's own cell left out of
@@ -369,7 +490,7 @@ void addMover(
   // The trail takes the cell back as the head goes out (see alive), so the
   // frontmost pixel is never left with nothing lighting it.
   float lit0 = max(-.5, head - g_tailCells - .5);
-  float lit1 = min(g_runCells + .5, head + .5) - alive;
+  float lit1 = min(runCells + .5, head + .5) - alive;
 
   // Fades in over the first half cell, so a mover that has only just spawned —
   // and has laid no trail yet — does not switch a bloom on before there is
@@ -480,42 +601,40 @@ void main() {
   //
   // The LATTICE is unbounded, deliberately: the framing controls move a camera
   // over a field rather than resizing the field, so zooming out finds more grid
-  // rather than an edge. Only the movers are drawn into a box (see
-  // NEXUS_SPAWN_SPREAD), because a count has to be a count of something.
+  // rather than an edge. Only the movers are held to it — they are born a
+  // measured distance from its centre (see the origin band in addMover) — since
+  // a count has to be a count of something.
   vec2 frame = (2. * u_resolution / longEdge) / cell;
   float lanes = max(frame.x + frame.y, 1.);
 
-  g_runCells = max(u_travel, 1.);
   g_tailCells = max(u_tail, 0.);
-  // The run, the drain, and ONE more cell.
-  //
-  // That last cell is the half at each end of the fade window, and without it
-  // the cycle ends with the final pixel still lit — faintly, but it is switched
-  // off rather than fading out, so every mover pops as it dies. The cost of
-  // carrying it is that a cycle is one cell longer than the two controls name,
-  // which nothing can see.
-  g_lifeCells = g_runCells + g_tailCells + 1.;
+
+  // One per axis: a column's lane runs the frame's height, a row's its width.
+  vec2 downTiming = timingFor(frame.y);
+  vec2 acrossTiming = timingFor(frame.x);
 
   // The trail's curve — see trailFade. Both of these are constant over the
   // frame, and the pow() for the end point is the reason they are hoisted: it
   // would otherwise be paid once per lane per fragment for a number that never
   // varies.
-  g_decay = mix(NEXUS_DECAY_SOFT, NEXUS_DECAY_HARD, clamp(u_falloff, 0., 1.));
+  g_decay = mix(COMET_DECAY_SOFT, COMET_DECAY_HARD, clamp(u_falloff, 0., 1.));
   g_tailEnd = pow(g_decay, max(g_tailCells, 1e-4));
 
-  // One cycle is one mover's whole life. u_time is already scaled by Speed at
-  // the mount, so this is seconds at Speed 1.
-  float cycleSeconds = g_lifeCells / CELLS_PER_SECOND;
-  g_cycles = u_time / max(cycleSeconds, 1e-4);
-
   // Count is a number of MOVERS, so it is shared out over the slots a frame
-  // holds — then corrected for the spawn box being wider than the frame, which
+  // holds — then corrected for the spawn band reaching outside the frame, which
   // leaves a mover on screen for only part of its life.
+  //
+  // The correction is the band's OUTER reach, floored at the frame itself: a
+  // band that stays inside the card has every mover on screen for the whole of
+  // its run and wants no correction, and one reaching two half-frames out
+  // leaves each mover visible for about half of it. A constant stood here while
+  // the spawn box was fixed. It cannot now, or Count would mean a different
+  // number of visible comets at every setting of the band.
   //
   // It saturates rather than failing: past what the lattice can hold every lane
   // fires every cycle and the field is as dense as it gets.
   g_chance = clamp(
-    u_count * NEXUS_SPAWN_SPREAD / (float(NEXUS_SLOTS) * lanes),
+    u_count * max(u_originMax, 1.) / (float(COMET_SLOTS) * lanes),
     0., 1.
   );
 
@@ -528,7 +647,7 @@ void main() {
     u_headGlow > 0. ? u_headRadius : 0.,
     u_tailGlow > 0. ? u_tailRadius : 0.
   );
-  int span = int(clamp(ceil(reach), 0., float(NEXUS_MAX_GLOW_LANES)));
+  int span = int(clamp(ceil(reach), 0., float(COMET_MAX_GLOW_LANES)));
 
   vec4 core = vec4(0.);
   vec4 glow = vec4(0.);
@@ -538,14 +657,16 @@ void main() {
     float column = base.x + float(d);
     float row = base.y + float(d);
 
-    for (int s = 0; s < NEXUS_SLOTS; s++) {
+    for (int s = 0; s < COMET_SLOTS; s++) {
       float slot = float(s);
       // Movers running along Y, in the columns either side of this fragment.
       addMover(0., column, slot,
-        base.y + .5, g.y, g.x - (column + .5), onLane, frame.y, core, glow);
+        base.y + .5, g.y, g.x - (column + .5), onLane, frame.y, downTiming,
+        core, glow);
       // Movers running along X, in the rows either side of it.
       addMover(1., row, slot,
-        base.x + .5, g.x, g.y - (row + .5), onLane, frame.x, core, glow);
+        base.x + .5, g.x, g.y - (row + .5), onLane, frame.x, acrossTiming,
+        core, glow);
     }
   }
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  FRAME_DISTANCE_STEP,
   FRAMING_CONTROLS,
   FRAMING_CONTROL_KEYS,
   PHASE_STEP,
@@ -329,6 +330,17 @@ const RENAMED_PARAMS: Record<string, string> = {
 const RESCALED_PARAMS: {
   was: string;
   now: string;
+  /**
+   * The shader this conversion belongs to, where the old key is a LIVE control
+   * on another one. A param name is only unique within a shader — Cosmic Track
+   * has a Travel of its own, in units that never changed — so a conversion
+   * named by key alone would rename it out from under every preset saved on
+   * that shader and hand the control back whatever today's default is.
+   *
+   * Omitted where the old key belongs to no other shader in the table, which is
+   * the same thing `RENAMED_PARAMS` relies on above.
+   */
+  shaderId?: ShaderId;
   convert: (value: number) => number;
 }[] = [
   {
@@ -347,7 +359,47 @@ const RESCALED_PARAMS: {
     convert: (value) =>
       Math.round(value / TRACK_UNITS_PER_DEGREE / PHASE_STEP) * PHASE_STEP,
   },
+  {
+    // Travel was a number of CELLS. It is now a share of the frame — half-frames,
+    // where 1 is the centre to the edge — so that the top of the slider carries a
+    // comet from the furthest origin out the far side whatever the pixel size. In
+    // cells that was a different setting on every card.
+    //
+    // There is no exact conversion, and there cannot be: how many cells a
+    // half-frame is worth depends on the card's size and the Pixel Size, and a
+    // stored preset records neither. So it is carried on the scale the two
+    // DEFAULTS share — a preset left at the old default opens on the new one, and
+    // everything else keeps its proportion to it.
+    //
+    // Both numbers are FROZEN here rather than read from the control table. A
+    // migration that followed the table would re-express the same stored preset
+    // differently every time the default moved, which is the one thing a
+    // migration may not do.
+    was: "travel",
+    now: "travelSpans",
+    shaderId: "pixelComets",
+    convert: (value) =>
+      Math.max(
+        Math.round(
+          (value * TRAVEL_SPANS_AT_UNIT_CHANGE) /
+            TRAVEL_CELLS_AT_UNIT_CHANGE /
+            FRAME_DISTANCE_STEP,
+        ) * FRAME_DISTANCE_STEP,
+        // A run of one cell was a legal saving and converts to a fraction of a
+        // stop — a value the slider cannot show and the shader reads as a comet
+        // that never leaves. Held on the first stop, the shortest run the
+        // control can express.
+        FRAME_DISTANCE_STEP,
+      ),
+  },
 ];
+
+/**
+ * Travel's default on either side of the unit change — 40 cells became 1.5
+ * half-frames — which is the only anchor the conversion above has. See there.
+ */
+const TRAVEL_CELLS_AT_UNIT_CHANGE = 40;
+const TRAVEL_SPANS_AT_UNIT_CHANGE = 1.5;
 
 /** Moves any stored value under a retired key onto the key that replaced it. */
 function applyRenames(value: unknown): unknown {
@@ -365,12 +417,13 @@ function applyRenames(value: unknown): unknown {
 }
 
 /** Re-expresses any stored value whose scale has changed — see `RESCALED_PARAMS`. */
-function applyRescales(value: unknown): unknown {
+function applyRescales(value: unknown, shaderId: ShaderId): unknown {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return value;
   }
   const params = { ...(value as Record<string, unknown>) };
-  for (const { was, now, convert } of RESCALED_PARAMS) {
+  for (const { was, now, shaderId: only, convert } of RESCALED_PARAMS) {
+    if (only !== undefined && only !== shaderId) continue;
     if (!(was in params)) continue;
     const stored = params[was];
     // The new key wins if BOTH are present, exactly as a rename does: a preset
@@ -383,9 +436,13 @@ function applyRescales(value: unknown): unknown {
   return params;
 }
 
-/** Every stored-params migration, in the order they have to run. */
-function migrateParams(value: unknown): unknown {
-  return applyRescales(applyRenames(value));
+/**
+ * Every stored-params migration, in the order they have to run — bound to the
+ * shader whose branch of the union is doing the parsing, since a conversion may
+ * belong to one shader and not another. See `RESCALED_PARAMS.shaderId`.
+ */
+function migrateParamsFor(shaderId: ShaderId) {
+  return (value: unknown): unknown => applyRescales(applyRenames(value), shaderId);
 }
 
 /**
@@ -451,7 +508,7 @@ function settingsSchemaFor(spec: ShaderSpec) {
   // shader takes, and this is the layer that decides a placement is stored per
   // shape instead of once.
   const params = z.preprocess(
-    migrateParams,
+    migrateParamsFor(spec.id),
     z.object(
       Object.fromEntries(
         spec.controls

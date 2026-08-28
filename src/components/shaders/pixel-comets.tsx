@@ -7,51 +7,55 @@ import {
   defaultObjectSizing,
   type ShaderSizingParams,
 } from "@paper-design/shaders";
-import { nexusFragmentShader } from "./nexus-shader";
+import { pixelCometsFragmentShader } from "./pixel-comets-shader";
 import {
-  DEFAULT_NEXUS,
-  toNexusUniforms,
-  type NexusParams,
-} from "./nexus-uniforms";
+  DEFAULT_PIXEL_COMETS,
+  toPixelCometsUniforms,
+  type PixelCometsParams,
+} from "./pixel-comets-uniforms";
 import { useShaderPolicy } from "./use-shader-policy";
 
 // ---------------------------------------------------------------------------
-// Nexus — coloured pixels running the lanes of a lattice, trailing as they go.
+// Pixel Comets — coloured pixels running the lanes of a lattice, trailing as
+// they go.
 //
 // Shaped exactly like `CosmicTrack`, which is shaped exactly like one of the
 // library's own: friendly props in, a `uniforms` object out, straight into
 // `ShaderMount`. No layer of ours in between to drift.
 // ---------------------------------------------------------------------------
 
-export interface NexusProps
+export interface PixelCometsProps
   extends ShaderComponentProps,
-    Partial<NexusParams>,
+    Partial<PixelCometsParams>,
     ShaderSizingParams {
   /** Animation rate. Held at 0 under `prefers-reduced-motion`. */
   speed?: number;
   frame?: number;
 }
 
-function NexusImpl({
-  colors = DEFAULT_NEXUS.colors,
-  colorBack = DEFAULT_NEXUS.colorBack,
-  colorGrid = DEFAULT_NEXUS.colorGrid,
-  colorGridMajor = DEFAULT_NEXUS.colorGridMajor,
-  pixelSize = DEFAULT_NEXUS.pixelSize,
-  count = DEFAULT_NEXUS.count,
-  seed = DEFAULT_NEXUS.seed,
-  travel = DEFAULT_NEXUS.travel,
-  tail = DEFAULT_NEXUS.tail,
-  tailBlend = DEFAULT_NEXUS.tailBlend,
-  falloff = DEFAULT_NEXUS.falloff,
-  headGlow = DEFAULT_NEXUS.headGlow,
-  headRadius = DEFAULT_NEXUS.headRadius,
-  tailGlow = DEFAULT_NEXUS.tailGlow,
-  tailRadius = DEFAULT_NEXUS.tailRadius,
-  gridWidth = DEFAULT_NEXUS.gridWidth,
-  majorGrid = DEFAULT_NEXUS.majorGrid,
-  easing = DEFAULT_NEXUS.easing,
-  easingBias = DEFAULT_NEXUS.easingBias,
+function PixelCometsImpl({
+  colors = DEFAULT_PIXEL_COMETS.colors,
+  colorBack = DEFAULT_PIXEL_COMETS.colorBack,
+  colorGrid = DEFAULT_PIXEL_COMETS.colorGrid,
+  colorGridMajor = DEFAULT_PIXEL_COMETS.colorGridMajor,
+  pixelSize = DEFAULT_PIXEL_COMETS.pixelSize,
+  count = DEFAULT_PIXEL_COMETS.count,
+  originMin = DEFAULT_PIXEL_COMETS.originMin,
+  originMax = DEFAULT_PIXEL_COMETS.originMax,
+  travelSpans = DEFAULT_PIXEL_COMETS.travelSpans,
+  parallax = DEFAULT_PIXEL_COMETS.parallax,
+  tail = DEFAULT_PIXEL_COMETS.tail,
+  tailBlend = DEFAULT_PIXEL_COMETS.tailBlend,
+  falloff = DEFAULT_PIXEL_COMETS.falloff,
+  headGlow = DEFAULT_PIXEL_COMETS.headGlow,
+  headRadius = DEFAULT_PIXEL_COMETS.headRadius,
+  headStretch = DEFAULT_PIXEL_COMETS.headStretch,
+  tailGlow = DEFAULT_PIXEL_COMETS.tailGlow,
+  tailRadius = DEFAULT_PIXEL_COMETS.tailRadius,
+  gridWidth = DEFAULT_PIXEL_COMETS.gridWidth,
+  majorGrid = DEFAULT_PIXEL_COMETS.majorGrid,
+  easing = DEFAULT_PIXEL_COMETS.easing,
+  easingBias = DEFAULT_PIXEL_COMETS.easingBias,
 
   speed = 0,
   frame = 0,
@@ -67,24 +71,27 @@ function NexusImpl({
   worldWidth = defaultObjectSizing.worldWidth,
   worldHeight = defaultObjectSizing.worldHeight,
   ...props
-}: NexusProps) {
+}: PixelCometsProps) {
   const policy = useShaderPolicy({ speed, maxPixelCount, fit });
 
   const uniforms = {
-    ...toNexusUniforms({
+    ...toPixelCometsUniforms({
       colors,
       colorBack,
       colorGrid,
       colorGridMajor,
       pixelSize,
       count,
-      seed,
-      travel,
+      originMin,
+      originMax,
+      travelSpans,
+      parallax,
       tail,
       tailBlend,
       falloff,
       headGlow,
       headRadius,
+      headStretch,
       tailGlow,
       tailRadius,
       gridWidth,
@@ -109,7 +116,7 @@ function NexusImpl({
       speed={policy.speed}
       frame={frame}
       maxPixelCount={policy.maxPixelCount}
-      fragmentShader={nexusFragmentShader}
+      fragmentShader={pixelCometsFragmentShader}
       uniforms={uniforms}
     />
   );
@@ -120,7 +127,7 @@ function NexusImpl({
  * where the same note explains why the default `memo` is defeated by an array
  * prop and re-uploads every uniform on every parent render.
  */
-export const Nexus = memo(NexusImpl, (prev, next) => {
+export const PixelComets = memo(PixelCometsImpl, (prev, next) => {
   const { colors: prevColors, ...prevRest } = prev;
   const { colors: nextColors, ...nextRest } = next;
 
