@@ -21,6 +21,7 @@ import { DemoPreloader } from "@/components/demo-component";
 import { useTrickleProgress } from "@/hooks/use-demo-loader";
 import { PresetsPane } from "./presets-pane";
 import { ShaderStage } from "./shader-stage";
+import { useDraftHistory } from "./use-draft-history";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
@@ -411,6 +412,12 @@ export interface OpenedShaderPreset {
 }
 
 export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
+  // ⌘Z / ⌘⇧Z over the draft. Here rather than in the palette, which owns the
+  // shortcuts that COMMIT a draft (⌘S) — undo never leaves the page and has no
+  // meaning off it, so it belongs to the surface being edited, exactly as the
+  // article editor's own history does.
+  useDraftHistory();
+
   // The draft lives in a STORE rather than in this component, because the
   // commands that commit it — "Save changes and exit", ⌘S — are in the command
   // palette, which is mounted in the root layout and knows nothing about the
