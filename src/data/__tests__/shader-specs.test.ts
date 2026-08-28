@@ -15,7 +15,7 @@ const eachSpec = specs.map((spec) => [spec.id, spec] as const);
 
 describe("defaultParams", () => {
   it("returns one entry per control, holding that control's default", () => {
-    const spec = SHADER_SPECS.colorPanels;
+    const spec = SHADER_SPECS.cosmicTrack;
     const params = defaultParams(spec);
 
     expect(Object.keys(params).sort()).toEqual(
@@ -29,7 +29,7 @@ describe("defaultParams", () => {
 
 describe("defaultState", () => {
   it("overrides only the keys the shader's defaults name, leaving the rest at the control's own", () => {
-    const spec = SHADER_SPECS.colorPanels;
+    const spec = SHADER_SPECS.cosmicTrack;
     const controlDefaults = defaultParams(spec);
     const { params } = defaultState(spec);
 
@@ -40,7 +40,7 @@ describe("defaultState", () => {
   });
 
   it("carries the colours and background through", () => {
-    const spec = SHADER_SPECS.colorPanels;
+    const spec = SHADER_SPECS.cosmicTrack;
     const result = defaultState(spec);
 
     expect(result.colors).toEqual(spec.defaults.colors);
@@ -48,7 +48,7 @@ describe("defaultState", () => {
   });
 
   it("merges the shader's extra colours over the spec's own defaults", () => {
-    const spec = SHADER_SPECS.godRays;
+    const spec = SHADER_SPECS.cosmicTrack;
     // The shader has a second colour beyond the ramp (the bloom tint), and the
     // defaults may or may not have an opinion about it.
     expect(spec.extraColors.length).toBeGreaterThan(0);
@@ -62,7 +62,7 @@ describe("defaultState", () => {
   });
 
   it("does not let a caller mutate the spec through the result", () => {
-    const spec = SHADER_SPECS.colorPanels;
+    const spec = SHADER_SPECS.cosmicTrack;
     const first = defaultState(spec);
     first.colors[0] = "#000000FF";
     first.params.scale = 99;
@@ -119,30 +119,20 @@ describe("the spec table itself", () => {
     }
   });
 
-  // Motion is NOT shared, and that is the point of it being its own block.
-  // Every paper-shaders component ACCEPTS `speed` — they all extend
-  // `ShaderMotionParams` — so the type system will never catch this; the only
-  // evidence is that StaticMeshGradient's fragment shader contains no `u_time`
-  // reference, which means the slider would move nothing.
-  it("gives the static mesh gradient no motion control", () => {
-    const keys = SHADER_SPECS.staticMeshGradient.controls.map(
-      (control) => control.key,
-    );
-
+  // Motion is NOT shared, and that is the point of it being its own block: a
+  // shader whose fragment shader never reads `u_time` must not carry a Speed
+  // slider, and the type system will never catch one that does — every
+  // paper-shaders component ACCEPTS `speed`, since they all extend
+  // `ShaderMotionParams`. The table's one static shader (StaticMeshGradient)
+  // went with the rest of the built-ins, so every spec left animates; the
+  // exception this row used to carry is the shape to bring back with the next
+  // shader that does not.
+  it.each(eachSpec)("%s: animates, so it exposes the motion controls", (_, spec) => {
+    const keys = spec.controls.map((control) => control.key);
     for (const key of MOTION_CONTROL_KEYS) {
-      expect(keys, key).not.toContain(key);
+      expect(keys, key).toContain(key);
     }
   });
-
-  it.each(eachSpec.filter(([id]) => id !== "staticMeshGradient"))(
-    "%s: animates, so it exposes the motion controls",
-    (_, spec) => {
-      const keys = spec.controls.map((control) => control.key);
-      for (const key of MOTION_CONTROL_KEYS) {
-        expect(keys, key).toContain(key);
-      }
-    },
-  );
 
   // ONE decimal in the panel, everywhere. The readout's precision is taken from
   // the step (see `formatSliderValue`), so this is the only place it is set —

@@ -57,10 +57,16 @@ import { TRACK_UNITS_PER_DEGREE } from "@/components/shaders/cosmic-track-unifor
 //
 // EVERY ratio is its own, including the two halves of an orientation pair.
 // Turning the frame over is not a special case here and deliberately gets no
-// automatic quarter turn: 3:4 is simply a shape you have not framed yet, which
-// opens on the placement you arrived with and is then yours to reframe, exactly
-// like 2:1 or 6:5. An automatic turn would be the one shape change that also
-// edited a control, and undoing it by hand is worse than never having it.
+// automatic quarter turn: 3:4 is simply a shape nobody has framed yet, drawn
+// with the nearest framed shape's placement until somebody does, exactly like
+// 2:1 or 6:5. An automatic turn would be a preset reframing itself, and undoing
+// that by hand is worse than never having had it.
+//
+// Which is also why LOOKING at a shape writes nothing. Nobody is going to sit
+// and frame eleven ratios, so the ones that were judged answer for the ones
+// that were not — see `framingFor`. A preset therefore holds placements only
+// for shapes somebody deliberately framed, and walking the rail to compare
+// crops leaves the preset exactly as it was found.
 //
 // The validator is GENERATED from `SHADER_SPECS` rather than written out. That
 // table is the only place a uniform's range is written down, and it has already
@@ -246,11 +252,11 @@ export const FRAMING_DEFAULTS: Framing = FramingSchema.parse({}) as Framing;
  * Every shape's placement, keyed by ratio — and PARTIAL, deliberately.
  *
  * A missing key is the honest record of "nobody has framed this shape", which
- * is a different fact from "framed at the defaults" and the one the playground
- * needs: a shape being looked at for the first time inherits the placement you
- * arrived with (see `seedFraming`), where a shape you have already framed keeps
- * what you gave it. A complete record would have to invent an answer for ten
- * shapes nobody had opened, and the difference would be gone.
+ * is a different fact from "framed at the defaults" and the one every reader
+ * needs: an unframed shape follows the nearest framed one (see `framingFor`),
+ * where a shape framed at the defaults has been judged there and says so. A
+ * complete record would have to invent an answer for ten shapes nobody had
+ * opened, and the difference would be gone.
  *
  * An OBJECT over the eleven known keys rather than a `z.record`, so a ratio the
  * app cannot draw is stripped on the way in the same way an unknown param is —
@@ -504,12 +510,32 @@ export interface ShaderPresetSettings {
   /**
    * How the graphic sits in each shape that has been framed.
    *
-   * Partial: a shape with no entry has never been framed, and opens on the
-   * placement you arrived with. See `ShaderPresetFramingSchema` and
-   * `seedFraming`.
+   * Partial: a shape with no entry has never been framed, and is drawn with
+   * the nearest framed shape's placement. See `ShaderPresetFramingSchema` and
+   * `framingFor`.
    */
   framing: Partial<Record<DemoFrameAspectRatio, Framing>>;
 }
+
+/**
+ * How far apart two shapes are as CROPS of the same picture — the distance the
+ * fallback below is nearest by.
+ *
+ * On the log of the ratio, so that the gap is read as a proportion rather than
+ * as a difference: 2:1 stands as far from 1:1 as 1:2 does, which a plain w/h
+ * subtraction gets wrong in exactly the case that matters (1.0 against 2.0 is
+ * one unit, 1.0 against 0.5 is half of one, and the two are the same turn of
+ * the frame). Landscape reads positive and portrait negative, so a shape's
+ * nearest neighbour is one of its own orientation wherever the preset has been
+ * framed in it.
+ */
+const cropDistance = (a: DemoFrameAspectRatio, b: DemoFrameAspectRatio) => {
+  const ratio = (aspect: DemoFrameAspectRatio) => {
+    const [width, height] = ASPECT_RATIOS[aspect];
+    return Math.log(width / height);
+  };
+  return Math.abs(ratio(a) - ratio(b));
+};
 
 /**
  * How the graphic sits in ONE shape.
@@ -517,14 +543,46 @@ export interface ShaderPresetSettings {
  * The shape is passed in rather than read off the preset, because a preset no
  * longer has one: it is framed for every shape, and which of them you want is
  * the caller's business — the playground asks for the frame on screen, a
- * thumbnail asks for the square it is drawn in, and an embed would ask for the
- * shape of the surface it fills.
+ * thumbnail asks for the square it is drawn in, and an embed asks for the shape
+ * of the surface it fills.
+ *
+ * A shape nobody framed FOLLOWS THE NEAREST one somebody did, and only a preset
+ * with no framing at all falls back to the table's defaults. That is what makes
+ * the per-shape split affordable to author: a preset is framed for eleven
+ * shapes and nobody is going to sit through eleven, so the ones you did judge
+ * have to answer for the ones you did not — and the nearest crop is the best
+ * answer available, being the one whose composition was approved in the most
+ * similar frame. The defaults are the worst: they are where the sliders start,
+ * which on a tuned preset is a placement no eye has ever seen.
+ *
+ * Resolved on the way OUT rather than written in on the way past. Nothing about
+ * the preset changes when a shape is merely looked at, so a container drawing a
+ * preset at 6:5 and an author looking at 6:5 in the playground get the same
+ * picture, and browsing the rail leaves no trace in what is saved.
+ *
+ * The search walks `ASPECT_RATIOS` rather than the preset's own keys, so two
+ * equally distant framings — 4:3 and 3:4 about the square — always resolve to
+ * the same one of them whatever order they were written in.
  */
 export function framingFor(
   settings: ShaderPresetSettings,
   aspect: DemoFrameAspectRatio,
 ): Framing {
-  return settings.framing[aspect] ?? FRAMING_DEFAULTS;
+  const own = settings.framing[aspect];
+  if (own) return own;
+
+  let nearest: Framing | null = null;
+  let best = Infinity;
+  for (const key of Object.keys(ASPECT_RATIOS) as DemoFrameAspectRatio[]) {
+    const framing = settings.framing[key];
+    if (!framing) continue;
+    const distance = cropDistance(key, aspect);
+    if (distance < best) {
+      best = distance;
+      nearest = framing;
+    }
+  }
+  return nearest ?? FRAMING_DEFAULTS;
 }
 
 /**

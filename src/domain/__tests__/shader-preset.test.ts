@@ -217,17 +217,16 @@ describe("ShaderPresetContentSchema", () => {
     ).toBe(false);
   });
 
-  // A mesh gradient is an opaque fill with no ground behind it, so a stored
-  // `colorBack` is meaningless there rather than merely unused.
-  it("drops colorBack for a shader that has no background", () => {
-    const spec = SHADER_SPECS.staticMeshGradient;
-    expect(spec.hasColorBack).toBe(false);
-    const parsed = ShaderPresetContentSchema.parse({
-      shaderId: "staticMeshGradient",
-      settings: { ...defaultState(spec), colorBack: "#000000FF" },
-    });
-    expect(parsed.settings.colorBack).toBeUndefined();
-  });
+  // A shader that is an opaque fill has no ground behind it, so a stored
+  // `colorBack` is meaningless there rather than merely unused, and the schema
+  // drops it on the way in.
+  //
+  // UNREACHABLE while every shader in `SHADER_SPECS` has a ground — the branch
+  // is keyed on the table's `hasColorBack`, and the one shader that answered
+  // false (StaticMeshGradient) left with the other built-ins. Kept as a todo
+  // because the rule is still in the schema and the next groundless shader
+  // needs it proved.
+  it.todo("drops colorBack for a shader that has no background");
 
   // The one thing a preset records about SHAPE, and it records it as a note
   // rather than as a size: the aspect the picture was designed against, so
@@ -478,9 +477,63 @@ describe("framingFor", () => {
     expect(framingFor(settings, "4/3").scale).toBe(2);
   });
 
-  // An unframed shape is not a broken one: it reads as the table's own starting
-  // point, which is where every control opens before anybody moves it.
-  it("falls back to the defaults for a shape nobody has framed", () => {
+  // A shape nobody framed follows the CLOSEST shape somebody did. A preset is
+  // authored for every ratio, so what a container gets is the placement from
+  // the nearest shape the preset was actually judged in — not a starting point
+  // no eye ever approved.
+  it("follows the closest framed shape for one nobody has framed", () => {
+    const settings = {
+      ...shaderPresetContentFor("cosmicTrack").settings,
+      framing: {
+        "1/1": { ...FRAMING_DEFAULTS, scale: 2 },
+        "9/16": { ...FRAMING_DEFAULTS, scale: 4 },
+      },
+    };
+
+    // 6:5 is a hair off square, and a long way off a poster.
+    expect(framingFor(settings, "6/5").scale).toBe(2);
+    // 1:2 is the other way about.
+    expect(framingFor(settings, "1/2").scale).toBe(4);
+  });
+
+  // Closeness is measured on the RATIO rather than on the key, so the nearest
+  // shape is the one that crops the picture most like this one — which lands on
+  // the same orientation whenever the preset has been framed in it.
+  it("prefers a framed shape of the same orientation to a nearer-named one", () => {
+    const settings = {
+      ...shaderPresetContentFor("cosmicTrack").settings,
+      framing: {
+        "4/3": { ...FRAMING_DEFAULTS, scale: 2 },
+        "9/16": { ...FRAMING_DEFAULTS, scale: 4 },
+      },
+    };
+
+    expect(framingFor(settings, "3/4").scale).toBe(4);
+  });
+
+  // Two framed shapes equally far off resolve by the app's own table order, so
+  // a preset draws the same way twice — 4:3 and 3:4 are the same distance from
+  // square, and the answer must not depend on which key was written first.
+  it("settles a tie the same way every time", () => {
+    const framing = {
+      "3/4": { ...FRAMING_DEFAULTS, scale: 3 },
+      "4/3": { ...FRAMING_DEFAULTS, scale: 2 },
+    };
+    const base = shaderPresetContentFor("cosmicTrack").settings;
+
+    expect(framingFor({ ...base, framing }, "1/1").scale).toBe(2);
+    expect(
+      framingFor(
+        { ...base, framing: { "4/3": framing["4/3"], "3/4": framing["3/4"] } },
+        "1/1",
+      ).scale,
+    ).toBe(2);
+  });
+
+  // An unframed shape in a preset nobody has framed AT ALL is not a broken one:
+  // it reads as the table's own starting point, which is where every control
+  // opens before anybody moves it.
+  it("falls back to the defaults where nothing has been framed", () => {
     const settings = {
       ...shaderPresetContentFor("cosmicTrack").settings,
       framing: {},
@@ -619,11 +672,15 @@ describe("paletteFor", () => {
     });
   });
 
-  it("leaves colorBack absent for a shader that has no ground", () => {
-    const settings = {
-      ...shaderPresetContentFor("staticMeshGradient").settings,
-      colors: [{ light: "#000000FF", dark: "#FFFFFFFF" }],
-    };
+  // ABSENT rather than undefined, so the palette can be spread onto a component
+  // whose prop is optional without handing it a key it has no meaning for. The
+  // settings are what this reads — a preset with no ground carries no
+  // `colorBack`, whichever shader left it that way.
+  it("leaves colorBack absent where the settings carry none", () => {
+    const { colorBack: _none, ...settings } = shaderPresetContentFor(
+      "cosmicTrack",
+    ).settings;
+
     expect("colorBack" in paletteFor(settings, "light")).toBe(false);
   });
 });

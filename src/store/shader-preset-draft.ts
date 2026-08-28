@@ -8,7 +8,6 @@ import {
 } from "@/data/shader-specs";
 import {
   DEFAULT_SHADER_PRESET_ASPECT,
-  FRAMING_DEFAULTS,
   shaderPresetContentFor,
   framingFor,
   type ShaderPresetContent,
@@ -144,9 +143,9 @@ interface ShaderPresetDraftStore {
    * invisible.
    *
    * Edited, not merely visited, and that distinction is the whole reason this
-   * is state rather than a comparison: `setAspect` writes framing on the way
-   * into a shape and on the way out of one, so a rule that diffed against the
-   * saved preset would mark every shape you clicked through and mean nothing.
+   * is state rather than a comparison: an unframed shape draws the nearest
+   * framed one's placement, so a rule that diffed what was on screen against
+   * the saved preset would mark every shape you clicked through.
    *
    * An array rather than a Set because it is read straight out of the store by
    * a component: a selector returning a fresh Set on every call would re-render
@@ -341,6 +340,21 @@ const savedFramingFor = (
   state: Pick<ShaderPresetDraftStore, "savedParams" | "aspect">,
 ): Framing | null => state.savedParams?.framing[state.aspect] ?? null;
 
+/**
+ * The framing map with the shape on screen put back to what the SAVE says about
+ * it — the placement it was saved with, or no entry at all where it was never
+ * framed. See `resetParams`.
+ */
+const framingWithout = (
+  state: Pick<ShaderPresetDraftStore, "settings" | "aspect">,
+  savedFraming: Framing | null,
+): ShaderPresetSettings["framing"] => {
+  const framing = { ...state.settings.framing };
+  if (savedFraming) framing[state.aspect] = { ...savedFraming };
+  else delete framing[state.aspect];
+  return framing;
+};
+
 /** The active draft, as it would be set aside — everything but which preset it is. */
 const snapshot = (state: ShaderPresetDraftStore): DraftBuffer => ({
   title: state.title,
@@ -457,10 +471,12 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
       isDirty: true,
     })),
 
-  // Writes onto the shape ON SCREEN, seeding it from the placement in force if
-  // it has never been framed — which is what turns "the shape inherits" into
-  // "the shape is its own" at the first nudge, with no separate flag saying
-  // which it is.
+  // Writes onto the shape ON SCREEN, seeding it from whatever that shape is
+  // currently drawn with — its own placement, or the nearest framed shape's
+  // where it has none. That is what turns "this shape follows another" into
+  // "this shape is its own" at the first nudge, with no separate flag saying
+  // which it is, and it is the ONLY way a shape gets an entry of its own: a
+  // preset holds a placement for a shape exactly when somebody framed it.
   setFraming: (key, value) =>
     set((state) => ({
       settings: {
@@ -482,38 +498,25 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
       isDirty: true,
     })),
 
-  // Changing shape SEEDS the new one where it has never been framed, with the
-  // placement you arrived with — unchanged, whichever way round the new shape
-  // is. Inheriting beats opening on the defaults because judging is the whole
-  // point of the picker: you tune a fan on a poster, press the banner, and want
-  // to see THAT fan in a banner rather than an untouched shader. From the first
-  // nudge the shape is its own and inherits nothing again.
+  // Nothing but the frame you are looking through. A shape change writes no
+  // placement and does not dirty the draft, because it is not an edit: the
+  // preset is authored for every shape at once, and which of them is on screen
+  // is a question about the playground rather than about the preset. Marking it
+  // unsaved put a dot over the strip and a "discard changes?" question in front
+  // of an exit that would have lost nothing.
+  //
+  // A shape nobody has framed still shows the nearest framed one — that is
+  // `framingFor`'s answer now, given on every read rather than pinned here on
+  // the way past. So the picker still does what it is for (tune a fan as a
+  // poster, press the banner, see THAT fan in a banner) and, unlike a pin, what
+  // you see in an unframed shape is exactly what a container of that shape will
+  // draw. From the first nudge the shape is its own and follows nothing again.
   //
   // NO automatic quarter turn on an orientation change. Turning the frame over
-  // is not a special case: 3:4 is a shape you have not framed yet, exactly like
-  // 2:1, and it is yours to reframe. A turn here would make this the one shape
+  // is not a special case: 3:4 is a shape nobody has framed, exactly like 2:1,
+  // and it is yours to reframe. A turn here would make this the one shape
   // change that also edited a control.
-  //
-  // Written on arrival rather than derived on every read, so the answer is
-  // fixed the moment you first look at a shape. Derived lazily it would keep
-  // following whatever you had been on last, and the same shape would frame
-  // itself differently depending on the route you took to it.
-  setAspect: (aspect) =>
-    set((state) => {
-      if (aspect === state.aspect) return state;
-      const current = framingFor(state.settings, state.aspect);
-      const framing = { ...state.settings.framing };
-      // The shape being LEFT is pinned on the way out, if it was never framed —
-      // so that what you come back to is what you left rather than a fresh
-      // derivation from wherever you have been since.
-      framing[state.aspect] ??= current;
-      framing[aspect] ??= { ...current };
-      return {
-        settings: { ...state.settings, framing },
-        aspect,
-        isDirty: true,
-      };
-    }),
+  setAspect: (aspect) => set({ aspect }),
 
   setTitle: (title) => set({ title, isDirty: true }),
 
@@ -543,13 +546,16 @@ export const useShaderPresetDraftStore = create<ShaderPresetDraftStore>((set, ge
           // leaving it behind would make Reset put half the sliders back. The
           // shape on screen only; the other ten are not what you are looking
           // at. Same baseline rule as the params: your own last save where
-          // there is one, and the table's starting point where there is not.
-          framing: {
-            ...state.settings.framing,
-            [state.aspect]: savedFraming
-              ? { ...savedFraming }
-              : { ...FRAMING_DEFAULTS },
-          },
+          // there is one.
+          //
+          // Where there is not, the shape goes back to being UNFRAMED rather
+          // than framed at the defaults — the preset says nothing about this
+          // shape, and saying nothing is what putting it back means. Written
+          // out as defaults it would be a placement nobody chose, pinned into
+          // the preset by a button whose whole job is to remove what you did
+          // not mean to do. Unframed it follows the nearest shape you framed,
+          // which is what it would have drawn had you never touched it.
+          framing: framingWithout(state, savedFraming),
         },
         // The shape on screen is back at its baseline, so there is nothing left
         // on it to mark — and only that shape, exactly as the reset above

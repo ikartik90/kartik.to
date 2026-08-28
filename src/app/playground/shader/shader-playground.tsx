@@ -35,7 +35,7 @@ import { OptionList } from "@/components/ui/input/option-list";
 import { Typography } from "@/components/ui/typography";
 import { Tooltip } from "@/components/ui/tooltip";
 import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
-import CrossIcon from "@/assets/icons/cross.svg";
+import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import ResetIcon from "@/assets/icons/reset.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -325,9 +325,10 @@ const shaderPresetStyle = css({
   // cannot reach zero.
 });
 
-// The gutter row's right-hand end. The theme toggle used to answer the menu on
-// its own; the sheet's way back stands beside it, so the pair reads as one
-// group rather than a third control drifting somewhere else on the band.
+// The gutter row's right-hand end: the theme toggle, answering the menu at the
+// other. The panel's way back stood here for a while and has moved into the
+// rail's own chrome — it acts on the panel, where these two act on the page,
+// and a third control wedged in beside the toggle read as part of that pair.
 // Pushed to its own column's far edge — a grid item fills its column by
 // default, which would leave the toggle floating at the column's left rather
 // than against the showcase's right edge where it belongs.
@@ -338,12 +339,39 @@ const chromeEndStyle = css({
   justifySelf: "end",
 });
 
-// Controls that only exist while the panel is a sheet: its close button, and
-// the button that brings it back. Both are meaningless against a docked rail —
-// there is nothing to close and nothing to reopen — so the media query is what
-// mounts them, and a phone turned on its side is back to the rail with neither
-// in sight and no state to put right.
-const sheetOnlyStyle = css({ display: "none", _bottomSheet: { display: "flex" } });
+// The hairline between the shapes and the panel's way back.
+//
+// The rail's own dividers are `OptionList.Divider`s, which need that list's
+// context — and this one is deliberately OUTSIDE it: the shapes are a toolbar
+// with a name of its own ("Preview aspect ratio"), and a button that opens the
+// properties panel is not one of them. So the chrome box holds two things with
+// a rule between, and the rule is drawn to the same recipe's measurements (1px
+// of `border.divider`, stretched to the row) so the two read as one strip.
+const toolbarSeparatorStyle = css({
+  flexShrink: 0,
+  width: "token(spacing.xxs)",
+  // The BUTTONS' height, not the rail's. Stretched, it would run the full 40px
+  // — the `md` toolbar states no block padding, its height alone — and stand 3
+  // pixels taller than the divider the rail draws after its flip control, which
+  // takes the 28px its own row is laid out on. Two rules in one strip disagreeing
+  // by three pixels is the kind of thing you see without being able to say why.
+  height: "token(sizes.toolbarButton)",
+  backgroundColor: "border.divider",
+});
+
+// Which glyph the panel's toggle wears, by the edge it is docked to: a sheet
+// rises from the bottom of a phone, a rail comes in from the side of a desktop,
+// and a button that pointed at the wrong edge would be describing a panel the
+// reader is not about to get. Worn by BOTH ends of the toggle — the control
+// that puts the panel away, in its header, and the one that brings it back, on
+// the band — because they are one control and the icon names the panel rather
+// than the direction of travel. ONE button each way, so the label and the press
+// are stated once; the media query only picks the picture.
+const sheetOnlyIconStyle = css({
+  display: "none",
+  _bottomSheet: { display: "block" },
+});
+const railOnlyIconStyle = css({ _bottomSheet: { display: "none" } });
 
 // The header IS the grip. `touch-action: none` is what makes a downward drag
 // belong to the sheet instead of being read as a scroll of the panel under it
@@ -384,7 +412,24 @@ const panel = propertiesPanel();
  * draws no header at all — these have headers because there are five of them
  * and they need telling apart).
  */
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({
+  title,
+  actions,
+  children,
+}: {
+  title: string;
+  /**
+   * Controls that sit AGAINST the heading rather than in the panel below it —
+   * the strip's own end, where the recipe already holds a slot open for a
+   * section's add/remove button.
+   *
+   * For a control that acts on what the section NAMES rather than on a property
+   * in it: "Preset actions" is a heading with two chips and nothing under it,
+   * which is a section whose whole content is its strip.
+   */
+  actions?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
     <section className={panel.section}>
       <div className={panel.sectionHeader}>
@@ -393,10 +438,17 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
             {title}
           </Typography>
         </div>
+        {actions && <div className={headerActionsStyle}>{actions}</div>}
       </div>
-      <div className={panel.controlPanel} role="group" aria-label={title}>
-        {children}
-      </div>
+      {/* Absent rather than empty for a section that is only a heading: the
+        control panel carries its own 12px inset, so an empty one would leave a
+        strip of nothing under the title and make the chips beside it look like
+        a row that had lost its contents. */}
+      {children && (
+        <div className={panel.controlPanel} role="group" aria-label={title}>
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -512,12 +564,6 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
   const ready = drawn;
   const trickle = useTrickleProgress(!ready);
 
-  // This page's rail is the propertiesPanel RECIPE rather than the component —
-  // the component is a dismissible dialog, and a playground whose whole content
-  // is the thing you click would close it on the first press with nothing left
-  // to bring it back. So the inset the component arranges for itself is asked
-  // for here directly, and permanently: this rail never leaves.
-  usePropertiesPanelInset(true);
   const spec = SHADER_SPECS[shaderId];
 
   // What the AUTHOR is shown on top of the playground everybody gets: the
@@ -600,10 +646,27 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
   const aspect = useShaderPresetDraftStore((draft) => draft.aspect);
   const [ratioWidth, ratioHeight] = ASPECT_RATIOS[aspect];
 
-  // Whether the sheet has been sent away. Read ONLY inside the bottom-sheet
-  // media query (see `panda.config.ts`), which is what makes rotating the phone
-  // the whole of the repair: in landscape the rail is back whatever this says.
+  // Whether the panel has been sent away — the sheet on a phone, the docked
+  // rail on a desktop, one state for both. It was the sheet's alone, read only
+  // inside that media query so that turning the phone brought the rail back;
+  // the rail collapses now, and the way back is on the band in either layout,
+  // so the state can outlive the turn and mean what it says.
   const [dismissed, setDismissed] = useState(false);
+
+  // This page's rail is the propertiesPanel RECIPE rather than the component —
+  // the component is a dismissible dialog, and a playground whose whole content
+  // is the thing you click would close it on the first press. So the inset the
+  // component arranges for itself is asked for here directly.
+  //
+  // Given up while the panel is away, which is the point of collapsing it: the
+  // rail is `position: fixed` and takes no width of its own, so the 360px it
+  // stands in is the page's to reserve — and a collapsed rail that kept it
+  // would leave a column of nothing beside a picture that could have grown into
+  // it. The body's own 200ms matches the panel's slide (see globals.css), so
+  // the picture and the rail move as one thing. Below `md` the inset rule does
+  // not apply at all, so on a phone this is the mark being kept tidy and
+  // nothing more.
+  usePropertiesPanelInset(!dismissed);
   const panelRef = useRef<HTMLElement>(null);
   const { offset, dragHandlers } = useSheetDrag({
     sheetRef: panelRef,
@@ -833,12 +896,11 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
               both — and the shape is kept on the draft so that reopening the
               preset reopens the frame it was judged in. See `@/domain/shader-preset`.
 
-              A third item in a `space-between` row, which is what centres it
-              BETWEEN the two ends rather than on the band's own midline. The
-              difference only shows when the ends are uneven — a phone with the
-              sheet dismissed grows a second button on the right — and there the
-              flex reading is the safe one: it slides the rail over instead of
-              letting it collide with the button. */}
+              The middle column of a three-column grid with EQUAL ends, so it
+              sits on the band's own midline however the ends weigh — which
+              matters here because the rail is what the presets strip below is
+              centred on, and two centred things disagreeing reads as a
+              mistake. */}
           <div className={cx(toolbar({ size: "md" }), aspectRailStyle)}>
             <AspectRail
               ariaLabel="Preview aspect ratio"
@@ -852,22 +914,39 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
               // resolves is a dot pointing at a save they cannot reach.
               markedAspects={isAdmin ? editedAspects : undefined}
             />
+
+            {/* The panel's way back, in the rail's chrome behind a rule.
+              
+              Here rather than beside the theme toggle, where it used to stand:
+              this band carries the page's two controls at its ends and the
+              controls for the THING at its middle, and the panel is part of
+              the thing. Behind a separator because it is not one of the shapes
+              — the rule is what says the toolbar is two groups rather than
+              seven buttons, and it is why this sits outside the rail's own
+              named toolbar rather than being appended to it.
+
+              Mounted only while the panel is away. A button that offered to
+              open what is already open would be inert half the time, and the
+              rail would hold a permanent gap for it. */}
+            {dismissed && (
+              <>
+                <span aria-hidden className={toolbarSeparatorStyle} />
+                <Button
+                  variant="icon"
+                  aria-label="Preset properties"
+                  onClick={() => setDismissed(false)}
+                >
+                  <RightSidebarIcon className={railOnlyIconStyle} />
+                  <BottomSheetIcon className={sheetOnlyIconStyle} />
+                  <Button.Tooltip>
+                    <Tooltip.Text>Preset properties</Tooltip.Text>
+                  </Button.Tooltip>
+                </Button>
+              </>
+            )}
           </div>
 
           <div className={chromeEndStyle}>
-            {dismissed && (
-              <Button
-                variant="icon"
-                className={sheetOnlyStyle}
-                aria-label="Properties"
-                onClick={() => setDismissed(false)}
-              >
-                <BottomSheetIcon />
-                <Button.Tooltip>
-                  <Tooltip.Text>Properties</Tooltip.Text>
-                </Button.Tooltip>
-              </Button>
-            )}
             <ThemeToggleButton />
           </div>
         </div>
@@ -907,88 +986,41 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
         <aside
           ref={panelRef}
           className={panel.root}
-          aria-label="Properties"
+          // The landmark's name is the heading it carries: a rail announced as
+          // one thing and titled as another is two names for one panel.
+          aria-label="Preset properties"
           data-dismissed={dismissed || undefined}
           data-dragging={offset !== null || undefined}
           style={offset !== null ? { translate: `0 ${offset}px` } : undefined}
         >
           <div className={cx(panel.header, sheetGripStyle)} {...dragHandlers}>
             <Typography tag="p" type="bodyLarge" className={panel.title}>
-              Properties
+              Preset properties
             </Typography>
             <div className={headerActionsStyle}>
-              {/* "Reset", flat — the panel is what it acts on and the header is
-                where it says so. WHERE it resets to (the preset you opened, or
-                the shader's defaults where there is no preset) is the store's
-                to decide; spelling that out in the label would make the shortest
-                control in the header the wordiest thing in it. */}
-              {canDelete ? (
-                <Button
-                  variant="icon"
-                  aria-label="Delete preset"
-                  disabled={deleting}
-                  onClick={() => setPendingDelete(true)}
-                >
-                  <TrashIcon />
-                  <Button.Tooltip>
-                    <Tooltip.Text>Delete preset</Tooltip.Text>
-                  </Button.Tooltip>
-                </Button>
-              ) : (
-                <Button
-                  variant="icon"
-                  aria-label="Reset"
-                  onClick={resetParamsInStore}
-                >
-                  <ResetIcon />
-                  <Button.Tooltip>
-                    <Tooltip.Text>Reset</Tooltip.Text>
-                  </Button.Tooltip>
-                </Button>
-              )}
+              {/* The panel's own control, and the only one left in its header:
+                everything else here acts on the PRESET and has moved to the
+                section that names it. Closes the panel in both layouts — the
+                sheet on a phone, the docked rail on a desktop. It was
+                sheet-only while the sheet was the only thing you could send
+                away; the rail is collapsible too, and one control that closes
+                whatever shape the panel is in beats two that each know about
+                one.
 
-              {/* Whether this preset is on show — one button, because it is one
-                fact with two settings, and a pair sitting side by side would
-                always have one of them inert.
-
-                Beside Reset rather than in the command palette, which is where
-                an article's Publish lives. The difference is what the control
-                acts on: a post's publish acts on the page you are looking at,
-                where this acts on the SAVED ROW behind the panel — the same
-                thing Reset restores from — so it belongs in the panel's own
-                header with it.
-
-                It publishes what was last SAVED, not what is in the panel: ⌘S
-                is the one press that decides between creating a row and
-                updating one, and a second control making that decision would be
-                two doors to one room. Which is also why it is disabled until
-                there is a row — there is nothing yet for "publish this" to
-                name.
-
-                The author's alone, and nothing here is what enforces that:
-                `publishShaderPreset` asks the server. */}
-              {isAdmin && (
-                <Button
-                  variant="icon"
-                  aria-label={publishedAt ? "Unpublish" : "Publish"}
-                  disabled={!savedShaderPresetId || publishing}
-                  onClick={() => void togglePublished()}
-                >
-                  {publishedAt ? <UnpublishIcon /> : <PublishIcon />}
-                  <Button.Tooltip>
-                    <Tooltip.Text>
-                      {publishedAt ? "Unpublish" : "Publish"}
-                    </Tooltip.Text>
-                  </Button.Tooltip>
-                </Button>
-              )}
+                The SAME glyph the way back wears, for the same reason it wears
+                it: this is one toggle with an end in each place, and what the
+                icon names is the panel — the rail from the side, the sheet from
+                the bottom. A cross stood here first and named the gesture
+                instead, which read as "get rid of this" rather than "put the
+                rail away", and left the two halves of one control looking like
+                two unrelated buttons. */}
               <Button
                 variant="icon"
-                className={sheetOnlyStyle}
                 aria-label="Close properties"
                 onClick={() => setDismissed(true)}
               >
-                <CrossIcon />
+                <RightSidebarIcon className={railOnlyIconStyle} />
+                <BottomSheetIcon className={sheetOnlyIconStyle} />
                 <Button.Tooltip>
                   <Tooltip.Text>Close properties</Tooltip.Text>
                 </Button.Tooltip>
@@ -996,19 +1028,111 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
             </div>
           </div>
 
+          {/* The two controls that act on the PRESET — the saved row behind the
+            panel and the draft in front of it — against a heading that says so.
+            First, because they are what you do TO the thing the rest of the
+            panel describes.
+
+            A heading with chips rather than a row of buttons under one: they
+            are the section, not properties of it, and a control panel beneath
+            would put them on a line of their own with an empty strip above.
+
+            They stood in the panel's header until now, which is the wrong strip
+            for them: that one names the panel and carries the control that
+            sends it away. */}
+          <Group
+            title="Preset actions"
+            actions={
+              <>
+                {/* "Reset", flat. WHERE it resets to (the preset you opened, or
+                  the shader's defaults where there is no preset) is the store's
+                  to decide; spelling that out would make the shortest control
+                  here the wordiest thing in it.
+
+                  Its slot turns into Delete once there is a saved preset and
+                  nothing left to reset — see `canDelete`. */}
+                {canDelete ? (
+                  <Button
+                    variant="icon"
+                    aria-label="Delete preset"
+                    disabled={deleting}
+                    onClick={() => setPendingDelete(true)}
+                  >
+                    <TrashIcon />
+                    <Button.Tooltip>
+                      <Tooltip.Text>Delete preset</Tooltip.Text>
+                    </Button.Tooltip>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="icon"
+                    aria-label="Reset"
+                    onClick={resetParamsInStore}
+                  >
+                    <ResetIcon />
+                    <Button.Tooltip>
+                      <Tooltip.Text>Reset</Tooltip.Text>
+                    </Button.Tooltip>
+                  </Button>
+                )}
+
+                {/* Whether this preset is on show — one button, because it is
+                  one fact with two settings, and a pair sitting side by side
+                  would always have one of them inert.
+
+                  Here rather than in the command palette, which is where an
+                  article's Publish lives. The difference is what the control
+                  acts on: a post's publish acts on the page you are looking at,
+                  where this acts on the SAVED ROW — the same thing Reset
+                  restores from — which is exactly what this section names.
+
+                  It publishes what was last SAVED, not what is in the panel: ⌘S
+                  is the one press that decides between creating a row and
+                  updating one, and a second control making that decision would
+                  be two doors to one room. Which is also why it is disabled
+                  until there is a row — there is nothing yet for "publish this"
+                  to name.
+
+                  The author's alone, and nothing here is what enforces that:
+                  `publishShaderPreset` asks the server. */}
+                {isAdmin && (
+                  <Button
+                    variant="icon"
+                    aria-label={publishedAt ? "Unpublish" : "Publish"}
+                    disabled={!savedShaderPresetId || publishing}
+                    onClick={() => void togglePublished()}
+                  >
+                    {publishedAt ? <UnpublishIcon /> : <PublishIcon />}
+                    <Button.Tooltip>
+                      <Tooltip.Text>
+                        {publishedAt ? "Unpublish" : "Publish"}
+                      </Tooltip.Text>
+                    </Button.Tooltip>
+                  </Button>
+                )}
+              </>
+            }
+          />
+
           {/* The shader itself is the AUTHOR's choice, so a visitor is not shown
             this group. What they came for is the preset in front of them — the
             preset they opened, with its own controls under it — and a picker
-            that swapped it for a bare `godRays` would throw that preset away
-            with nothing to get it back. The panel below still gives them every
-            control the mounted shader has. */}
+            that swapped it for a bare, untuned shader would throw that preset
+            away with nothing to get it back. The panel below still gives them
+            every control the mounted shader has. */}
           {isAdmin && (
             <Group title="Shader">
-              {/* A list rather than a row of chips: six names read as a set to pick
-              ONE of, and the selected row says which is mounted without the
-              reader having to compare button emphases. `sm` because the panel's
-              own rows are 24px — a 32px-pitch list inside it would be the
-              loudest thing in the rail. */}
+              {/* A list rather than a row of chips: names read as a set to pick ONE
+              of, and the selected row says which is mounted without the reader
+              having to compare button emphases. `sm` because the panel's own
+              rows are 24px — a 32px-pitch list inside it would be the loudest
+              thing in the rail.
+
+              It stands at one entry today (see `SHADER_SPECS`) and is still a
+              list: what it draws comes from the table, so the row that says
+              which shader you are on is the same control that offers the next
+              one. Special-casing a single shader would mean writing the picker
+              twice. */}
               <OptionList
                 size="sm"
                 // The recipe's own width is the 208px popover pitch it shares

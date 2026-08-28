@@ -4885,7 +4885,6 @@ export default defineConfig({
               // the rail rests on. It is the base rather than a variant because
               // an empty cell is simply one with nothing painted over it.
               backgroundColor: "field.bg.default",
-              boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
               // The checkerboard, so a translucent colour reads as translucent
               // rather than as a paler one — same conic gradient the colour
               // field's swatch draws, at the same 8px pitch. ONLY under a
@@ -4898,20 +4897,37 @@ export default defineConfig({
                   "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)",
                 backgroundSize: "token(spacing.md) token(spacing.md)",
               },
-              transition: "box-shadow 150ms ease",
               // A blank that cannot take a colour — a full ramp, or a grid
               // given no `onAdd`. Every other blank is pressable, so this is
               // the one case that offers nothing and says so by not lighting
               // up. (Where the colour LANDS is still the first gap: the ramp is
               // dense. Which cell you may press is a separate question.)
               "&:disabled": { cursor: "default" },
-              _hover: {
-                boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-active)",
-              },
-              "&:disabled:hover": {
+              // The frame, on an OVERLAY rather than on the cell itself.
+              //
+              // An inset shadow paints below the element's children, and a
+              // filled cell's colour is a child covering the whole box — so
+              // stated on the cell the hairline drew on the blanks and vanished
+              // under every colour, which left the ramp reading as a row of
+              // bare chips beside framed empty ones. Painted after the fill,
+              // every cell is framed the same way whatever is in it, and the
+              // focus ring is visible on a filled cell for the first time.
+              //
+              // The frame does NOT answer to hover. Which blank you are over is
+              // said by the add glyph appearing in it (see `icon`) — that is
+              // the whole of the affordance, and a ring brightening underneath
+              // it was a second answer to the same question that read as a
+              // focus halo on a control that was not focused.
+              "&::after": {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                pointerEvents: "none",
                 boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+                transition: "box-shadow 150ms ease",
               },
-              "html[data-keyboard-focus] &:focus-visible": {
+              "html[data-keyboard-focus] &:focus-visible::after": {
                 boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
               },
             },
@@ -5244,15 +5260,31 @@ export default defineConfig({
               // it keeps the panel on screen; the control rows inside then
               // scroll horizontally rather than being clipped away.
               maxWidth: "100vw",
-              // No radius, and a border on ONE side. The panel is docked, not
+              // No radius, and a hairline on ONE side. The panel is docked, not
               // floating — rounding corners that sit flush against the edge of
               // the screen would draw two slivers of page either side of it.
-              borderInlineStartWidth: "token(spacing.3xs)",
-              borderInlineStartStyle: "solid",
-              borderInlineStartColor: "border.divider",
+              //
+              // A SHADOW rather than a border, and that is a correctness point
+              // rather than a preference: 0.5px of border is 0.5px of layout,
+              // so it pushed the panel's content box onto a half pixel and
+              // every control in the rail with it. The panel is `position:
+              // fixed` — a composited layer of its own — and a layer whose
+              // contents sit at a subpixel offset re-rounds them whenever
+              // anything inside repaints. That is what made an icon button
+              // appear to shift half a pixel as the pointer arrived, and what
+              // turned the 0.5px ring inside a swatch into a halo instead of an
+              // edge. An inset shadow draws the same hairline and takes no
+              // space, so the rail lands on whole pixels. (`will-change:
+              // transform` would have hidden the symptom by pinning the layer —
+              // a permanent promotion to paper over a fractional layout.)
+              //
+              // Which EDGE carries it changes with the dock, so it is held in a
+              // custom property the bottom sheet re-points; the drop shadow
+              // beside it is the same either way round.
+              "--panel-hairline": "inset 0.5px 0 0 var(--colors-border-divider)",
               backgroundColor: "bg.surface",
               boxShadow:
-                "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
+                "var(--panel-hairline), 0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
               // The panel IS the scroll container — there is no inner body to
               // scroll, because the structure is a header and then sections,
               // full stop. What keeps the title in place is `position: sticky`
@@ -5267,6 +5299,26 @@ export default defineConfig({
               // the end of the sections should not start scrolling it away.
               overscrollBehavior: "contain",
               animation: "propertiesPanelIn 200ms ease-out",
+              // Dismissal — the docked rail's, and the sheet overrides the axis
+              // below. It slides out through the edge it is docked against and
+              // is then `hidden`, so a collapsed rail is out of the tab order
+              // as well as off the screen.
+              //
+              // A STATE rather than an unmount, which is what lets the same
+              // attribute mean the same thing in both layouts: the page turns
+              // the width loose separately (`usePropertiesPanelInset`), and the
+              // panel keeps its scroll position and its draft for the moment
+              // you ask for it back.
+              //
+              // `visibility` on a delay equal to the slide keeps it reachable
+              // for the length of the slide out, and the 0s on the way in is
+              // what stops it being invisible while it slides back.
+              transition: "translate 200ms ease-out, visibility 0s",
+              "&[data-dismissed]": {
+                translate: "100% 0",
+                visibility: "hidden",
+                transitionDelay: "0s, 200ms",
+              },
               // A phone held upright gets the same panel along the BOTTOM
               // edge instead: full width, half the viewport tall. Half is the
               // point of it — the other half is where the thing being edited
@@ -5291,27 +5343,20 @@ export default defineConfig({
                 width: "token(spacing.full)",
                 maxWidth: "none",
                 height: "50dvh",
-                borderInlineStartWidth: "0",
-                borderBlockStartWidth: "token(spacing.3xs)",
-                borderBlockStartStyle: "solid",
-                borderBlockStartColor: "border.divider",
+                // The hairline moves to the edge the sheet meets the page on
+                // — the same shadow, re-pointed. See `root`.
+                "--panel-hairline": "inset 0 0.5px 0 var(--colors-border-divider)",
                 animation: "bottomSheetIn 200ms ease-out",
-                // Dismissal is a STATE here rather than an unmount, and that is
-                // deliberate: the sheet only exists in this orientation, so a
-                // page turned on its side must find its rail back exactly where
-                // it left it. Nothing outside this media query reads
-                // `data-dismissed`, which is what makes rotating the phone the
-                // whole of the repair.
+                // The same dismissal as the rail's, turned through a right
+                // angle: the sheet is docked to the bottom, so it leaves
+                // downwards. Only the axis differs — the state, the timing and
+                // the `visibility` handoff are the base rule's (see there).
                 //
-                // `visibility` on a delay equal to the slide keeps the sheet
-                // out of the tab order once it has gone, without cutting the
-                // slide short on the way out.
-                transition: "translate 200ms ease-out, visibility 0s",
-                "&[data-dismissed]": {
-                  translate: "0 100%",
-                  visibility: "hidden",
-                  transitionDelay: "0s, 200ms",
-                },
+                // It used to be the ONLY dismissal, and rotating the phone was
+                // how you undid it. That is no longer the repair: the state
+                // survives the turn now, because the control that brings the
+                // panel back is on the band in both layouts.
+                "&[data-dismissed]": { translate: "0 100%" },
                 // A finger owns the sheet while it is on it — the transition is
                 // for letting go.
                 "&[data-dragging]": { transition: "none" },
@@ -5332,9 +5377,10 @@ export default defineConfig({
               gap: "md",
               height: "token(spacing.4xl)",
               paddingInline: "lg",
-              borderBottomWidth: "token(spacing.3xs)",
-              borderBottomStyle: "solid",
-              borderBottomColor: "border.divider",
+              // A shadow, for the reason the root's hairline is one: as a
+              // border it took half a pixel off the strip's own height, which
+              // left the chips in it centred a quarter pixel high. See `root`.
+              boxShadow: "inset 0 -0.5px 0 var(--colors-border-divider)",
               // The whole strip is one ink, stated ONCE here (Figma 845:7232).
               // The buttons in it are `action`'s icon variant, which paints in
               // `currentColor` precisely so a toolbar decides its own ink —
@@ -5356,9 +5402,11 @@ export default defineConfig({
               display: "flex",
               flexDirection: "column",
               alignItems: "stretch",
-              borderBottomWidth: "token(spacing.3xs)",
-              borderBottomStyle: "solid",
-              borderBottomColor: "border.divider",
+              // A shadow, for the reason the root's hairline is one — and here
+              // it ACCUMULATED: as a border each divider pushed every section
+              // below it another half pixel down, so by the fourth section the
+              // rows were a pixel and a half off the grid. See `root`.
+              boxShadow: "inset 0 -0.5px 0 var(--colors-border-divider)",
             },
             sectionHeader: {
               flexShrink: 0,

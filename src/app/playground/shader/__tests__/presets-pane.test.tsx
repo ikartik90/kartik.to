@@ -254,17 +254,17 @@ describe("PresetsPane", () => {
     (createShaderPreset as Mock).mockResolvedValue({
       id: "new-1",
       title: null,
-      shaderId: "swirl",
-      settings: settingsFor("swirl"),
+      shaderId: "cosmicTrack",
+      settings: settingsFor("cosmicTrack"),
     });
     render(<PresetsPane />);
 
-    useShaderPresetDraftStore.getState().selectShader("swirl");
+    useShaderPresetDraftStore.getState().selectShader("cosmicTrack");
     await user.click(screen.getByRole("button", { name: "New preset" }));
 
     await waitFor(() =>
       expect(createShaderPreset).toHaveBeenCalledWith(
-        expect.objectContaining({ shaderId: "swirl" }),
+        expect.objectContaining({ shaderId: "cosmicTrack" }),
       ),
     );
     // Adopted: the draft is now that preset, its URL says so, and the work is
