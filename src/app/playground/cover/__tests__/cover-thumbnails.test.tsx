@@ -88,7 +88,7 @@ describe("captureOrder", () => {
 
   it("is empty once every preset has a picture", () => {
     const presets = [preset("a", "swirl"), preset("b", "godRays")];
-    expect(captureOrder(presets, new Set(presets.map(thumbnailKey)))).toEqual([]);
+    expect(captureOrder(presets, new Set(presets.map((preset) => thumbnailKey(preset))))).toEqual([]);
   });
 });
 
@@ -110,6 +110,7 @@ describe("CoverThumbnails", () => {
     render(
       <CoverThumbnails
         presets={presets}
+        theme="light"
         onCaptured={(key, url) => {
           captured[key] = url;
         }}
@@ -129,7 +130,7 @@ describe("CoverThumbnails", () => {
   it("unmounts itself once there is nothing left to capture", async () => {
     const presets = [preset("a", "swirl")];
     const { container } = render(
-      <CoverThumbnails presets={presets} onCaptured={() => {}} />,
+      <CoverThumbnails presets={presets} theme="light" onCaptured={() => {}} />,
     );
 
     expect(container.querySelector("canvas")).not.toBeNull();
@@ -146,13 +147,13 @@ describe("CoverThumbnails", () => {
     const onCaptured = vi.fn();
 
     const first = render(
-      <CoverThumbnails presets={presets} onCaptured={onCaptured} />,
+      <CoverThumbnails presets={presets} theme="light" onCaptured={onCaptured} />,
     );
     await waitFor(() => expect(onCaptured).toHaveBeenCalledOnce());
     first.unmount();
 
     const { container } = render(
-      <CoverThumbnails presets={presets} onCaptured={vi.fn()} />,
+      <CoverThumbnails presets={presets} theme="light" onCaptured={vi.fn()} />,
     );
     expect(container.querySelector("canvas")).toBeNull();
   });

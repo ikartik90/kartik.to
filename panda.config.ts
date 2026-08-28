@@ -347,16 +347,29 @@ export default defineConfig({
           sidenoteMinWidth: { value: "320px" },
           sidenoteMaxWidth: { value: "480px" },
           // Properties-panel geometry (Figma 845:7223). A control row is
-          // label ∣ field, and the panel's WIDTH is derived from it below —
-          // one row, one panel, so the two can never drift out of agreement.
+          // label ∣ field ∣ action, and the panel's WIDTH is derived from it
+          // below — one row, one panel, so the two can never drift out of
+          // agreement.
           propertyRowLabel: { value: "80px" },
-          propertyRowField: { value: "220px" },
-          // 12 + 80 + 8 + 220 + 12 — the row plus the control panel's own
-          // inset on both sides. Written out rather than hard-coded at 332px
-          // so widening a field widens the panel with it.
+          // 212, not the 220 it was. The action column costs 36px (a gap and a
+          // button) and the rail only grew by 28 of them, so the field gives up
+          // the last 8. It is the right column to take them from: what fills a
+          // field here is a slider track or a menu, which loses 8px of travel
+          // rather than 8px of legible text.
+          propertyRowField: { value: "212px" },
+          // The empty cell at the end of every row — the place an icon button
+          // lands on the row it belongs to, and until one does, the column that
+          // holds a row's content clear of the panel's edge. Sized to the
+          // toolbar chip it is holding open for, so the reserve and the thing
+          // reserved for cannot disagree; it lands directly under the header
+          // strips' own buttons, which sit on the same 12px inset.
+          propertyRowAction: { value: "{sizes.toolbarButton}" },
+          // 12 + 80 + 8 + 212 + 8 + 28 + 12 — the row plus the control panel's
+          // own inset on both sides. Written out rather than hard-coded at
+          // 360px so widening a field widens the panel with it.
           propertiesPanelWidth: {
             value:
-              "calc({sizes.propertyRowLabel} + {sizes.propertyRowField} + {spacing.md} + 2 * {spacing.lg})",
+              "calc({sizes.propertyRowLabel} + {sizes.propertyRowField} + {sizes.propertyRowAction} + 2 * {spacing.md} + 2 * {spacing.lg})",
           },
         },
 
@@ -2732,25 +2745,32 @@ export default defineConfig({
         // is pinned to the rail, not to its trigger — every colour field in the
         // app lives in that rail, so the picker always appears in the same
         // column whichever row was clicked, and it never lands ON the rail it
-        // is editing through. Vertically it tracks the swatch via `anchor()`,
-        // which is what keeps it beside its own row as the rail scrolls, with
-        // `flip-block` for a row too near the foot of the screen to open
-        // downwards from.
+        // is editing through.
+        //
+        // Vertically it is PINNED at the position the swatch had when it opened
+        // — a number handed in by `usePickerPin`, not `anchor(top)`. An anchor
+        // is tracked, so the picker used to travel with its row as the rail
+        // scrolled: the panel is docked two pixels off that rail and reads as
+        // part of the same strip, and half a strip sliding while the other half
+        // holds still reads as a fault. The clamp that `@position-try` was
+        // buying moved into that hook with it, since a fallback only applies to
+        // an anchor-positioned element.
         colorPickerPopover: defineRecipe({
           className: "color-picker-popover",
           description:
-            "The colour picker's shell: docked 2px inside the properties rail's leading edge at the rail's own width, level with the swatch that opened it (`anchor(top)`, flipping above for a row near the viewport foot). Fixed, so `position-try-fallbacks` measures overflow against the viewport — the slash menu's bargain. On a phone, where the rail is a sheet along the BOTTOM edge, 'beside the rail' has no meaning and it centres over the canvas instead.",
+            "The colour picker's shell: docked 2px inside the properties rail's leading edge at the rail's own width, opening level with the swatch that opened it and then HOLDING there while the rail scrolls under it (the `top` comes from `usePickerPin`, which also keeps it clear of the viewport foot). On a phone, where the rail is a sheet along the BOTTOM edge, 'beside the rail' has no meaning and it centres over the canvas instead.",
           base: {
             position: "fixed",
             // Over the rail (50), because it is opened FROM the rail and must
             // not slide under it.
             zIndex: 60,
-            positionAnchor: "--color-picker",
-            top: "anchor(top)",
+            // `top` is supplied inline by `usePickerPin`. Zero is the floor it
+            // corrects from and never what is painted — the hook sets a real
+            // one in the same commit the panel mounts in.
+            top: 0,
             insetInlineEnd:
               "calc(token(sizes.propertiesPanelWidth) + token(spacing.xs))",
             width: "token(sizes.propertiesPanelWidth)",
-            positionTryFallbacks: "--color-picker-clamp",
             backgroundColor: "bg.surface",
             color: "text.body",
             borderRadius: "md",
@@ -4806,13 +4826,131 @@ export default defineConfig({
         }),
 
         // ---------------------------------------------------------------------
+        // The ramp, as a grid of swatches (Figma 1088:2591).
+        //
+        // It replaces a count slider over a stack of colour fields — one row per
+        // stop, which at ten stops stood taller than everything else in the rail
+        // put together and still made you read a number to find out how many
+        // colours you had. A grid says that at a glance: the ramp IS the filled
+        // cells, in order, and the empty ones are the room left.
+        //
+        // FIVE columns, always, whatever the shader's ceiling. The count is a
+        // property of the panel rather than of the shader — 5 × 36 + 4 × 8 is
+        // exactly `propertyRowField`, so the grid fills its column edge to edge
+        // — and a shader with a lower ceiling simply draws fewer cells into the
+        // same shape. What varies is how many cells there are, never how wide
+        // they are, so two shaders' ramps are read on one pitch.
+        //
+        // The cell is the colour FIELD's swatch at another size, deliberately:
+        // same checkerboard under the fill so a partial alpha reads as partial,
+        // same hairline so a pale colour on a pale ground still has an edge.
+        // ---------------------------------------------------------------------
+        colorSwatchGrid: defineSlotRecipe({
+          className: "color-swatch-grid",
+          description:
+            "A cover's ramp as a five-column grid of 36×28 swatches — filled cells are the colours in order, the first empty one offers to add, and the rest are inert blanks. Each swatch is a button that opens the shared ColorPicker. Sized so the grid is exactly the properties rail's field column (Figma 1088:2591).",
+          slots: ["grid", "cell", "fill", "icon"],
+          base: {
+            grid: {
+              display: "grid",
+              // `1fr`, not the 36px it comes out at: the cell's width is a
+              // consequence of the column it is drawn in, and stating both
+              // would be two answers to one question. A rail forced narrower
+              // than its own width (a phone in landscape) shrinks the cells
+              // rather than overflowing.
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gap: "md",
+              width: "token(spacing.full)",
+              minWidth: 0,
+            },
+            cell: {
+              // The button reset the colour field's swatch carries, for the
+              // same reason: this is a trigger everywhere it appears, and a
+              // native border inside the grid would be the one edge in the rail
+              // that is not a hairline of ours.
+              appearance: "none",
+              margin: "none",
+              padding: "none",
+              borderWidth: "0",
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "token(sizes.toolbarButton)",
+              minWidth: 0,
+              borderRadius: "sm",
+              overflow: "hidden",
+              cursor: "pointer",
+              // The EMPTY cell: a flat wash, the same one every field frame in
+              // the rail rests on. It is the base rather than a variant because
+              // an empty cell is simply one with nothing painted over it.
+              backgroundColor: "field.bg.default",
+              boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+              // The checkerboard, so a translucent colour reads as translucent
+              // rather than as a paler one — same conic gradient the colour
+              // field's swatch draws, at the same 8px pitch. ONLY under a
+              // colour: a `background-image` paints over its own
+              // `background-color`, so left in the base it would tile across
+              // the empty cells too and turn "room for four more" into a strip
+              // of texture.
+              "&[data-swatch-filled]": {
+                backgroundImage:
+                  "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)",
+                backgroundSize: "token(spacing.md) token(spacing.md)",
+              },
+              transition: "box-shadow 150ms ease",
+              // A cell past the first empty one. It is not a hole in the ramp —
+              // colours are dense, and the next one lands in the first gap — so
+              // it offers nothing and says so by not lighting up.
+              "&:disabled": { cursor: "default" },
+              _hover: {
+                boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-active)",
+              },
+              "&:disabled:hover": {
+                boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+              },
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+              },
+            },
+            // The colour itself, over the checker — a layer rather than a
+            // background, because the checker occupies the background and the
+            // two have to composite.
+            fill: { position: "absolute", inset: 0 },
+            // The add glyph on the one cell that offers it. Drawn only on
+            // hover and on keyboard focus: at rest the row should read as a
+            // ramp and its remaining room, not as a strip of buttons.
+            icon: {
+              position: "relative",
+              width: "token(spacing.xxl)",
+              height: "token(spacing.xxl)",
+              display: "block",
+              color: "text.body",
+              opacity: 0,
+              transition: "opacity 150ms ease",
+              "& path[stroke]": { stroke: "currentColor" },
+              "& path[fill]": { fill: "currentColor" },
+              "[data-swatch-add]:hover &": { opacity: 1 },
+              "html[data-keyboard-focus] [data-swatch-add]:focus-visible &": {
+                opacity: 1,
+              },
+            },
+          },
+        }),
+
+        // ---------------------------------------------------------------------
         // The panel the colour swatch opens (Figma 1066:2338).
         //
-        // Its width is `propertiesPanelWidth` and its footer is the panel's own
-        // 80 ∣ 8 ∣ 220 property row, because the picker stands two pixels off
-        // the docked rail and the two are read as one strip. Deriving it rather
-        // than restating 332px means widening a property field widens the
-        // picker with it, exactly as it widens the rail.
+        // Its width is `propertiesPanelWidth` and its footer carries the
+        // panel's own 212px field column, because the picker stands two pixels
+        // off the docked rail and the two are read as one strip. Deriving it
+        // rather than restating 360px means widening a property field widens
+        // the picker with it, exactly as it widens the rail.
+        //
+        // What the footer does NOT take is the rail's reserved action column:
+        // that column is the rail's, held open for a button on a property row,
+        // and a popover has no rows to hang one off. The format menu is `flex`
+        // and absorbs the width instead.
         //
         // Everything the picker DRAWS in — the map's gradients, the hue ramp —
         // is stated in plain `white` / `black` / sRGB primaries rather than in
@@ -4824,7 +4962,7 @@ export default defineConfig({
         colorPicker: defineSlotRecipe({
           className: "color-picker",
           description:
-            "The colour picker's innards — a title strip, a saturation/brightness map over a hue ramp and an alpha ramp, and a footer of format menu ∣ channel fields. The map is a live picture of the HSB solid at the current hue (`--color-picker-hue`) and the alpha ramp fades to the current colour (`--color-picker-alpha-to`) over the swatch's checkerboard, both handed in as custom properties because they change with the value. Slots are drawn to the docked properties rail's own metrics — a 40px header, a 12px body, a 48px footer on the 80 ∣ 8 ∣ 220 property row — since the picker opens 2px off that rail and the two read as one strip (Figma 1066:2338).",
+            "The colour picker's innards — a title strip, a saturation/brightness map over a hue ramp and an alpha ramp, and a footer of format menu ∣ channel fields. The map is a live picture of the HSB solid at the current hue (`--color-picker-hue`) and the alpha ramp fades to the current colour (`--color-picker-alpha-to`) over the swatch's checkerboard, both handed in as custom properties because they change with the value. Slots are drawn to the docked properties rail's own metrics — a 40px header, a 12px body, a 48px footer carrying the property row's own 212px field column — since the picker opens 2px off that rail and the two read as one strip (Figma 1066:2338).",
           slots: [
             "root",
             "header",
@@ -5096,7 +5234,7 @@ export default defineConfig({
               // A phone held upright gets the same panel along the BOTTOM
               // edge instead: full width, half the viewport tall. Half is the
               // point of it — the other half is where the thing being edited
-              // stays visible, which a rail 332px wide on a 390px screen
+              // stays visible, which a rail 360px wide on a 390px screen
               // cannot offer.
               //
               // SQUARE, like the rail it is the same panel as. The two upper
@@ -5213,11 +5351,17 @@ export default defineConfig({
               "& svg path[fill]": { fill: "currentColor" },
             },
             // Every labelled row IS a `Field`, relaid from the field's own
-            // vertical stack into a label ∣ control grid. Done here rather
-            // than with a wrapper and a bare <span> label so each control
-            // keeps its native `htmlFor`/`id` association — fifteen rows of
-            // hand-written `aria-label` would be fifteen chances to mislabel a
-            // slider.
+            // vertical stack into a label ∣ control ∣ action grid. Done here
+            // rather than with a wrapper and a bare <span> label so each
+            // control keeps its native `htmlFor`/`id` association — fifteen
+            // rows of hand-written `aria-label` would be fifteen chances to
+            // mislabel a slider.
+            //
+            // The third track is EMPTY and deliberately so: it is a declared
+            // grid column rather than padding, so the day a row needs a reset
+            // or an overflow button that button is a third child and nothing
+            // here has to move. Empty, it is what keeps every row clear of the
+            // panel's edge by the same 36px — see `propertyRowAction`.
             //
             // Stacked labels were the alternative and are not viable: at 15
             // parameters the background section alone would stand twice as
@@ -5235,7 +5379,7 @@ export default defineConfig({
               "& [data-property-control]": {
                 display: "grid",
                 gridTemplateColumns:
-                  "token(sizes.propertyRowLabel) token(sizes.propertyRowField)",
+                  "token(sizes.propertyRowLabel) token(sizes.propertyRowField) token(sizes.propertyRowAction)",
                 alignItems: "center",
                 columnGap: "md",
                 width: "max-content",
@@ -5243,6 +5387,30 @@ export default defineConfig({
               // The label is a column of the grid now, so it must not also
               // stretch to the field's full width the way the stacked one does.
               "& [data-property-control] > label": { width: "auto" },
+              // A row whose control is TALLER than one cell — the ramp's grid,
+              // which is two rows of swatches. Centring the three tracks is
+              // right for every ordinary row, where all three are one line high
+              // and centre and start are the same place; against a two-row
+              // control it floats the label and the action button into the
+              // gutter BETWEEN the rows, pointing at neither.
+              //
+              // Opt-in rather than automatic, because CSS cannot ask how tall
+              // the control turned out and every other row in the panel would
+              // shift by the few pixels its control exceeds its label by.
+              "& [data-property-control][data-control-align='start']": {
+                alignItems: "start",
+              },
+              // Aligned to the first ROW, not to the top edge. The label's text
+              // is shorter than a swatch, so `start` alone would hang it above
+              // the cells; a band exactly one cell high, with the text centred
+              // in it, puts the two on the same midline. `toolbarButton` is the
+              // cell's own height and the action chip's, so all three agree by
+              // construction.
+              "& [data-property-control][data-control-align='start'] > label": {
+                minHeight: "token(sizes.toolbarButton)",
+                display: "flex",
+                alignItems: "center",
+              },
             },
             // Prose that fills its control panel — a caption, a note — rather
             // than a value sitting in a labelled row, so it wears no field
@@ -5250,7 +5418,13 @@ export default defineConfig({
             // box drawn round the only thing in the panel would be chrome
             // describing nothing.
             text: {
-              width: "token(spacing.full)",
+              // Stops where the FIELD column stops, not where the panel does:
+              // the reserved action column runs unbroken from the header strip
+              // to the foot of the panel, and prose spanning it would be the
+              // one row that breaks the line. Same 36px every other row gives
+              // up, subtracted here because this row is not on the grid.
+              width:
+                "calc(token(spacing.full) - token(spacing.md) - token(sizes.propertyRowAction))",
               minWidth: 0,
               margin: "none",
               background: "transparent",
@@ -5973,10 +6147,6 @@ export default defineConfig({
     // would be flipping across. Pinning it to the foot of the viewport instead
     // keeps every row of it on screen and gives up only the level-with-the-row
     // alignment, which is the part that was never load-bearing.
-    "@position-try --color-picker-clamp": {
-      top: "auto",
-      bottom: "token(spacing.lg)",
-    },
   },
 
   outdir: "styled-system",

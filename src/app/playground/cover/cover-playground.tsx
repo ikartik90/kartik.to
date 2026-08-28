@@ -23,11 +23,12 @@ import { PresetsPane } from "./presets-pane";
 import { ShaderStage } from "./shader-stage";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
+import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
 import { Slider } from "@/components/ui/input/slider";
 import { Switch } from "@/components/ui/input/switch";
-import { ColorInput } from "@/components/ui/input/color-input";
+import { ColorSwatchGrid } from "@/components/ui/input/color-swatch-grid";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
 import { OptionList } from "@/components/ui/input/option-list";
 import { Typography } from "@/components/ui/typography";
@@ -37,6 +38,8 @@ import CrossIcon from "@/assets/icons/cross.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import ResetIcon from "@/assets/icons/reset.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
+import DarkIcon from "@/assets/icons/dark.svg";
+import LightIcon from "@/assets/icons/light.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import {
   SHADER_IDS,
@@ -46,7 +49,14 @@ import {
   type ControlSpec,
   type ShaderId,
 } from "@/data/shader-specs";
-import { framingFor, shaderParamsFor, type CoverSettings } from "@/domain/cover";
+import {
+  framingFor,
+  paletteFor,
+  shaderParamsFor,
+  type CoverSettings,
+  type CoverTheme,
+  type ThemedColor,
+} from "@/domain/cover";
 import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 
 // ---------------------------------------------------------------------------
@@ -430,6 +440,27 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
   // not invisible. See where it is handed to the rail.
   const editedAspects = useCoverDraftStore((draft) => draft.editedAspects);
 
+  // ---------------------------------------------------------------------
+  // Which GROUND the cover is being judged on.
+  //
+  // A cover holds a colour per theme, so "what does this look like" has two
+  // answers and the page has to be standing on one of them. It stands on the
+  // site's by default and can be sent to the other without taking the site
+  // with it: the rail, the strip and the chrome stay where the visitor put
+  // them, and only the picture in the middle changes ground.
+  //
+  // `null` means FOLLOW THE SITE rather than "light". That is what makes the
+  // first paint correct without a second answer to reconcile: `useThemeToggle`
+  // reports light for one commit after hydration (it cannot ask `matchMedia`
+  // on the server), and a state seeded from it would latch that guess forever.
+  // It also means flipping the site's theme re-aims the swatches, right up
+  // until the author says otherwise.
+  // ---------------------------------------------------------------------
+  const { isDark } = useThemeToggle();
+  const pageTheme: CoverTheme = isDark ? "dark" : "light";
+  const [groundOverride, setGroundOverride] = useState<CoverTheme | null>(null);
+  const ground = groundOverride ?? pageTheme;
+
   /**
    * Whether the cover on screen is the one that is going to stay there.
    *
@@ -656,19 +687,48 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
     setParamInStore(key, value);
   }
 
+  // -------------------------------------------------------------------------
+  // The colours. Every one of them is a PAIR, and the swatches show one half —
+  // whichever ground the preview is standing on. An edit therefore writes that
+  // half and leaves the other exactly as it was: switching ground, tuning, and
+  // switching back must not have quietly retuned the theme you were not
+  // looking at.
+  // -------------------------------------------------------------------------
+  const onGround = (color: ThemedColor, value: string): ThemedColor => ({
+    ...color,
+    [ground]: value,
+  });
+
+  const setRampColor = (index: number, value: string) =>
+    setColorsInStore(
+      state.colors.map((color, i) =>
+        i === index ? onGround(color, value) : color,
+      ),
+    );
+
   /**
-   * Growing the colour list copies the LAST colour rather than inserting a
-   * default: a new stop the same as its neighbour is invisible until you edit
-   * it, whereas a black one drops a hole into the gradient you were tuning.
-   * (Same reasoning as the media properties panel.)
+   * A new stop copies the LAST one — BOTH halves of it.
+   *
+   * A colour the same as its neighbour is invisible until you edit it, where a
+   * black one drops a hole into the gradient you were tuning. Copying the pair
+   * rather than the half on screen is the same rule one level up: the ground
+   * you are not looking at gets a stop that matches its own neighbour, not one
+   * borrowed from the other theme.
    */
-  function setColorCount(count: number) {
-    const colors = state.colors.slice(0, count);
-    while (colors.length < count) {
-      colors.push(colors[colors.length - 1] ?? "#FFFFFFFF");
-    }
-    setColorsInStore(colors);
-  }
+  const addRampColor = () =>
+    setColorsInStore([
+      ...state.colors,
+      state.colors[state.colors.length - 1] ?? {
+        light: "#FFFFFFFF",
+        dark: "#FFFFFFFF",
+      },
+    ]);
+
+  const removeRampColor = (index: number) =>
+    setColorsInStore(state.colors.filter((_, i) => i !== index));
+
+  /** What the card is painted with: every pair resolved onto `ground`. */
+  const palette = paletteFor(state, ground);
 
   /**
    * One control, whatever kind it is. Lifted out of the JSX because the sidebar
@@ -735,9 +795,13 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
               // Both halves, put back together — the shader's own uniforms with
               // the current shape's placement over them. See `shaderParamsFor`.
               params={shaderParamsFor(state, aspect)}
-              colors={state.colors}
-              colorBack={state.colorBack}
-              extraColors={state.extraColors}
+              // Resolved onto the ground the CARD is standing on, which is the
+              // site's until the author sends it to the other one. Only this
+              // picture moves: the rail beside it and the strip below stay in
+              // the theme the visitor chose. See `ground`.
+              colors={palette.colors}
+              colorBack={palette.colorBack}
+              extraColors={palette.extraColors}
             />
           </div>
         ) : (
@@ -960,28 +1024,63 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             </Group>
           )}
 
+          {/* Ramp, then edge, then background — front to back. The ramp is
+            what the picture IS, the rails are drawn on it, and the ground is
+            what shows through where neither reaches. The count slider that
+            used to open this group is gone: the grid says how many colours
+            there are by showing them, and how much room is left by not. */}
           <Group title="Colours">
-            <Field size="sm" data-property-control>
-              <Field.Label>Count</Field.Label>
-              <Slider
-                min={1}
-                max={spec.maxColors}
-                step={1}
-                value={state.colors.length}
-                onValueChange={setColorCount}
+            {/* Two rows of swatches, so the label and the toggle sit on the
+              FIRST of them rather than floating between the two. See the
+              `controlPanel` slot. */}
+            <Field size="sm" data-property-control data-control-align="start">
+              <Field.Label>Ramp</Field.Label>
+              <ColorSwatchGrid
+                ariaLabel="Ramp colours"
+                capacity={spec.maxColors}
+                values={palette.colors}
+                onValueChange={setRampColor}
+                onAdd={addRampColor}
+                onRemove={removeRampColor}
               />
+              {/* The row's ACTION cell — the column every control row keeps
+                open. It carries the glyph of the ground you are NOT on, which
+                is where pressing it goes, and it moves the card alone. */}
+              <Button
+                variant="icon"
+                aria-label={
+                  ground === "dark"
+                    ? "Show the light colours"
+                    : "Show the dark colours"
+                }
+                onClick={() =>
+                  setGroundOverride(ground === "dark" ? "light" : "dark")
+                }
+              >
+                {ground === "dark" ? <LightIcon /> : <DarkIcon />}
+                <Button.Tooltip>
+                  <Tooltip.Text>
+                    {ground === "dark" ? "Light colours" : "Dark colours"}
+                  </Tooltip.Text>
+                </Button.Tooltip>
+              </Button>
             </Field>
 
-            {state.colors.map((color, index) => (
-              <Field size="sm" key={index} data-property-control>
-                <Field.Label>{`Colour ${index + 1}`}</Field.Label>
-                <ColorInput
-                  value={color}
-                  onValueChange={(value) =>
-                    setColorsInStore(
-                      state.colors.map((existing, i) =>
-                        i === index ? value : existing,
-                      ),
+            {spec.extraColors.map((extra) => (
+              <Field size="sm" key={extra.key} data-property-control>
+                <Field.Label>{extra.label}</Field.Label>
+                {/* One cell. A rail's colour is a PROPERTY of the shader, not
+                  a stop that can be added or dropped — so the grid is handed
+                  neither `onAdd` nor `onRemove` and draws no affordance for
+                  either. */}
+                <ColorSwatchGrid
+                  ariaLabel={`${extra.label} colour`}
+                  capacity={1}
+                  values={[palette.extraColors[extra.key]]}
+                  onValueChange={(_, value) =>
+                    setExtraColorInStore(
+                      extra.key,
+                      onGround(state.extraColors[extra.key], value),
                     )
                   }
                 />
@@ -991,24 +1090,18 @@ export function CoverPlayground({ cover }: { cover?: OpenedCover }) {
             {spec.hasColorBack && state.colorBack && (
               <Field size="sm" data-property-control>
                 <Field.Label>Background</Field.Label>
-                <ColorInput
-                  value={state.colorBack}
-                  onValueChange={(value) => setColorBackInStore(value)}
-                />
-              </Field>
-            )}
-
-            {spec.extraColors.map((extra) => (
-              <Field size="sm" key={extra.key} data-property-control>
-                <Field.Label>{extra.label}</Field.Label>
-                <ColorInput
-                  value={state.extraColors[extra.key]}
-                  onValueChange={(value) =>
-                    setExtraColorInStore(extra.key, value)
+                <ColorSwatchGrid
+                  ariaLabel="Background colour"
+                  capacity={1}
+                  values={[palette.colorBack ?? "#000000FF"]}
+                  onValueChange={(_, value) =>
+                    setColorBackInStore(
+                      onGround(state.colorBack ?? { light: value, dark: value }, value),
+                    )
                   }
                 />
               </Field>
-            ))}
+            )}
           </Group>
 
           {/* The fan itself, then what is drawn ON it: the ramp is laid along the

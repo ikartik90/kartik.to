@@ -5,6 +5,7 @@ import {
   FRAMING_DEFAULTS,
   coverContentFor,
   framingFor,
+  paletteFor,
   shaderParamsFor,
 } from "../cover";
 
@@ -184,7 +185,11 @@ describe("CoverContentSchema", () => {
       shaderId: "cosmicTrack",
       settings: { ...settings, colors: ["#2E6BFF"] },
     });
-    expect(parsed.settings.colors).toEqual(["#2E6BFFFF"]);
+    // Both halves of the pair the bare string became — normalising happens
+    // after the split, so neither half can be the short form.
+    expect(parsed.settings.colors).toEqual([
+      { light: "#2E6BFFFF", dark: "#2E6BFFFF" },
+    ]);
   });
 
   it("stores every shader's defaults in the canonical eight-digit form", () => {
@@ -194,7 +199,10 @@ describe("CoverContentSchema", () => {
         settings: defaultState(SHADER_SPECS[shaderId]),
       });
       for (const color of parsed.settings.colors) {
-        expect(color, `${shaderId} colour`).toMatch(/^#[0-9A-F]{8}$/);
+        expect(color.light, `${shaderId} light colour`).toMatch(
+          /^#[0-9A-F]{8}$/,
+        );
+        expect(color.dark, `${shaderId} dark colour`).toMatch(/^#[0-9A-F]{8}$/);
       }
     }
   });
@@ -463,7 +471,7 @@ describe("phase", () => {
 describe("framingFor", () => {
   it("gives the shape's own framing where it has one", () => {
     const settings = {
-      ...defaultState(SHADER_SPECS.cosmicTrack),
+      ...coverContentFor("cosmicTrack").settings,
       framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 2 } },
     };
 
@@ -474,7 +482,7 @@ describe("framingFor", () => {
   // point, which is where every control opens before anybody moves it.
   it("falls back to the defaults for a shape nobody has framed", () => {
     const settings = {
-      ...defaultState(SHADER_SPECS.cosmicTrack),
+      ...coverContentFor("cosmicTrack").settings,
       framing: {},
     };
 
@@ -489,7 +497,7 @@ describe("shaderParamsFor", () => {
   // params would otherwise outrank the frame you are looking at.
   it("hands the shader its uniforms with the current frame's placement over them", () => {
     const settings = {
-      ...defaultState(SHADER_SPECS.cosmicTrack),
+      ...coverContentFor("cosmicTrack").settings,
       framing: { "4/3": { ...FRAMING_DEFAULTS, scale: 3 } },
     };
 
@@ -511,5 +519,111 @@ describe("coverContentFor", () => {
         CoverContentSchema.safeParse(coverContentFor(shaderId)).success,
       ).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-theme colours. Every colour a cover holds is a light/dark PAIR, so the
+// same cover can read on either ground without a second cover existing.
+// ---------------------------------------------------------------------------
+describe("themed colours", () => {
+  it("splits a cover written with one colour per stop into a matching pair", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      // Exactly what every cover saved before the split holds: bare strings.
+      settings: { ...settings, colors: ["#FFAB6F", "#FF4D97FF"] },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.colors).toEqual([
+      { light: "#FFAB6FFF", dark: "#FFAB6FFF" },
+      { light: "#FF4D97FF", dark: "#FF4D97FF" },
+    ]);
+  });
+
+  it("splits the background and the extra colours too", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      settings: {
+        ...settings,
+        colorBack: "#101010FF",
+        extraColors: { colorEdge: "#FFFFFF" },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.colorBack).toEqual({
+      light: "#101010FF",
+      dark: "#101010FF",
+    });
+    expect(result.success && result.data.settings.extraColors.colorEdge).toEqual(
+      { light: "#FFFFFFFF", dark: "#FFFFFFFF" },
+    );
+  });
+
+  it("leaves a pair that already differs alone", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+
+    const result = CoverContentSchema.safeParse({
+      shaderId: "cosmicTrack",
+      settings: {
+        ...settings,
+        colors: [{ light: "#000000FF", dark: "#FFFFFFFF" }],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.settings.colors).toEqual([
+      { light: "#000000FF", dark: "#FFFFFFFF" },
+    ]);
+  });
+
+  it("still rejects anything that is not a colour, in either half", () => {
+    const settings = defaultState(SHADER_SPECS.cosmicTrack);
+    for (const colors of [
+      ["rebeccapurple"],
+      [{ light: "#FFFFFFFF", dark: "nope" }],
+    ]) {
+      expect(
+        CoverContentSchema.safeParse({
+          shaderId: "cosmicTrack",
+          settings: { ...settings, colors },
+        }).success,
+      ).toBe(false);
+    }
+  });
+});
+
+describe("paletteFor", () => {
+  it("hands the shader one colour per stop, on the theme asked for", () => {
+    const settings = {
+      ...coverContentFor("cosmicTrack").settings,
+      colors: [{ light: "#000000FF", dark: "#FFFFFFFF" }],
+      colorBack: { light: "#EEEEEEFF", dark: "#111111FF" },
+      extraColors: { colorEdge: { light: "#FF0000FF", dark: "#00FF00FF" } },
+    };
+
+    expect(paletteFor(settings, "light")).toEqual({
+      colors: ["#000000FF"],
+      colorBack: "#EEEEEEFF",
+      extraColors: { colorEdge: "#FF0000FF" },
+    });
+    expect(paletteFor(settings, "dark")).toEqual({
+      colors: ["#FFFFFFFF"],
+      colorBack: "#111111FF",
+      extraColors: { colorEdge: "#00FF00FF" },
+    });
+  });
+
+  it("leaves colorBack absent for a shader that has no ground", () => {
+    const settings = {
+      ...coverContentFor("staticMeshGradient").settings,
+      colors: [{ light: "#000000FF", dark: "#FFFFFFFF" }],
+    };
+    expect("colorBack" in paletteFor(settings, "light")).toBe(false);
   });
 });

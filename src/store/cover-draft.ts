@@ -13,6 +13,7 @@ import {
   framingFor,
   type CoverContent,
   type CoverSettings,
+  type ThemedColor,
   type Framing,
 } from "@/domain/cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
@@ -153,9 +154,15 @@ interface CoverDraftStore {
 
   selectShader: (shaderId: ShaderId) => void;
   setParam: (key: string, value: ParamValue) => void;
-  setColors: (colors: string[]) => void;
-  setColorBack: (colorBack: string) => void;
-  setExtraColor: (key: string, value: string) => void;
+  /**
+   * The ramp, as PAIRS. The panel edits one ground at a time and rebuilds the
+   * array around the stop it touched — which keeps this action the same shape
+   * it always was, and keeps the store from having to know which theme the
+   * preview card happens to be standing in. See `@/domain/cover`.
+   */
+  setColors: (colors: ThemedColor[]) => void;
+  setColorBack: (colorBack: ThemedColor) => void;
+  setExtraColor: (key: string, value: ThemedColor) => void;
   /**
    * One placement control, on the shape currently on screen and on no other.
    *

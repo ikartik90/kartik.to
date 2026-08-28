@@ -37,14 +37,25 @@ describe("the swatch as a trigger", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("claims the CSS anchor only while open, so two pickers can never share it", () => {
+  // The picker used to take its vertical position from `anchor(top)` against
+  // this swatch, which TRACKED it: scrolling the properties rail dragged the
+  // panel along with the row. It now opens where the swatch was and holds
+  // there, so the position is a number read once rather than a live anchor.
+  it("pins itself where the swatch stood when it opened", () => {
     render(<Host />);
-    // `anchor-name` is newer than the DOM typings, so it is read off the
-    // declaration by name rather than as a property.
-    const anchorName = () => swatch().style.getPropertyValue("anchor-name");
-    expect(anchorName()).toBe("");
+    // jsdom measures everything at zero, so the assertion is about WHERE the
+    // number comes from, not what it is: a `top` written inline at all means
+    // the panel is no longer following anything.
+    vi.spyOn(
+      HTMLButtonElement.prototype,
+      "getBoundingClientRect",
+    ).mockReturnValue({ ...new DOMRect(), top: 240 } as DOMRect);
+
     fireEvent.click(swatch());
-    expect(anchorName()).toBe("--color-picker");
+    expect(screen.getByRole("dialog").style.top).toBe("240px");
+    // And the swatch claims no anchor of its own any more, so two pickers in
+    // one rail cannot collide over the name.
+    expect(swatch().style.getPropertyValue("anchor-name")).toBe("");
   });
 
   it("hands focus to the picker, which is otherwise outside the tab order", () => {

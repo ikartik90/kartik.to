@@ -12,6 +12,8 @@ import {
   useCoverDraftStore,
 } from "@/store/cover-draft";
 import { coverSwatch } from "@/utils/cover-swatch";
+import { paletteFor } from "@/domain/cover";
+import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import type { Cover, CoverContent } from "@/domain/cover";
 import {
   CoverThumbnails,
@@ -258,6 +260,12 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
   const isDirty = useCoverDraftStore((draft) => draft.isDirty);
   const buffers = useCoverDraftStore((draft) => draft.buffers);
   const openNewDraft = useCoverDraftStore((draft) => draft.openNewDraft);
+  // The strip paints in the PAGE's theme, not the preview card's. A cover holds
+  // a colour per ground and the card can be flipped to the other one to judge
+  // it, but the strip is chrome belonging to the playground — it stays where
+  // the site is, so the tiles read against the surface they sit on.
+  const { isDark } = useThemeToggle();
+  const tileTheme = isDark ? "dark" : "light";
   // What to DRAW, never what may be done: the add tile's write is checked again
   // on the server, and this answers false for one render after hydration by
   // design — see `useIsAdmin`.
@@ -496,9 +504,12 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
                 // shows until one has been taken anyway.
                 style={{
                   background: coverSwatch(
-                    (buffers[NEW_COVER_KEY]?.settings ??
-                      useCoverDraftStore.getState()
-                        .settings) as Preset["settings"],
+                    paletteFor(
+                      (buffers[NEW_COVER_KEY]?.settings ??
+                        useCoverDraftStore.getState()
+                          .settings) as Preset["settings"],
+                      tileTheme,
+                    ),
                   ),
                 }}
                 onClick={openNew}
@@ -511,7 +522,7 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
             than re-derived here. See that action for why it is by creation and
             not by last edit. */}
           {presets.map((preset) => {
-            const picture = thumbnails[thumbnailKey(preset)];
+            const picture = thumbnails[thumbnailKey(preset, tileTheme)];
             return (
               <div className={tileSlotStyle} key={preset.id}>
                 <button
@@ -530,7 +541,11 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
                           backgroundImage: `url(${picture})`,
                           backgroundSize: "cover",
                         }
-                      : { background: coverSwatch(preset.settings) }
+                      : {
+                          background: coverSwatch(
+                            paletteFor(preset.settings, tileTheme),
+                          ),
+                        }
                   }
                   onClick={() => openPreset(preset)}
                 />
@@ -551,6 +566,7 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
           itself the moment there are none. */}
       <CoverThumbnails
         presets={presets}
+        theme={tileTheme}
         onCaptured={(key, url) =>
           setThumbnails((was) => ({ ...was, [key]: url }))
         }

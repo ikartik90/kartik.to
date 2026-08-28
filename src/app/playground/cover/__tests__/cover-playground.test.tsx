@@ -13,7 +13,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
-import { FRAMING_DEFAULTS, shaderParamsFor } from "@/domain/cover";
+import {
+  FRAMING_DEFAULTS,
+  coverContentFor,
+  shaderParamsFor,
+} from "@/domain/cover";
 import type { ThemeMode } from "@/store/theme";
 
 // Every shader the playground can mount, stubbed. They all end in a
@@ -27,8 +31,15 @@ vi.mock("@paper-design/shaders-react", () => ({
   Warp: () => null,
 }));
 
+// Renders a MARKER rather than nothing, because what the mounted shader is
+// handed is now a question worth asking: a cover holds a colour per ground and
+// the card resolves the pair, so "which colours reached the canvas" is the only
+// honest way to test which ground the card is standing on. It stays out of the
+// server's markup either way — the stage is behind the page's `ready` gate.
 vi.mock("@/components/shaders/cosmic-track", () => ({
-  CosmicTrack: () => null,
+  CosmicTrack: ({ colors }: { colors: string[] }) => (
+    <div data-testid="stage" data-colors={colors.join(",")} />
+  ),
 }));
 
 // The presets strip reaches the database, through a `"use server"` module that
@@ -97,8 +108,12 @@ async function renderReady() {
   return result;
 }
 
+// Parsed, not authored: `defaultState` is the spec table's shape (one colour
+// per stop) and a cover's is the schema's (a light/dark pair each). Going
+// through `coverContentFor` is what makes the fixture the thing the panel
+// actually receives.
 const SETTINGS = {
-  ...defaultState(SHADER_SPECS.cosmicTrack),
+  ...coverContentFor("cosmicTrack").settings,
   framing: {},
 };
 
@@ -241,7 +256,7 @@ describe("CoverPlayground reset control", () => {
     title: "Dusk",
     shaderId: "cosmicTrack" as const,
     settings: {
-      ...defaultState(SHADER_SPECS.cosmicTrack),
+      ...coverContentFor("cosmicTrack").settings,
       params: {
         ...defaultState(SHADER_SPECS.cosmicTrack).params,
         rampLength: 4,
@@ -578,7 +593,7 @@ describe("CoverPlayground aspect toolbar", () => {
           title: "Dusk",
           shaderId: "swirl",
           settings: {
-            ...defaultState(SHADER_SPECS.swirl),
+            ...coverContentFor("swirl").settings,
             framing: { "3/2": { ...FRAMING_DEFAULTS, scale: 2 } },
           },
           publishedAt: null,
@@ -892,7 +907,13 @@ describe("CoverPlayground preloader", () => {
   it("ships no rail in the server's markup, whose draft has been seeded by nothing", () => {
     const routed = {
       ...savedCover,
-      settings: { ...SETTINGS, colors: ["#112233FF", "#445566FF"] },
+      settings: {
+        ...SETTINGS,
+        colors: [
+          { light: "#112233FF", dark: "#112233FF" },
+          { light: "#445566FF", dark: "#445566FF" },
+        ],
+      },
     };
     const html = renderToStaticMarkup(<CoverPlayground cover={routed} />);
 
@@ -900,7 +921,7 @@ describe("CoverPlayground preloader", () => {
     // holding — the shader defaults, which belong to no cover anybody opened.
     expect(html).not.toContain('aria-label="Properties"');
     for (const colour of SETTINGS.colors) {
-      expect(html).not.toContain(colour.replace("#", "").slice(0, 6));
+      expect(html).not.toContain(colour.light.replace("#", "").slice(0, 6));
     }
   });
 });
@@ -1237,5 +1258,104 @@ describe("CoverPlayground authoring controls", () => {
     await waitFor(() => expect(publishCover).toHaveBeenCalled());
     expect(publishButton()).not.toBeNull();
     expect(useCoverDraftStore.getState().publishedAt).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Which GROUND the card is standing on. A cover holds a colour per theme, so
+// the page has to choose one — and the choice belongs to the CARD alone: the
+// rail, the strip and the site's own toggle stay where the visitor put them.
+// ---------------------------------------------------------------------------
+describe("CoverPlayground ground", () => {
+  /** A cover whose two grounds are unmistakably different. */
+  const twoToned = {
+    ...savedCover,
+    settings: {
+      ...SETTINGS,
+      colors: [
+        { light: "#AAAAAAFF", dark: "#111111FF" },
+        { light: "#BBBBBBFF", dark: "#222222FF" },
+      ],
+    },
+  };
+
+  const stageColors = () =>
+    screen.getByTestId("stage").getAttribute("data-colors");
+
+  const groundToggle = () =>
+    screen.getByRole("button", {
+      name: /Show the (light|dark) colours/,
+    });
+
+  // The draft survives a test, so a cover handed in as a prop is only adopted
+  // by a store that has been put back to blank first — the same reset every
+  // other block that opens through the route uses.
+  beforeEach(() => {
+    useCoverDraftStore.getState().reset();
+    mockMode.mockReturnValue("dark");
+    mockSetMode.mockClear();
+  });
+  afterEach(cleanup);
+
+  it("opens on the site's own theme, not on a fixed one", async () => {
+    render(<CoverPlayground cover={twoToned} />);
+    await screen.findByRole("complementary", { name: "Properties" });
+
+    expect(stageColors()).toBe("#111111FF,#222222FF");
+  });
+
+  it("follows the site when the site is light instead", async () => {
+    mockMode.mockReturnValue("light");
+    render(<CoverPlayground cover={twoToned} />);
+    await screen.findByRole("complementary", { name: "Properties" });
+
+    expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
+  });
+
+  // The whole point of the control: judge the cover on the other ground WITHOUT
+  // taking the page there. Asserted against the site's theme store, which is
+  // what the page's own toggle writes to.
+  it("sends the card to the other ground and the site nowhere", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground cover={twoToned} />);
+    await screen.findByRole("complementary", { name: "Properties" });
+
+    await user.click(groundToggle());
+
+    expect(stageColors()).toBe("#AAAAAAFF,#BBBBBBFF");
+    expect(mockSetMode).not.toHaveBeenCalled();
+  });
+
+  // The glyph names where pressing it GOES, so it is the ground you are not on.
+  it("shows the glyph of the ground it would take you to", async () => {
+    const user = userEvent.setup();
+    render(<CoverPlayground cover={twoToned} />);
+    await screen.findByRole("complementary", { name: "Properties" });
+
+    expect(
+      screen.getByRole("button", { name: "Show the light colours" }),
+    ).toBeTruthy();
+    await user.click(groundToggle());
+    expect(
+      screen.getByRole("button", { name: "Show the dark colours" }),
+    ).toBeTruthy();
+  });
+
+  // An edit lands on the ground being LOOKED at, and leaves the other alone —
+  // otherwise switching, tuning and switching back would have quietly retuned
+  // the theme you never saw.
+  it("writes an edit to the ground on screen and no other", async () => {
+    render(<CoverPlayground cover={twoToned} />);
+    await screen.findByRole("complementary", { name: "Properties" });
+
+    act(() =>
+      useCoverDraftStore.getState().setColors([
+        { light: "#AAAAAAFF", dark: "#999999FF" },
+        { light: "#BBBBBBFF", dark: "#222222FF" },
+      ]),
+    );
+
+    const colors = useCoverDraftStore.getState().settings.colors;
+    expect(colors[0]).toEqual({ light: "#AAAAAAFF", dark: "#999999FF" });
   });
 });
