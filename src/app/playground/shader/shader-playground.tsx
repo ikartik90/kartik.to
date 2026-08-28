@@ -44,6 +44,7 @@ import LightIcon from "@/assets/icons/light.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import {
   SHADER_IDS,
+  extraColorRows,
   SHADER_SPECS,
   FRAMING_CONTROL_KEYS,
   MOTION_CONTROL_KEYS,
@@ -727,6 +728,12 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
   const rampControls = spec.controls.filter(
     (control) => control.group === "ramp",
   );
+  const gridControls = spec.controls.filter(
+    (control) => control.group === "grid",
+  );
+  const glowControls = spec.controls.filter(
+    (control) => control.group === "glow",
+  );
   const ownControls = spec.controls.filter(
     (control) => !shared.has(control.key) && control.group === undefined,
   );
@@ -1128,11 +1135,10 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
               rows are 24px — a 32px-pitch list inside it would be the loudest
               thing in the rail.
 
-              It stands at one entry today (see `SHADER_SPECS`) and is still a
-              list: what it draws comes from the table, so the row that says
-              which shader you are on is the same control that offers the next
-              one. Special-casing a single shader would mean writing the picker
-              twice. */}
+              It stood at one entry for a year and was still a list, which is
+              why Nexus arriving cost it nothing: what it draws comes from the
+              table, so the row saying which shader you are on is the same
+              control that offers the other one. */}
               <OptionList
                 size="sm"
                 // The recipe's own width is the 208px popover pitch it shares
@@ -1198,23 +1204,33 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
               </Button>
             </Field>
 
-            {spec.extraColors.map((extra) => (
-              <Field size="sm" key={extra.key} data-property-control>
-                <Field.Label>{extra.label}</Field.Label>
-                {/* One cell. A rail's colour is a PROPERTY of the shader, not
-                  a stop that can be added or dropped — so the grid is handed
-                  neither `onAdd` nor `onRemove` and draws no affordance for
-                  either. */}
+            {/* One row per GROUP of extra colours rather than one per colour —
+              see `extraColorRows`. Colours that are one decision in two parts
+              (the lattice's minor and major ink) sit side by side under a
+              single label, where a row each would have said they were
+              unrelated and spent a line of the panel saying it. */}
+            {extraColorRows(spec).map((row) => (
+              <Field size="sm" key={row.label} data-property-control>
+                <Field.Label>{row.label}</Field.Label>
+                {/* Fixed cells. An extra colour is a PROPERTY of the shader,
+                  not a stop that can be added or dropped — so the grid is
+                  handed neither `onAdd` nor `onRemove` and draws no affordance
+                  for either, and its capacity is exactly what the table names.
+                  `labels` because these cells differ by role, not position. */}
                 <ColorSwatchGrid
-                  ariaLabel={`${extra.label} colour`}
-                  capacity={1}
-                  values={[palette.extraColors[extra.key]]}
-                  onValueChange={(_, value) =>
+                  ariaLabel={`${row.label} colours`}
+                  capacity={row.colors.length}
+                  labels={row.colors.map((extra) => `${extra.label} colour`)}
+                  values={row.colors.map(
+                    (extra) => palette.extraColors[extra.key],
+                  )}
+                  onValueChange={(index, value) => {
+                    const { key } = row.colors[index];
                     setExtraColorInStore(
-                      extra.key,
-                      onGround(state.extraColors[extra.key], value),
-                    )
-                  }
+                      key,
+                      onGround(state.extraColors[key], value),
+                    );
+                  }}
                 />
               </Field>
             ))}
@@ -1236,13 +1252,24 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
             )}
           </Group>
 
-          {/* The fan itself, then what is drawn ON it: the ramp is laid along the
-            track, and the rails trace the bands the ramp fills. Reading order
-            follows that dependency rather than the control table's own. */}
-          <Group title="Track">{ownControls.map(renderControl)}</Group>
+          {/* The shader itself, then what is drawn ON it: Cosmic Track's ramp is
+            laid along its track and its rails trace the bands the ramp fills;
+            Nexus's movers run the lanes of its lattice. Reading order follows
+            that dependency rather than the control table's own — and the
+            heading is the shader's, since the group has no name that fits
+            both. See `ownLabel`. */}
+          <Group title={spec.ownLabel}>{ownControls.map(renderControl)}</Group>
 
           {/* Each absent entirely for a shader with none, rather than an empty
             strip — the same rule Motion follows below. */}
+          {gridControls.length > 0 && (
+            <Group title="Grid">{gridControls.map(renderControl)}</Group>
+          )}
+
+          {glowControls.length > 0 && (
+            <Group title="Glow">{glowControls.map(renderControl)}</Group>
+          )}
+
           {rampControls.length > 0 && (
             <Group title="Ramp">{rampControls.map(renderControl)}</Group>
           )}

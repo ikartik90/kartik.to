@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SHADER_SPECS,
+  extraColorRows,
   FRAMING_CONTROL_KEYS,
   MOTION_CONTROL_KEYS,
   defaultParams,
@@ -150,5 +151,48 @@ describe("the spec table itself", () => {
 
   it.each(eachSpec)("%s: only shaders with a background take one", (_, spec) => {
     expect(spec.defaults.colorBack === undefined).toBe(!spec.hasColorBack);
+  });
+});
+
+// The panel draws one row per GROUP of extra colours, not one per colour, so
+// that two inks which are one decision (a lattice's minor and major) sit side
+// by side under a single label. The grouping is a reading of the TABLE, which
+// is why it is asserted here rather than through the sidebar.
+describe("extraColorRows", () => {
+  it("gives a colour naming no row a row of its own, under its own label", () => {
+    const rows = extraColorRows(SHADER_SPECS.cosmicTrack);
+
+    expect(rows).toHaveLength(SHADER_SPECS.cosmicTrack.extraColors.length);
+    for (const row of rows) {
+      expect(row.colors).toHaveLength(1);
+      expect(row.label).toBe(row.colors[0].label);
+    }
+  });
+
+  it("collapses colours naming the same row, keeping the table's order", () => {
+    const rows = extraColorRows(SHADER_SPECS.nexus);
+    const grid = rows.find((row) => row.label === "Grid");
+
+    expect(grid?.colors.map((color) => color.key)).toEqual([
+      "colorGrid",
+      "colorGridMajor",
+    ]);
+    // The FIRST of them names the row — the second is a swatch beside it, not a
+    // row of its own.
+    expect(rows.some((row) => row.label === "Major")).toBe(false);
+  });
+
+  it("names every one of a shader's extra colours exactly once", () => {
+    // The rows are what the panel renders, so a colour missing from them is a
+    // control the author cannot reach, and one appearing twice is two swatches
+    // writing the same key.
+    for (const spec of specs) {
+      const drawn = extraColorRows(spec).flatMap((row) =>
+        row.colors.map((color) => color.key),
+      );
+      expect(drawn.sort(), spec.id).toEqual(
+        spec.extraColors.map((extra) => extra.key).sort(),
+      );
+    }
   });
 });

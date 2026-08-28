@@ -71,6 +71,16 @@ export interface ColorSwatchGridProps {
    * a section called Ramp is the distinction that costs nothing on screen.
    */
   ariaLabel: string;
+  /**
+   * Names each cell, for a grid whose cells differ by ROLE rather than by
+   * position — a lattice's minor and major ink, say.
+   *
+   * Left off, a multi-cell grid numbers them ("Colour 2"), which is right for a
+   * ramp, where the position IS the meaning, and wrong for a pair where it is
+   * not: there "Colour 2" names the one on the right, and what the reader needs
+   * to know is that it is the major one.
+   */
+  labels?: string[];
 }
 
 export function ColorSwatchGrid({
@@ -80,6 +90,7 @@ export function ColorSwatchGrid({
   onAdd,
   onRemove,
   ariaLabel,
+  labels,
 }: ColorSwatchGridProps) {
   const styles = colorSwatchGrid();
   const uid = useId();
@@ -175,9 +186,8 @@ export function ColorSwatchGrid({
               aria-label={
                 offersAdd
                   ? "Add a colour"
-                  : capacity === 1
-                    ? ariaLabel
-                    : `Colour ${index + 1}`
+                  : (labels?.[index] ??
+                    (capacity === 1 ? ariaLabel : `Colour ${index + 1}`))
               }
               className={styles.cell}
               onClick={() => (offersAdd ? addAndOpen() : openAt(index))}
