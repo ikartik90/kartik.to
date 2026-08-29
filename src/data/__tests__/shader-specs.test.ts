@@ -62,6 +62,18 @@ describe("defaultState", () => {
     }
   });
 
+  it("hands out a COPY of a list default, not the table's own array", () => {
+    // Every other control's default is a scalar and copies itself. A toggle
+    // row's is an array, so handing it out bare would give every caller the
+    // one the table holds — and the first press of a toggle would rewrite the
+    // shader's default for the rest of the session.
+    const spec = SHADER_SPECS.pixelComets;
+    const first = defaultParams(spec).direction as string[];
+    first.push("sideways");
+
+    expect(defaultParams(spec).direction).not.toContain("sideways");
+  });
+
   it("does not let a caller mutate the spec through the result", () => {
     const spec = SHADER_SPECS.cosmicTrack;
     const first = defaultState(spec);

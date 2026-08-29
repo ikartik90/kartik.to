@@ -151,6 +151,39 @@ describe("ShaderPresetContentSchema", () => {
     expect(parsed.settings.params.rampLength).toBe(control?.value);
   });
 
+  // A toggle row is the one control whose value is a LIST, and the one that can
+  // be stored in a state its own panel cannot produce.
+  it("refuses a toggle row stored with nothing pressed", () => {
+    const settings = defaultState(SHADER_SPECS.pixelComets);
+
+    // Rejected rather than defaulted, exactly as a slider's range is enforced
+    // rather than clamped: no direction is not a still field, it is a blank
+    // card, and a preset that opens blank with nothing to say why is worse
+    // than a save that fails.
+    expect(() =>
+      ShaderPresetContentSchema.parse({
+        shaderId: "pixelComets",
+        settings: { ...settings, params: { ...settings.params, direction: [] } },
+      }),
+    ).toThrow();
+  });
+
+  it("opens a preset written before the toggle row on all of its options", () => {
+    const settings = defaultState(SHADER_SPECS.pixelComets);
+    const { direction: _dropped, ...withoutDirection } = settings.params;
+    const parsed = ShaderPresetContentSchema.parse({
+      shaderId: "pixelComets",
+      settings: { ...settings, params: withoutDirection },
+    });
+
+    const control = SHADER_SPECS.pixelComets.controls.find(
+      (spec) => spec.key === "direction",
+    );
+    expect(parsed.settings.params.direction).toEqual(
+      control?.kind === "toggles" ? control.value : undefined,
+    );
+  });
+
   it("strips a param the shader no longer has", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const parsed = ShaderPresetContentSchema.parse({

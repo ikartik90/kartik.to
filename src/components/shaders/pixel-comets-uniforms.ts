@@ -34,6 +34,93 @@ export const PIXEL_COMETS_MAX_COLORS = 8;
 export const PIXEL_COMETS_MAX_GLOW_REACH = 3;
 
 /**
+ * Which ways the comets run — and the order the segments are drawn in.
+ *
+ * The four are independent: any combination is a field, and the combinations
+ * are the point of there being four rather than a choice of axis. All four is
+ * the classic; two opposites is one axis; two at right angles is a field
+ * sweeping into a corner; one is weather.
+ *
+ * Named for the direction of TRAVEL, which is the thing on screen. The LANES a
+ * direction uses run the same way (a leftward comet lives in a row), but the
+ * axis those lanes are counted along is the other one — there are as many rows
+ * as the frame is tall — and that swap is the one place this is easy to get
+ * backwards.
+ */
+export const PIXEL_COMETS_DIRECTIONS = ["up", "down", "left", "right"] as const;
+
+export type PixelCometsDirection = (typeof PIXEL_COMETS_DIRECTIONS)[number];
+
+/**
+ * Each direction as the axis it runs on and the sign it runs in.
+ *
+ * Axis 0 is the columns — comets travelling along Y — and axis 1 the rows.
+ * The SIGNS are screen signs: +Y is up and +X is right, because `v_objectUV`
+ * carries clip space's own orientation through unchanged (the library flips
+ * only its image UV, at the very end of its vertex shader). Getting one of
+ * these backwards draws a field running the wrong way, which every test that
+ * merely counts comets would pass.
+ */
+const DIRECTION_AXES: Record<
+  PixelCometsDirection,
+  { axis: 0 | 1; heading: 1 | -1 }
+> = {
+  up: { axis: 0, heading: 1 },
+  down: { axis: 0, heading: -1 },
+  left: { axis: 1, heading: -1 },
+  right: { axis: 1, heading: 1 },
+};
+
+/**
+ * The chosen directions as the two readings the shader wants: which axes carry
+ * comets, and which way they run on each.
+ *
+ * A heading of 0 is "both ways, toss for it" — the shader's own coin toss, left
+ * alone. An axis given both of its directions is exactly that, so all four
+ * directions reduce to the field this shader drew before there was a control,
+ * and the default is a no-op rather than a re-implementation of one.
+ *
+ * Unknown names are dropped and an empty result falls back to all four. A mask
+ * of zeroes is not a still field, it is a blank card, and that is not a state
+ * worth letting a caller reach by mistake.
+ *
+ * Anything that is not a LIST is dropped whole, for the same reason but a
+ * harsher one: every other guard in this module degrades a bad number to a
+ * sound one, and this is the only input that could throw instead. A bare string
+ * is what a caller reaches for first — the component is public, and this
+ * control was a single-select for an afternoon — and a TypeError here takes the
+ * page rather than the picture.
+ */
+function directionAxes(directions: readonly PixelCometsDirection[]) {
+  // Annotated rather than inlined: narrowing a `readonly T[]` with
+  // `Array.isArray` widens it to `any[]`, which would take the element type off
+  // the fold below with it.
+  const given: readonly PixelCometsDirection[] = Array.isArray(directions)
+    ? directions
+    : [];
+  const known = given.filter((direction) =>
+    Object.hasOwn(DIRECTION_AXES, direction),
+  );
+  const chosen = known.length > 0 ? known : PIXEL_COMETS_DIRECTIONS;
+
+  const axes: [number, number] = [0, 0];
+  // A SET per axis, so a direction named twice is one direction rather than
+  // the axis's two — which would read as a toss and undo the control.
+  const headings: [Set<number>, Set<number>] = [new Set(), new Set()];
+
+  for (const direction of chosen) {
+    const { axis, heading } = DIRECTION_AXES[direction];
+    axes[axis] = 1;
+    headings[axis].add(heading);
+  }
+
+  const headingFor = (axis: 0 | 1) =>
+    headings[axis].size === 1 ? [...headings[axis]][0] : 0;
+
+  return { axes, heading: [headingFor(0), headingFor(1)] as [number, number] };
+}
+
+/**
  * The floor on a pixel, in CSS pixels. Under one the lattice is finer than the
  * screen and every mover lands inside a single device pixel — the gutters
  * moiré, and the movers alias into noise. Not a taste call: there is nothing
@@ -108,6 +195,24 @@ export interface PixelCometsParams {
    * so a coarse grid on a small card runs out of room before the slider does.
    */
   count: number;
+  /**
+   * Which ways the comets run — any combination of the four.
+   *
+   * It does not change HOW MANY there are. `count` is shared over the lanes
+   * left running, so dropping to one axis redirects the field rather than
+   * halving it, and dropping to one DIRECTION does not change the lane count at
+   * all: every column can still carry a comet when they all fall. That is what
+   * keeps this control and Count independent of each other.
+   *
+   * Two things it does change. The field SATURATES sooner on one axis, which
+   * has about half the lanes — see the odds in the shader. And a single
+   * direction is BIASED toward the edge its comets are born at: every comet
+   * marches back at the centre from the origin band, so with the band inside
+   * the frame the far side is only reached by the ones born near the middle.
+   * Push `originMin` past 1 and raise `travelSpans` and the bias goes: every
+   * comet then enters from off the card and crosses the whole of it.
+   */
+  direction: PixelCometsDirection[];
   /**
    * The band of distances from the CENTRE a mover may be born in, measured in
    * HALF-FRAMES along its own lane: 0 is the centre, 1 is the frame's edge, 2
@@ -378,6 +483,8 @@ export interface PixelCometsUniforms {
   u_colorGridMajor: [number, number, number, number];
   u_pixelSize: number;
   u_count: number;
+  u_axes: [number, number];
+  u_axisHeading: [number, number];
   u_originMin: number;
   u_originMax: number;
   u_travelSpans: number;
@@ -411,6 +518,7 @@ export const DEFAULT_PIXEL_COMETS: PixelCometsParams = {
   colorGridMajor: "#A8C0FF5C",
   pixelSize: 8,
   count: 30,
+  direction: [...PIXEL_COMETS_DIRECTIONS],
   originMin: 0,
   originMax: 2,
   travelSpans: 1.5,
@@ -453,6 +561,9 @@ export function toPixelCometsUniforms(params: PixelCometsParams): PixelCometsUni
     padded.push(converted[converted.length - 1]);
   }
 
+  const { axes: u_axes, heading: u_axisHeading } = directionAxes(params.direction);
+  const axes = { u_axes, u_axisHeading };
+
   return {
     u_colors: padded,
     u_colorsCount: converted.length,
@@ -481,6 +592,11 @@ export function toPixelCometsUniforms(params: PixelCometsParams): PixelCometsUni
     // Floored at 0. Negative odds would fail every comparison in the shader and
     // empty the field, which reads as a broken shader rather than a still one.
     u_count: Math.max(params.count, 0),
+    // Two readings of one control — see `directionAxes`, which also carries the
+    // guard: every other guard here floors a number that would draw the wrong
+    // picture, where this one is the difference between a field and a blank
+    // card.
+    ...axes,
     // Floored at the centre, not sorted. A distance from the centre has no
     // sign — the side is the shader's coin toss — so a negative here would be
     // the same band written backwards; and the two ends are left in whatever

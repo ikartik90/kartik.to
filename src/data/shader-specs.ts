@@ -144,9 +144,31 @@ export interface SelectSpec {
   value: string;
 }
 
-export type ControlSpec = SliderSpec | ToggleSpec | SelectSpec;
+/**
+ * A row of independent toggles — any combination, including all of them.
+ *
+ * The multi-select sibling of `SelectSpec`, and worth its own kind rather than
+ * a flag on that one: the VALUE is a different shape, and every reader of a
+ * param (the schema, the store, the shader's own props) has to know which it is
+ * holding.
+ *
+ * Its value may not be EMPTY. Nothing here enforces that — the panel's last
+ * pressed toggle does not release, and the schema rejects an empty list on the
+ * way in — but a spec whose options cannot all be off is the assumption both of
+ * those are written against.
+ */
+export interface TogglesSpec {
+  kind: "toggles";
+  key: string;
+  label: string;
+  group?: ControlGroup;
+  options: { value: string; label: string }[];
+  value: string[];
+}
 
-export type ParamValue = number | boolean | string;
+export type ControlSpec = SliderSpec | ToggleSpec | SelectSpec | TogglesSpec;
+
+export type ParamValue = number | boolean | string | string[];
 export type Params = Record<string, ParamValue>;
 
 /** A colour the shader takes that is not part of its `colors` ramp. */
@@ -498,6 +520,41 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
       // field does. It saturates at whatever the lattice can hold, which on a
       // coarse grid over a small card is reached before the slider ends.
       { kind: "slider", key: "count", label: "Count", min: 0, max: 120, step: 1, value: 30 },
+      // Which ways the field runs — any combination of the four.
+      //
+      // It does not thin the field. Count is shared over the lanes left running
+      // (see the shader), so dropping to one axis TURNS the comets rather than
+      // removing half of them, and dropping to one direction does not change
+      // the lane count at all — a column carries a falling comet as readily as
+      // a rising one. The two controls stay independent.
+      //
+      // Named for the direction of TRAVEL, which is the thing on screen. The
+      // lanes a direction uses are counted along the other axis, and that swap
+      // is the conversion's — see `PIXEL_COMETS_DIRECTIONS`, whose options
+      // these are and which `pixel-comets-shader.test.ts` holds them against.
+      //
+      // FOUR independent toggles rather than a choice of axis, because the
+      // combinations are the point: two opposites is an axis, two at right
+      // angles is a field sweeping into a corner, and one is weather. A
+      // single-select cannot say "up and left" and a select with an entry per
+      // combination would have sixteen.
+      //
+      // One thing to know before reaching for a single direction: it is BIASED
+      // toward the edge its comets are born at, since every comet marches back
+      // at the centre from the origin band. Push Origin Min past 1 and raise
+      // Travel and it evens out — every comet then enters from off the card.
+      {
+        kind: "toggles",
+        key: "direction",
+        label: "Direction",
+        options: [
+          { value: "up", label: "Up" },
+          { value: "down", label: "Down" },
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+        ],
+        value: ["up", "down", "left", "right"],
+      },
       // WHERE a comet is born: the band of distances from the centre it may
       // spawn in, measured in HALF-FRAMES. 0 is the centre, 1 is the frame's
       // edge, and 2 is half a frame beyond it — so anything past 1 is a comet
@@ -686,7 +743,14 @@ export const SHADER_IDS = Object.keys(SHADER_SPECS) as ShaderId[];
 /** Every control's default, keyed by uniform — the shape the page holds in state. */
 export function defaultParams(spec: ShaderSpec): Params {
   return Object.fromEntries(
-    spec.controls.map((control) => [control.key, control.value]),
+    spec.controls.map((control) => [
+      control.key,
+      // COPIED where the default is a list, or every caller holds the same
+      // array the table does and the first one to edit a toggle row rewrites
+      // the spec for the rest of the session. The scalars are copied by being
+      // scalars; this is the one kind that is not.
+      Array.isArray(control.value) ? [...control.value] : control.value,
+    ]),
   );
 }
 

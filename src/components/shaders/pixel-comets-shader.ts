@@ -69,6 +69,20 @@ uniform vec4 u_colorGridMajor;
 
 uniform float u_pixelSize;
 uniform float u_count;
+// The Direction control, as the two readings this shader actually asks of it.
+//
+// u_axes         which axes carry comets: (columns, rows), 1 for a running axis
+//                and 0 for a silent one. It is what the lane count is taken
+//                from, so it decides how Count is shared out.
+// u_axisHeading  which WAY they run on each axis, as a screen sign: +1 for up
+//                or right, -1 for down or left, and 0 for "both, toss for it".
+//
+// Folded from a list of four directions on the way in — see
+// PIXEL_COMETS_DIRECTIONS. An axis handed both of its directions comes through
+// as a heading of 0, which is the coin toss below untouched, so the default
+// draws exactly what this shader drew before the control existed.
+uniform vec2 u_axes;
+uniform vec2 u_axisHeading;
 uniform float u_originMin;
 uniform float u_originMax;
 uniform float u_travelSpans;
@@ -288,7 +302,19 @@ vec4 colorAt(float r) {
 // real path is circular: two slots in a lane each asking the other what it did.
 // The cost is that a comet occasionally dodges one that had already moved,
 // which needs both slots alive, overlapping AND swerving to show at all.
-vec3 otherComet(float axis, float lane, float slot, float cyclesAt, float laneSpan, float baseRun) {
+// Which side of the centre a mover is born on — and so, negated, the way it
+// runs, since a mover always marches back at the middle (see addMover).
+//
+// That is the whole of the direction control: it is a change to the BIRTH, not
+// to the motion. Nothing downstream of this needs to know it happened, which is
+// why a heading costs one line here and nothing anywhere else.
+//
+// A heading of 0 is no heading, and leaves the hash its coin toss.
+float birthSide(float heading, float toss) {
+  return abs(heading) > .5 ? -heading : (toss < .5 ? -1. : 1.);
+}
+
+vec3 otherComet(float axis, float lane, float slot, float cyclesAt, float laneSpan, float baseRun, float heading) {
   vec4 key = vec4(axis, lane, slot, 0.);
   float ph = hash44(key * 1.7 + 11.3).x;
   float clock = cyclesAt + ph;
@@ -303,7 +329,7 @@ vec3 otherComet(float axis, float lane, float slot, float cyclesAt, float laneSp
   float eased = leanRun(leanRun(within));
   float progress = mix(eased, sin(eased * HALF_PI), u_easing);
 
-  float side = h.y < .5 ? -1. : 1.;
+  float side = birthSide(heading, h.y);
   float start = side * mix(u_originMin, u_originMax, h.z) * laneSpan * .5;
   return vec3(start - side * min(progress * (run + g_tailCells + 1.), run), -side, 1.);
 }
@@ -328,11 +354,15 @@ vec3 otherComet(float axis, float lane, float slot, float cyclesAt, float laneSp
 //              centre-to-edge distance, which is the unit the origin band and
 //              the run are both dialled in.
 //   timing     this axis's run at the far plane, and its clock — see timingFor.
+//   heading    which way comets run on this axis, or 0 to toss for it — see
+//              birthSide. Per axis for the same reason timing is: it is a
+//              reading of the Direction control, and the two axes are dialled
+//              separately.
 // ---------------------------------------------------------------------------
 void addMover(
   float axis, float lane, float slot,
   float alongStep, float alongFree, float perp, float laneOffset, float laneSpan,
-  vec2 timing,
+  vec2 timing, float heading,
   inout vec4 core, inout vec4 glow
 ) {
   float cycles = timing.y;
@@ -416,7 +446,7 @@ void addMover(
   // this worked at first — half of them ran outward from wherever they landed
   // and were never seen, so pushing the band outside the frame emptied the card
   // instead of filling it.
-  float side = h.y < .5 ? -1. : 1.;
+  float side = birthSide(heading, h.y);
   float dir = -side;
   float start = side * mix(u_originMin, u_originMax, h.z) * laneSpan * .5;
 
@@ -470,7 +500,7 @@ void addMover(
         // fraction of a cycle is a subtraction.
         float headAtW = min(progAt * lifeCells, runCells);
         float posA = start + dir * headAtW;
-        vec3 other = otherComet(axis, lane, otherSlot, cycles - (within - w), laneSpan, timing.x);
+        vec3 other = otherComet(axis, lane, otherSlot, cycles - (within - w), laneSpan, timing.x, heading);
         // How far into the other's tail this head has got, in cells: 0 at its
         // head, g_tailCells at the far end of its trail. Half of it is the
         // trigger, so a comet is well inside before it commits.
@@ -736,7 +766,8 @@ void main() {
   vec2 base = floor(g);
 
   // The frame measured in cells. Every column is a lane and so is every row, so
-  // their sum is how many lanes a frame holds — which is all the odds need.
+  // the two of them, masked by direction, are how many lanes a frame holds —
+  // which is all the odds need.
   //
   // The LATTICE is unbounded, deliberately: the framing controls move a camera
   // over a field rather than resizing the field, so zooming out finds more grid
@@ -744,7 +775,17 @@ void main() {
   // measured distance from its centre (see the origin band in addMover) — since
   // a count has to be a count of something.
   vec2 frame = (2. * u_resolution / longEdge) / cell;
-  float lanes = max(frame.x + frame.y, 1.);
+  // Only the axes that are RUNNING, which is what the mask is dotted in for:
+  // comets travelling along Y live in columns, of which there are frame.x, and
+  // ones travelling along X live in rows, of which there are frame.y. Count is
+  // shared over this below, so switching an axis off turns the field rather
+  // than halving it.
+  //
+  // A HEADING does not come into it. An axis carrying comets one way only still
+  // carries them in every one of its lanes — a column can hold a falling comet
+  // as readily as a rising one — so Count means the same thing whether a
+  // direction's opposite is on or off.
+  float lanes = max(dot(u_axes, frame), 1.);
 
   g_tailCells = max(u_tail, 0.);
 
@@ -799,13 +840,19 @@ void main() {
     for (int s = 0; s < COMET_SLOTS; s++) {
       float slot = float(s);
       // Movers running along Y, in the columns either side of this fragment.
-      addMover(0., column, slot,
+      //
+      // SKIPPED rather than masked when the direction leaves this axis out.
+      // The branch is on a uniform, so every fragment takes the same side of
+      // it and it costs nothing to ask — where a contribution multiplied by
+      // zero pays for the whole walk to add nothing, which is half of this
+      // loop's work.
+      if (u_axes.x > 0.) addMover(0., column, slot,
         base.y + .5, g.y, g.x - (column + .5), float(d), frame.y, downTiming,
-        core, glow);
+        u_axisHeading.x, core, glow);
       // Movers running along X, in the rows either side of it.
-      addMover(1., row, slot,
+      if (u_axes.y > 0.) addMover(1., row, slot,
         base.x + .5, g.x, g.y - (row + .5), float(d), frame.x, acrossTiming,
-        core, glow);
+        u_axisHeading.y, core, glow);
     }
   }
 

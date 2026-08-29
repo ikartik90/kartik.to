@@ -60,6 +60,62 @@ describe("toPixelCometsUniforms colours", () => {
   });
 });
 
+describe("toPixelCometsUniforms direction", () => {
+  // The four directions reach the shader as TWO readings, because it asks two
+  // separate questions of them:
+  //
+  //   u_axes         which axes carry comets at all, and so how many lanes the
+  //                  frame holds to share Count over.
+  //   u_axisHeading  which WAY they run on each axis: +1, -1, or 0 for "both,
+  //                  toss for it" — the shader's own coin toss, kept.
+  //
+  // Derived here rather than in GLSL because it is a fold over a list, which
+  // is a sentence of TypeScript and a mess of masks in a fragment shader.
+
+  it("runs every direction unless asked otherwise", () => {
+    const uniforms = toPixelCometsUniforms(params());
+
+    expect(uniforms.u_axes).toEqual([1, 1]);
+    // Neither axis has a heading forced on it, so both keep the coin toss.
+    expect(uniforms.u_axisHeading).toEqual([0, 0]);
+  });
+
+  it("keeps only the axis the chosen directions use", () => {
+    // Comets going left or right travel along X, which is a ROW, so the rows
+    // are the lanes left running — and vice versa. Getting this pair the wrong
+    // way round is silent: the field still fills, at right angles to the label.
+    expect(toPixelCometsUniforms(params({ direction: ["left", "right"] })).u_axes).toEqual([0, 1]);
+    expect(toPixelCometsUniforms(params({ direction: ["up", "down"] })).u_axes).toEqual([1, 0]);
+  });
+
+  it("forces the heading when an axis is given only one of its two ways", () => {
+    // +Y is UP and +X is RIGHT — `v_objectUV` keeps clip space's orientation,
+    // where the library flips only its image UV. A sign wrong here is a field
+    // running backwards, which no test that only counts comets would catch.
+    expect(toPixelCometsUniforms(params({ direction: ["up"] })).u_axisHeading).toEqual([1, 0]);
+    expect(toPixelCometsUniforms(params({ direction: ["down"] })).u_axisHeading).toEqual([-1, 0]);
+    expect(toPixelCometsUniforms(params({ direction: ["right"] })).u_axisHeading).toEqual([0, 1]);
+    expect(toPixelCometsUniforms(params({ direction: ["left"] })).u_axisHeading).toEqual([0, -1]);
+  });
+
+  it("leaves the toss alone on an axis given both of its ways", () => {
+    const uniforms = toPixelCometsUniforms(params({ direction: ["up", "down", "left"] }));
+
+    expect(uniforms.u_axes).toEqual([1, 1]);
+    // Up and down between them are the whole axis, so it tosses as it always
+    // has; the rows carry only leftward comets.
+    expect(uniforms.u_axisHeading).toEqual([0, -1]);
+  });
+
+  it("reads one direction named twice as naming it once", () => {
+    const uniforms = toPixelCometsUniforms(params({ direction: ["down", "down"] }));
+
+    expect(uniforms.u_axes).toEqual([1, 0]);
+    // Not a toss: a repeat is one direction, not the axis's two.
+    expect(uniforms.u_axisHeading).toEqual([-1, 0]);
+  });
+});
+
 describe("toPixelCometsUniforms guards", () => {
   // Each of these is a value the panel cannot produce but a direct consumer of
   // the component can. Clamping in the UI would leave the component unsafe for
@@ -74,6 +130,35 @@ describe("toPixelCometsUniforms guards", () => {
 
   it("floors the count at an empty field rather than at negative odds", () => {
     expect(toPixelCometsUniforms(params({ count: -5 })).u_count).toBe(0);
+  });
+
+  it("falls back to every direction rather than to an empty card", () => {
+    // The one guard here whose wrong answer is a BLANK canvas: no directions is
+    // a mask of zeroes, every lane switched off, and a caller passing an empty
+    // list or a typo would read it as a shader that failed to compile.
+    //
+    // The panel cannot reach either state — its last pressed direction does not
+    // release — but a direct consumer of the component can.
+    const unknown = ["diagonal"] as unknown as PixelCometsParams["direction"];
+
+    expect(toPixelCometsUniforms(params({ direction: [] })).u_axes).toEqual([1, 1]);
+    expect(toPixelCometsUniforms(params({ direction: unknown })).u_axes).toEqual([1, 1]);
+    expect(toPixelCometsUniforms(params({ direction: unknown })).u_axisHeading).toEqual([0, 0]);
+  });
+
+  it("survives a direction that is not a list at all", () => {
+    // The one input here that could THROW rather than degrade, which every
+    // other guard in this module is written not to do. A bare string is what a
+    // caller reaches for first — the control was a single-select once, and the
+    // component is public — and a TypeError takes the whole page, not just the
+    // canvas.
+    const single = "down" as unknown as PixelCometsParams["direction"];
+
+    expect(toPixelCometsUniforms(params({ direction: single })).u_axes).toEqual([1, 1]);
+    expect(
+      toPixelCometsUniforms(params({ direction: undefined as unknown as PixelCometsParams["direction"] }))
+        .u_axes,
+    ).toEqual([1, 1]);
   });
 
   it("floors the run at nothing, leaving the cell floor to the shader", () => {

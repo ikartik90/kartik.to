@@ -3,6 +3,7 @@ import { pixelCometsFragmentShader } from "../pixel-comets-shader";
 import {
   DEFAULT_PIXEL_COMETS,
   PIXEL_COMETS_MAX_COLORS,
+  PIXEL_COMETS_DIRECTIONS,
   PIXEL_COMETS_MAX_GLOW_REACH,
   toPixelCometsUniforms,
 } from "../pixel-comets-uniforms";
@@ -245,7 +246,10 @@ describe("pixelCometsFragmentShader", () => {
   // never seen. Binding one to the other is the whole of "march in towards the
   // centre"; leave them apart and the field converges only by accident.
   it("marches a comet back at the centre from whichever side it was born on", () => {
-    expect(pixelCometsFragmentShader).toContain("float side = h.y < .5 ? -1. : 1.;");
+    // The side is the coin toss or the heading it was given — see birthSide —
+    // and either way the direction is that side negated. The binding below is
+    // what this test is about, and it holds whichever the side came from.
+    expect(pixelCometsFragmentShader).toContain("float side = birthSide(heading, h.y);");
     expect(pixelCometsFragmentShader).toContain("float dir = -side;");
     // The old free coin toss. A direction drawn from the hash again is a comet
     // that may run outward, which is the thing this replaced.
@@ -304,6 +308,54 @@ describe("pixelCometsFragmentShader", () => {
       `#define COMET_MAX_GLOW_LANES ${PIXEL_COMETS_MAX_GLOW_REACH}`,
     );
   });
+
+  // DIRECTION. The mask decides which axes carry comets, and it has to reach
+  // two places or the control only half works.
+  //
+  // The first is the lane count Count is shared over. Leave it at every lane
+  // and turning one axis off halves the field instead of turning it — Count
+  // would stop being a number of comets and become a number of comets times
+  // however many axes happened to be running.
+  it("shares Count over the lanes the direction actually leaves running", () => {
+    // The mask pairs with the frame axis whose LANES that direction uses:
+    // comets travelling along Y live in columns, of which there are frame.x.
+    expect(pixelCometsFragmentShader).toContain("dot(u_axes, frame)");
+  });
+
+  // The second is the walk itself, and it must SKIP rather than draw nothing:
+  // an axis turned off is a quarter of the neighbourhood loop's work, and a
+  // masked-out contribution costs all of it to add zero.
+  it("skips the axis it turns off rather than drawing it invisibly", () => {
+    expect(pixelCometsFragmentShader).toContain("if (u_axes.x > 0.)");
+    expect(pixelCometsFragmentShader).toContain("if (u_axes.y > 0.)");
+  });
+
+  // WHICH WAY comets run on an axis that is on. A comet is born a distance out
+  // from the centre and always marches back at it, so the side it is born on IS
+  // the way it runs, negated — which is why forcing a heading is a change to
+  // the birth and not to the motion.
+  //
+  // A heading of 0 leaves the hash's own coin toss in place, so an axis given
+  // both of its directions draws exactly the field this shader drew before the
+  // control existed.
+  it("forces the side a comet is born on only where a heading is named", () => {
+    expect(pixelCometsFragmentShader).toContain("float birthSide(float heading, float toss)");
+    expect(pixelCometsFragmentShader).toContain(
+      "return abs(heading) > .5 ? -heading : (toss < .5 ? -1. : 1.);",
+    );
+    // The raw toss must not survive anywhere else, or the axis it is left in
+    // ignores its heading — a control that works on one axis and not the other.
+    expect(pixelCometsFragmentShader.split("h.y < .5 ? -1. : 1.")).toHaveLength(1);
+  });
+
+  // The SWERVE reads the other slot's base path, and it has to read the same
+  // heading: a comet that thinks its neighbour is coming the other way misses
+  // every encounter, so the control would quietly switch swerving off.
+  it("gives the other comet in the lane the same heading", () => {
+    const call = pixelCometsFragmentShader.match(/vec3 otherComet\(([^)]*)\)/);
+    expect(call?.[1]).toContain("heading");
+    expect(pixelCometsFragmentShader).toContain("birthSide(heading, h.y)");
+  });
 });
 
 // The spec table and the shader are two hand-kept copies of the same three
@@ -348,6 +400,25 @@ describe("the Pixel Comets spec table against the shader", () => {
     };
 
     expect(max("travelSpans")).toBeGreaterThanOrEqual(max("originMax") + 1);
+  });
+
+  // The panel writes STRINGS here and the conversion looks each of them up, so
+  // an option the uniforms module does not know is not a compile error — it is
+  // dropped, and a toggle that presses and changes nothing.
+  //
+  // The default is all four, which is the field this shader drew before the
+  // control existed: every axis on, neither heading forced, the coin toss
+  // untouched. A control that opens on anything else would re-tune every preset
+  // saved before it.
+  it("offers exactly the directions the conversion knows, and opens on all of them", () => {
+    const control = spec.controls.find((entry) => entry.key === "direction");
+
+    expect(control?.kind).toBe("toggles");
+    if (control?.kind !== "toggles") return;
+    expect(control.options.map((option) => option.value)).toEqual([
+      ...PIXEL_COMETS_DIRECTIONS,
+    ]);
+    expect(control.value).toEqual([...PIXEL_COMETS_DIRECTIONS]);
   });
 
   it("names an extra colour for the lattice, which the shader takes", () => {

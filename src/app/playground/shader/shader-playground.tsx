@@ -31,6 +31,7 @@ import { Slider } from "@/components/ui/input/slider";
 import { Switch } from "@/components/ui/input/switch";
 import { ColorSwatchGrid } from "@/components/ui/input/color-swatch-grid";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
+import { ToggleBar } from "@/components/ui/input/toggle-bar";
 import { OptionList } from "@/components/ui/input/option-list";
 import { Typography } from "@/components/ui/typography";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -49,6 +50,7 @@ import {
   FRAMING_CONTROL_KEYS,
   MOTION_CONTROL_KEYS,
   type ControlSpec,
+  type ParamValue,
   type ShaderId,
 } from "@/data/shader-specs";
 import {
@@ -924,8 +926,10 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
   const valueOf = (key: string) =>
     isFramingControl(key) ? framing[key] : state.params[key];
 
-  function setParam(key: string, value: number | boolean | string) {
+  function setParam(key: string, value: ParamValue) {
     if (isFramingControl(key)) {
+      // Every framing control is a slider, so this cast down to a number is
+      // safe by construction — see `FRAMING_CONTROLS`.
       setFramingInStore(key, Number(value));
       return;
     }
@@ -990,6 +994,26 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
             onCheckedChange={(checked) => setParam(control.key, checked)}
           />
           <Field.Label>{control.label}</Field.Label>
+        </Field>
+      );
+    }
+
+    if (control.kind === "toggles") {
+      const chosen = valueOf(control.key);
+      return (
+        <Field size="sm" key={control.key} data-property-control>
+          <Field.Label>{control.label}</Field.Label>
+          {/* The same rail the segmented control draws in, because it is the
+            same kind of row — a short list with every choice on show. What
+            differs is that these are INDEPENDENT, so the bar reports the whole
+            set rather than one value. Its last toggle does not release: none of
+            them is the control switched off, not a setting. */}
+          <ToggleBar
+            ariaLabel={control.label}
+            options={control.options}
+            value={Array.isArray(chosen) ? chosen : control.value}
+            onValueChange={(value) => setParam(control.key, value)}
+          />
         </Field>
       );
     }

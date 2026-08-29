@@ -641,6 +641,11 @@ describe("ShaderPlayground grid group", () => {
   // that replaced Seed sit where it sat, between how many comets there are and
   // how far each one runs.
   //
+  // Direction sits directly under Count, which is the control it is read
+  // against: the two together are the field's size and its shape, and Count is
+  // shared over whichever axes Direction leaves running rather than divided
+  // between them.
+  //
   // Seed is gone rather than moved: it hashed the lanes and did nothing else,
   // and a control whose whole job is "a different arrangement of the same
   // field" is not what these two do. The cost is that the arrangement is now
@@ -650,6 +655,7 @@ describe("ShaderPlayground grid group", () => {
 
     expect(labelsIn(screen.getByRole("group", { name: "Comet Field" }))).toEqual([
       "Count",
+      "Direction",
       "Origin Min",
       "Origin Max",
       "Travel",
@@ -657,6 +663,34 @@ describe("ShaderPlayground grid group", () => {
       "Tail Blend",
       "Falloff",
     ]);
+  });
+
+  // Direction is the panel's one multi-toggle row: four independent choices,
+  // any combination, drawn in the segmented control's rail because it is the
+  // same kind of row. A single-select here would be unable to say "up and
+  // left", which is half of what the control is for.
+  it("draws Direction as a bar of independent toggles", async () => {
+    await renderPixelComets();
+
+    const bar = screen.getByRole("toolbar", { name: "Direction" });
+    expect(
+      Array.from(bar.querySelectorAll("button")).map((button) => button.textContent),
+    ).toEqual(["Up", "Down", "Left", "Right"]);
+  });
+
+  it("opens with every direction pressed, and releases one without releasing the rest", async () => {
+    await renderPixelComets();
+
+    const bar = screen.getByRole("toolbar", { name: "Direction" });
+    const pressed = () =>
+      Array.from(bar.querySelectorAll("button"))
+        .filter((button) => button.getAttribute("aria-pressed") === "true")
+        .map((button) => button.textContent);
+
+    expect(pressed()).toEqual(["Up", "Down", "Left", "Right"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Up" }));
+    expect(pressed()).toEqual(["Down", "Left", "Right"]);
   });
 
   // Head Stretch sits with the other bloom controls, next to the radius it
