@@ -353,6 +353,19 @@ const aspectRailStyle = css({
   borderColor: "border.divider",
   overflow: "visible",
 
+  // The strip is one ink, stated ONCE here — the same declaration the
+  // properties panel's header makes, for the same reason. The shapes are
+  // option rows and bring `field.text.default` with them; the panel's way back
+  // beside them is `action`'s icon variant, which paints in `currentColor`
+  // precisely so that a toolbar decides its own hue. Left alone it inherited
+  // the PAGE's `text.default` and came out a step darker than the six shapes it
+  // stands beside — and two steps brighter than them in dark, where the gap is
+  // wider — one lit button in a row of quiet ones, on a strip whose whole claim
+  // is that the rule splits it into two groups of the same thing. Said on the
+  // rail rather than on that one button, so the next control to join the row is
+  // drawn in the row's ink by arriving in it.
+  color: "field.text.default",
+
   // WHERE it sits, which is two answers now rather than one.
   //
   // A DESKTOP keeps the seat it has always had: the middle of the gutter band,
