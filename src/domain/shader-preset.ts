@@ -186,6 +186,19 @@ function controlSchema(control: ControlSpec): z.ZodTypeAny {
       .enum(control.options.map((option) => option.value) as [string, ...string[]])
       .default(control.value);
   }
+  if (control.kind === "toggles") {
+    // NONEMPTY, and rejected rather than defaulted for the same reason a
+    // slider's range is enforced rather than clamped: a stored preset with
+    // every toggle off is one the panel cannot have written and the shader
+    // cannot draw. Better a save that fails loudly than a card that opens
+    // blank with nothing to say why.
+    return z
+      .array(
+        z.enum(control.options.map((option) => option.value) as [string, ...string[]]),
+      )
+      .nonempty()
+      .default(control.value as [string, ...string[]]);
+  }
   return z.number().min(control.min).max(control.max).default(control.value);
 }
 

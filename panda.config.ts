@@ -6054,7 +6054,7 @@ export default defineConfig({
         segmentedControl: defineSlotRecipe({
           className: "segmented-control",
           description:
-            "Equal-width segments for a horizontal single-select — the stretch an `OptionList.Listbox` needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the selected chip — already comes from those two recipes.",
+            "Equal-width segments for a short horizontal choice — the stretch an `OptionList` behavior container needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the active chip — already comes from those two recipes. Layout only, so it serves the single-select `Listbox` (SegmentedControl) and the multi-toggle `Toolbar` (ToggleBar) alike; which of the two a row is, is a question about semantics rather than about the box.",
           slots: ["list", "option"],
           base: {
             // Stretched as well as grown, and BOTH are needed: the rail centres
