@@ -522,6 +522,13 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* A staged entrance is a stagger of DELAYS with the motion between them
+       (the shader playground assembles itself that way). Zeroing the duration
+       alone would keep the wait and drop only the travel, so a part held back
+       400ms would still arrive 400ms late — a cut, but a late one, and the
+       parts would still appear one at a time. Zeroing the delay too is what
+       makes "no motion" mean the whole thing is simply there. */
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;

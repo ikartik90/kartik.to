@@ -389,7 +389,50 @@ const aspectRailStyle = css({
   // A PHONE puts it back in flow, under the card — the canvas is a column there
   // and its 8px gap is the standoff. Nothing else to say: the column centres it,
   // and it follows the card's bottom edge as the shape changes.
-  _bottomSheet: { position: "static" },
+  //
+  // The distance it comes in over is the one thing the two seats disagree about,
+  // so it is written per seat and the entrance below reads it. On a DESKTOP the
+  // rail clears the top edge of the viewport: its own height, plus the 20px it
+  // stands down from the top of the band, computed from `--chrome-band` so a
+  // band that changes height still hands the rail a starting point exactly
+  // flush with the edge. On a PHONE it goes behind the CARD instead — its own
+  // height plus the 8px column gap, which puts its bottom edge on the card's
+  // and hides it there completely (the card outranks it; see
+  // `shaderPresetStyle`). Two ways of being off screen, one for each seat: the
+  // rail arrives from wherever it was already hiding.
+  "--entrance-from":
+    "calc(-100% - (var(--chrome-band) - token(spacing.4xl)) / 2)",
+
+  // Away until the page says the preset has landed, and it must be HIDDEN
+  // rather than unmounted: the strip below it is what discovers the preset on
+  // the bare route, and this rail is the only way back to a dismissed panel, so
+  // both have to exist through the wait. `visibility` rather than opacity so
+  // the buttons cannot be tabbed to or read out while they are off screen.
+  visibility: "hidden",
+
+  // SECOND, with the presets strip — the two rails that act on the card, once
+  // the card is there to act on.
+  //
+  // 50ms behind it, not 150: the four parts OVERLAP. The whole entrance is 250ms
+  // end to end, and three beats laid end to end inside that budget would be 83ms
+  // each — a distance covered that fast is a jump, not a movement, and the rail
+  // has its own height to travel. So the parts are staggered by their STARTS and
+  // left to run over each other: what says "the card, then the rails, then the
+  // panel" is the order they set off in, which a 50ms gap states as clearly as a
+  // 150ms one and costs the sequence nothing.
+  //
+  // `backwards` is what holds it off screen through the delay; without it the
+  // rail would sit in its seat for 50ms and then animate, which is the fault
+  // this whole sequence exists to fix.
+  "[data-entered] &": {
+    visibility: "visible",
+    animation: "playgroundChromeIn 150ms ease-out 50ms backwards",
+  },
+
+  _bottomSheet: {
+    position: "static",
+    "--entrance-from": "calc(-100% - token(spacing.md))",
+  },
 });
 
 // The preset the reference art is drawn on: portrait, generously rounded. The
@@ -428,6 +471,33 @@ const aspectRailStyle = css({
 const shaderPresetStyle = css({
   position: "relative",
   isolation: "isolate",
+
+  // FIRST of the page's parts to arrive, and the clock the other three are
+  // timed against. It only has to appear — it is already in its seat — so it
+  // takes the shared entrance with nothing to travel (see `playgroundChromeIn`,
+  // whose `--entrance-from` defaults to zero).
+  //
+  // A fade rather than a swap, because "the preloader stops, the card is there"
+  // is not an arrival: the bar and the card stand in the same place, and one
+  // replacing the other in a single frame reads as the loader having BECOME the
+  // preset. The card is mounted only once the preset has settled (`ready`), so
+  // this plays on mount and never again.
+  //
+  // The whole sequence is 250ms end to end and this is its first 150 — the four
+  // parts OVERLAP rather than queue (see `aspectRailStyle`), so the card is
+  // still fading as the rails start to move.
+  animation: "playgroundChromeIn 150ms ease-out",
+
+  // The card paints OVER the aspect rail, which is what lets the rail come out
+  // from behind it (see `aspectRailStyle`). The two are flex items of the
+  // canvas's column there, and flex items paint in document order whatever
+  // their position — so the rail, which follows the card, would otherwise slide
+  // across the picture in full view rather than emerging from under its edge.
+  //
+  // The phone alone. On a desktop the rail is out of flow in the band above and
+  // the two never meet, and a card that outranked the rest of the canvas there
+  // would be a claim about stacking that nothing has asked for.
+  _bottomSheet: { zIndex: 1 },
   "--preset-max": "680px",
   aspectRatio: "var(--preset-w) / var(--preset-h)",
   width:
@@ -506,6 +576,31 @@ const sheetGripStyle = css({ _bottomSheet: { touchAction: "none" } });
 // button is the sheet's alone — so they are grouped rather than left to the
 // header's own `space-between`, which would push them to opposite ends.
 const headerActionsStyle = css({ display: "flex", alignItems: "center", gap: "xs" });
+
+// LAST of the four, and only on a desktop — the panel that describes the preset,
+// after the two rails that act on it. It sets off at 100ms and lands at 250,
+// which is the end of the whole sequence: the last part to start is what the
+// budget is measured to (see `aspectRailStyle` for why the parts overlap).
+//
+// A DELAY and a DURATION laid over the recipe's own slide rather than an
+// animation of its own. The panel already arrives from the edge it is docked to
+// (`propertiesPanelIn`, and `bottomSheetIn` on a phone) and that is the right
+// entrance — these only say when it starts and how long it takes, so a panel
+// that changes edge keeps whichever slide its dock calls for. The recipe's own
+// 200ms is the DISMISSAL's pace, matched to the body inset that moves with it
+// (globals.css); an arrival that is one beat of four is not the same journey and
+// need not take the same time. `backwards` holds it off screen through the wait,
+// as every other part of the sequence is held.
+//
+// It says nothing on a PHONE, where the sheet mounts already dismissed: the
+// third beat is a desktop's alone, which is why the phone's sequence is two.
+// Both are still applied there — a dismissed sheet has nowhere to arrive from,
+// so there is nothing to hold back and nothing to see.
+const panelEntranceStyle = css({
+  animationDelay: "100ms",
+  animationDuration: "150ms",
+  animationFillMode: "backwards",
+});
 
 /**
  * The docked panel, borrowed from the collection editor's media inspector —
@@ -1046,7 +1141,18 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
   }
 
   return (
-    <main className={pageStyle} data-sheet-dismissed={dismissed || undefined}>
+    <main
+      className={pageStyle}
+      data-sheet-dismissed={dismissed || undefined}
+      // The page has a preset on screen, so its chrome may come in. One
+      // attribute for the whole sequence rather than a prop threaded to each
+      // part: the parts are at three depths (the rail in the canvas, the strip
+      // inside its own component, the panel a sibling of both) and what they
+      // share is not a value but a MOMENT — which is exactly what an ancestor
+      // attribute says. The stagger itself is each part's own delay, so a part
+      // can be added to the sequence without the page being told about it.
+      data-entered={ready || undefined}
+    >
       <div className={canvasStyle}>
         {ready ? (
           <div
@@ -1190,7 +1296,7 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
       {ready && (
         <aside
           ref={panelRef}
-          className={panel.root}
+          className={cx(panel.root, panelEntranceStyle)}
           // The landmark's name is the heading it carries: a rail announced as
           // one thing and titled as another is two names for one panel.
           aria-label="Preset properties"

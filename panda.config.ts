@@ -800,6 +800,27 @@ export default defineConfig({
           from: { translate: "0 0", opacity: 1 },
           to: { translate: "0 100%", opacity: 0 },
         },
+        // A piece of the shader playground's chrome taking its seat, once the
+        // preset it belongs to is on screen. The page opens on a preloader
+        // ALONE and then assembles itself in the order the parts depend on each
+        // other: the card, then the two rails that act on it, then the panel
+        // that describes it (see `shader-playground`).
+        //
+        // ONE keyframe for every part, because they differ only in where they
+        // come from — the aspect rail out from behind the card on a phone and
+        // down from the top edge on a desktop, the presets strip up from the
+        // bottom edge in both — and `--entrance-from` is that difference,
+        // written by each part in its own units. The alternative is four
+        // near-identical keyframes that have to be kept in step by hand, and a
+        // part whose travel changes with the layout could not have one at all.
+        //
+        // `0px` is a legitimate value for it: a part that is already in its
+        // seat and only has to appear (the card) rides the same fade as the
+        // ones that travel, on the same clock.
+        playgroundChromeIn: {
+          from: { translate: "0 var(--entrance-from, 0px)", opacity: 0 },
+          to: { translate: "0 0", opacity: 1 },
+        },
         // The calendar's page turn. A chevron replaces every month on screen at
         // once, so the arriving page enters from the side the range is
         // travelling toward and the leaving one is pushed out by the same
