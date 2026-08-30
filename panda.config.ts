@@ -1092,7 +1092,7 @@ export default defineConfig({
                 justifyContent: "center",
                 // Space icon ∣ optional label. No app surface composes the pair
                 // any more — an icon button names itself on hover instead — but
-                // the recipe still supports it (see /dev/button).
+                // the recipe still supports it.
                 gap: "sm",
                 padding: "sm",
                 borderRadius: "sm",
