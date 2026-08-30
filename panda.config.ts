@@ -800,6 +800,27 @@ export default defineConfig({
           from: { translate: "0 0", opacity: 1 },
           to: { translate: "0 100%", opacity: 0 },
         },
+        // A piece of the shader playground's chrome taking its seat, once the
+        // preset it belongs to is on screen. The page opens on a preloader
+        // ALONE and then assembles itself in the order the parts depend on each
+        // other: the card, then the two rails that act on it, then the panel
+        // that describes it (see `shader-playground`).
+        //
+        // ONE keyframe for every part, because they differ only in where they
+        // come from — the aspect rail out from behind the card on a phone and
+        // down from the top edge on a desktop, the presets strip up from the
+        // bottom edge in both — and `--entrance-from` is that difference,
+        // written by each part in its own units. The alternative is four
+        // near-identical keyframes that have to be kept in step by hand, and a
+        // part whose travel changes with the layout could not have one at all.
+        //
+        // `0px` is a legitimate value for it: a part that is already in its
+        // seat and only has to appear (the card) rides the same fade as the
+        // ones that travel, on the same clock.
+        playgroundChromeIn: {
+          from: { translate: "0 var(--entrance-from, 0px)", opacity: 0 },
+          to: { translate: "0 0", opacity: 1 },
+        },
         // The calendar's page turn. A chevron replaces every month on screen at
         // once, so the arriving page enters from the side the range is
         // travelling toward and the leaving one is pushed out by the same
@@ -5595,6 +5616,38 @@ export default defineConfig({
                 minHeight: "token(sizes.toolbarButton)",
                 display: "flex",
                 alignItems: "center",
+              },
+
+              // A SHEET is as wide as the phone; the ROW was drawn for a rail
+              // whose width is the sum of its three columns and nothing else
+              // (see `propertiesPanelWidth`). Left alone it keeps that 336px
+              // and the slack collects at the right-hand end as dead margin —
+              // 15px on the narrowest phone this page draws, 70 on the widest
+              // — which reads as the sheet being narrower than the screen it
+              // fills, and as every control in it stopping short of the edge
+              // its own section header runs to.
+              //
+              // The FIELD column takes all of it, and only that one. The other
+              // two would gain nothing by it: the label column is sized to the
+              // words in it and the action column to the one chip it holds
+              // open for, so slack there is empty space either side of
+              // something already the size it wants to be. What fills the
+              // middle is a slider track or a ramp of swatches, and there
+              // every pixel is travel to aim along or a target big enough for
+              // a finger.
+              //
+              // `minmax(0, 1fr)` rather than `1fr`, which is `minmax(auto,
+              // 1fr)` and so floors the track at its content's intrinsic
+              // minimum: the ramp is five swatches and a menu is as wide as
+              // its longest option, and a track that cannot go below them
+              // would push the action column off the end of a narrow sheet
+              // rather than letting its own contents shrink.
+              _bottomSheet: {
+                "& [data-property-control]": {
+                  width: "token(spacing.full)",
+                  gridTemplateColumns:
+                    "token(sizes.propertyRowLabel) minmax(0, 1fr) token(sizes.propertyRowAction)",
+                },
               },
             },
             // Prose that fills its control panel — a caption, a note — rather

@@ -1227,6 +1227,38 @@ describe("ShaderPlayground preloader", () => {
     expect(panel()).not.toBeNull();
   });
 
+  // While the wait is on, the preloader is the only thing on the page — and the
+  // parts that are holding back are HIDDEN rather than unmounted, which is
+  // exactly why this is worth asserting on its own: "the rail is in the
+  // document" stopped being an answer to "is the rail on screen".
+  //
+  // One attribute on `main` is the whole contract. Every part times its own
+  // entrance off it (see `playgroundChromeIn`) — the card, then the aspect rail
+  // and the presets strip, then the panel — so a part added to the sequence
+  // later needs nothing from this component but the mark being right.
+  it("withholds the chrome's entrance mark until the library has been read", async () => {
+    let settle: (rows: unknown[]) => void = () => {};
+    (getShaderPresets as Mock).mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve as (rows: unknown[]) => void;
+      }),
+    );
+    render(<ShaderPlayground />);
+
+    const page = screen.getByRole("main");
+    expect(page.hasAttribute("data-entered")).toBe(false);
+    // Mounted throughout, and both have to be: the aspect rail carries the only
+    // way back to a dismissed panel, and the presets strip is what reads the
+    // library this very wait is waiting on. Unmounting either to hide it would
+    // be the page waiting on itself.
+    screen.getByRole("toolbar", { name: "Preview aspect ratio" });
+
+    await act(async () => {
+      settle([]);
+    });
+    await waitFor(() => expect(page.hasAttribute("data-entered")).toBe(true));
+  });
+
   // The one the client-side checks above cannot see.
   //
   // A hard load paints the SERVER's markup before a line of JavaScript runs, so

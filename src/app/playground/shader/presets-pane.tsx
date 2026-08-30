@@ -114,6 +114,29 @@ const paneStyle = css({
   // the browser as a back gesture — the page behind it is an editor with
   // unsaved work in it.
   overscrollBehaviorInline: "contain",
+
+  // SECOND into its seat, with the aspect rail: the two rails that act on the
+  // card, once the card is there to act on. Same delay and same duration as that
+  // rail, because "with" is the claim — the two set off together. See
+  // `shader-playground`, which owns the sequence, says when it may start, and
+  // carries the reasoning for the pace.
+  //
+  // Up from the BOTTOM EDGE of the viewport, in both layouts — the strip's own
+  // height plus the four pixels it stands off the canvas's foot, which is what
+  // makes the start point the edge itself rather than four pixels short of it.
+  // The pane is the box that has the canvas's full width, so travelling by its
+  // own height is travelling by exactly what is on screen.
+  //
+  // Hidden rather than unmounted through the wait, and that is load-bearing:
+  // this pane is what READS the library, and on the bare route its read is what
+  // tells the page the preset has settled. A pane that waited for the entrance
+  // would be waiting for itself.
+  "--entrance-from": "calc(100% + token(spacing.sm))",
+  visibility: "hidden",
+  "[data-entered] &": {
+    visibility: "visible",
+    animation: "playgroundChromeIn 150ms ease-out 50ms backwards",
+  },
 });
 
 // The strip as it is SEEN: the rounded plate the tiles sit on. Split from the
