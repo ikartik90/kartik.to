@@ -5596,6 +5596,38 @@ export default defineConfig({
                 display: "flex",
                 alignItems: "center",
               },
+
+              // A SHEET is as wide as the phone; the ROW was drawn for a rail
+              // whose width is the sum of its three columns and nothing else
+              // (see `propertiesPanelWidth`). Left alone it keeps that 336px
+              // and the slack collects at the right-hand end as dead margin —
+              // 15px on the narrowest phone this page draws, 70 on the widest
+              // — which reads as the sheet being narrower than the screen it
+              // fills, and as every control in it stopping short of the edge
+              // its own section header runs to.
+              //
+              // The FIELD column takes all of it, and only that one. The other
+              // two would gain nothing by it: the label column is sized to the
+              // words in it and the action column to the one chip it holds
+              // open for, so slack there is empty space either side of
+              // something already the size it wants to be. What fills the
+              // middle is a slider track or a ramp of swatches, and there
+              // every pixel is travel to aim along or a target big enough for
+              // a finger.
+              //
+              // `minmax(0, 1fr)` rather than `1fr`, which is `minmax(auto,
+              // 1fr)` and so floors the track at its content's intrinsic
+              // minimum: the ramp is five swatches and a menu is as wide as
+              // its longest option, and a track that cannot go below them
+              // would push the action column off the end of a narrow sheet
+              // rather than letting its own contents shrink.
+              _bottomSheet: {
+                "& [data-property-control]": {
+                  width: "token(spacing.full)",
+                  gridTemplateColumns:
+                    "token(sizes.propertyRowLabel) minmax(0, 1fr) token(sizes.propertyRowAction)",
+                },
+              },
             },
             // Prose that fills its control panel — a caption, a note — rather
             // than a value sitting in a labelled row, so it wears no field
