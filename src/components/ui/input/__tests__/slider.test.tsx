@@ -332,6 +332,43 @@ describe("Slider", () => {
       expect(tickOffsets(container)).toHaveLength(11);
     });
 
+    it("thins a capped ruler to whole steps rather than even fractions", () => {
+      // −180…180 by 15° holds 25 values; every third one is nine marks, and
+      // eleven even ones would have sat at −144 and −108, which are not stops.
+      const { container } = render(
+        <Field size="sm">
+          <Slider min={-180} max={180} step={15} defaultValue={0} />
+        </Field>,
+      );
+      expect(tickOffsets(container)).toEqual([
+        "0%",
+        "12.5%",
+        "25%",
+        "37.5%",
+        "50%",
+        "62.5%",
+        "75%",
+        "87.5%",
+        "100%",
+      ]);
+    });
+
+    it("closes a ruler its stride cannot reach the end of", () => {
+      // 1–20 by 1 strides every second step to 19, then a closing mark on 20
+      // says where the rule ends — the last gap is half the width of the rest.
+      const { container } = render(
+        <Field size="sm">
+          <Slider min={1} max={20} step={1} defaultValue={1} />
+        </Field>,
+      );
+      // Read back as the values they sit on: 1, 3 … 19, then the closing 20.
+      expect(
+        tickOffsets(container).map((left) =>
+          Math.round(1 + (parseFloat(left) / 100) * 19),
+        ),
+      ).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 20]);
+    });
+
     it("draws the requested number of ticks, spread end to end", () => {
       const { container } = render(
         <Field size="sm">
