@@ -50,10 +50,14 @@ describe("MenuButton", () => {
     expect(tip.getAttribute("aria-hidden")).toBe("true");
     expect(tip.hasAttribute("data-visible")).toBe(false);
 
-    fireEvent.mouseEnter(button, { clientX: 5, clientY: 5 });
+    fireEvent.pointerEnter(button, {
+      pointerType: "mouse",
+      clientX: 5,
+      clientY: 5,
+    });
     expect(tip.hasAttribute("data-visible")).toBe(true);
 
-    fireEvent.mouseLeave(button);
+    fireEvent.pointerLeave(button, { pointerType: "mouse" });
     expect(tip.hasAttribute("data-visible")).toBe(false);
   });
 });

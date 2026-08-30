@@ -5,6 +5,7 @@ import {
   isValidElement,
   useCallback,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
@@ -69,6 +70,9 @@ const isActionTooltip = (node: ReactNode) =>
  * positioned ancestor and takes no layout slot, being `position: fixed` and
  * portalled to the body by `Tooltip` itself; `show`/`hide` drive its
  * visibility. `hasText` feeds the text-vs-icon variant inference.
+ *
+ * `show` takes the POINTER EVENT rather than coordinates so the one rule about
+ * which pointers may open a label lives here, once, for both hosts.
  */
 export function useActionTooltip(children: ReactNode) {
   const items = Children.toArray(children);
@@ -79,9 +83,21 @@ export function useActionTooltip(children: ReactNode) {
   const [hovered, setHovered] = useState(false);
   const { ref, seed } = useCursorTooltip(hovered);
 
+  // A finger never opens the label. This tooltip is drawn AT THE CURSOR and
+  // names what the cursor is resting on — neither of which a touch has: the
+  // tap is over before the label lands, and the name it carries is already the
+  // trigger's `aria-label`. Left ungated it appears AFTER the interaction and
+  // stays there, since nothing on a touchscreen corresponds to leaving.
+  //
+  // Pointer events, and the check per EVENT rather than per device: a laptop
+  // with a touchscreen answers `(hover: hover)` truthfully for its trackpad
+  // while the hand that just tapped it was still a finger. `pointerenter` also
+  // arrives BEFORE the mouse events the engine synthesises after a tap, which
+  // is what made hovering the old `mouseenter` indistinguishable from tapping.
   const show = useCallback(
-    (x: number, y: number) => {
-      seed(x, y);
+    (event: ReactPointerEvent) => {
+      if (event.pointerType === "touch") return;
+      seed(event.clientX, event.clientY);
       setHovered(true);
     },
     [seed],
@@ -106,7 +122,7 @@ export function useActionTooltip(children: ReactNode) {
      * the same fact rather than off `:hover`. The two look equivalent and are
      * not: `:hover` is the browser's answer, recomputed on its own schedule and
      * sticky when the DOM changes under a still pointer, while this is React's,
-     * set from `mouseenter`/`mouseleave`. A face that hides on one while its
+     * set from `pointerenter`/`pointerleave`. A face that hides on one while its
      * replacement appears on the other will eventually show both at once.
      */
     visible: hovered,

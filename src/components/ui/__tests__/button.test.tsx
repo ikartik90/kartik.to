@@ -141,15 +141,38 @@ describe("Button", () => {
       expect(tip.hasAttribute("data-visible")).toBe(false);
     });
 
-    it("reveals the tooltip while the pointer is over the button", () => {
+    it("reveals the tooltip while the cursor is over the button", () => {
       render(iconButton());
       const btn = screen.getByRole("button", { name: "Delete" });
       const tip = screen.getByText("Delete").parentElement as HTMLElement;
 
-      fireEvent.mouseEnter(btn, { clientX: 10, clientY: 10 });
+      fireEvent.pointerEnter(btn, {
+        pointerType: "mouse",
+        clientX: 10,
+        clientY: 10,
+      });
       expect(tip.hasAttribute("data-visible")).toBe(true);
 
-      fireEvent.mouseLeave(btn);
+      fireEvent.pointerLeave(btn, { pointerType: "mouse" });
+      expect(tip.hasAttribute("data-visible")).toBe(false);
+    });
+
+    // A tap fires `pointerenter` before `pointerdown`, and the mouse events the
+    // engine synthesises afterwards fire another — so a hover-triggered label
+    // opens ON the tap and stays up until something else is touched.
+    it("stays down for a finger, which has no cursor to label", () => {
+      render(iconButton());
+      const btn = screen.getByRole("button", { name: "Delete" });
+      const tip = screen.getByText("Delete").parentElement as HTMLElement;
+
+      fireEvent.pointerEnter(btn, {
+        pointerType: "touch",
+        clientX: 10,
+        clientY: 10,
+      });
+      // The mouse compatibility events the engine fires after the tap.
+      fireEvent.mouseEnter(btn, { clientX: 10, clientY: 10 });
+      fireEvent.click(btn);
       expect(tip.hasAttribute("data-visible")).toBe(false);
     });
   });
