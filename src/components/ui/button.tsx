@@ -1,6 +1,10 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes, type MouseEvent } from "react";
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type PointerEvent,
+} from "react";
 import { cx } from "../../../styled-system/css";
 import { action } from "../../../styled-system/recipes";
 import {
@@ -71,8 +75,8 @@ function ButtonRoot(
     className,
     type = "button",
     children,
-    onMouseEnter,
-    onMouseLeave,
+    onPointerEnter,
+    onPointerLeave,
     ...rest
   }: ButtonProps,
   ref: React.Ref<HTMLButtonElement>,
@@ -89,15 +93,19 @@ function ButtonRoot(
         ref={ref}
         type={type}
         className={cx(
-          action({ variant: resolvedVariant, emphasis: resolvedEmphasis, size }),
+          action({
+            variant: resolvedVariant,
+            emphasis: resolvedEmphasis,
+            size,
+          }),
           className,
         )}
-        onMouseEnter={(event: MouseEvent<HTMLButtonElement>) => {
-          onMouseEnter?.(event);
-          if (hasTooltip) show(event.clientX, event.clientY);
+        onPointerEnter={(event: PointerEvent<HTMLButtonElement>) => {
+          onPointerEnter?.(event);
+          if (hasTooltip) show(event);
         }}
-        onMouseLeave={(event: MouseEvent<HTMLButtonElement>) => {
-          onMouseLeave?.(event);
+        onPointerLeave={(event: PointerEvent<HTMLButtonElement>) => {
+          onPointerLeave?.(event);
           if (hasTooltip) hide();
         }}
         // Says the tooltip is up, for anything drawn INSTEAD of it — see

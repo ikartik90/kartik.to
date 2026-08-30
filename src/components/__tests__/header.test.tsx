@@ -82,10 +82,14 @@ describe("Header", () => {
     const tip = screen.getByText("Menu").parentElement as HTMLElement;
     expect(tip.hasAttribute("data-visible")).toBe(false);
 
-    fireEvent.mouseEnter(menu, { clientX: 5, clientY: 5 });
+    fireEvent.pointerEnter(menu, {
+      pointerType: "mouse",
+      clientX: 5,
+      clientY: 5,
+    });
     expect(tip.hasAttribute("data-visible")).toBe(true);
 
-    fireEvent.mouseLeave(menu);
+    fireEvent.pointerLeave(menu, { pointerType: "mouse" });
     expect(tip.hasAttribute("data-visible")).toBe(false);
   });
 

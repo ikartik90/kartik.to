@@ -68,10 +68,38 @@ describe("Link", () => {
     expect(tip.getAttribute("aria-hidden")).toBe("true");
     expect(tip.hasAttribute("data-visible")).toBe(false);
 
-    fireEvent.mouseEnter(link, { clientX: 5, clientY: 5 });
+    fireEvent.pointerEnter(link, {
+      pointerType: "mouse",
+      clientX: 5,
+      clientY: 5,
+    });
     expect(tip.hasAttribute("data-visible")).toBe(true);
 
-    fireEvent.mouseLeave(link);
+    fireEvent.pointerLeave(link, { pointerType: "mouse" });
+    expect(tip.hasAttribute("data-visible")).toBe(false);
+  });
+
+  it("leaves the tooltip down for a finger", () => {
+    render(
+      <Link href="https://github.com/x" target="_blank" aria-label="GitHub">
+        <svg />
+        <Link.Tooltip>
+          <Tooltip.Text>GitHub</Tooltip.Text>
+          <svg />
+        </Link.Tooltip>
+      </Link>,
+    );
+    const link = screen.getByRole("link", { name: "GitHub" });
+    const tip = screen.getByText("GitHub").parentElement as HTMLElement;
+
+    fireEvent.pointerEnter(link, {
+      pointerType: "touch",
+      clientX: 5,
+      clientY: 5,
+    });
+    // The mouse compatibility events the engine fires after the tap.
+    fireEvent.mouseEnter(link, { clientX: 5, clientY: 5 });
+    fireEvent.click(link);
     expect(tip.hasAttribute("data-visible")).toBe(false);
   });
 });

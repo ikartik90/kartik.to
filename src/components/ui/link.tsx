@@ -4,7 +4,7 @@ import NextLink from "next/link";
 import {
   forwardRef,
   type AnchorHTMLAttributes,
-  type MouseEvent,
+  type PointerEvent,
   type Ref,
 } from "react";
 import { cx } from "../../../styled-system/css";
@@ -75,8 +75,8 @@ function LinkRoot(
     children,
     target,
     rel,
-    onMouseEnter,
-    onMouseLeave,
+    onPointerEnter,
+    onPointerLeave,
     ...rest
   }: LinkProps,
   ref: Ref<HTMLAnchorElement>,
@@ -88,18 +88,19 @@ function LinkRoot(
     emphasis ?? (resolvedVariant === "text" ? "secondary" : "tertiary");
   const asAnchor = external ?? (isExternalHref(href) || target != null);
   // Never ship a target="_blank" without the reverse-tabnabbing guard.
-  const safeRel = rel ?? (target === "_blank" ? "noopener noreferrer" : undefined);
+  const safeRel =
+    rel ?? (target === "_blank" ? "noopener noreferrer" : undefined);
   const classes = cx(
     action({ variant: resolvedVariant, emphasis: resolvedEmphasis }),
     className,
   );
 
-  const handleEnter = (event: MouseEvent<HTMLAnchorElement>) => {
-    onMouseEnter?.(event);
-    if (hasTooltip) show(event.clientX, event.clientY);
+  const handleEnter = (event: PointerEvent<HTMLAnchorElement>) => {
+    onPointerEnter?.(event);
+    if (hasTooltip) show(event);
   };
-  const handleLeave = (event: MouseEvent<HTMLAnchorElement>) => {
-    onMouseLeave?.(event);
+  const handleLeave = (event: PointerEvent<HTMLAnchorElement>) => {
+    onPointerLeave?.(event);
     if (hasTooltip) hide();
   };
 
@@ -112,8 +113,8 @@ function LinkRoot(
           target={target}
           rel={safeRel}
           className={classes}
-          onMouseEnter={handleEnter}
-          onMouseLeave={handleLeave}
+          onPointerEnter={handleEnter}
+          onPointerLeave={handleLeave}
           {...rest}
         >
           <WireframeContent>{content}</WireframeContent>
@@ -123,8 +124,8 @@ function LinkRoot(
           ref={ref}
           href={href}
           className={classes}
-          onMouseEnter={handleEnter}
-          onMouseLeave={handleLeave}
+          onPointerEnter={handleEnter}
+          onPointerLeave={handleLeave}
           {...rest}
         >
           <WireframeContent>{content}</WireframeContent>
