@@ -82,9 +82,9 @@ export interface SliderProps {
   /** Grid the value snaps to, anchored at `min`. */
   step?: number;
   /**
-   * Overrides the ruler with this many evenly spaced marks. Left off, the count
-   * comes from the scale: one mark per value the slider can actually hold, or
-   * 11 spread across the range once it holds more than that.
+   * Overrides the ruler with this many evenly spaced marks (11 at most). Left
+   * off, the ruler comes from the scale: marks a whole number of steps apart,
+   * as dense as a cap of 11 allows, each sitting on a value the slider holds.
    */
   ticks?: number;
   disabled?: boolean;

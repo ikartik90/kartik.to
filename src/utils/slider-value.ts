@@ -87,40 +87,63 @@ export function formatSliderValue(value: number, step: number): string {
   return /^-0(\.0+)?$/.test(text) ? text.slice(1) : text;
 }
 
-/** The most marks a ruler draws before it stops trying to show every value. */
+/** The most marks a ruler draws before it starts thinning them out. */
 export const MAX_SLIDER_TICKS = 11;
 
-/** How many values the scale holds; Infinity when it is continuous. */
-function stopCount({ min, max, step }: SliderScale): number {
-  if (!(max > min)) return 1;
-  if (!(step > 0)) return Infinity;
+/** How many step intervals the scale spans; 0 when nothing separates the ends. */
+function stepIntervals({ min, max, step }: SliderScale): number {
+  if (!(max > min) || !(step > 0)) return 0;
   // Settle the quotient before flooring, for the reason snapToStep settles it
   // before rounding: (0.5 - 0) / 0.1 is 4.999999999999999, and flooring that
   // raw would drop the last stop off the ruler.
-  return Math.floor(Number(((max - min) / step).toFixed(9))) + 1;
+  return Math.floor(Number(((max - min) / step).toFixed(9)));
+}
+
+/** `marks` marks end to end — the only ruler a gridless scale can draw. */
+function evenlySpaced(marks: number): number[] {
+  if (marks <= 0) return [];
+  if (marks === 1) return [0];
+  return Array.from({ length: marks }, (_, i) => i / (marks - 1));
 }
 
 /**
  * Where the ruler's marks sit, as 0–1 positions along the track.
  *
- * A scale the ruler can show WHOLE gets one mark per reachable value, each
- * sitting on that value: a 1–5 colour count is drawn with five marks, not with
- * eleven promising stops the thumb can never visit, and a max off the grid
- * (min 0, max 10, step 3) ends its ruler at 9, where the thumb ends. Denser
- * scales — and continuous ones — fall back to `MAX_SLIDER_TICKS` marks spread
- * evenly across the range, which is the ruler a 0–100 slider always had.
+ * Every mark sits on a value the thumb can actually hold, which fixes the gap
+ * between the marks rather than their number: it is always a WHOLE number of
+ * steps, and the ruler takes the smallest such gap — the densest ruler — that
+ * still comes in at `MAX_SLIDER_TICKS` or fewer. Count is the output, not the
+ * input. A 1–5 colour count is drawn with five marks (every step); −180…180 by
+ * 15° with nine (every third), where eleven spread evenly would have promised
+ * −144 and −108, values `snapToStep` can never return.
  *
- * `count` overrides the lot with that many evenly spread marks.
+ * No whole-step gap divides 1–20 by 1, so the stride runs out at 19 — and a
+ * closing mark then goes on the LAST STOP to say where the rule ends, leaving
+ * one short gap at the end rather than an even ruler that stops mid-track. The
+ * closing mark sits on the last stop, never on `max`: a max off the grid (min
+ * 0, max 10, step 3) closes at 9, where the thumb ends, not at 10.
+ *
+ * It cannot break the cap. Reaching `MAX_SLIDER_TICKS - 1` strides needs
+ * `intervals >= 10 * stride`, and `stride` is `intervals / 10` rounded up, so
+ * that happens only when the two are equal — and then the last stride has
+ * already landed on the last stop and nothing is added.
+ *
+ * Continuous scales have no grid to sit on and fall back to `MAX_SLIDER_TICKS`
+ * evenly spread. `count` overrides the lot with that many evenly spread marks.
  */
 export function tickRatios(scale: SliderScale, count?: number): number[] {
-  const stops = count ?? stopCount(scale);
-  if (count === undefined && stops <= MAX_SLIDER_TICKS) {
-    return Array.from({ length: stops }, (_, i) =>
-      ratioOfValue(snapToStep(scale.min + i * scale.step, scale), scale),
-    );
-  }
-  const marks = Math.min(stops, MAX_SLIDER_TICKS);
-  if (marks <= 0) return [];
-  if (marks === 1) return [0];
-  return Array.from({ length: marks }, (_, i) => i / (marks - 1));
+  if (count !== undefined) return evenlySpaced(Math.min(count, MAX_SLIDER_TICKS));
+  if (!(scale.max > scale.min)) return [0];
+  if (!(scale.step > 0)) return evenlySpaced(MAX_SLIDER_TICKS);
+
+  const intervals = stepIntervals(scale);
+  const stride = Math.max(1, Math.ceil(intervals / (MAX_SLIDER_TICKS - 1)));
+  const spanned = Math.floor(intervals / stride) * stride;
+  const steps = Array.from({ length: spanned / stride + 1 }, (_, i) => i * stride);
+  if (spanned !== intervals) steps.push(intervals);
+  // Routed through snapToStep so each mark carries the same float settling the
+  // value under it does — `min + n * step` alone drifts off the grid.
+  return steps.map((n) =>
+    ratioOfValue(snapToStep(scale.min + n * scale.step, scale), scale),
+  );
 }

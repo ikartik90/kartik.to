@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
+  MAX_SLIDER_TICKS,
   formatSliderValue,
   ratioOfValue,
   snapToStep,
   tickRatios,
   valueAtRatio,
+  type SliderScale,
 } from "../slider-value";
 
 describe("snapToStep", () => {
@@ -114,6 +116,12 @@ describe("formatSliderValue", () => {
 });
 
 describe("tickRatios", () => {
+  /** The marks read back as values, which is what the rule is written in. */
+  const tickValues = (scale: SliderScale) =>
+    tickRatios(scale).map((ratio) =>
+      Number((scale.min + ratio * (scale.max - scale.min)).toFixed(6)),
+    );
+
   it("draws one mark per value when the scale holds 11 or fewer", () => {
     // The God Rays colour count: 1–5 can only ever be five numbers, so eleven
     // marks would promise six stops the thumb cannot visit.
@@ -127,10 +135,71 @@ describe("tickRatios", () => {
   });
 
   it("caps a denser scale at 11 marks spread across the range", () => {
-    // 0–1 by hundredths is 101 stops; the ruler shows a tenth of the range.
+    // 0–1 by hundredths is 101 stops; every tenth step is 11 marks.
     expect(tickRatios({ min: 0, max: 1, step: 0.01 })).toEqual([
       0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1,
     ]);
+  });
+
+  it("spaces a capped ruler a whole number of steps apart", () => {
+    // −180…180 by 15° is 25 stops. Eleven marks spread evenly would sit at
+    // −144, −108, −72 … values the thumb can never hold; every third step can
+    // be held, and nine of them fit under the cap.
+    expect(tickRatios({ min: -180, max: 180, step: 15 })).toEqual([
+      0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1,
+    ]);
+  });
+
+  it("takes the densest whole-step spacing that stays inside the cap", () => {
+    // 12 steps: every second one is seven marks, every one would be thirteen.
+    expect(tickValues({ min: -90, max: 90, step: 15 })).toEqual([
+      -90, -60, -30, 0, 30, 60, 90,
+    ]);
+  });
+
+  it("closes the ruler on the last stop when the stride falls short of it", () => {
+    // 19 steps divide by nothing useful: every second one runs out at 19, so a
+    // final mark at 20 says where the rule ends. The last gap is a short one.
+    expect(tickValues({ min: 1, max: 20, step: 1 })).toEqual([
+      1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 20,
+    ]);
+  });
+
+  it("closes it on the last STOP, not on a max that is off the grid", () => {
+    // Grid is 0, 3 … 99 — the closing mark goes at 99, where the thumb stops,
+    // and the ruler still ends a hair short of the 100 end of the track.
+    expect(tickValues({ min: 0, max: 100, step: 3 })).toEqual([
+      0, 12, 24, 36, 48, 60, 72, 84, 96, 99,
+    ]);
+  });
+
+  it("does not add a closing mark when the stride already lands on the stop", () => {
+    // 24 steps by three is exactly eight strides; a mark on 180 is already there.
+    expect(tickValues({ min: -180, max: 180, step: 15 })).toHaveLength(9);
+  });
+
+  it("puts every mark on a value the thumb can hold", () => {
+    const scales: SliderScale[] = [
+      { min: 0.01, max: 4, step: 0.1 },
+      { min: 0.05, max: 10, step: 0.1 },
+      { min: -180, max: 180, step: 15 },
+      { min: 1, max: 12, step: 1 },
+      { min: 0, max: 15, step: 1 },
+      { min: 0, max: 120, step: 1 },
+      { min: -1.5, max: 1.5, step: 0.1 },
+      // The counts that put the closing mark under the most pressure: one step
+      // past a whole number of strides (91), and one past the cap's own reach.
+      { min: 0, max: 91, step: 1 },
+      { min: 0, max: 101, step: 1 },
+      { min: 0, max: 111, step: 1 },
+    ];
+    for (const scale of scales) {
+      const ticks = tickRatios(scale);
+      expect(ticks.length).toBeLessThanOrEqual(MAX_SLIDER_TICKS);
+      for (const value of tickValues(scale)) {
+        expect(snapToStep(value, scale)).toBeCloseTo(value, 6);
+      }
+    }
   });
 
   it("caps a continuous scale at 11 marks", () => {
