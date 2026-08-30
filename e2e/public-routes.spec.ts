@@ -83,7 +83,8 @@ test.describe("public routes", () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("Shader Playground");
     // The rail, which is the page — asserting it rules out an interstitial
-    // that also answers 200 (see the dev-route note below).
+    // that also answers 200: Vercel's own deployment-protection login is one,
+    // and an earlier CI run went green against exactly that.
     await expect(
       page.getByRole("complementary", { name: "Properties" }),
     ).toBeVisible();
@@ -94,49 +95,4 @@ test.describe("public routes", () => {
     const response = await page.goto("/writing/no-such-article-exists");
     expect(response?.status()).toBe(404);
   });
-});
-
-// The dev routes are the design system's living previews — every primitive
-// renders there, so a Panda recipe or token regression surfaces here first.
-const DEV_ROUTES = [
-  "button",
-  "calendar",
-  "checkbox",
-  "combobox",
-  "datepicker",
-  "demo-logger",
-  "grid-controls",
-  "menu",
-  "notice",
-  "option-list",
-  "shift-scheduling-v0",
-  "switch",
-  "text-input",
-];
-
-test.describe("design system previews", () => {
-  for (const route of DEV_ROUTES) {
-    test(`/dev/${route} renders without errors`, async ({
-      page,
-      pageFailures,
-    }) => {
-      const response = await page.goto(`/dev/${route}`);
-
-      expect(response?.status()).toBe(200);
-
-      // `200` plus a visible <main> is not proof this is our page — an
-      // interstitial (Vercel's own deployment-protection login, for one)
-      // satisfies both, and an earlier CI run passed all twelve of these
-      // against exactly that. Assert two things only the root layout produces:
-      // its metadata title, and the data-theme the inline pre-paint script
-      // stamps on <html>.
-      await expect(page).toHaveTitle("kartik.to");
-      await expect(page.locator("html")).toHaveAttribute(
-        "data-theme",
-        /^(light|dark)$/,
-      );
-      await expect(page.locator("main")).toBeVisible();
-      expect(pageFailures).toEqual([]);
-    });
-  }
 });

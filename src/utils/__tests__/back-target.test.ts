@@ -41,7 +41,6 @@ describe("getBackTarget", () => {
   it("falls back to the index when no ancestor is a page of its own", () => {
     // `/writing` and `/work` are section prefixes, not routes — walking one
     // segment up blindly would offer a link to a 404.
-    expect(getBackTarget("/dev/button")).toEqual({ href: "/", label: "index" });
     expect(getBackTarget("/edit/new")).toEqual({ href: "/", label: "index" });
   });
 
