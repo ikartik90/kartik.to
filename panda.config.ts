@@ -6054,7 +6054,7 @@ export default defineConfig({
         segmentedControl: defineSlotRecipe({
           className: "segmented-control",
           description:
-            "Equal-width segments for a short horizontal choice — the stretch an `OptionList` behavior container needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the active chip — already comes from those two recipes. Layout only, so it serves the single-select `Listbox` (SegmentedControl) and the multi-toggle `Toolbar` (ToggleBar) alike; which of the two a row is, is a question about semantics rather than about the box.",
+            "Equal-width segments for a short horizontal choice — the stretch an `OptionList` behavior container needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the active chip — already comes from those two recipes. It serves the single-select `Listbox` (SegmentedControl) and the multi-toggle `Toolbar` (ToggleBar) alike; which of the two a row is, is a question about semantics rather than about the box. The one thing it adds beyond layout is the SEAM between adjacent segments — a hairline between two that agree (the active border where both are on, the resting one where both are off) and nothing between two that differ, where the chip\'s own fill already divides them.",
           slots: ["list", "option"],
           base: {
             // Stretched as well as grown, and BOTH are needed: the rail centres
@@ -6078,6 +6078,69 @@ export default defineConfig({
               // height of the bar it is a segment OF, which is the whole read
               // of the control.
               alignSelf: "stretch",
+              // Anchors the seam hairline below.
+              position: "relative",
+
+              // THE SEAM between one segment and the next, drawn by the RIGHT
+              // one of each pair on its leading edge.
+              //
+              // Which pairs get one is the whole rule, and it follows from what
+              // a seam is FOR: telling two segments apart. Where they differ
+              // the fill already does that, so a line would be a second answer
+              // to a question already answered — and a heavier one, since it
+              // would land exactly where the chip's own edge is.
+              //
+              //   two on    a line, in the ACTIVE border — a run of pressed
+              //             segments shares one continuous fill and would
+              //             otherwise read as a single wide chip rather than as
+              //             the several toggles it is.
+              //   two off   a line, in the resting border — the rail's own
+              //             hairline, carried inward.
+              //   one each  NOTHING. The fill changes at that seam.
+              //
+              // Nothing is drawn by default, so the mixed case needs no rule of
+              // its own; and both rules below require a PRECEDING sibling, so
+              // the first segment can never paint one against the rail's edge.
+              //
+              // Both flavours of container are covered: `aria-selected` is what
+              // a Listbox marks its chosen row with (SegmentedControl), and
+              // `aria-pressed` what a Toolbar marks a pressed toggle with
+              // (ToggleBar). One row is only ever one of the two, so the pairs
+              // cannot collide.
+              //
+              // The same 0.5px weight as `optionList`'s own `divider` slot, so
+              // the two hairlines that can meet in one rail do not read as two
+              // different lines — but run EDGE TO EDGE where that slot holds
+              // itself 2px clear.
+              //
+              // A floating divider is right between the groups of a toolbar,
+              // which are a loose row of buttons: the gaps at its ends are what
+              // say it separates two runs rather than cutting the bar. Here the
+              // segments are one continuous bar with a ring around it, and a
+              // seam that stops short of that ring leaves a sliver of chip
+              // joined at the top and bottom — the two segments read as one
+              // shape pinched in the middle rather than as two. Meeting the
+              // ring is what makes the division a division.
+              //
+              // The segment is `alignSelf: stretch` above, so zero here is the
+              // rail's full 28px exactly, and the seam lands on the inside of
+              // the ring at both ends.
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                insetBlock: "none",
+                insetInlineStart: 0,
+                width: "token(spacing.3xs)",
+                backgroundColor: "transparent",
+              },
+              '&[aria-selected="true"] + [aria-selected="true"]::before, &[aria-pressed="true"] + [aria-pressed="true"]::before':
+                {
+                  backgroundColor: "field.border.active",
+                },
+              '&[aria-selected="false"] + [aria-selected="false"]::before, &[aria-pressed="false"] + [aria-pressed="false"]::before':
+                {
+                  backgroundColor: "field.border.default",
+                },
             },
           },
         }),
