@@ -102,14 +102,31 @@ const fillStyle = css({
  * which is the arrangement the recipe explicitly rejects. `GridItem`'s own
  * observer measures something else — how tall its card actually came out.
  *
- * Writing to the observed element does not restart the observer: `--grid-width`
- * feeds row spans and cell `min-height`s, and the grid's own inline size is set
- * by its parent, not by what it packs.
+ * Writing to the observed element DOES restart the observer, and the guard
+ * below is what stops that becoming a loop. A `ResizeObserver` watches the
+ * content box, so it reports height as well as width — and height is precisely
+ * what this hook's own publication changes, since `--grid-width` decides every
+ * card's row span and therefore how tall the grid comes out. Writing a custom
+ * property invalidates style for the grid and every card in it, so publishing
+ * on each notification feeds the next one. The geometry still converges, but
+ * WebKit reports the cycle as "ResizeObserver loop completed with undelivered
+ * notifications" — a window `error` event rather than a console line, so it
+ * reaches error reporting. Measured in Safari 26.6.2 over five window resizes:
+ * 5 errors against 0 before this existed, and it fired with `grid-lanes` on as
+ * well, where the span arithmetic is not running at all.
+ *
+ * So a notification that does not CHANGE the width writes nothing, and a cycle
+ * has nowhere to start.
  */
 function useGridWidth(grid: RefObject<HTMLDivElement | null>) {
   useLayoutEffect(() => {
     const node = grid.current;
     if (!node) return;
+
+    // The width last published, held here rather than read back off the node:
+    // what matters is whether this hook has anything new to say, and a
+    // comparison against the DOM would be a second copy of the same fact.
+    let published = 0;
 
     const publish = () => {
       // Up, never down, for the same reason `GridItem` rounds its height up:
@@ -122,6 +139,11 @@ function useGridWidth(grid: RefObject<HTMLDivElement | null>) {
       // grid, a hidden tab — would make `--col-width` negative and every span
       // with it, where saying nothing leaves the un-measured tier in charge.
       if (width <= 0) return;
+      // Nothing to say when the width has not moved, either: this is the
+      // height-only notification the comment above describes, and answering it
+      // with a write is what starts the loop.
+      if (width === published) return;
+      published = width;
       node.style.setProperty("--grid-width", `${width}px`);
       node.setAttribute("data-measured", "");
     };

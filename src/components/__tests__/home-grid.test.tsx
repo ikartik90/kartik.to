@@ -665,4 +665,32 @@ describe("HomeGrid width measurement", () => {
     );
     expect(grid(container).hasAttribute("data-measured")).toBe(true);
   });
+
+  // A ResizeObserver watches the CONTENT BOX, so it fires on height as well as
+  // width — and height is exactly what this hook's own publication changes,
+  // since `--grid-width` decides every card's row span. Writing the property
+  // and the flag on every notification invalidates style for the grid and all
+  // of its cards, which produces the next notification, and WebKit reports the
+  // cycle as "ResizeObserver loop completed with undelivered notifications" —
+  // a window `error` event, not a console line. Measured in Safari 26.6.2 over
+  // five window resizes: 5 errors against 0 before the hook existed, and it
+  // fires with `grid-lanes` on too, where the span arithmetic is not even
+  // running. Publishing only on a CHANGED width is what breaks it.
+  it("writes nothing when it is remeasured at the same width", () => {
+    stubWidth(799);
+    const { container } = render(<HomeGrid cards={[post("a")]} />);
+    const node = grid(container);
+
+    const setProperty = vi.spyOn(node.style, "setProperty");
+    const setAttribute = vi.spyOn(node, "setAttribute");
+
+    // A height-only notification: the box changed, the width did not.
+    StubResizeObserver.flush();
+
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(setAttribute).not.toHaveBeenCalled();
+    // And what the first measurement published still stands.
+    expect(node.style.getPropertyValue("--grid-width")).toBe("799px");
+    expect(node.hasAttribute("data-measured")).toBe(true);
+  });
 });
