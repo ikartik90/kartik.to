@@ -62,28 +62,53 @@ import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 // takes the remaining width so the 208px calendar (the recipe's single-month
 // measure) keeps its natural size and the two are separated by one 32px gutter,
 // reproducing the Figma's 347 ∣ 208 split without hardcoding either number.
+//
+// Narrowing the frame spends the FIELD column first, since it is the half made
+// of rubber and the calendar's grid cannot shrink without breaking its pitch:
+// the two close on each other until they are the same width. That is the floor.
+// A field column narrower than the calendar beside it has stopped being the
+// form's main column, so THAT is the point the row wraps and the two stack —
+// not some frame width guessed in advance. Flex lines break on their items'
+// hypothetical sizes, so the floor below IS the breakpoint; nothing here has to
+// name a viewport.
+//
+// `wrap-reverse` is what puts the calendar on top when they do stack, leaving
+// the DOM in the old form's own reading order (the fields, then the calendar
+// exiled to their right). It swaps the cross axis with it, which is why
+// holding the two columns' TOPS together asks for `flex-end` here. And the row
+// gap only exists once there are two rows, so it needs no condition of its own.
 const bodyStyle = css({
   display: "flex",
-  alignItems: "flex-start",
-  gap: "3xl",
+  flexWrap: "wrap-reverse",
+  alignItems: "flex-end",
+  columnGap: "3xl",
+  rowGap: "xl",
   // The stage the walkthrough's cursor is placed against, so its points are
   // plain offsets into this box rather than viewport coordinates.
   position: "relative",
-  // Below the form's comfortable width the two columns stop being side-by-side
-  // furniture and just crowd each other — stack them, calendar first, so the
-  // live half stays on top.
-  _demoFrameCompact: { flexDirection: "column-reverse", gap: "xl" },
 });
+
+// The calendar's measure written as the arithmetic that produces it rather than
+// as the 208px it comes out at: seven day cells on a 4px gutter inside the
+// period's 8px inset. The calendar column reads its own width off the grid
+// (`min-content`, below) and CSS gives the field column no way to ask a sibling
+// for it, so this is the one place the pitch is restated — in the same tokens
+// the recipe builds it from, so it moves when they do.
+const CALENDAR_MEASURE =
+  "calc(7 * token(sizes.calendarDay) + 6 * token(spacing.sm) + 2 * token(spacing.md))";
 
 // The wireframe scope IS the field column, so it carries the column's layout —
 // one wrapper, not a wrapper inside a wrapper.
 const fieldColumnStyle = css({
   flex: "1 1 0",
-  minWidth: 0,
+  // Shrinks to the calendar's width and no further — the floor the body's
+  // comment describes, and so also the width at which the row gives up and
+  // wraps. Once wrapped it is alone on its line and grows back to fill it,
+  // which is what the compact width override used to have to say by hand.
+  minWidth: CALENDAR_MEASURE,
   display: "flex",
   flexDirection: "column",
   gap: "lg",
-  _demoFrameCompact: { width: "token(spacing.full)" },
 });
 
 // The calendar column is exactly as wide as the calendar. `min-content` reads
