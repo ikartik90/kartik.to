@@ -151,6 +151,37 @@ vi.mock("@/components/image-insert-dialog", () => ({
     ) : null,
 }));
 
+// The component library is a heavy dialog with its own suite; here only its
+// contract matters — which mode it opened in, which demo it opened on, and what
+// it hands back.
+vi.mock("@/components/component-insert-dialog", () => ({
+  ComponentInsertDialog: ({
+    open,
+    mode,
+    currentComponentId,
+    onClose,
+    onInsert,
+  }: {
+    open: boolean;
+    mode?: "insert" | "change";
+    currentComponentId?: string | null;
+    onClose: () => void;
+    onInsert: (componentId: string) => void;
+  }) =>
+    open ? (
+      <div
+        data-testid="component-dialog"
+        data-mode={mode ?? "insert"}
+        data-current={currentComponentId ?? ""}
+      >
+        <button onClick={onClose}>close component</button>
+        <button onClick={() => onInsert("shift-scheduling-v2")}>
+          pick component
+        </button>
+      </div>
+    ) : null,
+}));
+
 vi.mock("@/components/demo-frame", () => ({
   DemoFrame: ({
     children,
@@ -887,31 +918,83 @@ describe("ArticleEditor", () => {
     clickSpy.mockRestore();
   });
 
-  it("shows delete action when the component block is focused", () => {
-    const post = {
-      id: "comp3",
-      slug: "comp3",
-      title: "Component Post",
-      category: "ARTICLE" as const,
-      content: {
-        type: "doc" as const,
-        content: [
-          {
-            type: "component" as const,
-            componentId: "calchemy-demo",
-          },
-          { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
-        ],
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    render(<ArticleEditor initialPost={post} />);
+  // ---------------------------------------------------------------------------
+  // A demo block carries the rail a media block carries
+  //
+  // It used to carry a tinted scrim with a single trash can under it, which
+  // meant the one thing you could not do to a demo was change which demo it
+  // was — you deleted the block and inserted another, losing the caption with
+  // it. Same object, same chrome: a rail on the frame's top edge, revealed by
+  // hover or focus, with the picture's Replace/Delete pair on it.
+  // ---------------------------------------------------------------------------
 
-    const showcaseMedia = document.querySelector("[data-showcase-media]") as HTMLElement;
-    fireEvent.focus(showcaseMedia);
+  const componentPost = (caption?: string) => ({
+    id: "comp3",
+    slug: "comp3",
+    title: "Component Post",
+    category: "ARTICLE" as const,
+    content: {
+      type: "doc" as const,
+      content: [
+        {
+          type: "component" as const,
+          componentId: "calchemy-demo",
+          ...(caption ? { caption } : {}),
+        },
+        { type: "paragraph" as const, children: [{ type: "text" as const, text: "" }] },
+      ],
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 
-    expect(screen.getByRole("button", { name: "Delete component" })).toBeDefined();
+  it("gives a component block the rail a media block has", () => {
+    render(<ArticleEditor initialPost={componentPost()} />);
+
+    const rail = screen.getByRole("toolbar", { name: "Component actions" });
+    expect(
+      within(rail).getByRole("button", { name: "Replace component" }),
+    ).toBeDefined();
+    expect(
+      within(rail).getByRole("button", { name: "Delete component" }),
+    ).toBeDefined();
+  });
+
+  it("deletes the component block from the rail", () => {
+    render(<ArticleEditor initialPost={componentPost()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete component" }));
+
+    expect(
+      useEditorStore
+        .getState()
+        .document.content.some((block) => block.type === "component"),
+    ).toBe(false);
+  });
+
+  it("opens the library in change mode, on the demo the block already holds", () => {
+    render(<ArticleEditor initialPost={componentPost()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace component" }));
+
+    const dialog = screen.getByTestId("component-dialog");
+    expect(dialog.getAttribute("data-mode")).toBe("change");
+    expect(dialog.getAttribute("data-current")).toBe("calchemy-demo");
+  });
+
+  // The caption belongs to the block's POSITION in the article rather than to
+  // the demo standing in it — the same rule a replaced picture follows.
+  it("swaps the demo and keeps the block's caption", () => {
+    render(<ArticleEditor initialPost={componentPost("Figure 1")} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace component" }));
+    fireEvent.click(screen.getByText("pick component"));
+
+    expect(useEditorStore.getState().document.content[0]).toEqual({
+      type: "component",
+      componentId: "shift-scheduling-v2",
+      caption: "Figure 1",
+    });
   });
 
   it("shows delete action when the horizontal rule is focused", () => {

@@ -87,14 +87,30 @@ const iconStyle = menuIcon();
 // Component
 // ---------------------------------------------------------------------------
 
+export type ComponentDialogMode = "insert" | "change";
+
 export interface ComponentInsertDialogProps {
   open: boolean;
+  /**
+   * Whether this is filling an empty block or swapping the demo in a filled
+   * one. The library is the same either way — only what the dialog calls
+   * itself, and where it opens the selection, differ.
+   */
+  mode?: ComponentDialogMode;
+  /**
+   * The demo the block already holds. Only consulted in `change` mode, and only
+   * while it is still in the registry: a retired id falls back to the first
+   * entry rather than opening the picker on nothing.
+   */
+  currentComponentId?: string | null;
   onClose: () => void;
   onInsert: (componentId: string) => void;
 }
 
 export function ComponentInsertDialog({
   open,
+  mode = "insert",
+  currentComponentId,
   onClose,
   onInsert,
 }: ComponentInsertDialogProps) {
@@ -103,20 +119,34 @@ export function ComponentInsertDialog({
   const paneRef = useRef<HTMLDivElement>(null);
   const [stageHeight, setStageHeight] = useState(0);
   const [paneWidth, setPaneWidth] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    demoComponents[0]?.id ?? null,
-  );
+  // Where the picker opens: on the demo the block already holds when there is
+  // one, and otherwise on the top of the list. Read as a function rather than a
+  // value so the open transition below and the first render answer it the same
+  // way, from whatever the props say at that moment.
+  const openingSelection = () =>
+    (mode === "change" &&
+    currentComponentId &&
+    demoComponents.some((demo) => demo.id === currentComponentId)
+      ? currentComponentId
+      : demoComponents[0]?.id) ?? null;
+
+  const [selectedId, setSelectedId] = useState<string | null>(openingSelection);
 
   const selected =
     demoComponents.find((demo) => demo.id === selectedId) ?? null;
 
-  // Default-select the first component each time the dialog (re)opens. Adjusted
-  // during render — the sanctioned pattern for resetting on a prop transition.
+  // Re-seat the selection each time the dialog (re)opens. Adjusted during
+  // render — the sanctioned pattern for resetting on a prop transition.
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
-    if (open) setSelectedId(demoComponents[0]?.id ?? null);
+    if (open) setSelectedId(openingSelection());
   }
+
+  // The dialog says what it is about to do, in the heading and on the button
+  // alike — the same word in both places, so the commit is named by what the
+  // title promised rather than by a generic "Insert".
+  const title = mode === "change" ? "Replace Component" : "Insert Component";
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -179,12 +209,12 @@ export function ComponentInsertDialog({
       ref={dialogRef}
       align="center"
       justify="center"
-      aria-label="Insert Component"
+      aria-label={title}
       className={dialogPanel({ size: "md" })}
       onClose={onClose}
     >
       <header className={dialogHeader()}>
-        <h2 className={dialogTitle()}>Insert Component</h2>
+        <h2 className={dialogTitle()}>{title}</h2>
         <Button
           type="button"
           variant="icon"
@@ -261,7 +291,7 @@ export function ComponentInsertDialog({
           disabled={!selectedId}
           onClick={handleInsert}
         >
-          Insert Component
+          {title}
         </Button>
       </footer>
     </Dialog>

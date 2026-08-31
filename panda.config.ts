@@ -3152,7 +3152,7 @@ export default defineConfig({
         mediaObjectToolbar: defineRecipe({
           className: "media-object-toolbar",
           description:
-            "The hover/focus-revealed control pill for a media object in the editor — a collection slot or a standalone media block, which are the same object in two positions — centred on the cell's top edge (Figma 828:6697 dark / 828:6838 light). Composes the shared `toolbar` recipe for the box and adds only what floating costs — position, hairline, elevation, clip — plus a cell-relative width cap. Everything the pill cannot say in icons — caption, background, fit, inset, corner — is edited in the docked `propertiesPanel`.",
+            "The hover/focus-revealed control pill for an object on the editor's canvas — a collection slot, a standalone media block (the same object in two positions), or the demo frame of a component block — centred on the cell's top edge (Figma 828:6697 dark / 828:6838 light). Composes the shared `toolbar` recipe for the box and adds only what floating costs — position, hairline, elevation, clip — plus a cell-relative width cap. Everything the pill cannot say in icons — caption, background, fit, inset, corner — is edited in the docked `propertiesPanel`.",
           base: {
             position: "absolute",
             // Centred on the cell's TOP EDGE — half above it, half over the

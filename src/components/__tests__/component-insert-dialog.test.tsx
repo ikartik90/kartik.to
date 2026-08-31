@@ -120,4 +120,63 @@ describe("ComponentInsertDialog", () => {
     expect(onInsert).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  // -------------------------------------------------------------------------
+  // Change mode — the same library, reached from a block that already holds a
+  // demo. It says what it is about to do, and it opens on the demo standing
+  // there rather than on the top of the list, so the block's current choice is
+  // visible next to the alternatives instead of being the one thing the picker
+  // does not show.
+  // -------------------------------------------------------------------------
+
+  it("names itself for the replacement when it opens on a filled block", () => {
+    render(
+      <ComponentInsertDialog
+        open
+        mode="change"
+        currentComponentId="beta-demo"
+        onClose={vi.fn()}
+        onInsert={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Replace Component" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Replace Component" }),
+    ).toBeDefined();
+  });
+
+  it("opens on the demo the block already holds", () => {
+    render(
+      <ComponentInsertDialog
+        open
+        mode="change"
+        currentComponentId="beta-demo"
+        onClose={vi.fn()}
+        onInsert={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("option", { name: "Beta Demo" }).getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  // A demo that has since left the registry must not leave the picker empty —
+  // the list falls back to its first entry, exactly as an insert does.
+  it("falls back to the first demo when the block holds an unknown one", () => {
+    render(
+      <ComponentInsertDialog
+        open
+        mode="change"
+        currentComponentId="retired-demo"
+        onClose={vi.fn()}
+        onInsert={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("option", { name: "Alpha Demo" }).getAttribute("aria-selected"),
+    ).toBe("true");
+  });
 });
