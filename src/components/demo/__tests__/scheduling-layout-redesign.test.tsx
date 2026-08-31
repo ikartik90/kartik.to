@@ -7,7 +7,12 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, it, expect, afterEach } from "vitest";
-import { SchedulingLayoutRedesign } from "../scheduling-layout-redesign";
+import {
+  LABELLED_WIDTH,
+  NUMBERED_WIDTH,
+  resolveDiagramFit,
+  SchedulingLayoutRedesign,
+} from "../scheduling-layout-redesign";
 
 afterEach(cleanup);
 
@@ -154,5 +159,135 @@ describe("SchedulingLayoutRedesign — a diagram, not a wizard", () => {
       reachable.every((node) => node.closest('[role="listbox"]') !== null),
     ).toBe(true);
     expect(reachable.length).toBeGreaterThan(0);
+  });
+});
+
+describe("SchedulingLayoutRedesign — fitting the diagram to the frame", () => {
+  // The frame gives the diagram its width less a 20px gutter on each side, and
+  // the diagram spends that room in the order the redesign's own annotations
+  // can afford to lose it: the labels go first, the drawing itself last.
+  it("draws the labelled diagram at full size while it clears the gutter", () => {
+    expect(resolveDiagramFit(LABELLED_WIDTH)).toMatchObject({
+      annotation: "labels",
+      width: LABELLED_WIDTH,
+      fit: 1,
+    });
+  });
+
+  it("never draws it LARGER than the Figma does, however wide the frame", () => {
+    expect(resolveDiagramFit(LABELLED_WIDTH + 400)).toMatchObject({
+      annotation: "labels",
+      fit: 1,
+    });
+  });
+
+  // The first boundary: the labels are what the gutter takes, not the drawing.
+  it("numbers the redlines rather than scaling once the labels reach it", () => {
+    expect(resolveDiagramFit(LABELLED_WIDTH - 1)).toMatchObject({
+      annotation: "numbers",
+      width: NUMBERED_WIDTH,
+      fit: 1,
+    });
+  });
+
+  it("holds the numbered diagram at full size down to its own gutter", () => {
+    expect(resolveDiagramFit(NUMBERED_WIDTH)).toMatchObject({
+      annotation: "numbers",
+      fit: 1,
+    });
+  });
+
+  // The second boundary, and only here: nothing is left to give up but size.
+  it("scales the numbered diagram once even that reaches the gutter", () => {
+    const available = NUMBERED_WIDTH - 100;
+
+    expect(resolveDiagramFit(available)).toMatchObject({
+      annotation: "numbers",
+      fit: available / NUMBERED_WIDTH,
+    });
+  });
+
+  // A frame measured mid-collapse reports nothing to fit into. A negative
+  // scale would MIRROR the diagram rather than hide it.
+  it("never resolves a scale below zero", () => {
+    expect(resolveDiagramFit(-200).fit).toBe(0);
+  });
+
+  // The legend the numbers need is drawn UNDER the diagram, so the box the
+  // frame measures has to reserve room for it.
+  it("reserves height for the legend only when the numbers need one", () => {
+    expect(resolveDiagramFit(NUMBERED_WIDTH).height).toBeGreaterThan(
+      resolveDiagramFit(LABELLED_WIDTH).height,
+    );
+  });
+});
+
+/**
+ * Mount the diagram inside a stand-in demo frame of a given inner width — what
+ * the component measures itself against. Outside one it has nothing to fit to.
+ */
+function renderInFrame(clientWidth: number) {
+  const frame = document.createElement("div");
+  frame.setAttribute("data-demo-frame", "");
+  Object.defineProperty(frame, "clientWidth", {
+    value: clientWidth,
+    configurable: true,
+  });
+  document.body.appendChild(frame);
+  return render(<SchedulingLayoutRedesign />, { container: frame });
+}
+
+/** The gutter the demo area keeps on each side, both of them. */
+const GUTTERS = 40;
+
+describe("SchedulingLayoutRedesign — what a narrowing frame takes", () => {
+  it("labels the redlines, and needs no legend, while there is room", () => {
+    renderInFrame(LABELLED_WIDTH + GUTTERS);
+
+    expect(screen.getAllByTestId("redline-label")).toHaveLength(2);
+    expect(screen.queryByTestId("redline-legend")).toBeNull();
+  });
+
+  it("swaps the labels for numbers, and says what they mean, below that", () => {
+    renderInFrame(NUMBERED_WIDTH + GUTTERS);
+
+    expect(screen.queryAllByTestId("redline-label")).toHaveLength(0);
+    expect(
+      screen.getAllByTestId("redline-badge").map((b) => b.textContent),
+    ).toEqual(["1", "2"]);
+
+    const legend = screen.getByTestId("redline-legend");
+    expect(within(legend).getByText("Shift Information")).toBeTruthy();
+    expect(within(legend).getByText("Shift Planning")).toBeTruthy();
+  });
+
+  // The legend belongs to the redlines, so it goes when they do — a key to
+  // marks that are no longer on screen is a key to nothing.
+  it("withdraws the legend with the arrangement the redlines annotate", () => {
+    renderInFrame(NUMBERED_WIDTH + GUTTERS);
+    expect(presented(screen.getByTestId("redline-legend"))).toBe(true);
+
+    pickSegment("After");
+    expect(presented(screen.getByTestId("redline-legend"))).toBe(false);
+  });
+
+  it("keeps the numbered diagram unscaled until it too reaches the gutter", () => {
+    renderInFrame(NUMBERED_WIDTH + GUTTERS);
+
+    expect(
+      screen.getByTestId("scheduling-diagram").style.getPropertyValue("--demo-fit"),
+    ).toBe("1");
+  });
+
+  it("only then scales the contents as they are", () => {
+    renderInFrame(NUMBERED_WIDTH + GUTTERS - 100);
+
+    const fit = Number(
+      screen.getByTestId("scheduling-diagram").style.getPropertyValue("--demo-fit"),
+    );
+    expect(fit).toBeLessThan(1);
+    expect(fit).toBeCloseTo((NUMBERED_WIDTH - 100) / NUMBERED_WIDTH, 5);
+    // Scaled, not re-annotated: the numbers are still what is drawn.
+    expect(screen.getAllByTestId("redline-badge")).toHaveLength(2);
   });
 });
