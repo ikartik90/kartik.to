@@ -34,6 +34,33 @@ import { createDraft, saveDraft } from "@/app/actions/post";
 // Mock SVG icons and slash menu for component tests
 // ---------------------------------------------------------------------------
 
+// The Paper shader is a real WebGL mount, and jsdom has no WebGL: left
+// unmocked it rejects asynchronously with "WebGL is not supported", which
+// Vitest reports as an unhandled error and exits non-zero even though every
+// test passed. Stand it in with a marker element carrying the colours, exactly
+// as the collection and showcase suites do — a media block can carry a shader
+// ground now, so this suite mounts one too.
+vi.mock("@paper-design/shaders-react", () => ({
+  StaticMeshGradient: ({
+    colors,
+    className,
+    style,
+  }: {
+    colors: string[];
+    className?: string;
+    style?: React.CSSProperties;
+  }) => (
+    <div
+      data-background-effect=""
+      data-colors={colors.join(",")}
+      className={className}
+      style={style}
+    >
+      <canvas />
+    </div>
+  ),
+}));
+
 vi.mock("@/assets/icons/subheading.svg", () => ({ default: () => null }));
 vi.mock("@/assets/icons/paragraph.svg", () => ({ default: () => null }));
 vi.mock("@/assets/icons/media.svg", () => ({ default: () => null }));
