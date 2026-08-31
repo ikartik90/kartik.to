@@ -87,12 +87,10 @@ const picture = (
 function setupLive(list: CollectionItem[]) {
   const handlers = {
     onFeature: vi.fn(),
-    onEditCaption: vi.fn(),
     onReplace: vi.fn(),
     onRemove: vi.fn(),
     onAddImage: vi.fn(),
-    onSetBackgroundEffect: vi.fn(),
-    onSetLayout: vi.fn(),
+    onItemsChange: vi.fn(),
   };
   function Harness() {
     const [current, setCurrent] = useState(list);
@@ -111,20 +109,18 @@ function setupLive(list: CollectionItem[]) {
 function setup(list: CollectionItem[]) {
   const handlers = {
     onFeature: vi.fn(),
-    onEditCaption: vi.fn(),
     onReplace: vi.fn(),
     onRemove: vi.fn(),
     onAddImage: vi.fn(),
     onReorder: vi.fn(),
-    onSetBackgroundEffect: vi.fn(),
-    onSetLayout: vi.fn(),
+    onItemsChange: vi.fn(),
   };
   render(<CollectionGrid items={list} {...handlers} />);
   return { ...handlers, user: userEvent.setup() };
 }
 
 const cells = () =>
-  Array.from(document.querySelectorAll<HTMLElement>("[data-collection-cell]"));
+  Array.from(document.querySelectorAll<HTMLElement>("[data-media-cell]"));
 
 const grid = () =>
   document.querySelector<HTMLElement>("[data-collection-grid]")!;
@@ -977,13 +973,11 @@ describe("CollectionGrid slot identity", () => {
   it("keeps a cell's DOM node across a swap of its contents", () => {
     const props = {
       onFeature: vi.fn(),
-      onEditCaption: vi.fn(),
       onReplace: vi.fn(),
       onRemove: vi.fn(),
       onAddImage: vi.fn(),
       onReorder: vi.fn(),
-      onSetBackgroundEffect: vi.fn(),
-    onSetLayout: vi.fn(),
+      onItemsChange: vi.fn(),
     };
     const { rerender } = render(
       <CollectionGrid items={items("a", "b", "c")} {...props} />,
@@ -1014,13 +1008,11 @@ const panel = () => screen.queryByRole("dialog", { name: "Media properties" });
 
 const panelProps = () => ({
   onFeature: vi.fn(),
-  onEditCaption: vi.fn(),
   onReplace: vi.fn(),
   onRemove: vi.fn(),
   onAddImage: vi.fn(),
   onReorder: vi.fn(),
-  onSetBackgroundEffect: vi.fn(),
-  onSetLayout: vi.fn(),
+  onItemsChange: vi.fn(),
 });
 
 describe("CollectionGrid properties panel", () => {
@@ -1034,14 +1026,13 @@ describe("CollectionGrid properties panel", () => {
   // giving it a caption or a gradient it did not have. Adding one is a click
   // inside the panel, on the section that owns it.
   it("opens without touching the picture", async () => {
-    const { user, onSetBackgroundEffect, onEditCaption } = setup(items("a", "b"));
+    const { user, onItemsChange } = setup(items("a", "b"));
     expect(panel()).toBeNull();
 
     await user.click(propertiesButton(1));
 
     expect(panel()).not.toBeNull();
-    expect(onSetBackgroundEffect).not.toHaveBeenCalled();
-    expect(onEditCaption).not.toHaveBeenCalled();
+    expect(onItemsChange).not.toHaveBeenCalled();
   });
 
   // The panel is the editor for that picture now; a scrim blurring the very
@@ -1060,7 +1051,7 @@ describe("CollectionGrid properties panel", () => {
   // The toolbar stands down while the panel is open, so the button that opened
   // it cannot be the way back — the header's close is.
   it("closes from the header without taking anything away", async () => {
-    const { user, onSetBackgroundEffect, onEditCaption } = setup([
+    const { user, onItemsChange } = setup([
       picture("a", {
         caption: "A note",
         backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
@@ -1074,8 +1065,7 @@ describe("CollectionGrid properties panel", () => {
 
     // The panel plays its closing slide before the grid drops it.
     await waitFor(() => expect(panel()).toBeNull());
-    expect(onSetBackgroundEffect).not.toHaveBeenCalled();
-    expect(onEditCaption).not.toHaveBeenCalled();
+    expect(onItemsChange).not.toHaveBeenCalled();
     // Both are properties of the picture, not of the panel.
     expect(document.querySelectorAll("[data-background-effect]")).toHaveLength(1);
   });
@@ -1199,7 +1189,7 @@ describe("CollectionGrid properties panel", () => {
   // an edit has to land on that picture and not on the slot it happens to
   // occupy.
   it("routes a caption typed in the panel to the addressed image", async () => {
-    const { user, onEditCaption } = setup(items("a", "b"));
+    const { user, onItemsChange } = setup(items("a", "b"));
     await user.click(propertiesButton(1));
 
     await user.click(screen.getByRole("button", { name: "Add caption" }));
@@ -1208,19 +1198,22 @@ describe("CollectionGrid properties panel", () => {
       "Hi",
     );
 
-    expect(onEditCaption).toHaveBeenLastCalledWith(1, "Hi");
+    expect(onItemsChange).toHaveBeenLastCalledWith([
+      picture("a"),
+      picture("b", { caption: "Hi" }),
+    ]);
   });
 
   it("routes a background added in the panel to the addressed image", async () => {
-    const { user, onSetBackgroundEffect } = setup(items("a", "b"));
+    const { user, onItemsChange } = setup(items("a", "b"));
     await user.click(propertiesButton(1));
 
     await user.click(screen.getByRole("button", { name: "Add background" }));
 
-    expect(onSetBackgroundEffect).toHaveBeenCalledExactlyOnceWith(
-      1,
-      DEFAULT_BACKGROUND_EFFECT,
-    );
+    expect(onItemsChange).toHaveBeenCalledExactlyOnceWith([
+      picture("a"),
+      picture("b", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT }),
+    ]);
   });
 });
 

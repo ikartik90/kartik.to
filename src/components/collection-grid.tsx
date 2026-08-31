@@ -10,34 +10,20 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import {
-  collectionCellToolbar,
   collectionEmptyCell,
   collectionGrid,
-  toolbar,
 } from "../../styled-system/recipes";
-import { cx } from "../../styled-system/css";
-import { OptionList } from "@/components/ui/input/option-list";
-import { BackgroundEffectLayer } from "@/components/background-effect";
-import { Media } from "@/components/media";
+import { MediaObject } from "@/components/media-object";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
-import {
-  PROPERTIES_TRIGGER_ATTR,
-  type PropertiesPanelHandle,
-} from "@/components/ui/properties-panel";
+import { useMediaProperties } from "@/hooks/use-media-properties";
 import {
   COLLECTION_MAX_ITEMS,
   mediaRadiusPx,
-  type BackgroundEffect,
   type CollectionItem,
+  type MediaNode,
 } from "@/domain/nodes";
-import type { MediaLayoutPatch } from "@/utils/collection-items";
 import { useImageTransparency } from "@/hooks/use-image-transparency";
-import { collectionItemAlt } from "@/utils/collection-items";
 import AddIcon from "@/assets/icons/add.svg";
-import FeatureIcon from "@/assets/icons/feature.svg";
-import PropertiesIcon from "@/assets/icons/slider.svg";
-import ReplaceIcon from "@/assets/icons/replace.svg";
-import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
 // CollectionGrid — the collection block's authoring surface.
@@ -202,49 +188,42 @@ export interface CollectionGridProps {
    */
   rootProps?: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> };
   onFeature: (index: number) => void;
-  onEditCaption: (index: number, caption: string | undefined) => void;
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
   onAddImage: () => void;
   /** Exchange two slots — dragging one tile onto another. */
   onReorder: (from: number, to: number) => void;
-  /** Sets, retunes or (with `undefined`) clears an image's background effect. */
-  onSetBackgroundEffect: (
-    index: number,
-    effect: BackgroundEffect | undefined,
-  ) => void;
-  /** Patches how one image sits in its frame — its fit and/or its inset. */
-  onSetLayout: (index: number, patch: MediaLayoutPatch) => void;
+  /**
+   * Everything the properties panel writes — the caption, the shader ground,
+   * the fit, the inset, the corner — as ONE list in and one list out.
+   *
+   * Three separate callbacks before, one per control, which was three ways of
+   * saying the same thing: the item algebra that produced the new list already
+   * lives in `@/utils/collection-items`, and the panel that drives all three
+   * is now shared with the standalone media block (`useMediaProperties`). What
+   * remains worth distinguishing is not WHICH property changed but how the
+   * change should land in history: these ride `onChange`'s debounce, because a
+   * slider emits a value per frame, where the intents above are each one clean
+   * undo step.
+   */
+  onItemsChange: (items: MediaNode[]) => void;
 }
 
 export function CollectionGrid({
   items,
   rootProps,
   onFeature,
-  onEditCaption,
   onReplace,
   onRemove,
   onAddImage,
   onReorder,
-  onSetBackgroundEffect,
-  onSetLayout,
+  onItemsChange,
 }: CollectionGridProps) {
-  // The image whose properties panel is open, keyed on the IMAGE and not on
-  // the slot. Featuring an image moves it to another cell and removing one
-  // slides its neighbours along, so a stored index would strand the open panel
-  // on whatever took that slot — captioning or retuning the wrong picture.
-  // Pinning to `src` makes "the panel follows its image" and "the panel closes
-  // when its image is gone" fall out of a plain lookup, with no effect to keep
-  // them in sync.
-  const [propertiesSrc, setPropertiesSrc] = useState<string | null>(null);
-  // Closing goes through the PANEL, never through this state directly — see
-  // `togglePropertiesPanel`.
-  const propertiesPanelRef = useRef<PropertiesPanelHandle>(null);
-
-  const propertiesIndex = propertiesSrc
-    ? items.findIndex((item) => item.src === propertiesSrc)
-    : -1;
-  const propertiesItem = propertiesIndex === -1 ? null : items[propertiesIndex];
+  // Which picture the docked inspector is addressing, and everything it writes
+  // back. Shared with the standalone media block, which is the same object in
+  // another position — see `useMediaProperties`, including why the open panel
+  // is pinned to the IMAGE rather than to the slot.
+  const properties = useMediaProperties(items, onItemsChange);
 
   // Which of these pictures you can see through. A transparent screenshot with
   // no gradient behind it is standing on the page, and on a dark theme a dark
@@ -263,29 +242,6 @@ export function CollectionGrid({
   const transparentSrcs = useImageTransparency(
     items.filter((item) => item.kind === "image").map((item) => item.src),
   );
-
-  /**
-   * Opens the properties panel for a slot — or closes it, if that slot's panel
-   * is the one already open.
-   *
-   * Opening applies NOTHING. The panel's sections each own their property, and
-   * adding one is a click inside the panel: reaching for this button is a
-   * request to SEE the properties of a picture, which must not be the same
-   * gesture as giving it a gradient it didn't have.
-   *
-   * Closing ASKS the panel rather than dropping it from the tree. Clearing
-   * this state unmounts it on the spot, which takes its closing slide with it
-   * — the panel arrives from the edge of the screen and would simply blink
-   * out. It calls back when it has finished leaving.
-   */
-  function togglePropertiesPanel(index: number) {
-    const item = items[index];
-    if (propertiesSrc === item.src) {
-      propertiesPanelRef.current?.dismiss();
-      return;
-    }
-    setPropertiesSrc(item.src);
-  }
 
   // ---- Reordering -------------------------------------------------------
   //
@@ -796,43 +752,69 @@ export function CollectionGrid({
           // then never received its `dragend` and left the drag resolving
           // against a source that no longer existed. The grid is six fixed
           // slots whose contents change; the slot is the identity.
-          <div key={index} className={gridStyles.slot}>
-            <figure
-              ref={(node) => {
+          <MediaObject
+            key={index}
+            item={item}
+            classes={{
+              root: gridStyles.slot,
+              frame: gridStyles.cell,
+              image: gridStyles.image,
+              backgroundEffect: gridStyles.backgroundEffect,
+            }}
+            label={`Image ${index + 1}`}
+            featured={index === 0}
+            onFeature={() => onFeature(index)}
+            propertiesOpen={properties.isOpen(index)}
+            onToggleProperties={() => properties.toggle(index)}
+            onReplace={() => onReplace(index)}
+            onRemove={() => onRemove(index)}
+            // The photo is see-through and has no gradient standing behind it,
+            // so it stands on the checkerboard instead. A picture WITH a ground
+            // never asks for one — a background box paints over any sibling
+            // behind it, so the two are exclusive by construction as well as by
+            // intent.
+            checkered={
+              !item.backgroundEffect && transparentSrcs.has(item.src)
+            }
+            mediaProps={{
+              // Images are draggable by default, and that native drag would
+              // hijack the pointer gesture with the very bitmap it avoids.
+              draggable: false,
+            }}
+            // Everything below is the GRID's, not the object's: the cell has to
+            // register itself for hit-testing, and it carries the whole
+            // press-and-drag gesture that arranges a set. A block standing
+            // alone has no set to be arranged in, so none of it is shared.
+            frameProps={{
+              ref: (node: HTMLDivElement | null) => {
                 if (node) cellNodes.current.set(index, node);
                 else cellNodes.current.delete(index);
-              }}
-              className={gridStyles.cell}
-              // The hook the rail's reveal rule keys on — an attribute rather
-              // than a generated class, so the recipe can name it directly.
-              data-collection-cell=""
-              data-pressed={pressed?.index === index ? "" : undefined}
+              },
+              "data-pressed": pressed?.index === index ? "" : undefined,
               // The coordinate is runtime data, so it comes through as a custom
               // property and the recipe keeps the rule. Inherits to the <img>,
               // which is what actually scales.
-              style={
+              style:
                 pressed?.index === index
                   ? ({ "--press-origin": pressed.origin } as CSSProperties)
-                  : undefined
-              }
+                  : undefined,
               // Empty and dashed while the photo is out of it — from the moment
               // it is lifted until the flight carrying it has landed. Its own
               // replacement is still visibly in the air over the target cell
               // until then, so filling this slot early would show that photo
               // twice.
-              data-dragging={
-                dragIndex === index || landing?.vacated === index ? "" : undefined
-              }
-              data-drop-target={dropIndex === index ? "" : undefined}
-              data-arriving={arrivingIndex === index ? "" : undefined}
-              data-landing={landing?.target === index ? "" : undefined}
+              "data-dragging":
+                dragIndex === index || landing?.vacated === index ? "" : undefined,
+              "data-drop-target": dropIndex === index ? "" : undefined,
+              "data-arriving": arrivingIndex === index ? "" : undefined,
+              "data-landing": landing?.target === index ? "" : undefined,
               // Which picture the open panel is editing. The control rail is
               // NOT styled off it — a cell whose panel is open behaves like
               // every other one — but the state is worth surfacing on the
               // element it is about rather than living only inside this
               // component.
-              data-properties-open={propertiesIndex === index ? "" : undefined}
-              onPointerDown={(event) => {
+              "data-properties-open": properties.isOpen(index) ? "" : undefined,
+              onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
                 if (event.button !== 0) return;
                 // The picture is the handle — a clip as much as a photo. A
                 // press that lands on the controls laid over it is a press on
@@ -872,8 +854,8 @@ export function CollectionGrid({
                 // live, which only a synthetic event can produce, and a drag
                 // that works while the pointer stays put beats no drag at all.
                 event.currentTarget.setPointerCapture?.(event.pointerId);
-              }}
-              onPointerMove={(event) => {
+              },
+              onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
                 const held = pending.current;
                 if (!held || held.pointerId !== event.pointerId) return;
                 if (dragIndexRef.current === null) {
@@ -885,8 +867,8 @@ export function CollectionGrid({
                   beginDrag(event.clientX, event.clientY);
                 }
                 moveDrag(event.clientX, event.clientY);
-              }}
-              onPointerUp={(event) => {
+              },
+              onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => {
                 const held = pending.current;
                 if (!held || held.pointerId !== event.pointerId) return;
                 if (dragIndexRef.current !== null) {
@@ -910,66 +892,13 @@ export function CollectionGrid({
                   // animation.
                 }
                 endDrag();
-              }}
+              },
               // The system taking the pointer away — a touch that turned into a
               // scroll, a window losing focus — ends the gesture like any
               // other.
-              onPointerCancel={endDrag}
-            >
-              {/* Behind the photo, so it shows through wherever the picture is
-                  transparent. Before it in the DOM as well as beneath it in the
-                  stack — see the recipe's `backgroundEffect` slot. */}
-              {item.backgroundEffect && (
-                <BackgroundEffectLayer
-                  effect={item.backgroundEffect}
-                  className={gridStyles.backgroundEffect}
-                />
-              )}
-              {/* A clip in a cell is a tile like any other — no transport,
-                  since the cell's own gesture is a press-and-drag and a
-                  control strip laid over it would take the grip away. */}
-              <Media
-                src={item.src}
-                // The item's own word about what it is — never re-derived from
-                // the src here, so a clip under an extensionless key shows as a
-                // clip in the grid the author is arranging.
-                kind={item.kind}
-                alt={collectionItemAlt(item)}
-                className={gridStyles.image}
-                // Fit and inset are per-picture DATA, so they ride as a style
-                // rather than as recipe variants — a slider that emits a value
-                // per frame has nothing a static variant table could enumerate.
-                // The padding shrinks the picture's content box while the
-                // gradient behind it stays sized to the whole cell, which is
-                // what lets the ground out from under a photo that would
-                // otherwise cover it.
-                layout={item}
-                // The checkerboard, which is the photo's OWN background rather
-                // than a layer behind it — see the recipe's `image` slot. So it
-                // is the exclusive alternative to a gradient and not a
-                // companion to one: a background box paints over any sibling
-                // behind it, and a picture that has been given a ground does
-                // not need one offered.
-                data-checkered={
-                  !item.backgroundEffect && transparentSrcs.has(item.src)
-                    ? ""
-                    : undefined
-                }
-                // Images are draggable by default, and that native drag would
-                // hijack the pointer gesture with the very bitmap this avoids.
-                draggable={false}
-              />
-            </figure>
-            <CellToolbar
-              index={index}
-              featured={index === 0}
-              propertiesOpen={propertiesIndex === index}
-              onToggleProperties={() => togglePropertiesPanel(index)}
-              onFeature={() => onFeature(index)}
-              onReplace={() => onReplace(index)}
-              onRemove={() => onRemove(index)}
-            />
-          </div>
+              onPointerCancel: endDrag,
+            }}
+          />
         ) : (
           <button
             key={index}
@@ -989,114 +918,15 @@ export function CollectionGrid({
         handling — and a panel full of inputs inside it would put every
         keystroke through that handler. It docks to the viewport (and portals
         to the body to get there), so it takes no space here and needs none. */}
-    {propertiesItem && (
+    {properties.panel && (
+      // Remounted per image, so a panel reopened on another picture starts from
+      // that picture's values rather than the previous one's drafts — and its
+      // sections re-derive which of them are open.
       <MediaPropertiesPanel
-        ref={propertiesPanelRef}
-        // Remounted per image, so a panel reopened on another picture starts
-        // from that picture's values rather than the previous one's drafts —
-        // and its sections re-derive which of them are open.
-        key={propertiesItem.src}
-        objectFit={propertiesItem.objectFit}
-        onObjectFitChange={(fit) =>
-          onSetLayout(propertiesIndex, { objectFit: fit })
-        }
-        padding={propertiesItem.padding}
-        onPaddingChange={(padding) =>
-          onSetLayout(propertiesIndex, { padding })
-        }
-        borderRadius={propertiesItem.borderRadius}
-        onBorderRadiusChange={(borderRadius) =>
-          onSetLayout(propertiesIndex, { borderRadius })
-        }
-        caption={propertiesItem.caption}
-        onCaptionChange={(caption) => onEditCaption(propertiesIndex, caption)}
-        effect={propertiesItem.backgroundEffect}
-        onEffectChange={(effect) =>
-          onSetBackgroundEffect(propertiesIndex, effect)
-        }
-        onDismiss={() => setPropertiesSrc(null)}
+        key={properties.panel.key}
+        {...properties.panel.props}
       />
     )}
     </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Per-cell controls
-// ---------------------------------------------------------------------------
-
-interface CellToolbarProps {
-  index: number;
-  featured: boolean;
-  /** Whether THIS cell's properties panel is the one currently open. */
-  propertiesOpen: boolean;
-  onToggleProperties: () => void;
-  onFeature: () => void;
-  onReplace: () => void;
-  onRemove: () => void;
-}
-
-function CellToolbar({
-  index,
-  featured,
-  propertiesOpen,
-  onToggleProperties,
-  onFeature,
-  onReplace,
-  onRemove,
-}: CellToolbarProps) {
-  const label = `Image ${index + 1}`;
-
-  return (
-    <div className={cx(toolbar(), collectionCellToolbar())}>
-      <OptionList direction="inline">
-        <OptionList.Toolbar aria-label={`${label} actions`}>
-          {/* Featured is a POSITION (index 0), so the first slot's button is
-              simply already on. Pressed rather than disabled: a disabled
-              button dims to 40%, which would fight the brand chip that is
-              the whole signal here. */}
-          <OptionList.Option
-            aria-label="Feature image"
-            pressed={featured}
-            onClick={() => {
-              if (!featured) onFeature();
-            }}
-          >
-            <FeatureIcon aria-hidden />
-          </OptionList.Option>
-          <OptionList.Divider />
-          {/* ONE button for everything about the picture that isn't an
-              action on the picture. Caption and background each had their
-              own before, which put two editors on a five-button pill and
-              made "add a caption" and "add a gradient" look like different
-              KINDS of thing; they are both properties, and the panel is
-              where properties are.
-
-              Pressed while its own panel is OPEN — the state it reports is
-              the panel's, not the picture's. It is the way back out as well
-              as in, so it has to look held down while it is holding
-              something open. The rail behaves no differently over a cell
-              being edited than over any other one, so the button is always
-              there to be pressed again and close the panel.
-
-              Marked as the panel's trigger so that second press actually
-              closes it — see PROPERTIES_TRIGGER_ATTR. */}
-          <OptionList.Option
-            {...PROPERTIES_TRIGGER_ATTR}
-            aria-label="Image properties"
-            pressed={propertiesOpen}
-            onClick={onToggleProperties}
-          >
-            <PropertiesIcon aria-hidden />
-          </OptionList.Option>
-          <OptionList.Option aria-label="Replace image" onClick={onReplace}>
-            <ReplaceIcon aria-hidden />
-          </OptionList.Option>
-          <OptionList.Option aria-label="Remove image" onClick={onRemove}>
-            <TrashIcon aria-hidden />
-          </OptionList.Option>
-        </OptionList.Toolbar>
-      </OptionList>
-    </div>
   );
 }

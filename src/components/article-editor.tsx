@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { css, cx } from "../../styled-system/css";
 import {
@@ -33,7 +33,7 @@ import {
   articleMetricLabel,
   codeBlock,
   articleShowcase,
-  articleImg,
+  mediaBlock,
   menuIcon,
 } from "../../styled-system/recipes";
 import { useEditorStore } from "@/store/editor";
@@ -66,7 +66,9 @@ import {
 } from "@/components/image-insert-dialog";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import { CollectionGrid } from "@/components/collection-grid";
-import { Media } from "@/components/media";
+import { MediaObject } from "@/components/media-object";
+import { MediaPropertiesPanel } from "@/components/media-properties-panel";
+import { useMediaProperties } from "@/hooks/use-media-properties";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { NumberToolbar } from "@/components/number-toolbar";
 import { BulletToolbar, type BulletStyle } from "@/components/bullet-toolbar";
@@ -101,9 +103,6 @@ import {
   removeItem,
   swapItems,
   replaceItem,
-  setItemBackgroundEffect,
-  setItemLayout,
-  setItemCaption,
 } from "@/utils/collection-items";
 import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
 
@@ -1075,7 +1074,15 @@ const editorDemoPreviewStyle = css({
   userSelect: "none",
 });
 
-const editorImgStyle = cx(articleImg(), editorShowcaseMediaStyle);
+// The boxes a standalone media block is composed of — the SAME recipe the
+// reader's block uses, so the canvas is a preview of the article rather than a
+// second opinion about it. See `mediaBlock`.
+const mediaBlockStyles = mediaBlock();
+
+// The reader's picture plus what an editable one needs: it is the block's tab
+// stop, so it must not draw the focus ring a text field does, and the caret
+// that would otherwise appear over it is not a caret this block has.
+const editorImgStyle = cx(mediaBlockStyles.image, editorShowcaseMediaStyle);
 
 const editorImagePlaceholderStyle = cx(
   editorShowcaseMediaStyle,
@@ -1423,6 +1430,25 @@ function EditableBlock({
   // Whether this non-text block currently has keyboard focus (drives overlay).
   const [isFocused, setIsFocused] = useState(false);
   const [isShowcaseMediaFocused, setIsShowcaseMediaFocused] = useState(false);
+
+  // A media block is a collection of ONE — the same object in another
+  // position, so the same docked inspector edits it through the same item
+  // algebra. A list rather than the node itself is what makes that literally
+  // true rather than merely analogous; every other block type hands in an
+  // empty list, which is a controller with nothing open.
+  //
+  // Called unconditionally, above the block-type branches below, because it is
+  // a hook. It costs a non-media block one `useState` and one `useRef`.
+  const mediaItems = useMemo(
+    () => (block.type === "media" ? [block] : []),
+    [block],
+  );
+  const mediaProperties = useMediaProperties(mediaItems, ([next]) => {
+    // Rides `onChange`'s history debounce like every caption in the editor —
+    // and it has to: a slider drag emits a value per frame, and one undo step
+    // per frame would bury every other edit in the article's history.
+    if (next) onChange(next);
+  });
 
   // Keyboard handler for the horizontal rule block (no caret): arrow keys
   // navigate between blocks, Backspace/Delete removes the rule, and Enter
@@ -2604,10 +2630,6 @@ function EditableBlock({
       onBlur: () => setIsShowcaseMediaFocused(false),
       onKeyDown: handleShowcaseMediaKeyDown,
     };
-    const showcaseMediaProps = {
-      ...showcaseMediaContract,
-      ref: showcaseMediaCallbackRef,
-    };
 
     return (
       <figure
@@ -2616,72 +2638,66 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        <div className={editorShowcaseMediaShellStyle}>
-          {block.src ? (
-            // Not a raw <img>. The block now records its own `kind`, and the
-            // insert dialog offers clips, so an author can make a video block
-            // deliberately — and painting one with an <img> put a broken
-            // picture on the very canvas that promises to show what will be
-            // published. `Media` is where the reader's block, the tile, the
-            // lightbox and the library's preview all settle this fork, and the
-            // editor asking the same question is what keeps the canvas and the
-            // article agreeing about what a source is.
-            <Media
-              src={block.src}
-              kind={block.kind}
-              alt={block.alt ?? ""}
-              className={editorImgStyle}
-              // Held, not played. A loop running beside the prose someone is
-              // writing is a distraction, and holding costs nothing to look at:
-              // `Media` seeks a hair past the start so a paused clip shows its
-              // opening frame rather than an empty box. The house transport is
-              // left off for the same reason — that corner already belongs to
-              // the Change Image / Delete overlay, and this canvas is for
-              // arranging blocks rather than watching them run.
-              autoPlay={false}
-              // NOT `layout={block}`: the editor block does not apply media
-              // layout today and the reader's does, which is a real
-              // inconsistency but an older and separate one. Fixing it here
-              // would change how every existing picture sits in the editor.
-              elementRef={showcaseMediaCallbackRef}
-              {...showcaseMediaContract}
-            />
-          ) : (
+        {/* The same object a collection slot holds, drawn by the same
+            component — see `MediaObject`. It used to be a picture under a
+            tinted overlay carrying "Change Image…" and a trash can, which meant
+            a picture in a collection could be given a caption, a shader ground,
+            a fit, an inset and a corner, and the identical picture standing
+            alone could be given none of them. The rail is the same rail, less
+            the star: featuring is a move-to-front, and a block has no other
+            slot to move in front of. */}
+        <MediaObject
+          item={block}
+          classes={{
+            root: mediaBlockStyles.root,
+            frame: mediaBlockStyles.frame,
+            image: editorImgStyle,
+            backgroundEffect: mediaBlockStyles.backgroundEffect,
+          }}
+          label="Image"
+          propertiesOpen={mediaProperties.isOpen(0)}
+          onToggleProperties={() => mediaProperties.toggle(0)}
+          onReplace={() => onChangeImage?.()}
+          onRemove={() => onDelete?.()}
+          // The trash empties a collection SLOT and leaves the block standing;
+          // here there is no block left over, so it says what it does.
+          removeLabel="Delete image"
+          mediaProps={{
+            // Held, not played. A loop running beside the prose someone is
+            // writing is a distraction, and holding costs nothing to look at:
+            // `Media` seeks a hair past the start so a paused clip shows its
+            // opening frame rather than an empty box. The house transport is
+            // left off for the same reason — this canvas is for arranging
+            // blocks rather than watching them run.
+            autoPlay: false,
+            // The block's tab stop. Its figure holds no caret, so the media
+            // element itself is what the caret keys are read from and what
+            // `focusBlockAtStart` reaches by querying `[data-showcase-media]`.
+            elementRef: showcaseMediaCallbackRef,
+            ...showcaseMediaContract,
+          }}
+          placeholder={
             <span
               aria-label="Image placeholder"
               className={editorImagePlaceholderStyle}
-              {...showcaseMediaProps}
+              ref={showcaseMediaCallbackRef}
+              {...showcaseMediaContract}
             >
               📷
             </span>
-          )}
-          {isShowcaseMediaFocused && (
-            <div
-              className={editorImageOverlayStyle}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <div className={editorImageOverlayTintStyle} aria-hidden />
-              <div className={editorImageOverlayActionsStyle}>
-                <Button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => onChangeImage?.()}
-                >
-                  Change Image...
-                </Button>
-                <Button
-                  type="button"
-                  variant="icon"
-                  tabIndex={-1}
-                  aria-label="Delete image"
-                  onClick={onDelete}
-                >
-                  <TrashIcon className={editorOverlayIconStyle} />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+          }
+        />
+        {mediaProperties.panel && (
+          // A SIBLING of the block, not a child of it. This figure carries the
+          // editor's showcase-media contract, and a panel full of inputs inside
+          // it would put every keystroke through that handler. It docks to the
+          // viewport (and portals to the body to get there), so it takes no
+          // space here and needs none.
+          <MediaPropertiesPanel
+            key={mediaProperties.panel.key}
+            {...mediaProperties.panel.props}
+          />
+        )}
         <figcaption
           ref={captionRef}
           className={editorCaptionStyle}
@@ -2731,27 +2747,12 @@ function EditableBlock({
           onRemove={(i) => onCollectionRemove?.(i)}
           onReorder={(from, to) => onCollectionReorder?.(from, to)}
           onAddImage={() => onCollectionAdd?.()}
-          // Per-item captions are ordinary edits, so they ride `onChange`'s
-          // history debounce like every other caption in the editor.
-          onEditCaption={(i, caption) =>
-            onChange({
-              ...block,
-              items: setItemCaption(block.items, i, caption),
-            })
-          }
-          // Rides `onChange`'s history debounce like the captions do — a slider
-          // drag emits a value per frame, and one undo step per frame would
-          // bury every other edit in the article's history.
-          onSetBackgroundEffect={(i, effect) =>
-            onChange({
-              ...block,
-              items: setItemBackgroundEffect(block.items, i, effect),
-            })
-          }
-          // Same debounce, same reason: the padding slider is a drag too.
-          onSetLayout={(i, patch) =>
-            onChange({ ...block, items: setItemLayout(block.items, i, patch) })
-          }
+          // Everything the properties panel writes, in one edit. It rides
+          // `onChange`'s history debounce like every other caption in the
+          // editor — and it has to: a slider drag emits a value per frame, and
+          // one undo step per frame would bury every other edit in the
+          // article's history.
+          onItemsChange={(items) => onChange({ ...block, items })}
         />
         <figcaption
           ref={captionRef}

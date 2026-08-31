@@ -1828,34 +1828,6 @@ export default defineConfig({
           },
         }),
 
-        articleImg: defineRecipe({
-          className: "article-img",
-          description:
-            "Image inside article content with divider border matching demo showcase shells.",
-          base: {
-            width: "token(spacing.full)",
-            // No corner: an article image, like a collection tile, wears the
-            // radius its own properties state and nothing else — see
-            // `DEFAULT_MEDIA_RADIUS`.
-            display: "block",
-            borderWidth: "token(spacing.3xs)",
-            borderStyle: "solid",
-            borderColor: "border.divider",
-          },
-        }),
-
-        articleMediaFrame: defineRecipe({
-          className: "article-media-frame",
-          description:
-            "The box around a single media block in article prose — the picture's own, NOT the figure's, which also holds the caption. It exists to be the positioned parent a clip's transport pins to, so the chip lands in the corner of the picture rather than down beside the words under it. The width is load-bearing, not a default: `articleShowcase` is a centred flex column, so a box that did not state one would shrink-wrap, and the media's own frame inside it — a query container, whose inline size may not come from its contents — would then collapse to nothing at all. `flex` rather than `block` so no line box puts a descender gap under the picture.",
-          base: {
-            position: "relative",
-            display: "flex",
-            width: "token(spacing.full)",
-            minWidth: 0,
-          },
-        }),
-
         mediaTransport: defineRecipe({
           className: "media-transport",
           description:
@@ -3177,10 +3149,10 @@ export default defineConfig({
         // same problem and two chrome treatments for it would read as two
         // materials. (The Figma frame carries neither, on the reasoning that
         // the scrim already did the separating. Without the scrim it doesn't.)
-        collectionCellToolbar: defineRecipe({
-          className: "collection-cell-toolbar",
+        mediaObjectToolbar: defineRecipe({
+          className: "media-object-toolbar",
           description:
-            "The hover/focus-revealed control pill for a filled collection cell in the editor, centred on the cell's top edge (Figma 828:6697 dark / 828:6838 light). Composes the shared `toolbar` recipe for the box and adds only what floating costs — position, hairline, elevation, clip — plus a cell-relative width cap. Everything the pill cannot say in four buttons — caption, background — is edited in the docked `propertiesPanel`.",
+            "The hover/focus-revealed control pill for a media object in the editor — a collection slot or a standalone media block, which are the same object in two positions — centred on the cell's top edge (Figma 828:6697 dark / 828:6838 light). Composes the shared `toolbar` recipe for the box and adds only what floating costs — position, hairline, elevation, clip — plus a cell-relative width cap. Everything the pill cannot say in icons — caption, background, fit, inset, corner — is edited in the docked `propertiesPanel`.",
           base: {
             position: "absolute",
             // Centred on the cell's TOP EDGE — half above it, half over the
@@ -3218,10 +3190,18 @@ export default defineConfig({
             // the rail's own overhanging half (the cell is NOT hovered there,
             // so without this the rail would drop out from under the hand
             // reaching for it), and while anything in it holds focus.
-            "[data-collection-cell]:hover + &, &:hover, &:focus-within": {
-              opacity: 1,
-              pointerEvents: "auto",
-            },
+            //
+            // And while anything in the CELL holds focus, which is the
+            // standalone block's case rather than the grid's: a media block's
+            // own tab stop is the picture (`[data-showcase-media]`), so a
+            // keyboard reaching the block has to be shown what can be done to
+            // it. A collection's cells hold nothing focusable — the grid root
+            // is the tab stop — so this costs the grid nothing.
+            "[data-media-cell]:hover + &, [data-media-cell]:focus-within + &, &:hover, &:focus-within":
+              {
+                opacity: 1,
+                pointerEvents: "auto",
+              },
             // Down for the whole reorder, and back up once the dropped photo
             // has landed.
             //
@@ -3232,10 +3212,10 @@ export default defineConfig({
             // instantly, back in once the state clears — grabbing is abrupt,
             // letting go is not.
             //
-            // The extra `[data-collection-cell]` is specificity, not reach:
+            // The extra `[data-media-cell]` is specificity, not reach:
             // without it this ties with the reveal rule above and would be
             // decided by source order alone.
-            "[data-collection-grid][data-reordering] [data-collection-cell] + &":
+            "[data-collection-grid][data-reordering] [data-media-cell] + &":
               { opacity: 0, pointerEvents: "none", transition: "none" },
             // And it STAYS down once the gesture is over, for as long as the
             // pointer has not moved. A drag necessarily ends with the cursor
@@ -3248,7 +3228,7 @@ export default defineConfig({
             // from a rail that is ALREADY down, so there is nothing to animate
             // on the way in, and the fade on the way out should be the ordinary
             // hover fade.
-            "[data-collection-grid][data-pointer-idle] [data-collection-cell] + &":
+            "[data-collection-grid][data-pointer-idle] [data-media-cell] + &":
               { opacity: 0, pointerEvents: "none" },
             // In the cell a photo is FLYING INTO, the rail comes back over the
             // length of that flight rather than the shorter hover fade, so it
@@ -3258,7 +3238,7 @@ export default defineConfig({
             // conflicts with the rule above: `data-landing` is set in the same
             // commit that clears `data-reordering`, so the two are never on
             // together.
-            "[data-collection-cell][data-landing] + &": {
+            "[data-media-cell][data-landing] + &": {
               transition: "opacity 100ms ease-out",
             },
           },
@@ -4269,6 +4249,128 @@ export default defineConfig({
         // divided by `1fr` rows) and on the CELL for `pair` (two squares whose
         // height follows their own width), so the grid never needs a measured
         // height.
+        // A media object standing ALONE — the picture-or-clip block in article
+        // prose, as opposed to the same object standing in a numbered slot
+        // (`collectionGrid`). One recipe for both the editor's canvas and the
+        // reader's article, because a block that composed differently in the
+        // two would make the canvas a guess rather than a preview — the same
+        // argument that put `objectFit` and `padding` on the node itself.
+        //
+        // This replaces the pair of single-part recipes that used to draw it
+        // (`articleImg`, `articleMediaFrame`). They were separate only because
+        // nothing had ever needed to put a third box in between; the ground
+        // behind a picture and the control rail over it are both that third
+        // box, and a slot recipe is where a composition of boxes belongs.
+        mediaBlock: defineSlotRecipe({
+          className: "media-block",
+          description:
+            "The boxes a standalone media block is composed of, in the editor and in the reader alike: `root` is the box that does NOT clip, so the editor's control rail can straddle the picture's top edge with half of it outside; `frame` is the positioned box the ground fills and a clip's transport pins to; `tile` is the reader's hit target that opens the enlargement; `image` is the picture; `backgroundEffect` is the shader ground behind it. Mirrors `collectionGrid`'s slot/cell/tile/image/backgroundEffect for the same object standing in a numbered slot.",
+          slots: ["root", "frame", "tile", "image", "backgroundEffect"],
+          base: {
+            // The rail is centred on the frame's top edge with half of it
+            // hanging above — so this box must not clip, exactly as the grid's
+            // `slot` must not. `grid` rather than `block` so the frame stretches
+            // in both axes without restating a size; the rail is absolute, so it
+            // never becomes a second track.
+            root: {
+              position: "relative",
+              display: "grid",
+              alignSelf: "stretch",
+              width: "token(spacing.full)",
+            },
+            // The box around the picture — the picture's own, NOT the figure's,
+            // which also holds the caption. It is the positioned parent a clip's
+            // transport pins to, so the chip lands in the corner of the picture
+            // rather than down beside the words under it, and it is what the
+            // shader ground fills.
+            //
+            // The width is load-bearing, not a default: `articleShowcase` is a
+            // centred flex column, so a box that did not state one would
+            // shrink-wrap, and the media's own frame inside it — a query
+            // container, whose inline size may not come from its contents —
+            // would then collapse to nothing at all. `flex` rather than `block`
+            // so no line box puts a descender gap under the picture.
+            frame: {
+              position: "relative",
+              display: "flex",
+              width: "token(spacing.full)",
+              minWidth: 0,
+              // The CARD's corner — a constant of the design system, and
+              // nothing to do with the picture inside it. `xl`, the same one a
+              // collection cell and the lightbox's frame draw, because all
+              // three are the same container seen from somewhere else: the box
+              // a media object and its ground sit in. The properties panel's
+              // slider rounds the media OBJECT and only the media object.
+              //
+              // It became visible the moment a standalone block could carry a
+              // shader ground: the ground fills this box (`inset: 0`, corner
+              // inherited), so without a corner here an inset picture floated
+              // rounded inside a square card, where the identical picture in a
+              // collection slot sat on a rounded one.
+              //
+              // Deliberately NOT paired with `overflow: hidden`, which is where
+              // this parts company with the other two. A collection cell clips
+              // because a photo FILLS its slot and has to take the card's
+              // shape; an article's media block has no card behind it until a
+              // ground is added, and clipping here would round every picture
+              // ever published in an article — making the panel a liar again
+              // (`Radius 0` under a visibly rounded corner), which is the exact
+              // thing `DEFAULT_MEDIA_RADIUS` was written to end.
+              borderRadius: "xl",
+            },
+            // The reader's hit target — the block opens its own enlargement,
+            // exactly as a collection tile does. A button around the picture
+            // and NOT the frame, so the transport laid over the same frame
+            // stays outside it: one control may not contain another.
+            tile: {
+              display: "block",
+              width: "token(spacing.full)",
+              minWidth: 0,
+              padding: "none",
+              border: "none",
+              background: "none",
+              appearance: "none",
+              cursor: "zoom-in",
+              // Over the ground behind it. The frame is `position: relative`
+              // with no z-index, so it is not a stacking context and whatever
+              // stands in it competes with the gradient in the same one — the
+              // same paint ladder a collection cell states, for the same
+              // reason.
+              position: "relative",
+              zIndex: 1,
+              "html[data-keyboard-focus] &:focus-visible": {
+                boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
+              },
+            },
+            image: {
+              width: "token(spacing.full)",
+              // No corner: an article image, like a collection tile, wears the
+              // radius its own properties state and nothing else — see
+              // `DEFAULT_MEDIA_RADIUS`.
+              display: "block",
+              borderWidth: "token(spacing.3xs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              // The editor puts the picture straight into the frame with no
+              // tile around it, so it names its own rung on the ladder above.
+              position: "relative",
+              zIndex: 1,
+            },
+            backgroundEffect: {
+              position: "absolute",
+              inset: 0,
+              zIndex: 0,
+              // The FRAME's corner, not the picture's: the ground fills the
+              // card, and the picture in front of it wears its own, which is a
+              // property of the picture and stops at the picture.
+              borderRadius: "inherit",
+              // Decoration under the picture — whatever is laid over it owns
+              // the press.
+              pointerEvents: "none",
+            },
+          },
+        }),
+
         collectionGrid: defineSlotRecipe({
           className: "collection-grid",
           description:
@@ -4341,7 +4443,7 @@ export default defineConfig({
               borderRadius: "xl",
               // Editor cells only — the reader's tiles carry `zoom-in` on the
               // button that opens the lightbox.
-              "&[data-collection-cell]": { cursor: "grab" },
+              "&[data-media-cell]": { cursor: "grab" },
               // Pressing a photo answers the hand the way pressing a button
               // does, over the same 100ms as `action`'s `_active` — but at
               // TWICE its travel: 0.94 against the button's 0.97. A deliberate
@@ -4489,7 +4591,7 @@ export default defineConfig({
                 gridTemplateRows: "repeat(2, minmax(0, 1fr))",
                 padding: "sm",
                 gap: "sm",
-                "& > [data-collection-tile]": {
+                "& > [data-media-tile]": {
                   position: "absolute",
                   inset: 0,
                 },
@@ -4575,7 +4677,7 @@ export default defineConfig({
             //   0  backgroundEffect — the ground
             //   1  image            — the picture
             //   2  cell's ::after   — the drop-target wash and ring
-            //   3  the editor's control rail (`collectionCellToolbar`)
+            //   3  the editor's control rail (`mediaObjectToolbar`)
             //
             // The rail is on this ladder despite being a SIBLING of the cell
             // rather than a child of it: the cell is `position: relative` with
@@ -5712,10 +5814,10 @@ export default defineConfig({
         // and the natural width set inline, `width: auto` resolves to exactly
         // min(natural, 85vw, 85vh × ratio): a tall image is caught by the
         // height cap, a wide one by the width cap, and a small one by neither.
-        collectionLightbox: defineSlotRecipe({
-          className: "collection-lightbox",
+        mediaLightbox: defineSlotRecipe({
+          className: "media-lightbox",
           description:
-            "Enlarged collection image — clamped to its natural size or 85% of the viewport, whichever is smaller, with the item's caption beneath.",
+            "An enlarged media object — clamped to its natural size or 85% of the viewport, whichever is smaller, with the object's caption beneath. Shared by a collection's tiles and a standalone media block, which enlarge the same object.",
           slots: [
             "panel",
             "figure",
