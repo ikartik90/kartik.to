@@ -72,13 +72,19 @@ const headerStyle = css({
   borderBottomWidth: "token(spacing.none)",
 });
 
+// The tear itself, as a background image: a 20px band carrying the Figma shim
+// zigzag (684:1019). Named rather than inlined at each use because the SAME
+// drawing ends the header AND ends a cropped card, and a second copy of a 600-
+// character data URI is a second thing to keep in step.
+const TEAR_IMAGE =
+  "url(\"data:image/svg+xml,%3Csvg preserveAspectRatio='none' width='615.462' height='21.1273' viewBox='0 0 615.462 21.1273' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.23079 0.563635L38.6683 20.5636L77.1058 0.563635L115.543 20.5636L153.981 0.563635L192.418 20.5636L230.856 0.563635L269.293 20.5636L307.731 0.563635L346.168 20.5636L384.606 0.563635L423.043 20.5636L461.481 0.563635L499.918 20.5636L538.356 0.563635L576.793 20.5636L615.231 0.563635' stroke='%23576675' stroke-opacity='0.1'/%3E%3C/svg%3E\")";
+
 const headerWrapStyle = css({
   "&::after": {
     content: '""',
     display: "block",
     height: "token(spacing.xxl)",
-    backgroundImage:
-      "url(\"data:image/svg+xml,%3Csvg preserveAspectRatio='none' width='615.462' height='21.1273' viewBox='0 0 615.462 21.1273' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.23079 0.563635L38.6683 20.5636L77.1058 0.563635L115.543 20.5636L153.981 0.563635L192.418 20.5636L230.856 0.563635L269.293 20.5636L307.731 0.563635L346.168 20.5636L384.606 0.563635L423.043 20.5636L461.481 0.563635L499.918 20.5636L538.356 0.563635L576.793 20.5636L615.231 0.563635' stroke='%23576675' stroke-opacity='0.1'/%3E%3C/svg%3E\")",
+    backgroundImage: TEAR_IMAGE,
     backgroundSize: "100% 100%",
     backgroundRepeat: "no-repeat",
   },
@@ -181,6 +187,49 @@ const wirePrimaryButtonStyle = css({
   backgroundColor: "color-mix(in srgb, var(--colors-neutral-500) 10%, transparent)",
 });
 
+// --- The cropped card ------------------------------------------------------
+//
+// The same furniture arranged as a DIAGRAM rather than a dialog: header, body,
+// tear, and nothing after it. A demo whose subject is the form's LAYOUT never
+// reaches the action bar, so drawing one would only promise a bottom the card
+// does not have — the tear says "this continues" and the argument stays on the
+// arrangement above it (Figma 1137:5928 after / 1137:5971 before).
+
+// Unlike the dialog header this one closes its own box: with no torn band
+// directly beneath it, the bottom hairline is what separates the title from the
+// body (Figma 1137:5972, bordered on all four sides).
+const croppedHeaderStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+  padding: "lg",
+  borderStyle: "solid",
+  borderColor: wireBorder,
+  borderWidth: "token(spacing.xxs)",
+});
+
+// Side rails only — the header caps it above and the tear ends it below, so a
+// border on either edge would double up with them.
+const croppedBodyStyle = css({
+  borderStyle: "solid",
+  borderColor: wireBorder,
+  borderInlineWidth: "token(spacing.xxs)",
+  borderBlockWidth: "token(spacing.none)",
+  // The body is CROPPED, not merely short: content taller than the card runs on
+  // past the tear rather than stretching it.
+  overflow: "hidden",
+});
+
+// The tear as an element rather than a pseudo — it is the card's last row here,
+// not decoration hung off a wrapper, and being real is what lets it sit in the
+// stack's flow after a body of any height.
+const croppedTearStyle = css({
+  height: "token(spacing.xxl)",
+  backgroundImage: TEAR_IMAGE,
+  backgroundSize: "100% 100%",
+  backgroundRepeat: "no-repeat",
+});
+
 export interface ShiftFormShellProps {
   /** The live form surface, between the two wireframe sections. */
   children: ReactNode;
@@ -189,21 +238,56 @@ export interface ShiftFormShellProps {
    * between the torn top shim and the Action Bar (Figma 902:2466). Optional and
    * zero-height when omitted — v1 uses it as the counterweight that keeps the
    * dialog one height as its recurrence block folds away.
+   *
+   * Ignored when `cropped` — that card has no footer for a fill to sit in.
    */
   footerFill?: ReactNode;
+  /**
+   * End the card at the tear, partway down the form: header, body, torn edge,
+   * no action bar. For a demo arguing about the form's SHAPE rather than
+   * working it, where a Cancel/Post pair would promise a bottom that isn't
+   * there. The body is clipped, so it is the consumer's to say how tall the
+   * crop is and how its content fades into the cut.
+   */
+  cropped?: boolean;
+}
+
+/** The header's two pieces of scenery, identical in both cards. */
+function ShellTitle() {
+  return (
+    <>
+      <span className={wireTitleStyle}>Post a Shift</span>
+      <span className={wireIconStyle} aria-hidden>
+        <CrossIcon />
+      </span>
+    </>
+  );
 }
 
 /** "Post a Shift" wireframe chrome: header, torn form surface, footer. */
-export function ShiftFormShell({ children, footerFill }: ShiftFormShellProps) {
+export function ShiftFormShell({
+  children,
+  footerFill,
+  cropped = false,
+}: ShiftFormShellProps) {
+  if (cropped) {
+    return (
+      <div className={stackStyle}>
+        <div className={croppedHeaderStyle}>
+          <ShellTitle />
+        </div>
+        <div className={croppedBodyStyle}>{children}</div>
+        <div className={croppedTearStyle} aria-hidden />
+      </div>
+    );
+  }
+
   return (
     <div className={stackStyle}>
       {/* Non-interactive wireframe header — top/side borders, torn bottom shim. */}
       <div className={headerWrapStyle}>
         <div className={headerStyle}>
-          <span className={wireTitleStyle}>Post a Shift</span>
-          <span className={wireIconStyle} aria-hidden>
-            <CrossIcon />
-          </span>
+          <ShellTitle />
         </div>
       </div>
 

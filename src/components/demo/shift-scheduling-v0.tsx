@@ -4,14 +4,12 @@ import { useCallback, useRef, useState } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
+import { ShiftFormFields } from "./shift-form-fields";
 import { DemoCursor } from "./demo-cursor";
 import { DemoControls } from "./demo-controls";
 import { DemoInvitation } from "./demo-invitation";
 import { Field } from "@/components/ui/input/field";
 import { Calendar } from "@/components/ui/input/calendar";
-import { Combobox } from "@/components/ui/input/combobox";
-import { TextInput } from "@/components/ui/input/text-input";
-import { Checkbox } from "@/components/ui/input/checkbox";
 import { Wireframe } from "@/components/ui/wireframe";
 import { useInView } from "@/hooks/use-in-view";
 import { useDemoCursorTour } from "@/hooks/use-demo-cursor-tour";
@@ -95,20 +93,6 @@ const fieldColumnStyle = css({
 // hint on one line, and the column would run ~390px wide. Taking min-content
 // instead makes the hint wrap under the grid, as the Figma draws it (745:4415).
 const calendarColumnStyle = css({ width: "min-content", flexShrink: 0 });
-
-// The old form's "how long is the break" box. Per Figma 745:4395 the FIELD is
-// 140.8px — the width of its label — while only the `Input+Hint Wrapper` inside
-// it is 70px. So this lands on the frame, not on the field root: constraining
-// the root instead wraps the long label to a second line, which pushes the
-// label's bar off the input it belongs to.
-const breakInputStyle = css({ width: "70px" });
-
-/** A role or two, so the Combobox is the real control rather than a lookalike. */
-const ROLES = [
-  { value: "barista", label: "Barista" },
-  { value: "floor", label: "Floor Supervisor" },
-  { value: "kitchen", label: "Kitchen Hand" },
-];
 
 /** How many dates the walkthrough picks — enough to feel like work, not a list. */
 const TOUR_DATES = 4;
@@ -212,41 +196,7 @@ export function ShiftSchedulingV0() {
           {/* The old form's left column, as a shape. Non-interactive by default,
             so nothing here takes focus or invites a click it cannot honour. */}
           <Wireframe className={fieldColumnStyle} opacity={25}>
-            <Field>
-              <Field.Label>Shift Role</Field.Label>
-              <Combobox placeholder="Select a shift role">
-                {ROLES.map((role) => (
-                  <Combobox.Option key={role.value} value={role.value}>
-                    {role.label}
-                  </Combobox.Option>
-                ))}
-              </Combobox>
-              <Field.Hint>Required</Field.Hint>
-            </Field>
-
-            {/* Composed from the Field primitives rather than the flat-prop
-              TextInput, because this is the one bespoke field here: its label
-              and its input want different widths, and the assembly's single
-              `className` can only reach the root. */}
-            <Field>
-              <Field.Label>Break Duration (mins)</Field.Label>
-              <Field.Frame className={breakInputStyle}>
-                <Field.Control defaultValue="30 min" />
-              </Field.Frame>
-            </Field>
-
-            <TextInput
-              label="Additional Notes"
-              defaultValue="Anything the team should know"
-              hint="Visible to everyone rostered on this shift"
-            />
-
-            <Field>
-              <Checkbox />
-              <Field.Label>
-                Notify the team when this shift is posted
-              </Field.Label>
-            </Field>
+            <ShiftFormFields />
           </Wireframe>
 
           {/* Live, full strength, outside the scope — the one thing in focus. */}
