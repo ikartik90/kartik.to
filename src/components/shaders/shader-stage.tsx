@@ -1,9 +1,9 @@
 "use client";
 
 import type { ComponentProps } from "react";
-import { css } from "../../../../styled-system/css";
-import { CosmicTrack } from "@/components/shaders/cosmic-track";
-import { PixelComets } from "@/components/shaders/pixel-comets";
+import { css } from "../../../styled-system/css";
+import { CosmicTrack } from "./cosmic-track";
+import { PixelComets } from "./pixel-comets";
 import type { Params, ShaderSpec } from "@/data/shader-specs";
 
 // ---------------------------------------------------------------------------

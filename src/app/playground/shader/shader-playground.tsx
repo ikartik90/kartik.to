@@ -20,7 +20,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DemoPreloader } from "@/components/demo-component";
 import { useTrickleProgress } from "@/hooks/use-demo-loader";
 import { PresetsPane } from "./presets-pane";
-import { ShaderStage } from "./shader-stage";
+import { ShaderStage } from "@/components/shaders/shader-stage";
 import { useDraftHistory } from "./use-draft-history";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";

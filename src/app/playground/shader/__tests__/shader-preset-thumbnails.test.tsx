@@ -6,7 +6,7 @@ import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
 // The stage is the real thing's only job — mounting a webgl2 context, which
 // jsdom has none of. Stubbed with a canvas, because a canvas is exactly what
 // the thumbnailer goes looking for.
-vi.mock("../shader-stage", () => ({
+vi.mock("@/components/shaders/shader-stage", () => ({
   MAX_PIXELS: 1,
   layerStyle: "",
   ShaderStage: ({ spec }: { spec: { id: string } }) => (
