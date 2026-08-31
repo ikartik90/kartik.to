@@ -10,7 +10,7 @@ import {
   type ShaderPresetContent,
   type ShaderPresetTheme,
 } from "@/domain/shader-preset";
-import { ShaderStage } from "./shader-stage";
+import { ShaderStage } from "@/components/shaders/shader-stage";
 
 // ---------------------------------------------------------------------------
 // Pictures of saved presets, drawn once each and kept.

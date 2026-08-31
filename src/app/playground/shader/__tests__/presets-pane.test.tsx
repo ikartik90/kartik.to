@@ -27,7 +27,7 @@ vi.mock("@/app/actions/shader-preset", () => ({
 // The stage's whole job is a webgl2 context, which jsdom has none of. A canvas
 // is what the thumbnailer goes looking for, so a canvas is what it gets — the
 // capture path then runs for real, end to end, into the tile.
-vi.mock("../shader-stage", () => ({
+vi.mock("@/components/shaders/shader-stage", () => ({
   MAX_PIXELS: 1,
   layerStyle: "",
   ShaderStage: ({ spec }: { spec: { id: string } }) => (
