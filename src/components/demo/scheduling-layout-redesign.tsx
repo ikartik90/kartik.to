@@ -88,26 +88,106 @@ const REDLINE_HEIGHT = REDLINE_SPINE + 2 + 44;
 
 // --- The stage -------------------------------------------------------------
 //
-// The diagram has ONE intrinsic size — every part of it is fixed by the Figma,
-// so there is no reflow to do and nothing that reads better rearranged. It is
-// an annotated drawing: take the annotations off to save room and what is left
-// no longer makes the argument. So a narrow frame gets the whole thing SMALLER
-// rather than a rearranged subset of it.
+// The drawing is fixed by the Figma — there is no reflow to do inside it and
+// nothing that reads better rearranged — so a narrowing frame is answered by
+// giving things UP, in one order, and the order is what the other Shift
+// Scheduling frames set: they hold their 615px card at full size until it sits
+// 20px from the frame's edge, and only then does anything move. This one hangs
+// 92px of annotation off each side of that same card, and would otherwise start
+// shrinking the card a full 184px earlier than its neighbours do.
 //
-//   799 = 615 card + 2 × (12 to clear the mark + 80 for its label)
+// So the annotation is what it spends first. The redline labels become numbered
+// marks — 20px a side rather than 92 — with a legend under the drawing saying
+// which number is which, and the card carries on at full size for another 112px
+// of narrowing. Scaling starts only at the SECOND boundary, where even the
+// numbered drawing reaches the gutter and there is nothing left to give up but
+// size.
+//
+//   615 = the card (`ShiftFormShell`'s own stack)
 //   366 = 28 toggle + 76 gap + 262 card (52 header + 190 body + 20 tear)
-const INTRINSIC_WIDTH = 799;
-const INTRINSIC_HEIGHT = 366;
+const CARD_WIDTH = 615;
+const STAGE_HEIGHT = 366;
+
+// What one redline costs beside the card: the 8px mark plus the 4px gutter the
+// Figma leaves between it and the card (1137:5966), then the 4px gap from the
+// mark out to whatever captions it.
+const REDLINE_CLEARANCE = 12;
+const CAPTION_GAP = 4;
+
+// The two captions, at the two widths they come in — the Figma's 76px label
+// column (1137:6025), and the numbered mark that stands in for it, which is one
+// 20px disc (`spacing.xxl`, the size the styles below draw it at).
+const LABEL_WIDTH = 76;
+const BADGE_SIZE = 20;
+
+/** 799 — the drawing as the Figma draws it, labels and all. */
+export const LABELLED_WIDTH =
+  CARD_WIDTH + 2 * (REDLINE_CLEARANCE + CAPTION_GAP + LABEL_WIDTH);
+
+/** 687 — the same drawing with its labels down to a number apiece. */
+export const NUMBERED_WIDTH =
+  CARD_WIDTH + 2 * (REDLINE_CLEARANCE + CAPTION_GAP + BADGE_SIZE);
+
+// The legend's own row — a 20px disc beside a 14/1.72 name, so the name's line
+// box is the taller of the two — and its distance from the drawing above it.
+// Only the numbered form has a legend, so only the numbered form reserves the
+// height for one; the frame reads that height off the box below and grows to
+// hold it, which is the same arrangement the toggle already has at the top.
+const LEGEND_HEIGHT = 24;
+const LEGEND_GAP = 32;
+const NUMBERED_HEIGHT = STAGE_HEIGHT + LEGEND_GAP + LEGEND_HEIGHT;
+
+/** Which of the two forms the redline captions are drawn in. */
+export type RedlineAnnotation = "labels" | "numbers";
+
+export interface DiagramFit {
+  annotation: RedlineAnnotation;
+  /** The drawing's own width in that form — what the scale is measured from. */
+  width: number;
+  /** Its height, legend included where there is one. */
+  height: number;
+  /** 1 until the numbered drawing reaches the gutter; its share of it after. */
+  fit: number;
+}
+
+/**
+ * What to draw, and how big, in `available` px — the frame's inner width less
+ * the demo area's 20px inline padding on each side.
+ *
+ * The two boundaries in one expression: above `LABELLED_WIDTH` nothing has been
+ * spent; below it the labels are, and `Math.min` then holds the scale at 1
+ * through the whole stretch where the numbered drawing still clears the gutter.
+ *
+ * A frame measured mid-collapse reports nothing to fit into, and a negative
+ * scale would MIRROR the drawing rather than hide it, so the floor is 0.
+ */
+export function resolveDiagramFit(available: number): DiagramFit {
+  if (available >= LABELLED_WIDTH) {
+    return {
+      annotation: "labels",
+      width: LABELLED_WIDTH,
+      height: STAGE_HEIGHT,
+      fit: 1,
+    };
+  }
+
+  return {
+    annotation: "numbers",
+    width: NUMBERED_WIDTH,
+    height: NUMBERED_HEIGHT,
+    fit: Math.min(1, Math.max(0, available) / NUMBERED_WIDTH),
+  };
+}
 
 // The box the frame actually lays out and measures: the diagram's footprint at
-// whatever scale it ended up at, so nothing overflows and the frame reserves
-// neither too much room nor too little.
+// whatever form and scale it ended up in, so nothing overflows and the frame
+// reserves neither too much room nor too little.
 //
-// `--demo-fit` is written by the observer in the component below, and DEFAULTS
-// to 1 here on purpose. It is the value that renders before the observer has
-// measured anything — and the value that survives if it never runs at all — so
-// the failure mode is a diagram drawn too large in a frame that grew to hold
-// it, which is still a readable diagram.
+// All three variables are written by the observer in the component below, and
+// DEFAULT here to the labelled drawing at 1:1 on purpose. Those are the values
+// that render before the observer has measured anything — and the ones that
+// survive if it never runs at all — so the failure mode is a diagram drawn too
+// large in a frame that grew to hold it, which is still a readable diagram.
 //
 // This was a `tan(atan2(100cqw - 40px, 799px))` expression, which is the known
 // trick for dividing one CSS length by another (calc() refuses to, atan2 takes
@@ -119,8 +199,10 @@ const INTRINSIC_HEIGHT = 366;
 const fitStyle = css({
   position: "relative",
   "--demo-fit": "1",
-  width: `calc(${INTRINSIC_WIDTH}px * var(--demo-fit))`,
-  height: `calc(${INTRINSIC_HEIGHT}px * var(--demo-fit))`,
+  "--demo-diagram-width": `${LABELLED_WIDTH}px`,
+  "--demo-diagram-height": `${STAGE_HEIGHT}px`,
+  width: "calc(var(--demo-diagram-width) * var(--demo-fit))",
+  height: "calc(var(--demo-diagram-height) * var(--demo-fit))",
   // Fill the frame's content box (its height is half its width at the 2/1 this
   // demo is registered at, less the same 40px inset) so that the demo area's
   // `justify-content: center` has no slack left to centre — which is what puts
@@ -134,8 +216,11 @@ const stageStyle = css({
   position: "absolute",
   insetBlockStart: "token(spacing.none)",
   insetInlineStart: "token(spacing.none)",
-  width: `${INTRINSIC_WIDTH}px`,
-  height: `${INTRINSIC_HEIGHT}px`,
+  width: "var(--demo-diagram-width)",
+  // The drawing's own height, never the legend's: the legend hangs off the
+  // BOX's bottom edge below, so that the frame's foot is what it keeps its
+  // distance from rather than the card.
+  height: `${STAGE_HEIGHT}px`,
   // Scaled from the top-left corner because the box above is already sized to
   // the result — anchoring it anywhere else would need the box to re-centre
   // what the transform moved.
@@ -251,6 +336,90 @@ const redlineLabelStyle = css({
     insetInlineStart: "calc(100% + token(spacing.sm))",
     textAlign: "start",
   },
+});
+
+// The caption the gutter can afford: the mark's number, ringed so it reads as a
+// marker rather than as a stray digit. Same colour and same size as the label
+// it stands in for, and the same disc appears in the legend — a key drawn
+// differently from the mark it explains would be a third thing to read.
+const badgeStyle = css({
+  display: "flex",
+  flex: "none",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "token(spacing.xxl)",
+  height: "token(spacing.xxl)",
+  borderRadius: "token(radii.full)",
+  borderWidth: "token(spacing.xxs)",
+  borderStyle: "solid",
+  borderColor: "field.text.active",
+  textStyle: "bodySmall",
+  // The type's own 1.72 line box is taller than the disc it has to sit inside,
+  // so the digit is centred by the flex box instead of by its leading.
+  lineHeight: "1",
+  // And centring the LINE box is not centring the digit. A numeral has no
+  // descender: its ink runs from the baseline up to the figure height, and
+  // Switzer's own ascent/descent put that baseline at 15px inside the 20px
+  // disc, which leaves a 9.1px digit sitting 0.45px low — 4.9px of air above it
+  // against 4.0 below, measured off the rasterised glyph rather than guessed at.
+  // On a disc this small that reads as a number resting on the floor of its
+  // circle. One pixel of bottom padding takes 17px of room for a 14px line box
+  // instead of 18, which lifts the centred line — and the baseline with it —
+  // by half of that: 0.5px, against the 0.45 and 0.35 the two digits want.
+  //
+  // `text-box: trim-both cap alphabetic` is the same correction declared rather
+  // than arithmetic'd, and is what this should become — but it is Chromium and
+  // WebKit only for now, and a digit that is centred in two engines out of
+  // three is the bug still shipping. Padding lands everywhere.
+  paddingBlockEnd: "token(spacing.xxs)",
+  color: "field.text.active",
+});
+
+// On the rail, the disc hangs exactly where the label hung: centred on the
+// middle tick, 4px clear of the mark, on whichever side its redline is.
+const redlineBadgeStyle = css({
+  position: "absolute",
+  top: `${REDLINE_SPINE / 2}px`,
+  transform: "translateY(-50%)",
+  "[data-side=start] &": { insetInlineEnd: "calc(100% + token(spacing.sm))" },
+  "[data-side=end] &": { insetInlineStart: "calc(100% + token(spacing.sm))" },
+});
+
+// The key the numbers need, at the foot of the frame. It is pinned to the
+// BOX's bottom edge rather than placed under the card, which puts it the demo
+// area's own 20px inset above the frame's bottom — the same inset the toggle
+// keeps at the top, so the two pieces of chrome bracket the drawing evenly.
+// It scales from that corner with everything else once the second boundary is
+// reached, so the gutter it keeps stays the drawing's own.
+const legendStyle = css({
+  position: "absolute",
+  insetBlockEnd: "token(spacing.none)",
+  insetInlineStart: "token(spacing.none)",
+  width: "var(--demo-diagram-width)",
+  height: `${LEGEND_HEIGHT}px`,
+  transformOrigin: "bottom left",
+  transform: "scale(var(--demo-fit))",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: "3xl",
+  listStyle: "none",
+  // It belongs to the redlines, so it goes when they do — a key to marks that
+  // are no longer on screen is a key to nothing.
+  pointerEvents: "none",
+  transitionProperty: "opacity",
+  transitionDuration: "200ms",
+  transitionTimingFunction: "ease-out",
+  "&[data-presented=false]": { opacity: 0 },
+});
+
+const legendEntryStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+  textStyle: "bodySmall",
+  color: "field.text.active",
+  whiteSpace: "nowrap",
 });
 
 /**
@@ -496,7 +665,13 @@ export function SchedulingLayoutRedesign() {
   const showing = (which: Arrangement) => arrangement === which;
 
   const fitRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState(1);
+  // What the frame has room for, rather than the answer worked out from it:
+  // stored as the one number the observer actually reads, so a resize that
+  // changes nothing about the fit re-renders nothing either. It opens at the
+  // width the labelled drawing wants, which is the 1:1 default the styles above
+  // are written to agree with.
+  const [available, setAvailable] = useState(LABELLED_WIDTH);
+  const { annotation, width, height, fit } = resolveDiagramFit(available);
 
   // What the diagram has to fit into is the DEMO FRAME's box, never anything
   // nearer: this element and its measuring parent are both sized FROM the scale,
@@ -507,10 +682,8 @@ export function SchedulingLayoutRedesign() {
     const host = fitRef.current?.closest("[data-demo-frame]");
     if (!host || typeof ResizeObserver === "undefined") return;
 
-    const measure = () => {
-      const available = host.clientWidth - DEMO_FRAME_CONTENT_PADDING_PX;
-      setFit(Math.min(1, available / INTRINSIC_WIDTH));
-    };
+    const measure = () =>
+      setAvailable(host.clientWidth - DEMO_FRAME_CONTENT_PADDING_PX);
 
     const observer = new ResizeObserver(measure);
     observer.observe(host);
@@ -523,7 +696,14 @@ export function SchedulingLayoutRedesign() {
     <div
       ref={fitRef}
       className={fitStyle}
-      style={{ "--demo-fit": fit } as CSSProperties}
+      data-testid="scheduling-diagram"
+      style={
+        {
+          "--demo-fit": fit,
+          "--demo-diagram-width": `${width}px`,
+          "--demo-diagram-height": `${height}px`,
+        } as CSSProperties
+      }
     >
       <div className={stageStyle}>
         <SegmentedControl
@@ -545,15 +725,27 @@ export function SchedulingLayoutRedesign() {
             data-presented={showing("before")}
             aria-hidden={!showing("before")}
           >
-            {REDLINES.map((redline) => (
+            {REDLINES.map((redline, index) => (
               <div
                 key={redline.label}
                 className={redlineStyle}
                 data-side={redline.side}
               >
-                <span className={redlineLabelStyle} data-testid="redline-label">
-                  {redline.label}
-                </span>
+                {annotation === "labels" ? (
+                  <span
+                    className={redlineLabelStyle}
+                    data-testid="redline-label"
+                  >
+                    {redline.label}
+                  </span>
+                ) : (
+                  <span
+                    className={cx(badgeStyle, redlineBadgeStyle)}
+                    data-testid="redline-badge"
+                  >
+                    {index + 1}
+                  </span>
+                )}
                 <RedlineMark />
               </div>
             ))}
@@ -638,6 +830,26 @@ export function SchedulingLayoutRedesign() {
           </ShiftFormShell>
         </div>
       </div>
+
+      {/* Only the numbered form needs saying out loud, and only while the marks
+        it explains are up. */}
+      {annotation === "numbers" ? (
+        <ol
+          className={legendStyle}
+          data-testid="redline-legend"
+          data-presented={showing("before")}
+          aria-hidden={!showing("before")}
+        >
+          {REDLINES.map((redline, index) => (
+            <li key={redline.label} className={legendEntryStyle}>
+              <span className={badgeStyle} aria-hidden>
+                {index + 1}
+              </span>
+              {redline.label}
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </div>
   );
 }
