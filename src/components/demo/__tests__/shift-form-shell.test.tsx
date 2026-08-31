@@ -23,3 +23,30 @@ describe("ShiftFormShell — footer fill", () => {
     expect(fill.nextElementSibling?.textContent).toContain("Cancel");
   });
 });
+
+// A CROPPED shell is the card as a diagram rather than as a dialog: it ends in
+// the torn edge partway down the form, so the body reads as continuing past the
+// frame. There is no footer to fill, which is the whole distinction — a demo
+// arguing about layout never reaches the buttons.
+describe("ShiftFormShell — cropped", () => {
+  it("drops the action bar so the card ends at the tear", () => {
+    render(<ShiftFormShell cropped>form</ShiftFormShell>);
+    expect(screen.queryByText("Cancel")).toBeNull();
+    expect(screen.queryByText("Post Shift")).toBeNull();
+  });
+
+  it("keeps the header and the body it crops", () => {
+    render(<ShiftFormShell cropped>form</ShiftFormShell>);
+    expect(screen.getByText("Post a Shift")).toBeTruthy();
+    expect(screen.getByText("form")).toBeTruthy();
+  });
+
+  it("has no footer slot to fill, so a fill is ignored", () => {
+    render(
+      <ShiftFormShell cropped footerFill={<span>wireframe</span>}>
+        form
+      </ShiftFormShell>,
+    );
+    expect(screen.queryByTestId("footer-fill")).toBeNull();
+  });
+});

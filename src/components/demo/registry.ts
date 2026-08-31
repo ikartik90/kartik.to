@@ -66,6 +66,13 @@ const registry: Record<string, DemoRegistryEntry> = {
       },
     ],
   },
+  "scheduling-layout-redesign": {
+    load: async () =>
+      (await import("./scheduling-layout-redesign")).SchedulingLayoutRedesign,
+    // The four Figma frames are 960×480 (1143:6560), so it fills the frame at
+    // the article width exactly as the Shift Scheduling showcases do.
+    aspectRatio: "2/1",
+  },
   "calchemy-demo": {
     load: async () => {
       const mod = await import("./calchemy-demo");
