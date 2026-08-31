@@ -8,6 +8,7 @@ import {
   act,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   inlineNodesToHtml,
@@ -23,6 +24,7 @@ import {
   normalizeLinkHref,
 } from "../article-editor";
 import type { InlineNode, Mark, MediaNode } from "@/domain/nodes";
+import { DEFAULT_BACKGROUND_EFFECT } from "@/domain/nodes";
 import type { Document } from "@/domain/post";
 import { useEditorStore } from "@/store/editor";
 import { notifyContentUpdated } from "@/utils/content-sync";
@@ -1362,7 +1364,7 @@ describe("ArticleEditor", () => {
     expect(document.querySelector("figure")).toBeNull();
   });
 
-  it("shows change and delete actions when the image is focused", () => {
+  it("gives a media block the rail a collection slot has, less the star", () => {
     const post = {
       id: "img9",
       slug: "img9",
@@ -1384,11 +1386,96 @@ describe("ArticleEditor", () => {
     };
     render(<ArticleEditor initialPost={post} />);
 
-    const img = document.querySelector("[data-showcase-media]") as HTMLElement;
-    fireEvent.focus(img);
+    const rail = screen.getByRole("toolbar", { name: "Image actions" });
+    expect(
+      within(rail).getByRole("button", { name: "Image properties" }),
+    ).toBeDefined();
+    expect(
+      within(rail).getByRole("button", { name: "Replace image" }),
+    ).toBeDefined();
+    expect(
+      within(rail).getByRole("button", { name: "Delete image" }),
+    ).toBeDefined();
+    // Featuring is a move-to-front, and a block standing alone has no other
+    // slot to move in front of.
+    expect(
+      within(rail).queryByRole("button", { name: "Feature image" }),
+    ).toBeNull();
+  });
 
-    expect(screen.getByRole("button", { name: "Change Image..." })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Delete image" })).toBeDefined();
+  // ---------------------------------------------------------------------------
+  // A media block is a collection of one
+  //
+  // Everything the docked inspector edits already lived on the node — the
+  // caption, the shader ground, the fit, the inset, the corner — and only the
+  // collection ever offered a way to reach it. These are the three that were
+  // unreachable from a block standing alone.
+  // ---------------------------------------------------------------------------
+
+  const mediaPost = (media: Record<string, unknown> = {}) => ({
+    id: "media-props",
+    slug: "media-props",
+    title: "Image Post",
+    category: "ARTICLE" as const,
+    content: {
+      type: "doc" as const,
+      content: [
+        {
+          type: "media" as const,
+          kind: "image" as const,
+          src: "https://example.com/photo.png",
+          ...media,
+        },
+        {
+          type: "paragraph" as const,
+          children: [{ type: "text" as const, text: "" }],
+        },
+      ],
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  it("opens the properties panel on a media block", async () => {
+    const user = userEvent.setup();
+    render(<ArticleEditor initialPost={mediaPost()} />);
+
+    await user.click(screen.getByRole("button", { name: "Image properties" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Media properties" }),
+    ).toBeDefined();
+  });
+
+  it("puts a shader ground behind a media block", async () => {
+    const user = userEvent.setup();
+    render(<ArticleEditor initialPost={mediaPost()} />);
+
+    await user.click(screen.getByRole("button", { name: "Image properties" }));
+    await user.click(screen.getByRole("button", { name: "Add background" }));
+
+    const block = useEditorStore.getState().document.content[0];
+    expect(block.type === "media" && block.backgroundEffect).toEqual(
+      DEFAULT_BACKGROUND_EFFECT,
+    );
+    // And it is painted, not merely recorded — the canvas is a preview of the
+    // article rather than a form describing one.
+    expect(document.querySelector("[data-background-effect]")).not.toBeNull();
+  });
+
+  // The panel is a live editor with no apply step, so the canvas has to wear
+  // what it writes. The editor block used to ignore media layout outright,
+  // which would have made every slider in the panel a control with no visible
+  // effect until the article was published.
+  it("wears the layout its own properties state", () => {
+    render(
+      <ArticleEditor initialPost={mediaPost({ padding: 16, borderRadius: 8 })} />,
+    );
+
+    const img = document.querySelector(
+      "[data-showcase-media]",
+    ) as HTMLImageElement;
+    expect(img.style.borderRadius).not.toBe("");
   });
 
   it("opens the image dialog in change mode from the overlay action", () => {
@@ -1413,9 +1500,7 @@ describe("ArticleEditor", () => {
     };
     render(<ArticleEditor initialPost={post} />);
 
-    const img = document.querySelector("[data-showcase-media]") as HTMLElement;
-    fireEvent.focus(img);
-    fireEvent.click(screen.getByRole("button", { name: "Change Image..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace image" }));
 
     const dialog = screen.getByTestId("image-dialog");
     expect(dialog.getAttribute("data-mode")).toBe("change");
@@ -1510,26 +1595,16 @@ describe("ArticleEditor", () => {
     expect(media.tagName).toBe("VIDEO");
     expect(media.tabIndex).toBe(0);
 
-    // Focus is what raises the overlay — the block has no caret of its own, so
-    // this is the only thing that says "you are on this block".
-    fireEvent.focus(media);
-    expect(screen.getByRole("button", { name: "Change Image..." })).not.toBeNull();
-
-    // And the caret keys reach the figure's handler from the clip itself.
+    // The caret keys reach the figure's handler from the clip itself.
     fireEvent.keyDown(media, { key: "ArrowDown" });
     expect(document.activeElement).toBe(
       document.querySelector("figcaption[data-placeholder='Add caption...']"),
     );
-
-    fireEvent.blur(media);
-    expect(screen.queryByRole("button", { name: "Change Image..." })).toBeNull();
   });
 
   it("deletes a clip block from the overlay, as it does a picture", () => {
     render(<ArticleEditor initialPost={clipPost()} />);
 
-    const media = document.querySelector("[data-showcase-media]") as HTMLElement;
-    fireEvent.focus(media);
     fireEvent.click(screen.getByRole("button", { name: "Delete image" }));
 
     expect(
@@ -1545,9 +1620,7 @@ describe("ArticleEditor", () => {
   it("writes an inserted clip's kind, taking the dialog at its word", () => {
     render(<ArticleEditor initialPost={clipPost()} />);
 
-    const media = document.querySelector("[data-showcase-media]") as HTMLElement;
-    fireEvent.focus(media);
-    fireEvent.click(screen.getByRole("button", { name: "Change Image..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace image" }));
     fireEvent.click(screen.getByText("insert clip"));
 
     expect(useEditorStore.getState().document.content[0]).toEqual({
@@ -3604,7 +3677,7 @@ describe("ArticleEditor collection block", () => {
   // nothing out, needs those stated. A row of 100px cells at the origin.
   function dragCell(from: number, to: number) {
     const cells = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-collection-cell]"),
+      document.querySelectorAll<HTMLElement>("[data-media-cell]"),
     );
     cells.forEach((cell, index) => {
       const left = index * 100;

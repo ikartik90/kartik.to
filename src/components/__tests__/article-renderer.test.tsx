@@ -460,7 +460,10 @@ describe("ArticleRenderer", () => {
       ).toBeTruthy();
     });
 
-    // ...and a still picture has nothing to play, so it gets no control at all.
+    // ...and a still picture has nothing to play, so it gets no transport. The
+    // press that ENLARGES it is a different control and is always there — a
+    // picture standing alone opens in the lightbox exactly as one in a
+    // collection does.
     it("leaves a picture in a media block without one", () => {
       const { container } = render(
         <ArticleRenderer
@@ -474,7 +477,15 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      expect(container.querySelector("button")).toBeNull();
+      const surface = container.querySelector("[data-media-surface]")!;
+      expect(
+        within(surface as HTMLElement).queryByRole("button", {
+          name: "Play video",
+        }),
+      ).toBeNull();
+      expect(
+        surface.querySelector("[data-media-tile]"),
+      ).not.toBeNull();
     });
 
     it("renders a collection with the block's own caption", () => {

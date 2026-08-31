@@ -35,13 +35,11 @@ import {
   articleMetricLabel,
   codeBlock,
   articleShowcase,
-  articleImg,
-  articleMediaFrame,
   horizontalRule,
 } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
 import { CollectionShowcase } from "@/components/collection-showcase";
-import { Media } from "@/components/media";
+import { MediaShowcase } from "@/components/media-showcase";
 import {
   computeListNumbering,
   type ListItemNumbering,
@@ -305,27 +303,13 @@ function renderBlockNode(
       return <hr key={index} className={horizontalRule()} />;
 
     case "media":
+      // A collection of one, and built out of the same two pieces — the tile
+      // and the lightbox — so a picture standing alone can be enlarged and can
+      // carry a shader ground exactly as the same picture in a collection slot
+      // can. See `MediaShowcase`.
       return (
         <figure key={index} className={articleShowcase()}>
-          {/* The media's own frame, and the box the transport anchors to — NOT
-              the figure, which also holds the caption and would put the chip
-              down beside the words. */}
-          <div data-media-surface="" className={articleMediaFrame()}>
-            {/* A clip gets the house transport here, and this is where it earns
-                its keep: a looping demo running beside a paragraph is the one
-                thing a reader most wants to be able to stop, and the block IS
-                the picture at the article's full width, so there is no tile
-                reading to protect. */}
-            <Media
-              src={node.src}
-              kind={node.kind}
-              alt={node.alt ?? ""}
-              className={articleImg()}
-              layout={node}
-              loading="lazy"
-              transport
-            />
-          </div>
+          <MediaShowcase item={node} />
           {node.caption && (
             <Typography tag="figcaption" type="caption">
               {node.caption}
