@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { css } from "../../styled-system/css";
 import { masonryGrid } from "../../styled-system/recipes";
 import { CardPropertiesPanel } from "@/components/card-properties-panel";
@@ -72,6 +78,62 @@ const fillStyle = css({
   "&[data-inert]": { pointerEvents: "none" },
 });
 
+/**
+ * Publish the grid's own width, in plain pixels, for the row-span arithmetic.
+ *
+ * `masonryGrid` divides one CSS length by another with `tan(atan2(A, B))` —
+ * the only construction in CSS that does it. WebKit gets that wrong the moment
+ * a CONTAINER QUERY UNIT is one of the operands. Measured in Safari 26.6.2
+ * inside a 799px `inline-size` container: `tan(atan2(50px, 10px))` is right,
+ * `tan(atan2(100cqw, 799px))` resolves `100cqw` against the VIEWPORT, and the
+ * same expression routed through an unregistered custom property first — which
+ * is exactly the recipe's `--col-width` → `--cell-width` → `--aspect-height`
+ * chain — computes to 0, collapsing every card to the gutter. `@supports`
+ * cannot tell the two apart: it tests parsing, and the broken form parses.
+ *
+ * So the same quantity is handed over as a plain px length instead, and the
+ * recipe's 1px-row tier is gated on `data-measured` so the `100cqw` fallback
+ * can never reach an `atan2`. Both are written here, width first: the flag is
+ * the promise that the width is there, and a flag standing without one would
+ * put the `cqw` straight back in.
+ *
+ * ONE observer, on the grid. The grid's width is a single number for every
+ * card in it; per-card measurement would be a layout pass per card per resize,
+ * which is the arrangement the recipe explicitly rejects. `GridItem`'s own
+ * observer measures something else — how tall its card actually came out.
+ *
+ * Writing to the observed element does not restart the observer: `--grid-width`
+ * feeds row spans and cell `min-height`s, and the grid's own inline size is set
+ * by its parent, not by what it packs.
+ */
+function useGridWidth(grid: RefObject<HTMLDivElement | null>) {
+  useLayoutEffect(() => {
+    const node = grid.current;
+    if (!node) return;
+
+    const publish = () => {
+      // Up, never down, for the same reason `GridItem` rounds its height up:
+      // the span is a whole number of 1px rows, so a width rounded down
+      // understates the shape's height and hands the next card a row this one
+      // is still drawing in. The grid draws no border and no padding, so its
+      // border box is the content box `100cqw` would have measured.
+      const width = Math.ceil(node.getBoundingClientRect().width);
+      // Nothing to say until there is a layout. A measured zero — an unmounted
+      // grid, a hidden tab — would make `--col-width` negative and every span
+      // with it, where saying nothing leaves the un-measured tier in charge.
+      if (width <= 0) return;
+      node.style.setProperty("--grid-width", `${width}px`);
+      node.setAttribute("data-measured", "");
+    };
+
+    const observer = new ResizeObserver(publish);
+    observer.observe(node);
+    publish();
+
+    return () => observer.disconnect();
+  }, [grid]);
+}
+
 /** Where an insertion is aimed, held while the component picker is open. */
 interface PendingInsert {
   index: number;
@@ -113,6 +175,9 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
   // Closing goes through the PANEL, never through this state directly — see
   // `togglePropertiesPanel`.
   const propertiesPanelRef = useRef<PropertiesPanelHandle>(null);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  useGridWidth(gridRef);
 
   // The card the last move acted on. Held rather than flashed: you nudge a card
   // several times to get it where you want, and a ring that faded after each
@@ -179,7 +244,10 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
 
   return (
     <section aria-label="Work" className={containerStyle}>
-      <div className={masonryGrid()} data-columns={columns}>
+      {/* `data-measured` is written by the observer rather than rendered here,
+          and has to be: it says the grid has been laid out, which is not a
+          fact the server or the first render can know. */}
+      <div ref={gridRef} className={masonryGrid()} data-columns={columns}>
         {shown.map((card, index) => (
           <GridItem
             key={card.key}
@@ -336,7 +404,7 @@ function ComponentCard({
     // logger for, which the panel does not offer but a hand-edited row can.
     <DemoFrame
       aspectRatio={card.aspect}
-      logger={card.logger ? (entry.logger ?? true) : false}
+      logger={card.logger ? entry.logger ?? true : false}
     >
       <DemoComponent entry={entry} />
     </DemoFrame>
