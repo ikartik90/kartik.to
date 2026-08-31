@@ -65,6 +65,36 @@ describe("useDemoLoader", () => {
     expect(second.result.current.Component).toBeTypeOf("function");
     expect(entry.load).toHaveBeenCalledOnce();
   });
+
+  // Swapping the demo a LIVE instance is showing — what the editor's Replace
+  // does to a component block. React reads a function handed to a state setter
+  // as an updater, so parking a component in state has to go through
+  // `setState(() => Component)`; passing it bare CALLS it, running its hooks
+  // inside the state update ("Do not call Hooks inside useEffect(…)…") and
+  // storing whatever it returned in place of the component.
+  it("swaps to an already-loaded demo without calling it", async () => {
+    const Second = vi.fn(() => null);
+    const first = makeEntry({ id: "swap-a" });
+    const second = makeEntry({ id: "swap-b", load: vi.fn(async () => Second) });
+
+    // Warm the module cache for the demo being swapped IN — the case the
+    // editor is always in, since the picker previews it before you commit.
+    const warm = renderHook(() => useDemoLoader(second));
+    await waitFor(() => expect(warm.result.current.ready).toBe(true));
+    warm.unmount();
+    Second.mockClear();
+
+    const { result, rerender } = renderHook(
+      (entry: DemoComponentEntry) => useDemoLoader(entry),
+      { initialProps: first },
+    );
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    rerender(second);
+
+    expect(result.current.Component).toBe(Second);
+    expect(Second).not.toHaveBeenCalled();
+  });
 });
 
 describe("useTrickleProgress", () => {

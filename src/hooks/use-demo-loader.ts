@@ -76,7 +76,11 @@ export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
   const [loadedEntry, setLoadedEntry] = useState(entry);
   if (loadedEntry !== entry) {
     setLoadedEntry(entry);
-    setComponent(loadedComponents.get(entry.id) ?? null);
+    // Through an updater, exactly as the effect below parks its result: a
+    // component IS a function, and a function handed to a state setter is read
+    // as `updater(prev)` — so the bare form CALLS the demo, running its hooks
+    // inside the state update and storing what it returned in its place.
+    setComponent(() => loadedComponents.get(entry.id) ?? null);
     setPreloaded(loadedComponents.has(entry.id));
     setSettled(0);
   }

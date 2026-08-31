@@ -34,6 +34,8 @@ import {
   codeBlock,
   articleShowcase,
   mediaBlock,
+  mediaObjectToolbar,
+  toolbar,
   menuIcon,
 } from "../../styled-system/recipes";
 import { useEditorStore } from "@/store/editor";
@@ -69,7 +71,10 @@ import { CollectionGrid } from "@/components/collection-grid";
 import { MediaObject } from "@/components/media-object";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
 import { useMediaProperties } from "@/hooks/use-media-properties";
-import { ComponentInsertDialog } from "@/components/component-insert-dialog";
+import {
+  ComponentInsertDialog,
+  type ComponentDialogMode,
+} from "@/components/component-insert-dialog";
 import { NumberToolbar } from "@/components/number-toolbar";
 import { BulletToolbar, type BulletStyle } from "@/components/bullet-toolbar";
 import {
@@ -85,7 +90,9 @@ import {
   type SidenoteEntry,
 } from "@/utils/sidenotes";
 import { Button } from "@/components/ui/button";
+import { OptionList } from "@/components/ui/input/option-list";
 import { typographyStyles } from "@/components/ui/typography";
+import ReplaceIcon from "@/assets/icons/replace.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 import type { Post, Document, PostCategory } from "@/domain/post";
 import type {
@@ -1041,16 +1048,6 @@ const editorHrStyle = cx(horizontalRule(), css({ marginBlock: "0" }));
 
 const editorShowcaseStyle = articleShowcase();
 
-const editorShowcaseMediaShellStyle = css({
-  position: "relative",
-  alignSelf: "stretch",
-  width: "full",
-  display: "grid",
-  "& > *": {
-    gridArea: "1 / 1",
-  },
-});
-
 const editorHrShellStyle = css({
   position: "relative",
   width: "full",
@@ -1078,6 +1075,16 @@ const editorDemoPreviewStyle = css({
 // reader's block uses, so the canvas is a preview of the article rather than a
 // second opinion about it. See `mediaBlock`.
 const mediaBlockStyles = mediaBlock();
+
+// The rail a demo block wears, in the chrome a picture's rail is made of:
+// `toolbar` for the box and `mediaObjectToolbar` for the float — centred on the
+// frame's top edge, up on hover or focus, down otherwise. A demo is the third
+// object to stand on the editor's canvas and the second to carry controls over
+// one; a second treatment for the same job would read as a second material.
+//
+// It sits in `mediaBlockStyles.root`, which is the box that does NOT clip, so
+// the half of the rail that hangs above the frame survives.
+const editorObjectToolbarStyle = cx(toolbar(), mediaObjectToolbar());
 
 // The reader's picture plus what an editable one needs: it is the block's tab
 // stop, so it must not draw the focus ring a text field does, and the caret
@@ -1343,6 +1350,8 @@ interface EditableBlockProps {
   onCollectionRemove?: (itemIndex: number) => void;
   /** Exchange two collection slots — a tile dragged onto another. */
   onCollectionReorder?: (from: number, to: number) => void;
+  /** Open the component library to swap the demo this block holds. */
+  onChangeComponent?: () => void;
   /** Insert an empty paragraph immediately before this block. */
   onInsertParagraphBefore?: () => void;
   /** Insert an empty paragraph after this block, or focus the trailing one. */
@@ -1388,6 +1397,7 @@ function EditableBlock({
   onCollectionFeature,
   onCollectionRemove,
   onCollectionReorder,
+  onChangeComponent,
   onInsertParagraphBefore,
   onInsertParagraphAfter,
   onInsertListItemBefore,
@@ -1429,7 +1439,6 @@ function EditableBlock({
 
   // Whether this non-text block currently has keyboard focus (drives overlay).
   const [isFocused, setIsFocused] = useState(false);
-  const [isShowcaseMediaFocused, setIsShowcaseMediaFocused] = useState(false);
 
   // A media block is a collection of ONE — the same object in another
   // position, so the same docked inspector edits it through the same item
@@ -2626,8 +2635,6 @@ function EditableBlock({
     const showcaseMediaContract = {
       tabIndex: 0 as const,
       "data-showcase-media": "",
-      onFocus: () => setIsShowcaseMediaFocused(true),
-      onBlur: () => setIsShowcaseMediaFocused(false),
       onKeyDown: handleShowcaseMediaKeyDown,
     };
 
@@ -2727,8 +2734,6 @@ function EditableBlock({
       tabIndex: 0 as const,
       "data-showcase-media": "",
       ref: showcaseMediaCallbackRef as React.Ref<HTMLDivElement>,
-      onFocus: () => setIsShowcaseMediaFocused(true),
-      onBlur: () => setIsShowcaseMediaFocused(false),
       onKeyDown: handleShowcaseMediaKeyDown,
     };
 
@@ -2779,8 +2784,6 @@ function EditableBlock({
       tabIndex: 0 as const,
       "data-showcase-media": "",
       ref: showcaseMediaCallbackRef,
-      onFocus: () => setIsShowcaseMediaFocused(true),
-      onBlur: () => setIsShowcaseMediaFocused(false),
       onKeyDown: handleShowcaseMediaKeyDown,
     };
 
@@ -2791,12 +2794,23 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        <div className={editorShowcaseMediaShellStyle}>
+        {/* The same three boxes a picture stands in — the non-clipping root,
+            the frame, and the rail straddling its top edge — because a demo is
+            the same KIND of thing on this canvas as a picture: an object the
+            article holds a position for, with a caption under it. It used to
+            wear a tinted scrim with a lone trash can in the middle of it, which
+            defocused the very demo the control was about and offered no way to
+            change WHICH demo it was short of deleting the block. */}
+        <div className={mediaBlockStyles.root}>
           <DemoFrame
             aspectRatio={demo?.aspectRatio}
             logger={demo?.logger}
             interactive={false}
             className={editorShowcaseMediaStyle}
+            // The hook the rail reveals itself off — the same one a picture's
+            // frame is stamped with, so the two rails share a rule rather than
+            // each carrying a near-copy of it. See `mediaObjectToolbar`.
+            data-media-cell=""
             {...showcaseMediaProps}
           >
             <div inert className={editorDemoPreviewStyle}>
@@ -2807,25 +2821,27 @@ function EditableBlock({
               )}
             </div>
           </DemoFrame>
-          {isShowcaseMediaFocused && (
-            <div
-              className={editorImageOverlayStyle}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              <div className={editorImageOverlayTintStyle} aria-hidden />
-              <div className={editorImageOverlayActionsStyle}>
-                <Button
-                  type="button"
-                  variant="icon"
-                  tabIndex={-1}
+          <div className={editorObjectToolbarStyle}>
+            <OptionList direction="inline">
+              <OptionList.Toolbar aria-label="Component actions">
+                <OptionList.Option
+                  aria-label="Replace component"
+                  onClick={() => onChangeComponent?.()}
+                >
+                  <ReplaceIcon aria-hidden />
+                </OptionList.Option>
+                {/* Nothing is left over when a demo block goes — unlike a
+                    collection slot, which empties and stands — so the trash
+                    says what it does. */}
+                <OptionList.Option
                   aria-label="Delete component"
                   onClick={onDelete}
                 >
-                  <TrashIcon className={editorOverlayIconStyle} />
-                </Button>
-              </div>
-            </div>
-          )}
+                  <TrashIcon aria-hidden />
+                </OptionList.Option>
+              </OptionList.Toolbar>
+            </OptionList>
+          </div>
         </div>
         <figcaption
           ref={captionRef}
@@ -3520,6 +3536,8 @@ export function ArticleEditor({
     number | null
   >(null);
   const [componentDialogOpen, setComponentDialogOpen] = useState(false);
+  const [componentDialogMode, setComponentDialogMode] =
+    useState<ComponentDialogMode>("insert");
   const [componentDialogBlockIndex, setComponentDialogBlockIndex] = useState<
     number | null
   >(null);
@@ -4292,25 +4310,60 @@ export function ArticleEditor({
   function handleComponentInsert(componentId: string) {
     if (componentDialogBlockIndex === null) return;
     const index = componentDialogBlockIndex;
+    const existing = blocks[index];
 
     const next = [...blocks];
-    next[index] = { type: "component", componentId };
+    next[index] = {
+      type: "component",
+      componentId,
+      // The caption belongs to the block's POSITION in the article rather than
+      // to the demo standing in it — the same rule a replaced picture follows.
+      ...(existing?.type === "component" && existing.caption
+        ? { caption: existing.caption }
+        : {}),
+    };
     updateBlocks(next);
     cancelHistoryDebounce();
     pushHistoryNow();
 
+    const wasChange = componentDialogMode === "change";
     setComponentDialogOpen(false);
     setComponentDialogBlockIndex(null);
+    setComponentDialogMode("insert");
 
     setTimeout(() => {
+      // A replacement puts you back on the block you were working on; an
+      // insertion carries you past it, to the paragraph after.
+      if (wasChange) {
+        const figure = blockRefs.current[index];
+        const frame = figure?.querySelector(
+          "[data-showcase-media]",
+        ) as HTMLElement | null;
+        frame?.focus();
+        return;
+      }
       const trailing = blockRefs.current[index + 1];
       if (trailing) focusBlockAtStart(trailing);
     }, 0);
   }
 
+  /** The demo standing in the block the picker is open over, if any. */
+  function componentDialogCurrentId(): string | null {
+    if (componentDialogBlockIndex === null) return null;
+    const block = blocks[componentDialogBlockIndex];
+    return block?.type === "component" ? block.componentId : null;
+  }
+
+  function handleChangeComponent(blockIndex: number) {
+    setComponentDialogMode("change");
+    setComponentDialogBlockIndex(blockIndex);
+    setComponentDialogOpen(true);
+  }
+
   function handleComponentDialogClose() {
     setComponentDialogOpen(false);
     setComponentDialogBlockIndex(null);
+    setComponentDialogMode("insert");
   }
 
   // --- Collection ---------------------------------------------------------
@@ -4446,6 +4499,7 @@ export function ArticleEditor({
       next[index] = { type: "paragraph", children: keptChildren };
       updateBlocks(next);
 
+      setComponentDialogMode("insert");
       setComponentDialogBlockIndex(index);
       setComponentDialogOpen(true);
       return;
@@ -5416,6 +5470,11 @@ export function ArticleEditor({
                   updateCollection(i, swapItems(block.items, from, to))
               : undefined
           }
+          onChangeComponent={
+            block.type === "component"
+              ? () => handleChangeComponent(i)
+              : undefined
+          }
           onInsertParagraphBefore={() => insertParagraphBefore(i)}
           onInsertParagraphAfter={
             block.type === "media" ||
@@ -5570,6 +5629,8 @@ export function ArticleEditor({
 
       <ComponentInsertDialog
         open={componentDialogOpen}
+        mode={componentDialogMode}
+        currentComponentId={componentDialogCurrentId()}
         onClose={handleComponentDialogClose}
         onInsert={handleComponentInsert}
       />
