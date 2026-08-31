@@ -141,9 +141,7 @@ describe("HomeGrid", () => {
   it("leaves cards followable when not editing", () => {
     const { container } = render(<HomeGrid cards={[post("a")]} />);
     expect(container.querySelectorAll("[data-inert]")).toHaveLength(0);
-    expect(
-      container.querySelector("a")?.hasAttribute("tabindex"),
-    ).toBe(false);
+    expect(container.querySelector("a")?.hasAttribute("tabindex")).toBe(false);
   });
 
   it("shows controls when editable", () => {
@@ -357,7 +355,9 @@ describe("HomeGrid", () => {
     await user.click(screen.getByRole("button", { name: "4:3" }));
 
     expect(useGridDraftStore.getState().aspects).toEqual({ "post:b": "4/3" });
-    const cell = container.querySelectorAll("[data-grid-cell]")[1] as HTMLElement;
+    const cell = container.querySelectorAll(
+      "[data-grid-cell]",
+    )[1] as HTMLElement;
     expect(cell.style.getPropertyValue("--aspect-w")).toBe("4");
     expect(cell.style.getPropertyValue("--aspect-h")).toBe("3");
   });
@@ -488,7 +488,9 @@ describe("HomeGrid — card properties", () => {
     render(<HomeGrid cards={[logging("c1")]} editable />);
 
     await user.click(customize()[0]);
-    await user.click(within(logControl()!).getByRole("option", { name: "Hide" }));
+    await user.click(
+      within(logControl()!).getByRole("option", { name: "Hide" }),
+    );
 
     expect(useGridDraftStore.getState().loggers).toEqual({
       "component:c1": false,
@@ -501,7 +503,9 @@ describe("HomeGrid — card properties", () => {
     render(<HomeGrid cards={[logging("c1", false)]} editable />);
 
     await user.click(customize()[0]);
-    await user.click(within(logControl()!).getByRole("option", { name: "Show" }));
+    await user.click(
+      within(logControl()!).getByRole("option", { name: "Show" }),
+    );
 
     expect(useGridDraftStore.getState().loggers).toEqual({
       "component:c1": true,
@@ -515,12 +519,178 @@ describe("HomeGrid — card properties", () => {
     render(<HomeGrid cards={[logging("c1")]} editable />);
 
     await user.click(customize()[0]);
-    await user.click(within(logControl()!).getByRole("option", { name: "Hide" }));
+    await user.click(
+      within(logControl()!).getByRole("option", { name: "Hide" }),
+    );
 
     expect(
       within(logControl()!)
         .getByRole("option", { name: "Hide" })
         .getAttribute("aria-selected"),
     ).toBe("true");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The grid publishes its own width.
+//
+// The masonry fallback computes each card's row span with `tan(atan2(A, B))`,
+// the only construction in CSS that divides one length by another. WebKit gets
+// it wrong the moment a CONTAINER QUERY UNIT is one of the operands — measured
+// in Safari 26.6.2, `tan(atan2(100cqw, 799px))` inside a 799px `inline-size`
+// container resolves `100cqw` against the VIEWPORT, and routed through an
+// unregistered custom property first it computes to 0 outright. So the grid
+// hands the arithmetic a PLAIN PIXEL length instead, measured here.
+//
+// One observer, on the grid — not one per card. The card's own height is
+// already measured by `GridItem`; the grid's width is one number for all of
+// them, and measuring it per card would be a layout pass per card per resize.
+// ---------------------------------------------------------------------------
+
+/** A stand-in ResizeObserver that hands every observed element to the callback. */
+class StubResizeObserver {
+  static callbacks = new Set<ResizeObserverCallback>();
+
+  constructor(private callback: ResizeObserverCallback) {
+    StubResizeObserver.callbacks.add(callback);
+  }
+
+  observe() {}
+  unobserve() {}
+
+  disconnect() {
+    StubResizeObserver.callbacks.delete(this.callback);
+  }
+
+  /** Re-run every live observer, as the browser would after a reflow. */
+  static flush() {
+    for (const callback of [...StubResizeObserver.callbacks]) {
+      callback([], {} as ResizeObserver);
+    }
+  }
+}
+
+/** jsdom lays nothing out, so the grid's box is stated rather than measured. */
+function stubWidth(width: number) {
+  Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({
+      width,
+      height: 0,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: 0,
+    }),
+  });
+}
+
+describe("HomeGrid width measurement", () => {
+  const realObserver = global.ResizeObserver;
+  const realRect = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "getBoundingClientRect",
+  );
+
+  beforeEach(() => {
+    global.ResizeObserver =
+      StubResizeObserver as unknown as typeof ResizeObserver;
+    useGridDraftStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    global.ResizeObserver = realObserver;
+    StubResizeObserver.callbacks.clear();
+    if (realRect) {
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+        realRect,
+      );
+    }
+  });
+
+  const grid = (container: HTMLElement) =>
+    container.querySelector("[data-columns]") as HTMLElement;
+
+  it("publishes its own width as a plain pixel length", () => {
+    stubWidth(799);
+    const { container } = render(<HomeGrid cards={[post("a")]} />);
+    expect(grid(container).style.getPropertyValue("--grid-width")).toBe(
+      "799px",
+    );
+  });
+
+  // Up, never down, for the same reason `--card-height` rounds up: the span is
+  // a whole number of 1px rows, and a width rounded down understates the
+  // shape's height, which hands the next card a row this one is still using.
+  it("rounds a fractional width up", () => {
+    stubWidth(798.328125);
+    const { container } = render(<HomeGrid cards={[post("a")]} />);
+    expect(grid(container).style.getPropertyValue("--grid-width")).toBe(
+      "799px",
+    );
+  });
+
+  it("republishes the width when the grid is remeasured", () => {
+    stubWidth(640);
+    const { container } = render(<HomeGrid cards={[post("a")]} />);
+    expect(grid(container).style.getPropertyValue("--grid-width")).toBe(
+      "640px",
+    );
+
+    stubWidth(960);
+    StubResizeObserver.flush();
+    expect(grid(container).style.getPropertyValue("--grid-width")).toBe(
+      "960px",
+    );
+  });
+
+  // The flag and the width are ONE fact, and the stylesheet leans on that: the
+  // 1px-row tier is gated on `data-measured`, and `--grid-width` falls back to
+  // `100cqw` for everything outside it. A grid flagged measured with no width
+  // published would put a `cqw` back inside the `atan2` — the exact WebKit
+  // failure this arrangement exists to remove.
+  it("does not mark itself measured until it has a width", () => {
+    stubWidth(0);
+    const { container } = render(<HomeGrid cards={[post("a")]} />);
+    expect(grid(container).style.getPropertyValue("--grid-width")).toBe("");
+    expect(grid(container).hasAttribute("data-measured")).toBe(false);
+
+    stubWidth(799);
+    StubResizeObserver.flush();
+    expect(grid(container).style.getPropertyValue("--grid-width")).toBe(
+      "799px",
+    );
+    expect(grid(container).hasAttribute("data-measured")).toBe(true);
+  });
+
+  // A ResizeObserver watches the CONTENT BOX, so it fires on height as well as
+  // width — and height is exactly what this hook's own publication changes,
+  // since `--grid-width` decides every card's row span. Writing the property
+  // and the flag on every notification invalidates style for the grid and all
+  // of its cards, which produces the next notification, and WebKit reports the
+  // cycle as "ResizeObserver loop completed with undelivered notifications" —
+  // a window `error` event, not a console line. Measured in Safari 26.6.2 over
+  // five window resizes: 5 errors against 0 before the hook existed, and it
+  // fires with `grid-lanes` on too, where the span arithmetic is not even
+  // running. Publishing only on a CHANGED width is what breaks it.
+  it("writes nothing when it is remeasured at the same width", () => {
+    stubWidth(799);
+    const { container } = render(<HomeGrid cards={[post("a")]} />);
+    const node = grid(container);
+
+    const setProperty = vi.spyOn(node.style, "setProperty");
+    const setAttribute = vi.spyOn(node, "setAttribute");
+
+    // A height-only notification: the box changed, the width did not.
+    StubResizeObserver.flush();
+
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(setAttribute).not.toHaveBeenCalled();
+    // And what the first measurement published still stands.
+    expect(node.style.getPropertyValue("--grid-width")).toBe("799px");
+    expect(node.hasAttribute("data-measured")).toBe(true);
   });
 });

@@ -888,17 +888,40 @@ export default defineConfig({
         // `grid-auto-rows: 1px`, collapsing every card to a single pixel. It
         // tests the exact construction it protects, not a proxy for it.
         //
+        // WEBKIT: that atan2 must be fed PLAIN LENGTHS. A container query unit
+        // anywhere in it is computed wrong. Measured in Safari 26.6.2, inside
+        // a 799px `inline-size` container: `calc(100px * tan(atan2(50px,
+        // 10px)))` gives the correct 500px; `calc(100px * tan(atan2(100cqw,
+        // 799px)))` gives 161.97px, because `100cqw` was resolved against the
+        // VIEWPORT; and `--f: min(1, tan(atan2(100cqw - 40px, 799px)))` read
+        // back as `calc(799px * var(--f))` gives 0 outright. The last is this
+        // recipe's own shape — `--col-width` → `--cell-width` →
+        // `--aspect-height`, all cqw-derived — so every card collapsed to the
+        // gutter term across macOS Safari 15.4–26.3 and every iOS browser
+        // before 26.4, all of which are WebKit. Newer Safari escaped only
+        // because the `grid-lanes` tier below wins there.
+        //
+        // No `@supports` test can catch this, and adding one is the wrong
+        // instinct: `@supports` tests PARSING, the broken form parses, and the
+        // guard above passes because plain pixels are computed correctly. So
+        // the width arrives as a px length instead — `--grid-width`, published
+        // by one ResizeObserver on the grid in `HomeGrid` — and every operand
+        // of the atan2 is a kind WebKit gets right. See `--col-width` for how
+        // the un-measured first frame is kept out of it.
+        //
         // Two nested containers, deliberately. The grid is its own unnamed
         // `inline-size` container so a child's `100cqw` is the GRID's width and
         // the arithmetic is exact; the tier queries name `projectsGrid` and so
         // skip it for the section outside. Capping the grid's width while
         // measuring against a wider ancestor is precisely the drift this
-        // arrangement rules out.
+        // arrangement rules out. The container survives the px measurement
+        // because `100cqw` is still what sizes the cells before the first
+        // layout, and is still the honest name for the quantity.
         // -------------------------------------------------------------------
         masonryGrid: defineRecipe({
           className: "masonry-grid",
           description:
-            "A masonry grid that supports column spans. Upgrades to `display: grid-lanes` where it exists; elsewhere it packs cards into 1px row tracks and computes each card's row span from its declared aspect and the width it lands at. Children drive it with three custom properties — `--span` (columns, clamped to what the grid has), `--aspect-w` and `--aspect-h` (the shape as a pair, kept as integers so ratios like 3:2 stay exact) — and may publish a fourth, `--card-height`, when they have measured themselves taller than their shape; the span reserves the larger of the two. The grid hands `--aspect-height` back to each child, which is the shape's height at the width that child landed at, so the child can take its shape as a floor. `data-columns` is the CEILING on the column count from `listingColumnsFor`; the tier queries hand out the smaller of that and what fits.",
+            "A masonry grid that supports column spans. Upgrades to `display: grid-lanes` where it exists; elsewhere it packs cards into 1px row tracks and computes each card's row span from its declared aspect and the width it lands at. Children drive it with three custom properties — `--span` (columns, clamped to what the grid has), `--aspect-w` and `--aspect-h` (the shape as a pair, kept as integers so ratios like 3:2 stay exact) — and may publish a fourth, `--card-height`, when they have measured themselves taller than their shape; the span reserves the larger of the two. The grid hands `--aspect-height` back to each child, which is the shape's height at the width that child landed at, so the child can take its shape as a floor. `data-columns` is the CEILING on the column count from `listingColumnsFor`; the tier queries hand out the smaller of that and what fits. The 1px-row tier additionally waits on `data-measured` and `--grid-width` — the grid's own width in plain pixels, published by a single `ResizeObserver` — because the `tan(atan2(…))` division is computed wrongly by WebKit on a container query unit; until then the grid is a plain aligned grid at the same widths and shapes.",
           base: {
             // The gap, once, as a length the arithmetic can read back. It has
             // to be a custom property rather than `columnGap` alone, because the
@@ -931,8 +954,21 @@ export default defineConfig({
               minWidth: "0",
 
               "--span-clamped": "min(var(--span, 1), var(--columns))",
+              // The grid's width, twice over, naming ONE quantity: the px
+              // length `HomeGrid`'s observer publishes, falling back to the
+              // container unit that means the same thing.
+              //
+              // Which of the two is in play is not a detail — see the WebKit
+              // note above. The `100cqw` fallback is only ever reached before
+              // the grid has been measured, and the `[data-measured]` gate
+              // below is what keeps that state out of the `atan2`: unmeasured,
+              // the only thing reading this chain is the cell's `min-height`,
+              // where a container unit is computed correctly by every engine.
+              // So the fallback keeps the shapes right on the server and in
+              // the first frame, and never reaches the arithmetic that breaks
+              // on it.
               "--col-width":
-                "calc((100cqw - (var(--columns) - 1) * var(--grid-gap)) / var(--columns))",
+                "calc((var(--grid-width, 100cqw) - (var(--columns) - 1) * var(--grid-gap)) / var(--columns))",
               // A spanning card is not N columns wide — it is N columns plus
               // the N-1 gutters it swallows.
               "--cell-width":
@@ -943,41 +979,66 @@ export default defineConfig({
               // `--card-height` below for why it cannot be an `aspect-ratio`.
               "--aspect-height":
                 "calc(var(--cell-width) * var(--aspect-h, 9) / var(--aspect-w, 16))",
+              // `start`, not the default `stretch`. Stretched, a card grows to
+              // fill the rows it was given INCLUDING the gutter rows, and the
+              // gap closes to nothing. It is also what keeps the measurement
+              // below from chasing its own tail: the card's height decides the
+              // span, and the span must not decide the card's height back.
+              //
+              // In the BASE tier rather than with the span it protects, because
+              // the un-measured first paint is a plain grid and stretch there
+              // means a short card grows to the tallest in its row, then snaps
+              // back the moment packing starts — with `GridItem` publishing the
+              // stretched height as `--card-height` in between. Started, every
+              // card is already at its final height before the JS lands. The
+              // `grid-lanes` tier resets this to `auto`, which still wins: it
+              // is later, and this adds no specificity to outrank it with.
+              alignSelf: "start",
             },
 
             "@supports (grid-row: span calc(tan(atan2(1px, 1px))))": {
-              gridAutoRows: "1px",
-              rowGap: "0",
-              "& > *": {
-                // Height, then the gutter, both as counts of 1px rows. `row-gap`
-                // is zero above precisely so the second term can be the gap —
-                // a real row-gap would apply between every 1px track and turn a
-                // 20px gutter into 20px times the height of the card.
-                //
-                // The height is the LARGER of the shape's and the card's own.
-                // The shape is a floor, not a fixed height: a demo frame stops
-                // shrinking with its width at its content's height plus its
-                // padding, so a card too narrow for its shape to hold its
-                // contents is taller than its shape — which is every card at
-                // one column, and most of them at two. Reserving the shape's
-                // height there packed the next card into rows this one was
-                // still drawing in, and the card, told to fill a cell shorter
-                // than its contents, simply clipped them.
-                //
-                // `--card-height` is measured and published by the cell itself
-                // (`GridItem`), because a rendered height is not a quantity CSS
-                // can be asked for. Absent — before the first measurement, and
-                // on the server — this falls back to the shape's height alone,
-                // which is what the grid reserved before any of this existed.
-                gridRow:
-                  "span calc(tan(atan2(max(var(--aspect-height), var(--card-height, 0px)), 1px)) + tan(atan2(var(--grid-gap), 1px)))",
-                // `start`, not the default `stretch`. Stretched, a card grows
-                // to fill the rows it was given INCLUDING the gutter rows, and
-                // the gap closes to nothing. It is also what keeps the
-                // measurement above from chasing its own tail: the card's
-                // height decides the span, and the span must not decide the
-                // card's height back.
-                alignSelf: "start",
+              // Gated on the measurement, and inside `:where()` so the gate
+              // costs no specificity — the `grid-lanes` tier below is a bare
+              // `&`, and it has to keep winning on SOURCE ORDER alone. A plain
+              // `&[data-measured]` would outrank it and take that tier out
+              // wherever both apply.
+              //
+              // Until the grid is measured this whole tier is simply absent,
+              // which leaves a plain grid: right column count, right shapes
+              // (the cells' `min-height` needs no measurement), rows aligned
+              // rather than packed. That is the deliberate first paint — the
+              // alternative was admitting `--grid-width`'s `100cqw` fallback
+              // into the `atan2`, which is the WebKit failure itself, and
+              // dropping the fallback instead makes the whole `grid-row`
+              // invalid-at-computed-value-time, i.e. `auto` over 1px rows:
+              // every card one pixel tall until the JS lands.
+              "&:where([data-measured])": {
+                gridAutoRows: "1px",
+                rowGap: "0",
+                "& > *": {
+                  // Height, then the gutter, both as counts of 1px rows. `row-gap`
+                  // is zero above precisely so the second term can be the gap —
+                  // a real row-gap would apply between every 1px track and turn a
+                  // 20px gutter into 20px times the height of the card.
+                  //
+                  // The height is the LARGER of the shape's and the card's own.
+                  // The shape is a floor, not a fixed height: a demo frame stops
+                  // shrinking with its width at its content's height plus its
+                  // padding, so a card too narrow for its shape to hold its
+                  // contents is taller than its shape — which is every card at
+                  // one column, and most of them at two. Reserving the shape's
+                  // height there packed the next card into rows this one was
+                  // still drawing in, and the card, told to fill a cell shorter
+                  // than its contents, simply clipped them.
+                  //
+                  // `--card-height` is measured and published by the cell itself
+                  // (`GridItem`), because a rendered height is not a quantity CSS
+                  // can be asked for. Absent — before the first measurement, and
+                  // on the server — this falls back to the shape's height alone,
+                  // which is what the grid reserved before any of this existed.
+                  gridRow:
+                    "span calc(tan(atan2(max(var(--aspect-height), var(--card-height, 0px)), 1px)) + tan(atan2(var(--grid-gap), 1px)))",
+                },
               },
             },
 
@@ -3010,7 +3071,10 @@ export default defineConfig({
             // translucent brand wash the way an inline emphasis is.
             tone: {
               brand: {
-                backgroundColor: { base: "brand.rosemilk", _dark: "brand.rust" },
+                backgroundColor: {
+                  base: "brand.rosemilk",
+                  _dark: "brand.rust",
+                },
                 color: { base: "brand.pink", _dark: "brand.orange" },
                 // The bright hue again at 25%, exactly as `field.border.active`
                 // draws a focused frame — a neutral hairline is the one part of
@@ -3215,8 +3279,11 @@ export default defineConfig({
             // The extra `[data-media-cell]` is specificity, not reach:
             // without it this ties with the reveal rule above and would be
             // decided by source order alone.
-            "[data-collection-grid][data-reordering] [data-media-cell] + &":
-              { opacity: 0, pointerEvents: "none", transition: "none" },
+            "[data-collection-grid][data-reordering] [data-media-cell] + &": {
+              opacity: 0,
+              pointerEvents: "none",
+              transition: "none",
+            },
             // And it STAYS down once the gesture is over, for as long as the
             // pointer has not moved. A drag necessarily ends with the cursor
             // over the photo it dropped, so `:hover` matches the moment the
@@ -3228,8 +3295,10 @@ export default defineConfig({
             // from a rail that is ALREADY down, so there is nothing to animate
             // on the way in, and the fade on the way out should be the ordinary
             // hover fade.
-            "[data-collection-grid][data-pointer-idle] [data-media-cell] + &":
-              { opacity: 0, pointerEvents: "none" },
+            "[data-collection-grid][data-pointer-idle] [data-media-cell] + &": {
+              opacity: 0,
+              pointerEvents: "none",
+            },
             // In the cell a photo is FLYING INTO, the rail comes back over the
             // length of that flight rather than the shorter hover fade, so it
             // arrives exactly as the photo settles into the slot instead of
@@ -5110,7 +5179,8 @@ export default defineConfig({
                 inset: 0,
                 borderRadius: "inherit",
                 pointerEvents: "none",
-                boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+                boxShadow:
+                  "inset 0 0 0 0.5px var(--colors-field-border-default)",
                 transition: "box-shadow 150ms ease",
               },
               "html[data-keyboard-focus] &:focus-visible::after": {
@@ -5385,7 +5455,6 @@ export default defineConfig({
           },
         }),
 
-
         // The properties panel for an image's background effect — a header, a
         // column of label ∣ control rows, and the remove action (Figma 845:7223).
         //
@@ -5467,7 +5536,8 @@ export default defineConfig({
               // Which EDGE carries it changes with the dock, so it is held in a
               // custom property the bottom sheet re-points; the drop shadow
               // beside it is the same either way round.
-              "--panel-hairline": "inset 0.5px 0 0 var(--colors-border-divider)",
+              "--panel-hairline":
+                "inset 0.5px 0 0 var(--colors-border-divider)",
               backgroundColor: "bg.surface",
               boxShadow:
                 "var(--panel-hairline), 0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
@@ -5531,7 +5601,8 @@ export default defineConfig({
                 height: "50dvh",
                 // The hairline moves to the edge the sheet meets the page on
                 // — the same shadow, re-pointed. See `root`.
-                "--panel-hairline": "inset 0 0.5px 0 var(--colors-border-divider)",
+                "--panel-hairline":
+                  "inset 0 0.5px 0 var(--colors-border-divider)",
                 animation: "bottomSheetIn 200ms ease-out",
                 // The same dismissal as the rail's, turned through a right
                 // angle: the sheet is docked to the bottom, so it leaves
@@ -6187,7 +6258,9 @@ export default defineConfig({
             size: "md",
           },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ tone: ["*"], direction: ["*"], fit: ["*"], size: ["*"] }],
+          staticCss: [
+            { tone: ["*"], direction: ["*"], fit: ["*"], size: ["*"] },
+          ],
         }),
 
         // A segmented control — one row, every option visible, exactly one on
@@ -6209,7 +6282,7 @@ export default defineConfig({
         segmentedControl: defineSlotRecipe({
           className: "segmented-control",
           description:
-            "Equal-width segments for a short horizontal choice — the stretch an `OptionList` behavior container needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the active chip — already comes from those two recipes. It serves the single-select `Listbox` (SegmentedControl) and the multi-toggle `Toolbar` (ToggleBar) alike; which of the two a row is, is a question about semantics rather than about the box. The one thing it adds beyond layout is the SEAM between adjacent segments — a hairline between two that agree (the active border where both are on, the resting one where both are off) and nothing between two that differ, where the chip\'s own fill already divides them.",
+            "Equal-width segments for a short horizontal choice — the stretch an `OptionList` behavior container needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the active chip — already comes from those two recipes. It serves the single-select `Listbox` (SegmentedControl) and the multi-toggle `Toolbar` (ToggleBar) alike; which of the two a row is, is a question about semantics rather than about the box. The one thing it adds beyond layout is the SEAM between adjacent segments — a hairline between two that agree (the active border where both are on, the resting one where both are off) and nothing between two that differ, where the chip's own fill already divides them.",
           slots: ["list", "option"],
           base: {
             // Stretched as well as grown, and BOTH are needed: the rail centres
@@ -6217,7 +6290,12 @@ export default defineConfig({
             // content height and a segment stretching to it would stretch to
             // nothing. The rail's height is definite (28px), so this row is
             // exactly that, and the segments below inherit a real box to fill.
-            list: { flexGrow: 1, flexBasis: 0, minWidth: 0, alignSelf: "stretch" },
+            list: {
+              flexGrow: 1,
+              flexBasis: 0,
+              minWidth: 0,
+              alignSelf: "stretch",
+            },
             option: {
               flexGrow: 1,
               flexBasis: 0,
