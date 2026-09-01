@@ -987,6 +987,49 @@ describe("CommandPalette — the `>` command line", () => {
     expect(list().queryByText("Settings")).toBeNull();
   });
 
+  // The strongest form of the promise, and the one worth a regression test: a
+  // command line that found nothing must LOOK like an ordinary search that
+  // found nothing. Anything visible that only appears in command mode is a
+  // tell — it says a command mode exists and that you are in it, which is the
+  // one thing a hidden command cannot afford to announce.
+  //
+  // Read as what a person can see rather than as markup: cmdk keeps the groups
+  // a search filtered out in the DOM behind `hidden`, where this branch simply
+  // does not render them, so the two are different HTML that paint the same
+  // nothing. (Confirmed in Chromium: the two lists screenshot byte-identical.)
+  // Neither is a secret from someone reading the bundle — `adminLogin` is a
+  // global on every page — and it was never meant to be. The palette just does
+  // not advertise.
+  it("looks exactly like a search that simply found nothing", () => {
+    const seen = (value: string) => {
+      openAndType(value);
+      const root = document.querySelector("[cmdk-list]") as HTMLElement;
+      // Text nodes, not elements: a container's `textContent` sweeps up its
+      // hidden descendants — the very thing being asked about — and a row's own
+      // words are not a leaf element, they sit beside an icon and a chip.
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let text = "";
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (!node.parentElement?.closest("[hidden]")) {
+          text += node.textContent ?? "";
+        }
+      }
+      text = text.trim();
+      cleanup();
+      return text;
+    };
+
+    expect(seen("zzzz")).toBe("");
+
+    for (const value of ["> ", "> window.admin", "> adminLogin()"]) {
+      expect(seen(value)).toBe("");
+    }
+
+    // …and the control: the one string that IS supposed to show something.
+    expect(seen("> window.adminLogin()")).toContain("window.adminLogin()");
+  });
+
   // The command exists to get you SIGNED IN, so the one visitor who must be
   // able to reach it is the one with no session — the opposite of every other
   // admin affordance in this list.
