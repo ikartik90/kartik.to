@@ -213,13 +213,6 @@ describe("SchedulingLayoutRedesign — fitting the diagram to the frame", () => 
     expect(resolveDiagramFit(-200).fit).toBe(0);
   });
 
-  // The legend the numbers need is drawn UNDER the diagram, so the box the
-  // frame measures has to reserve room for it.
-  it("reserves height for the legend only when the numbers need one", () => {
-    expect(resolveDiagramFit(NUMBERED_WIDTH).height).toBeGreaterThan(
-      resolveDiagramFit(LABELLED_WIDTH).height,
-    );
-  });
 });
 
 /**
@@ -277,6 +270,20 @@ describe("SchedulingLayoutRedesign — what a narrowing frame takes", () => {
     expect(
       screen.getByTestId("scheduling-diagram").style.getPropertyValue("--demo-fit"),
     ).toBe("1");
+  });
+
+  // The toggle is a control and the legend is a key: both are chrome around the
+  // picture, both have room to spare at every width the picture runs out at, and
+  // neither gets smaller just because the drawing had to. Only the drawing is
+  // inside the box the scale is applied to.
+  it("scales the drawing, and only the drawing", () => {
+    renderInFrame(NUMBERED_WIDTH + GUTTERS - 200);
+
+    const drawing = screen.getByTestId("scheduling-drawing");
+    expect(drawing.contains(screen.getByTestId("redlines"))).toBe(true);
+    expect(drawing.contains(screen.getByTestId("before-pane"))).toBe(true);
+    expect(drawing.contains(screen.getByTestId("redline-legend"))).toBe(false);
+    expect(drawing.contains(screen.getByRole("listbox"))).toBe(false);
   });
 
   it("only then scales the contents as they are", () => {
