@@ -42,6 +42,23 @@ function tornEdgesClip(teeth: number, amp: number): string {
 
 const TORN_CLIP = tornEdgesClip(8, 20);
 
+// Every row of the card that is NOT its form surface, so a demo staging one can
+// work out how tall the whole card ends up without keeping a second copy of the
+// answer. Each is what the styles below already produce, and each is what the
+// Figma draws:
+//
+//   HEADER      12px of padding either side of a 28px title line
+//   TEAR        the shim band, `spacing.xxl` — the FULL card carries four of
+//               them (under the header, the form's own two toothed edges, and
+//               above the action bar), the cropped one a single closing edge
+//   FORM_INSET  the form surface's block padding above and below its content,
+//               on top of that 20px tooth allowance
+//   ACTION_BAR  12px either side of a 40px button
+export const SHELL_HEADER_HEIGHT = 52;
+export const SHELL_TEAR_HEIGHT = 20;
+export const SHELL_FORM_INSET = 16;
+export const SHELL_ACTION_BAR_HEIGHT = 64;
+
 // The card stack — the DemoFrame provides the surrounding canvas frame. The
 // sections abut directly (no gap); each section's own tear band (carried in its
 // block padding) is the only space between the torn edges.
@@ -116,6 +133,54 @@ const formStyle = css({
   paddingInline: "xl",
   paddingBlock: "calc(token(spacing.xxl) + token(spacing.xl))",
   clipPath: TORN_CLIP,
+});
+
+// The same surface OUTLINED rather than filled — side rails at the wireframe
+// hairline and nothing behind the content, so the frame's canvas shows through.
+// It is the treatment `croppedBodyStyle` below already gives the cropped card's
+// body, and the diagrams wear it for the same reason: a block you are looking AT
+// is drawn, where a block you are working IN is a surface you work on. v1 and v2
+// are prototypes and keep the fill.
+//
+// No `clip-path` — there are no teeth to cut without a fill — but the two torn
+// edges it used to draw are this section's OWN, and have to be drawn as strokes
+// instead. The Figma stacks four shim bands down the card, not two: the header's
+// bottom (1167:7785), this section's top and bottom (1167:7787 / 1167:7790), and
+// the footer's top (1167:7857). Only the first and last were pseudo-elements
+// here; the middle pair were the clipped fill's toothed edges, so dropping the
+// fill took them with it and left the block open at both ends.
+//
+// They sit INSIDE the 20px tooth allowance the block padding already reserves,
+// so the content keeps its 16px clearance and the card's height is the filled
+// surface's exactly — nothing downstream has to know which one it is wearing.
+//
+// The drawing is one edge, used both ways up: as exported it is a TOP edge, and
+// the foot takes it mirrored. Reversing the two turns the seam into a lattice —
+// this section's top and the header's tear above it then interlock into a row of
+// diamonds instead of reading as one torn line, which is what gave it away.
+const outlinedFormStyle = css({
+  position: "relative",
+  paddingInline: "xl",
+  paddingBlock: "calc(token(spacing.xxl) + token(spacing.xl))",
+  borderStyle: "solid",
+  borderColor: wireBorder,
+  borderInlineWidth: "token(spacing.xxs)",
+  borderBlockWidth: "token(spacing.none)",
+  "&::before, &::after": {
+    content: '""',
+    position: "absolute",
+    // The padding box, so the zigzag runs rail to rail rather than over them.
+    insetInline: "token(spacing.none)",
+    height: "token(spacing.xxl)",
+    backgroundImage: TEAR_IMAGE,
+    backgroundSize: "100% 100%",
+    backgroundRepeat: "no-repeat",
+  },
+  "&::before": { insetBlockStart: "token(spacing.none)" },
+  "&::after": {
+    insetBlockEnd: "token(spacing.none)",
+    transform: "scaleY(-1)",
+  },
 });
 
 // Mirror of the header — a plain wireframe box with bottom + side hairline
@@ -250,6 +315,14 @@ export interface ShiftFormShellProps {
    * crop is and how its content fades into the cut.
    */
   cropped?: boolean;
+  /**
+   * Draw the form surface as an outline rather than a fill — side rails and the
+   * canvas showing through, the way the cropped card's body already reads.
+   *
+   * For a card that is a DIAGRAM of a form rather than one you work in. Ignored
+   * when `cropped`, whose body is outlined by construction.
+   */
+  outlined?: boolean;
 }
 
 /** The header's two pieces of scenery, identical in both cards. */
@@ -269,6 +342,7 @@ export function ShiftFormShell({
   children,
   footerFill,
   cropped = false,
+  outlined = false,
 }: ShiftFormShellProps) {
   if (cropped) {
     return (
@@ -291,7 +365,9 @@ export function ShiftFormShell({
         </div>
       </div>
 
-      <div className={formStyle}>{children}</div>
+      <div className={outlined ? outlinedFormStyle : formStyle}>
+        {children}
+      </div>
 
       {/* Non-interactive wireframe footer — bottom/side borders, torn top shim. */}
       <div className={footerWrapStyle}>

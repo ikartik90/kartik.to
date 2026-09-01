@@ -1,0 +1,42 @@
+<svg width="208" height="112" viewBox="0 0 208 112" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="map wireframe-dark">
+<g clip-path="url(#clip0_1167_8568)">
+<ellipse id="Ellipse 43" cx="141.5" cy="66.5" rx="11" ry="10.5" stroke="white" stroke-width="4"/>
+<path id="Vector 219" d="M138.5 55L120.5 -6" stroke="white" stroke-width="4"/>
+<path id="Vector 217" d="M141.5 78L144.5 119" stroke="white" stroke-width="4"/>
+<path id="Vector 220" d="M164.5 61L171.5 119" stroke="white" stroke-width="3"/>
+<path id="Vector 221" d="M191.5 50L199.5 119" stroke="white" stroke-width="3"/>
+<path id="Vector 218" d="M153.5 65L223.5 36" stroke="white" stroke-width="4"/>
+<circle id="Ellipse 44" cx="17.5" cy="24" r="11" stroke="white" stroke-width="4"/>
+<path id="Vector 231" d="M67.5 42.4437L49.9593 64.4305M49.9593 64.4305L35.1593 68.8278M49.9593 64.4305L58.7296 79.6633M20.3593 73.2252L-6.5 64.4305M20.3593 73.2252L28.0333 53.4371L35.55 32M20.3593 73.2252L35.1593 68.8278M20.3593 73.2252L14.778 94.1126M9.19669 115L14.778 94.1126M67.5 94.8962L58.7296 79.6633M35.1593 68.8278L40.6407 85.6101L35.1593 106.755M14.778 94.1126L58.7296 79.6633" stroke="white" stroke-width="2"/>
+<path id="Vector 241" opacity="0.55" d="M28.5 53L40.9857 49.2812L47.5 36" stroke="white"/>
+<path id="Vector 240" opacity="0.5" d="M28.5 53L1.5 48" stroke="white"/>
+<path id="Vector 232" d="M58.5 80L95.5 51" stroke="white" stroke-width="2"/>
+<path id="Vector 233" opacity="0.5" d="M77.5 65.8889L84.7537 76.4444M92.0075 87L84.7537 76.4444M84.7537 76.4444L113.5 57" stroke="white"/>
+<path id="Vector 225" d="M11.5 34L-13.5 76" stroke="white" stroke-width="4"/>
+<path id="Vector 215" d="M28.5 28L131.5 63" stroke="white" stroke-width="4"/>
+<path id="Vector 229" d="M130.5 26L79.5 8" stroke="white" stroke-width="2"/>
+<path id="Vector 230" d="M67.5 42L84.5 -10" stroke="white" stroke-width="2"/>
+<path id="Vector 216" d="M131.5 73L6.5 117" stroke="white" stroke-width="4"/>
+<path id="Vector 214" d="M24.5 16L40.5 -1" stroke="white" stroke-width="4"/>
+<path id="Vector 222" d="M71.5 117L220.5 66" stroke="white" stroke-width="2"/>
+<path id="Vector 235" opacity="0.5" d="M135.5 39L183.5 21" stroke="white"/>
+<path id="Vector 223" opacity="0.5" d="M170.5 105L226.5 90" stroke="white"/>
+<path id="Vector 224" d="M9.5 16L-5.5 -10" stroke="white" stroke-width="4"/>
+<path id="Vector 226" d="M164.5 60L147.5 -1" stroke="white" stroke-width="3"/>
+<path id="Vector 227" d="M190.5 50L174.5 -11" stroke="white" stroke-width="3"/>
+<path id="Vector 228" d="M220.5 38L203.5 -23" stroke="white" stroke-width="3"/>
+<path id="Vector 234" d="M95.0526 50L105.276 35M115.5 20L105.276 35M73.5 23.2143L105.276 35" stroke="white" stroke-width="2"/>
+<path id="Vector 236" opacity="0.5" d="M180.53 8.8125H213.5M102.5 15L123.931 6" stroke="white"/>
+<path id="Vector 242" d="M47.5 34L53.0319 17.2698M58.5638 0L53.0319 17.2698M53.0319 17.2698L73.5 22.6667" stroke="white" stroke-width="2"/>
+<path id="Vector 239" opacity="0.5" d="M148.5 0L125.5 7" stroke="white"/>
+<path id="Vector 238" d="M5.5 26H-30.5" stroke="white" stroke-width="4"/>
+<path id="Vector 237" d="M91.5 87L94.5 116" stroke="white" stroke-width="2"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_1167_8568">
+<rect width="208" height="112" rx="4" fill="white"/>
+</clipPath>
+</defs>
+</svg>
