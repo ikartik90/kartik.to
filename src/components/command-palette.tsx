@@ -197,8 +197,9 @@ export function CommandPalette() {
   const commandLine = parseCommandLine(search);
 
   /**
-   * The command named, or null — including while it is half-typed. Commands are
-   * not listed and do not narrow; see `data/palette-commands.ts` for why.
+   * The command named, or null — for a half-typed name, a shorthand of one, or
+   * anything else short of the name in full. Commands are neither listed nor
+   * narrowed towards; see `data/palette-commands.ts` for why.
    */
   const command =
     commandLine === null ? null : resolvePaletteCommand(commandLine);
@@ -394,11 +395,12 @@ export function CommandPalette() {
                 no path to running, whatever it happens to be valid JavaScript
                 for.
 
-                And it draws NOTHING until a whole name has been typed: no menu
-                to browse, no rows appearing as you get warmer, and no notice
-                saying what was not found. A stranger who tries `> ` gets the
-                same blank list as one who tries `> admin`, which is the only
-                answer that keeps a command hidden. */}
+                And it draws NOTHING until the name has been typed out in full,
+                exactly: no menu to browse, no rows appearing as you get warmer,
+                no shorthand that also works, and no notice saying what was not
+                found. A stranger who tries `> ` gets the same blank list as one
+                who tries `> window.admin`, which is the only answer that keeps
+                a command hidden. */}
             {commandLine !== null ? (
               command && (
                 <Command.Group className={groupStyle}>
@@ -415,7 +417,7 @@ export function CommandPalette() {
                     }}
                   >
                     <ConsoleIcon className={iconStyle} />
-                    {command.label}
+                    {command.name}
                     {hasCursor && <kbd className={itemHotkeyStyle}>↵</kbd>}
                   </Command.Item>
                 </Command.Group>

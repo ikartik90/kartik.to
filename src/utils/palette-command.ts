@@ -18,11 +18,11 @@
 // the same thing said differently: the prefix opens the field or it is not a
 // prefix.
 //
-// Nothing here evaluates anything. The text is normalised into a NAME and the
-// name is looked up in a table (`data/palette-commands.ts`); a command that
-// nobody registered does not run, however valid its JavaScript. That is the
-// whole security model of the feature, and it is why this file only ever
-// returns strings.
+// Nothing here evaluates anything. What comes back is TEXT, looked up as an
+// exact name in a table (`data/palette-commands.ts`); a command that nobody
+// registered does not run, however valid its JavaScript. That is the whole
+// security model of the feature, and it is why this file only ever returns
+// strings.
 // ---------------------------------------------------------------------------
 
 /** What the field must open with for its text to be read as a command. */
@@ -32,30 +32,10 @@ export const COMMAND_PREFIX = "> ";
  * What was typed after the prefix, or `null` when this is an ordinary search.
  *
  * An empty string is a real answer, not a missing one: `"> "` is command mode
- * with nothing named yet, which is what lets the palette list everything there
- * is to run.
+ * with nothing named yet. It resolves to nothing, like every other name the
+ * table does not hold — see `data/palette-commands.ts`.
  */
 export function parseCommandLine(input: string): string | null {
   if (!input.startsWith(COMMAND_PREFIX)) return null;
   return input.slice(COMMAND_PREFIX.length).trim();
-}
-
-/**
- * The name a typed command keys against.
- *
- * `window.adminLogin()`, `window.adminLogin`, `adminLogin()` and `adminLogin`
- * are one command written four ways — the console form the author already knows
- * and the three shorthands they will reach for once they stop thinking about
- * it. Stripping the receiver and an EMPTY call reduces all four to the name.
- *
- * A call with arguments in it is left exactly as typed, because those parens
- * are not decoration: nothing in the table takes arguments, so the honest
- * outcome is that it matches nothing.
- */
-export function commandKey(source: string): string {
-  return source
-    .trim()
-    .replace(/^window\s*\./, "")
-    .replace(/\(\s*\)$/, "")
-    .trim();
 }

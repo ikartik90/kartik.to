@@ -953,7 +953,22 @@ describe("CommandPalette — the `>` command line", () => {
   });
 
   it("does not give the name away to a partial one", () => {
-    openAndType("> admin");
+    openAndType("> window.admin");
+
+    expect(list().queryByText("window.adminLogin()")).toBeNull();
+  });
+
+  it("answers to the console form and to no shorthand of it", () => {
+    for (const shorthand of ["adminLogin", "adminLogin()", "window.adminLogin"]) {
+      cleanup();
+      openAndType(`> ${shorthand}`);
+
+      expect(list().queryByText("window.adminLogin()")).toBeNull();
+    }
+  });
+
+  it("answers to the console form and to no other casing of it", () => {
+    openAndType("> window.adminlogin()");
 
     expect(list().queryByText("window.adminLogin()")).toBeNull();
   });

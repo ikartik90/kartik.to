@@ -11,62 +11,66 @@ const { PALETTE_COMMANDS, resolvePaletteCommand } = await import(
   "../palette-commands"
 );
 
+const ADMIN_LOGIN = PALETTE_COMMANDS.find(
+  (command) => command.name === "window.adminLogin()",
+);
+
 describe("resolvePaletteCommand", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("recognises the console form the author already knows", () => {
-    expect(resolvePaletteCommand("window.adminLogin()")).toBe(
-      PALETTE_COMMANDS.adminLogin,
-    );
+  it("registers the admin login under the console form, exactly", () => {
+    expect(ADMIN_LOGIN).toBeDefined();
   });
 
-  it("recognises it without the call, and without the receiver", () => {
-    for (const written of [
-      "window.adminLogin",
-      "adminLogin()",
+  it("resolves that form and runs it", async () => {
+    expect(resolvePaletteCommand("window.adminLogin()")).toBe(ADMIN_LOGIN);
+
+    await resolvePaletteCommand("window.adminLogin()")?.run();
+    expect(mockAdminLogin).toHaveBeenCalledTimes(1);
+  });
+
+  // Exactly, and nothing near it. A shorthand is a second name for a hidden
+  // thing, and every extra name is another way to stumble onto it — so the
+  // command answers to what it is called and to nothing else.
+  it("does not answer to a shorthand of its name", () => {
+    for (const shorthand of [
       "adminLogin",
+      "adminLogin()",
+      "window.adminLogin",
+      "window.adminLogin( )",
+      "window .adminLogin()",
     ]) {
-      expect(resolvePaletteCommand(written)).toBe(PALETTE_COMMANDS.adminLogin);
+      expect(resolvePaletteCommand(shorthand)).toBeNull();
     }
   });
 
-  it("does not mind the case of what was typed", () => {
-    expect(resolvePaletteCommand("ADMINLOGIN")).toBe(
-      PALETTE_COMMANDS.adminLogin,
-    );
+  it("does not answer to a different case", () => {
+    expect(resolvePaletteCommand("window.adminlogin()")).toBeNull();
+    expect(resolvePaletteCommand("WINDOW.ADMINLOGIN()")).toBeNull();
   });
 
-  // Hidden, and hidden means hidden: a command answers to its whole name or it
-  // does not answer. Prefix matching would hand the name to anyone patient
-  // enough to type one letter at a time, which is the same as printing it.
   it("stays silent on a partial name, however close it gets", () => {
-    for (const partial of ["a", "admin", "adminLogi", "window.admin"]) {
+    for (const partial of ["w", "window.", "window.admin", "window.adminLogin("]) {
       expect(resolvePaletteCommand(partial)).toBeNull();
     }
   });
 
+  it("does not answer to a name with something appended to it", () => {
+    expect(resolvePaletteCommand("window.adminLogin()!")).toBeNull();
+    expect(resolvePaletteCommand("window.adminLogin();")).toBeNull();
+  });
+
   it("has nothing to say to an empty line — there is no menu to open", () => {
     expect(resolvePaletteCommand("")).toBeNull();
-    expect(resolvePaletteCommand("   ")).toBeNull();
   });
 
   it("returns null for a command nobody registered", () => {
-    expect(resolvePaletteCommand("dropDatabase()")).toBeNull();
+    expect(resolvePaletteCommand("window.dropDatabase()")).toBeNull();
   });
 
-  it("does not answer to a name with something appended to it", () => {
-    expect(resolvePaletteCommand("adminLoginNow")).toBeNull();
-  });
-
-  it("runs the resolved command, and nothing else", async () => {
-    await resolvePaletteCommand("window.adminLogin()")?.run();
-
-    expect(mockAdminLogin).toHaveBeenCalledTimes(1);
-  });
-
-  it("names every command by the console form that invokes it", () => {
-    for (const [key, command] of Object.entries(PALETTE_COMMANDS)) {
-      expect(command.label).toBe(`window.${key}()`);
+  it("gives every command a name to be typed and shown by", () => {
+    for (const command of PALETTE_COMMANDS) {
+      expect(command.name.length).toBeGreaterThan(0);
     }
   });
 });
