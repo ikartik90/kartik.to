@@ -38,6 +38,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: vi.fn(), refresh: vi.fn() }),
 }));
 
+// The one registered `>` command, stood in for at its delegate rather than at
+// the registry — so the palette's tests exercise the real table and the real
+// name matching, and only the redirect out of the page is withheld.
+const mockAdminLogin = vi.fn();
+vi.mock("@/utils/admin-login", () => ({ adminLogin: () => mockAdminLogin() }));
+
 // Stub server actions so they never hit the network
 vi.mock("@/app/actions/grid", () => ({
   publishComponent: vi.fn().mockResolvedValue("component-id"),
@@ -116,6 +122,7 @@ beforeEach(() => {
   mockPush.mockClear();
   mockSetMode.mockClear();
   mockPush.mockClear();
+  mockAdminLogin.mockClear();
 
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -835,5 +842,121 @@ describe("CommandPalette — Navigate", () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The `>` line
+//
+// The search box doubles as a console prompt: `>` turns the field into a place
+// to NAME something rather than find it. It is deliberately not an evaluator —
+// nothing is parsed as JavaScript and nothing runs that was not registered — so
+// what these cases pin down is the matching and the handing-over, and the fact
+// that the rest of the palette gets out of the way while it is happening.
+// ---------------------------------------------------------------------------
+
+describe("CommandPalette — the `>` command line", () => {
+  function openAndType(value: string) {
+    render(<CommandPalette />);
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.change(screen.getByPlaceholderText("Search…"), {
+      target: { value },
+    });
+  }
+
+  it("takes a leading '>' as the way in, and says which line it is on", () => {
+    openAndType(">");
+
+    expect(list().getByText("Command")).toBeDefined();
+  });
+
+  it("lists what there is to run, so a bare '>' is not a dead end", () => {
+    openAndType(">");
+
+    expect(list().getByText("window.adminLogin()")).toBeDefined();
+  });
+
+  it("puts the rest of the palette away — a command line is not a search", () => {
+    openAndType("> window.adminLogin()");
+
+    expect(list().queryByText("Settings")).toBeNull();
+    expect(list().queryByText("Shader Playground")).toBeNull();
+  });
+
+  it("leaves ordinary search text alone", () => {
+    openAndType("shader");
+
+    expect(list().queryByText("Command")).toBeNull();
+    expect(list().getByText("Shader Playground")).toBeDefined();
+  });
+
+  it("recognises the console form typed out in full", () => {
+    openAndType("> window.adminLogin()");
+
+    expect(list().getByText("window.adminLogin()")).toBeDefined();
+  });
+
+  it("narrows as the name is typed", () => {
+    openAndType("> admin");
+
+    expect(list().getByText("window.adminLogin()")).toBeDefined();
+  });
+
+  it("runs the command when its row is chosen", () => {
+    openAndType("> window.adminLogin()");
+
+    fireEvent.click(list().getByText("window.adminLogin()"));
+
+    expect(mockAdminLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs it on Enter, which is the whole point of typing a command", () => {
+    openAndType("> window.adminLogin()");
+
+    fireEvent.keyDown(screen.getByPlaceholderText("Search…"), {
+      key: "Enter",
+    });
+
+    expect(mockAdminLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the palette on the way out", () => {
+    openAndType("> window.adminLogin()");
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+
+    fireEvent.click(list().getByText("window.adminLogin()"));
+
+    expect(dialog.close).toHaveBeenCalled();
+  });
+
+  it("says so when nothing answers to what was typed, rather than running it", () => {
+    openAndType("> window.dropDatabase()");
+
+    expect(list().getByText(/no command/i)).toBeDefined();
+    expect(mockAdminLogin).not.toHaveBeenCalled();
+  });
+
+  // The command exists to get you SIGNED IN, so the one visitor who must be
+  // able to reach it is the one with no session — the opposite of every other
+  // admin affordance in this list.
+  it("is offered to a visitor with no session at all", () => {
+    openAndType(">");
+
+    expect(list().getByText("window.adminLogin()")).toBeDefined();
+    expect(list().queryByText("Edit page")).toBeNull();
+  });
+
+  it("names the key that runs it, where there is a key to name", () => {
+    openAndType("> window.adminLogin()");
+
+    expect(list().getByText("↵")).toBeDefined();
+  });
+
+  it("withholds that chip on a device that cannot press it", () => {
+    hasCursor = false;
+    openAndType("> window.adminLogin()");
+
+    expect(list().getByText("window.adminLogin()")).toBeDefined();
+    expect(list().queryByText("↵")).toBeNull();
   });
 });

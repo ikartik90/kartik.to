@@ -2,6 +2,18 @@
 
 import { useEffect } from "react";
 import { authClient } from "@/lib/auth/client";
+import { ADMIN_LOGIN_PENDING_KEY, adminLogin } from "@/utils/admin-login";
+
+// ---------------------------------------------------------------------------
+// The console half of signing in.
+//
+// Hangs `adminLogin` off `window` so the author can call it by hand, and
+// reports the outcome once the browser lands back here. The going-away half is
+// `utils/admin-login.ts`, shared with the palette's `> window.adminLogin()`
+// row — this component only owns the console handle and the return leg, which
+// has to live in a component because the page that asked for the login no
+// longer exists to be told how it went.
+// ---------------------------------------------------------------------------
 
 declare global {
   interface Window {
@@ -9,13 +21,11 @@ declare global {
   }
 }
 
-const LOGIN_PENDING_KEY = "adminLoginPending";
-
 export function AdminLoginBootstrap() {
   useEffect(() => {
-    const pending = sessionStorage.getItem(LOGIN_PENDING_KEY);
+    const pending = sessionStorage.getItem(ADMIN_LOGIN_PENDING_KEY);
     if (pending) {
-      sessionStorage.removeItem(LOGIN_PENDING_KEY);
+      sessionStorage.removeItem(ADMIN_LOGIN_PENDING_KEY);
       authClient
         .getSession()
         .then(({ data }) => {
@@ -26,10 +36,7 @@ export function AdminLoginBootstrap() {
         });
     }
 
-    window.adminLogin = () => {
-      sessionStorage.setItem(LOGIN_PENDING_KEY, "1");
-      authClient.signIn.social({ provider: "github", callbackURL: "/" });
-    };
+    window.adminLogin = () => void adminLogin();
 
     return () => {
       delete window.adminLogin;

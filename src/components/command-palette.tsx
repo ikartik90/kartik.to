@@ -19,6 +19,8 @@ import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { takePaletteIntent } from "@/utils/palette-intent";
+import { parseCommandLine } from "@/utils/palette-command";
+import { matchPaletteCommands } from "@/data/palette-commands";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
@@ -35,6 +37,7 @@ import ComponentIcon from "@/assets/icons/component.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import ReturnIcon from "@/assets/icons/return.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
+import ConsoleIcon from "@/assets/icons/console.svg";
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -135,6 +138,19 @@ const itemHotkeyStyle = cx(
   css({ marginInlineStart: "auto" }),
 );
 
+// What the command line says when nothing answers to what was typed. Drawn as
+// prose rather than as a row: there is nothing here to choose, and a row offers
+// a press. Sized like the heading above it so the group still reads as one
+// block with one thing in it.
+const noticeStyle = css({
+  display: "flex",
+  alignItems: "center",
+  minHeight: "token(spacing.4xl)",
+  paddingInline: "md",
+  textStyle: "bodySmall",
+  color: "text.body/50",
+});
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -174,6 +190,25 @@ export function CommandPalette() {
    * costs nothing at open time, when the whole `Command` remounts anyway.
    */
   const [isOpen, setIsOpen] = useState(false);
+
+  /**
+   * What is in the field.
+   *
+   * Held here rather than left to cmdk because the palette now has to READ it:
+   * a leading `>` turns the field from a search into a prompt, and that is a
+   * decision about what the whole list is, not about which rows survive a
+   * filter.
+   */
+  const [search, setSearch] = useState("");
+
+  /**
+   * The command being typed, or null while this is an ordinary search.
+   *
+   * Empty string is command mode with nothing named yet — a bare `>` — which is
+   * why this is compared against null rather than tested for truth.
+   */
+  const commandLine = parseCommandLine(search);
+  const commands = commandLine === null ? [] : matchPaletteCommands(commandLine);
 
   // The palette owns its own component picker rather than reaching for the
   // grid's: "New component…" has to work from any page, and the grid only
@@ -269,6 +304,10 @@ export function CommandPalette() {
       if (dialogRef.current?.open) return;
       dialogRef.current?.showModal();
       setIsOpen(true);
+      // cmdk's own state is cleared by the remount `openKey` forces; the field's
+      // text is ours and has to be cleared with it, or the palette reopens onto
+      // whatever was last typed into it.
+      setSearch("");
       setOpenKey((k) => k + 1);
     }
     function handleKeyDown(e: KeyboardEvent) {
@@ -303,7 +342,16 @@ export function CommandPalette() {
         className={dialogPanel({ size: "sm" })}
         onClose={() => setIsOpen(false)}
       >
-        <Command key={openKey} loop className={css({ display: "contents" })}>
+        <Command
+          key={openKey}
+          loop
+          // On the command line the rows are already the answer to what was
+          // typed — matched by NAME, in `matchPaletteCommands` — and cmdk
+          // filtering them a second time against a string that starts with `>`
+          // would leave nothing standing.
+          shouldFilter={commandLine === null}
+          className={css({ display: "contents" })}
+        >
           {/* Input row — the same field on both devices, and a way out that is
               named as the key that does it where there is a key and drawn as
               the button that does it where there is not. */}
@@ -314,6 +362,8 @@ export function CommandPalette() {
               // Waiting on a phone, where it is there to be TAPPED. See
               // `isOpen` for why the cursor half is not simply `autoFocus`.
               autoFocus={isOpen && hasCursor}
+              value={search}
+              onValueChange={setSearch}
               placeholder="Search…"
               className={inputStyle}
             />
@@ -336,249 +386,295 @@ export function CommandPalette() {
 
           {/* Results */}
           <Command.List className={listStyle}>
-            {/* Navigate — the way out of here, which used to be an icon
-                button in the page's left gutter. First, because leaving is the
-                one thing every page can do and the one thing a reader who
-                opened this by accident is looking for. */}
-            {backTarget && (
+            {/* The command line.
+
+                Typed rather than chosen, and so the one thing in this palette
+                that is not a row you could have found by scrolling. It replaces
+                the list rather than joining it: `>` says the field has stopped
+                describing what you are looking for and started naming what you
+                want done, and leaving the search results underneath would be the
+                palette answering a question that is no longer being asked.
+
+                What runs is looked up by name in `data/palette-commands.ts`.
+                Nothing here evaluates anything — the prompt is a borrowed
+                gesture, not a console — so a name that is not in that table has
+                no path to running, whatever it happens to be valid JavaScript
+                for. */}
+            {commandLine !== null ? (
               <Command.Group className={groupStyle}>
-                <div className={groupHeadingStyle}>Navigate</div>
-                <Command.Item className={itemStyle} onSelect={handleBack}>
-                  <ReturnIcon className={iconStyle} />
-                  {backTarget.label}
-                  {hasCursor && (
-                    <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
-                  )}
-                </Command.Item>
-              </Command.Group>
-            )}
-
-            {/* Admin-only groups */}
-            {isAdmin && (
-              <>
-                {/* Whatever editor is open, said the same way in all three.
-                    They differ in what they buffer and where it goes, and in
-                    nothing the author can see from here: each has unsaved work,
-                    a way to commit it and a way to throw it away.
-
-                    Save STAYS PUT — ⌘S means "commit and carry on" everywhere
-                    else and must here too. Discard exits, and belongs here
-                    rather than in Navigate because it is a decision about the
-                    WORK: you are not going somewhere, you are throwing
-                    something away and the leaving follows from it.
-
-                    There is deliberately no save-and-exit. That one IS just
-                    navigation, and "Exit editor" above already offers it — it
-                    asks about unsaved work on the way out, and answering "Save
-                    changes and exit" there is this same command. Two doors to
-                    one room would have to agree forever.
-
-                    Publish and Unpublish are a document's alone here. The
-                    homepage is already live; a preset HAS a publication now, but
-                    its control is the one in the properties panel's header,
-                    beside Reset — both act on the saved row rather than on the
-                    page you are looking at, and two doors to one room would
-                    have to agree forever. */}
-                {editorKind ? (
-                  <Command.Group className={groupStyle}>
-                    <div className={groupHeadingStyle}>{editorTitle}</div>
-                    {editorKind === "document" && (
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={handlePublish}
-                      >
-                        <PublishIcon className={iconStyle} />
-                        {editCategory === "WORK"
-                          ? "Publish project"
-                          : "Publish article"}
-                      </Command.Item>
-                    )}
-                    {/* The chip sits on THIS one, because this is what the key
-                        does. ⌘S commits and leaves you in the editor — hanging
-                        it off an exit would be a label that lies, the failure
-                        `keyboard-shortcut.ts` exists to prevent. */}
+                <div className={groupHeadingStyle}>Command</div>
+                {commands.length > 0 ? (
+                  commands.map((command) => (
                     <Command.Item
+                      key={command.label}
                       className={itemStyle}
-                      onSelect={() => void handleSaveChanges()}
+                      onSelect={() => {
+                        // Closed FIRST: the commands here leave the page — this
+                        // one hands the browser to GitHub — and a palette still
+                        // standing over a page that is on its way out reads as a
+                        // press that did nothing.
+                        close();
+                        void command.run();
+                      }}
                     >
-                      <SaveIcon className={iconStyle} />
-                      Save changes
+                      <ConsoleIcon className={iconStyle} />
+                      {command.label}
+                      {hasCursor && <kbd className={itemHotkeyStyle}>↵</kbd>}
+                    </Command.Item>
+                  ))
+                ) : (
+                  <div className={noticeStyle}>
+                    No command named “{commandLine}”
+                  </div>
+                )}
+              </Command.Group>
+            ) : (
+              <>
+                {/* Navigate — the way out of here, which used to be an icon
+                    button in the page's left gutter. First, because leaving is the
+                    one thing every page can do and the one thing a reader who
+                    opened this by accident is looking for. */}
+                {backTarget && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Navigate</div>
+                    <Command.Item className={itemStyle} onSelect={handleBack}>
+                      <ReturnIcon className={iconStyle} />
+                      {backTarget.label}
                       {hasCursor && (
-                        <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                        <kbd className={itemHotkeyStyle}>{backShortcut}</kbd>
                       )}
                     </Command.Item>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handleDiscardAndExit}
-                    >
-                      <TrashIcon className={iconStyle} />
-                      Discard changes and exit
-                    </Command.Item>
-                    {/* Only a live post has something to withdraw. */}
-                    {editorKind === "document" && isPublished && (
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={() => {
-                          const noun =
-                            editCategory === "WORK" ? "Project" : "Article";
-                          setConfirm({
-                            title: `Unpublish ${noun}`,
-                            message: `You are about to unpublish this ${noun.toLowerCase()}. Do you want to proceed?`,
-                            confirmLabel: "Unpublish",
-                            onConfirm: () => void handleUnpublish(),
-                          });
-                          close();
-                        }}
-                      >
-                        <UnpublishIcon className={iconStyle} />
-                        {editCategory === "WORK"
-                          ? "Unpublish project"
-                          : "Unpublish article"}
-                      </Command.Item>
-                    )}
                   </Command.Group>
-                ) : (
+                )}
+
+                {/* Admin-only groups */}
+                {isAdmin && (
                   <>
-                    <Command.Group className={groupStyle}>
-                      <div className={groupHeadingStyle}>This Page</div>
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={handleEditPage}
-                      >
-                        <EditIcon className={iconStyle} />
-                        Edit page
-                      </Command.Item>
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={() => {
-                          console.log("edit metadata");
-                          close();
-                        }}
-                      >
-                        <MetadataIcon className={iconStyle} />
-                        Edit metadata
-                      </Command.Item>
-                      {currentDraft && (
+                    {/* Whatever editor is open, said the same way in all three.
+                        They differ in what they buffer and where it goes, and in
+                        nothing the author can see from here: each has unsaved work,
+                        a way to commit it and a way to throw it away.
+
+                        Save STAYS PUT — ⌘S means "commit and carry on" everywhere
+                        else and must here too. Discard exits, and belongs here
+                        rather than in Navigate because it is a decision about the
+                        WORK: you are not going somewhere, you are throwing
+                        something away and the leaving follows from it.
+
+                        There is deliberately no save-and-exit. That one IS just
+                        navigation, and "Exit editor" above already offers it — it
+                        asks about unsaved work on the way out, and answering "Save
+                        changes and exit" there is this same command. Two doors to
+                        one room would have to agree forever.
+
+                        Publish and Unpublish are a document's alone here. The
+                        homepage is already live; a preset HAS a publication now, but
+                        its control is the one in the properties panel's header,
+                        beside Reset — both act on the saved row rather than on the
+                        page you are looking at, and two doors to one room would
+                        have to agree forever. */}
+                    {editorKind ? (
+                      <Command.Group className={groupStyle}>
+                        <div className={groupHeadingStyle}>{editorTitle}</div>
+                        {editorKind === "document" && (
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={handlePublish}
+                          >
+                            <PublishIcon className={iconStyle} />
+                            {editCategory === "WORK"
+                              ? "Publish project"
+                              : "Publish article"}
+                          </Command.Item>
+                        )}
+                        {/* The chip sits on THIS one, because this is what the key
+                            does. ⌘S commits and leaves you in the editor — hanging
+                            it off an exit would be a label that lies, the failure
+                            `keyboard-shortcut.ts` exists to prevent. */}
                         <Command.Item
                           className={itemStyle}
-                          onSelect={() => {
-                            setConfirm({
-                              title: "Delete Draft",
-                              message:
-                                "You are about to permanently delete this draft. Do you want to proceed?",
-                              confirmLabel: "Delete",
-                              onConfirm: () => void handleDiscardDraft(),
-                            });
-                            close();
-                          }}
+                          onSelect={() => void handleSaveChanges()}
+                        >
+                          <SaveIcon className={iconStyle} />
+                          Save changes
+                          {hasCursor && (
+                            <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                          )}
+                        </Command.Item>
+                        <Command.Item
+                          className={itemStyle}
+                          onSelect={handleDiscardAndExit}
                         >
                           <TrashIcon className={iconStyle} />
-                          Discard draft
+                          Discard changes and exit
                         </Command.Item>
-                      )}
-                    </Command.Group>
-
-                    {/* Publish */}
-                    <Command.Group className={groupStyle}>
-                      <div className={groupHeadingStyle}>Publish</div>
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={handleNewBlogArticle}
-                      >
-                        <WriteIcon className={iconStyle} />
-                        New blog article…
-                      </Command.Item>
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={handleNewWorkArticle}
-                      >
-                        <WorkIcon className={iconStyle} />
-                        New work article…
-                      </Command.Item>
-                      {/* Published, but NOT pinned — unlike the grid's own [+],
-                        which places a component at a seat you chose. Arriving
-                        from the palette there is no seat in mind, so it takes
-                        whatever chronology gives it. */}
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={() => {
-                          setPickingComponent(true);
-                          close();
-                        }}
-                      >
-                        <ComponentIcon className={iconStyle} />
-                        New component…
-                      </Command.Item>
-                    </Command.Group>
-
-                    {/* Drafts — the draft being viewed is omitted so the
-                      current page never lists itself */}
-                    {(() => {
-                      const listableDrafts = drafts.filter(
-                        (draft) => draft.id !== currentDraft?.id,
-                      );
-                      if (listableDrafts.length === 0) return null;
-                      return (
+                        {/* Only a live post has something to withdraw. */}
+                        {editorKind === "document" && isPublished && (
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={() => {
+                              const noun =
+                                editCategory === "WORK" ? "Project" : "Article";
+                              setConfirm({
+                                title: `Unpublish ${noun}`,
+                                message: `You are about to unpublish this ${noun.toLowerCase()}. Do you want to proceed?`,
+                                confirmLabel: "Unpublish",
+                                onConfirm: () => void handleUnpublish(),
+                              });
+                              close();
+                            }}
+                          >
+                            <UnpublishIcon className={iconStyle} />
+                            {editCategory === "WORK"
+                              ? "Unpublish project"
+                              : "Unpublish article"}
+                          </Command.Item>
+                        )}
+                      </Command.Group>
+                    ) : (
+                      <>
                         <Command.Group className={groupStyle}>
-                          <div className={groupHeadingStyle}>Drafts</div>
-                          {listableDrafts.map((draft) => (
+                          <div className={groupHeadingStyle}>This Page</div>
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={handleEditPage}
+                          >
+                            <EditIcon className={iconStyle} />
+                            Edit page
+                          </Command.Item>
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={() => {
+                              console.log("edit metadata");
+                              close();
+                            }}
+                          >
+                            <MetadataIcon className={iconStyle} />
+                            Edit metadata
+                          </Command.Item>
+                          {currentDraft && (
                             <Command.Item
-                              key={draft.id}
                               className={itemStyle}
-                              onSelect={() => handleOpenDraft(draft)}
+                              onSelect={() => {
+                                setConfirm({
+                                  title: "Delete Draft",
+                                  message:
+                                    "You are about to permanently delete this draft. Do you want to proceed?",
+                                  confirmLabel: "Delete",
+                                  onConfirm: () => void handleDiscardDraft(),
+                                });
+                                close();
+                              }}
                             >
-                              {draft.category === "WORK" ? (
-                                <WorkIcon className={iconStyle} />
-                              ) : (
-                                <WriteIcon className={iconStyle} />
-                              )}
-                              {draft.title ??
-                                `Untitled ${draft.untitledIndex ?? ""}`}
+                              <TrashIcon className={iconStyle} />
+                              Discard draft
                             </Command.Item>
-                          ))}
+                          )}
                         </Command.Group>
-                      );
-                    })()}
+
+                        {/* Publish */}
+                        <Command.Group className={groupStyle}>
+                          <div className={groupHeadingStyle}>Publish</div>
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={handleNewBlogArticle}
+                          >
+                            <WriteIcon className={iconStyle} />
+                            New blog article…
+                          </Command.Item>
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={handleNewWorkArticle}
+                          >
+                            <WorkIcon className={iconStyle} />
+                            New work article…
+                          </Command.Item>
+                          {/* Published, but NOT pinned — unlike the grid's own [+],
+                            which places a component at a seat you chose. Arriving
+                            from the palette there is no seat in mind, so it takes
+                            whatever chronology gives it. */}
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={() => {
+                              setPickingComponent(true);
+                              close();
+                            }}
+                          >
+                            <ComponentIcon className={iconStyle} />
+                            New component…
+                          </Command.Item>
+                        </Command.Group>
+
+                        {/* Drafts — the draft being viewed is omitted so the
+                          current page never lists itself */}
+                        {(() => {
+                          const listableDrafts = drafts.filter(
+                            (draft) => draft.id !== currentDraft?.id,
+                          );
+                          if (listableDrafts.length === 0) return null;
+                          return (
+                            <Command.Group className={groupStyle}>
+                              <div className={groupHeadingStyle}>Drafts</div>
+                              {listableDrafts.map((draft) => (
+                                <Command.Item
+                                  key={draft.id}
+                                  className={itemStyle}
+                                  onSelect={() => handleOpenDraft(draft)}
+                                >
+                                  {draft.category === "WORK" ? (
+                                    <WorkIcon className={iconStyle} />
+                                  ) : (
+                                    <WriteIcon className={iconStyle} />
+                                  )}
+                                  {draft.title ??
+                                    `Untitled ${draft.untitledIndex ?? ""}`}
+                                </Command.Item>
+                              ))}
+                            </Command.Group>
+                          );
+                        })()}
+                      </>
+                    )}
                   </>
                 )}
+
+                {/* Playgrounds — down here with Settings for the reason Settings is:
+                    it is not about the page you are on. Nothing in it writes to the
+                    site either — it reads a shader table, draws a canvas and hands
+                    back a JSX tag — so unlike the groups above it there is no
+                    session to have and nothing for a gate to protect. A
+                    destination, so it leads the furniture.
+
+                    Withheld while you are editing, and once you have arrived —
+                    see `offersDestinations`. */}
+                {offersDestinations && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Playgrounds</div>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handleShaderPlayground}
+                    >
+                      <ShaderIcon className={iconStyle} />
+                      Shader Playground
+                    </Command.Item>
+                  </Command.Group>
+                )}
+
+                {/* Settings — always visible, and last: it is the palette's
+                    furniture rather than anything this page is about. */}
+                <Command.Group className={groupStyle}>
+                  <div className={groupHeadingStyle}>Settings</div>
+                  <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
+                    {isDark ? (
+                      <LightIcon className={iconStyle} />
+                    ) : (
+                      <DarkIcon className={iconStyle} />
+                    )}
+                    {isDark ? OFFER.light : OFFER.dark}
+                  </Command.Item>
+                </Command.Group>
               </>
             )}
-
-            {/* Playgrounds — down here with Settings for the reason Settings is:
-                it is not about the page you are on. Nothing in it writes to the
-                site either — it reads a shader table, draws a canvas and hands
-                back a JSX tag — so unlike the groups above it there is no
-                session to have and nothing for a gate to protect. A
-                destination, so it leads the furniture.
-
-                Withheld while you are editing, and once you have arrived —
-                see `offersDestinations`. */}
-            {offersDestinations && (
-              <Command.Group className={groupStyle}>
-                <div className={groupHeadingStyle}>Playgrounds</div>
-                <Command.Item
-                  className={itemStyle}
-                  onSelect={handleShaderPlayground}
-                >
-                  <ShaderIcon className={iconStyle} />
-                  Shader Playground
-                </Command.Item>
-              </Command.Group>
-            )}
-
-            {/* Settings — always visible, and last: it is the palette's
-                furniture rather than anything this page is about. */}
-            <Command.Group className={groupStyle}>
-              <div className={groupHeadingStyle}>Settings</div>
-              <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
-                {isDark ? (
-                  <LightIcon className={iconStyle} />
-                ) : (
-                  <DarkIcon className={iconStyle} />
-                )}
-                {isDark ? OFFER.light : OFFER.dark}
-              </Command.Item>
-            </Command.Group>
           </Command.List>
         </Command>
       </Dialog>
