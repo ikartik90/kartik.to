@@ -1,4 +1,4 @@
-import { getShaderPresets } from "@/app/actions/shader-preset";
+import { getPublishedShaderPresets } from "@/app/actions/shader-preset";
 import {
   ShaderPresetReelPlayer,
   toReelPresets,
@@ -14,11 +14,13 @@ import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 // browser's business, and fetching them in an effect would mean the reel opens
 // on an empty box and fills in a round trip later.
 //
-// WHICH presets is `getShaderPresets`' decision rather than this file's, and
-// that is the point of calling it instead of querying: it already answers
-// newest-first, and it already answers a VISITOR with the published ones alone.
-// A query here would be a second place for both of those rules to live, and the
-// one that would go stale is the one about what a visitor may see.
+// WHICH presets is the action's decision rather than this file's, and that is
+// the point of calling it instead of querying: it already answers newest-first.
+// The PUBLISHED read specifically, not the playground's — the reel is a display
+// and shows what is on show, to the author exactly as to a visitor. Reading the
+// author's whole library here put a half-tuned draft on their own front page,
+// visible to nobody else, so the page they were looking at was not the page
+// that shipped.
 //
 // This is the half the GRID renders — `server-demos.tsx` puts it on the page,
 // so a published reel card arrives with its presets already in it and paints
@@ -33,7 +35,7 @@ export interface ShaderPresetReelProps {
 }
 
 export async function ShaderPresetReel({ aspect }: ShaderPresetReelProps) {
-  const reel = toReelPresets(await getShaderPresets());
+  const reel = toReelPresets(await getPublishedShaderPresets());
 
   // Nothing published, nothing drawn — and NOT an empty box. The reel is a
   // ground the host stands something on; a host whose ground has nothing in it

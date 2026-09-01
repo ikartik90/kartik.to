@@ -83,8 +83,41 @@ export async function getShaderPresets(): Promise<(ShaderPreset & ShaderPresetCo
   // public and so is its strip, but saving is how the author keeps a half-tuned
   // idea overnight — and a library that showed those would turn every save into
   // an act of publishing, which is the pressure that stops you saving.
+  return readShaderPresets(!(await isAdmin()));
+}
+
+/**
+ * The library as everyone sees it — the published presets, to the author too.
+ *
+ * The other read answers the AUTHOR with their drafts as well, which is right
+ * for the strip along the playground's foot: that is a workbench, and picking
+ * up an unfinished idea is what you go there for. It is wrong for anything that
+ * DISPLAYS presets. The reel on the homepage is the case that found this: the
+ * author's own front page was playing a preset nobody else could see, so the
+ * page being looked at was not the page that shipped — and "publish" had
+ * quietly stopped meaning anything on the surface it governs.
+ *
+ * A separate action rather than an argument to the one above, because the
+ * question each answers is different — "what may I work with" against "what is
+ * on show" — and a boolean parameter on a public HTTP surface is one the caller
+ * gets to choose. This one has no parameter to get wrong.
+ */
+export async function getPublishedShaderPresets(): Promise<
+  (ShaderPreset & ShaderPresetContent)[]
+> {
+  return readShaderPresets(true);
+}
+
+/**
+ * The shared query. Not exported, so it is not an endpoint — the two reads
+ * above are the surface, and this is only what keeps their ordering and their
+ * parsing identical.
+ */
+async function readShaderPresets(
+  publishedOnly: boolean,
+): Promise<(ShaderPreset & ShaderPresetContent)[]> {
   const rows = await prisma.shaderPreset.findMany({
-    where: (await isAdmin()) ? {} : { publishedAt: { not: null } },
+    where: publishedOnly ? { publishedAt: { not: null } } : {},
     orderBy: { createdAt: "desc" },
   });
   return rows.map(parseShaderPreset);

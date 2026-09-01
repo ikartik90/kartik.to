@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { shaderPresetContentFor } from "@/domain/shader-preset";
 import type { ShaderId } from "@/data/shader-specs";
@@ -22,16 +23,15 @@ vi.mock("@/components/shaders/shader-stage", () => ({
   ),
 }));
 
-const getShaderPresets = vi.fn();
+const getPublishedShaderPresets = vi.fn();
 vi.mock("@/app/actions/shader-preset", () => ({
-  getShaderPresets: () => getShaderPresets(),
+  getPublishedShaderPresets: () => getPublishedShaderPresets(),
 }));
 
 const {
   ShaderPresetReelPlayer,
   advanceReel,
   reelLayers,
-  reelRampIndex,
   REEL_START,
   DWELL_MS,
   FADE_MS,
@@ -77,7 +77,7 @@ const row = (id: string, shaderId: ShaderId = "cosmicTrack") => ({
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  getShaderPresets.mockReset();
+  getPublishedShaderPresets.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -136,29 +136,8 @@ describe("advanceReel", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The ramp — the preset's colours as a plain CSS gradient, which is what the
-// handover fades THROUGH.
-// ---------------------------------------------------------------------------
-describe("reelRampIndex", () => {
-  // The colours arrive BEFORE the picture does: the ramp is already the next
-  // preset's while the current one is still fading off it.
-  it("names the incoming preset while the current one fades out", () => {
-    expect(reelRampIndex({ index: 0, phase: "fadingOut" }, 3)).toBe(1);
-  });
-
-  it("names the current preset once the handover is under way", () => {
-    expect(reelRampIndex({ index: 1, phase: "fadingIn" }, 3)).toBe(1);
-    expect(reelRampIndex({ index: 1, phase: "holding" }, 3)).toBe(1);
-  });
-
-  it("wraps with the reel", () => {
-    expect(reelRampIndex({ index: 2, phase: "fadingOut" }, 3)).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// The layers — one per SHADER, not one per preset, and mounted for the life of
-// the reel. This is the whole context budget.
+// The layers — one per distinct shader, mounted for the life of the reel, and
+// which of them is the picture right now.
 // ---------------------------------------------------------------------------
 describe("reelLayers", () => {
   it("mounts one layer per distinct shader", () => {
@@ -254,10 +233,16 @@ describe("<ShaderPresetReelPlayer>", () => {
       />,
     );
 
-    expect(screen.getByTestId("reel-ramp-0")).toHaveProperty("style.opacity", "1");
+    expect(
+      screen.getByTestId("reel-layer-cosmicTrack"),
+    ).toHaveProperty("style.opacity", "1");
     play(DWELL_MS);
-    // The colours have arrived; the picture has not yet.
-    expect(screen.getByTestId("reel-ramp-1")).toHaveProperty("style.opacity", "1");
+    // Mid-handover the box is EMPTY: the outgoing picture has faded off and
+    // the incoming one has not started, so what shows through is whatever the
+    // host stands the reel on. No layer paints across the gap.
+    for (const layer of screen.getAllByTestId(/^reel-layer-/)) {
+      expect(layer).toHaveProperty("style.opacity", "0");
+    }
     play(FADE_MS);
     play(FADE_MS);
     expect(
@@ -270,7 +255,9 @@ describe("<ShaderPresetReelPlayer>", () => {
   it("holds still on a single preset", () => {
     render(<ShaderPresetReelPlayer presets={[preset("a")]} />);
     play(DWELL_MS * 10);
-    expect(screen.getByTestId("reel-ramp-0")).toHaveProperty("style.opacity", "1");
+    expect(
+      screen.getByTestId("reel-layer-cosmicTrack"),
+    ).toHaveProperty("style.opacity", "1");
   });
 
   it("renders nothing when there are no presets", () => {
@@ -332,35 +319,61 @@ describe("<ShaderPresetReelPlayer>", () => {
       />,
     );
     play(DWELL_MS * 10);
-    expect(screen.getByTestId("reel-ramp-0")).toHaveProperty("style.opacity", "1");
+    expect(
+      screen.getByTestId("reel-layer-cosmicTrack"),
+    ).toHaveProperty("style.opacity", "1");
     vi.unstubAllGlobals();
   });
 });
 
 describe("<ShaderPresetReel>", () => {
+  /** The element it returns, without rendering — what it hands the player. */
+  const handedOver = async () =>
+    (await ShaderPresetReel({})) as ReactElement<{ presets: ReelPreset[] }> | null;
+
   it("plays the three latest and no more", async () => {
-    getShaderPresets.mockResolvedValue([
+    getPublishedShaderPresets.mockResolvedValue([
       row("a"),
       row("b"),
       row("c"),
       row("d"),
     ]);
-    render(await ShaderPresetReel({}));
-    expect(screen.getAllByTestId(/^reel-ramp-/)).toHaveLength(REEL_LENGTH);
+
+    const el = await handedOver();
+
+    expect(el?.props.presets).toHaveLength(REEL_LENGTH);
+    expect(el?.props.presets.map((p) => p.id)).toEqual(["a", "b", "c"]);
   });
 
   // Fewer than three is not a shortfall to pad or an error to throw — it is
   // a shorter reel, which is the same reel.
   it("plays however few there are", async () => {
-    getShaderPresets.mockResolvedValue([row("a"), row("b")]);
-    render(await ShaderPresetReel({}));
-    expect(screen.getAllByTestId(/^reel-ramp-/)).toHaveLength(2);
+    getPublishedShaderPresets.mockResolvedValue([row("a"), row("b")]);
+
+    expect((await handedOver())?.props.presets.map((p) => p.id)).toEqual([
+      "a",
+      "b",
+    ]);
   });
 
   it("draws nothing at all when none are published", async () => {
-    getShaderPresets.mockResolvedValue([]);
-    const { container } = render(await ShaderPresetReel({}));
-    expect(container.innerHTML).toBe("");
+    getPublishedShaderPresets.mockResolvedValue([]);
+
+    expect(await handedOver()).toBeNull();
+  });
+
+  // The reel DISPLAYS presets, so it shows the published ones and no others —
+  // to the author exactly as to a visitor. `getShaderPresets` would answer the
+  // author with their drafts too, which is right for the playground's own strip
+  // (a workbench) and wrong here: the author's homepage would carry a half-
+  // tuned idea that nobody else could see, so the page they were looking at
+  // would not be the page that shipped.
+  it("asks only for what has been published, whoever is looking", async () => {
+    getPublishedShaderPresets.mockResolvedValue([row("a")]);
+
+    await handedOver();
+
+    expect(getPublishedShaderPresets).toHaveBeenCalledTimes(1);
   });
 });
 
