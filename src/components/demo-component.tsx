@@ -6,7 +6,7 @@ import {
   PROGRESS_COMPLETE_HOLD_MS,
 } from "@/components/ui/progress-bar";
 import { useDemoLoader, useTrickleProgress } from "@/hooks/use-demo-loader";
-import type { DemoComponentEntry } from "@/components/demo/registry";
+import type { DemoComponentEntry, DemoProps } from "@/components/demo/registry";
 import { demoPreloader } from "../../styled-system/recipes";
 
 /**
@@ -30,7 +30,10 @@ export function DemoPreloader({ value }: { value?: number }) {
  * assets load (deferred until the page has loaded), then swaps in the demo.
  * Every demo call site goes through this so the loading behaviour lives once.
  */
-export function DemoComponent({ entry }: { entry: DemoComponentEntry }) {
+export function DemoComponent({
+  entry,
+  aspect,
+}: { entry: DemoComponentEntry } & DemoProps) {
   const { Component, ready, fraction } = useDemoLoader(entry);
   const trickle = useTrickleProgress(!ready);
 
@@ -56,5 +59,8 @@ export function DemoComponent({ entry }: { entry: DemoComponentEntry }) {
     return <DemoPreloader value={value} />;
   }
 
-  return <Component />;
+  // The SHOWING's shape, not the entry's: a publication may override it, and a
+  // demo that frames its contents for a shape needs the box it actually landed
+  // in. Handed to every demo; the ones that draw to fill ignore it.
+  return <Component aspect={aspect} />;
 }

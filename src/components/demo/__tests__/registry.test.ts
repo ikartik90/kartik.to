@@ -6,6 +6,7 @@ describe("demo component registry", () => {
     expect(demoComponents.map((demo) => demo.id)).toEqual([
       "calchemy-demo",
       "scheduling-layout-redesign",
+      "shader-preset-reel",
       "shift-scheduling-v0",
       "shift-scheduling-v1",
       "shift-scheduling-v2",
@@ -41,6 +42,26 @@ describe("demo component registry", () => {
       id: "scheduling-layout-redesign",
       label: "Scheduling Layout Redesign",
     });
+  });
+
+  // The reel is the one entry that is not a self-contained toy: it is a
+  // PICTURE of the shader playground, so its card is drawn square (the shape
+  // presets are authored at) and points at the thing it is a picture of.
+  it("resolves shader-preset-reel by id, squared and linked to the playground", () => {
+    expect(getDemoComponent("shader-preset-reel")).toMatchObject({
+      id: "shader-preset-reel",
+      label: "Shader Preset Reel",
+      aspectRatio: "1/1",
+      link: { href: "/playground/shader", label: "Shader playground" },
+    });
+  });
+
+  // Every other demo is played where it stands, and a card that navigated away
+  // from one would be taking the reader out of a demo they were using.
+  it("gives no link to the demos that are played in place", () => {
+    for (const demo of demoComponents) {
+      if (demo.id !== "shader-preset-reel") expect(demo.link).toBeUndefined();
+    }
   });
 
   it("returns undefined for an unknown id", () => {

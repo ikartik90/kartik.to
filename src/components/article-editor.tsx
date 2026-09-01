@@ -2815,7 +2815,7 @@ function EditableBlock({
           >
             <div inert className={editorDemoPreviewStyle}>
               {demo ? (
-                <DemoComponent entry={demo} />
+                <DemoComponent entry={demo} aspect={demo.aspectRatio} />
               ) : (
                 <span>Unknown component: {block.componentId}</span>
               )}

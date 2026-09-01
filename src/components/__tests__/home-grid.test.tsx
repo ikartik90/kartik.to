@@ -40,6 +40,12 @@ vi.mock("@/components/demo/registry", () => ({
     label: id,
     load: vi.fn(),
     logger: id === "calchemy-demo" ? true : undefined,
+    // One demo in the mocked registry is a picture of somewhere else, which is
+    // what the card's link keys off — see `link` on the real entry.
+    link:
+      id === "shader-preset-reel"
+        ? { href: "/playground/shader", label: "Shader playground" }
+        : undefined,
   }),
 }));
 
@@ -70,6 +76,13 @@ const component = (id: string, gridIndex: number | null = null): GridCard => ({
   publishedAt: new Date("2026-01-01"),
   aspect: "3/2",
   span: 1,
+});
+
+/** A card for the one demo in the mocked registry that points somewhere. */
+const linked = (id: string): GridCard => ({
+  ...(component(id) as Extract<GridCard, { kind: "component" }>),
+  componentId: "shader-preset-reel",
+  aspect: "1/1",
 });
 
 /** A card for the one demo in the mocked registry that logs. */
@@ -692,5 +705,83 @@ describe("HomeGrid width measurement", () => {
     // And what the first measurement published still stands.
     expect(node.style.getPropertyValue("--grid-width")).toBe("799px");
     expect(node.hasAttribute("data-measured")).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Component cards: the link over a view-only demo, and the server-rendered
+  // half that lets one paint before its chunk has loaded.
+  // -------------------------------------------------------------------------
+
+  // A demo that is a PICTURE of somewhere else is worth clicking, and clicking
+  // it must not mean clicking the demo: the reel is a ground, not a control
+  // panel, so the whole card is one link and nothing inside it takes a pointer.
+  it("wraps a card whose demo points somewhere in a link to it", () => {
+    render(<HomeGrid cards={[linked("a")]} />);
+
+    expect(
+      screen.getByRole("link", { name: /shader playground/i }),
+    ).toHaveProperty("pathname", "/playground/shader");
+  });
+
+  // The demos that are played in place keep their pointer, and gain no link —
+  // a card that navigated away from a scheduler you were using would be taking
+  // the click you meant for the scheduler.
+  it("leaves a card whose demo has no link unlinked", () => {
+    render(<HomeGrid cards={[component("a")]} />);
+
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByTestId("demo")).toBeTruthy();
+  });
+
+  // The same rule `LinkCard` follows while the grid is being edited, and for
+  // the same reason: `data-inert` stops the pointer, but the card is an
+  // `<a href>` and Enter on a focused link navigates just as well.
+  it("takes the card's link out of the tab order while editing", () => {
+    render(<HomeGrid cards={[linked("a")]} editable />);
+
+    expect(screen.getByRole("link").getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("keeps the link followable when the grid is not being edited", () => {
+    render(<HomeGrid cards={[linked("a")]} />);
+
+    expect(screen.getByRole("link").hasAttribute("tabindex")).toBe(false);
+  });
+
+  // The server-rendered half. A demo whose data the page already fetched
+  // arrives as a finished node, so the card paints it immediately instead of
+  // mounting the browser's loader and waiting a chunk and a round trip.
+  it("renders the server's node for a card that came with one", () => {
+    render(
+      <HomeGrid
+        cards={[linked("a")]}
+        demos={{ "component:a": <div data-testid="server-demo" /> }}
+      />,
+    );
+
+    expect(screen.getByTestId("server-demo")).toBeTruthy();
+    expect(screen.queryByTestId("demo")).toBeNull();
+  });
+
+  // Keyed by CARD, so the node built for one showing cannot be drawn in
+  // another's seat — the two are published at different shapes.
+  it("falls back to the browser for a card the server sent no node for", () => {
+    render(
+      <HomeGrid
+        cards={[linked("a")]}
+        demos={{ "component:b": <div data-testid="server-demo" /> }}
+      />,
+    );
+
+    expect(screen.queryByTestId("server-demo")).toBeNull();
+    expect(screen.getByTestId("demo")).toBeTruthy();
+  });
+
+  // A card inserted while editing has no server node and cannot have one: it
+  // does not exist until the layout is saved. It must still draw.
+  it("falls back to the browser when the page sent no nodes at all", () => {
+    render(<HomeGrid cards={[linked("a")]} />);
+
+    expect(screen.getByTestId("demo")).toBeTruthy();
   });
 });

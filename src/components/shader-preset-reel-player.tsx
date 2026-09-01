@@ -53,6 +53,36 @@ export interface ReelPreset {
 }
 
 /**
+ * How many presets a full reel plays.
+ *
+ * A CEILING, not a quota. Fewer than this is the ordinary case for a young
+ * library and not a shortfall to pad out — the reel plays two, or one, or draws
+ * nothing at all, and none of those is a different component.
+ */
+export const REEL_LENGTH = 3;
+
+/**
+ * The newest few presets, cut down to what a layer actually reads off one.
+ *
+ * HERE rather than in either half that calls it, because both do: the server
+ * component fetches for the page and the demo wrapper fetches for the browser,
+ * and "the newest three, narrowed" written twice is the rule that would end up
+ * meaning two different things.
+ *
+ * It does not sort. `getShaderPresets` already answers newest-first, and a
+ * second opinion about the order here is the one that would go stale.
+ *
+ * The narrowing earns its keep on the server side especially: everything that
+ * crosses that boundary is serialised into the page, and a preset's row carries
+ * a title, a publication date and two timestamps the ground has no use for.
+ */
+export function toReelPresets(presets: readonly ReelPreset[]): ReelPreset[] {
+  return presets
+    .slice(0, REEL_LENGTH)
+    .map(({ id, shaderId, settings }) => ({ id, shaderId, settings }));
+}
+
+/**
  * How long a preset holds the reel, in milliseconds — the SETTLED time, not the
  * period. A full turn is this plus the two halves of the handover below.
  */
