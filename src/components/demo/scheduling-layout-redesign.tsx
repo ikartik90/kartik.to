@@ -103,10 +103,26 @@ const REDLINE_HEIGHT = REDLINE_SPINE + 2 + 44;
 // numbered drawing reaches the gutter and there is nothing left to give up but
 // size.
 //
-//   615 = the card (`ShiftFormShell`'s own stack)
-//   366 = 28 toggle + 76 gap + 262 card (52 header + 190 body + 20 tear)
+// What SCALES is the drawing alone — the card and the marks hung off it. The
+// toggle above it is a control and the legend below it is a key: both are
+// chrome around the picture rather than part of it, both are far narrower than
+// the picture (120px and ~285px against 687), and so both still have room to
+// spare at every width the picture has run out at. Shrinking them would be
+// answering a question nobody asked, and it would cost a live control its hit
+// area and the legend its legibility.
+//
+//   615 × 262 = the card (`ShiftFormShell`'s own stack; 52 header + 190 body
+//               + 20 tear), and 76 below the toggle, off the token scale in
+//               both directions — the Figma root's own gap (1137:5962)
 const CARD_WIDTH = 615;
-const STAGE_HEIGHT = 366;
+const CARD_HEIGHT = 262;
+const TOGGLE_GAP = 76;
+
+// How far the legend keeps off the drawing at the closest it ever gets. It is a
+// MINIMUM rather than the gap: the box below fills the frame, and everything
+// left over after the drawing has been placed falls between the two, which is
+// what holds the legend against the frame's foot.
+const LEGEND_GAP = 32;
 
 // What one redline costs beside the card: the 8px mark plus the 4px gutter the
 // Figma leaves between it and the card (1137:5966), then the 4px gap from the
@@ -128,15 +144,6 @@ export const LABELLED_WIDTH =
 export const NUMBERED_WIDTH =
   CARD_WIDTH + 2 * (REDLINE_CLEARANCE + CAPTION_GAP + BADGE_SIZE);
 
-// The legend's own row — a 20px disc beside a 14/1.72 name, so the name's line
-// box is the taller of the two — and its distance from the drawing above it.
-// Only the numbered form has a legend, so only the numbered form reserves the
-// height for one; the frame reads that height off the box below and grows to
-// hold it, which is the same arrangement the toggle already has at the top.
-const LEGEND_HEIGHT = 24;
-const LEGEND_GAP = 32;
-const NUMBERED_HEIGHT = STAGE_HEIGHT + LEGEND_GAP + LEGEND_HEIGHT;
-
 /** Which of the two forms the redline captions are drawn in. */
 export type RedlineAnnotation = "labels" | "numbers";
 
@@ -144,8 +151,6 @@ export interface DiagramFit {
   annotation: RedlineAnnotation;
   /** The drawing's own width in that form — what the scale is measured from. */
   width: number;
-  /** Its height, legend included where there is one. */
-  height: number;
   /** 1 until the numbered drawing reaches the gutter; its share of it after. */
   fit: number;
 }
@@ -163,31 +168,26 @@ export interface DiagramFit {
  */
 export function resolveDiagramFit(available: number): DiagramFit {
   if (available >= LABELLED_WIDTH) {
-    return {
-      annotation: "labels",
-      width: LABELLED_WIDTH,
-      height: STAGE_HEIGHT,
-      fit: 1,
-    };
+    return { annotation: "labels", width: LABELLED_WIDTH, fit: 1 };
   }
 
   return {
     annotation: "numbers",
     width: NUMBERED_WIDTH,
-    height: NUMBERED_HEIGHT,
     fit: Math.min(1, Math.max(0, available) / NUMBERED_WIDTH),
   };
 }
 
-// The box the frame actually lays out and measures: the diagram's footprint at
-// whatever form and scale it ended up in, so nothing overflows and the frame
-// reserves neither too much room nor too little.
+// The box the frame lays out and measures: the toggle, the drawing at whatever
+// form and scale it ended up in, and the legend where there is one — a plain
+// column, so its height is the sum of what is actually in it rather than a
+// number kept in step by hand.
 //
-// All three variables are written by the observer in the component below, and
-// DEFAULT here to the labelled drawing at 1:1 on purpose. Those are the values
-// that render before the observer has measured anything — and the ones that
-// survive if it never runs at all — so the failure mode is a diagram drawn too
-// large in a frame that grew to hold it, which is still a readable diagram.
+// Both variables are written by the observer in the component below, and DEFAULT
+// here to the labelled drawing at 1:1 on purpose. Those are the values that
+// render before the observer has measured anything — and the ones that survive
+// if it never runs at all — so the failure mode is a diagram drawn too large in
+// a frame that grew to hold it, which is still a readable diagram.
 //
 // This was a `tan(atan2(100cqw - 40px, 799px))` expression, which is the known
 // trick for dividing one CSS length by another (calc() refuses to, atan2 takes
@@ -197,41 +197,57 @@ export function resolveDiagramFit(available: number): DiagramFit {
 // the whole thing collapsed to `scale(0)` — a correctly sized frame with nothing
 // inside it. A ResizeObserver computes the same number in every engine.
 const fitStyle = css({
-  position: "relative",
   "--demo-fit": "1",
   "--demo-diagram-width": `${LABELLED_WIDTH}px`,
-  "--demo-diagram-height": `${STAGE_HEIGHT}px`,
+  // As wide as the drawing ends up, which is what the frame measures. The two
+  // pieces of chrome are narrower than that at every width the drawing is
+  // scaled at, so this is also what they centre on.
   width: "calc(var(--demo-diagram-width) * var(--demo-fit))",
-  height: "calc(var(--demo-diagram-height) * var(--demo-fit))",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
   // Fill the frame's content box (its height is half its width at the 2/1 this
   // demo is registered at, less the same 40px inset) so that the demo area's
   // `justify-content: center` has no slack left to centre — which is what puts
   // the toggle at the TOP of the frame, where the Figma draws it, rather than
-  // floating in the middle of it. Where the diagram is taller than that — a
+  // floating in the middle of it. Where the column is taller than that — a
   // narrow frame — this simply stops applying and the frame grows instead.
   minHeight: "calc(50cqw - token(spacing.4xl))",
 });
 
-const stageStyle = css({
+// The drawing's own footprint AT SCALE, and the only thing in the column whose
+// size the scale decides. A transform costs layout nothing, so the scaled
+// drawing needs a box of the right size around it or the column would reserve
+// the drawing's full height and the frame would grow to hold a picture that is
+// no longer that big.
+//
+// The gap above it is the Figma's 76, scaled: the toggle stays the size it is,
+// but the distance from a control to the picture it drives belongs to the
+// picture's composition, and holding it at 76 while the drawing halved would
+// leave the two adrift of each other.
+const drawingBoxStyle = css({
+  position: "relative",
+  flex: "none",
+  width: "calc(var(--demo-diagram-width) * var(--demo-fit))",
+  height: `calc(${CARD_HEIGHT}px * var(--demo-fit))`,
+  marginBlockStart: `calc(${TOGGLE_GAP}px * var(--demo-fit))`,
+});
+
+const drawingStyle = css({
   position: "absolute",
   insetBlockStart: "token(spacing.none)",
   insetInlineStart: "token(spacing.none)",
   width: "var(--demo-diagram-width)",
-  // The drawing's own height, never the legend's: the legend hangs off the
-  // BOX's bottom edge below, so that the frame's foot is what it keeps its
-  // distance from rather than the card.
-  height: `${STAGE_HEIGHT}px`,
+  height: `${CARD_HEIGHT}px`,
   // Scaled from the top-left corner because the box above is already sized to
   // the result — anchoring it anywhere else would need the box to re-centre
   // what the transform moved.
   transformOrigin: "top left",
   transform: "scale(var(--demo-fit))",
+  // The card is 615 of the drawing's 799 or 687; the rest is the annotation
+  // hanging off its two sides, so the card sits in the middle of it.
   display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  // 76px, off the token scale in both directions (xxl is 20, 3xl is 32, 5xl is
-  // 80) — the Figma root's own gap between the toggle and the card (1137:5962).
-  gap: "76px",
+  justifyContent: "center",
 });
 
 // The toggle is the ONE live control on the stage — everything under it is
@@ -385,24 +401,32 @@ const redlineBadgeStyle = css({
   "[data-side=end] &": { insetInlineStart: "calc(100% + token(spacing.sm))" },
 });
 
-// The key the numbers need, at the foot of the frame. It is pinned to the
-// BOX's bottom edge rather than placed under the card, which puts it the demo
-// area's own 20px inset above the frame's bottom — the same inset the toggle
-// keeps at the top, so the two pieces of chrome bracket the drawing evenly.
-// It scales from that corner with everything else once the second boundary is
-// reached, so the gutter it keeps stays the drawing's own.
+// The key the numbers need, at the foot of the frame. `margin-block-start: auto`
+// is what puts it there: it takes every pixel the column has left over after
+// the drawing has been placed, which leaves the legend against the bottom edge
+// of a box that is itself the demo area's own 20px inset above the frame's
+// bottom — the same inset the toggle keeps at the top, so the two pieces of
+// chrome bracket the drawing evenly. The padding is the floor for when there is
+// nothing left over to take.
+//
+// It is drawn at its own size, never at the drawing's scale. A key nobody can
+// read is not a key, and it is the one thing on the stage whose job is to be
+// read rather than looked at.
 const legendStyle = css({
-  position: "absolute",
-  insetBlockEnd: "token(spacing.none)",
-  insetInlineStart: "token(spacing.none)",
-  width: "var(--demo-diagram-width)",
-  height: `${LEGEND_HEIGHT}px`,
-  transformOrigin: "bottom left",
-  transform: "scale(var(--demo-fit))",
+  flex: "none",
+  marginBlockStart: "auto",
+  paddingBlockStart: `calc(${LEGEND_GAP}px * var(--demo-fit))`,
+  maxWidth: "token(spacing.full)",
   display: "flex",
+  // A frame narrow enough that 276px of key will not fit on one line gets it on
+  // two rather than a key running under the frame's edge. The two gaps are
+  // separate because they are doing different jobs: 32 apart, the entries read
+  // as two things; stacked, 8 is what keeps them reading as one block.
+  flexWrap: "wrap",
   justifyContent: "center",
   alignItems: "center",
-  gap: "3xl",
+  columnGap: "3xl",
+  rowGap: "md",
   listStyle: "none",
   // It belongs to the redlines, so it goes when they do — a key to marks that
   // are no longer on screen is a key to nothing.
@@ -671,7 +695,7 @@ export function SchedulingLayoutRedesign() {
   // width the labelled drawing wants, which is the 1:1 default the styles above
   // are written to agree with.
   const [available, setAvailable] = useState(LABELLED_WIDTH);
-  const { annotation, width, height, fit } = resolveDiagramFit(available);
+  const { annotation, width, fit } = resolveDiagramFit(available);
 
   // What the diagram has to fit into is the DEMO FRAME's box, never anything
   // nearer: this element and its measuring parent are both sized FROM the scale,
@@ -701,133 +725,142 @@ export function SchedulingLayoutRedesign() {
         {
           "--demo-fit": fit,
           "--demo-diagram-width": `${width}px`,
-          "--demo-diagram-height": `${height}px`,
         } as CSSProperties
       }
     >
-      <div className={stageStyle}>
-        <SegmentedControl
-          ariaLabel="Scheduling form layout"
-          className={toggleStyle}
-          options={ARRANGEMENTS}
-          value={arrangement}
-          onValueChange={(next) => setArrangement(next as Arrangement)}
-        />
+      {/* The one live control on the stage, and so the one thing here drawn at
+        the size a hand has to hit rather than at the picture's scale. */}
+      <SegmentedControl
+        ariaLabel="Scheduling form layout"
+        className={toggleStyle}
+        options={ARRANGEMENTS}
+        value={arrangement}
+        onValueChange={(next) => setArrangement(next as Arrangement)}
+      />
 
-        <div className={cardStyle}>
-          {/* The annotations belong to the old arrangement, so they withdraw with
+      <div className={drawingBoxStyle}>
+        <div className={drawingStyle} data-testid="scheduling-drawing">
+          <div className={cardStyle}>
+            {/* The annotations belong to the old arrangement, so they withdraw with
             it. They are OUTSIDE the card because the card is clipped at its
             side rails and at the tear — a bracket drawn inside it could neither
             reach past its edge nor run on below the cut. */}
-          <div
-            className={redlinesStyle}
-            data-testid="redlines"
-            data-presented={showing("before")}
-            aria-hidden={!showing("before")}
-          >
-            {REDLINES.map((redline, index) => (
-              <div
-                key={redline.label}
-                className={redlineStyle}
-                data-side={redline.side}
-              >
-                {annotation === "labels" ? (
-                  <span
-                    className={redlineLabelStyle}
-                    data-testid="redline-label"
-                  >
-                    {redline.label}
-                  </span>
-                ) : (
-                  <span
-                    className={cx(badgeStyle, redlineBadgeStyle)}
-                    data-testid="redline-badge"
-                  >
-                    {index + 1}
-                  </span>
-                )}
-                <RedlineMark />
-              </div>
-            ))}
-          </div>
+            <div
+              className={redlinesStyle}
+              data-testid="redlines"
+              data-presented={showing("before")}
+              aria-hidden={!showing("before")}
+            >
+              {REDLINES.map((redline, index) => (
+                <div
+                  key={redline.label}
+                  className={redlineStyle}
+                  data-side={redline.side}
+                >
+                  {annotation === "labels" ? (
+                    <span
+                      className={redlineLabelStyle}
+                      data-testid="redline-label"
+                    >
+                      {redline.label}
+                    </span>
+                  ) : (
+                    <span
+                      className={cx(badgeStyle, redlineBadgeStyle)}
+                      data-testid="redline-badge"
+                    >
+                      {index + 1}
+                    </span>
+                  )}
+                  <RedlineMark />
+                </div>
+              ))}
+            </div>
 
-          <ShiftFormShell cropped>
-            <div className={bodyStyle}>
-              {/* BEFORE — two concerns, one screen, both running off the bottom. */}
-              <div
-                className={cx(paneStyle, beforePaneStyle)}
-                data-testid="before-pane"
-                data-presented={showing("before")}
-                aria-hidden={!showing("before")}
-                inert={!showing("before")}
-              >
-                <Wireframe className={fieldColumnStyle} opacity={50}>
-                  <ShiftFormFields />
-                </Wireframe>
+            <ShiftFormShell cropped>
+              <div className={bodyStyle}>
+                {/* BEFORE — two concerns, one screen, both running off the bottom. */}
+                <div
+                  className={cx(paneStyle, beforePaneStyle)}
+                  data-testid="before-pane"
+                  data-presented={showing("before")}
+                  aria-hidden={!showing("before")}
+                  inert={!showing("before")}
+                >
+                  <Wireframe className={fieldColumnStyle} opacity={50}>
+                    <ShiftFormFields />
+                  </Wireframe>
 
-                {/* Held at the same strength as the fields, unlike v0's live
+                  {/* Held at the same strength as the fields, unlike v0's live
                   calendar: the comparison is between two ARRANGEMENTS, and
                   putting one half of this one in focus would be judging it. */}
-                <Wireframe className={calendarColumnStyle} opacity={50}>
-                  <Field>
-                    <Field.Label>Scheduling Calendar</Field.Label>
-                    <Field.Frame className={calendarPlaceholderStyle}>
-                      <Skeleton>August 2026</Skeleton>
-                      <span className={monthNavStyle} aria-hidden>
-                        <ChevronLeftIcon />
-                        <ChevronRightIcon />
-                      </span>
-                    </Field.Frame>
-                  </Field>
-                </Wireframe>
-
-                <div className={cropFadeStyle} aria-hidden />
-              </div>
-
-              {/* AFTER — the same work, in the order it is actually done. */}
-              <div
-                className={cx(paneStyle, afterPaneStyle)}
-                data-testid="after-pane"
-                data-presented={showing("after")}
-                aria-hidden={!showing("after")}
-                inert={!showing("after")}
-              >
-                <ol className={stepsStyle}>
-                  {STEPS.map((step, index) => (
-                    <li
-                      key={step.name}
-                      className={stepStyle}
-                      data-state={step.state}
-                    >
-                      <span className={stepEyebrowStyle}>Step {index + 1}</span>
-                      <span className={stepNameStyle} data-testid="step-name">
-                        {step.name}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-
-                <Wireframe className={monthStripStyle} opacity={25}>
-                  <Field>
-                    <Field.Label>Scheduling Calendar</Field.Label>
-                    <Field.Frame className={monthStripFrameStyle}>
-                      {MONTHS.map((month) => (
-                        <span key={month} className={monthStyle}>
-                          <Skeleton>{month}</Skeleton>
+                  <Wireframe className={calendarColumnStyle} opacity={50}>
+                    <Field>
+                      <Field.Label>Scheduling Calendar</Field.Label>
+                      <Field.Frame className={calendarPlaceholderStyle}>
+                        <Skeleton>August 2026</Skeleton>
+                        <span className={monthNavStyle} aria-hidden>
+                          <ChevronLeftIcon />
+                          <ChevronRightIcon />
                         </span>
-                      ))}
-                    </Field.Frame>
-                  </Field>
-                  <span className={stripNavStyle} data-side="start" aria-hidden>
-                    <ChevronLeftIcon />
-                  </span>
-                  <span className={stripNavStyle} data-side="end" aria-hidden>
-                    <ChevronRightIcon />
-                  </span>
-                </Wireframe>
+                      </Field.Frame>
+                    </Field>
+                  </Wireframe>
+
+                  <div className={cropFadeStyle} aria-hidden />
+                </div>
+
+                {/* AFTER — the same work, in the order it is actually done. */}
+                <div
+                  className={cx(paneStyle, afterPaneStyle)}
+                  data-testid="after-pane"
+                  data-presented={showing("after")}
+                  aria-hidden={!showing("after")}
+                  inert={!showing("after")}
+                >
+                  <ol className={stepsStyle}>
+                    {STEPS.map((step, index) => (
+                      <li
+                        key={step.name}
+                        className={stepStyle}
+                        data-state={step.state}
+                      >
+                        <span className={stepEyebrowStyle}>
+                          Step {index + 1}
+                        </span>
+                        <span className={stepNameStyle} data-testid="step-name">
+                          {step.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <Wireframe className={monthStripStyle} opacity={25}>
+                    <Field>
+                      <Field.Label>Scheduling Calendar</Field.Label>
+                      <Field.Frame className={monthStripFrameStyle}>
+                        {MONTHS.map((month) => (
+                          <span key={month} className={monthStyle}>
+                            <Skeleton>{month}</Skeleton>
+                          </span>
+                        ))}
+                      </Field.Frame>
+                    </Field>
+                    <span
+                      className={stripNavStyle}
+                      data-side="start"
+                      aria-hidden
+                    >
+                      <ChevronLeftIcon />
+                    </span>
+                    <span className={stripNavStyle} data-side="end" aria-hidden>
+                      <ChevronRightIcon />
+                    </span>
+                  </Wireframe>
+                </div>
               </div>
-            </div>
-          </ShiftFormShell>
+            </ShiftFormShell>
+          </div>
         </div>
       </div>
 
