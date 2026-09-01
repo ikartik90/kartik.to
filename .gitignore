@@ -54,3 +54,11 @@ styled-system-studio
 .cursor/
 # Claude Code local (machine-specific) settings
 .claude/settings.local.json
+
+# local-only demo review pages (/dev/*)
+#
+# Retired from the repo twice — #119 removed sixteen of them so the public site
+# is only the site, and #125 removed the one #123 had added as a droppable
+# commit that a squash-merge took anyway. Ignoring the directory is what stops
+# the third time: a review page written here cannot be staged, so it cannot ship.
+/src/app/dev/

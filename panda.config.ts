@@ -6387,9 +6387,13 @@ export default defineConfig({
             root: {
               display: "flex",
               alignItems: "flex-start",
-              gap: "xs",
+              // 4px between the icon and the prose, on an 8px inline inset —
+              // the Figma's own (1167:7922: a 20px icon at x=8, its text
+              // opening at 32). The radius stays `sm`, which already resolves
+              // to the 4px it is drawn at.
+              gap: "sm",
               width: "token(spacing.full)",
-              paddingInline: "sm",
+              paddingInline: "md",
               paddingBlock: "md",
               borderRadius: "sm",
               backgroundColor: "bg.notice",

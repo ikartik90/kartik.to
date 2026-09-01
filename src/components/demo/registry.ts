@@ -116,6 +116,15 @@ const registry: Record<string, DemoRegistryEntry> = {
     // the article width exactly as the Shift Scheduling showcases do.
     aspectRatio: "2/1",
   },
+  "position-fields-consolidation": {
+    load: async () =>
+      (await import("./position-fields-consolidation"))
+        .PositionFieldsConsolidation,
+    // The four Figma frames are 960×640 (1167:8542) — taller than the layout
+    // redesign's, because the card it annotates is the BEFORE's own 332px body
+    // and the redlines have to reach their full length inside it.
+    aspectRatio: "3/2",
+  },
   "shader-preset-reel": {
     load: async () => {
       const mod = await import("./shader-preset-reel-demo");
