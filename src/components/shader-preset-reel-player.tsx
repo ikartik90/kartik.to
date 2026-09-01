@@ -11,7 +11,6 @@ import {
 } from "@/domain/shader-preset";
 import { ShaderStage } from "@/components/shaders/shader-stage";
 import { useReducedMotion } from "@/components/shaders/use-shader-policy";
-import { shaderPresetSwatch } from "@/utils/shader-preset-swatch";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
@@ -39,10 +38,15 @@ import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 // against itself — so a crossfade would be available for some pairs of presets
 // and not others, and which ones would depend on what happened to be saved
 // last. Instead every handover fades the current picture off, then fades the
-// next one on, and the thing underneath both is the preset's RAMP: its colours
-// as a plain CSS gradient (`shaderPresetSwatch`), which costs no context at
-// all. The ramp turns over at the top of the fade, so the reading is the same
-// every time — the colours arrive, then the picture resolves onto them.
+// next one on.
+//
+// It fades through NOTHING — the host's own background, whatever the reel is
+// standing on. There was a layer under the pictures painting the preset's
+// colours as a CSS gradient, so the colours would arrive before the picture
+// did; it read as a wash of unrelated colour sliding under the shader, which is
+// worse than a plain gap and drew attention to exactly the moment that should
+// pass unnoticed. A gap costs nothing, reads identically for every pair of
+// presets, and is what "fading out" already implied.
 // ---------------------------------------------------------------------------
 
 /** What the reel needs off a preset. The row's other columns are the strip's. */
@@ -124,18 +128,6 @@ export function advanceReel(state: ReelState, count: number): ReelState {
   }
 }
 
-/**
- * Whose colours the ground is painted in.
- *
- * The INCOMING preset's for the whole of the fade out — that is what makes the
- * handover read as an arrival rather than a gap, and it is why the ramp is a
- * separate layer from the shader rather than a fallback behind it.
- */
-export function reelRampIndex(state: ReelState, count: number): number {
-  if (count < 1) return 0;
-  return state.phase === "fadingOut" ? (state.index + 1) % count : state.index;
-}
-
 export interface ReelLayer {
   shaderId: ShaderId;
   /** Which preset's uniforms this layer is currently carrying. */
@@ -194,8 +186,9 @@ function carriedIndex(
 // shapeless.
 const reelStyle = css({ position: "absolute", inset: 0, overflow: "hidden" });
 
-// Every ramp and every shader is this same box, stacked in document order: the
-// ramps first, the pictures over them.
+// Every layer is this same box, stacked in document order and fading on its
+// own opacity. Nothing sits under them: the gap between two pictures is the
+// host's background, by design.
 const fadeStyle = css({
   position: "absolute",
   inset: 0,
@@ -238,29 +231,10 @@ export function ShaderPresetReelPlayer({
 
   if (presets.length === 0) return null;
 
-  const rampIndex = reelRampIndex(state, presets.length);
-
   return (
     // Decorative through and through: the reel is a ground, and a screen reader
     // announcing a shader changing every few seconds is noise with no content.
     <div className={reelStyle} aria-hidden>
-      {presets.map((preset, index) => (
-        <div
-          key={preset.id}
-          data-testid={`reel-ramp-${index}`}
-          className={fadeStyle}
-          // Inline because both values are the component's own: the duration is
-          // `FADE_MS`, which the timers above run on, and Panda extracts
-          // statically — a literal in `css()` would be a second copy of the
-          // number, free to drift from the one the machine uses.
-          style={{
-            background: shaderPresetSwatch(paletteFor(preset.settings, theme)),
-            opacity: index === rampIndex ? 1 : 0,
-            transitionDuration: `${FADE_MS}ms`,
-          }}
-        />
-      ))}
-
       {reelLayers(presets, state).map((layer) => {
         const preset = presets[layer.presetIndex];
         const palette = paletteFor(preset.settings, theme);

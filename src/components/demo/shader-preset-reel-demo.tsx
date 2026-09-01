@@ -1,6 +1,6 @@
 "use client";
 
-import { getShaderPresets } from "@/app/actions/shader-preset";
+import { getPublishedShaderPresets } from "@/app/actions/shader-preset";
 import {
   ShaderPresetReelPlayer,
   toReelPresets,
@@ -22,6 +22,10 @@ import type { DemoProps } from "@/components/demo/registry";
 //   - a card just inserted into an unsaved layout, which the server has never
 //     seen and cannot have rendered.
 //
+// The PUBLISHED read, the same one the server half makes: the insert dialog is
+// the author's, and a preview that showed drafts would be previewing a card
+// nobody else would ever see.
+//
 // The fetch happens in the LOAD, not on mount, which is the same bargain
 // `calchemy-demo` strikes with its engine warm-up: `useDemoLoader` awaits this
 // promise behind the frame's preloader, so the reel arrives with its presets in
@@ -31,7 +35,7 @@ import type { DemoProps } from "@/components/demo/registry";
 // ---------------------------------------------------------------------------
 
 export async function prepareShaderPresetReel() {
-  const presets = toReelPresets(await getShaderPresets());
+  const presets = toReelPresets(await getPublishedShaderPresets());
 
   return function ShaderPresetReelDemo({ aspect }: DemoProps) {
     return <ShaderPresetReelPlayer presets={presets} aspect={aspect} />;

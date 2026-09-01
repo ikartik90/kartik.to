@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { shaderPresetContentFor } from "@/domain/shader-preset";
 import type { ReelPreset } from "@/components/shader-preset-reel-player";
 
-const getShaderPresets = vi.fn();
+const getPublishedShaderPresets = vi.fn();
 vi.mock("@/app/actions/shader-preset", () => ({
-  getShaderPresets: () => getShaderPresets(),
+  getPublishedShaderPresets: () => getPublishedShaderPresets(),
 }));
 
 // The player mounts webgl2 contexts, which jsdom has none of. Stubbed with a
@@ -46,7 +46,7 @@ const row = (id: string) => ({
 
 afterEach(() => {
   cleanup();
-  getShaderPresets.mockReset();
+  getPublishedShaderPresets.mockReset();
 });
 
 describe("prepareShaderPresetReel", () => {
@@ -55,17 +55,17 @@ describe("prepareShaderPresetReel", () => {
   // arrives with its presets already in hand instead of opening on an empty box
   // and filling a round trip later.
   it("fetches while loading and hands the newest three over", async () => {
-    getShaderPresets.mockResolvedValue([row("a"), row("b"), row("c"), row("d")]);
+    getPublishedShaderPresets.mockResolvedValue([row("a"), row("b"), row("c"), row("d")]);
 
     const Reel = await prepareShaderPresetReel();
-    expect(getShaderPresets).toHaveBeenCalledTimes(1);
+    expect(getPublishedShaderPresets).toHaveBeenCalledTimes(1);
 
     render(<Reel />);
     expect(screen.getByTestId("player").dataset.presets).toBe("a,b,c");
   });
 
   it("draws the shape the frame says it is in", async () => {
-    getShaderPresets.mockResolvedValue([row("a")]);
+    getPublishedShaderPresets.mockResolvedValue([row("a")]);
     const Reel = await prepareShaderPresetReel();
 
     render(<Reel aspect="16/9" />);
@@ -77,13 +77,13 @@ describe("prepareShaderPresetReel", () => {
   // the database again. `useDemoLoader` caches the prepared component by id, so
   // rendering it repeatedly must not fetch.
   it("does not fetch again for a second render of the same load", async () => {
-    getShaderPresets.mockResolvedValue([row("a")]);
+    getPublishedShaderPresets.mockResolvedValue([row("a")]);
     const Reel = await prepareShaderPresetReel();
 
     render(<Reel />);
     cleanup();
     render(<Reel />);
 
-    expect(getShaderPresets).toHaveBeenCalledTimes(1);
+    expect(getPublishedShaderPresets).toHaveBeenCalledTimes(1);
   });
 });

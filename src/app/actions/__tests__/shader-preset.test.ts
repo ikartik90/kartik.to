@@ -41,6 +41,7 @@ vi.mock("@/lib/env", () => ({
 
 const {
   getShaderPresets,
+  getPublishedShaderPresets,
   getShaderPreset,
   createShaderPreset,
   publishShaderPreset,
@@ -126,6 +127,48 @@ describe("preset actions", () => {
       mockFindMany.mockResolvedValue([row("a", NOW)]);
 
       expect((await getShaderPresets())[0].publishedAt).toEqual(NOW);
+    });
+  });
+
+  // The other read, and the difference between them is WHO is asking.
+  //
+  // `getShaderPresets` answers the author with everything, which is right for
+  // the strip along the playground's foot: that is the author's workbench, and
+  // a draft is exactly what you go there to pick up. It is wrong for anything
+  // that DISPLAYS presets — the author's own homepage would put a half-tuned
+  // idea on the front page and show it to nobody else, so the page the author
+  // sees would not be the page that shipped.
+  describe("getPublishedShaderPresets", () => {
+    it("shows a visitor only the published presets", async () => {
+      mockFindMany.mockResolvedValue([row("a", NOW)]);
+
+      const presets = await getPublishedShaderPresets();
+
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { publishedAt: { not: null } } }),
+      );
+      expect(presets.map((preset) => preset.id)).toEqual(["a"]);
+    });
+
+    // The one that matters: signed in as the author changes nothing.
+    it("shows the author only the published presets too", async () => {
+      signedIn();
+      mockFindMany.mockResolvedValue([row("b", NOW)]);
+
+      const presets = await getPublishedShaderPresets();
+
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { publishedAt: { not: null } } }),
+      );
+      expect(presets.map((preset) => preset.id)).toEqual(["b"]);
+    });
+
+    it("asks for them newest first, as the other read does", async () => {
+      await getPublishedShaderPresets();
+
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { createdAt: "desc" } }),
+      );
     });
   });
 
