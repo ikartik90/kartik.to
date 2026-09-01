@@ -864,14 +864,29 @@ describe("CommandPalette — the `>` command line", () => {
     });
   }
 
-  it("takes a leading '>' as the way in, and says which line it is on", () => {
-    openAndType(">");
+  it("takes a leading '> ' as the way in, and says which line it is on", () => {
+    openAndType("> ");
 
     expect(list().getByText("Command")).toBeDefined();
   });
 
-  it("lists what there is to run, so a bare '>' is not a dead end", () => {
+  // The marker alone is half a prefix. Holding off until the space arrives is
+  // what keeps a search that happens to open with `>` from being hijacked into
+  // a mode nobody asked for.
+  it("waits for the space before it treats the field as a prompt", () => {
     openAndType(">");
+
+    expect(list().queryByText("Command")).toBeNull();
+  });
+
+  it("does not take a command jammed against the marker", () => {
+    openAndType(">window.adminLogin()");
+
+    expect(list().queryByText("window.adminLogin()")).toBeNull();
+  });
+
+  it("lists what there is to run, so a bare '>' is not a dead end", () => {
+    openAndType("> ");
 
     expect(list().getByText("window.adminLogin()")).toBeDefined();
   });
@@ -940,7 +955,7 @@ describe("CommandPalette — the `>` command line", () => {
   // able to reach it is the one with no session — the opposite of every other
   // admin affordance in this list.
   it("is offered to a visitor with no session at all", () => {
-    openAndType(">");
+    openAndType("> ");
 
     expect(list().getByText("window.adminLogin()")).toBeDefined();
     expect(list().queryByText("Edit page")).toBeNull();

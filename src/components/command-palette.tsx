@@ -390,7 +390,7 @@ export function CommandPalette() {
 
                 Typed rather than chosen, and so the one thing in this palette
                 that is not a row you could have found by scrolling. It replaces
-                the list rather than joining it: `>` says the field has stopped
+                the list rather than joining it: `> ` says the field has stopped
                 describing what you are looking for and started naming what you
                 want done, and leaving the search results underneath would be the
                 palette answering a question that is no longer being asked.

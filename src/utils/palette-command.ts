@@ -1,15 +1,22 @@
 // ---------------------------------------------------------------------------
 // Reading the search box as a command line.
 //
-// One character decides it: a `>` in the first position means the rest of the
-// field NAMES something to run rather than describes something to find. Chosen
-// because it is the prompt every console in the world already draws, and
-// because nothing in this palette's own vocabulary starts with it — a search for
-// "> " was never going to match a row.
+// Two characters decide it: a `>` in the first position FOLLOWED BY A SPACE
+// means the rest of the field NAMES something to run rather than describes
+// something to find. Chosen because it is the prompt every console in the world
+// already draws, and because nothing in this palette's own vocabulary starts
+// with it — a search for "> " was never going to match a row.
 //
-// Only the FIRST character counts. A `>` further in is part of what is being
+// The space is required, not decoration. `>` on its own is half a prefix and
+// could still be the start of an ordinary search, so the field stays a search
+// until the space arrives and settles it; `>foo` is that search, not a command
+// spelled impatiently. One rule, stated the way it is typed.
+//
+// And only the OPENING marker counts. A `>` further in is part of what is being
 // searched for (a title, a quote), and treating it as a prompt would turn an
-// ordinary search into a mode the reader never asked for.
+// ordinary search into a mode the reader never asked for. Leading whitespace is
+// the same thing said differently: the prefix opens the field or it is not a
+// prefix.
 //
 // Nothing here evaluates anything. The text is normalised into a NAME and the
 // name is looked up in a table (`data/palette-commands.ts`); a command that
@@ -18,20 +25,19 @@
 // returns strings.
 // ---------------------------------------------------------------------------
 
-/** The character that turns the search box into a prompt. */
-export const COMMAND_MARKER = ">";
+/** What the field must open with for its text to be read as a command. */
+export const COMMAND_PREFIX = "> ";
 
 /**
- * What was typed after the marker, or `null` when this is an ordinary search.
+ * What was typed after the prefix, or `null` when this is an ordinary search.
  *
- * An empty string is a real answer, not a missing one: a bare `>` is command
- * mode with nothing named yet, which is what lets the palette list everything
- * there is to run.
+ * An empty string is a real answer, not a missing one: `"> "` is command mode
+ * with nothing named yet, which is what lets the palette list everything there
+ * is to run.
  */
 export function parseCommandLine(input: string): string | null {
-  const line = input.trimStart();
-  if (!line.startsWith(COMMAND_MARKER)) return null;
-  return line.slice(COMMAND_MARKER.length).trim();
+  if (!input.startsWith(COMMAND_PREFIX)) return null;
+  return input.slice(COMMAND_PREFIX.length).trim();
 }
 
 /**

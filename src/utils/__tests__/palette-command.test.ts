@@ -10,28 +10,29 @@ describe("parseCommandLine", () => {
     expect(parseCommandLine("")).toBeNull();
   });
 
-  it("returns what follows the marker", () => {
-    expect(parseCommandLine(">window.adminLogin()")).toBe(
-      "window.adminLogin()",
-    );
-  });
-
-  it("drops the space the marker is usually followed by", () => {
+  it("returns what follows the marker and its space", () => {
     expect(parseCommandLine("> window.adminLogin()")).toBe(
       "window.adminLogin()",
     );
   });
 
-  it("returns an empty command for a bare marker, which is still command mode", () => {
-    expect(parseCommandLine(">")).toBe("");
+  it("wants the space: a marker jammed against the command is not one", () => {
+    expect(parseCommandLine(">window.adminLogin()")).toBeNull();
+  });
+
+  it("is not yet command mode on the marker alone — the space completes it", () => {
+    expect(parseCommandLine(">")).toBeNull();
+  });
+
+  it("returns an empty command once the space arrives, nothing named yet", () => {
     expect(parseCommandLine("> ")).toBe("");
   });
 
-  it("tolerates leading whitespace before the marker", () => {
-    expect(parseCommandLine("  > adminLogin")).toBe("adminLogin");
+  it("wants the marker first: whitespace ahead of it is an ordinary search", () => {
+    expect(parseCommandLine("  > adminLogin")).toBeNull();
   });
 
-  it("ignores a marker typed mid-search — only the first character opens it", () => {
+  it("ignores a marker typed mid-search — only the opening one counts", () => {
     expect(parseCommandLine("edit > page")).toBeNull();
   });
 
