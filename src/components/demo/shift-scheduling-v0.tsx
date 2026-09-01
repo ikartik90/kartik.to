@@ -77,6 +77,15 @@ import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 // exiled to their right). It swaps the cross axis with it, which is why
 // holding the two columns' TOPS together asks for `flex-end` here. And the row
 // gap only exists once there are two rows, so it needs no condition of its own.
+//
+// Stacking then changes what each column IS, and both changes are below:
+// the calendar is alone on its line, so it takes the line; the field block is
+// no longer a column beside anything, so it sheds its middle. Neither can be
+// read off the flex line it is on — CSS has no "did I wrap" selector, and one
+// of the two rules has to reach into the OTHER column's subtree — so the row
+// is a container and `_shiftFormStacked` asks it the same question flex
+// already answered. The query restates the flex crossover rather than adding
+// one; see the condition in `panda.config.ts` for the arithmetic.
 const bodyStyle = css({
   display: "flex",
   flexWrap: "wrap-reverse",
@@ -86,6 +95,8 @@ const bodyStyle = css({
   // The stage the walkthrough's cursor is placed against, so its points are
   // plain offsets into this box rather than viewport coordinates.
   position: "relative",
+  containerType: "inline-size",
+  containerName: "shiftForm",
 });
 
 // The calendar's measure written as the arithmetic that produces it rather than
@@ -109,6 +120,16 @@ const fieldColumnStyle = css({
   display: "flex",
   flexDirection: "column",
   gap: "lg",
+  // Stacked, the block stops being a column beside the calendar and becomes
+  // the whole width under it — in a frame that now has to hold both. So it
+  // sheds its MIDDLE: the role field it opens on and the notify row it closes
+  // on are what make the shape read as a form, and the two in between (the
+  // break duration and the notes box) are what it can spare. Written as
+  // "everything but the ends" rather than as the 2nd and 3rd children, because
+  // the ends staying IS the argument — see `ShiftFormFields` for the order.
+  _shiftFormStacked: {
+    "& > :not(:first-child, :last-child)": { display: "none" },
+  },
 });
 
 // The calendar column is exactly as wide as the calendar. `min-content` reads
@@ -117,7 +138,17 @@ const fieldColumnStyle = css({
 // would NOT do: it resolves to the widest child's max-content, which is the
 // hint on one line, and the column would run ~390px wide. Taking min-content
 // instead makes the hint wrap under the grid, as the Figma draws it (745:4415).
-const calendarColumnStyle = css({ width: "min-content", flexShrink: 0 });
+//
+// ...until it is alone on its line, where hugging the grid leaves the calendar
+// as a small box in the corner of a full-width form with nothing beside it to
+// justify the empty half. Stacked it takes the whole line instead, and the
+// `fluid` calendar inside spreads its seven columns into whatever that comes
+// to — the widening is the recipe's to perform, not this demo's to draw.
+const calendarColumnStyle = css({
+  width: "min-content",
+  flexShrink: 0,
+  _shiftFormStacked: { width: "token(spacing.full)" },
+});
 
 /** How many dates the walkthrough picks — enough to feel like work, not a list. */
 const TOUR_DATES = 4;
@@ -231,6 +262,10 @@ export function ShiftSchedulingV0() {
               selectionMode="multiple"
               values={shifts}
               onValuesChange={setShifts}
+              // Fill the column rather than hug the months. A no-op at the
+              // 208px the column is worth beside the fields, and what spends
+              // the extra width once the column is the whole stacked row.
+              fluid
               // One date per action — no marquee drag, no Shift+Arrow run. Sweeping
               // a range in a single gesture is v2's move, and the whole point of
               // this frame is the design that did NOT have it: here you pick days
