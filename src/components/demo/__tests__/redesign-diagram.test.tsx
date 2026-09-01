@@ -371,10 +371,13 @@ describe("RedesignDiagram — the card holds still", () => {
     expect(cardHeight()).toBe("418px");
   });
 
-  // The gap under the toggle is the Figma's own and varies by design, so it is
-  // the caller's to state — and it scales with the drawing, since the distance
-  // from a control to the picture it drives belongs to the composition.
-  it("takes the gap below the toggle from the caller", () => {
+  // The MOST the drawing hangs below the toggle is the Figma's own and varies by
+  // design, so it is the caller's to state — and it scales with the drawing,
+  // since the distance from a control to the picture it drives belongs to the
+  // composition. It is a ceiling on the spring above the drawing rather than a
+  // distance: what the air actually comes to is a layout question, and layout
+  // is not something jsdom answers.
+  it("takes the most the drawing hangs below the toggle from the caller", () => {
     const { rerender } = render(<Diagram />);
     expect(
       screen

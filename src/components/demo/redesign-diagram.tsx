@@ -129,14 +129,18 @@ export interface RedesignArrangement {
 //   615 = the card (`ShiftFormShell`'s own stack)
 const CARD_WIDTH = 615;
 
-/** How far the drawing hangs below the toggle when a caller does not say. */
+/**
+ * The MOST the drawing hangs below the toggle when a caller does not say — see
+ * `toggleGap`, and the pair of springs below for why it is a ceiling.
+ */
 const DEFAULT_TOGGLE_GAP = 76;
 
-// How far the legend keeps off the drawing at the closest it ever gets. It is a
-// MINIMUM rather than the gap: the box below fills the frame, and everything
-// left over after the drawing has been placed falls between the two, which is
-// what holds the legend against the frame's foot.
-const LEGEND_GAP = 32;
+// The floor under the air on either side of the drawing: how close the legend
+// ever comes to it, and the least the toggle is ever left with. It only binds
+// in a frame too short to hold the drawing at all — there, the column overflows
+// its min-height and the frame grows, which is better than the two closing on
+// the picture.
+const MIN_AIR = 32;
 
 // What one redline costs beside the card: the 8px mark plus the 4px gutter the
 // Figma leaves between it and the card, then the 4px gap from the mark out to
@@ -238,17 +242,54 @@ const fitStyle = css({
 // drawing needs a box of the right size around it or the column would reserve
 // the drawing's full height and the frame would grow to hold a picture that is
 // no longer that big.
-//
-// The gap above it is the Figma's 76, scaled: the toggle stays the size it is,
-// but the distance from a control to the picture it drives belongs to the
-// picture's composition, and holding it at 76 while the drawing halved would
-// leave the two adrift of each other.
 const drawingBoxStyle = css({
   position: "relative",
   flex: "none",
   width: "calc(var(--demo-diagram-width) * var(--demo-fit))",
   height: "calc(var(--demo-card-height) * var(--demo-fit))",
-  marginBlockStart: "calc(var(--demo-toggle-gap) * var(--demo-fit))",
+});
+
+// The air above the drawing and the air below it, as a pair of SPRINGS rather
+// than as two stated distances — one flex factor each, so whatever the column
+// has left over after the toggle, the drawing and the legend is split EQUALLY
+// between them. That is what keeps the drawing centred between its chrome, and
+// what the fixed pair could not do: the gap under the toggle was a distance and
+// the one under the drawing was everything left over, so the moment the legend
+// arrived and took 52px off the bottom, the drawing was pushed below the middle
+// of its own frame (116 above ∣ 73 below, measured at 2/1).
+//
+// Both are drawn at the drawing's scale, because the distance from a control to
+// the picture it drives belongs to the picture's composition; holding either at
+// full size while the drawing halved would leave the parts adrift of each other.
+const airStyle = css({
+  // Basis zero, so the free space is shared rather than the springs' own
+  // heights being grown from — an even split needs both to start from nothing.
+  flex: "1 1 0",
+  // Nothing sits in them, so they need no width of their own.
+  width: "token(spacing.none)",
+});
+
+// The caller's gap is a CEILING on the top spring, not the distance itself. The
+// Figma's 76 (and the position demo's 12) is what the picture wants under its
+// control when the frame has room for it — and when it has not, the spring
+// takes its half and no more, so the drawing cannot be pushed down by a legend
+// arriving underneath it.
+//
+// The floor is the smaller of the two numbers rather than `MIN_AIR` flat: a
+// caller asking for less than the floor means it, and a min-height above a
+// max-height wins in CSS — which would quietly turn the position demo's
+// deliberate 12 into 32.
+const airAboveStyle = css({
+  minHeight: `calc(min(${MIN_AIR}px, var(--demo-toggle-gap)) * var(--demo-fit))`,
+  maxHeight: "calc(var(--demo-toggle-gap) * var(--demo-fit))",
+});
+
+// ...and the floor under the bottom spring is the legend's clearance, so it is
+// carried only while there is a legend to keep off. Trailing air below the
+// drawing needs no minimum of its own, and one here would push the frame taller
+// than the shape it is drawn at.
+const airBelowLegendStyle = css({
+  minHeight: `calc(${MIN_AIR}px * var(--demo-fit))`,
 });
 
 const drawingStyle = css({
@@ -414,21 +455,18 @@ const redlineBadgeStyle = css({
   "[data-side=end] &": { insetInlineStart: "calc(100% + token(spacing.sm))" },
 });
 
-// The key the numbers need, at the foot of the frame. `margin-block-start: auto`
-// is what puts it there: it takes every pixel the column has left over after
-// the drawing has been placed, which leaves the legend against the bottom edge
-// of a box that is itself the demo area's own 20px inset above the frame's
-// bottom — the same inset the toggle keeps at the top, so the two pieces of
-// chrome bracket the drawing evenly. The padding is the floor for when there is
-// nothing left over to take.
+// The key the numbers need, at the foot of the frame. The spring above it is
+// what puts it there — between them the two springs take every pixel the column
+// has left over, which leaves the legend against the bottom edge of a box that
+// is itself the demo area's own 20px inset above the frame's bottom, the same
+// inset the toggle keeps at the top. So the two pieces of chrome bracket the
+// drawing, and the drawing sits in the middle of what they leave.
 //
 // It is drawn at its own size, never at the drawing's scale. A key nobody can
 // read is not a key, and it is the one thing on the stage whose job is to be
 // read rather than looked at.
 const legendStyle = css({
   flex: "none",
-  marginBlockStart: "auto",
-  paddingBlockStart: `calc(${LEGEND_GAP}px * var(--demo-fit))`,
   maxWidth: "token(spacing.full)",
   display: "flex",
   // A frame narrow enough that the key will not fit on one line gets it on two
@@ -651,9 +689,14 @@ export interface RedesignDiagramProps {
    */
   cropped?: boolean;
   /**
-   * How far the drawing sits below the toggle, at 1:1. The Figma's own gap, and
-   * it varies by design — a card that fills its frame has far less to give it
-   * than one that ends halfway down.
+   * The MOST the drawing sits below the toggle, at 1:1. The Figma's own gap,
+   * and it varies by design — a card that fills its frame has far less to give
+   * it than one that ends halfway down.
+   *
+   * A ceiling rather than a distance: the drawing is centred in whatever the
+   * chrome leaves it, and this is only how far the air above may open before
+   * the rest of it is handed to the air below. Where the frame has room for the
+   * whole gap, it gets the whole gap.
    */
   toggleGap?: number;
   /**
@@ -755,6 +798,9 @@ export function RedesignDiagram({
         onValueChange={(next) => setArrangement(next as Arrangement)}
       />
 
+      {/* The air above the drawing — see `airAboveStyle`. */}
+      <div className={cx(airStyle, airAboveStyle)} aria-hidden />
+
       <div className={drawingBoxStyle}>
         <div className={drawingStyle} data-testid="redesign-drawing">
           <div className={cardStyle}>
@@ -838,6 +884,16 @@ export function RedesignDiagram({
           </div>
         </div>
       </div>
+
+      {/* ...and the air below it, which carries the legend's clearance only
+        while there is a legend under it to keep off. */}
+      <div
+        className={cx(
+          airStyle,
+          annotation === "numbers" ? airBelowLegendStyle : undefined,
+        )}
+        aria-hidden
+      />
 
       {/* Only the numbered form needs saying out loud, and only while the marks
         it explains are up. */}
