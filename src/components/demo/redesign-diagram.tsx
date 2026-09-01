@@ -539,10 +539,11 @@ const bodyStyle = css({
 // arrangement is cut against. Being outside is what MAKES that possible: a
 // child cannot opt out of its parent's opacity or transform.
 //
-// It fades to `bg.canvas`, which is what the demo frame paints — and, because
-// the block is OUTLINED rather than filled, what is actually behind the content
-// running off it. One colour for both cards: a cropped one never had a fill
-// under its body, and the whole dialog no longer has one either.
+// It fades to `bg.surface`, because a fade has to meet what is ACTUALLY behind
+// the content it dissolves — and both cards now work on the form's own fill,
+// the same surface v0, v1 and v2 do. One colour for both, and it is the card's
+// rather than the frame's: the canvas is no longer what shows through here, and
+// fading to it would leave the band a shade the surface never reaches.
 //
 // Its height is a SHARE of the block, not a flat 80px. Two cards with the same
 // 80px band do not read alike: the reference demo fades 80 of a 190px block and
@@ -594,12 +595,12 @@ const cropFadeStyle = css({
   },
   backgroundImage: [
     "linear-gradient(to top",
-    "var(--colors-bg-canvas) 0%",
-    "color-mix(in srgb, var(--colors-bg-canvas) 88%, transparent) 20%",
-    "color-mix(in srgb, var(--colors-bg-canvas) 66%, transparent) 40%",
-    "color-mix(in srgb, var(--colors-bg-canvas) 40%, transparent) 60%",
-    "color-mix(in srgb, var(--colors-bg-canvas) 17%, transparent) 80%",
-    "color-mix(in srgb, var(--colors-bg-canvas) 0%, transparent) 100%)",
+    "var(--colors-bg-surface) 0%",
+    "color-mix(in srgb, var(--colors-bg-surface) 88%, transparent) 20%",
+    "color-mix(in srgb, var(--colors-bg-surface) 66%, transparent) 40%",
+    "color-mix(in srgb, var(--colors-bg-surface) 40%, transparent) 60%",
+    "color-mix(in srgb, var(--colors-bg-surface) 17%, transparent) 80%",
+    "color-mix(in srgb, var(--colors-bg-surface) 0%, transparent) 100%)",
   ].join(", "),
 });
 
@@ -796,9 +797,7 @@ export function RedesignDiagram({
               ))}
             </div>
 
-            {/* Outlined either way — a card here is a DIAGRAM of a form, and
-              the cropped variant is outlined by construction. */}
-            <ShiftFormShell cropped={cropped} outlined>
+            <ShiftFormShell cropped={cropped}>
               <div className={bodyStyle}>
                 <div
                   className={cx(paneStyle, before.className)}
