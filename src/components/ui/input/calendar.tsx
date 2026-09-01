@@ -357,6 +357,15 @@ export interface CalendarProps
    * label row.
    */
   navPlacement?: "label" | "edge";
+  /**
+   * Fill the box rather than hug the months. The calendar's width is otherwise
+   * intrinsic (208px a month), so in a wider column it simply sits in one
+   * corner of it; `fluid` grows the period to the column and opens the gutters
+   * between the seven day columns to take up the slack, leaving the day cell
+   * itself at its 24px square. A no-op at the natural measure, which is what
+   * makes it safe to set once and let the column decide.
+   */
+  fluid?: boolean;
   /** Override "today" — primarily for tests/deterministic rendering. */
   today?: Temporal.PlainDate;
   children: ReactNode;
@@ -380,6 +389,7 @@ function CalendarRoot({
   queryParser,
   tone = "default",
   navPlacement = "label",
+  fluid = false,
   today: todayProp,
   className,
   children,
@@ -391,7 +401,7 @@ function CalendarRoot({
   // (a <div role="group"> is not a labelable `htmlFor` target). Display-only
   // calendars (availability/event/heatmap) are a separate component.
   const { labelId, hasLabel, hintId, hasHint } = useField("Calendar");
-  const styles = calendar({ tone, navPlacement });
+  const styles = calendar({ tone, navPlacement, fluid });
   const today = todayProp ?? Temporal.Now.plainDateISO();
 
   const multiple = selectionMode === "multiple";

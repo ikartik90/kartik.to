@@ -42,6 +42,25 @@ function tornEdgesClip(teeth: number, amp: number): string {
 
 const TORN_CLIP = tornEdgesClip(8, 20);
 
+// The lower half of the same cut, for a band exactly one tooth tall: the fill
+// runs flush to the band's top and only its bottom edge zigzags. It is what
+// ends the CROPPED card, where the surface stops partway down a form rather
+// than at the form's own foot — the teeth are the same drawing, on the same
+// phase, so the cropped card's last edge and the dialog's read as one treatment
+// (`tornEdgesClip`'s bottom row already resolves to exactly this on a 20px box;
+// it is written out because the top row must stay straight).
+function tornFootClip(teeth: number): string {
+  const segments = teeth * 2;
+  const points = ["0% 0px", "100% 0px"];
+  for (let i = segments; i >= 0; i--) {
+    const x = `${((i / segments) * 100).toFixed(3)}%`;
+    points.push(`${x} ${i % 2 === 0 ? "100%" : "0px"}`);
+  }
+  return `polygon(${points.join(", ")})`;
+}
+
+const TORN_FOOT_CLIP = tornFootClip(8);
+
 // Every row of the card that is NOT its form surface, so a demo staging one can
 // work out how tall the whole card ends up without keeping a second copy of the
 // answer. Each is what the styles below already produce, and each is what the
@@ -89,10 +108,10 @@ const headerStyle = css({
   borderBottomWidth: "token(spacing.none)",
 });
 
-// The tear itself, as a background image: a 20px band carrying the Figma shim
-// zigzag (684:1019). Named rather than inlined at each use because the SAME
-// drawing ends the header AND ends a cropped card, and a second copy of a 600-
-// character data URI is a second thing to keep in step.
+// The header's tear, as a background image: a 20px band carrying the Figma shim
+// zigzag (684:1019). A drawn LINE rather than a cut, because there is no fill
+// here to cut — the wireframe rows are the card's unfilled scenery, and the two
+// sections that carry a surface tear it with `TORN_CLIP` instead.
 const TEAR_IMAGE =
   "url(\"data:image/svg+xml,%3Csvg preserveAspectRatio='none' width='615.462' height='21.1273' viewBox='0 0 615.462 21.1273' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.23079 0.563635L38.6683 20.5636L77.1058 0.563635L115.543 20.5636L153.981 0.563635L192.418 20.5636L230.856 0.563635L269.293 20.5636L307.731 0.563635L346.168 20.5636L384.606 0.563635L423.043 20.5636L461.481 0.563635L499.918 20.5636L538.356 0.563635L576.793 20.5636L615.231 0.563635' stroke='%23576675' stroke-opacity='0.1'/%3E%3C/svg%3E\")";
 
@@ -133,54 +152,6 @@ const formStyle = css({
   paddingInline: "xl",
   paddingBlock: "calc(token(spacing.xxl) + token(spacing.xl))",
   clipPath: TORN_CLIP,
-});
-
-// The same surface OUTLINED rather than filled — side rails at the wireframe
-// hairline and nothing behind the content, so the frame's canvas shows through.
-// It is the treatment `croppedBodyStyle` below already gives the cropped card's
-// body, and the diagrams wear it for the same reason: a block you are looking AT
-// is drawn, where a block you are working IN is a surface you work on. v1 and v2
-// are prototypes and keep the fill.
-//
-// No `clip-path` — there are no teeth to cut without a fill — but the two torn
-// edges it used to draw are this section's OWN, and have to be drawn as strokes
-// instead. The Figma stacks four shim bands down the card, not two: the header's
-// bottom (1167:7785), this section's top and bottom (1167:7787 / 1167:7790), and
-// the footer's top (1167:7857). Only the first and last were pseudo-elements
-// here; the middle pair were the clipped fill's toothed edges, so dropping the
-// fill took them with it and left the block open at both ends.
-//
-// They sit INSIDE the 20px tooth allowance the block padding already reserves,
-// so the content keeps its 16px clearance and the card's height is the filled
-// surface's exactly — nothing downstream has to know which one it is wearing.
-//
-// The drawing is one edge, used both ways up: as exported it is a TOP edge, and
-// the foot takes it mirrored. Reversing the two turns the seam into a lattice —
-// this section's top and the header's tear above it then interlock into a row of
-// diamonds instead of reading as one torn line, which is what gave it away.
-const outlinedFormStyle = css({
-  position: "relative",
-  paddingInline: "xl",
-  paddingBlock: "calc(token(spacing.xxl) + token(spacing.xl))",
-  borderStyle: "solid",
-  borderColor: wireBorder,
-  borderInlineWidth: "token(spacing.xxs)",
-  borderBlockWidth: "token(spacing.none)",
-  "&::before, &::after": {
-    content: '""',
-    position: "absolute",
-    // The padding box, so the zigzag runs rail to rail rather than over them.
-    insetInline: "token(spacing.none)",
-    height: "token(spacing.xxl)",
-    backgroundImage: TEAR_IMAGE,
-    backgroundSize: "100% 100%",
-    backgroundRepeat: "no-repeat",
-  },
-  "&::before": { insetBlockStart: "token(spacing.none)" },
-  "&::after": {
-    insetBlockEnd: "token(spacing.none)",
-    transform: "scaleY(-1)",
-  },
 });
 
 // Mirror of the header — a plain wireframe box with bottom + side hairline
@@ -273,13 +244,14 @@ const croppedHeaderStyle = css({
   borderWidth: "token(spacing.xxs)",
 });
 
-// Side rails only — the header caps it above and the tear ends it below, so a
-// border on either edge would double up with them.
+// The form's own surface, exactly as the dialog draws it — a diagram of a form
+// is still a picture OF that form, and the arrangement inside it should read
+// against the surface it would really sit on rather than against the frame's
+// canvas. It takes no side rails for the same reason the dialog's form section
+// has none: the fill is what draws the box, and the hairlines belong to the
+// wireframe rows above and below it.
 const croppedBodyStyle = css({
-  borderStyle: "solid",
-  borderColor: wireBorder,
-  borderInlineWidth: "token(spacing.xxs)",
-  borderBlockWidth: "token(spacing.none)",
+  backgroundColor: "bg.surface",
   // The body is CROPPED, not merely short: content taller than the card runs on
   // past the tear rather than stretching it.
   overflow: "hidden",
@@ -288,11 +260,16 @@ const croppedBodyStyle = css({
 // The tear as an element rather than a pseudo — it is the card's last row here,
 // not decoration hung off a wrapper, and being real is what lets it sit in the
 // stack's flow after a body of any height.
+//
+// It is the SURFACE torn, not a line drawn under it: one tooth's worth of the
+// same fill, cut off along the zigzag, so the canvas shows through the teeth
+// the way it does at the dialog section's own two edges. The stroked zigzag the
+// band used to carry belongs to the wireframe rows — the header's bottom shim
+// and the footer's top one — where there is no fill to cut.
 const croppedTearStyle = css({
   height: "token(spacing.xxl)",
-  backgroundImage: TEAR_IMAGE,
-  backgroundSize: "100% 100%",
-  backgroundRepeat: "no-repeat",
+  backgroundColor: "bg.surface",
+  clipPath: TORN_FOOT_CLIP,
 });
 
 export interface ShiftFormShellProps {
@@ -315,14 +292,6 @@ export interface ShiftFormShellProps {
    * crop is and how its content fades into the cut.
    */
   cropped?: boolean;
-  /**
-   * Draw the form surface as an outline rather than a fill — side rails and the
-   * canvas showing through, the way the cropped card's body already reads.
-   *
-   * For a card that is a DIAGRAM of a form rather than one you work in. Ignored
-   * when `cropped`, whose body is outlined by construction.
-   */
-  outlined?: boolean;
 }
 
 /** The header's two pieces of scenery, identical in both cards. */
@@ -342,7 +311,6 @@ export function ShiftFormShell({
   children,
   footerFill,
   cropped = false,
-  outlined = false,
 }: ShiftFormShellProps) {
   if (cropped) {
     return (
@@ -365,9 +333,7 @@ export function ShiftFormShell({
         </div>
       </div>
 
-      <div className={outlined ? outlinedFormStyle : formStyle}>
-        {children}
-      </div>
+      <div className={formStyle}>{children}</div>
 
       {/* Non-interactive wireframe footer — bottom/side borders, torn top shim. */}
       <div className={footerWrapStyle}>

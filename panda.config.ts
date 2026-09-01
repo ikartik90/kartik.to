@@ -271,6 +271,15 @@ export default defineConfig({
       narrowRail: `@media ${NARROW_RAIL_QUERY}`,
       demoFrameNarrow: "@container demoFrame (max-width: 760px)",
       demoFrameCompact: "@container demoFrame (max-width: 535px)",
+      // The Shift Scheduling v0 form once its two columns have STACKED — the
+      // one state where the calendar is alone on its line and the field column
+      // is no longer beside it. 448px is not a width picked for the demo: it is
+      // 2 × the calendar's 208px measure (7 × 24 cells + 6 × 4 gutters + 2 × 8
+      // inset) plus the 32px column gap, which is exactly the crossover the
+      // form's own flex floor already wraps at — the query restates it rather
+      // than introducing a second, disagreeing breakpoint. Container, not
+      // viewport: the form is staged in a DemoFrame that can be any width.
+      shiftFormStacked: "@container shiftForm (max-width: 448px)",
     },
   },
 
@@ -443,7 +452,7 @@ export default defineConfig({
         },
       },
 
-      containerNames: ["demoFrame", "projectsGrid"],
+      containerNames: ["demoFrame", "projectsGrid", "shiftForm"],
 
       semanticTokens: {
         colors: {
@@ -3833,7 +3842,7 @@ export default defineConfig({
         calendar: defineSlotRecipe({
           className: "calendar",
           description:
-            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). A turn is a push: the list crops, the arriving page slides in from the side the range is travelling toward and the leaving one (the `outgoing` copy) is pushed out by the same `--calendar-push` — `step` month columns, signed by the direction. Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
+            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). A turn is a push: the list crops, the arriving page slides in from the side the range is travelling toward and the leaving one (the `outgoing` copy) is pushed out by the same `--calendar-push` — `step` month columns, signed by the direction. Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `fluid` lets the grid FILL a box wider than its months instead of hugging them, spending the surplus in the gutters between the seven columns so the day cell keeps its 24px square. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
           slots: [
             "root",
             "search",
@@ -4067,6 +4076,31 @@ export default defineConfig({
             },
           },
           variants: {
+            // Fill the box, instead of hugging the months. The calendar's
+            // measure is otherwise intrinsic — 208px a month, and a consumer
+            // handing it a wider column just gets 208px of calendar sitting in
+            // one corner of it. `fluid` spends the surplus in the GUTTERS: the
+            // period grows to the list, and each grid distributes what is left
+            // between its seven tracks, so a day cell stays the 24px square the
+            // rest of the system draws and only the space BETWEEN the columns
+            // opens up. The alternative — stretching the cells — would make the
+            // selected chip a wide bar in one layout and a square in another,
+            // and it is the same calendar in both.
+            //
+            // At the natural measure the arithmetic is a no-op (free space is
+            // zero), which is what lets a consumer set this once and leave the
+            // decision to whatever column the calendar lands in.
+            fluid: {
+              true: {
+                root: { width: "token(spacing.full)" },
+                // One month takes the whole list; several share it equally.
+                period: { flexGrow: 1 },
+                // Both grids, so the weekday header keeps step with the day
+                // columns it names.
+                week: { justifyContent: "space-between" },
+                grid: { justifyContent: "space-between" },
+              },
+            },
             // How the flanking chevrons meet the list's left/right edges.
             // `label` is a bare chevron level with the month label row — right
             // for ONE month, where nothing is clipped (Figma 715:921). `edge`
@@ -4232,7 +4266,7 @@ export default defineConfig({
           },
           defaultVariants: { tone: "default", navPlacement: "label" },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ tone: ["*"], navPlacement: ["*"] }],
+          staticCss: [{ tone: ["*"], navPlacement: ["*"], fluid: ["*"] }],
         }),
 
         // A single-field editor that takes over a floating toolbar's interior:
