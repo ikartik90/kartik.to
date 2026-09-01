@@ -22,7 +22,7 @@ export function ArticleComponentBlock({
   return (
     <figure className={articleShowcase()}>
       <DemoFrame aspectRatio={demo.aspectRatio} logger={demo.logger}>
-        <DemoComponent entry={demo} />
+        <DemoComponent entry={demo} aspect={demo.aspectRatio} />
       </DemoFrame>
       {caption ? (
         <Typography tag="figcaption" type="caption">

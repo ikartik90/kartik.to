@@ -3,6 +3,7 @@ import { ArticleRenderer } from "@/components/article-renderer";
 import { HomeGrid } from "@/components/home-grid";
 import { SocialLinks } from "@/components/social-links";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
+import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getGridCards } from "@/lib/grid";
 import { getHomeDocument } from "@/lib/home";
 
@@ -31,7 +32,13 @@ export default async function Home() {
         <ArticleRenderer
           content={document ?? DEFAULT_HOME_DOCUMENT}
           slots={{
-            project_grid: <HomeGrid cards={cards} />,
+            /* The demos the page can render itself go down with the cards, so
+               a card whose content is a database read arrives painted rather
+               than showing a progress bar while the browser goes and gets it.
+               See `serverDemoSlots` for which demos those are. */
+            project_grid: (
+              <HomeGrid cards={cards} demos={serverDemoSlots(cards)} />
+            ),
             social_links: (
               <nav aria-label="Social links" className={socialRowStyle}>
                 <SocialLinks />

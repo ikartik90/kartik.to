@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { css } from "../../styled-system/css";
@@ -76,6 +77,26 @@ const fillStyle = css({
   // the tab order, where Enter would navigate just as well — see the matching
   // `interactive` prop on `LinkCard`.
   "&[data-inert]": { pointerEvents: "none" },
+});
+
+/**
+ * The card of a demo that POINTS somewhere — the reel, which is the shader
+ * playground's window.
+ *
+ * Its demo is inert to the pointer always, not only while editing: a linked
+ * card is a picture of where it goes, so every click in it belongs to the link.
+ * That is the trade a `link` in the registry makes, and it is why the demos you
+ * are meant to play with have none — see `DemoComponentEntry.link`.
+ *
+ * `fillStyle`'s job too, and deliberately not shared with it: that one fills
+ * the cell and goes inert only under `data-inert`, and folding the two together
+ * would mean either every card losing its pointer or this one keeping it.
+ */
+const demoLinkStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  flexGrow: 1,
+  "& > *": { flexGrow: 1, pointerEvents: "none" },
 });
 
 /**
@@ -178,9 +199,23 @@ interface HomeGridProps {
    * "session not read yet" on first paint.
    */
   editable?: boolean;
+  /**
+   * Demos the PAGE already rendered, keyed by card key.
+   *
+   * A slot map, the same shape `ArticleRenderer` takes for the grid itself: a
+   * client component cannot render a server one, but it can be handed the
+   * finished node. A demo whose content is a database read arrives complete
+   * this way — see `serverDemoSlots` — instead of showing a progress bar while
+   * the browser fetches a chunk and then makes a round trip for the data.
+   *
+   * Partial by design. A key that is missing falls back to the browser loader,
+   * which is what every demo without a server half uses, and what a card
+   * inserted into an unsaved layout must use — the server has never seen it.
+   */
+  demos?: Record<string, ReactNode>;
 }
 
-export function HomeGrid({ cards, editable = false }: HomeGridProps) {
+export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
   const draft = useGridDraftStore();
   const [insert, setInsert] = useState<PendingInsert | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState<{
@@ -344,7 +379,11 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
                   interactive={!editable}
                 />
               ) : (
-                <ComponentCard card={card} />
+                <ComponentCard
+                  card={card}
+                  demo={demos?.[card.key]}
+                  editable={editable}
+                />
               )}
             </div>
           </GridItem>
@@ -412,12 +451,18 @@ export function HomeGrid({ cards, editable = false }: HomeGridProps) {
 /** A published demo, rendered in the frame the article renderer gives it. */
 function ComponentCard({
   card,
+  demo,
+  editable,
 }: {
   card: Extract<GridCard, { kind: "component" }>;
+  /** The page's own render of this demo, if it had one. */
+  demo?: ReactNode;
+  editable: boolean;
 }) {
   const entry = getDemoComponent(card.componentId);
   if (!entry) return null;
-  return (
+
+  const frame = (
     // The card says WHETHER the log panel shows; the registry says what it
     // shows — a demo's empty hint, say. Handing the frame a bare `true` would
     // turn the panel on and drop the configuration that goes with it, so the
@@ -428,7 +473,28 @@ function ComponentCard({
       aspectRatio={card.aspect}
       logger={card.logger ? entry.logger ?? true : false}
     >
-      <DemoComponent entry={entry} />
+      {/* The page's node when it sent one, and the browser's loader otherwise.
+          A plain `??` rather than a branch on the demo's identity: which demos
+          the server can render is `server-demos.tsx`'s business, and the grid
+          only needs to know whether this card came with one. */}
+      {demo ?? <DemoComponent entry={entry} aspect={card.aspect} />}
     </DemoFrame>
+  );
+
+  if (!entry.link) return frame;
+
+  return (
+    // Out of the TAB ORDER while editing, not merely inert to the pointer —
+    // the same rule `LinkCard` follows and for the same reason: Enter on a
+    // focused link navigates just as well as a click, and navigating away
+    // during an edit takes the unsaved layout with it.
+    <a
+      href={entry.link.href}
+      aria-label={entry.link.label}
+      className={demoLinkStyle}
+      tabIndex={editable ? -1 : undefined}
+    >
+      {frame}
+    </a>
   );
 }

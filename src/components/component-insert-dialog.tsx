@@ -268,7 +268,12 @@ export function ComponentInsertDialog({
                   interactive={false}
                 >
                   <div inert className={demoPreviewStyle}>
-                    {selected ? <DemoComponent entry={selected} /> : null}
+                    {selected ? (
+                      <DemoComponent
+                        entry={selected}
+                        aspect={selected.aspectRatio}
+                      />
+                    ) : null}
                   </div>
                 </DemoFrame>
               </div>

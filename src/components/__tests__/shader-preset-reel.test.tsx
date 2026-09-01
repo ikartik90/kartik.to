@@ -35,8 +35,10 @@ const {
   REEL_START,
   DWELL_MS,
   FADE_MS,
+  REEL_LENGTH,
+  toReelPresets,
 } = await import("../shader-preset-reel-player");
-const { ShaderPresetReel, REEL_LENGTH } = await import("../shader-preset-reel");
+const { ShaderPresetReel } = await import("../shader-preset-reel");
 
 /**
  * A preset carrying nothing but the two facts the reel reads off one: which
@@ -359,5 +361,38 @@ describe("<ShaderPresetReel>", () => {
     getShaderPresets.mockResolvedValue([]);
     const { container } = render(await ShaderPresetReel({}));
     expect(container.innerHTML).toBe("");
+  });
+});
+
+describe("toReelPresets", () => {
+  it("takes the newest three and no more", () => {
+    expect(
+      toReelPresets([row("a"), row("b"), row("c"), row("d")]).map((p) => p.id),
+    ).toEqual(["a", "b", "c"]);
+  });
+
+  // It does not sort. `getShaderPresets` already answers newest-first, and a
+  // second opinion about the order here would be the one that went stale.
+  it("keeps the order it was given", () => {
+    expect(toReelPresets([row("c"), row("a")]).map((p) => p.id)).toEqual([
+      "c",
+      "a",
+    ]);
+  });
+
+  it("passes a short library through untouched", () => {
+    expect(toReelPresets([row("a")])).toHaveLength(1);
+    expect(toReelPresets([])).toEqual([]);
+  });
+
+  // The narrowing is the point on the server side: everything that crosses into
+  // the page is serialised, and a preset's row carries a title, a publication
+  // date and two timestamps the ground has no use for.
+  it("carries only what a layer reads off a preset", () => {
+    expect(Object.keys(toReelPresets([row("a")])[0]).sort()).toEqual([
+      "id",
+      "settings",
+      "shaderId",
+    ]);
   });
 });

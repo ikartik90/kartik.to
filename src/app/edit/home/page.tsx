@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/server";
 import { ArticleEditor } from "@/components/article-editor";
 import { HomeGrid } from "@/components/home-grid";
 import { SocialLinks } from "@/components/social-links";
+import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getGridCards } from "@/lib/grid";
 import { getOrCreateHomePost } from "@/lib/home";
 
@@ -53,7 +54,13 @@ export default async function EditHomePage() {
           initialPost={post}
           showTitle={false}
           slots={{
-            project_grid: <HomeGrid cards={cards} editable />,
+            /* The same server-rendered demos the public grid gets. A card
+               inserted during THIS edit has no node here and cannot — it does
+               not exist until the layout is saved — and falls back to the
+               browser loader on its own. */
+            project_grid: (
+              <HomeGrid cards={cards} demos={serverDemoSlots(cards)} editable />
+            ),
             social_links: (
               <nav aria-label="Social links" className={socialRowStyle}>
                 <SocialLinks />

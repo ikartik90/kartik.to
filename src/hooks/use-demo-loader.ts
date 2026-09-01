@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { usePageLoaded } from "@/hooks/use-page-loaded";
 import { loadDemoAsset, resolveDemoAssets } from "@/utils/demo-assets";
-import type { DemoComponentEntry } from "@/components/demo/registry";
+import type { DemoComponentEntry, DemoProps } from "@/components/demo/registry";
 
 // A demo's module (including its warm-up, e.g. the Calchemy engine) is loaded
 // once per session and cached by id. Any later instance — a second copy on the
 // page, a re-mount, scrolling back after it finished — reads this cache and
 // renders the component immediately, so the loader only ever shows for a
 // genuine first load, never a fake replay.
-const loadedComponents = new Map<string, ComponentType>();
-const loadPromises = new Map<string, Promise<ComponentType>>();
+const loadedComponents = new Map<string, ComponentType<DemoProps>>();
+const loadPromises = new Map<string, Promise<ComponentType<DemoProps>>>();
 
-function loadDemoModule(entry: DemoComponentEntry): Promise<ComponentType> {
+function loadDemoModule(entry: DemoComponentEntry): Promise<ComponentType<DemoProps>> {
   const cached = loadedComponents.get(entry.id);
   if (cached) return Promise.resolve(cached);
 
@@ -42,7 +42,7 @@ export function __resetDemoLoadCache(): void {
 
 interface DemoLoaderState {
   /** The demo component, once its module chunk has loaded. */
-  Component: ComponentType | null;
+  Component: ComponentType<DemoProps> | null;
   /** True once the module and all reveal-gating fonts have settled. */
   ready: boolean;
   /** Real completion fraction (0–1) across the module + gating fonts. */
@@ -57,7 +57,7 @@ interface DemoLoaderState {
  */
 export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
   const pageLoaded = usePageLoaded();
-  const [Component, setComponent] = useState<ComponentType | null>(
+  const [Component, setComponent] = useState<ComponentType<DemoProps> | null>(
     () => loadedComponents.get(entry.id) ?? null,
   );
   const [settled, setSettled] = useState(0);
