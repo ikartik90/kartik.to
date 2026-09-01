@@ -7,46 +7,59 @@ const { mockAdminLogin } = vi.hoisted(() => ({ mockAdminLogin: vi.fn() }));
 
 vi.mock("@/utils/admin-login", () => ({ adminLogin: () => mockAdminLogin() }));
 
-const { PALETTE_COMMANDS, matchPaletteCommands } = await import(
+const { PALETTE_COMMANDS, resolvePaletteCommand } = await import(
   "../palette-commands"
 );
 
-const names = (source: string) =>
-  matchPaletteCommands(source).map((command) => command.label);
-
-describe("matchPaletteCommands", () => {
+describe("resolvePaletteCommand", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("offers every command for a bare marker, so they can be found at all", () => {
-    expect(names("")).toEqual(
-      Object.values(PALETTE_COMMANDS).map((command) => command.label),
+  it("recognises the console form the author already knows", () => {
+    expect(resolvePaletteCommand("window.adminLogin()")).toBe(
+      PALETTE_COMMANDS.adminLogin,
     );
   });
 
-  it("recognises the console form the author already knows", () => {
-    expect(names("window.adminLogin()")).toEqual(["window.adminLogin()"]);
-  });
-
   it("recognises it without the call, and without the receiver", () => {
-    expect(names("window.adminLogin")).toEqual(["window.adminLogin()"]);
-    expect(names("adminLogin()")).toEqual(["window.adminLogin()"]);
-    expect(names("adminLogin")).toEqual(["window.adminLogin()"]);
-  });
-
-  it("narrows as the name is typed, rather than waiting for the whole of it", () => {
-    expect(names("admin")).toEqual(["window.adminLogin()"]);
+    for (const written of [
+      "window.adminLogin",
+      "adminLogin()",
+      "adminLogin",
+    ]) {
+      expect(resolvePaletteCommand(written)).toBe(PALETTE_COMMANDS.adminLogin);
+    }
   });
 
   it("does not mind the case of what was typed", () => {
-    expect(names("ADMINLOGIN")).toEqual(["window.adminLogin()"]);
+    expect(resolvePaletteCommand("ADMINLOGIN")).toBe(
+      PALETTE_COMMANDS.adminLogin,
+    );
   });
 
-  it("matches nothing for a command nobody registered", () => {
-    expect(names("dropDatabase()")).toEqual([]);
+  // Hidden, and hidden means hidden: a command answers to its whole name or it
+  // does not answer. Prefix matching would hand the name to anyone patient
+  // enough to type one letter at a time, which is the same as printing it.
+  it("stays silent on a partial name, however close it gets", () => {
+    for (const partial of ["a", "admin", "adminLogi", "window.admin"]) {
+      expect(resolvePaletteCommand(partial)).toBeNull();
+    }
   });
 
-  it("runs the matched command, and nothing else", async () => {
-    await matchPaletteCommands("window.adminLogin()")[0].run();
+  it("has nothing to say to an empty line — there is no menu to open", () => {
+    expect(resolvePaletteCommand("")).toBeNull();
+    expect(resolvePaletteCommand("   ")).toBeNull();
+  });
+
+  it("returns null for a command nobody registered", () => {
+    expect(resolvePaletteCommand("dropDatabase()")).toBeNull();
+  });
+
+  it("does not answer to a name with something appended to it", () => {
+    expect(resolvePaletteCommand("adminLoginNow")).toBeNull();
+  });
+
+  it("runs the resolved command, and nothing else", async () => {
+    await resolvePaletteCommand("window.adminLogin()")?.run();
 
     expect(mockAdminLogin).toHaveBeenCalledTimes(1);
   });

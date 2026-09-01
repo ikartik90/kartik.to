@@ -865,7 +865,7 @@ describe("CommandPalette — the `>` command line", () => {
   }
 
   it("takes a leading '> ' as the way in, and says which line it is on", () => {
-    openAndType("> ");
+    openAndType("> window.adminLogin()");
 
     expect(list().getByText("Command")).toBeDefined();
   });
@@ -885,12 +885,6 @@ describe("CommandPalette — the `>` command line", () => {
     expect(list().queryByText("window.adminLogin()")).toBeNull();
   });
 
-  it("lists what there is to run, so a bare '>' is not a dead end", () => {
-    openAndType("> ");
-
-    expect(list().getByText("window.adminLogin()")).toBeDefined();
-  });
-
   it("puts the rest of the palette away — a command line is not a search", () => {
     openAndType("> window.adminLogin()");
 
@@ -907,12 +901,6 @@ describe("CommandPalette — the `>` command line", () => {
 
   it("recognises the console form typed out in full", () => {
     openAndType("> window.adminLogin()");
-
-    expect(list().getByText("window.adminLogin()")).toBeDefined();
-  });
-
-  it("narrows as the name is typed", () => {
-    openAndType("> admin");
 
     expect(list().getByText("window.adminLogin()")).toBeDefined();
   });
@@ -944,18 +932,51 @@ describe("CommandPalette — the `>` command line", () => {
     expect(dialog.close).toHaveBeenCalled();
   });
 
-  it("says so when nothing answers to what was typed, rather than running it", () => {
+  // ---------------------------------------------------------------------
+  // Hidden
+  //
+  // The commands are not a menu. The palette lists what a reader can DO with
+  // the page in front of them; a command is something you already know the
+  // name of, and the login one is the console handle the whole stealth-auth
+  // arrangement rests on — a row advertising it is the visible login button
+  // that arrangement exists to not have.
+  //
+  // So the line answers an exact name and is otherwise blank: no listing, no
+  // narrowing, and no "no such command", which would confirm to anyone
+  // fishing that there is something to fish for.
+  // ---------------------------------------------------------------------
+  it("shows nothing at all for an empty line — there is no menu to open", () => {
+    openAndType("> ");
+
+    expect(list().queryByText("Command")).toBeNull();
+    expect(list().queryByText("window.adminLogin()")).toBeNull();
+  });
+
+  it("does not give the name away to a partial one", () => {
+    openAndType("> admin");
+
+    expect(list().queryByText("window.adminLogin()")).toBeNull();
+  });
+
+  it("says nothing about what was typed when nothing answers to it", () => {
     openAndType("> window.dropDatabase()");
 
-    expect(list().getByText(/no command/i)).toBeDefined();
+    expect(list().queryByText(/no command/i)).toBeNull();
+    expect(list().queryByText("Command")).toBeNull();
     expect(mockAdminLogin).not.toHaveBeenCalled();
+  });
+
+  it("keeps the search results out of the way even while it is blank", () => {
+    openAndType("> something");
+
+    expect(list().queryByText("Settings")).toBeNull();
   });
 
   // The command exists to get you SIGNED IN, so the one visitor who must be
   // able to reach it is the one with no session — the opposite of every other
   // admin affordance in this list.
-  it("is offered to a visitor with no session at all", () => {
-    openAndType("> ");
+  it("is reachable by a visitor with no session at all", () => {
+    openAndType("> window.adminLogin()");
 
     expect(list().getByText("window.adminLogin()")).toBeDefined();
     expect(list().queryByText("Edit page")).toBeNull();

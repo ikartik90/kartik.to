@@ -10,6 +10,14 @@ import { commandKey } from "@/utils/palette-command";
 // `> fetch('/api/…')` does not reach the network, and a table with one row can
 // only do one thing.
 //
+// Nothing in it is ever LISTED. The palette's rows are what a reader can do
+// with the page in front of them; a command is something you already know the
+// name of, and the one below is the console handle the stealth-auth
+// arrangement rests on — a row offering it is the visible login button that
+// arrangement exists to not have. So the table answers whole names only, and
+// answers nothing at all otherwise: no menu, no narrowing as you type, and no
+// "no such command" to tell a stranger there is something here to find.
+//
 // The row's own logic is not here either — `adminLogin` is a call away, and the
 // half of it worth protecting is a server action behind that. This file's whole
 // job is the mapping: which words reach which function. Adding a command means
@@ -33,15 +41,20 @@ export const PALETTE_COMMANDS: Record<string, PaletteCommand> = {
 };
 
 /**
- * The commands `source` could be naming — everything for an empty line, so a
- * bare `>` shows what there is rather than nothing at all.
+ * The command `source` names, or null — which is the answer to anything short
+ * of the whole name, including the empty line.
  *
- * Prefix matching on the normalised name, so the list narrows as the name is
- * typed instead of waiting for the closing paren.
+ * Whole names only: a partial one resolving would hand the name over a letter
+ * at a time, which is the same as publishing it. The normalisation `commandKey`
+ * does is not a relaxation of that — `window.adminLogin()` and `adminLogin` are
+ * the SAME whole name written two ways, and you have to know it either way.
  */
-export function matchPaletteCommands(source: string): PaletteCommand[] {
+export function resolvePaletteCommand(source: string): PaletteCommand | null {
   const typed = commandKey(source).toLowerCase();
-  return Object.entries(PALETTE_COMMANDS)
-    .filter(([key]) => key.toLowerCase().startsWith(typed))
-    .map(([, command]) => command);
+  if (!typed) return null;
+  return (
+    Object.entries(PALETTE_COMMANDS).find(
+      ([key]) => key.toLowerCase() === typed,
+    )?.[1] ?? null
+  );
 }

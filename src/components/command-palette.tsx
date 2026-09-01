@@ -20,7 +20,7 @@ import { OFFER } from "@/components/theme-toggle";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { takePaletteIntent } from "@/utils/palette-intent";
 import { parseCommandLine } from "@/utils/palette-command";
-import { matchPaletteCommands } from "@/data/palette-commands";
+import { resolvePaletteCommand } from "@/data/palette-commands";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
@@ -138,19 +138,6 @@ const itemHotkeyStyle = cx(
   css({ marginInlineStart: "auto" }),
 );
 
-// What the command line says when nothing answers to what was typed. Drawn as
-// prose rather than as a row: there is nothing here to choose, and a row offers
-// a press. Sized like the heading above it so the group still reads as one
-// block with one thing in it.
-const noticeStyle = css({
-  display: "flex",
-  alignItems: "center",
-  minHeight: "token(spacing.4xl)",
-  paddingInline: "md",
-  textStyle: "bodySmall",
-  color: "text.body/50",
-});
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -208,7 +195,13 @@ export function CommandPalette() {
    * why this is compared against null rather than tested for truth.
    */
   const commandLine = parseCommandLine(search);
-  const commands = commandLine === null ? [] : matchPaletteCommands(commandLine);
+
+  /**
+   * The command named, or null — including while it is half-typed. Commands are
+   * not listed and do not narrow; see `data/palette-commands.ts` for why.
+   */
+  const command =
+    commandLine === null ? null : resolvePaletteCommand(commandLine);
 
   // The palette owns its own component picker rather than reaching for the
   // grid's: "New component…" has to work from any page, and the grid only
@@ -399,35 +392,34 @@ export function CommandPalette() {
                 Nothing here evaluates anything — the prompt is a borrowed
                 gesture, not a console — so a name that is not in that table has
                 no path to running, whatever it happens to be valid JavaScript
-                for. */}
+                for.
+
+                And it draws NOTHING until a whole name has been typed: no menu
+                to browse, no rows appearing as you get warmer, and no notice
+                saying what was not found. A stranger who tries `> ` gets the
+                same blank list as one who tries `> admin`, which is the only
+                answer that keeps a command hidden. */}
             {commandLine !== null ? (
-              <Command.Group className={groupStyle}>
-                <div className={groupHeadingStyle}>Command</div>
-                {commands.length > 0 ? (
-                  commands.map((command) => (
-                    <Command.Item
-                      key={command.label}
-                      className={itemStyle}
-                      onSelect={() => {
-                        // Closed FIRST: the commands here leave the page — this
-                        // one hands the browser to GitHub — and a palette still
-                        // standing over a page that is on its way out reads as a
-                        // press that did nothing.
-                        close();
-                        void command.run();
-                      }}
-                    >
-                      <ConsoleIcon className={iconStyle} />
-                      {command.label}
-                      {hasCursor && <kbd className={itemHotkeyStyle}>↵</kbd>}
-                    </Command.Item>
-                  ))
-                ) : (
-                  <div className={noticeStyle}>
-                    No command named “{commandLine}”
-                  </div>
-                )}
-              </Command.Group>
+              command && (
+                <Command.Group className={groupStyle}>
+                  <div className={groupHeadingStyle}>Command</div>
+                  <Command.Item
+                    className={itemStyle}
+                    onSelect={() => {
+                      // Closed FIRST: the commands here leave the page — this
+                      // one hands the browser to GitHub — and a palette still
+                      // standing over a page that is on its way out reads as a
+                      // press that did nothing.
+                      close();
+                      void command.run();
+                    }}
+                  >
+                    <ConsoleIcon className={iconStyle} />
+                    {command.label}
+                    {hasCursor && <kbd className={itemHotkeyStyle}>↵</kbd>}
+                  </Command.Item>
+                </Command.Group>
+              )
             ) : (
               <>
                 {/* Navigate — the way out of here, which used to be an icon
