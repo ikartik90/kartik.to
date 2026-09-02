@@ -17,6 +17,16 @@ import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 // element `ref` and `seed(x, y)` — call `seed` from the pointer event that
 // opens the tooltip so it appears in place instead of at a stale spot before
 // the first pointermove lands.
+//
+// DOCKED is the case with no cursor to trail: a touch device, where the demos'
+// invitation is drawn at the foot of the screen instead. The placement is the
+// stylesheet's there (`data-docked` on the `tooltip` recipe), because a box
+// pinned to the viewport's bottom edge has to survive a phone's URL bar
+// sliding away, which a `top` computed once from `innerHeight` would not. All
+// this hook does for it is get out of the way: no pointer to follow — a
+// finger-scroll dispatches `pointermove` like anything else — and the inline
+// `left`/`top` a previous cursor placement wrote has to go, since an inline
+// style outranks the rule that would centre it.
 // ---------------------------------------------------------------------------
 
 /**
@@ -39,7 +49,7 @@ function reservedRightInset(): number {
   return parseFloat(getComputedStyle(document.body).paddingInlineEnd) || 0;
 }
 
-export function useCursorTooltip(visible: boolean) {
+export function useCursorTooltip(visible: boolean, docked = false) {
   const ref = useRef<HTMLElement | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const rafRef = useRef(0);
@@ -70,7 +80,15 @@ export function useCursorTooltip(visible: boolean) {
   }, [position]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!docked) return;
+    const el = ref.current;
+    if (!el) return;
+    el.style.left = "";
+    el.style.top = "";
+  }, [docked, visible]);
+
+  useEffect(() => {
+    if (!visible || docked) return;
 
     function onPointerMove(event: PointerEvent) {
       // A self-playing demo drags by dispatching this very event at its OWN
@@ -88,7 +106,7 @@ export function useCursorTooltip(visible: boolean) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     };
-  }, [visible, schedule]);
+  }, [visible, docked, schedule]);
 
   const seed = useCallback(
     (x: number, y: number) => {

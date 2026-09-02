@@ -14,6 +14,10 @@ import { useCursorTooltip } from "./use-cursor-tooltip";
 // Positioning is `useCursorTooltip`'s (fixed box + ref + rAF); this hook adds
 // only the two clocks. `show(x, y)` seeds it at the pointer, exactly like the
 // hover tooltips do, so it opens in place rather than at a stale spot.
+//
+// `dock()` is the same hint on the same clock with nowhere to point: no cursor
+// on the device, so the stylesheet places it at the foot of the screen and the
+// returned `docked` is what tells the box to take that placement.
 // ---------------------------------------------------------------------------
 
 /** How long a hint stays up before withdrawing itself, in ms. */
@@ -21,10 +25,11 @@ export const HINT_TOOLTIP_MS = 3000;
 
 export function useHintTooltip(duration: number = HINT_TOOLTIP_MS) {
   const [visible, setVisible] = useState(false);
+  const [docked, setDocked] = useState(false);
   // Latched by `retire`. A ref, not state: `show` reads it, nothing renders it.
   const spent = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(null);
-  const { ref, seed } = useCursorTooltip(visible);
+  const { ref, seed } = useCursorTooltip(visible, docked);
 
   // Every path out of "visible" drops the timer with it, so a stale tick can
   // never reopen a hint that has already been dismissed.
@@ -42,18 +47,30 @@ export function useHintTooltip(duration: number = HINT_TOOLTIP_MS) {
     durationRef.current = duration;
   }, [duration]);
 
+  // Restarted on every open, so each fresh hover gets the whole window rather
+  // than the tail of the last one.
+  const open = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    setVisible(true);
+    timer.current = setTimeout(hide, durationRef.current);
+  }, [hide]);
+
   const show = useCallback(
     (x: number, y: number) => {
       if (spent.current) return;
-      if (timer.current) clearTimeout(timer.current);
+      setDocked(false);
       seed(x, y);
-      setVisible(true);
-      // Restarted on every show, so each fresh hover gets the whole window
-      // rather than the tail of the last one.
-      timer.current = setTimeout(hide, durationRef.current);
+      open();
     },
-    [seed, hide],
+    [seed, open],
   );
+
+  /** The same hint with no cursor to hang from — see the note at the top. */
+  const dock = useCallback(() => {
+    if (spent.current) return;
+    setDocked(true);
+    open();
+  }, [open]);
 
   /** The gesture happened — put the hint away permanently. */
   const retire = useCallback(() => {
@@ -67,5 +84,5 @@ export function useHintTooltip(duration: number = HINT_TOOLTIP_MS) {
     };
   }, []);
 
-  return { ref, visible, show, hide, retire };
+  return { ref, visible, docked, show, dock, hide, retire };
 }
