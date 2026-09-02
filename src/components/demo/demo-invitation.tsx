@@ -8,7 +8,8 @@ import type { DemoInvitation as DemoInvitationState } from "@/hooks/use-demo-inv
 // cursor — see `useDemoInvitation` for when a page makes the offer and when it
 // declines to. This is only the copy and the wiring: the hook owns the state,
 // the shared cursor-following tooltip owns the box, the position, and its own
-// escape from anything that crops.
+// escape from anything that crops. On a device with no cursor to draw beside,
+// `docked` hands that position to the stylesheet — see `useDemoInvitation`.
 //
 // That escape used to live here, because this was the first tooltip anchored to
 // the CURSOR rather than to the element it labels — routinely outside the
@@ -23,9 +24,9 @@ import type { DemoInvitation as DemoInvitationState } from "@/hooks/use-demo-inv
 export type DemoInvitationProps = DemoInvitationState;
 
 /** "Try it yourself", at the visitor's cursor, once a demo has performed. */
-export function DemoInvitation({ ref, visible }: DemoInvitationProps) {
+export function DemoInvitation({ ref, visible, docked }: DemoInvitationProps) {
   return (
-    <TooltipHostContext.Provider value={{ ref, visible }}>
+    <TooltipHostContext.Provider value={{ ref, visible, docked }}>
       <Tooltip tone="brand">
         <Tooltip.Text>Try it yourself</Tooltip.Text>
       </Tooltip>

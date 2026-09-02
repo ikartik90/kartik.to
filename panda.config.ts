@@ -3063,6 +3063,32 @@ export default defineConfig({
               pointerEvents: "auto",
               filter: "blur(0)",
             },
+            // The one placement this box has of its own, for the one case with
+            // no cursor to hang from: the demos' invitation on a touch device,
+            // where the coordinates of the last thing a finger touched are not
+            // a place anybody is looking. Bottom centre, over the page.
+            //
+            // Placed HERE rather than written onto the element, because a phone
+            // is the one viewport that changes height while the box is up — the
+            // URL bar slides away as the visitor scrolls — and `bottom` follows
+            // that edge where a `top` computed once from `innerHeight` would be
+            // stranded. `useCursorTooltip` leaves the inline `left`/`top` off
+            // while docked so this rule is unopposed.
+            //
+            // 50px is a clearance, not a step on the spacing scale: far enough
+            // up to read as floating over the page rather than stuck to its
+            // edge, plus whatever the home indicator is holding, so it sits the
+            // same height above the glass on a phone that has one and a phone
+            // that doesn't. And nothing to press — the box is over content the
+            // visitor is being invited to touch.
+            "&[data-docked]": {
+              top: "auto",
+              left: "token(spacing.half)",
+              bottom: "calc(50px + env(safe-area-inset-bottom, 0px))",
+              translate: "-50% 0",
+              maxWidth: "calc(100% - token(spacing.3xl))",
+            },
+            "&[data-docked][data-visible]": { pointerEvents: "none" },
             // A composed trailing glyph, sized and tinted with no className.
             "& svg": {
               flexShrink: 0,
