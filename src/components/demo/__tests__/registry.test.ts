@@ -11,6 +11,7 @@ describe("demo component registry", () => {
       "shift-scheduling-v0",
       "shift-scheduling-v1",
       "shift-scheduling-v2",
+      "weather-widget",
     ]);
     for (const demo of demoComponents) {
       expect(typeof demo.load).toBe("function");

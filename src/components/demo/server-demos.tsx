@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { ShaderPresetReel } from "@/components/shader-preset-reel";
+import { WeatherWidget } from "@/components/weather-widget";
+import { getCurrentWeather } from "@/lib/weather";
 import type { DemoProps } from "@/components/demo/registry";
 import type { GridCard } from "@/lib/grid";
 
@@ -32,8 +34,22 @@ import type { GridCard } from "@/lib/grid";
  */
 type ServerDemo = (props: DemoProps) => ReactNode | Promise<ReactNode>;
 
+/**
+ * The weather card, with its reading already taken.
+ *
+ * The second kind of server demo, and for a slightly different reason from the
+ * reel's: this one's content is an OUTBOUND request, and a cached one. Rendered
+ * here it costs a single upstream call per revalidation window shared by every
+ * visitor; rendered in the browser it would be one call per person, per load,
+ * for a number that only changes every fifteen minutes.
+ */
+async function WeatherWidgetCard() {
+  return <WeatherWidget reading={await getCurrentWeather()} />;
+}
+
 export const serverDemos: Record<string, ServerDemo> = {
   "shader-preset-reel": ShaderPresetReel,
+  "weather-widget": WeatherWidgetCard,
 };
 
 /**

@@ -37,6 +37,12 @@ interface DemoFrameProps
   logger?: boolean | DemoLoggerConfig;
   /** When false, logger controls are inert (e.g. article edit preview). */
   interactive?: boolean;
+  /**
+   * `"none"` drops the frame's outline — for a demo that is a widget rather
+   * than a specimen, where a box around it reads as a picture OF the thing
+   * instead of the thing. Everything the frame measures is unchanged.
+   */
+  chrome?: "none";
 }
 
 function resolveLoggerConfig(
@@ -60,6 +66,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       aspectRatio = "2/1",
       logger,
       interactive = true,
+      chrome,
       className,
       style,
       ...props
@@ -133,7 +140,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
         // absolute against this box, and up only while the visitor is in it.
         data-demo-frame=""
         className={cx(
-          demoFrame({ logger: loggerEnabled ? true : undefined }),
+          demoFrame({ logger: loggerEnabled ? true : undefined, chrome }),
           className,
         )}
         style={style}

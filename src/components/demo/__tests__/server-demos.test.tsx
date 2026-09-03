@@ -11,6 +11,9 @@ vi.mock("@/components/shader-preset-reel", () => ({
   },
 }));
 
+// Likewise the weather card, whose server half calls an external service.
+vi.mock("@/lib/weather", () => ({ getCurrentWeather: async () => null }));
+
 const { serverDemoSlots, serverDemos } = await import("../server-demos");
 const { ShaderPresetReel } = await import("@/components/shader-preset-reel");
 
@@ -87,6 +90,9 @@ describe("serverDemoSlots", () => {
   // The registry is the catalogue of demos this codebase has; this is the much
   // shorter list of the ones whose data is fetched before the page is sent.
   it("names only the demos that have a server half", () => {
-    expect(Object.keys(serverDemos)).toEqual(["shader-preset-reel"]);
+    expect(Object.keys(serverDemos)).toEqual([
+      "shader-preset-reel",
+      "weather-widget",
+    ]);
   });
 });
