@@ -251,10 +251,10 @@ export function CommandPalette() {
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
 
-  // The chip names the key this visitor's keyboard actually has — ⌘[ on Apple
-  // hardware, Ctrl [ on a PC — which is the same shortcut the hook listens for
-  // on each.
-  const backShortcut = useShortcutLabel("[");
+  // The chip names the key this visitor's keyboard actually has — ⌘/ on Apple
+  // hardware, Ctrl / on a PC — which is the same shortcut the hook listens for
+  // on each. It was ⌘[ until Safari turned out never to hand that one over.
+  const backShortcut = useShortcutLabel("/");
   const saveShortcut = useShortcutLabel("S");
 
   /**
@@ -492,7 +492,9 @@ export function CommandPalette() {
                           <SaveIcon className={iconStyle} />
                           Save changes
                           {hasCursor && (
-                            <kbd className={itemHotkeyStyle}>{saveShortcut}</kbd>
+                            <kbd className={itemHotkeyStyle}>
+                              {saveShortcut}
+                            </kbd>
                           )}
                         </Command.Item>
                         <Command.Item
@@ -658,7 +660,10 @@ export function CommandPalette() {
                     furniture rather than anything this page is about. */}
                 <Command.Group className={groupStyle}>
                   <div className={groupHeadingStyle}>Settings</div>
-                  <Command.Item className={itemStyle} onSelect={handleThemeToggle}>
+                  <Command.Item
+                    className={itemStyle}
+                    onSelect={handleThemeToggle}
+                  >
                     {isDark ? (
                       <LightIcon className={iconStyle} />
                     ) : (

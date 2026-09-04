@@ -39,7 +39,10 @@ function isTextEntry(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
-    target.isContentEditable
+    // Compared, not just trusted: `isContentEditable` is declared `boolean` but
+    // is absent in jsdom, so the bare chain returns `undefined` there — a lie
+    // from a function that promises a boolean.
+    target.isContentEditable === true
   );
 }
 
@@ -54,20 +57,22 @@ export function useDraftHistory(): void {
     // that is a great many renders. The push then lands seconds late or not at
     // all, so ⌘Z pressed straight after an edit finds nothing to step back to.
     // A store subscription fires only when the state actually moves.
-    const unsubscribe = useShaderPresetDraftStore.subscribe((draft, previous) => {
-      if (
-        draft.settings === previous.settings &&
-        draft.shaderId === previous.shaderId &&
-        draft.editedAspects === previous.editedAspects
-      ) {
-        return;
-      }
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(
-        () => useShaderPresetDraftStore.getState().pushHistory(),
-        HISTORY_DEBOUNCE_MS,
-      );
-    });
+    const unsubscribe = useShaderPresetDraftStore.subscribe(
+      (draft, previous) => {
+        if (
+          draft.settings === previous.settings &&
+          draft.shaderId === previous.shaderId &&
+          draft.editedAspects === previous.editedAspects
+        ) {
+          return;
+        }
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(
+          () => useShaderPresetDraftStore.getState().pushHistory(),
+          HISTORY_DEBOUNCE_MS,
+        );
+      },
+    );
 
     return () => {
       unsubscribe();

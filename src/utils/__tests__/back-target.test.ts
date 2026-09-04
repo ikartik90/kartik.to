@@ -27,20 +27,22 @@ describe("getBackTarget", () => {
     });
   });
 
-  it("climbs to the nearest ancestor that is a real page", () => {
+  // It used to climb: an article's editor answered to the article, and only a
+  // page with no real ancestor fell through to the index. One destination now,
+  // because the command is "go to the index" rather than "go up a level" —
+  // somewhere to stand, not a step in a history nobody is tracking.
+  it("sends a deep page to the index rather than to its parent", () => {
     expect(getBackTarget("/writing/my-post/edit")).toEqual({
-      href: "/writing/my-post",
-      label: "My Post",
+      href: "/",
+      label: "index",
     });
     expect(getBackTarget("/work/my-project/edit")).toEqual({
-      href: "/work/my-project",
-      label: "My Project",
+      href: "/",
+      label: "index",
     });
   });
 
-  it("falls back to the index when no ancestor is a page of its own", () => {
-    // `/writing` and `/work` are section prefixes, not routes — walking one
-    // segment up blindly would offer a link to a 404.
+  it("sends a path with no real ancestor there too", () => {
     expect(getBackTarget("/edit/new")).toEqual({ href: "/", label: "index" });
   });
 

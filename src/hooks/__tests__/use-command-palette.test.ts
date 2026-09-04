@@ -27,7 +27,11 @@ const mockReplace = vi.fn<() => void>();
 const mockRefresh = vi.fn<() => void>();
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
-  useRouter: () => ({ push: mockPush, replace: mockReplace, refresh: mockRefresh }),
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    refresh: mockRefresh,
+  }),
 }));
 
 const mockNotifyContentUpdated = vi.fn();
@@ -249,7 +253,9 @@ describe("useCommandPalette", () => {
     });
 
     it("saves the open editor, and takes the key off the browser", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
@@ -266,7 +272,9 @@ describe("useCommandPalette", () => {
     // alone: the browser's own behaviour is at least a behaviour.
     it("leaves the key alone away from an editor", async () => {
       mockPathname.mockReturnValue("/");
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
@@ -280,7 +288,9 @@ describe("useCommandPalette", () => {
 
     it("leaves the key alone for a visitor, who has nothing to save to", async () => {
       mockUseSession.mockReturnValue({ data: null });
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
@@ -295,7 +305,9 @@ describe("useCommandPalette", () => {
     // ⌘⇧S is a different gesture, and the browser reports the shifted key as
     // an uppercase "S".
     it("does not answer the shifted key", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       renderHook(() => useCommandPalette(close));
 
       await act(async () => {
@@ -313,6 +325,188 @@ describe("useCommandPalette", () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // ⌘/
+  //
+  // This was ⌘[ — the gesture the browser itself reads as "back", claimed so it
+  // would land on the page above THIS one. Safari never allowed that: ⌘[ is the
+  // key equivalent of its History ▸ Back menu item, and macOS runs menu key
+  // equivalents before the event reaches the page at all, so the listener was
+  // never called and the chip advertised a shortcut that could not fire.
+  // ---------------------------------------------------------------------------
+  describe("the back shortcut", () => {
+    const stubApple = () =>
+      Object.defineProperty(navigator, "userAgentData", {
+        value: { platform: "macOS" },
+        configurable: true,
+      });
+
+    afterEach(() => {
+      cleanup();
+      delete (navigator as { userAgentData?: unknown }).userAgentData;
+    });
+
+    const press = (key: string, extra: KeyboardEventInit = {}) => {
+      const event = new KeyboardEvent("keydown", {
+        key,
+        metaKey: true,
+        cancelable: true,
+        ...extra,
+      });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    beforeEach(() => {
+      // An ancestor exists here, and it is the index — so a press has somewhere
+      // to go, and `mockPush` says where.
+      mockPathname.mockReturnValue("/writing/my-post");
+      stubApple();
+    });
+
+    it("goes up a level, and takes the key off the browser", () => {
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = press("/");
+      });
+
+      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    // The old binding, left to the browser deliberately: in Safari it is Back
+    // and the page cannot have it, and everywhere else Back is still a sane
+    // answer to it. Claiming it in one browser and not another is worse than
+    // claiming it nowhere.
+    it("leaves ⌘[ alone", () => {
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = press("[");
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    // ⌘⇧/ is ⌘?, which macOS gives to the Help menu — a different gesture, and
+    // one no page gets a say in. Browsers report the shifted key as "?".
+    it("does not answer the shifted key", () => {
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = press("?", { shiftKey: true });
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    // Claiming a key and then doing nothing with it is worse than leaving it
+    // alone — the same rule ⌘S follows off an editor.
+    it("leaves the key alone at the index, which has nothing behind it", () => {
+      mockPathname.mockReturnValue("/");
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = press("/");
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    // The platform's own modifier only: Ctrl / on a Mac is not this gesture.
+    it("refuses the other platform's modifier", () => {
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = press("/", { metaKey: false, ctrlKey: true });
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Leaving the document entirely
+  //
+  // The palette's own exits all ask before dropping buffered work, but they are
+  // not the only way out: a reload, a closed tab, a typed URL. Those unload the
+  // document, and every editor here buffers in a store — so without a word from
+  // `beforeunload` the work goes with it, unasked.
+  // ---------------------------------------------------------------------------
+  describe("the unload guard", () => {
+    const fireUnload = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    afterEach(() => {
+      cleanup();
+      useEditorStore.getState().reset();
+      useShaderPresetDraftStore.getState().reset();
+    });
+
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      useEditorStore.getState().reset();
+      mockPathname.mockReturnValue("/edit/existing-draft");
+    });
+
+    it("stops an unload that would drop a dirty document", () => {
+      useEditorStore.setState({ isDirty: true });
+      renderHook(() => useCommandPalette(close));
+
+      expect(fireUnload().defaultPrevented).toBe(true);
+    });
+
+    // The dialog is the browser's, unstyled and unskippable, so it has to earn
+    // its place: raised over a saved document it is pure obstruction.
+    it("lets a clean document go", () => {
+      renderHook(() => useCommandPalette(close));
+
+      expect(fireUnload().defaultPrevented).toBe(false);
+    });
+
+    it("lets an unload go where there is no editor open", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      useEditorStore.setState({ isDirty: true });
+      renderHook(() => useCommandPalette(close));
+
+      expect(fireUnload().defaultPrevented).toBe(false);
+    });
+
+    // The same reasoning `wouldLoseWork` gives: a visitor has nowhere to save
+    // to, so stopping them asks a question whose best answer cannot be carried
+    // out. Their buffer is ephemeral by definition.
+    it("lets a visitor go, having nowhere to save to", () => {
+      mockUseSession.mockReturnValue({ data: null });
+      useEditorStore.setState({ isDirty: true });
+      renderHook(() => useCommandPalette(close));
+
+      expect(fireUnload().defaultPrevented).toBe(false);
+    });
+
+    // Every preset holding something, not just the one on screen — the strip
+    // sets each draft aside as you move between them.
+    it("stops an unload that would drop tuned presets", () => {
+      mockPathname.mockReturnValue("/playground/shader");
+      useShaderPresetDraftStore.setState({ isDirty: true });
+      renderHook(() => useCommandPalette(close));
+
+      expect(fireUnload().defaultPrevented).toBe(true);
+    });
+  });
+
   describe("handleSaveChanges — the preset", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/playground/shader");
@@ -326,7 +520,9 @@ describe("useCommandPalette", () => {
     // Create or update is decided by the DRAFT, not the route — after a create
     // the two disagree until the navigation lands, and the store is what knows.
     it("creates when the draft has never been saved", async () => {
-      const { createShaderPreset, saveShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset, saveShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       (createShaderPreset as Mock).mockResolvedValue({
         id: "preset-1",
         title: null,
@@ -341,11 +537,15 @@ describe("useCommandPalette", () => {
       expect(saveShaderPreset).not.toHaveBeenCalled();
       // The saved row's id comes back into the draft, so a second ⌘S updates
       // the preset just written rather than creating a duplicate of it.
-      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("preset-1");
+      expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe(
+        "preset-1",
+      );
     });
 
     it("updates the preset the draft was opened on", async () => {
-      const { createShaderPreset, saveShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset, saveShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       useShaderPresetDraftStore.getState().load({
         id: "preset-9",
         title: "Dusk",
@@ -375,7 +575,9 @@ describe("useCommandPalette", () => {
     // ⌘S is a SAVE, not an exit. The whole point of the shortcut is to keep
     // working, so the one thing it must never do is navigate.
     it("stays on the page", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       (createShaderPreset as Mock).mockResolvedValue({
         id: "preset-1",
         title: null,
@@ -393,7 +595,9 @@ describe("useCommandPalette", () => {
     // a refresh would land back on the blank route and lose the connection.
     // `replace`, not `push`: the blank route is not a place to go back to.
     it("takes on the new preset's URL without adding a history entry", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       (createShaderPreset as Mock).mockResolvedValue({
         id: "preset-1",
         title: null,
@@ -438,7 +642,9 @@ describe("useCommandPalette", () => {
     });
 
     it("leaves the draft clean, so there is nothing left to discard", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       useShaderPresetDraftStore.getState().setParam("scale", 2);
       (createShaderPreset as Mock).mockResolvedValue({
         id: "preset-1",
@@ -454,7 +660,9 @@ describe("useCommandPalette", () => {
     });
 
     it("keeps the draft when the write fails", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       (createShaderPreset as Mock).mockRejectedValue(new Error("nope"));
       vi.spyOn(console, "error").mockImplementation(() => {});
       useShaderPresetDraftStore.getState().setParam("scale", 2);
@@ -462,7 +670,9 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(useShaderPresetDraftStore.getState().settings.params.scale).toBe(2);
+      expect(useShaderPresetDraftStore.getState().settings.params.scale).toBe(
+        2,
+      );
       expect(mockPush).not.toHaveBeenCalled();
     });
   });
@@ -515,7 +725,9 @@ describe("useCommandPalette", () => {
     });
 
     it("saves and then leaves when that is the answer", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       useShaderPresetDraftStore.getState().setParam("scale", 2);
       (createShaderPreset as Mock).mockResolvedValue({
         id: "preset-1",
@@ -533,7 +745,9 @@ describe("useCommandPalette", () => {
     });
 
     it("leaves without writing when the answer is discard", async () => {
-      const { createShaderPreset, saveShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset, saveShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
@@ -556,13 +770,17 @@ describe("useCommandPalette", () => {
 
       expect(mockPush).not.toHaveBeenCalled();
       expect(result.current.pendingExit).toBeNull();
-      expect(useShaderPresetDraftStore.getState().settings.params.scale).toBe(2);
+      expect(useShaderPresetDraftStore.getState().settings.params.scale).toBe(
+        2,
+      );
       expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
     });
 
     // A preset just written is clean, so the same press now simply goes.
     it("stops asking once the work has been saved", async () => {
-      const { createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       useShaderPresetDraftStore.getState().setParam("scale", 2);
       (createShaderPreset as Mock).mockResolvedValue({
         id: "preset-1",
@@ -592,7 +810,9 @@ describe("useCommandPalette", () => {
     // Nothing was ever written, so this is a no-op plus a navigation — the same
     // shape as the grid's "Discard and exit".
     it("drops the draft and leaves without writing", async () => {
-      const { saveShaderPreset, createShaderPreset } = await import("@/app/actions/shader-preset");
+      const { saveShaderPreset, createShaderPreset } = await import(
+        "@/app/actions/shader-preset"
+      );
       useShaderPresetDraftStore.getState().setParam("scale", 2);
 
       const { result } = renderHook(() => useCommandPalette(close));
@@ -658,7 +878,9 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      expect(mockReplace).toHaveBeenCalledWith("/edit/my-draft?category=ARTICLE");
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/edit/my-draft?category=ARTICLE",
+      );
       expect(mockPush).not.toHaveBeenCalled();
     });
 
