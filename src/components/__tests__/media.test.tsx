@@ -2,6 +2,7 @@
 import { act, render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Media } from "../media";
+import { MEDIA_PLACEHOLDER_ASPECT } from "@/domain/nodes";
 
 // jsdom ships no media stack at all: `play()` is a not-implemented stub that
 // returns undefined where every browser returns a promise, and `paused` is a
@@ -272,5 +273,79 @@ describe("Media", () => {
     expect(onFocus).toHaveBeenCalledTimes(2);
     expect(onKeyDown).toHaveBeenCalledTimes(2);
     expect(onBlur).toHaveBeenCalledTimes(2);
+  });
+  // -------------------------------------------------------------------------
+  // The reserved box.
+  //
+  // A picture with no bytes yet is zero pixels tall, so a block sized by its
+  // own picture occupied nothing — the padding around it and two hairlines —
+  // and then shoved the rest of the article down the page the moment the file
+  // arrived. The box is held from the first paint instead, at the shape the
+  // document records or at the house ratio when it records none, and let go
+  // the instant the source can paint for itself.
+  // -------------------------------------------------------------------------
+
+  it("holds a box at the house ratio for a picture whose shape is unrecorded", () => {
+    render(<Media src="/media/shot.png" alt="A screenshot" kind="image" />);
+    const image = screen.getByAltText("A screenshot");
+    expect(image.hasAttribute("data-media-pending")).toBe(true);
+    expect(image.style.aspectRatio).toBe(MEDIA_PLACEHOLDER_ASPECT);
+  });
+
+  it("holds the picture's OWN box when the document recorded one", () => {
+    render(
+      <Media
+        src="/media/shot.png"
+        alt="A screenshot"
+        kind="image"
+        width={1600}
+        height={900}
+      />,
+    );
+    expect(screen.getByAltText("A screenshot").style.aspectRatio).toBe(
+      "1600 / 900",
+    );
+  });
+
+  it("lets the box go the moment the picture can paint", () => {
+    render(<Media src="/media/shot.png" alt="A screenshot" kind="image" />);
+    const image = screen.getByAltText("A screenshot");
+    fireEvent.load(image);
+    expect(image.hasAttribute("data-media-pending")).toBe(false);
+    expect(image.style.aspectRatio).toBe("");
+  });
+
+  // A source that will never arrive must not sit under a shimmer forever: a
+  // broken picture is a finished state, not a pending one.
+  it("lets it go on a source that fails, too", () => {
+    render(<Media src="/media/gone.png" alt="A screenshot" kind="image" />);
+    const image = screen.getByAltText("A screenshot");
+    fireEvent.error(image);
+    expect(image.hasAttribute("data-media-pending")).toBe(false);
+  });
+
+  // Swapping the source starts the wait over — the lightbox steps between
+  // pictures on one element, and a box released by the last one is not a box
+  // the next one has earned.
+  it("takes the box back when the source changes", () => {
+    const { rerender } = render(
+      <Media src="/media/one.png" alt="A screenshot" kind="image" />,
+    );
+    fireEvent.load(screen.getByAltText("A screenshot"));
+    rerender(<Media src="/media/two.png" alt="A screenshot" kind="image" />);
+    expect(
+      screen.getByAltText("A screenshot").hasAttribute("data-media-pending"),
+    ).toBe(true);
+  });
+
+  // A clip holds its box until it has a FRAME, not merely a header: metadata
+  // answers how big the video is, and a <video> with nothing decoded paints
+  // nothing at all.
+  it("holds a clip's box until it has a frame to show", () => {
+    render(<Media src="/media/demo.mp4" alt="A demo" kind="video" />);
+    const clip = video() as HTMLVideoElement;
+    expect(clip.hasAttribute("data-media-pending")).toBe(true);
+    fireEvent.loadedData(clip);
+    expect(clip.hasAttribute("data-media-pending")).toBe(false);
   });
 });

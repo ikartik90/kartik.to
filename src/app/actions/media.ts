@@ -30,6 +30,12 @@ async function requireAdmin(): Promise<void> {
   }
 }
 
+/** One metadata string as the positive integer it claims to be, or nothing. */
+function numericMetadata(value: string | undefined): number | undefined {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 async function keyToMediaAsset(key: string): Promise<MediaAsset | null> {
   const url = publicUrlForKey(key);
   if (!url) return null;
@@ -44,6 +50,12 @@ async function keyToMediaAsset(key: string): Promise<MediaAsset | null> {
     contentType: head.contentType,
     size: head.size,
     alt: head.alt || undefined,
+    // Object metadata is a map of strings, so the shape comes back as a pair
+    // of them. `undefined` rather than `NaN` for anything unparseable: the
+    // schema takes an absent measurement and refuses a nonsensical one, and an
+    // object stored before this was recorded has neither key.
+    width: numericMetadata(head.width),
+    height: numericMetadata(head.height),
   });
 }
 
@@ -68,15 +80,25 @@ export async function createMediaUploadUrl(
     throw new Error("R2_PUBLIC_BASE_URL is not configured");
   }
 
-  const { filename, contentType } = CreateMediaUploadInputSchema.parse(input);
+  const { filename, contentType, width, height } =
+    CreateMediaUploadInputSchema.parse(input);
   const safeName = sanitizeMediaFilename(filename);
   const key = `${MEDIA_PREFIX}${randomUUID()}-${safeName}`;
 
   // Record the name alongside the object so it can later be edited without
   // moving the object (the key is immutable once anything links to it).
+  //
+  // The shape rides along in the same map, and is signed into the PUT rather
+  // than patched on afterwards — the client measured the file before it asked
+  // for this URL, so the answer is already in hand and costs no second round
+  // trip. Both keys or neither: a ratio is not a thing half a measurement can
+  // express (`mediaReservedAspect`).
   const { uploadUrl, publicUrl } = await createR2UploadUrl(key, contentType, {
     alt: "",
     filename: safeName,
+    ...(width && height
+      ? { width: String(width), height: String(height) }
+      : {}),
   });
 
   if (!publicUrl) {

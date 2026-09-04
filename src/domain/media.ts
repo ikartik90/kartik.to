@@ -82,6 +82,27 @@ export function mediaKindOf(contentType: string): MediaKind {
   return isVideoContentType(contentType) ? "video" : "image";
 }
 
+/**
+ * The source's own pixel size, measured once at upload (`measureMediaFile`) and
+ * carried from there into every node that points at it.
+ *
+ * It exists so a surface can reserve the box a media object will need BEFORE
+ * the bytes arrive — see `mediaReservedAspect`. Only the ratio is ever read.
+ *
+ * Optional at every link in the chain, and it has to be: a browser can decline
+ * to decode a file, an SVG can report no intrinsic size at all, and every
+ * object already in the bucket was stored before there was anywhere to write
+ * this. All three land in the same place — the house ratio — so an absent
+ * measurement is a slightly worse reservation rather than a broken one.
+ *
+ * Positive integers, because zero is precisely what an element that decoded
+ * nothing reports, and a stored zero is a shape claim no source can satisfy.
+ */
+const mediaDimensionFields = {
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+};
+
 export const MediaAssetSchema = z.object({
   key: z.string(),
   url: z.string(),
@@ -89,6 +110,7 @@ export const MediaAssetSchema = z.object({
   contentType: z.string(),
   size: z.number(),
   alt: z.string().optional(),
+  ...mediaDimensionFields,
 });
 
 export type MediaAsset = z.infer<typeof MediaAssetSchema>;
@@ -100,6 +122,7 @@ export const CreateMediaUploadInputSchema = z
     filename: z.string().min(1),
     contentType: z.enum(ALLOWED_MEDIA_CONTENT_TYPES),
     size: z.number().int().positive(),
+    ...mediaDimensionFields,
   })
   .refine(({ contentType, size }) => size <= maxUploadBytesFor(contentType), {
     message: "File is too large",

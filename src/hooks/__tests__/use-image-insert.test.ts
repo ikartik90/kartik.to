@@ -14,10 +14,21 @@ vi.mock("@/app/actions/media", () => ({
   deleteMedia: (...args: unknown[]) => mockDeleteMedia(...args),
 }));
 
+// The measurement is the DOM's answer about a real file, and jsdom loads
+// nothing — an <img> pointed at a blob URL fires neither `load` nor `error`,
+// so the real one would sit out its whole timeout on every upload here. Its
+// own behaviour is covered in `utils/__tests__/measure-media.test.ts`; what
+// this file cares about is that whatever it answers reaches the signing call.
+const mockMeasureMediaFile = vi.fn();
+vi.mock("@/utils/measure-media", () => ({
+  measureMediaFile: (...args: unknown[]) => mockMeasureMediaFile(...args),
+}));
+
 describe("useImageInsert", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListMediaAssets.mockResolvedValue([]);
+    mockMeasureMediaFile.mockResolvedValue(null);
   });
 
   it("loads library when open", async () => {
@@ -180,6 +191,7 @@ describe("useImageInsert file validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListMediaAssets.mockResolvedValue([]);
+    mockMeasureMediaFile.mockResolvedValue(null);
     // Reaching the signing call at all is the proof that the gates let the file
     // through, and refusing there stops the test short of jsdom's XHR — which
     // would put a real PUT on the wire.
@@ -212,6 +224,36 @@ describe("useImageInsert file validation", () => {
     expect(mockCreateMediaUploadUrl).toHaveBeenCalledWith({
       filename: "clip.mp4",
       contentType: "video/mp4",
+      size: 1024,
+    });
+  });
+
+  // The shape is measured from the file in hand and signed into the upload, so
+  // the object carries it from the moment it exists — which is what lets a
+  // surface reserve the right box for it before a byte has arrived. It rides
+  // in the SIGNING call rather than a patch afterwards: the answer is already
+  // in hand, so recording it costs no round trip of its own.
+  it("records the file's own shape with the upload", async () => {
+    mockMeasureMediaFile.mockResolvedValue({ width: 1600, height: 900 });
+    await drop(fileOf("shot.png", "image/png", 1024));
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledWith({
+      filename: "shot.png",
+      contentType: "image/png",
+      size: 1024,
+      width: 1600,
+      height: 900,
+    });
+  });
+
+  // A file the browser will not decode still uploads. The shape is an
+  // optimisation — the box falls back to the house ratio without it — and an
+  // upload is not worth failing over a measurement.
+  it("uploads a file it could not measure, with no shape at all", async () => {
+    mockMeasureMediaFile.mockResolvedValue(null);
+    await drop(fileOf("odd.svg", "image/svg+xml", 1024));
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledWith({
+      filename: "odd.svg",
+      contentType: "image/svg+xml",
       size: 1024,
     });
   });
@@ -250,6 +292,7 @@ describe("useImageInsert (selectionMode: multiple)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListMediaAssets.mockResolvedValue(LIBRARY);
+    mockMeasureMediaFile.mockResolvedValue(null);
   });
 
   async function openMultiple(maxSelection = 6) {
@@ -319,6 +362,23 @@ describe("useImageInsert (selectionMode: multiple)", () => {
 
   // Same argument as the single-insert case above: a batch dropped into a
   // collection is exactly where a wall of untyped items used to come from.
+  // The shape travels with the source through the batch, exactly as `kind`
+  // does: both are things the library knows first-hand and the document could
+  // never recover afterwards.
+  it("carries each asset's recorded shape into its payload", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      { ...asset("a"), width: 1600, height: 900 },
+      asset("b"),
+    ]);
+    const { result } = await openMultiple();
+    act(() => result.current.toggleAsset("media/a.png"));
+    act(() => result.current.toggleAsset("media/b.png"));
+    expect(result.current.getInsertPayloads()).toMatchObject([
+      { src: "https://cdn/a.png", width: 1600, height: 900 },
+      { src: "https://cdn/b.png", width: undefined, height: undefined },
+    ]);
+  });
+
   it("carries each asset's kind through the batch, in selection order", async () => {
     mockListMediaAssets.mockResolvedValue([
       asset("a"),

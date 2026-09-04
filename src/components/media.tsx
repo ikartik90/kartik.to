@@ -14,6 +14,7 @@ import {
   mediaBoxStyle,
   mediaFrameStyle,
   mediaObjectStyle,
+  mediaReservationStyle,
   type MediaKind,
   type MediaLayout,
 } from "@/domain/nodes";
@@ -89,6 +90,17 @@ export interface MediaProps {
    * `display: contents` when there is no layout to apply.
    */
   layout?: MediaLayout;
+  /**
+   * The source's own pixel size, when the document recorded it — the shape the
+   * box is HELD at until the source can size itself (`mediaReservedAspect`).
+   *
+   * Only the ratio is read; neither number is ever rendered as a length. A
+   * caller that has no record passes nothing and the reserved box takes the
+   * house ratio, which is what every document written before these fields
+   * existed does.
+   */
+  width?: number;
+  height?: number;
   draggable?: boolean;
   /** Pictures only — a clip decides its own fetching through `preload`. */
   loading?: "lazy" | "eager";
@@ -176,6 +188,25 @@ export interface MediaProps {
   elementRef?: (node: HTMLElement | null) => void;
 }
 
+/**
+ * Has this element already got something on screen?
+ *
+ * The two elements answer it differently and neither answers it with an event
+ * once the moment has passed — which is exactly the case a reserved box has to
+ * survive: a cached picture and a hydrating clip both arrive done.
+ */
+function hasSomethingToShow(
+  node: HTMLElement | null,
+): node is HTMLImageElement | HTMLVideoElement {
+  if (node instanceof HTMLImageElement) {
+    return node.complete && node.naturalWidth > 0;
+  }
+  if (node instanceof HTMLVideoElement) {
+    return node.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+  }
+  return false;
+}
+
 export function Media({
   src,
   alt,
@@ -183,6 +214,8 @@ export function Media({
   className,
   style,
   layout,
+  width,
+  height,
   draggable,
   loading = "lazy",
   controls,
@@ -203,9 +236,35 @@ export function Media({
   // fresh element that the chip has to pick up.
   const [clip, setClip] = useState<HTMLVideoElement | null>(null);
 
+  // Which source has actually PAINTED — the src itself rather than a boolean,
+  // so that swapping the source takes the reserved box back with no effect to
+  // reset it. The lightbox steps between pictures on one element, and a box the
+  // last one released is not a box the next one has earned.
+  const [paintedSrc, setPaintedSrc] = useState<string | null>(null);
+  const pending = paintedSrc !== src;
+  // Settled by the PROP, never by the element's `currentSrc` — the browser
+  // resolves that to an absolute URL, and this value has to compare equal to
+  // the src the next render brings.
+  const settle = useCallback(() => setPaintedSrc(src), [src]);
+
   // The caller's ref, which takes whichever element this turned out to be.
+  //
+  // It also settles a source that had ALREADY painted by the time the element
+  // reached us, which no event will ever announce: a cached picture is
+  // `complete` before React hears a `load`, and a hydrating one has usually
+  // decoded before hydration gets to it. Without this the box stays reserved
+  // and the shimmer runs under a picture that is plainly there.
+  //
+  // The src comes off the ATTRIBUTE rather than the prop so that this callback
+  // owes nothing to the current render. Its identity must not change — a ref
+  // callback that changes is a ref callback React re-runs, and the clip's
+  // branch below re-runs `play()` when it does — and the attribute is the prop
+  // in any case, unresolved, which is what `paintedSrc` compares against.
   const hold = useCallback(
-    (node: HTMLElement | null) => elementRef?.(node),
+    (node: HTMLElement | null) => {
+      if (hasSomethingToShow(node)) setPaintedSrc(node.getAttribute("src"));
+      elementRef?.(node);
+    },
     [elementRef],
   );
 
@@ -253,9 +312,17 @@ export function Media({
 
   // The caller's own style still wins — the lightbox's natural-size cap is a
   // constraint on the picture, not a layout property, so it is applied last.
-  const objectStyle = layout
-    ? { ...mediaObjectStyle(layout), ...style }
-    : style;
+  //
+  // The reservation sits between the two, and only while the source has
+  // nothing to paint: it OVERRIDES the layout (a `contain` picture's
+  // sized-to-content width has nothing to size itself from yet) and is
+  // overridden by the caller, whose caps are constraints on a picture that will
+  // arrive rather than a shape for the box waiting on it.
+  const objectStyle = {
+    ...(layout ? mediaObjectStyle(layout) : {}),
+    ...(pending ? mediaReservationStyle({ width, height }, layout) : {}),
+    ...style,
+  };
 
   const isClip = kind === "video";
 
@@ -275,12 +342,20 @@ export function Media({
       onKeyDown={onKeyDown}
       data-checkered={checkered}
       data-showcase-media={showcaseMedia}
-      onLoad={(event) =>
+      // The hook the shimmer keys on, and the box's own answer to "is there
+      // anything here yet" — see the global rule for `[data-media-pending]`.
+      data-media-pending={pending ? "" : undefined}
+      onLoad={(event) => {
+        settle();
         onMeasure?.(
           event.currentTarget.naturalWidth,
           event.currentTarget.naturalHeight,
-        )
-      }
+        );
+      }}
+      // A source that will never arrive is a FINISHED state, not a pending
+      // one: a broken picture under a shimmer that never stops is worse than
+      // the broken picture on its own.
+      onError={settle}
     />
   ) : (
     <video
@@ -306,6 +381,12 @@ export function Media({
       onKeyDown={onKeyDown}
       data-checkered={checkered}
       data-showcase-media={showcaseMedia}
+      data-media-pending={pending ? "" : undefined}
+      // `loadeddata`, not `loadedmetadata`: metadata answers how big the clip
+      // is, and a <video> with no frame decoded still paints nothing at all.
+      // The box is held until there is something to put in it.
+      onLoadedData={settle}
+      onError={settle}
       onLoadedMetadata={(event) => {
         const node = event.currentTarget;
         onMeasure?.(node.videoWidth, node.videoHeight);

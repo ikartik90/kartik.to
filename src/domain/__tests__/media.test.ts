@@ -64,6 +64,55 @@ describe("MediaAssetSchema", () => {
       }),
     ).toThrow();
   });
+
+  // The file's own shape, carried from the moment it is picked to the node
+  // that ends up pointing at it — the whole chain a reserved box depends on
+  // (`mediaReservedAspect`). Optional at every link, because a measurement can
+  // fail and every object stored before this existed has none.
+  it("carries the source's measured shape, and does without it", () => {
+    expect(
+      CreateMediaUploadInputSchema.parse({
+        filename: "photo.png",
+        contentType: "image/png",
+        size: 1024,
+        width: 1600,
+        height: 900,
+      }),
+    ).toMatchObject({ width: 1600, height: 900 });
+
+    const unmeasured = CreateMediaUploadInputSchema.parse({
+      filename: "photo.png",
+      contentType: "image/png",
+      size: 1024,
+    });
+    expect(unmeasured.width).toBeUndefined();
+
+    expect(
+      MediaAssetSchema.parse({
+        key: "media/abc-photo.png",
+        url: "https://cdn.example.com/media/abc-photo.png",
+        filename: "photo.png",
+        contentType: "image/png",
+        size: 1024,
+        width: 1600,
+        height: 900,
+      }),
+    ).toMatchObject({ width: 1600, height: 900 });
+  });
+
+  // Zero is what an element that decoded nothing reports. It must never be
+  // stored as if it were an answer, at this link or the next one.
+  it("refuses a dimension no source could have", () => {
+    expect(() =>
+      CreateMediaUploadInputSchema.parse({
+        filename: "photo.png",
+        contentType: "image/png",
+        size: 1024,
+        width: 0,
+        height: 900,
+      }),
+    ).toThrow();
+  });
 });
 
 describe("isAllowedMediaContentType", () => {

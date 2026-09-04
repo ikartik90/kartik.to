@@ -372,6 +372,8 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                         src={asset.url}
                         kind={mediaKindOf(asset.contentType)}
                         alt=""
+                        width={asset.width}
+                        height={asset.height}
                       />
                     </span>
                     <span className={libraryFilenameStyle}>
@@ -403,6 +405,8 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     kind={mediaKindOf(selectedAsset.contentType)}
                     alt={altText || selectedAsset.filename}
                     controls
+                    width={selectedAsset.width}
+                    height={selectedAsset.height}
                   />
                 </figure>
                 <div className={mediaMetadataRow()}>

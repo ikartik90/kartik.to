@@ -15,6 +15,7 @@ import {
   type MediaAsset,
 } from "@/domain/media";
 import type { MediaKind } from "@/domain/nodes";
+import { measureMediaFile } from "@/utils/measure-media";
 import { PROGRESS_COMPLETE_HOLD_MS } from "@/components/ui/progress-bar";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,6 +61,23 @@ export interface ImageInsertPayload {
    * nothing inserted from here on will ever need it.
    */
   kind: MediaKind;
+  /**
+   * The source's own pixel size, when the library knows it — measured at
+   * upload and stored on the object ever since (`measureMediaFile`).
+   *
+   * It travels with `kind` because it is the same sort of fact: something the
+   * library holds first-hand that the document cannot recover later. A surface
+   * uses it to reserve the box the picture will need before a byte of it has
+   * arrived (`mediaReservedAspect`), which is the difference between an
+   * article that holds still while it loads and one that jolts open around
+   * every image in it.
+   *
+   * Absent for everything uploaded before the measurement existed, and for
+   * anything the browser declined to decode. Those fall back to the house
+   * ratio and are merely reserved less exactly, never not at all.
+   */
+  width?: number;
+  height?: number;
 }
 
 function uploadFileWithProgress(
@@ -241,10 +259,18 @@ export function useImageInsert({
       setUploadProgress(0);
 
       try {
+        // Measured HERE, from the file in hand, and never again: this is the
+        // only moment anything holds the bytes and the answer at the same
+        // time. It rides into the signing request, so recording it costs no
+        // round trip of its own — and `null` when the browser will not decode
+        // the file, which the object simply stores without.
+        const shape = await measureMediaFile(file);
+
         const { uploadUrl, key } = await createMediaUploadUrl({
           filename: file.name,
           contentType: file.type,
           size: file.size,
+          ...(shape ?? {}),
         });
 
         await uploadFileWithProgress(uploadUrl, file, setUploadProgress);
@@ -423,6 +449,8 @@ export function useImageInsert({
       src: selectedAsset.url,
       alt: altText.trim() || undefined,
       kind: mediaKindOf(selectedAsset.contentType),
+      width: selectedAsset.width,
+      height: selectedAsset.height,
     };
   }, [selectedAsset, altText]);
 
@@ -441,6 +469,8 @@ export function useImageInsert({
           src: asset.url,
           alt: alt.trim() || undefined,
           kind: mediaKindOf(asset.contentType),
+          width: asset.width,
+          height: asset.height,
         },
       ];
     });
