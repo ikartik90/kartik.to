@@ -113,6 +113,22 @@ function ButtonRoot(
         // answering a different question from the tooltip's own, and the two
         // drift apart on any event the browser and React see differently.
         data-tooltip-visible={visible || undefined}
+        // WebKit's default sequential focus order — Safari with "Press Tab to
+        // highlight each item on a webpage" off, which is how it ships — reaches
+        // form fields and anything carrying an EXPLICIT tabindex, and nothing
+        // else. A bare <button> is skipped, so on Safari the keyboard tabs
+        // straight past every button on the page: out of a form's first text
+        // field and into whatever comes after its last one.
+        //
+        // Written down, the button is in the order in both engines. It changes
+        // nothing anywhere else — an explicit 0 puts an element exactly where
+        // its DOM position already put it — and it is BEFORE the spread, so a
+        // caller taking the button out of the order (`tabIndex={-1}`, a roving
+        // toolbar) still wins.
+        //
+        // Switch, DatePicker and Combobox draw their own <button> and say the
+        // same thing for the same reason.
+        tabIndex={0}
         {...rest}
       >
         <WireframeContent>{content}</WireframeContent>

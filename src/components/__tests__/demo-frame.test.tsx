@@ -5,6 +5,45 @@ import { DemoFrame } from "../demo-frame";
 import { DEMO_FRAME_LOGGER_SECTION_COLLAPSED_PX } from "@/utils/demo-frame-sizing";
 
 describe("DemoFrame", () => {
+
+  // A demo that lays itself out AGAINST the frame — the calchemy one puts its
+  // query bar on the frame's own bottom inset — cannot be wrapped in the
+  // intrinsic-size measure div, which hugs its content and so has no height to
+  // fill. `fill` hands it the area directly, exactly as a logger frame does.
+  it("wraps a measured demo but hands a filling one the area itself", () => {
+    const { container, rerender } = render(
+      <DemoFrame>
+        <p>demo</p>
+      </DemoFrame>,
+    );
+    expect(container.querySelector(".demo-frame__demo-measure")).toBeTruthy();
+
+    rerender(
+      <DemoFrame fill>
+        <p>demo</p>
+      </DemoFrame>,
+    );
+    expect(container.querySelector(".demo-frame__demo-measure")).toBeNull();
+    expect(
+      container.querySelector(".demo-frame__demo-area")?.firstElementChild
+        ?.tagName,
+    ).toBe("P");
+  });
+
+  // And it must not be MEASURED either. The area's floor is normally raised to
+  // whatever the demo turned out to be; a demo that fills the area is as tall
+  // as the area, so measuring it feeds its own height back in and the frame
+  // runs away — 8,000px on the first pass. Its height is the aspect ratio's,
+  // which the area already carries without asking anyone.
+  it("leaves a filling frame's height to the aspect ratio", () => {
+    const { container } = render(
+      <DemoFrame fill>
+        <p>demo</p>
+      </DemoFrame>,
+    );
+    const area = container.querySelector<HTMLElement>(".demo-frame__demo-area");
+    expect(area?.style.minHeight).toBe("");
+  });
   afterEach(() => cleanup());
   it("renders children in a single frame element", () => {
     const { container } = render(

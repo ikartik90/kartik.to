@@ -315,6 +315,21 @@ export interface CalendarProps
    * current month sits in the middle).
    */
   defaultView?: Temporal.PlainDate;
+  /**
+   * Controlled first month of the range, for a consumer that owns which months
+   * exist — a lazily loaded run, say, where moving the range is how more of it
+   * is brought in. Pair it with `onViewChange`: everything that moves the range
+   * from the inside (a chevron, a searched date, an arrow key walking off the
+   * end) reports through that instead of moving it itself.
+   *
+   * Controlled deliberately rather than remount-with-a-new-`defaultView`: the
+   * periods are keyed by month, so a range that SHIFTS keeps the DOM for every
+   * month it still holds. Remounting throws all of them away, which a scroll
+   * position cannot survive.
+   */
+  view?: Temporal.PlainDate;
+  /** Fired with the range's new first month whenever the calendar moves it. */
+  onViewChange?: (view: Temporal.PlainDate) => void;
   /** Lower/upper selectable bounds (inclusive). */
   min?: Temporal.PlainDate;
   max?: Temporal.PlainDate;
@@ -357,6 +372,15 @@ export interface CalendarProps
    * label row.
    */
   navPlacement?: "label" | "edge";
+  /**
+   * Fill the box rather than hug the months. The calendar's width is otherwise
+   * intrinsic (208px a month), so in a wider column it simply sits in one
+   * corner of it; `fluid` grows the period to the column and opens the gutters
+   * between the seven day columns to take up the slack, leaving the day cell
+   * itself at its 24px square. A no-op at the natural measure, which is what
+   * makes it safe to set once and let the column decide.
+   */
+  fluid?: boolean;
   /** Override "today" — primarily for tests/deterministic rendering. */
   today?: Temporal.PlainDate;
   children: ReactNode;
@@ -371,6 +395,8 @@ function CalendarRoot({
   values,
   defaultValues,
   onValuesChange,
+  view: viewProp,
+  onViewChange,
   defaultView,
   min,
   max,
@@ -380,6 +406,7 @@ function CalendarRoot({
   queryParser,
   tone = "default",
   navPlacement = "label",
+  fluid = false,
   today: todayProp,
   className,
   children,
@@ -390,8 +417,12 @@ function CalendarRoot({
   // but as a compound group it associates via aria-labelledby/-describedby
   // (a <div role="group"> is not a labelable `htmlFor` target). Display-only
   // calendars (availability/event/heatmap) are a separate component.
-  const { labelId, hasLabel, hintId, hasHint } = useField("Calendar");
-  const styles = calendar({ tone, navPlacement });
+  const { labelId, hasLabel, hintId, hasHint, size } = useField("Calendar");
+  // The search row follows the FIELD's size, the way Switch's track does — a
+  // small date field opens a popover whose search stands exactly where its
+  // input stood, rather than a 40px row overhanging a 28px trigger. The grid
+  // below it does not scale; see the recipe's `size`.
+  const styles = calendar({ tone, navPlacement, fluid, size });
   const today = todayProp ?? Temporal.Now.plainDateISO();
 
   const multiple = selectionMode === "multiple";
@@ -425,13 +456,26 @@ function CalendarRoot({
 
   // An explicit `defaultView` wins; otherwise the range opens where the
   // selection is, and failing that on today.
-  const [view, setView] = useState<Temporal.PlainDate>(() => {
-    if (defaultView) return defaultView.with({ day: 1 });
-    const seeded = toKeys(values ?? defaultValues)[0];
-    const seed =
-      value ?? defaultValue ?? (seeded ? Temporal.PlainDate.from(seeded) : null);
-    return (seed ?? today).with({ day: 1 });
-  });
+  const [uncontrolledView, setUncontrolledView] = useState<Temporal.PlainDate>(
+    () => {
+      if (defaultView) return defaultView.with({ day: 1 });
+      const seeded = toKeys(values ?? defaultValues)[0];
+      const seed =
+        value ?? defaultValue ?? (seeded ? Temporal.PlainDate.from(seeded) : null);
+      return (seed ?? today).with({ day: 1 });
+    },
+  );
+  const viewControlled = viewProp !== undefined;
+  const view = viewControlled ? viewProp.with({ day: 1 }) : uncontrolledView;
+  // Every internal move goes through here, so a controlled consumer hears about
+  // all of them and an uncontrolled one behaves exactly as it always did.
+  const setView = (
+    next: Temporal.PlainDate | ((current: Temporal.PlainDate) => Temporal.PlainDate),
+  ) => {
+    const resolved = typeof next === "function" ? next(view) : next;
+    if (!viewControlled) setUncontrolledView(resolved);
+    onViewChange?.(resolved);
+  };
 
   const periods = useMemo(
     () => buildCalendarPeriods(view, { months, weekStartsOn }),
@@ -717,6 +761,15 @@ function CalendarRoot({
       const el = child as ReactElement<FieldSearchProps>;
       return cloneElement(el, {
         className: cx(styles.search, el.props.className),
+        // The calendar's width is its PERIODS (208px a month), and the root
+        // hugs its content — so a search left at the HTML default of `size=20`
+        // claims an intrinsic width of its own and can outvote them. WebKit
+        // sizes that default at 219px, which widened every date popover by 11px
+        // of empty surface beside the month; Chromium's is narrower, so the
+        // fault only showed in Safari. `1` withdraws the claim, and the `search`
+        // slot's `width: 100%` then takes the row it is given. A consumer who
+        // states one means it.
+        size: el.props.size ?? 1,
         onValueChange: (raw: string) => {
           el.props.onValueChange?.(raw);
           const date = queryParser?.(raw) ?? null;

@@ -300,6 +300,12 @@ export default defineConfig({
           listingGrid3Up: { value: "calc(3 * {sizes.listingColumn})" },
           articleShowcase: { value: "960px" },
           calchemyDemo: { value: "720px" },
+          // The Calchemy playground's year. The site's 960 column, spent on a
+          // 3 × 4 grid of months: the gap BETWEEN months takes its 80 first —
+          // without it the twelve dissolve into one field of numbers — and the
+          // months are `fluid` over what is left, so the rest opens the gutters
+          // between the seven day columns and every cell keeps its 24px square.
+          calchemyPlayground: { value: "960px" },
           librarySidebar: { value: "200px" },
           imagePreviewMax: { value: "280px" },
           insertDialogHeight: { value: "480px" },
@@ -316,9 +322,26 @@ export default defineConfig({
           // Three day columns (3 × 24), so the fade spans the clipped column
           // plus enough of its neighbours to read as a gradient (Figma 723:2265).
           calendarNavZone: { value: "72px" },
+          // What ONE month column measures: seven day cells on a 4px gutter,
+          // plus the period's own 8px inset — the 208px pitch the calendar
+          // recipe hugs to, and so the natural width of a single-month
+          // `datePopover`. Written out from its parts rather than as 208 so it
+          // tracks `calendarDay`, and named so a consumer sizing a surface
+          // AROUND a calendar can state that intent instead of restating the
+          // number (see the Calchemy playground's named-date panel).
+          calendarPeriod: {
+            value:
+              "calc(7 * {sizes.calendarDay} + 6 * {spacing.sm} + 2 * {spacing.md})",
+          },
           // Fixed like the calendar's 208px pitch, so a select popover and a
           // date popover read as siblings (Figma 647:2383, 629:1416).
           optionListWidth: { value: "208px" },
+          // What a date field is drawn at: room for a dd/mm/yyyy value and the
+          // frame's trailing calendar glyph, and no more. Narrower than the
+          // popover it opens (one month, `calendarPeriod`) — a date is ten
+          // characters, so the field is sized for the value rather than for the
+          // calendar that fills it in.
+          dateField: { value: "140px" },
           // The number at the end of a field frame — the slider's readout and
           // the colour input's opacity, which are one box (see
           // `fieldValueBox`) and so are one width.
@@ -683,6 +706,19 @@ export default defineConfig({
                   base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
                   _dark:
                     "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                },
+              },
+              // The hover wash pressed one step further. An icon button's press
+              // is a FILL rather than the shared `scale(0.97)`: a 28px chip
+              // shrinks by 0.84px, which is nothing to see, while the 20px glyph
+              // inside it lands its 1.25px strokes off-pixel and visibly wobbles
+              // — the artifact costing more than the affordance was worth. A
+              // 40px text chip is big enough for the scale to read, and keeps it.
+              pressed: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-500) 40%, transparent)",
                 },
               },
               hoverBrand: {
@@ -1183,6 +1219,22 @@ export default defineConfig({
                 textStyle: "bodySmall",
                 backgroundColor: "transparent",
                 _hover: { backgroundColor: "field.bg.hover" },
+                // ON — a toggle whose state is worth seeing at rest (a rail
+                // that is showing, a mark that is applied), in the brand chip
+                // every pressed toggle in the system wears; see the option
+                // list. Above hover, so an on button does not read as merely
+                // pointed at, and below the press, so it still answers a click.
+                "&[aria-pressed='true']": {
+                  backgroundColor: "field.bg.active",
+                  color: "field.text.active",
+                },
+                // The press, as a fill rather than the base's `scale(0.97)` —
+                // see `field.bg.pressed`. The glyph is the whole content of one
+                // of these, and scaling the chip drags it off the pixel grid.
+                _active: {
+                  transform: "none",
+                  backgroundColor: "field.bg.pressed",
+                },
                 "html[data-keyboard-focus] &:focus-visible": {
                   boxShadow:
                     "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
@@ -3562,10 +3614,50 @@ export default defineConfig({
                 },
               },
             },
+            // Reverses the toggle archetype: the statement first, the switch
+            // after it. That is the arrangement a settings ROW wants — the
+            // reader scans labels down one margin and states down the other —
+            // where the default keeps the control first, which is what a switch
+            // standing on its own in a form wants.
+            //
+            // The slack goes to the LABEL's column, so a field stretched wider
+            // than its parts pushes the track to its far edge (a full-width
+            // settings row) while one left to hug keeps the label against the
+            // switch it speaks for. Both are had from the same variant.
+            //
+            // Only the toggle archetype has two orders to choose between, so
+            // every rule here is scoped to it — on a stacked text field the
+            // label is above the control either way, and this does nothing.
+            labelFirst: {
+              true: {
+                root: {
+                  "&:has([role='switch'], [role='checkbox'])": {
+                    gridTemplateColumns: "1fr auto",
+                    // The control's own slot belongs to `switchField` /
+                    // `checkbox`, not to this recipe, so its column is moved
+                    // structurally — the same `:has` the archetype itself is
+                    // detected with.
+                    "& [role='switch'], & [role='checkbox']": {
+                      gridColumn: 2,
+                    },
+                  },
+                },
+                label: {
+                  "[data-field]:has([role='switch'], [role='checkbox']) &": {
+                    gridColumn: 1,
+                  },
+                },
+                hint: {
+                  "[data-field]:has([role='switch'], [role='checkbox']) &": {
+                    gridColumn: 1,
+                  },
+                },
+              },
+            },
           },
           defaultVariants: { size: "md" },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ size: ["*"] }],
+          staticCss: [{ size: ["*"], labelFirst: ["*"] }],
         }),
 
         // Named `switchField`, not `switch` — a reserved word breaks the
@@ -3630,6 +3722,26 @@ export default defineConfig({
                   left: "token(spacing.sm)",
                   "[aria-checked='true'] &": {
                     transform: "translateX(token(spacing.xl))",
+                  },
+                },
+              },
+              // Between the two, on the same derivation: a 12px thumb on a 4px
+              // inset — 12 + 2·4 = 20 tall, 4 + 12 + 12 + 4 = 32 wide, and a
+              // travel of one thumb. For a switch that shares a row with
+              // bodySmall text, where `lg` reads as the loudest thing in the
+              // form and `sm` as a detail on it.
+              md: {
+                control: {
+                  width: "token(spacing.3xl)",
+                  height: "calc(token(spacing.lg) + 2 * token(spacing.sm))",
+                },
+                thumb: {
+                  width: "token(spacing.lg)",
+                  height: "token(spacing.lg)",
+                  top: "token(spacing.sm)",
+                  left: "token(spacing.sm)",
+                  "[aria-checked='true'] &": {
+                    transform: "translateX(token(spacing.lg))",
                   },
                 },
               },
@@ -4067,6 +4179,60 @@ export default defineConfig({
             },
           },
           variants: {
+            // Which FIELD size this calendar is serving. It scales the search
+            // row and nothing else — deliberately. The grid's measure is a
+            // fixed pitch (`calendarDay`, 24px, on a 4px gutter) that the whole
+            // system draws days at, and a month is 208px because of it; scaling
+            // that with the label beside it would make the same calendar a
+            // different size in two forms. The search row is the one part
+            // shared with the field family — it stands exactly where the input
+            // it replaced stood — so it takes that family's height and text and
+            // the popover lands flush on its trigger instead of overhanging it.
+            size: {
+              sm: {
+                search: {
+                  height: "calc(token(spacing.xxl) + token(spacing.md))",
+                  textStyle: "bodySmall",
+                },
+              },
+              md: {
+                search: {
+                  height: "token(spacing.4xl)",
+                  textStyle: "bodyLarge",
+                },
+              },
+              lg: {
+                search: {
+                  height: "calc(token(spacing.4xl) + token(spacing.md))",
+                  textStyle: "subheading",
+                },
+              },
+            },
+            // Fill the box, instead of hugging the months. The calendar's
+            // measure is otherwise intrinsic — 208px a month, and a consumer
+            // handing it a wider column just gets 208px of calendar sitting in
+            // one corner of it. `fluid` spends the surplus in the GUTTERS: the
+            // period grows to the list, and each grid distributes what is left
+            // between its seven tracks, so a day cell stays the 24px square the
+            // rest of the system draws and only the space BETWEEN the columns
+            // opens up. The alternative — stretching the cells — would make the
+            // selected chip a wide bar in one layout and a square in another,
+            // and it is the same calendar in both.
+            //
+            // At the natural measure the arithmetic is a no-op (free space is
+            // zero), which is what lets a consumer set this once and leave the
+            // decision to whatever column the calendar lands in.
+            fluid: {
+              true: {
+                root: { width: "token(spacing.full)" },
+                // One month takes the whole list; several share it equally.
+                period: { flexGrow: 1 },
+                // Both grids, so the weekday header keeps step with the day
+                // columns it names.
+                week: { justifyContent: "space-between" },
+                grid: { justifyContent: "space-between" },
+              },
+            },
             // How the flanking chevrons meet the list's left/right edges.
             // `label` is a bare chevron level with the month label row — right
             // for ONE month, where nothing is clipped (Figma 715:921). `edge`
@@ -4230,9 +4396,11 @@ export default defineConfig({
               },
             },
           },
-          defaultVariants: { tone: "default", navPlacement: "label" },
+          defaultVariants: { tone: "default", navPlacement: "label", size: "md" },
           // Runtime variant values — force every branch to be emitted.
-          staticCss: [{ tone: ["*"], navPlacement: ["*"] }],
+          staticCss: [
+            { tone: ["*"], navPlacement: ["*"], fluid: ["*"], size: ["*"] },
+          ],
         }),
 
         // A single-field editor that takes over a floating toolbar's interior:

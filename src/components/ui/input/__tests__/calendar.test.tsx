@@ -101,6 +101,28 @@ describe("Calendar composition", () => {
     renderCalendar();
     expect(screen.getAllByRole("gridcell")).toHaveLength(42);
   });
+
+  // The calendar's width is its PERIODS — 208px a month. The root hugs its
+  // content, so an `<input>` left at the HTML default of `size=20` claims an
+  // intrinsic width of its own and can outvote them: WebKit sizes that at
+  // 219px, which widened every date popover in the app by 11px of empty
+  // surface beside the month. Chromium's is narrower and the bug was invisible
+  // there. The search takes its width from the row, never the other way round.
+  it("stops the search claiming an intrinsic width of its own", () => {
+    renderCalendar();
+    expect(screen.getByRole("searchbox").getAttribute("size")).toBe("1");
+  });
+
+  it("lets a consumer state their own", () => {
+    render(
+      <Field>
+        <Calendar today={TODAY}>
+          <Field.Search size={12} />
+        </Calendar>
+      </Field>,
+    );
+    expect(screen.getByRole("searchbox").getAttribute("size")).toBe("12");
+  });
 });
 
 describe("weekday / weekend attributes", () => {

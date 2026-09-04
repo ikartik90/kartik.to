@@ -97,12 +97,13 @@ export function ColorInput({
   const keepOpenFor = `[data-color-swatch="${uid}"]`;
 
   const dismiss = () => {
-    // The format menu is a popover of its own, nested inside this one, and
-    // Escape reaches BOTH: `useDismiss` listens at the document, and this
-    // popover mounted first so its listener runs first. Without this guard the
-    // keypress meant for the menu would take the whole picker with it. The
-    // class comes from the recipe rather than being written out, so the two
-    // cannot drift apart.
+    // The format menu is a popover of its own, nested inside this one — and
+    // portalled, so a press on it lands OUTSIDE this picker and would dismiss
+    // the whole thing. While the menu is up it owns the dismissal: closing it
+    // is what a press or an Escape means. (Escape is already the menu's alone —
+    // `useDismiss` gives it to the surface opened last — so this guard is now
+    // the pointer's.) The class comes from the recipe rather than being written
+    // out, so the two cannot drift apart.
     if (document.querySelector(`.${comboboxPopover()}`)) return;
     closePicker();
   };

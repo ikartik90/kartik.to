@@ -1,4 +1,10 @@
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  waitFor,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -12,13 +18,19 @@ function Harness({
   onDismiss = vi.fn(),
   onEnabledChange,
   defaultEnabled = false,
+  dismissOnOutsidePointer,
 }: {
   onDismiss?: () => void;
   onEnabledChange?: (enabled: boolean) => void;
   defaultEnabled?: boolean;
+  dismissOnOutsidePointer?: boolean;
 }) {
   return (
-    <PropertiesPanel ariaLabel="Media properties" onDismiss={onDismiss}>
+    <PropertiesPanel
+      ariaLabel="Media properties"
+      onDismiss={onDismiss}
+      dismissOnOutsidePointer={dismissOnOutsidePointer}
+    >
       <PropertiesPanel.Header>Media Properties</PropertiesPanel.Header>
       <PropertiesPanel.Section
         defaultEnabled={defaultEnabled}
@@ -105,6 +117,34 @@ describe("PropertiesPanel", () => {
     expect(panel.className).toMatch(/properties-panel__exiting/);
 
     await waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
+  });
+
+  // A panel docked beside the thing it edits is usually transient — press the
+  // canvas and it goes. A panel that IS the page's settings is not: it is
+  // opened deliberately and closed deliberately, and every press on the surface
+  // it configures would otherwise take it away.
+  // Asserted on the EXIT rather than on `onDismiss`, which only arrives once
+  // the slide is over — by which time an Escape fired in between would have
+  // reported the same thing whether the press was heard or not.
+  const isLeaving = () =>
+    screen
+      .getByRole("dialog", { name: "Media properties" })
+      .className.includes("properties-panel__exiting");
+
+  it("closes on an outside press by default", () => {
+    render(<Harness />);
+    fireEvent.pointerDown(document.body);
+    expect(isLeaving()).toBe(true);
+  });
+
+  it("holds through an outside press when told to", () => {
+    render(<Harness dismissOnOutsidePointer={false} />);
+    fireEvent.pointerDown(document.body);
+    expect(isLeaving()).toBe(false);
+
+    // Escape is not what was withdrawn — a dialog still has to be escapable.
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(isLeaving()).toBe(true);
   });
 
   // Escape, the header and an outside press all reach the same close, so a

@@ -56,9 +56,18 @@ body {
    content and the panel move as one thing; the transition is declared on `body`
    above, where the reduced-motion rule at the foot of this file already reaches
    it. */
+body {
+  /* How much of the page's inline end a docked panel has taken. The padding
+     below makes room for it in the FLOW, which is all that page content needs;
+     anything FIXED is measured against the viewport instead and would run on
+     underneath the panel, so it reads this instead of re-deriving it. */
+  --page-inset-end: 0px;
+}
+
 @media (min-width: 820px) {
   body[data-properties-panel] {
     padding-inline-end: var(--sizes-properties-panel-width);
+    --page-inset-end: var(--sizes-properties-panel-width);
   }
 }
 

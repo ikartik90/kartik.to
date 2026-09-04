@@ -15,6 +15,13 @@ export interface OptionItem {
   value: string;
   /** The visible text, and what the search filters against. */
   label: string;
+  /**
+   * What assistive tech reads instead of `label`, for a row whose visible text
+   * is an ABBREVIATION — a weekday bar showing S M T W T F S has two Ss and two
+   * Ts, and the letters cannot tell them apart. Omit it wherever the label
+   * already says what the option is.
+   */
+  ariaLabel?: string;
   /** Rendered but unselectable (dimmed, skipped by keyboard navigation). */
   disabled?: boolean;
 }

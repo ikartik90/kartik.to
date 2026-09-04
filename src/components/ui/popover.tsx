@@ -54,6 +54,12 @@ type PopoverProps = {
    */
   ignoreSelector?: string;
   /**
+   * Whether a press outside dismisses (default true). Off for a surface that
+   * stands over what it configures and is closed deliberately — see
+   * {@link useDismiss}.
+   */
+  dismissOnOutsidePointer?: boolean;
+  /**
    * Render the container in a `document.body` portal so it renders in the true
    * top stacking context and escapes ancestor clipping/containment — e.g. a
    * `DemoFrame`, whose `container-type` makes it the containing block for a
@@ -99,6 +105,7 @@ export function Popover({
   ariaLabel,
   dismissOnReflow = false,
   ignoreSelector,
+  dismissOnOutsidePointer,
   portal = false,
   style,
   containerRef: onContainer,
@@ -106,7 +113,13 @@ export function Popover({
   children,
 }: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  useDismiss({ ref: containerRef, onDismiss, dismissOnReflow, ignoreSelector });
+  useDismiss({
+    ref: containerRef,
+    onDismiss,
+    dismissOnReflow,
+    ignoreSelector,
+    dismissOnOutsidePointer,
+  });
 
   // Where a wheel stops. A popover is anchored to something on the page, so
   // scrolling the page out from under a list that has run out would drag the

@@ -1,6 +1,18 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useId, type RefObject } from "react";
+
+// The open dismissable surfaces, in the order they opened. Escape closes ONE
+// thing — the one on top — and every surface listens at the document, so
+// without this a press meant for the combobox on a properties panel would take
+// the panel with it. `stopPropagation` cannot sort them out: listeners on the
+// SAME node in the same phase all run regardless, and the one registered first
+// (the surface underneath) would win anyway.
+//
+// Opening order, not DOM nesting, because a portalled popover is a sibling of
+// everything else under <body> — there is no containment left to read. The two
+// agree wherever it matters: a surface opened FROM another one mounts second.
+const layers: string[] = [];
 
 interface UseDismissOptions {
   /** The popover container — pointer-downs outside it dismiss. */
@@ -21,6 +33,15 @@ interface UseDismissOptions {
    * itself is enough however it wraps its icon.
    */
   ignoreSelector?: string;
+  /**
+   * Whether a pointer-down outside dismisses at all (default true).
+   *
+   * Off for a surface that is not transient — one opened deliberately and
+   * closed deliberately, standing over the very thing it configures, where
+   * every press on that thing would otherwise take it away. Escape and the
+   * surface's own controls still close it; only the ambient press is withdrawn.
+   */
+  dismissOnOutsidePointer?: boolean;
   /** Turn all listeners off (default true). */
   enabled?: boolean;
 }
@@ -36,16 +57,33 @@ export function useDismiss({
   onDismiss,
   dismissOnReflow = false,
   ignoreSelector,
+  dismissOnOutsidePointer = true,
   enabled = true,
 }: UseDismissOptions): void {
-  // Escape closes from anywhere. Capture + stopPropagation so it dismisses the
-  // popover rather than reaching an editor-level Escape handler first, and
-  // preventDefault so the browser doesn't also run its own Escape action —
-  // e.g. Safari leaving fullscreen when the menu is dismissed.
+  // This surface's place in the stack above. An identity, nothing more, and
+  // registered in an effect of its OWN so that a re-render (which re-runs the
+  // Escape effect, `onDismiss` being an inline arrow at every call site) cannot
+  // pop this surface and push it back on top of the ones opened after it.
+  const layer = useId();
+  useEffect(() => {
+    if (!enabled) return;
+    layers.push(layer);
+    return () => {
+      const at = layers.indexOf(layer);
+      if (at !== -1) layers.splice(at, 1);
+    };
+  }, [enabled, layer]);
+
+  // Escape closes the TOPMOST surface. Capture + stopPropagation so it
+  // dismisses the popover rather than reaching an editor-level Escape handler
+  // first, and preventDefault so the browser doesn't also run its own Escape
+  // action — e.g. Safari leaving fullscreen when the menu is dismissed. Both
+  // are the top surface's to do: a press swallowed by a surface underneath
+  // would be one the surface on top never got.
   useEffect(() => {
     if (!enabled) return;
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && layers[layers.length - 1] === layer) {
         e.preventDefault();
         e.stopPropagation();
         onDismiss();
@@ -54,11 +92,11 @@ export function useDismiss({
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () =>
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [enabled, onDismiss]);
+  }, [enabled, onDismiss, layer]);
 
   // Dismiss when a pointer goes down outside the container.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !dismissOnOutsidePointer) return;
     function handlePointerDown(e: PointerEvent) {
       const el = ref.current;
       if (!el || el.contains(e.target as Node)) return;
@@ -69,9 +107,8 @@ export function useDismiss({
       onDismiss();
     }
     document.addEventListener("pointerdown", handlePointerDown);
-    return () =>
-      document.removeEventListener("pointerdown", handlePointerDown);
-  }, [enabled, onDismiss, ref, ignoreSelector]);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [enabled, dismissOnOutsidePointer, onDismiss, ref, ignoreSelector]);
 
   // A click-captured anchor rect goes stale on scroll/resize — dismiss rather
   // than let the popover drift from its target.

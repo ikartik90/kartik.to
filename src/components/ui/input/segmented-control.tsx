@@ -100,6 +100,7 @@ export function SegmentedControl({
             <OptionList.Option
               key={option.value}
               value={option.value}
+              aria-label={option.ariaLabel}
               className={styles.option}
             >
               {option.label}

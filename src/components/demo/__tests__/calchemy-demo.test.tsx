@@ -6,74 +6,43 @@ import {
   cleanup,
   fireEvent,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { CalchemyDemo, __resetCalchemyDemoCache } from "../calchemy-demo";
 import { DemoFrame } from "@/components/demo-frame";
 
-const mockUseCalchemyContext = vi.fn();
-
-vi.mock("@calchemy/date-core", () => ({
-  createCalchemy: vi.fn(() =>
-    Promise.resolve({
-      parseDate: vi.fn(),
-      getInlineCompletion: vi.fn(() => null),
-      toJSON: vi.fn((value: unknown) => value),
-    }),
-  ),
-}));
-
-vi.mock("@calchemy/date-react/calendar-scroll", () => ({
-  CalendarScroll: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="calchemy-scroll">{children}</div>
-  ),
-}));
-
-vi.mock("@calchemy/date-react", () => ({
-  useCalchemyCalendar: vi.fn(() => ({
-    period: { count: 3, unit: "month" },
-    isNavigating: false,
-    canMove: () => true,
-    move: vi.fn(),
-  })),
-  useCalchemyContext: () => mockUseCalchemyContext(),
-  Calchemy: {
-    Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    Field: ({ placeholder }: { placeholder?: string }) => (
-      <input placeholder={placeholder} />
-    ),
-    Candidates: () => null,
-    Calendar: ({
-      children,
-      period,
-    }: {
-      children: React.ReactNode;
-      period?: { months?: number };
-    }) => (
-      // The period is surfaced because it is not decoration: `period.count` is
-      // exactly what `CalchemyCalendarNavPrevious`/`Next` step by, so a demo
-      // showing one month and paging by three is a disagreement visible here.
-      <div data-testid="calchemy-calendar" data-months={period?.months}>
-        {children}
-      </div>
-    ),
-    CalendarPeriodList: ({ children }: { children: React.ReactNode }) => (
-      <div>{children}</div>
-    ),
-    CalendarPeriod: ({ children }: { children: React.ReactNode }) => (
-      <div>{children}</div>
-    ),
-    CalendarPeriodHeading: () => <h3>June 2026</h3>,
-    CalendarWeekdays: () => <div>weekdays</div>,
-    CalendarGrid: () => <div>grid</div>,
-  },
-}));
+// No mocks: the demo runs the real parser now. It used to mock
+// `@calchemy/date-react` — the package it was built on and which no longer
+// exists — and mocking the engine as well left the cases asserting against a
+// stub of the very thing the demo is a demo OF.
 
 afterEach(() => {
   cleanup();
-  mockUseCalchemyContext.mockReset();
   // The engine is module-cached; drop it so each case exercises fresh init.
   __resetCalchemyDemoCache();
 });
+
+/** The months on screen, named the way the calendar labels its grids. */
+function monthLabels(): string[] {
+  return screen
+    .queryAllByRole("grid")
+    .map((grid) => grid.getAttribute("aria-label") ?? "");
+}
+
+function selectedLabels(): string[] {
+  return screen
+    .queryAllByRole("gridcell", { selected: true })
+    .map((cell) => cell.getAttribute("aria-label") ?? "");
+}
+
+/** The demo, mounted and waited for. */
+async function renderDemo() {
+  render(<CalchemyDemo />);
+  const field = await screen.findByRole("searchbox", {
+    name: "Natural language date query",
+  });
+  return { field, user: userEvent.setup() };
+}
 
 /**
  * Mount the demo inside a frame of a stated width.
@@ -95,7 +64,14 @@ function renderInFrameOfWidth(width: number) {
 
   const rect = vi
     .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-    .mockReturnValue({ width, height: 0, top: 0, left: 0, right: width, bottom: 0 } as DOMRect);
+    .mockReturnValue({
+      width,
+      height: 0,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: 0,
+    } as DOMRect);
 
   const result = render(
     <DemoFrame logger>
@@ -113,189 +89,129 @@ function renderInFrameOfWidth(width: number) {
 }
 
 describe("CalchemyDemo", () => {
-  it("renders the field placeholder after Calchemy initializes", async () => {
-    mockUseCalchemyContext.mockReturnValue({
-      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
-      calchemy: { toJSON: (value: unknown) => value },
-    });
-
-    const { getByPlaceholderText } = render(<CalchemyDemo />);
-
-    await waitFor(() => {
-      expect(
-        getByPlaceholderText('Try "Mondays and Fridays next month"'),
-      ).toBeDefined();
-    });
+  it("offers the query field once the engine lands", async () => {
+    await renderDemo();
+    expect(
+      screen.getByPlaceholderText('Try "Mondays and Fridays next month"'),
+    ).toBeDefined();
   });
 
-  it("renders the horizontally scrollable calendar with navigation", async () => {
-    mockUseCalchemyContext.mockReturnValue({
-      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
-      calchemy: { toJSON: (value: unknown) => value },
-    });
+  it("selects the days a typed phrase means", async () => {
+    const { field, user } = await renderDemo();
 
-    const { getByTestId, getByRole } = render(<CalchemyDemo />);
-
-    await waitFor(() => {
-      expect(getByTestId("calchemy-calendar")).toBeDefined();
-      expect(getByTestId("calchemy-scroll")).toBeDefined();
-      expect(getByRole("button", { name: "Previous months" })).toBeDefined();
-      expect(getByRole("button", { name: "Next months" })).toBeDefined();
-    });
+    await user.type(field, "tomorrow");
+    await waitFor(() => expect(selectedLabels()).toHaveLength(1));
   });
 
-  it("does not log empty-input placeholder errors", async () => {
-    mockUseCalchemyContext.mockReturnValue({
-      result: {
-        status: "invalid",
-        input: "",
-        errors: [{ code: "empty-input", message: "Enter a date phrase." }],
-        corrections: [],
-        warnings: [],
-      },
-      calchemy: { toJSON: () => ({}) },
-    });
+  // The card cannot scroll a century the way the playground does, so it MOVES
+  // instead: a phrase answered outside the months on screen brings its own
+  // month into them.
+  it("moves the run of months to where the answer falls", async () => {
+    const { field, user } = await renderDemo();
+    expect(monthLabels()).not.toContain("December 2028");
 
-    render(
-      <DemoFrame logger>
-        <CalchemyDemo />
-      </DemoFrame>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("No output logs available")).toBeDefined();
-    });
-    expect(screen.queryByText("Enter a date phrase.")).toBeNull();
+    await user.type(field, "25 december 2028");
+    await waitFor(() => expect(monthLabels()).toContain("December 2028"));
+    expect(selectedLabels()).toEqual(["December 25, 2028"]);
   });
 
-  it("logs parse status, value, and errors through the demo logger", async () => {
-    let parseResult: {
-      status: string;
-      input: string;
-      errors?: Array<{ code: string; message: string }>;
-      corrections: unknown[];
-      warnings: unknown[];
-      value?: unknown;
-      candidates?: unknown[];
-    } = {
-      status: "invalid",
-      input: "bad",
-      errors: [{ code: "invalid-date", message: "Could not parse input" }],
-      corrections: [],
-      warnings: [],
-    };
+  // The shared readings row, driven by the shared hook — a phrase with more
+  // than one meaning previews one and offers the rest.
+  it("offers the readings of an ambiguous phrase, and settles on one", async () => {
+    const { field, user } = await renderDemo();
 
-    mockUseCalchemyContext.mockImplementation(() => ({
-      result: parseResult,
-      calchemy: {
-        toJSON: () => ({ kind: "single", date: "2026-06-29" }),
-      },
-    }));
-
-    const { rerender } = render(
-      <DemoFrame logger>
-        <CalchemyDemo />
-      </DemoFrame>,
-    );
-
-    // The logger is collapsed by default; expand it so its body exposes
-    // role="log" (and its entries become visible). State persists across the
-    // rerender below, so this is only needed once.
-    fireEvent.click(
-      screen.getByRole("button", { name: "Expand output logs" }),
-    );
-
-    await waitFor(() => {
-      const panel = screen.getByRole("log");
-      expect(panel.textContent).toContain("✕ invalid");
-      expect(panel.textContent).toContain("Could not parse input");
+    await user.type(field, "03/04/25");
+    const readings = await screen.findAllByRole("button", {
+      name: /2025|2003/,
     });
+    expect(readings.length).toBeGreaterThan(1);
 
-    parseResult = {
-      status: "valid",
-      input: "next monday",
-      value: { kind: "single", date: "2026-06-29" },
-      candidates: [],
-      corrections: [],
-      warnings: [],
-    };
+    // The first is previewed, so the grid is already drawing it.
+    expect(readings[0].getAttribute("aria-current")).toBe("true");
+    expect(readings[0].getAttribute("aria-pressed")).toBe("false");
 
-    rerender(
-      <DemoFrame logger>
-        <CalchemyDemo />
-      </DemoFrame>,
-    );
-
-    await waitFor(() => {
-      const panel = screen.getByRole("log");
-      expect(panel.textContent).toContain("✓ valid");
-      expect(panel.textContent).toContain('"kind": "single"');
-      expect(panel.textContent).toContain('"date": "2026-06-29"');
-    });
-    expect(screen.getByRole("log").textContent).not.toContain("✕ invalid");
-    expect(screen.getByRole("log").textContent).not.toContain(
-      "Could not parse input",
+    // Enter settles on it, which is a different thing from previewing it.
+    await user.type(field, "{Enter}");
+    await waitFor(() =>
+      expect(readings[0].getAttribute("aria-pressed")).toBe("true"),
     );
   });
+
+  it("says nothing to the log about an empty box", async () => {
+    const { restore } = renderInFrameOfWidth(900);
+    try {
+      await waitFor(() =>
+        expect(screen.getByText("No output logs available")).toBeDefined(),
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("logs the parse through the demo logger", async () => {
+    const { restore } = renderInFrameOfWidth(900);
+    try {
+      const field = await screen.findByRole("searchbox", {
+        name: "Natural language date query",
+      });
+      // The logger is collapsed by default; expand it so its body exposes
+      // role="log" and its entries become visible.
+      fireEvent.click(screen.getByRole("button", { name: "Expand output logs" }));
+
+      const user = userEvent.setup();
+      await user.type(field, "qwerty");
+      await waitFor(() =>
+        expect(screen.getByRole("log").textContent).toContain("✕ invalid"),
+      );
+
+      await user.clear(field);
+      await user.type(field, "next monday");
+      await waitFor(() => {
+        const panel = screen.getByRole("log");
+        expect(panel.textContent).toContain("✓ valid");
+        expect(panel.textContent).toContain('"kind": "single"');
+      });
+      expect(screen.getByRole("log").textContent).not.toContain("✕ invalid");
+    } finally {
+      restore();
+    }
+  });
+
   // --- Layout tier ---------------------------------------------------------
   //
-  // The demo shows as many months as the frame is wide enough for, and pages
-  // by exactly that many: `period.count` is what the nav buttons step. The two
-  // are one number, so getting the tier wrong is not a cosmetic mistake — it
-  // is a calendar that shows one month and jumps three when you press Next,
-  // which is what the published grid card did on a phone.
+  // The demo shows as many months as the frame is wide enough for, and pages by
+  // exactly that many — one number, so getting the tier wrong is not a cosmetic
+  // mistake. It is a calendar that shows one month and jumps three when you
+  // press Next, which is what the published grid card once did on a phone.
   //
   // The tier has to be settled on MOUNT. Waiting for a resize that never comes
   // (a card's width does not change after it lands) leaves the demo on its
   // initial guess, which is the widest tier.
-  it("opens on the compact tier inside a narrow frame", async () => {
-    mockUseCalchemyContext.mockReturnValue({
-      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
-      calchemy: { toJSON: (value: unknown) => value },
-    });
-
-    const { getByTestId, getByPlaceholderText, restore } =
-      renderInFrameOfWidth(350);
-
+  it("opens on one month inside a narrow frame", async () => {
+    const { restore } = renderInFrameOfWidth(350);
     try {
-      await waitFor(() => {
-        expect(getByTestId("calchemy-calendar").dataset.months).toBe("1");
-      });
-      expect(getByPlaceholderText('Try "Mondays next month"')).toBeDefined();
+      await waitFor(() => expect(monthLabels()).toHaveLength(1));
+      expect(
+        screen.getByPlaceholderText('Try "Mondays next month"'),
+      ).toBeDefined();
     } finally {
       restore();
     }
   });
 
-  it("opens on the middle tier inside a medium frame", async () => {
-    mockUseCalchemyContext.mockReturnValue({
-      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
-      calchemy: { toJSON: (value: unknown) => value },
-    });
-
-    const { getByTestId, restore } = renderInFrameOfWidth(600);
-
+  it("opens on two months inside a medium frame", async () => {
+    const { restore } = renderInFrameOfWidth(600);
     try {
-      await waitFor(() => {
-        expect(getByTestId("calchemy-calendar").dataset.months).toBe("2");
-      });
+      await waitFor(() => expect(monthLabels()).toHaveLength(2));
     } finally {
       restore();
     }
   });
 
-  it("opens on the wide tier inside a wide frame", async () => {
-    mockUseCalchemyContext.mockReturnValue({
-      result: { status: "invalid", input: "", errors: [], corrections: [], warnings: [] },
-      calchemy: { toJSON: (value: unknown) => value },
-    });
-
-    const { getByTestId, restore } = renderInFrameOfWidth(900);
-
+  it("opens on three months inside a wide frame", async () => {
+    const { restore } = renderInFrameOfWidth(900);
     try {
-      await waitFor(() => {
-        expect(getByTestId("calchemy-calendar").dataset.months).toBe("3");
-      });
+      await waitFor(() => expect(monthLabels()).toHaveLength(3));
     } finally {
       restore();
     }

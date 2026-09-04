@@ -75,6 +75,12 @@ describe("collapsed trigger", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
+  // See Button: WebKit's default tab order skips a bare <button>.
+  it("states its own place in the tab order", () => {
+    renderCombobox({});
+    expect(trigger().getAttribute("tabindex")).toBe("0");
+  });
+
   it("shows the placeholder when nothing is selected", () => {
     renderCombobox({ placeholder: "Pick a fruit" });
     expect(trigger().textContent).toBe("Pick a fruit");

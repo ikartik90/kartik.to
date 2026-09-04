@@ -121,7 +121,10 @@ const rowStyle = css({
   rowGap: "lg",
   alignItems: "flex-start",
 });
-const dateFieldStyle = css({ width: "140px", flexShrink: 0 });
+const dateFieldStyle = css({
+  width: "token(sizes.dateField)",
+  flexShrink: 0,
+});
 
 // The repeating-shift card (Figma 901:2365). The switch is its header and the
 // controls it governs sit under a rule in the SAME box, so the grouping is
