@@ -11,6 +11,7 @@ import { Calendar } from "@/components/ui/input/calendar";
 import { Field } from "@/components/ui/input/field";
 import { CalchemyReadings } from "@/components/calchemy-readings";
 import { CalchemyQueryField } from "@/components/calchemy-query-field";
+import { CalchemySuggestion } from "@/components/calchemy-suggestion";
 import { useCalchemyQuery } from "@/hooks/use-calchemy-query";
 import { DemoPreloader } from "@/components/demo-component";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
@@ -411,6 +412,7 @@ function CalchemyCard({ engine }: { engine: CalchemyEngine }) {
           playground — the readings above the phrase, and nothing else in it. */}
       <div className={barStyle}>
         <CalchemyReadings query={phrase} className={readingsStyle} />
+        <CalchemySuggestion query={phrase} />
         <CalchemyQueryField query={phrase} placeholder={placeholder} />
       </div>
     </div>

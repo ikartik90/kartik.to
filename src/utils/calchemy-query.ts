@@ -71,6 +71,32 @@ export interface QueryAnswer {
   candidates: QueryCandidate[];
   /** Which reading `dates` came from, when there was a choice to make. */
   activeId: string | null;
+  /**
+   * The phrase the parser would have read instead, when it can work one out.
+   * Null whenever there is nothing to correct — see `rewriteOf`.
+   */
+  suggestion: string | null;
+}
+
+/**
+ * The rewrite the parser offers for a phrase it could not read: a backwards
+ * range given the year that makes it run forwards ("tomorrow until march" →
+ * "tomorrow until march 2027"), a numeric date given its dashes ("2020 03 15"
+ * → "2020-03-15").
+ *
+ * Only ever taken from a FAILED parse, which is narrower than it sounds and
+ * deliberately so. A phrase the chosen KIND turned down is not a typo —
+ * "mondays next month" is perfectly readable, it simply does not mean one day —
+ * and rewriting it would answer a question nobody asked. An ambiguous phrase is
+ * not broken either: three readings is a choice, and it already has a list of
+ * its own to make it in.
+ */
+function rewriteOf(result: ParseDateResult): string | null {
+  if (result.status !== "invalid") return null;
+
+  return (
+    result.errors.find((error) => error.suggestedInput)?.suggestedInput ?? null
+  );
 }
 
 /** The days a resolved result means, flattened for drawing. */
@@ -114,6 +140,7 @@ export function parseQuery(
       dates: parseQueryDates(calchemy, query, context, kind),
       candidates: [],
       activeId: null,
+      suggestion: rewriteOf(parsed),
     };
   }
 
@@ -137,7 +164,7 @@ export function parseQuery(
   // No reading the kind can use: the phrase does not mean what is being asked
   // for, and offering readings that cannot be drawn would be worse than silence.
   if (usable.length === 0) {
-    return { dates: [], candidates: [], activeId: null };
+    return { dates: [], candidates: [], activeId: null, suggestion: null };
   }
 
   // One reading left is not a choice — the kind already made it.
@@ -146,6 +173,7 @@ export function parseQuery(
       dates: drawableDates(usable[0].resolved),
       candidates: [],
       activeId: null,
+      suggestion: null,
     };
   }
 
@@ -161,5 +189,6 @@ export function parseQuery(
       label: candidate.label,
     })),
     activeId: active.candidate.id,
+    suggestion: null,
   };
 }

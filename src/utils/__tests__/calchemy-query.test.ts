@@ -140,6 +140,38 @@ describe("parseQueryDates", () => {
     expect(dates.map(String)).toEqual([REFERENCE.add({ days: 1 }).toString()]);
   });
 
+  // 0.3.0 hands back the phrase it WOULD have read, when it can work one out:
+  // a backwards range given the year that makes it run forwards, a numeric date
+  // given its dashes. Passed straight through, so a caller can offer it back.
+  it("passes on the phrase the parser would have read instead", () => {
+    expect(
+      parseQuery(calchemy, "tomorrow until march", CONTEXT).suggestion,
+    ).toBe("tomorrow until march 2027");
+    expect(parseQuery(calchemy, "2020 03 15", CONTEXT).suggestion).toBe(
+      "2020-03-15",
+    );
+  });
+
+  it("has nothing to suggest for a phrase that already reads", () => {
+    expect(parseQuery(calchemy, "tomorrow", CONTEXT).suggestion).toBeNull();
+    // Ambiguous is not broken: three readings is a choice, not a mistake.
+    expect(parseQuery(calchemy, "03/04/25", CONTEXT).suggestion).toBeNull();
+  });
+
+  it("has nothing to suggest for a phrase beyond repair, or an empty box", () => {
+    expect(parseQuery(calchemy, "qwertyuiop", CONTEXT).suggestion).toBeNull();
+    expect(parseQuery(calchemy, "", CONTEXT).suggestion).toBeNull();
+  });
+
+  // A phrase the KIND turned down is not a typo. "mondays next month" is
+  // perfectly readable; asked for one date it simply does not mean one, and
+  // rewriting it would answer a question nobody asked.
+  it("does not offer a rewrite for a phrase only the kind refused", () => {
+    expect(
+      parseQuery(calchemy, "mondays next month", CONTEXT, "single").suggestion,
+    ).toBeNull();
+  });
+
   it("hands back this app's PlainDate, not the parser's", () => {
     const [date] = parseQueryDates(calchemy, "today", CONTEXT);
 

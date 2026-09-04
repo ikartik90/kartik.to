@@ -39,6 +39,7 @@ import { usePickerPin } from "@/hooks/use-picker-pin";
 import { useCalchemyQuery } from "@/hooks/use-calchemy-query";
 import { CalchemyReadings } from "@/components/calchemy-readings";
 import { CalchemyQueryField } from "@/components/calchemy-query-field";
+import { CalchemySuggestion } from "@/components/calchemy-suggestion";
 import SliderIcon from "@/assets/icons/slider.svg";
 import AddIcon from "@/assets/icons/add.svg";
 import EditIcon from "@/assets/icons/edit.svg";
@@ -1324,6 +1325,10 @@ export function CalchemyPlayground() {
           </Button>
         </div>
         <CalchemyReadings query={phrase} />
+        {/* Same slot as the readings, and never at the same time — see the
+            component. Taking the offer retypes the phrase, so it drops the
+            hand-made selection exactly as typing does. */}
+        <CalchemySuggestion query={phrase} onQueryChange={() => setPicked(null)} />
         <CalchemyQueryField
           query={phrase}
           placeholder='Try "mondays and fridays next month"'
