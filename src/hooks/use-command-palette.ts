@@ -22,8 +22,14 @@ import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
-import { createShaderPreset, saveShaderPreset } from "@/app/actions/shader-preset";
-import { hasUnsavedShaderPresetWork, useShaderPresetDraftStore } from "@/store/shader-preset-draft";
+import {
+  createShaderPreset,
+  saveShaderPreset,
+} from "@/app/actions/shader-preset";
+import {
+  hasUnsavedShaderPresetWork,
+  useShaderPresetDraftStore,
+} from "@/store/shader-preset-draft";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 
 // ---------------------------------------------------------------------------
@@ -183,9 +189,15 @@ export function useCommandPalette(
     }
     let ignore = false;
     getDrafts()
-      .then((data) => { if (!ignore) setDrafts(data); })
-      .catch(() => { if (!ignore) setDrafts([]); });
-    return () => { ignore = true; };
+      .then((data) => {
+        if (!ignore) setDrafts(data);
+      })
+      .catch(() => {
+        if (!ignore) setDrafts([]);
+      });
+    return () => {
+      ignore = true;
+    };
   }, [isAdmin, openKey]);
 
   // The draft (unpublished post) currently being viewed in renderer mode, if
@@ -317,25 +329,68 @@ export function useCommandPalette(
     handleBackRef.current = handleBack;
   });
 
-  // ⌘[ / Ctrl [ — the same gesture the browser reads as "back", claimed so it
-  // lands on the page above THIS page rather than on whatever was visited
-  // before it. Global, because the control it replaces was on the page rather
-  // than in the palette: it has to work without opening anything.
-  // ⌘[ goes through the same gate as the command. A shortcut that skipped the
+  // ⌘J / Ctrl J — up a level: the page above THIS page, rather than whatever
+  // was visited before it. Global, because the control it replaces was on the
+  // page rather than in the palette: it has to work without opening anything.
+  // It goes through the same gate as the command. A shortcut that skipped the
   // unsaved-work question would be a back door round it, and the faster route
   // is exactly the one an author takes without thinking.
+  //
+  // NOT ⌘[, which this was. That is the key equivalent of Safari's History ▸
+  // Back menu item, and macOS dispatches menu key equivalents before the event
+  // reaches web content — the listener was never called there, so the palette's
+  // chip advertised a shortcut that could not fire. ⌘J is unclaimed in Safari
+  // and in Chrome (whose Downloads is ⇧⌘J). Firefox binds ⌘J/Ctrl J to
+  // Downloads but lets a page cancel it, which this does.
   const handleBackRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!backTarget) return;
     function handleKeyDown(event: KeyboardEvent) {
-      if (!hasShortcutModifier(event) || event.key !== "[") return;
+      // Lowercase only: ⌘⇧J is a different gesture, and browsers report the
+      // shifted key as "J".
+      if (!hasShortcutModifier(event) || event.key !== "j") return;
       event.preventDefault();
       handleBackRef.current();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [backTarget]);
+
+  // Leaving the document entirely — a reload, a closed tab, a typed URL.
+  //
+  // The palette's own exits all ask before dropping buffered work, and ⌘J goes
+  // through the same gate. None of those is the only way out: every editor here
+  // buffers in a store rather than the database, and an unload takes the store
+  // with it. `beforeunload` is the only word the page gets in first.
+  //
+  // It does NOT catch the browser's Back. The App Router answers Back from
+  // `popstate` and re-renders in place, so the document never unloads and this
+  // never fires — the swipe, the toolbar button and ⌘← still leave without
+  // asking. Closing that needs a history trap, which is a different thing than
+  // this and has not been built.
+  //
+  // The predicate is read at fire time through a ref, not subscribed to, for
+  // the same reason `wouldLoseWork` itself is: the palette has no business
+  // re-rendering on every keystroke behind it.
+  const wouldLoseWorkRef = useRef(wouldLoseWork);
+  useEffect(() => {
+    wouldLoseWorkRef.current = wouldLoseWork;
+  });
+
+  useEffect(() => {
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (!wouldLoseWorkRef.current()) return;
+      // Both spellings: `preventDefault` is the standard one, `returnValue` is
+      // what older browsers read. The string is never shown — browsers have
+      // used their own wording for years, precisely so a page cannot dress the
+      // dialog up as something else.
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   const syncOtherTabs = () => {
     notifyContentUpdated();
@@ -376,7 +431,8 @@ export function useCommandPalette(
    * the author can no longer see.
    */
   const persistShaderPreset = async (): Promise<boolean> => {
-    const { shaderPresetId, title, shaderId, settings } = useShaderPresetDraftStore.getState();
+    const { shaderPresetId, title, shaderId, settings } =
+      useShaderPresetDraftStore.getState();
     try {
       const saved = shaderPresetId
         ? await saveShaderPreset({ id: shaderPresetId, shaderId, settings })
@@ -442,8 +498,7 @@ export function useCommandPalette(
     }
     requestAnimationFrame(() => {
       const target =
-        (document.querySelector("main") as HTMLElement | null) ??
-        document.body;
+        (document.querySelector("main") as HTMLElement | null) ?? document.body;
 
       target.contentEditable = "true";
       target.focus();

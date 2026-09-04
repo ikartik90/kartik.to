@@ -251,7 +251,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      expect(list().getByText("⌘[")).toBeDefined();
+      expect(list().getByText("⌘J")).toBeDefined();
     });
 
     // Esc is the way out on a keyboard, and saying so is the whole point of the
@@ -308,7 +308,7 @@ describe("CommandPalette", () => {
       expect(dialog.close).toHaveBeenCalled();
     });
 
-    // A chip naming ⌘[ or Ctrl S is an offer a phone cannot take up — the same
+    // A chip naming ⌘J or Ctrl S is an offer a phone cannot take up — the same
     // reason the Esc hint gives way to a button above it.
     it("withholds the rows' keyboard shortcut chips", () => {
       mockPathname.mockReturnValue("/writing/my-post");
@@ -316,8 +316,8 @@ describe("CommandPalette", () => {
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
       expect(list().getByText("Back to index")).toBeDefined();
-      expect(list().queryByText("⌘[")).toBeNull();
-      expect(list().queryByText("Ctrl [")).toBeNull();
+      expect(list().queryByText("⌘J")).toBeNull();
+      expect(list().queryByText("Ctrl J")).toBeNull();
     });
 
     it("filters on what is typed into it, as it does anywhere else", () => {
@@ -728,12 +728,12 @@ describe("CommandPalette — Navigate", () => {
   it("shows the shortcut the platform actually types beside it", () => {
     mockPathname.mockReturnValue("/writing/my-post");
     render(<CommandPalette />);
-    expect(screen.getByText("⌘[").tagName).toBe("KBD");
+    expect(screen.getByText("⌘J").tagName).toBe("KBD");
 
     cleanup();
     stubPlatform("Windows");
     render(<CommandPalette />);
-    expect(screen.getByText("Ctrl [").tagName).toBe("KBD");
+    expect(screen.getByText("Ctrl J").tagName).toBe("KBD");
   });
 
   it("goes there when the item is chosen", () => {
@@ -749,7 +749,7 @@ describe("CommandPalette — Navigate", () => {
     mockPathname.mockReturnValue("/writing/my-post");
     render(<CommandPalette />);
 
-    fireEvent.keyDown(window, { key: "[", metaKey: true });
+    fireEvent.keyDown(window, { key: "j", metaKey: true });
 
     expect(mockPush).toHaveBeenCalledWith("/");
   });
@@ -959,7 +959,11 @@ describe("CommandPalette — the `>` command line", () => {
   });
 
   it("answers to the console form and to no shorthand of it", () => {
-    for (const shorthand of ["adminLogin", "adminLogin()", "window.adminLogin"]) {
+    for (const shorthand of [
+      "adminLogin",
+      "adminLogin()",
+      "window.adminLogin",
+    ]) {
       cleanup();
       openAndType(`> ${shorthand}`);
 
