@@ -33,6 +33,7 @@ import {
 import { Switch } from "@/components/ui/input/switch";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useCalchemyQuery } from "@/hooks/use-calchemy-query";
+import { monthGrid } from "@/utils/calchemy-grid";
 import { CalchemyReadings } from "@/components/calchemy-readings";
 import { CalchemyQueryField } from "@/components/calchemy-query-field";
 import { CalchemySuggestion } from "@/components/calchemy-suggestion";
@@ -129,12 +130,21 @@ function localZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
-/** Three across; how many rows are on screen is now the viewport's business. */
-const GRID_COLUMNS = 3;
+/**
+ * The most columns the year's own measure has room for, and therefore what is
+ * drawn on the very first paint — before there is a laid-out grid to ask. How
+ * many actually fit is `auto-fit`'s decision and is read back off it (see
+ * `yearGridStyle` and `columnsOf`), so this is a starting guess and never an
+ * answer: on anything narrower it is corrected before the frame is shown.
+ */
+const WIDEST_GRID = 3;
 
 // There are no chevrons, so SCROLLING is the only way through the months, and
 // it does not run out: the scroll is a CENTURY either side of today, and only
-// the rows near the viewport are ever built.
+// the rows near the viewport are ever built. The arithmetic of which month
+// lands on which row is `monthGrid`'s (src/utils/calchemy-grid.ts), because it
+// changes with the column count and is worth being able to test without a
+// viewport.
 //
 // Virtualised against a FIXED content height, which is the whole point. The
 // obvious way — keep a window of months and load more onto whichever end you
@@ -145,13 +155,47 @@ const GRID_COLUMNS = 3;
 // years away. Here the tall box below never changes size and every row sits at
 // its own absolute offset, so scrolling in is all that happens and there is
 // nothing to correct.
-const TOTAL_ROWS = 800;
-const ORIGIN_ROW = TOTAL_ROWS / 2;
-/** Rows built beyond each edge of the viewport, so a fast scroll never outruns
- *  them — deep enough to cover a hard flick, which is roughly a screen. */
-const OVERSCAN_ROWS = 6;
 /** What is built before the row height is known — see `useLayoutEffect`. */
 const INITIAL_ROWS = 8;
+
+/** How long a scroll has to stand still to count as where the reader IS, in ms
+ *  — long enough to outlast the scroll a re-snap fires within the frame. */
+const SETTLE = 150;
+
+/**
+ * How many columns the grid actually laid out, read off the resolved template.
+ *
+ * `auto-fit` is what decides — it drops a column the moment the row can no
+ * longer hold one at the month's own pitch — and that pitch is a set of tokens
+ * this file has no business restating as a breakpoint. So the width question is
+ * left entirely to CSS and only its ANSWER is read back here, which is the one
+ * thing the row arithmetic cannot get from the stylesheet.
+ *
+ * A resolved template is a list of used track sizes in px. Anything else — a
+ * box with no layout, a context that never painted — is not a measurement, and
+ * gives 0 for the caller to ignore.
+ */
+function columnsOf(grid: HTMLElement): number {
+  return getComputedStyle(grid)
+    .gridTemplateColumns.split(" ")
+    .filter((track) => track.endsWith("px")).length;
+}
+
+/**
+ * How many rows read CLEAR of the page's chrome — the viewport less the two
+ * overlay bands the scrollport runs under. Both are already reserved as the
+ * stage's own padding, so they are measured rather than restated: the head one
+ * IS that padding, and the foot one is the scrim standing over the query bar.
+ */
+function readableRows(
+  stage: HTMLElement,
+  scrim: HTMLElement | null,
+  rowHeight: number,
+): number {
+  const head = parseFloat(getComputedStyle(stage).paddingTop) || 0;
+  const foot = scrim?.offsetHeight ?? 0;
+  return Math.floor((stage.clientHeight - head - foot) / rowHeight);
+}
 
 // ---------------------------------------------------------------------------
 // The scrim, built the way the calendar's own `edge` nav scrims are built
@@ -218,42 +262,23 @@ const SCRIM_RAMPS = [
   "linear-gradient(to top, #000, transparent)",
 ];
 
-/** The first day of the quarter today falls in. */
-function currentQuarterStart(): Temporal.PlainDate {
-  const today = Temporal.Now.plainDateISO();
-  return today.with({
-    month: Math.floor((today.month - 1) / 3) * 3 + 1,
-    day: 1,
-  });
-}
-
-/** The month opening `row`. Row `ORIGIN_ROW` is the quarter today falls in. */
-function monthForRow(
-  row: number,
-  quarter: Temporal.PlainDate,
-): Temporal.PlainDate {
-  return quarter.add({ months: (row - ORIGIN_ROW) * GRID_COLUMNS });
-}
-
-/** The row `date` falls in — the inverse of `monthForRow`. */
-function rowForDate(
-  date: Temporal.PlainDate,
-  quarter: Temporal.PlainDate,
-): number {
-  const months = (date.year - quarter.year) * 12 + (date.month - quarter.month);
-  return ORIGIN_ROW + Math.floor(months / GRID_COLUMNS);
-}
-
-/**
- * The row parked at the top on arrival: one above the current quarter's, which
- * is what makes the quarter you are in the SECOND row.
- */
-const OPENING_ROW = ORIGIN_ROW - 1;
-
 /** A month's own measure: 7 day columns, their 6 gutters, and the period's
  *  padding — the 208px pitch the `calendar` recipe is built on. */
 const MONTH_MEASURE =
   "calc(7 * token(sizes.calendarDay) + 6 * token(spacing.sm) + 2 * token(spacing.md))";
+
+/**
+ * How wide a month is ever allowed to spread: its share of the full measure at
+ * the widest grid, gutters taken out first.
+ *
+ * `fluid` spends surplus width BETWEEN the seven day columns, and at three
+ * across that surplus is what opens them to a readable ~14px. Two months given
+ * a three-month surplus would open theirs to nearly 30, and one month left
+ * alone with it to fifty — a single month dissolved across half a screen. So a
+ * month takes its share and no more, and the grid centres what it has: the same
+ * month at every width, with the air outside it rather than through it.
+ */
+const MONTH_STRETCH = `calc((token(sizes.calchemyPlayground) - ${WIDEST_GRID - 1} * token(spacing.5xl)) / ${WIDEST_GRID})`;
 
 const stageStyle = css({
   // The stage scrolls, not the page: snapping belongs to this one screen, and
@@ -301,9 +326,9 @@ const stageStyle = css({
   // The floating bar's height and its standoff, so the last row of months can
   // always be scrolled clear of it.
   paddingBottom: "calc(2 * token(spacing.5xl))",
-  // The grid holds its 3 × 208px measure rather than shrinking: below that the
-  // stage scrolls sideways instead of the grid cropping (the list hides its
-  // overflow).
+  // The grid drops a column rather than squeezing one, and a single month
+  // holds its 208px pitch rather than shrinking: below THAT the stage scrolls
+  // sideways instead of the grid cropping (the list hides its overflow).
   overflowX: "auto",
 });
 
@@ -312,6 +337,12 @@ const stageStyle = css({
 // window below, parked at its row's offset.
 const runStyle = css({
   position: "relative",
+  // Load-bearing since the grid became `auto-fit`: the column count is counted
+  // against THIS box, so a run that measures nothing pins the grid to one
+  // month and never sees the room to grow back. It measured exactly nothing
+  // until recently and read as centred anyway — a 960 measure shrink-wrapped
+  // around a zero-width line lands where it belongs — which is how a width
+  // spelled at the wrong scale went unnoticed here for so long.
   width: "token(spacing.full)",
   // The stage is a flex COLUMN, so its main axis is the one this box is a
   // century long on — and a flex item shrinks on the main axis by default.
@@ -332,6 +363,18 @@ const windowStyle = css({
 // paging: scrolling IS how you move through the months.
 const periodStyle = css({
   scrollSnapAlign: "start",
+  // A month takes its share of the measure and no more — see `MONTH_STRETCH`.
+  // Capped HERE rather than on the grid, because the grid's own box is what
+  // `auto-fit` counts columns against: cap that and a narrow width would pin
+  // the count to one and then never see the room to grow back.
+  maxWidth: MONTH_STRETCH,
+  // `stretch` is a grid item's default, so a cap alone would leave the month
+  // against the head of its track. Centred, the slack reads as the gutter it
+  // is.
+  marginInline: "auto",
+  // The cap is a maximum, not a width: with room to spare the month still
+  // fills its track, which is what `fluid` is being handed.
+  width: "token(spacing.full)",
 });
 
 // The one override the year layout needs. Everything else about the list —
@@ -504,7 +547,13 @@ const yearGridStyle = css({
   // pitch: a column may not squeeze the grid its cells are drawn on. Under
   // that the stage scrolls instead, which is what the recipe says in flex
   // terms with `flexShrink: 0`.
-  gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(${MONTH_MEASURE}, 1fr))`,
+  //
+  // AUTO-FIT, so how many months a row holds is decided by whether one more
+  // still clears that pitch — three at the full measure, two beside a docked
+  // rail, one on a phone. The count is CSS's answer to a question of tokens,
+  // and the row arithmetic reads it back off this rather than restating those
+  // tokens as a breakpoint in JS (see `columnsOf`).
+  gridTemplateColumns: `repeat(auto-fit, minmax(${MONTH_MEASURE}, 1fr))`,
   // The month boundary, and the whole reason this is not simply `fluid` across
   // 960. `fluid` spends surplus width in the gutters BETWEEN the seven day
   // columns, so widening the grid without this widens the inside of a month by
@@ -825,7 +874,6 @@ const namedDateNameStyle = css({
   textOverflow: "ellipsis",
 });
 
-
 /** Calchemy's own value kinds — what a phrase is allowed to mean. */
 const QUERY_KINDS = [
   { value: "single", label: "Single" },
@@ -925,7 +973,9 @@ function NamedDateForm({
             hands back the 20px track). `labelFirst` makes each one a settings
             row: the statement first, the state after it. */}
         <Field size="sm" labelFirst className={definitionRowStyle}>
-          <Field.Label className={definitionFlagLabelStyle}>Repeats every year</Field.Label>
+          <Field.Label className={definitionFlagLabelStyle}>
+            Repeats every year
+          </Field.Label>
           <Switch
             size="lg"
             checked={repeats}
@@ -935,7 +985,9 @@ function NamedDateForm({
           <span className={definitionActionSlotStyle} aria-hidden />
         </Field>
         <Field size="sm" labelFirst className={definitionRowStyle}>
-          <Field.Label className={definitionFlagLabelStyle}>Is holiday</Field.Label>
+          <Field.Label className={definitionFlagLabelStyle}>
+            Is holiday
+          </Field.Label>
           <Switch
             size="lg"
             checked={isHoliday}
@@ -1133,20 +1185,56 @@ export function CalchemyPlayground() {
   const stageRef = useRef<HTMLElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   // Row heights are uniform (every month draws six week rows), so one
-  // measurement places all 800 of them. Held rather than assumed: it is derived
-  // from the recipe's cell and gutter tokens, and this way it stays right if
-  // any of them move.
+  // measurement places every row in the run. Held rather than assumed: it is
+  // derived from the recipe's cell and gutter tokens, and this way it stays
+  // right if any of them move.
   const [rowHeight, setRowHeight] = useState<number | null>(null);
+  // How many months a row holds, which is the viewport's answer and not this
+  // file's — see `columnsOf`. Everything about the run follows from it: how
+  // long it is, which month is on which row, and where it opens.
+  const [columns, setColumns] = useState(WIDEST_GRID);
+  const today = useMemo(() => Temporal.Now.plainDateISO(), []);
+  const grid = useMemo(() => monthGrid(columns, today), [columns, today]);
   // Which rows are actually built. Derived from the scroll on every move, so
   // nothing is ever loaded — the rows simply exist where they always were.
-  const [window_, setWindow] = useState({
-    start: OPENING_ROW,
+  const [window_, setWindow] = useState(() => ({
+    // Nothing has been measured yet, so nothing is obscured yet either: the
+    // opening window is the one a viewport with room for all of it would get.
+    start: grid.openingRow(INITIAL_ROWS),
     rows: INITIAL_ROWS,
-  });
+    // The row the window was built around — the one at the top of the
+    // viewport. Carried with it because it is the reader's POSITION, and a
+    // window's own start is that position less the overscan and clamped to the
+    // ends of the run, which is not the same thing at either edge.
+    top: grid.openingRow(INITIAL_ROWS),
+  }));
   const opened = useRef(false);
   // A scroll offset waiting for the rows it lands on to exist — see `jumpTo`.
   const pendingScroll = useRef<{ top: number; smooth: boolean } | null>(null);
-  const quarter = useMemo(() => currentQuarterStart(), []);
+  // The month that was at the top when the column count changed under it. The
+  // rows are a different length afterwards and start on different months, so
+  // the scroll offset means something else entirely — the MONTH is the one
+  // thing both geometries can name, and putting it back is what keeps a resize
+  // from throwing the reader years away.
+  const keepInView = useRef<Temporal.PlainDate | null>(null);
+  // Where the reader is, sampled only from a scroll that has SETTLED — and
+  // that qualifier is the whole point.
+  //
+  // A width change re-snaps the scroller: the months have just re-wrapped, so
+  // `scroll-snap-type` finds a different period nearest the top and pulls the
+  // scroll a row or two onto it. That happens BEFORE the resize is reported,
+  // and its scroll event is committed before it too — so at the moment the new
+  // column count is known, neither `scrollTop` nor the window built from it
+  // still says where the reader was. A settled reading predates all of it.
+  const settled = useRef<Temporal.PlainDate | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(
+      () => (settled.current = grid.monthForRow(window_.top)),
+      SETTLE,
+    );
+
+    return () => clearTimeout(timer);
+  }, [window_, grid]);
 
   const closeDefinition = () => {
     setDefinition(null);
@@ -1192,9 +1280,11 @@ export function CalchemyPlayground() {
 
   // One measurement, before the first paint, and every row in the run is
   // placed. Until it lands the window is `INITIAL_ROWS` sitting at the top of
-  // the box, which is exactly what is needed to measure.
+  // the box, which is exactly what is needed to measure. Taken again whenever
+  // the column count moves: a month keeps its six week rows at every width, so
+  // this should not move with it — and measuring is cheaper than trusting that.
   useLayoutEffect(() => {
-    if (!calchemy || rowHeight !== null) return;
+    if (!calchemy) return;
 
     const month = stageRef.current?.querySelector<HTMLElement>(
       "[data-playground-month]",
@@ -1204,8 +1294,35 @@ export function CalchemyPlayground() {
     // the whole run by zero; leaving it null keeps the plain opening window,
     // which is exactly what those contexts should see.
     const height = month?.getBoundingClientRect().height ?? 0;
-    if (height > 0) setRowHeight(height);
-  }, [calchemy, rowHeight]);
+    if (height > 0)
+      setRowHeight((current) => (current === height ? current : height));
+  }, [calchemy, columns]);
+
+  // How many months fit across, watched. The answer is CSS's (`auto-fit`) and
+  // this only reads it back — but it reads it back BEFORE the frame is shown,
+  // so a narrow window never flashes a three-column grid on its way to two.
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const list = stage?.querySelector<HTMLElement>("[data-playground-grid]");
+    if (!stage || !list || typeof ResizeObserver === "undefined") return;
+
+    const measure = () => {
+      const next = columnsOf(list);
+      if (next === 0 || next === grid.columns) return;
+      // Where the reader is, in the one currency a change of geometry does not
+      // devalue — see `keepInView`. Only once the page has OPENED: before that
+      // there is no reader position to keep, and the opening is itself about to
+      // decide where to land.
+      if (opened.current) keepInView.current = settled.current;
+      setColumns(next);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+
+    return () => observer.disconnect();
+  }, [calchemy, grid]);
 
   // Going somewhere far off is two steps, and it has to be: a scroll into rows
   // that have not been built has no snap point to come to rest on, and the
@@ -1216,16 +1333,13 @@ export function CalchemyPlayground() {
       const stage = stageRef.current;
       if (!stage || !rowHeight) return;
 
-      const rows =
-        Math.ceil(stage.clientHeight / rowHeight) + OVERSCAN_ROWS * 2;
-      const start = Math.min(
-        Math.max(0, row - OVERSCAN_ROWS),
-        TOTAL_ROWS - rows,
-      );
       pendingScroll.current = { top: row * rowHeight, smooth };
-      setWindow({ start, rows });
+      setWindow({
+        ...grid.windowFor(row, Math.ceil(stage.clientHeight / rowHeight)),
+        top: row,
+      });
     },
-    [rowHeight],
+    [rowHeight, grid],
   );
 
   useLayoutEffect(() => {
@@ -1239,18 +1353,46 @@ export function CalchemyPlayground() {
     else stage.scrollTop = pending.top;
   }, [window_]);
 
-  // Arrive on the opening row rather than at the top of a century.
+  // Arrive on the opening row rather than at the top of a century — which row
+  // that is depends on how many read clear, so it is asked of the measured
+  // page rather than fixed: a viewport with room for two opens a row early,
+  // and a short one opens on today's own row instead.
   useLayoutEffect(() => {
-    if (!rowHeight || opened.current) return;
+    const stage = stageRef.current;
+    if (!stage || !rowHeight || opened.current) return;
 
     opened.current = true;
-    jumpTo(OPENING_ROW, false);
+    const opening = grid.openingRow(
+      readableRows(stage, scrimRef.current, rowHeight),
+    );
+    // Seeded rather than waited for: a window resized in the first moments has
+    // a settled position of its own — the one the page just opened on.
+    settled.current = grid.monthForRow(opening);
+    jumpTo(opening, false);
     // Again on the next frame, because a browser restores an inner scroller's
     // position AFTER layout — so without this you arrive wherever the page was
     // left last time, which for a century-long run is anywhere at all.
-    const frame = requestAnimationFrame(() => jumpTo(OPENING_ROW, false));
+    const frame = requestAnimationFrame(() => jumpTo(opening, false));
     return () => cancelAnimationFrame(frame);
-  }, [rowHeight, jumpTo]);
+  }, [rowHeight, grid, jumpTo]);
+
+  // A column dropped or gained under the reader: the same months, on rows of a
+  // different length. Put the one that was at the top back at the top — see
+  // `keepInView`.
+  useLayoutEffect(() => {
+    const month = keepInView.current;
+    if (!month) return;
+
+    keepInView.current = null;
+    const row = grid.rowForDate(month);
+    jumpTo(row, false);
+    // And again on the next frame, for the reason the opening does it: the run
+    // is a different height now, and a browser CLAMPS or anchors an inner
+    // scroller after the layout this effect runs in — which lands the reader a
+    // couple of rows off the month they were reading.
+    const frame = requestAnimationFrame(() => jumpTo(row, false));
+    return () => cancelAnimationFrame(frame);
+  }, [grid, jumpTo]);
 
   // Which rows to build, read straight off the scroll. No loading, no
   // shifting: the row that was at 1,200px is still at 1,200px, whether or not
@@ -1259,16 +1401,18 @@ export function CalchemyPlayground() {
     const stage = stageRef.current;
     if (!stage || !rowHeight) return;
 
-    const rows = Math.ceil(stage.clientHeight / rowHeight) + OVERSCAN_ROWS * 2;
-    const start = Math.min(
-      Math.max(0, Math.floor(stage.scrollTop / rowHeight) - OVERSCAN_ROWS),
-      TOTAL_ROWS - rows,
-    );
+    const top = Math.round(stage.scrollTop / rowHeight);
+    const next = {
+      ...grid.windowFor(top, Math.ceil(stage.clientHeight / rowHeight)),
+      top,
+    };
 
     setWindow((current) =>
-      current.start === start && current.rows === rows
+      current.start === next.start &&
+      current.rows === next.rows &&
+      current.top === next.top
         ? current
-        : { start, rows },
+        : next,
     );
   };
 
@@ -1281,7 +1425,7 @@ export function CalchemyPlayground() {
       const stage = stageRef.current;
       if (!stage || !rowHeight) return;
 
-      const row = rowForDate(date, quarter);
+      const row = grid.rowForDate(date);
       const top = row * rowHeight;
       // The scrim's band is an overlay, so a row resting under it is on screen
       // and unreadable. Measured rather than repeated as a number.
@@ -1295,7 +1439,7 @@ export function CalchemyPlayground() {
       // anyone wants to watch.
       jumpTo(row, Math.abs(top - stage.scrollTop) < stage.clientHeight * 3);
     },
-    [rowHeight, quarter, jumpTo],
+    [rowHeight, grid, jumpTo],
   );
 
   // A phrase can be answered off screen, so bring its row up.
@@ -1440,9 +1584,7 @@ export function CalchemyPlayground() {
               setNamedDates((current) =>
                 edited
                   ? current.map((held) =>
-                      held.id === edited.id
-                        ? { ...fields, id: held.id }
-                        : held,
+                      held.id === edited.id ? { ...fields, id: held.id } : held,
                     )
                   : [...current, { ...fields, id: nextNamedDateId() }],
               );
@@ -1471,7 +1613,9 @@ export function CalchemyPlayground() {
       <div
         className={runStyle}
         style={
-          rowHeight === null ? undefined : { height: TOTAL_ROWS * rowHeight }
+          rowHeight === null
+            ? undefined
+            : { height: grid.totalRows * rowHeight }
         }
       >
         <div
@@ -1489,18 +1633,21 @@ export function CalchemyPlayground() {
               selectionMode="multiple"
               values={values}
               onValuesChange={setPicked}
-              months={window_.rows * GRID_COLUMNS}
+              months={window_.rows * grid.columns}
               // Controlled, and deliberately WITHOUT an `onViewChange`: which months
               // exist is decided by the scroll and nothing else. Left to itself the
               // calendar would move the range when a typed date fell outside it,
               // which is the same navigation done twice and in disagreement.
-              view={monthForRow(window_.start, quarter)}
+              view={grid.monthForRow(window_.start)}
               // One row, matching the snap — this is what PageUp/PageDown move by
               // now that there are no chevrons to press.
-              step={GRID_COLUMNS}
+              step={grid.columns}
               weekStartsOn={WEEK_START_KEYS[weekStartsOn]}
             >
-              <Calendar.PeriodList className={yearGridStyle}>
+              <Calendar.PeriodList
+                className={yearGridStyle}
+                data-playground-grid=""
+              >
                 <Calendar.Period
                   className={periodStyle}
                   data-playground-month=""
