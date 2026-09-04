@@ -363,6 +363,25 @@ const BaseMediaSchema = z.object({
     .max(MEDIA_RADIUS_MAX)
     .multipleOf(MEDIA_RADIUS_STEP)
     .optional(),
+  // The SOURCE's own pixel size, recorded once at insert and never edited —
+  // the only two fields here that describe the file rather than the frame it
+  // sits in. They exist for one job: to let a surface reserve the box a
+  // picture is going to need BEFORE it has any bytes to size itself from (see
+  // `mediaReservedAspect`). Nothing renders them as a width or a height; only
+  // their ratio is ever read.
+  //
+  // Optional because they can only ever be known going FORWARD. Every document
+  // written before this field existed has neither, and no migration can invent
+  // them — the answer lives in the file, not in the record — so the house ratio
+  // stands in and the picture still gets a box. `withMediaKind` could backfill
+  // a `kind` from a filename; there is no filename that says how tall a photo
+  // is.
+  //
+  // Positive integers, and both bounds matter: a replaced element that has not
+  // loaded reports `0`, which is exactly the value that must never reach the
+  // document as if it were a measurement.
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
 });
 
 /**
@@ -850,6 +869,76 @@ export function mediaObjectStyle(media: MediaLayout): CSSProperties {
     // is the picture's to state and the panel cannot disagree with it.
     borderRadius: mediaRadiusValue(media),
   };
+}
+
+/**
+ * The shape a media object is given while it has nothing to show.
+ *
+ * A media element with no bytes yet has no intrinsic size, so a box that takes
+ * its height from its picture is zero pixels tall until the picture lands and
+ * then jolts open — the article below it moving down the page by the whole
+ * height of the image. Reserving the box from the first paint is what removes
+ * that jolt, and reserving it needs a SHAPE, which is the one thing an unloaded
+ * source cannot be asked for.
+ *
+ * 3:2 because that is already the app's answer to "a box of pictures, before
+ * you know what is in them": the collection grid's own skeleton is a 3:2 box
+ * divided into slots. A landscape default is also the honest bet — a portfolio
+ * is screenshots and screen recordings — and the cost of being wrong is bounded
+ * either way: the box settles to the picture's real height on load, which is
+ * strictly less movement than opening from zero.
+ *
+ * Every picture inserted from here on records its own dimensions and never
+ * touches this (see `width`/`height` on `BaseMediaSchema`); this is what stands
+ * in for the documents written before there was a field to record them in.
+ */
+export const MEDIA_PLACEHOLDER_ASPECT = "3 / 2";
+
+/** What a media object states about its own shape, if anything. */
+export type MediaShape = Pick<MediaNode, "width" | "height">;
+
+/**
+ * The `aspect-ratio` to hold the box at until the source can size it itself.
+ *
+ * BOTH dimensions or neither: a ratio is not a thing half a measurement can
+ * express, and a node carrying one of the two is a record of something that
+ * went wrong upstream rather than a picture we know half of. It falls back
+ * exactly as a node with nothing recorded does.
+ */
+export function mediaReservedAspect(shape: MediaShape): string {
+  const { width, height } = shape;
+  if (!width || !height) return MEDIA_PLACEHOLDER_ASPECT;
+  return `${width} / ${height}`;
+}
+
+/**
+ * The style that HOLDS a media object's box while its source has nothing to
+ * paint — the whole of what a surface does about the wait.
+ *
+ * An `aspect-ratio` and, for one case, a width. The ratio alone is enough
+ * wherever the object takes its width from the box around it and its height
+ * from itself, which is every surface here but one: a `contain` picture in a
+ * padded frame is sized to its own CONTENT instead (`mediaObjectStyle`), and
+ * content is the one thing an unloaded source has none of — `auto` against
+ * `auto` reserves nothing at all, however definite the ratio between them is.
+ * That case fills the box's width until it can be measured, which is also the
+ * width it settles at for anything wider than the frame.
+ *
+ * Applied ON TOP of `mediaObjectStyle` and dropped the moment the source can
+ * size itself, so nothing here survives into the loaded picture.
+ */
+export function mediaReservationStyle(
+  shape: MediaShape,
+  media?: MediaLayout,
+): CSSProperties {
+  const reserved: CSSProperties = { aspectRatio: mediaReservedAspect(shape) };
+  const sizedToItsContent =
+    media &&
+    hasMediaLayout(media) &&
+    (media.objectFit ?? DEFAULT_MEDIA_FIT) === "contain";
+  return sizedToItsContent
+    ? { ...reserved, width: "100%", height: "auto" }
+    : reserved;
 }
 
 // `items` may be empty: removing images one by one has to pass through zero,

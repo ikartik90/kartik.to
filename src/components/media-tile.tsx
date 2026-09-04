@@ -112,6 +112,10 @@ export function MediaTile({
           // The same fit, inset and corner the editor previewed — the whole
           // reason both read it off the object rather than deciding locally.
           layout={item}
+          // And the same shape, so the tile holds its box from the first paint
+          // rather than opening under the reader when the file lands.
+          width={item.width}
+          height={item.height}
           loading="lazy"
           autoPlay={autoPlay}
           elementRef={holdClip}

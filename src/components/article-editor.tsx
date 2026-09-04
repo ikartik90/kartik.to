@@ -970,6 +970,13 @@ function mediaNodeFrom(payload: ImageInsertPayload): MediaNode {
     kind: payload.kind,
     src: payload.src,
     ...(payload.alt ? { alt: payload.alt } : {}),
+    // Both or neither, and dropped entirely when the library has no
+    // measurement — a node carrying one dimension is a record of something
+    // that went wrong, and the reserved box falls back to the house ratio for
+    // it anyway (`mediaReservedAspect`).
+    ...(payload.width && payload.height
+      ? { width: payload.width, height: payload.height }
+      : {}),
   };
 }
 

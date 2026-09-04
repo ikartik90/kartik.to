@@ -174,6 +174,11 @@ export function MediaObject({
             // no apply step, and a canvas that ignored what the panel had just
             // written would make it a form rather than a preview.
             layout={item}
+            // The box the canvas holds while a slot's picture is still coming
+            // — the same reservation the reader makes, so the editor is still
+            // a preview of it.
+            width={item.width}
+            height={item.height}
             // The checkerboard is the picture's OWN background rather than a
             // layer behind it, so it is the exclusive alternative to a gradient
             // and not a companion to one.

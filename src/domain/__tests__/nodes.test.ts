@@ -22,6 +22,9 @@ import {
   mediaObjectStyle,
   mediaPictureShare,
   mediaRadiusPx,
+  mediaReservedAspect,
+  mediaReservationStyle,
+  MEDIA_PLACEHOLDER_ASPECT,
 } from "../nodes";
 
 describe("BackgroundEffectSchema", () => {
@@ -772,5 +775,111 @@ describe("CollectionItemSchema (documents written before `kind`)", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The reserved box — what a media object occupies BEFORE its source can paint.
+//
+// An <img> with no bytes yet is zero pixels tall, so a block that sized itself
+// from its picture occupied nothing at all until the picture arrived and then
+// shoved the rest of the article down the page. The shape is the answer, and
+// the document is where it has to come from: a picture's own dimensions when
+// they were recorded at insert, and a stated house ratio when they were not.
+// ---------------------------------------------------------------------------
+
+describe("intrinsic dimensions on media nodes", () => {
+  it("leaves both absent on a node written before they were recorded", () => {
+    const node = MediaNodeSchema.parse({
+      type: "media",
+      kind: "image",
+      src: "/a.png",
+    });
+    expect(node.width).toBeUndefined();
+    expect(node.height).toBeUndefined();
+  });
+
+  it("stores the source's own pixel size, on either arm", () => {
+    expect(
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        width: 1600,
+        height: 900,
+      }),
+    ).toMatchObject({ width: 1600, height: 900 });
+    expect(
+      MediaNodeSchema.parse({
+        type: "media",
+        kind: "video",
+        src: "/a.mp4",
+        width: 1280,
+        height: 720,
+      }),
+    ).toMatchObject({ width: 1280, height: 720 });
+  });
+
+  // A measurement, not a style: half a pixel and a negative one are both a bug
+  // upstream rather than an unusual picture, and zero is what an element that
+  // has not loaded reports — precisely the value that must never be written
+  // down as if it were the answer.
+  it("refuses a dimension no picture could have", () => {
+    for (const size of [0, -4, 12.5]) {
+      expect(() =>
+        MediaNodeSchema.parse({
+          type: "media",
+          kind: "image",
+          src: "/a.png",
+          width: size,
+          height: 100,
+        }),
+      ).toThrow();
+    }
+  });
+});
+
+describe("mediaReservedAspect", () => {
+  it("reserves the picture's own shape once the document knows it", () => {
+    expect(mediaReservedAspect({ width: 1600, height: 900 })).toBe("1600 / 900");
+  });
+
+  it("falls back to the house ratio when either dimension is missing", () => {
+    expect(mediaReservedAspect({})).toBe(MEDIA_PLACEHOLDER_ASPECT);
+    expect(mediaReservedAspect({ width: 1600 })).toBe(MEDIA_PLACEHOLDER_ASPECT);
+    expect(mediaReservedAspect({ height: 900 })).toBe(MEDIA_PLACEHOLDER_ASPECT);
+  });
+});
+
+describe("mediaReservationStyle", () => {
+  it("is the ratio alone wherever the box gives the picture its width", () => {
+    expect(mediaReservationStyle({ width: 1600, height: 900 })).toEqual({
+      aspectRatio: "1600 / 900",
+    });
+    expect(mediaReservationStyle({}, { objectFit: "cover", padding: MEDIA_PADDING_STEP })).toEqual({
+      aspectRatio: MEDIA_PLACEHOLDER_ASPECT,
+    });
+  });
+
+  // The one case a ratio cannot carry on its own: `mediaObjectStyle` sizes a
+  // `contain` picture in a padded frame to its own content, and an unloaded
+  // source has no content — `auto` against `auto` reserves nothing however
+  // definite the ratio between them is.
+  it("gives a sized-to-content picture a width to apply the ratio to", () => {
+    expect(
+      mediaReservationStyle({}, { objectFit: "contain", padding: MEDIA_PADDING_STEP }),
+    ).toEqual({
+      aspectRatio: MEDIA_PLACEHOLDER_ASPECT,
+      width: "100%",
+      height: "auto",
+    });
+  });
+
+  // `contain` with nothing else set is not sized to its content at all (see
+  // `hasMediaLayout`), so it needs no width of its own.
+  it("leaves a `contain` picture with no frame around it alone", () => {
+    expect(mediaReservationStyle({}, { objectFit: "contain" })).toEqual({
+      aspectRatio: MEDIA_PLACEHOLDER_ASPECT,
+    });
   });
 });

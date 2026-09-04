@@ -90,6 +90,14 @@ export interface R2ObjectHead {
   alt?: string;
   /** The original upload name, editable independently of the immutable key. */
   filename?: string;
+  /**
+   * The source's own pixel size, written at upload so a surface can reserve
+   * the box it will need before the bytes arrive. Object metadata is a map of
+   * STRINGS, so these arrive as strings and the caller parses them; absent for
+   * everything stored before the measurement existed.
+   */
+  width?: string;
+  height?: string;
 }
 
 export async function headR2Object(key: string): Promise<R2ObjectHead> {
@@ -105,6 +113,8 @@ export async function headR2Object(key: string): Promise<R2ObjectHead> {
     contentType: response.ContentType ?? "application/octet-stream",
     alt: response.Metadata?.alt,
     filename: response.Metadata?.filename,
+    width: response.Metadata?.width,
+    height: response.Metadata?.height,
   };
 }
 

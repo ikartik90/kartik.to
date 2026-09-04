@@ -8465,6 +8465,43 @@ export default defineConfig({
     ":root": {
       "--global-color-focus-ring": "var(--colors-border-focus-ring)",
     },
+    // A media object that has nothing to paint yet — the hook is stamped by
+    // `Media` on whichever element the fork produced, and let go the moment the
+    // source can size itself. The box it sits in is already being HELD open by
+    // an inline `aspect-ratio` (`mediaReservationStyle`); this is only what
+    // goes inside it.
+    //
+    // Global rather than a slot in each of the four recipes that draw media,
+    // for the reason the attribute is global: one component decides that an
+    // object is waiting, so one rule should say what waiting looks like. A
+    // reserved box is a new state for every surface at once — the article
+    // block, the collection's lone tile, the library's preview and its
+    // thumbnails — and four copies of it is four places for the shimmer to
+    // drift.
+    //
+    // It paints as the element's OWN background rather than as a layer behind
+    // it, which is what makes it exclusive with the checkerboard by
+    // construction (see `collectionGrid`'s `image` slot): an object has one
+    // ground, and while it is waiting the ground is this.
+    "[data-media-pending]": {
+      backgroundColor: "var(--colors-bg-surface)",
+      // The same shape of highlight the wireframe's bars use — a travelling
+      // dip rather than a blend toward a second named colour, so it reads in
+      // both themes off one declaration. `bg.canvas` is the neighbouring step
+      // of the same neutral, lighter in light and darker in dark, so the sweep
+      // moves the same DIRECTION as the surface it crosses in either.
+      backgroundImage:
+        "linear-gradient(90deg, transparent 0%, transparent 35%, color-mix(in srgb, var(--colors-bg-canvas) 70%, transparent) 50%, transparent 65%, transparent 100%)",
+      backgroundSize: "200% 100%",
+      // The same keyframe and the same clock as `wireframe`'s loading mode —
+      // one pace for everything in the app that is waiting.
+      animation: "wireframeShimmer 1.6s ease-in-out infinite",
+    },
+    "@media (prefers-reduced-motion: reduce)": {
+      // The plate stays; only the sweep goes. A held box with no motion in it
+      // still says "something is coming" by being there.
+      "[data-media-pending]": { animation: "none" },
+    },
     // The colour picker's overflow answer, and a CLAMP rather than the
     // `flip-block` every other anchored menu here uses. Flipping puts a 492px
     // panel's BOTTOM on its trigger, which for a row low on the screen throws
