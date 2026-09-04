@@ -18,8 +18,7 @@ import {
   type ParseDateContext,
   type WeekdayIndex,
 } from "@calchemy/date-core";
-import { css, cx } from "../../../../styled-system/css";
-import { colorPickerPopover } from "../../../../styled-system/recipes";
+import { css } from "../../../../styled-system/css";
 import { Calendar } from "@/components/ui/input/calendar";
 import { Field } from "@/components/ui/input/field";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
@@ -31,11 +30,8 @@ import {
   PROPERTIES_TRIGGER_ATTR,
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
-import { Popover } from "@/components/ui/popover";
-import { TextInput } from "@/components/ui/input/text-input";
-import { DatePicker } from "@/components/ui/input/datepicker";
 import { Switch } from "@/components/ui/input/switch";
-import { usePickerPin } from "@/hooks/use-picker-pin";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useCalchemyQuery } from "@/hooks/use-calchemy-query";
 import { CalchemyReadings } from "@/components/calchemy-readings";
 import { CalchemyQueryField } from "@/components/calchemy-query-field";
@@ -45,7 +41,6 @@ import AddIcon from "@/assets/icons/add.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import { MenuButton } from "@/components/menu-button";
 import { ThemeToggleButton } from "@/components/theme-toggle";
-import CrossIcon from "@/assets/icons/cross.svg";
 
 // ---------------------------------------------------------------------------
 // Calchemy Playground — a year of calendar, and one line to talk to it.
@@ -597,57 +592,90 @@ const kindsStyle = css({
 //
 // Calchemy ships NO named dates — its vocabulary starts empty, so "christmas"
 // parses as nothing at all until something here says what it means. Every entry
-// is a `NamedDatesVocabularyEntry`: a name, the day it falls on, and whatever
-// else it answers to.
+// is a `NamedDatesVocabularyEntry`: a name, the days it stands for, and
+// whatever else it answers to.
+//
+// The days are never asked for. They are whatever the grid has lit when the
+// form is opened, which is the whole reason the form lives in the query panel
+// rather than in a popover on the rail: a name is given TO a selection. So an
+// entry holds a SET of days and hands the parser `resolveDates`.
 //
 // An entry is a RULE, not a date, because the parser asks for one by YEAR: it
 // resolves "christmas next year" by handing the entry 2027 and drawing whatever
-// day comes back. There are two rules worth having, and `year` is which:
+// comes back. There are two rules worth having, and `repeatsYearly` is which:
 //
-//   • null — the date falls every year, so the entry is a month and a day and
-//     answers for whatever year it is asked about. Christmas, a birthday.
-//   • a year — one day in history, which answers with ITSELF whatever year is
+//   • repeating — the set slides WHOLE, by the difference between the year
+//     asked about and the year its first day falls in. A single day is then a
+//     month and a day like any other Christmas, and a set that straddles a new
+//     year — a season, a fixture list — keeps its shape instead of collapsing
+//     into whichever of the two years it started in.
+//   • pinned — days in history, which answer with THEMSELVES whatever year is
 //     asked. Returning nothing for the other years is the purer reading, but it
 //     would leave the bare name unparseable except during its own year, and
 //     "the eclipse" has to still mean the eclipse next Tuesday.
+//
+// Sliding only means anything while the set fits inside a year: stretch it past
+// twelve months and the second lap lands on the first, so whether an entry MAY
+// repeat is a fact about what is lit rather than a preference — see
+// `fitsWithinAYear`, and the switch that withdraws itself.
 // ---------------------------------------------------------------------------
 
 // Identity that survives an edit. Derived from the fields it used to be built
-// from — name, month, day — a rename would read as a different entry to React
-// and to the row that opened the form on it.
+// from — a name, a day — a rename would read as a different entry to React and
+// to the row that opened the form on it.
 let namedDateSerial = 0;
 const nextNamedDateId = () => `named-date-${(namedDateSerial += 1)}`;
 
 interface NamedDate {
   id: string;
   name: string;
-  /** The year it is pinned to, or `null` when it falls every year. */
-  year: number | null;
-  month: number;
-  day: number;
+  /** The days it stands for, in order, and never empty. */
+  dates: Temporal.PlainDate[];
+  /** Whether the set slides to whatever year the parser asks about. */
+  repeatsYearly: boolean;
   /** The other words that mean this date. Trimmed, and never empty strings. */
   aliases: string[];
   isHoliday: boolean;
 }
 
 /**
- * The day an entry falls on, written so the two rules are told apart at a
+ * Whether a set may repeat — whether a year is a long enough stride to clear
+ * it. A run from July to the following June repeats; one that reaches the same
+ * date a year on does not, because that day would be on both laps at once.
+ * Takes the days in order.
+ */
+function fitsWithinAYear(dates: readonly Temporal.PlainDate[]): boolean {
+  if (dates.length === 0) return false;
+  return (
+    Temporal.PlainDate.compare(
+      dates[0].add({ years: 1 }),
+      dates[dates.length - 1],
+    ) > 0
+  );
+}
+
+/**
+ * The days an entry falls on, written so the two rules are told apart at a
  * glance: a repeating date is a month and a day, and a pinned one carries the
- * year that makes it a single day in history.
+ * year that makes it days in history. A set says how many MORE days it holds
+ * rather than listing them — the row is 80px of label, and the entry is one
+ * press away from being read in full.
  */
 function namedDateDay(entry: NamedDate): string {
   // Abbreviated, because this is a row's LABEL and the panel's label column is
   // 80px — which a written-out month and a day are not.
-  const day = `${MONTH_NAMES[entry.month - 1].slice(0, 3)} ${entry.day}`;
-  return entry.year === null ? day : `${day}, ${entry.year}`;
+  const [first, ...rest] = entry.dates;
+  const day = `${MONTH_NAMES[first.month - 1].slice(0, 3)} ${first.day}`;
+  const dated = entry.repeatsYearly ? day : `${day}, ${first.year}`;
+  return rest.length === 0 ? dated : `${dated} +${rest.length}`;
 }
 
 // A section's own header strip, in the panel's measurements — 40px on a 12px
-// inset, the title at the leading edge and whatever the section's one control
-// is at the other. `PropertiesPanel.SectionHeader` draws this already, but its
-// button is spent on opening and closing the section: one of these sections has
-// nothing to open (its settings are always on) and the other's button DEFINES
-// an entry. Same strip, different jobs.
+// inset, with the section's title at the leading edge and nothing at the other.
+// `PropertiesPanel.SectionHeader` draws this already, but its button is spent
+// on opening and closing the section, and neither of these two has anything to
+// open: the preferences are always on, and the dictionary is filled from the
+// query panel rather than from here. Same strip, no button.
 const railSectionHeaderStyle = css({
   display: "flex",
   alignItems: "center",
@@ -659,77 +687,134 @@ const railSectionHeaderStyle = css({
   color: "text.body",
 });
 
-// The popover's header, in the colour picker's own measurements — a 40px strip
-// on a 12px inset under a hairline, the title taking the slack and the chips
-// clustered at its end. The shell it sits in is that picker's too.
-const namedDateHeadStyle = css({
-  flexShrink: 0,
+// ---------------------------------------------------------------------------
+// The definition form, which is the query panel wearing the rail's own row:
+// label ∣ control ∣ action, with the action column held open on every row so
+// the controls end on one line whether or not a row has a chip in it. That is
+// what makes the morph read as one instrument rather than two — a definition is
+// a set of labelled settings, exactly like the settings behind the slider.
+// ---------------------------------------------------------------------------
+
+const definitionStyle = css({
   display: "flex",
-  alignItems: "center",
-  gap: "md",
-  height: "token(spacing.4xl)",
-  paddingInline: "lg",
-  borderBottomWidth: "token(spacing.3xs)",
-  borderBottomStyle: "solid",
-  borderBottomColor: "border.divider",
-  // One ink for the strip, so the close chip — an icon button painted in
-  // `currentColor` — matches the title beside it.
+  flexDirection: "column",
+  minWidth: 0,
+  // The rule between the form and the kinds control above it, drawn on the form
+  // so it sits under that row's own padding rather than inside it — the same
+  // hairline, and the same bargain, as the query row makes.
+  borderTopWidth: "token(spacing.3xs)",
+  borderTopStyle: "solid",
+  borderTopColor: "field.border.default",
+});
+
+// The fields — 32px rows on a 4px rhythm, which is a command list's and NOT the
+// 40px the panel's two chrome rows are drawn at: a row here is a field in a
+// form, not a strip of controls over the year.
+const definitionRowsStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: "sm",
+  paddingBlock: "sm",
   color: "text.body",
 });
 
-const namedDateTitleStyle = css({
-  flex: 1,
-  minWidth: 0,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
+const definitionRowStyle = css({
+  // `flexDirection` explicitly, not just `display`: a `Field` is a COLUMN (or,
+  // with a switch in it, a grid) and only its direction is being overruled
+  // here — leave it out and the label goes on standing above its control while
+  // everything else about the row looks right.
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  // The gap either side of the field — off its label, and off the chip in the
+  // slot after it (Figma 1187:9698). The label never comes that close: it takes
+  // the row's slack, so what shows is whatever is left inside its own box.
+  columnGap: "sm",
+  // A `Field` holding a switch HUGS its two parts — that is what lets one stand
+  // on its own in a form — and hugging is the wrong half of that bargain here:
+  // these are settings rows, and the slack is what carries the track out to the
+  // margin the boxes above it end on.
+  width: "token(spacing.full)",
+  paddingInline: "lg",
+  minHeight: "token(spacing.3xl)",
+  "& > label": {
+    flex: "1 1 auto",
+    // The recipe gives a label `width: 100%`, which as a flex BASIS is the
+    // whole row — the field is then squeezed out of its measure to make room
+    // for a label claiming everything. Sized by its content instead, and grown
+    // into the slack by the `flex` above, which is the same result the recipe
+    // was after in a column.
+    width: "auto",
+    minWidth: 0,
+  },
+  "& > div": {
+    // 208 — the measure the option list and one month column are already drawn
+    // at, so a box in this panel is as wide as the popover it would open
+    // (Figma 1187:9698). NOT the rail's `propertyRowField`: that 212 is derived
+    // from a 360px panel, and this one is 480 wide with its own drawing.
+    width: "token(sizes.optionListWidth)",
+    // Allowed to give way, unlike the rail's own field: the bar narrows with
+    // the viewport (`BAR_WIDTH`) and this measure is more than a phone has to
+    // spend. Shrinking in proportion to a basis takes it out of the 208 first,
+    // which is the column that can afford it — a squeezed box still reads, and
+    // a squeezed label wraps the row to two lines.
+    minWidth: 0,
+    // What puts an unlabelled row's field in the field's column — the alias
+    // rows after the first, which have nothing in the label column to push it.
+    marginInlineStart: "auto",
+  },
+  // A switch needs no rule of its own: it is narrower than the field column,
+  // and the label beside it having taken the slack leaves it on the same margin
+  // the boxes end on.
 });
 
-// How wide the panel is — and why that is now a free choice.
+// The column at the end of every row — where a chip lands on the row that has
+// one, and what holds the rows that do not clear of the panel's edge by exactly
+// as much. A real element rather than a trailing padding the chip rows would
+// have to take back: two classes setting the same padding are two atomic
+// utilities in one layer, and `cx` is a string joiner with no opinion about
+// which of them wins.
+const definitionActionSlotStyle = css({
+  flexShrink: 0,
+  width: "token(sizes.propertyRowAction)",
+});
+
+// The two flag rows, muted back down to a label.
 //
-// A `datePopover` covers its trigger (`min-width: anchor-size(width)`) while the
-// calendar inside it hugs one month: `sizes.calendarPeriod`, the recipe's 208px
-// pitch. So while the date field filled the panel, the panel's width WAS the
-// calendar's, and any panel wider than a month stretched the calendar past the
-// month it draws, leaving empty surface beside it. The field states its own
-// measure now (`namedDateOnStyle`), which takes the calendar out of the
-// argument: the panel is simply as wide as the form reads best at.
-const namedDatePopoverStyle = css({
-  width: "320px",
-  // On a phone the shell is a sheet spanning the canvas, not a column beside a
-  // rail; it has its own width there and this must not overrule it.
-  _bottomSheet: { width: "auto" },
+// `field` promotes a TOGGLE's label to resting field text on purpose — beside a
+// switch it is a full statement rather than a caption, and it is clickable. In
+// a column of four labelled rows that reading breaks the column: two labels come
+// out bright and the two naming boxes read as disabled next to them. Figma draws
+// all four at the one muted ink (1187:9698), which is right here and wrong for a
+// switch standing on its own — so it is said here rather than in the recipe.
+const definitionFlagLabelStyle = css({
+  color: "field.text.muted",
 });
 
-// The two yes/no questions about the date, pushed to opposite margins. Neither
-// is wide enough to be worth a row of its own, and asking them side by side is
-// what makes them read as a pair of flags on one date rather than two more
-// fields to fill in.
-const namedDateFlagsStyle = css({
+// The form's foot — the retreat and the commitment, pushed to opposite margins
+// under a hairline. 48px rather than the bar's own 40: it holds a 32px chip on
+// an 8px inset, and that is the sum, the same way the small field derives its
+// own 28px frame.
+const definitionFootStyle = css({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: "md",
+  flexShrink: 0,
+  height: "calc(token(spacing.4xl) + token(spacing.md))",
+  paddingInline: "lg",
+  borderTopWidth: "token(spacing.3xs)",
+  borderTopStyle: "solid",
+  borderTopColor: "field.border.default",
 });
 
-// `sizes.dateField` — the measure every date field in the app is drawn at (see
-// the shift-scheduling form). The popover it opens is a month wide regardless
-// and overhangs it, which is the covering popover's own bargain: the field is
-// sized for the ten characters it holds, not for the calendar that fills it in.
-const namedDateOnStyle = css({
-  width: "token(sizes.dateField)",
+// The control row's trailing cluster — the chip that names a selection beside
+// the one that opens the settings, on the toolbar's own 4px gap.
+const barActionsStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "sm",
   flexShrink: 0,
 });
-
-// Hugs its own two parts, so each label stays ON the switch it speaks for and
-// the row's `space-between` opens the gap where it belongs — between the two
-// questions, not inside either of them. The trailing one lands its track on the
-// panel's right margin, in line with the Aliases add chip and the CTA under it.
-const namedDateFlagStyle = css({
-  width: "auto",
-  flexShrink: 0,
-});
-
 // The name fills the row's field column and is CUT rather than wrapped: the
 // dictionary is a list of one-line rows, and a long name must not be the one
 // that stands two lines tall.
@@ -740,39 +825,6 @@ const namedDateNameStyle = css({
   textOverflow: "ellipsis",
 });
 
-const namedDateFormStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: "lg",
-  padding: "lg",
-});
-
-const namedDateActionsStyle = css({
-  display: "flex",
-  justifyContent: "flex-end",
-});
-
-// A section INSIDE the form, headed the way the rail's own sections are: a
-// label with the button that adds to it at the far end. The rows it collects
-// are the section's content, so they sit under that header at the form's own
-// rhythm rather than being fields of their own with a label each.
-const aliasSectionStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: "md",
-});
-
-const aliasHeaderStyle = css({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "md",
-  // The label sits on the baseline the field labels above it sit on, and the
-  // add chip is taller than the text — so the strip is the chip's height and
-  // the label is centred in it, exactly as the dictionary header does it.
-  minHeight: "token(sizes.propertyRowAction)",
-  color: "text.body",
-});
 
 /** Calchemy's own value kinds — what a phrase is allowed to mean. */
 const QUERY_KINDS = [
@@ -782,177 +834,187 @@ const QUERY_KINDS = [
 ] satisfies { value: ExpectedDateValue; label: string }[];
 
 /**
- * The fields a named date is made of — a name, the day it falls on, whatever
- * else it answers to, and two yes/no questions about it. The same form defines
- * a new entry and edits an existing one: they ask the identical questions, and
- * an edit that offered a different set of them would be a second thing to keep
- * in step. `entry` is which, and seeds the fields.
+ * The fields a named date is made of — a name, whatever else it answers to, and
+ * two yes/no questions about it. What it does NOT ask for is the days: those
+ * are `dates`, the selection the form was opened over, and they stay live while
+ * it is open, so the grid can be corrected without leaving the form.
  *
- * "Repeats every year" is what the picker's YEAR is for. On (the default, and
- * the common case for a dictionary: Christmas, Diwali, a birthday) the year is
- * thrown away and the entry keeps a month and a day, so it can answer for every
- * year the parser asks about. Off, the picked year is kept and the entry names
- * one day in history.
+ * The same form defines a new entry and edits an existing one: they ask the
+ * identical questions, and an edit that offered a different set of them would
+ * be a second thing to keep in step. `entry` is which, and seeds the fields.
+ *
+ * "Repeats every year" is the rule the days are read under — see the dictionary
+ * note above. It is offered only while the set fits inside a year, and a set
+ * grown past one turns the switch off rather than carrying a stale yes.
  */
 function NamedDateForm({
   entry,
+  dates,
   onSubmit,
-  onClose,
+  onCancel,
 }: {
   /** The entry being edited, or `null` to define a new one. */
   entry: NamedDate | null;
+  /** The days on the grid — the entry's subject, live while the form is open. */
+  dates: Temporal.PlainDate[];
   /** The fields as filled in. Identity is the caller's — see `nextNamedDateId`. */
   onSubmit: (fields: Omit<NamedDate, "id">) => void;
-  onClose: () => void;
+  onCancel: () => void;
 }) {
   const [name, setName] = useState(entry?.name ?? "");
-  const [on, setOn] = useState<Temporal.PlainDate>(() =>
-    entry
-      ? Temporal.PlainDate.from({
-          // A repeating entry has no year of its own to show, and the picker
-          // still needs one: this year, which is the year it would resolve to
-          // if the phrase asked today.
-          year: entry.year ?? Temporal.Now.plainDateISO().year,
-          month: entry.month,
-          day: entry.day,
-        })
-      : Temporal.Now.plainDateISO(),
+  // One row from the start, because the row is where the add chip lives: the
+  // section header the popover hung it on is gone, and a chip at the end of the
+  // last row needs a last row. A blank one is dropped on the way out, so an
+  // untouched row costs the entry nothing.
+  const [aliases, setAliases] = useState<string[]>(() =>
+    entry && entry.aliases.length > 0 ? entry.aliases : [""],
   );
-  // One string per alias, appended to. Most named dates have none, so the list
-  // starts empty and the section's add button is where a first one comes from —
-  // nothing is drawn for aliases that do not exist.
-  const [aliases, setAliases] = useState<string[]>(entry?.aliases ?? []);
   // How many rows this form OPENED with, so that none of them takes the caret
   // on mount: `autoFocus` belongs to a row the reader has just asked for, and
-  // an edit starts at the name like a new entry does.
-  const [openedWith] = useState(() => entry?.aliases.length ?? 0);
+  // the form starts at the name.
+  const [openedWith] = useState(() => aliases.length);
   // Most of a dictionary falls every year, so that is what a new entry assumes;
-  // turning it off is how you say this one date happened once.
+  // turning it off is how you say these days happened once.
   const [repeatsYearly, setRepeatsYearly] = useState(
-    entry ? entry.year === null : true,
+    entry ? entry.repeatsYearly : true,
   );
   const [isHoliday, setIsHoliday] = useState(entry?.isHoliday ?? false);
 
+  // In order, because both rules read the set by its ends — which day the
+  // slide is anchored on, and whether the run outlasts a year. A click order is
+  // not a date order.
+  const days = [...dates].sort(Temporal.PlainDate.compare);
+  // The switch's answer is only half the question; the other half is whether
+  // the days can be slid at all, and that changes under the form as the grid is
+  // corrected. Held apart from the reader's yes rather than folded into it, so
+  // that widening the selection past a year and narrowing it back does not
+  // quietly lose the answer they gave.
+  const canRepeat = fitsWithinAYear(days);
+  const repeats = repeatsYearly && canRepeat;
+
   return (
-    <>
-      <header className={namedDateHeadStyle}>
-        <Typography tag="p" type="bodySmall" className={namedDateTitleStyle}>
-          {entry ? "Edit Named Date" : "New Named Date"}
-        </Typography>
-        <Button variant="icon" aria-label="Close" onClick={onClose}>
-          <CrossIcon />
-        </Button>
-      </header>
-      <div className={namedDateFormStyle}>
-        <TextInput
-          size="sm"
-          label="Date name"
-          placeholder="Christmas"
-          autoFocus
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-        <Field size="sm" className={namedDateOnStyle}>
-          <Field.Label>Falls on</Field.Label>
-          {/* Kept in flow. This popover is `position: fixed`, so a calendar
-              portalled to <body> would be positioned against a containing
-              block the trigger's chain never passes through — CSS anchor
-              positioning rejects that anchor outright and drops the calendar
-              at the foot of the document. In place, the two share this panel
-              as their containing block and the anchor resolves;
-              `colorPickerPopover` deliberately does not clip, so nothing
-              crops it. */}
-          <DatePicker value={on} onValueChange={setOn} portal={false} />
+    <div
+      className={definitionStyle}
+      role="group"
+      aria-label={entry ? "Edit named date" : "New named date"}
+      // Escape retreats from the FORM and stops there — the rail behind the
+      // panel is not the thing being dismissed.
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        onCancel();
+      }}
+    >
+      <div className={definitionRowsStyle}>
+        <Field size="sm" className={definitionRowStyle}>
+          <Field.Label>Date name</Field.Label>
+          <Field.Frame>
+            <Field.Control
+              placeholder="Christmas"
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </Field.Frame>
+          <span className={definitionActionSlotStyle} aria-hidden />
         </Field>
-        {/* Everything written in this panel is bodySmall, the switch labels
-            included — so the fields are `md`, whose label IS bodySmall, and
-            each track is asked for `md` explicitly rather than left to the
-            field's coercion (which reads `md` as "full geometry" and hands back
-            `lg`). `labelFirst` makes each one a settings row: the statement
-            first, the state after it. */}
-        <div className={namedDateFlagsStyle}>
-          <Field size="md" labelFirst className={namedDateFlagStyle}>
-            <Field.Label>Repeats every year</Field.Label>
-            <Switch
-              size="md"
-              checked={repeatsYearly}
-              onCheckedChange={setRepeatsYearly}
-            />
-          </Field>
-          <Field size="md" labelFirst className={namedDateFlagStyle}>
-            <Field.Label>Is holiday</Field.Label>
-            <Switch
-              size="md"
-              checked={isHoliday}
-              onCheckedChange={setIsHoliday}
-            />
-          </Field>
-        </div>
-        {/* A section, not a field: the rail's own sections are a label with the
-            button that adds to them at the far end, and this is that same
-            bargain one level in. The rows it collects are its content. */}
-        <div className={aliasSectionStyle}>
-          <div className={aliasHeaderStyle}>
-            <Typography tag="p" type="bodySmall">
-              Aliases
-            </Typography>
-            <Button
-              variant="icon"
-              aria-label="Add an alias"
-              onClick={() => setAliases((current) => [...current, ""])}
-            >
-              <AddIcon />
-            </Button>
-          </div>
-          {/* Appended to and never reordered, so the index IS a row's identity.
-              The header names them collectively; each row carries its own
-              number so it is still addressable on its own. */}
-          {aliases.map((alias, index) => (
-            <TextInput
-              key={index}
-              size="sm"
-              aria-label={`Alias ${index + 1}`}
-              placeholder="Xmas"
-              value={alias}
-              // The point of pressing add is to type one, so the row that has
-              // just mounted takes the caret. `autoFocus` only fires on mount,
-              // which is exactly the moment meant: the rows already standing
-              // are untouched, and no effect has to chase the DOM for a node
-              // that does not exist yet.
-              autoFocus={index === aliases.length - 1 && index >= openedWith}
-              onChange={(event) => {
-                const next = event.currentTarget.value;
-                setAliases((current) =>
-                  current.map((held, at) => (at === index ? next : held)),
-                );
-              }}
-            />
-          ))}
-        </div>
-        <div className={namedDateActionsStyle}>
-          <Button
-            size="sm"
-            disabled={name.trim().length === 0}
-            onClick={() =>
-              onSubmit({
-                name: name.trim(),
-                // The picker always has a year; whether the entry keeps it is
-                // the question the switch above asks.
-                year: repeatsYearly ? null : on.year,
-                month: on.month,
-                day: on.day,
-                // A row added and left blank is one the reader thought better
-                // of, not an empty word to teach the parser.
-                aliases: aliases.map((alias) => alias.trim()).filter(Boolean),
-                isHoliday,
-              })
-            }
-          >
-            {entry ? "Save named date" : "Add named date"}
-          </Button>
-        </div>
+        {/* Everything written in this panel is small type, the switch labels
+            included — so the fields are `sm`, whose label IS the 12/20 the rows
+            are drawn in, and each track is asked for `lg` explicitly rather
+            than left to the field's coercion (which reads `sm` as a detail and
+            hands back the 20px track). `labelFirst` makes each one a settings
+            row: the statement first, the state after it. */}
+        <Field size="sm" labelFirst className={definitionRowStyle}>
+          <Field.Label className={definitionFlagLabelStyle}>Repeats every year</Field.Label>
+          <Switch
+            size="lg"
+            checked={repeats}
+            disabled={!canRepeat}
+            onCheckedChange={setRepeatsYearly}
+          />
+          <span className={definitionActionSlotStyle} aria-hidden />
+        </Field>
+        <Field size="sm" labelFirst className={definitionRowStyle}>
+          <Field.Label className={definitionFlagLabelStyle}>Is holiday</Field.Label>
+          <Switch
+            size="lg"
+            checked={isHoliday}
+            onCheckedChange={setIsHoliday}
+          />
+          <span className={definitionActionSlotStyle} aria-hidden />
+        </Field>
+        {/* Appended to and never reordered, so the index IS a row's identity.
+            The first row is the one the label sits on and the last is the one
+            carrying the chip that adds another; each row names itself by
+            number, so it is still addressable on its own. */}
+        {aliases.map((alias, index) => {
+          const last = index === aliases.length - 1;
+          return (
+            <Field key={index} size="sm" className={definitionRowStyle}>
+              {index === 0 && <Field.Label>Aliases</Field.Label>}
+              <Field.Frame>
+                <Field.Control
+                  aria-label={`Alias ${index + 1}`}
+                  placeholder="Xmas"
+                  value={alias}
+                  // The point of pressing add is to type one, so the row that
+                  // has just mounted takes the caret. `autoFocus` only fires on
+                  // mount, which is exactly the moment meant: the rows already
+                  // standing are untouched, and no effect has to chase the DOM
+                  // for a node that does not exist yet.
+                  autoFocus={last && index >= openedWith}
+                  onChange={(event) => {
+                    const next = event.currentTarget.value;
+                    setAliases((current) =>
+                      current.map((held, at) => (at === index ? next : held)),
+                    );
+                  }}
+                />
+              </Field.Frame>
+              {/* The action column, filled on the last row and standing empty
+                  on the ones above it — so a row that cannot be added from
+                  still ends its field on the same margin. */}
+              {last ? (
+                <Button
+                  variant="icon"
+                  aria-label="Add an alias"
+                  onClick={() => setAliases((current) => [...current, ""])}
+                >
+                  <AddIcon />
+                </Button>
+              ) : (
+                <span className={definitionActionSlotStyle} aria-hidden />
+              )}
+            </Field>
+          );
+        })}
       </div>
-    </>
+      <div className={definitionFootStyle}>
+        <Button size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          // A name, and something for it to mean. The grid stays live under an
+          // open form, so the days can empty out from under it — and a name for
+          // no days is not a definition.
+          disabled={name.trim().length === 0 || days.length === 0}
+          onClick={() =>
+            onSubmit({
+              name: name.trim(),
+              dates: days,
+              repeatsYearly: repeats,
+              // A row added and left blank is one the reader thought better of,
+              // not an empty word to teach the parser.
+              aliases: aliases.map((alias) => alias.trim()).filter(Boolean),
+              isHoliday,
+            })
+          }
+        >
+          {entry ? "Save named date" : "Define named date"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -996,16 +1058,17 @@ export function CalchemyPlayground() {
   const [weekStartsOn, setWeekStartsOn] = useState<WeekdayIndex>(0);
   const [locale, setLocale] = useState("en-US");
   const [namedDates, setNamedDates] = useState<NamedDate[]>([]);
-  // What the popover is standing for: `null` while it is closed, an `entry` of
-  // null for a new one, otherwise the entry being edited. One popover doing
-  // both jobs, because they are the same questions.
-  const [draft, setDraft] = useState<{ entry: NamedDate | null } | null>(null);
-  const definePin = usePickerPin();
-  // The button it was opened FROM — the header's add chip, or one row's pencil.
-  // Both the thing the popover is pinned level with and where focus goes back.
+  // What the form is standing for: `null` while the panel is a query panel, an
+  // `entry` of null while it is defining a new date, otherwise the entry being
+  // edited. One form doing both jobs, because they are the same questions.
+  const [definition, setDefinition] = useState<{
+    entry: NamedDate | null;
+  } | null>(null);
+  // The button it was opened FROM — the panel's add chip, or one row's pencil.
+  // Where focus goes back when the form is done.
   const namedDateTrigger = useRef<HTMLElement | null>(null);
 
-  // The vocabulary the engine is built with. A named date is a RULE (what day
+  // The vocabulary the engine is built with. A named date is a RULE (which days
   // does this name fall on in year N), not a date, so it is handed over as a
   // resolver rather than a value.
   const namedDatesVocabulary = useMemo(
@@ -1014,15 +1077,15 @@ export function CalchemyPlayground() {
         value: entry.name,
         aliases: entry.aliases,
         isHoliday: entry.isHoliday,
-        // One expression, both rules: a repeating entry has no year of its
-        // own and takes the one it is asked about, a pinned one overrules the
-        // question with its own.
-        resolveDate: ({ year }: { year: number }) =>
-          Temporal.PlainDate.from({
-            year: entry.year ?? year,
-            month: entry.month,
-            day: entry.day,
-          }),
+        // One expression, both rules: a repeating entry SLIDES to the year it
+        // is asked about, whole and by the stride between that year and the one
+        // it was defined in, while a pinned one overrules the question with its
+        // own days. The parser dedupes and orders whatever comes back.
+        resolveDates: ({ year }: { year: number }) => {
+          if (!entry.repeatsYearly) return entry.dates;
+          const stride = year - entry.dates[0].year;
+          return entry.dates.map((date) => date.add({ years: stride }));
+        },
       })),
     [namedDates],
   );
@@ -1085,24 +1148,9 @@ export function CalchemyPlayground() {
   const pendingScroll = useRef<{ top: number; smooth: boolean } | null>(null);
   const quarter = useMemo(() => currentQuarterStart(), []);
 
-  const closeNamedDate = (restoreFocus = true) => {
-    setDraft(null);
-    definePin.unpin();
-    if (restoreFocus) namedDateTrigger.current?.focus();
-  };
-
-  // Pressing the button that already has the popover open closes it; pressing a
-  // DIFFERENT one moves the popover onto that entry rather than closing and
-  // reopening — which is why every one of these buttons is exempt from the
-  // outside-press dismiss (see `ignoreSelector`).
-  const openNamedDate = (entry: NamedDate | null, button: HTMLElement) => {
-    if (draft && (draft.entry?.id ?? null) === (entry?.id ?? null)) {
-      closeNamedDate();
-      return;
-    }
-    namedDateTrigger.current = button;
-    definePin.pin(button);
-    setDraft({ entry });
+  const closeDefinition = () => {
+    setDefinition(null);
+    namedDateTrigger.current?.focus();
   };
 
   useEffect(() => {
@@ -1224,29 +1272,57 @@ export function CalchemyPlayground() {
     );
   };
 
-  // A phrase can be answered off screen, so bring its row to the top — unless
-  // it is already readable, in which case moving would be rude. Worked out
-  // ARITHMETICALLY rather than by looking for the month: at a century's range
-  // the answer's row is very often not built yet, and this is the same sum that
-  // decides where it would be built.
+  // Bring a day's row into view — unless it is already readable, in which case
+  // moving would be rude. Worked out ARITHMETICALLY rather than by looking for
+  // the month: at a century's range the row is very often not built yet, and
+  // this is the same sum that decides where it would be built.
+  const reveal = useCallback(
+    (date: Temporal.PlainDate) => {
+      const stage = stageRef.current;
+      if (!stage || !rowHeight) return;
+
+      const row = rowForDate(date, quarter);
+      const top = row * rowHeight;
+      // The scrim's band is an overlay, so a row resting under it is on screen
+      // and unreadable. Measured rather than repeated as a number.
+      const obscured = scrimRef.current?.offsetHeight ?? 0;
+      const readable =
+        top >= stage.scrollTop &&
+        top + rowHeight <= stage.scrollTop + stage.clientHeight - obscured;
+      if (readable) return;
+
+      // Smooth only when it is a short move; sliding a century is not a journey
+      // anyone wants to watch.
+      jumpTo(row, Math.abs(top - stage.scrollTop) < stage.clientHeight * 3);
+    },
+    [rowHeight, quarter, jumpTo],
+  );
+
+  // A phrase can be answered off screen, so bring its row up.
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || !rowHeight || dates.length === 0) return;
+    if (dates.length === 0) return;
+    reveal(dates[0]);
+  }, [dates, reveal]);
 
-    const top = rowForDate(dates[0], quarter) * rowHeight;
-    // The scrim's band is an overlay, so a row resting under it is on screen
-    // and unreadable. Measured rather than repeated as a number.
-    const obscured = scrimRef.current?.offsetHeight ?? 0;
-    const readable =
-      top >= stage.scrollTop &&
-      top + rowHeight <= stage.scrollTop + stage.clientHeight - obscured;
-    if (readable) return;
-
-    // Smooth only when it is a short move; sliding a century is not a journey
-    // anyone wants to watch.
-    const row = rowForDate(dates[0], quarter);
-    jumpTo(row, Math.abs(top - stage.scrollTop) < stage.clientHeight * 3);
-  }, [dates, rowHeight, quarter, jumpTo]);
+  // Pressing the chip that already has the form open closes it; pressing a
+  // DIFFERENT trigger moves the form onto that entry rather than closing and
+  // reopening.
+  //
+  // An edit is the form standing over the entry's OWN days, so opening one
+  // LIGHTS them and brings them on screen: the days are the subject here, and a
+  // form left over whatever happened to be selected would save the wrong ones.
+  const openDefinition = (entry: NamedDate | null, button: HTMLElement) => {
+    if (definition && (definition.entry?.id ?? null) === (entry?.id ?? null)) {
+      closeDefinition();
+      return;
+    }
+    namedDateTrigger.current = button;
+    if (entry) {
+      setPicked(entry.dates);
+      reveal(entry.dates[0]);
+    }
+    setDefinition({ entry });
+  };
 
   // Nothing date-shaped is rendered until the engine lands, which also keeps
   // "today" off the server: it is read from the client's clock, and a server
@@ -1308,33 +1384,89 @@ export function CalchemyPlayground() {
             }}
             ariaLabel="What a phrase may mean"
           />
-          <Button
-            variant="icon"
-            {...PROPERTIES_TRIGGER_ATTR}
-            // One label in both states, with the state itself on
-            // `aria-pressed` — which is also what paints the chip while the
-            // rail is up. A toggle that renames itself says the same thing
-            // twice and disagrees with its own appearance.
-            aria-label="Parser Settings"
-            aria-pressed={sidebarOpen}
-            onClick={() =>
-              sidebarOpen ? sidebar.current?.dismiss() : setRailChoice(true)
-            }
-          >
-            <SliderIcon />
-          </Button>
+          <div className={barActionsStyle}>
+            {/* Only while there is something to name. A definition's days are
+                whatever is lit, so with nothing lit there is nothing to offer —
+                and the form has no field that could ask for them instead. It
+                stays through an open form, which is where the pressed state and
+                the focus return both land. */}
+            {(values.length > 0 || definition) && (
+              <Button
+                variant="icon"
+                aria-label="New named date"
+                // Only while the form is standing for a NEW entry: an open edit
+                // is the rail's own pencil, and this chip is not it.
+                aria-pressed={definition?.entry === null}
+                onClick={(event) => openDefinition(null, event.currentTarget)}
+              >
+                <AddIcon />
+                <Button.Tooltip>
+                  <Tooltip.Text>New named date</Tooltip.Text>
+                </Button.Tooltip>
+              </Button>
+            )}
+            <Button
+              variant="icon"
+              {...PROPERTIES_TRIGGER_ATTR}
+              // One label in both states, with the state itself on
+              // `aria-pressed` — which is also what paints the chip while the
+              // rail is up. A toggle that renames itself says the same thing
+              // twice and disagrees with its own appearance.
+              aria-label="Parser Settings"
+              aria-pressed={sidebarOpen}
+              onClick={() =>
+                sidebarOpen ? sidebar.current?.dismiss() : setRailChoice(true)
+              }
+            >
+              <SliderIcon />
+            </Button>
+          </div>
         </div>
-        <CalchemyReadings query={phrase} />
-        {/* Same slot as the readings, and never at the same time — see the
-            component. Taking the offer retypes the phrase, so it drops the
-            hand-made selection exactly as typing does. */}
-        <CalchemySuggestion query={phrase} onQueryChange={() => setPicked(null)} />
-        <CalchemyQueryField
-          query={phrase}
-          placeholder='Try "mondays and fridays next month"'
-          // Back to the phrase's answer — see the header.
-          onQueryChange={() => setPicked(null)}
-        />
+        {/* The morph. The panel is one instrument in two states — a phrase is
+            typed at the year, or a name is given to what the year is showing —
+            and they are never both wanted at once: the form's whole subject is
+            the selection standing, which a new phrase would replace. */}
+        {definition ? (
+          <NamedDateForm
+            // A new subject is a new FORM: the fields are seeded from the entry
+            // once, as it mounts, so switching entries under an open form has
+            // to remount it.
+            key={definition.entry?.id ?? "new"}
+            entry={definition.entry}
+            dates={values}
+            onCancel={closeDefinition}
+            onSubmit={(fields) => {
+              const edited = definition.entry;
+              setNamedDates((current) =>
+                edited
+                  ? current.map((held) =>
+                      held.id === edited.id
+                        ? { ...fields, id: held.id }
+                        : held,
+                    )
+                  : [...current, { ...fields, id: nextNamedDateId() }],
+              );
+              closeDefinition();
+            }}
+          />
+        ) : (
+          <>
+            <CalchemyReadings query={phrase} />
+            {/* Same slot as the readings, and never at the same time — see the
+                component. Taking the offer retypes the phrase, so it drops the
+                hand-made selection exactly as typing does. */}
+            <CalchemySuggestion
+              query={phrase}
+              onQueryChange={() => setPicked(null)}
+            />
+            <CalchemyQueryField
+              query={phrase}
+              placeholder='Try "mondays and fridays next month"'
+              // Back to the phrase's answer — see the header.
+              onQueryChange={() => setPicked(null)}
+            />
+          </>
+        )}
       </div>
       <div
         className={runStyle}
@@ -1396,10 +1528,6 @@ export function CalchemyPlayground() {
           // from its own chip, its header, or Escape.
           dismissOnOutsidePointer={false}
           onDismiss={() => setRailChoice(false)}
-          // The definition popover is portalled, so by every measure the
-          // dismiss can take it is outside this panel — and a press in it would
-          // close the panel it was opened from.
-          ignoreSelector="[data-named-date-form]"
         >
           <PropertiesPanel.Header>Parser Settings</PropertiesPanel.Header>
           {/* One always-on section: these are not features to add, they are the
@@ -1465,37 +1593,26 @@ export function CalchemyPlayground() {
 
           {/* The named dates, which are entirely the reader's to define:
               Calchemy ships NONE. Its vocabulary starts empty, so "christmas"
-              parses as nothing at all until something here says what it means —
-              which makes this section the only door to that half of the parser
-              rather than a convenience over it.
+              parses as nothing at all until something here says what it means.
 
-              An addable section rather than an always-on one, because unlike
-              the preferences above it holds a list that starts empty, and the
-              header's add button is what a first entry comes from. */}
+              A LIST, though, and no longer a door: an entry is defined over the
+              days it is to mean, so the way in is the add chip on the query
+              panel and this section is where the definitions are read back and
+              reopened. */}
           <PropertiesPanel.Section enabled>
             {/* The panel's own SectionHeader spends its button on opening and
-                closing the section. This one defines an ENTRY, so the header is
-                composed here — same strip, same measurements, different job. */}
+                closing the section, and this one has nothing to open — so the
+                header is composed here: same strip, same measurements, no
+                button. */}
             <div className={railSectionHeaderStyle}>
               <Typography tag="p" type="bodySmall">
                 Named Dates Dictionary
               </Typography>
-              <Button
-                variant="icon"
-                data-named-date-trigger
-                aria-label="Add a named date"
-                // Only while the popover is standing for a NEW entry: an open
-                // edit is a different button's business.
-                aria-expanded={draft?.entry === null}
-                onClick={(event) => openNamedDate(null, event.currentTarget)}
-              >
-                <AddIcon />
-              </Button>
             </div>
             {/* Nothing at all until there is something to list. An empty
                 dictionary is the ordinary state — Calchemy ships no named
                 dates — and a line of prose announcing it every time says less
-                than the add button beside the heading already does. */}
+                than the days on the grid and the chip over them already do. */}
             {namedDates.length > 0 && (
               <PropertiesPanel.ControlPanel ariaLabel="Named dates">
                 {/* The DAY labels the row and the name is its value: the
@@ -1517,11 +1634,10 @@ export function CalchemyPlayground() {
                     </Typography>
                     <Button
                       variant="icon"
-                      data-named-date-trigger
                       aria-label={`Edit ${entry.name}`}
-                      aria-expanded={draft?.entry?.id === entry.id}
+                      aria-expanded={definition?.entry?.id === entry.id}
                       onClick={(event) =>
-                        openNamedDate(entry, event.currentTarget)
+                        openDefinition(entry, event.currentTarget)
                       }
                     >
                       <EditIcon />
@@ -1532,52 +1648,6 @@ export function CalchemyPlayground() {
             )}
           </PropertiesPanel.Section>
         </PropertiesPanel>
-      )}
-      {draft && (
-        <Popover
-          // The colour picker's shell, which is exactly this arrangement
-          // already solved: docked 2px off the rail's leading edge at the
-          // rail's own width, and pinned level with the button that opened it
-          // rather than tracking it, so the rail can scroll underneath.
-          className={cx(colorPickerPopover(), namedDatePopoverStyle)}
-          role="dialog"
-          ariaLabel={draft.entry ? "Edit Named Date" : "New Named Date"}
-          // Out to the body: the rail is its own scroll container, and left in
-          // flow this would be cropped at the one edge it has to cross.
-          portal
-          // Every trigger toggles, so a press on one must not also count as a
-          // press outside — and a press on ANOTHER one has to reach its own
-          // click with the popover still open, or moving between entries would
-          // close and reopen instead of switching.
-          ignoreSelector="[data-named-date-trigger]"
-          onDismiss={() => closeNamedDate(false)}
-          containerRef={definePin.ref}
-          style={{ top: definePin.top }}
-        >
-          <div data-named-date-form>
-            <NamedDateForm
-              // A new subject is a new FORM: the fields are seeded from the
-              // entry once, as it mounts, so switching entries under an open
-              // popover has to remount it.
-              key={draft.entry?.id ?? "new"}
-              entry={draft.entry}
-              onClose={() => closeNamedDate()}
-              onSubmit={(fields) => {
-                const edited = draft.entry;
-                setNamedDates((current) =>
-                  edited
-                    ? current.map((held) =>
-                        held.id === edited.id
-                          ? { ...fields, id: held.id }
-                          : held,
-                      )
-                    : [...current, { ...fields, id: nextNamedDateId() }],
-                );
-                closeNamedDate();
-              }}
-            />
-          </div>
-        </Popover>
       )}
     </main>
   );
