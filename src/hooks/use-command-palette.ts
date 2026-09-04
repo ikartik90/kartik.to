@@ -87,6 +87,10 @@ export interface CommandPaletteHandlers {
   handleShaderPlayground: () => void;
   /** On the playground — which is an editor, so it has the same exits. */
   isShaderPlayground: boolean;
+  /** Open the calchemy playground — public on the same grounds as the shader one. */
+  handleCalchemyPlayground: () => void;
+  /** On it. Nothing is buffered here, so this withholds ONE row, not the group. */
+  isCalchemyPlayground: boolean;
   /**
    * Where a blocked exit was headed, or null. Non-null means the author asked
    * to leave an editor with unsaved work in it and has been asked what to do.
@@ -153,6 +157,11 @@ export function useCommandPalette(
   // because Save means "create" on one and "update" on the other but the group
   // offering it is the same group.
   const isShaderPlayground = /^\/playground\/shader(\/[^/]+)?$/.test(pathname);
+
+  // The other playground, and a plainer case: it holds nothing unsaved, so
+  // being on it is not being in an editor. It only takes its own row out of
+  // the group — see `isCalchemyPlayground` at the call site.
+  const isCalchemyPlayground = pathname === "/playground/calchemy";
 
   // Which editor is open. Ordered most-specific first: `/edit/home` also
   // satisfies the generic edit-mode test, and it edits a GRID rather than a
@@ -415,6 +424,11 @@ export function useCommandPalette(
   const handleShaderPlayground = () => {
     close();
     router.push("/playground/shader");
+  };
+
+  const handleCalchemyPlayground = () => {
+    close();
+    router.push("/playground/calchemy");
   };
 
   /**
@@ -817,6 +831,8 @@ export function useCommandPalette(
     handleThemeToggle,
     handleShaderPlayground,
     isShaderPlayground,
+    handleCalchemyPlayground,
+    isCalchemyPlayground,
     editorKind,
     handleSaveChanges,
     handleDiscardAndExit,

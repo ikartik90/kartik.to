@@ -417,10 +417,34 @@ export default defineConfig({
             800: { value: "#2E3338" },
             900: { value: "#1F2123" },
           },
+          // Two bright hues, and the two quiet ones they settle into.
+          //
+          // `rust` and `rosemilk` are not free-standing pigments: each is its
+          // theme's bright hue at 15% over that theme's canvas — the brand as
+          // far into the background as it goes while staying a colour. Written
+          // as the mix rather than as the hex it comes to, so a retuned canvas
+          // or a retuned brand carries them both with it instead of leaving two
+          // frozen numbers behind that used to agree with everything.
+          //
+          // `rust` was ALREADY exactly this (#41362E to the byte); `rosemilk`
+          // was a step stronger at 25% (#F2C9DE), which is why a focused field
+          // in light used to open a popover a shade deeper than its own frame.
+          // Levelling the two is what lets `field.bg.active` and
+          // `field.bg.popover` be the same paint — see them below.
+          //
+          // Base tokens, so each mixes with the NEUTRAL its canvas resolves to
+          // rather than with `bg.canvas` itself: a base token holds one value
+          // and cannot ask which theme is on.
           brand: {
-            rust: { value: "#41362E" },
+            rust: {
+              value:
+                "color-mix(in srgb, var(--colors-brand-orange) 15%, var(--colors-neutral-900))",
+            },
             orange: { value: "#FFAB6F" },
-            rosemilk: { value: "#F2C9DE" },
+            rosemilk: {
+              value:
+                "color-mix(in srgb, var(--colors-brand-pink) 15%, var(--colors-neutral-100))",
+            },
             pink: { value: "#FF4D97" },
           },
 
@@ -720,6 +744,10 @@ export default defineConfig({
           // fill (Figma 586:876).
           field: {
             bg: {
+              // The neutral fill, and the one token in the family whose
+              // strength depends on WHAT IT IS STANDING ON. 15% / 25% on the
+              // canvas; `defaultOnSurface` below is the same fill five points
+              // lighter, for a field on `bg.surface`.
               default: {
                 value: {
                   base: "color-mix(in srgb, var(--colors-neutral-500) 15%, transparent)",
@@ -727,7 +755,70 @@ export default defineConfig({
                     "color-mix(in srgb, var(--colors-neutral-500) 25%, transparent)",
                 },
               },
+              // `default` as a field wears it on `bg.surface`, which has
+              // already spent a step of the same neutral getting away from the
+              // canvas — a field taking its full share on top of that read as a
+              // second panel rather than as an inset in one.
+              //
+              // A field cannot ask what is behind it, so the SURFACES say so:
+              // anything painting `bg.surface` also writes
+              // `--colors-field-bg-default: var(--colors-field-bg-default-on-surface)`,
+              // and every field under it inherits the answer. It has to be the
+              // token that is reassigned, not some flag the token reads: a
+              // custom property's `var()`s are substituted where the property
+              // is DECLARED — at `:root` — and what inherits down is the colour
+              // that came out, so a flag set on a descendant would reach
+              // nothing. Reassigning re-evaluates it at the surface instead.
+              //
+              // One line per surface and no theme numbers in it, which is why
+              // this is a token and not a percentage written out a dozen times.
+              //
+              // `field.bg.hover` deliberately does NOT follow. Its invariant is
+              // that a tertiary hover lands exactly on a secondary chip, and
+              // both of those are 15% / 25% wherever they are; matching this
+              // token was incidental. A field resting lighter than a row being
+              // pointed at is right anyway.
+              defaultOnSurface: {
+                value: {
+                  base: "color-mix(in srgb, var(--colors-neutral-500) 10%, transparent)",
+                  _dark:
+                    "color-mix(in srgb, var(--colors-neutral-500) 20%, transparent)",
+                },
+              },
+              // The settled brand — `rosemilk` in light, `rust` in dark, which
+              // ARE the bright hue at 15% over the canvas (see the palette).
+              // Named rather than re-mixed here, because the same paint is the
+              // popover's surface below: a focused field and the popover it
+              // opens are then one continuous surface rather than two brand
+              // tints that nearly agree.
+              //
+              // Settled rather than translucent so a selection stops
+              // COMPOUNDING: the range band lies under the days it spans, and a
+              // veil-chip added its 15% to the band's 5%, reading stronger at
+              // an end than at a day that merely started a run. The hue also
+              // stops drifting with its ground — the same chip on a field
+              // surface, under a marquee and on bare canvas used to be three
+              // slightly different pinks.
+              //
+              // The cost is that it is canvas-bound: on a surface that is NOT
+              // the canvas it reads as a plate rather than a tint. The right
+              // trade for a selection, which should look the same wherever it
+              // is made — but not for a veil that has to let its ground
+              // through, which is why `activeVeil` exists below.
               active: {
+                value: {
+                  base: "{colors.brand.rosemilk}",
+                  _dark: "{colors.brand.rust}",
+                },
+              },
+              // `active`'s translucent twin, and the one place the veil IS the
+              // point: the collection tile a drop is aimed at wears this over
+              // its photo, which has to stay visible under it. An opaque wash
+              // there would not mark the picture, it would replace it. Spelled
+              // out rather than derived from the pigment, because what it needs
+              // is the half of the recipe the pigment has already spent — the
+              // brand at 15%, with nothing behind it.
+              activeVeil: {
                 value: {
                   base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
                   _dark:
@@ -735,7 +826,10 @@ export default defineConfig({
                 },
               },
               // Opaque, because the popover COVERS the field it belongs to and
-              // so can't be translucent like `active` (Figma 631:894/631:898).
+              // so can't be translucent (Figma 631:894/631:898). The same
+              // pigment as `active`, and kept as its own name all the same: a
+              // surface and a chip answer to different things, and a popover
+              // retune must not silently resize every selection in the system.
               popover: {
                 value: {
                   base: "{colors.brand.rosemilk}",
@@ -1671,6 +1765,8 @@ export default defineConfig({
             gap: "sm",
             padding: "md",
             backgroundColor: "bg.surface",
+            "--colors-field-bg-default":
+              "var(--colors-field-bg-default-on-surface)",
             borderRadius: "md",
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
@@ -2035,6 +2131,8 @@ export default defineConfig({
             width: "token(spacing.full)",
             borderRadius: "md",
             backgroundColor: "bg.surface",
+            "--colors-field-bg-default":
+              "var(--colors-field-bg-default-on-surface)",
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
@@ -2246,6 +2344,8 @@ export default defineConfig({
           description: "Shared dialog panel shell.",
           base: {
             backgroundColor: "bg.surface",
+            "--colors-field-bg-default":
+              "var(--colors-field-bg-default-on-surface)",
             // The surface owns the glyph hue: the header/body icon buttons are
             // `color: inherit` and would otherwise fall through to the app body.
             color: "text.body",
@@ -2936,6 +3036,8 @@ export default defineConfig({
             zIndex: 50,
             width: "200px",
             backgroundColor: "bg.surface",
+            "--colors-field-bg-default":
+              "var(--colors-field-bg-default-on-surface)",
             borderRadius: "md",
             display: "flex",
             flexDirection: "column",
@@ -2976,6 +3078,8 @@ export default defineConfig({
             marginTop: "xs",
             positionTryFallbacks: "flip-block",
             backgroundColor: "bg.surface",
+            "--colors-field-bg-default":
+              "var(--colors-field-bg-default-on-surface)",
             borderRadius: "md",
             borderWidth: "token(spacing.3xs)",
             borderStyle: "solid",
@@ -3087,6 +3191,8 @@ export default defineConfig({
               "calc(token(sizes.propertiesPanelWidth) + token(spacing.xs))",
             width: "token(sizes.propertiesPanelWidth)",
             backgroundColor: "bg.surface",
+            "--colors-field-bg-default":
+              "var(--colors-field-bg-default-on-surface)",
             color: "text.body",
             borderRadius: "md",
             borderWidth: "token(spacing.3xs)",
@@ -3164,7 +3270,11 @@ export default defineConfig({
             // the text inputs and sliders stacked above and below it
             // (Figma 885:1963).
             tone: {
-              surface: { backgroundColor: "bg.surface" },
+              surface: {
+                backgroundColor: "bg.surface",
+                "--colors-field-bg-default":
+                  "var(--colors-field-bg-default-on-surface)",
+              },
               field: {
                 backgroundColor: "field.bg.default",
                 // An inset ring rather than a `border`, exactly as the `field`
@@ -4368,6 +4478,12 @@ export default defineConfig({
               width: "token(sizes.calendarDay)",
               height: "token(sizes.calendarDay)",
               borderRadius: "sm",
+              // Anchors the selection ring below. Every cell, not just the
+              // selected one, so the box does not change class when it is
+              // picked. Harmless to the layer order the nav scrims and the
+              // marquee depend on: those carry explicit z-indices (1/2/3) and
+              // still sit above a positioned cell at `z-index: auto`.
+              position: "relative",
               textStyle: "bodySmall",
               color: "field.text.default",
               cursor: "pointer",
@@ -4401,6 +4517,28 @@ export default defineConfig({
               "&[aria-selected='true']": {
                 backgroundColor: "field.bg.active",
                 color: "field.text.active",
+              },
+              // ── SELECTION RING (trial) ───────────────────────────────
+              // A chip filled with `field.bg.active` also wears the matching
+              // `field.border.active` edge — which is what the Switch and the
+              // Checkbox have always done, and what the segmented control now
+              // does over its rail. Scoped to exactly that fill: the `onBrand`
+              // tone below takes the neutral `field.bg.selected` chip instead
+              // and turns the ring off, because on a brand surface the accent
+              // IS the background and an accent edge would have nothing to sit
+              // against.
+              //
+              // On a pseudo rather than a `box-shadow`, so it composes with the
+              // focus ring the slot already spends its `box-shadow` on.
+              "&[aria-selected='true']::after": {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                borderWidth: "token(spacing.3xs)",
+                borderStyle: "solid",
+                borderColor: "field.border.active",
+                pointerEvents: "none",
               },
               "&:disabled": {
                 color: "field.text.muted",
@@ -4627,11 +4765,18 @@ export default defineConfig({
                     backgroundColor: "field.bg.selected",
                     color: "field.text.default",
                   },
+                  // The chip here is neutral, not the brand fill — so it takes
+                  // no brand edge. See the ring in the base slot.
+                  "&[aria-selected='true']::after": { borderWidth: 0 },
                 },
               },
             },
           },
-          defaultVariants: { tone: "default", navPlacement: "label", size: "md" },
+          defaultVariants: {
+            tone: "default",
+            navPlacement: "label",
+            size: "md",
+          },
           // Runtime variant values — force every branch to be emitted.
           staticCss: [
             { tone: ["*"], navPlacement: ["*"], fluid: ["*"], size: ["*"] },
@@ -5044,7 +5189,7 @@ export default defineConfig({
                 inset: 0,
                 zIndex: 2,
                 borderRadius: "inherit",
-                backgroundColor: "field.bg.active",
+                backgroundColor: "field.bg.activeVeil",
                 boxShadow: "inset 0 0 0 1.5px var(--colors-border-focus-ring)",
                 // Decoration only — it lies over the whole tile, and the drop
                 // events belong to the cell beneath it.
@@ -5942,6 +6087,8 @@ export default defineConfig({
               "--panel-hairline":
                 "inset 0.5px 0 0 var(--colors-border-divider)",
               backgroundColor: "bg.surface",
+              "--colors-field-bg-default":
+                "var(--colors-field-bg-default-on-surface)",
               boxShadow:
                 "var(--panel-hairline), 0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
               // The panel IS the scroll container — there is no inner body to
@@ -6030,6 +6177,8 @@ export default defineConfig({
               insetBlockStart: 0,
               zIndex: 1,
               backgroundColor: "bg.surface",
+              "--colors-field-bg-default":
+                "var(--colors-field-bg-default-on-surface)",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
@@ -6450,6 +6599,8 @@ export default defineConfig({
               // text row its line-box + 8px, rather than all forced to 32px.
               padding: "sm",
               borderRadius: "sm",
+              // Anchors the selection ring below.
+              position: "relative",
               border: "none",
               background: "transparent",
               appearance: "none",
@@ -6498,6 +6649,32 @@ export default defineConfig({
               "&[aria-selected='true'], &[aria-pressed='true']": {
                 backgroundColor: "field.bg.active",
                 color: "field.text.active",
+              },
+              // ── SELECTION RING (trial) ───────────────────────────────
+              // A chip filled with `field.bg.active` also wears the matching
+              // `field.border.active` edge — which is what the Switch and the
+              // Checkbox have always done, and what the segmented control now
+              // does over its rail. Scoped to exactly that fill: the `onBrand`
+              // tone below takes the neutral `field.bg.selected` chip instead
+              // and turns the ring off, because on a brand surface the accent
+              // IS the background and an accent edge would have nothing to sit
+              // against.
+              //
+              // On a pseudo rather than a `box-shadow`, so it composes with the
+              // focus ring the slot already spends its `box-shadow` on.
+              //
+              // `segmentedControl` narrows this rather than redrawing it: in a
+              // rail the inline edges belong to the SEAM, and the row's two
+              // outer corners belong to the rail. See that recipe.
+              "&[aria-selected='true']::after, &[aria-pressed='true']::after": {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                borderWidth: "token(spacing.3xs)",
+                borderStyle: "solid",
+                borderColor: "field.border.active",
+                pointerEvents: "none",
               },
               "&:disabled": {
                 color: "field.text.muted",
@@ -6562,6 +6739,9 @@ export default defineConfig({
                     backgroundColor: "field.bg.selected",
                     color: "field.text.default",
                   },
+                  // Neutral chip, so no brand edge — see the base slot's ring.
+                  "&[aria-selected='true']::after, &[aria-pressed='true']::after":
+                    { borderWidth: 0 },
                   "&:disabled": {
                     "&:hover, &[data-active]": {
                       backgroundColor: "transparent",
@@ -6769,13 +6949,95 @@ export default defineConfig({
                 width: "token(spacing.3xs)",
                 backgroundColor: "transparent",
               },
-              '&[aria-selected="true"] + [aria-selected="true"]::before, &[aria-pressed="true"] + [aria-pressed="true"]::before':
-                {
-                  backgroundColor: "field.border.active",
-                },
+              // NOTHING between two that are on. It used to be a line here, and
+              // the ring made that line the third drawn in one place: the left
+              // chip's trailing edge, the right chip's leading edge, and this.
+              // Measured, the divider came out twice the width of every other
+              // one in the rail with a darker core where all three stacked.
+              //
+              // The chips can say it themselves, so they do — see the ring's
+              // own rule below, which withdraws ONE of the two abutting edges
+              // so what is left is a single hairline of exactly the weight the
+              // rest of the rail is drawn at.
               '&[aria-selected="false"] + [aria-selected="false"]::before, &[aria-pressed="false"] + [aria-pressed="false"]::before':
                 {
                   backgroundColor: "field.border.default",
+                },
+
+              // THE SELECTION RING — the whole way round, as every other
+              // `field.bg.active` chip wears it.
+              //
+              // Stated in FULL rather than inherited from `optionList`'s, which
+              // draws the same edge. The two agree and this one wins on every
+              // property it names — but the shared ring is on trial and this
+              // one is not, so it does not depend on it: pulling the trial must
+              // not take the rail's own hairline out with it.
+              //
+              // The BLOCK edges are that hairline, put back. The rail draws its
+              // edge as an inset box-shadow, which paints above the rail's
+              // background but below its children's, so an opaque chip lands on
+              // top of it and the ring is what stops the rail reading as nicked.
+              //
+              // The INLINE edges close the chip. They overlap the seam's
+              // territory and win it: where the seam's rule was that two
+              // segments which differ need no line — the fill already divides
+              // them — a chip that is outlined on three sides and open on the
+              // fourth reads as unfinished, not as economical. The seam still
+              // owns the line between two segments that AGREE, where there is
+              // no chip edge to do the job.
+              //
+              // Nothing squares the middle corners because nothing has to: a
+              // `size=sm` rail's items are already square, and the ring takes
+              // its radius from the chip it edges.
+              //
+              // Per-side longhands, so the two rules below each add their own
+              // corner without restating the others — where a `box-shadow` is
+              // one property a later rule replaces WHOLE, and the slot already
+              // spends its box-shadow on the focus ring.
+              '&[aria-selected="true"]::after, &[aria-pressed="true"]::after': {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                // Decoration; the press belongs to the segment under it.
+                pointerEvents: "none",
+                borderStyle: "solid",
+                borderColor: "field.border.active",
+                borderWidth: "token(spacing.3xs)",
+              },
+              // The ends of the row, where the chip meets the rail's own corner.
+              //
+              // The radius is not decoration here, it is the difference between
+              // a line and a nick. The rail CLIPS its row, and clipping a square
+              // 1px border with a 4px corner does not bend that border round the
+              // curve — it slices the corner off it, leaving the edge to stop
+              // dead a few pixels short at the top and start again below. The
+              // overlay has to carry the rail's corner itself so it curves
+              // INSIDE the clip and meets the rail's hairline where the two
+              // become one line.
+              //
+              // Logical longhands, so a right-to-left row rounds the end that is
+              // actually its outside.
+              '&[aria-selected="true"]:first-child::after, &[aria-pressed="true"]:first-child::after':
+                {
+                  borderInlineStartWidth: "token(spacing.3xs)",
+                  borderStartStartRadius: "sm",
+                  borderEndStartRadius: "sm",
+                },
+              '&[aria-selected="true"]:last-child::after, &[aria-pressed="true"]:last-child::after':
+                {
+                  borderInlineEndWidth: "token(spacing.3xs)",
+                  borderStartEndRadius: "sm",
+                  borderEndEndRadius: "sm",
+                },
+              // Two chips that abut would each draw the line between them, at
+              // twice the weight of every other line in the rail. The RIGHT one
+              // of the pair gives its leading edge up, so the divider is the
+              // left one's trailing edge alone — one hairline, and the same
+              // hairline a chip shows against an unpressed neighbour or against
+              // the rail itself.
+              '&[aria-selected="true"] + [aria-selected="true"]::after, &[aria-pressed="true"] + [aria-pressed="true"]::after':
+                {
+                  borderInlineStartWidth: 0,
                 },
             },
           },
@@ -6891,6 +7153,8 @@ export default defineConfig({
               position: "absolute",
               inset: 0,
               backgroundColor: "bg.surface",
+              "--colors-field-bg-default":
+                "var(--colors-field-bg-default-on-surface)",
             },
             // `position: relative` for one reason only: the cover is positioned
             // and this is not, so without it the plate paints OVER the words it
@@ -7177,7 +7441,8 @@ export default defineConfig({
               inset: 0,
               opacity: "var(--wx-halo)",
               transformOrigin: "0 0",
-              transform: "translate(calc((var(--wx-orb-x) - 125 * var(--wx-orb-scale)) * 0.4%), calc((var(--wx-orb-y) - 125 * var(--wx-orb-scale)) * 0.4%)) scale(var(--wx-orb-scale))",
+              transform:
+                "translate(calc((var(--wx-orb-x) - 125 * var(--wx-orb-scale)) * 0.4%), calc((var(--wx-orb-y) - 125 * var(--wx-orb-scale)) * 0.4%)) scale(var(--wx-orb-scale))",
               transition:
                 "opacity var(--wx-glow) ease-in-out, transform var(--wx-travel) var(--wx-ease)",
             },
@@ -7254,7 +7519,8 @@ export default defineConfig({
               mixBlendMode: "plus-lighter",
               maskRepeat: "no-repeat",
               transformOrigin: "0 0",
-              transform: "translate(calc((var(--wx-orb-x) - 125 * var(--wx-orb-scale)) * 0.4%), calc((var(--wx-orb-y) - 125 * var(--wx-orb-scale)) * 0.4%)) scale(var(--wx-orb-scale))",
+              transform:
+                "translate(calc((var(--wx-orb-x) - 125 * var(--wx-orb-scale)) * 0.4%), calc((var(--wx-orb-y) - 125 * var(--wx-orb-scale)) * 0.4%)) scale(var(--wx-orb-scale))",
               transition:
                 "filter var(--wx-travel) var(--wx-ease), transform var(--wx-travel) var(--wx-ease)",
             },
@@ -7280,8 +7546,7 @@ export default defineConfig({
             drift: {
               position: "absolute",
               inset: 0,
-              animation:
-                "weatherCloudDrift 19s ease-in-out infinite alternate",
+              animation: "weatherCloudDrift 19s ease-in-out infinite alternate",
             },
             cloudSmall: {
               opacity: "var(--wx-cloud-small-opacity)",

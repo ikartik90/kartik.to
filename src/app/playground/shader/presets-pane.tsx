@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { menuIcon } from "../../../../styled-system/recipes";
-import { createShaderPreset, getShaderPresets } from "@/app/actions/shader-preset";
+import {
+  createShaderPreset,
+  getShaderPresets,
+} from "@/app/actions/shader-preset";
 import { UnsavedDot } from "@/components/unsaved-dot";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
@@ -154,6 +157,7 @@ const surfaceStyle = css({
   borderColor: "border.divider",
   borderRadius: "xxl",
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
 });
 
 // One tile. 80px square — `spacing.5xl`, the same 80 the gutter band is — with
@@ -287,7 +291,9 @@ export interface PresetsPaneProps {
 }
 
 export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
-  const shaderPresetId = useShaderPresetDraftStore((draft) => draft.shaderPresetId);
+  const shaderPresetId = useShaderPresetDraftStore(
+    (draft) => draft.shaderPresetId,
+  );
   const isDirty = useShaderPresetDraftStore((draft) => draft.isDirty);
   const buffers = useShaderPresetDraftStore((draft) => draft.buffers);
   const openNewDraft = useShaderPresetDraftStore((draft) => draft.openNewDraft);
@@ -312,7 +318,9 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
   // a workspace. A dot they could never resolve would point at a save that is
   // not theirs to reach.
   const unsaved = new Set(
-    isAdmin ? unsavedShaderPresetKeys({ buffers, isDirty, shaderPresetId }) : [],
+    isAdmin
+      ? unsavedShaderPresetKeys({ buffers, isDirty, shaderPresetId })
+      : [],
   );
 
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -444,7 +452,8 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
     if (saving) return;
     setSaving(true);
     try {
-      const { title, shaderId, settings } = useShaderPresetDraftStore.getState();
+      const { title, shaderId, settings } =
+        useShaderPresetDraftStore.getState();
       const saved = await createShaderPreset({ title, shaderId, settings });
 
       // Adopted from what was STORED rather than from what was sent: the schema
@@ -562,7 +571,9 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
                   type="button"
                   className={tileStyle}
                   aria-label={presetName(preset)}
-                  aria-current={preset.id === shaderPresetId ? "true" : undefined}
+                  aria-current={
+                    preset.id === shaderPresetId ? "true" : undefined
+                  }
                   // The preset itself, photographed once off-screen — the tile
                   // cannot MOUNT one, because a context per tile is a strip
                   // that goes blank at around sixteen presets. Its ramp stands

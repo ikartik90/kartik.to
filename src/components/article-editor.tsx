@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { css, cx } from "../../styled-system/css";
 import {
@@ -1018,6 +1024,7 @@ const editorCodeLanguageSelectStyle = css({
   textStyle: "caption",
   color: "text.body",
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
   borderWidth: "token(spacing.3xs)",
   borderStyle: "solid",
   borderColor: "border.divider",

@@ -575,6 +575,38 @@ describe("CommandPalette", () => {
     });
   });
 
+  // The second playground, and public on the same grounds as the first: it
+  // parses a phrase in the browser and paints the days it means. Nothing is
+  // read from the site and nothing is written to it.
+  describe("Calchemy Playground", () => {
+    it("is offered logged out, beside the shader one", () => {
+      render(<CommandPalette />);
+      expect(screen.getByText("Calchemy Playground")).toBeDefined();
+    });
+
+    it("routes to the playground and closes the palette", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(screen.getByText("Calchemy Playground"));
+
+      expect(mockPush).toHaveBeenCalledWith("/playground/calchemy");
+      expect(dialog.close).toHaveBeenCalledOnce();
+    });
+
+    // Standing on it, the row is a command to the page you are already on —
+    // the rule the shader playground follows for itself. The OTHER playground
+    // is still somewhere to go, so the group survives.
+    it("stops advertising itself once you are on it, and still offers the other", () => {
+      mockPathname.mockReturnValue("/playground/calchemy");
+      render(<CommandPalette />);
+
+      expect(list().queryByText("Calchemy Playground")).toBeNull();
+      expect(list().getByText("Shader Playground")).toBeDefined();
+    });
+  });
+
   // A destination is worth offering only when going there is a thing you can
   // simply DO. Inside an editor it is not: leaving decides what becomes of the
   // buffered work, which is the same reason "Back to …" is withheld there.

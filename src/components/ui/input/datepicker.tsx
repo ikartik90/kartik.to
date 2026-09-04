@@ -172,6 +172,18 @@ export function DatePicker({
             weekStartsOn={weekStartsOn}
             today={today}
             tone="onBrand"
+            // The popover is at LEAST as wide as the field it covers
+            // (`minWidth: anchor-size(width)`), and a field is usually wider
+            // than a month's natural 208px — so without this the calendar hugs
+            // its months and leaves the surplus as dead space in one corner of
+            // the popover. `fluid` spends it in the GUTTERS instead: the period
+            // grows to the list and each grid distributes what is left between
+            // its seven tracks, so the day cell stays the 24px square the rest
+            // of the system draws and only the space between the columns opens
+            // up. Unconditional, because at the natural measure there is no
+            // free space and the arithmetic is a no-op — a narrow field gets
+            // exactly what it got before.
+            fluid
             // Parser derived from the same `format` that drives the trigger's
             // display — one pattern, both directions. It lives on the Calendar
             // (which interprets the query), not the dumb search box.
