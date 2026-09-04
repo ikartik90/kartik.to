@@ -18,9 +18,11 @@ export interface SwitchProps
   onCheckedChange?: (checked: boolean) => void;
   /**
    * Override the track/thumb geometry, independent of the field `size` — e.g. a
-   * large switch beside a caption-sized label. Unset → follows `<Field size>`.
+   * large switch beside a caption-sized label, or `md` for one that shares a
+   * row with bodySmall text and should not be the loudest thing in the form.
+   * Unset → follows `<Field size>`.
    */
-  size?: "sm" | "lg";
+  size?: "sm" | "md" | "lg";
   /** Applied to the control (track). */
   className?: string;
 }
@@ -75,6 +77,9 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
         role="switch"
         aria-checked={checked}
         aria-describedby={hasHint ? hintId : undefined}
+        // In the tab order explicitly, because WebKit's default one skips a
+        // bare <button> — see `Button`.
+        tabIndex={0}
         className={cx(styles.control, className)}
         onClick={(e) => {
           onClick?.(e);

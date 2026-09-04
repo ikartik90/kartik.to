@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { DatePicker, type DatePickerProps } from "../datepicker";
@@ -49,6 +55,14 @@ describe("collapsed trigger", () => {
     expect(trigger().textContent).toBe("11/12/2026");
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  // See Button: WebKit's default tab order skips a bare <button>, so the
+  // trigger states its own place — a field the keyboard cannot reach is not a
+  // field.
+  it("states its own place in the tab order", () => {
+    renderDatePicker({});
+    expect(trigger().getAttribute("tabindex")).toBe("0");
   });
 
   it("shows the placeholder when empty", () => {
@@ -170,5 +184,29 @@ describe("search", () => {
     fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Enter" });
     expect(onValueChange.mock.calls[0][0].toString()).toBe("2027-05-01");
     expect(trigger().textContent).toBe("05-01-2027");
+  });
+});
+
+describe("anchoring", () => {
+  // The popover is positioned by CSS anchor positioning against the trigger
+  // frame, and an anchor only resolves when the two share a containing-block
+  // chain. Portalled to <body> that holds for the ordinary page; inside a
+  // `position: fixed` surface it does not, because a fixed ancestor ends the
+  // chain at the viewport. Hence the escape hatch — the same one Combobox has.
+  it("portals the popover to the body by default", () => {
+    const { container } = renderDatePicker({ defaultValue: TODAY });
+    fireEvent.click(trigger());
+    const dialog = screen.getByRole("dialog");
+    expect(container.contains(dialog)).toBe(false);
+    expect(dialog.parentElement).toBe(document.body);
+  });
+
+  it("keeps the popover beside its trigger when portal is off", () => {
+    const { container } = renderDatePicker({
+      defaultValue: TODAY,
+      portal: false,
+    });
+    fireEvent.click(trigger());
+    expect(container.contains(screen.getByRole("dialog"))).toBe(true);
   });
 });

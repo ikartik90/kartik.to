@@ -17,6 +17,20 @@ describe("Switch", () => {
     expect(sw.getAttribute("aria-checked")).toBe("false");
   });
 
+  // See Button: WebKit's default tab order skips a bare <button>, so every
+  // control drawn as one states its own place in it.
+  it("states its own place in the tab order", () => {
+    render(
+      <Field>
+        <Switch />
+        <Field.Label>Wi-Fi</Field.Label>
+      </Field>,
+    );
+    expect(
+      screen.getByRole("switch", { name: "Wi-Fi" }).getAttribute("tabindex"),
+    ).toBe("0");
+  });
+
   it("toggles aria-checked and reports each change when uncontrolled", () => {
     const onCheckedChange = vi.fn();
     render(

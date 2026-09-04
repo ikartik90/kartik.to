@@ -42,6 +42,11 @@ export interface DemoComponentEntry {
   /** Lazily imports the demo's module chunk (loaded after the page loads). */
   load: () => Promise<ComponentType<DemoProps>>;
   aspectRatio?: DemoFrameAspectRatio;
+  /**
+   * The demo lays itself out against the frame rather than being measured and
+   * centred in it — see {@link DemoFrame}'s own `fill`.
+   */
+  fill?: boolean;
   logger?: boolean | DemoLoggerConfig;
   /** Demo-specific assets, on top of the shared common/logger asset sets. */
   assets?: DemoAsset[];
@@ -144,6 +149,10 @@ const registry: Record<string, DemoRegistryEntry> = {
     link: { href: "/playground/shader", label: "Shader playground" },
   },
   "calchemy-demo": {
+    // The playground in a frame: the calendar takes the middle and the query
+    // bar sits on the frame's own bottom inset, so the demo needs the frame's
+    // height rather than its own.
+    fill: true,
     load: async () => {
       const mod = await import("./calchemy-demo");
       // Warm the engine as part of loading so the single frame preloader covers

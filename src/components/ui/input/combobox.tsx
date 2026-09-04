@@ -165,6 +165,9 @@ function ComboboxRoot({
           data-placeholder={display ? undefined : ""}
           aria-haspopup="listbox"
           aria-expanded={open}
+          // In the tab order explicitly, because WebKit's default one skips a
+          // bare <button> — see `Button`.
+          tabIndex={0}
           className={cx(styles.control, triggerClass)}
         >
           <WireframeText>{display || placeholder}</WireframeText>

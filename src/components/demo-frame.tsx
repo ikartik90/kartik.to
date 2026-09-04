@@ -37,6 +37,17 @@ interface DemoFrameProps
   logger?: boolean | DemoLoggerConfig;
   /** When false, logger controls are inert (e.g. article edit preview). */
   interactive?: boolean;
+  /**
+   * The demo lays itself out against the FRAME rather than being measured at
+   * its intrinsic size and centred — for one whose own furniture sits on the
+   * frame's edges (the calchemy demo's query bar and chevrons). It is handed
+   * the demo area directly, exactly as a logger frame's child is, so it has a
+   * definite height to fill; the intrinsic-size wrapper below has none.
+   *
+   * The frame still measures: `measureRef` falls back to the content box, the
+   * same fallback the logger path has always used.
+   */
+  fill?: boolean;
 }
 
 function resolveLoggerConfig(
@@ -60,6 +71,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       aspectRatio = "2/1",
       logger,
       interactive = true,
+      fill = false,
       className,
       style,
       ...props
@@ -91,9 +103,14 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
     // Logger frames reserve their aspect-ratio height as a CSS floor (cqw
     // compound variant on `demoFrameDemoArea`), so the frame is full-height from
     // SSR with no client-measured jump — no JS sizing needed here.
-
+    //
+    // Neither does a FILLING one, and it must not be measured at all: what this
+    // raises the floor to is the demo's own height, and a demo that fills the
+    // area is as tall as the area — so its height feeds back into its own floor
+    // and the frame runs away (8,000px on the first pass). Its height is the
+    // aspect ratio's, which the area carries already.
     useLayoutEffect(() => {
-      if (loggerEnabled) return;
+      if (loggerEnabled || fill) return;
 
       const frame = frameRef.current;
       const content = contentRef.current;
@@ -124,7 +141,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       updateDemoAreaSize();
 
       return () => observer.disconnect();
-    }, [resolvedAspectRatio, children, loggerEnabled]);
+    }, [resolvedAspectRatio, children, loggerEnabled, fill]);
 
     const frame = (
       <div
@@ -147,7 +164,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
           })}
           style={demoAreaStyle}
         >
-          {loggerEnabled ? (
+          {loggerEnabled || fill ? (
             children
           ) : (
             <div ref={measureRef} className={demoFrameDemoMeasure()}>

@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  act,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRef } from "react";
 import { useDismiss } from "../use-dismiss";
@@ -34,6 +40,42 @@ describe("useDismiss", () => {
     render(<Harness onDismiss={onDismiss} />);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // Escape closes ONE thing. Every open surface listens at the document, so
+  // without an order among them a keypress meant for the combobox standing on a
+  // panel takes the panel with it — which is the bug this locks out.
+  it("gives Escape to the surface opened last, not to every open one", () => {
+    const panel = vi.fn();
+    const menu = vi.fn();
+    const { rerender } = render(<Harness onDismiss={panel} />);
+    rerender(
+      <>
+        <Harness onDismiss={panel} />
+        <Harness onDismiss={menu} />
+      </>,
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menu).toHaveBeenCalledTimes(1);
+    expect(panel).not.toHaveBeenCalled();
+  });
+
+  // And the next press is the panel's, so two presses close two surfaces —
+  // the layering is an order, not a mute.
+  it("hands Escape back to the surface underneath once the top one goes", () => {
+    const panel = vi.fn();
+    const menu = vi.fn();
+    const { rerender } = render(
+      <>
+        <Harness onDismiss={panel} />
+        <Harness onDismiss={menu} />
+      </>,
+    );
+    rerender(<Harness onDismiss={panel} />);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(panel).toHaveBeenCalledTimes(1);
   });
 
   it("prevents the default Escape action (so Safari doesn't leave fullscreen)", () => {
