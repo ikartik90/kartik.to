@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { createRef } from "react";
+import { createRef, useRef } from "react";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Dialog } from "../dialog";
+import { useDismiss } from "@/hooks/use-dismiss";
 
 // JSDOM does not implement showModal/close — patch them so tests can call
 // dialogRef.current.showModal() without throwing.
@@ -23,6 +24,13 @@ beforeEach(() => {
     this.dispatchEvent(new Event("close"));
   });
 });
+
+/** A floating surface of the ordinary kind, standing behind the dialog. */
+function Rail({ onDismiss }: { onDismiss: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss({ ref, onDismiss });
+  return <div ref={ref}>rail</div>;
+}
 
 describe("Dialog", () => {
   it("renders a <dialog> element", () => {
@@ -69,6 +77,45 @@ describe("Dialog", () => {
     expect(notPrevented).toBe(false);
     expect(dialog.close).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  // The command palette opens over whatever is already on screen, and the rail
+  // it covers listens for Escape at the document like every floating surface
+  // here. One press used to close both — the palette because the press was
+  // made in it, and the rail because by the time it was asked the palette had
+  // already closed itself and nothing said it had ever been there.
+  it("keeps a menu behind it open when Escape closes the dialog", () => {
+    const rail = vi.fn();
+    const ref = createRef<HTMLDialogElement>();
+    render(
+      <>
+        <Rail onDismiss={rail} />
+        <Dialog ref={ref}>content</Dialog>
+      </>,
+    );
+    ref.current?.showModal();
+
+    fireEvent.keyDown(ref.current!, { key: "Escape" });
+    expect(ref.current?.close).toHaveBeenCalledOnce();
+    expect(rail).not.toHaveBeenCalled();
+  });
+
+  // Two presses close two things: with the dialog gone, the rail is what the
+  // next Escape finds.
+  it("hands Escape back to that menu once it has closed", () => {
+    const rail = vi.fn();
+    const ref = createRef<HTMLDialogElement>();
+    render(
+      <>
+        <Rail onDismiss={rail} />
+        <Dialog ref={ref}>content</Dialog>
+      </>,
+    );
+    ref.current?.showModal();
+    fireEvent.keyDown(ref.current!, { key: "Escape" });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(rail).toHaveBeenCalledTimes(1);
   });
 
   it("does not intercept non-Escape keys", () => {
