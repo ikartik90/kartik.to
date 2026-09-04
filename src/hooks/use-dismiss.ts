@@ -14,6 +14,34 @@ import { useEffect, useId, type RefObject } from "react";
 // agree wherever it matters: a surface opened FROM another one mounts second.
 const layers: string[] = [];
 
+// The <dialog> the press was made in, or null. A modal dialog stands over every
+// surface on this page and is not in the stack above — it is opened by a
+// `showModal()` made on a ref, from outside — so a rail left open behind one is
+// still the TOPMOST layer while being the thing the reader can no longer touch,
+// and it would take the Escape meant for the palette over it.
+//
+// The answer has to be taken here, before the press is dispatched anywhere,
+// because the dialog is gone by the time the surfaces are asked: React
+// delegates keydown from its root, so the dialog's own handler has already run
+// and closed it, and the page looks as though there was never a dialog at all.
+// `window` is the first stop in the capture phase, ahead of React's root and
+// ahead of every surface's listener — and it is first in a test renderer too,
+// where React's root is a div and the rest of the order reverses.
+let dialogAtPress: Element | null = null;
+let watching = false;
+function watchPresses(): void {
+  if (watching) return;
+  watching = true;
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      dialogAtPress =
+        (e.target as Element | null)?.closest?.("dialog[open]") ?? null;
+    },
+    { capture: true },
+  );
+}
+
 interface UseDismissOptions {
   /** The popover container — pointer-downs outside it dismiss. */
   ref: RefObject<HTMLElement | null>;
@@ -82,17 +110,20 @@ export function useDismiss({
   // would be one the surface on top never got.
   useEffect(() => {
     if (!enabled) return;
+    watchPresses();
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && layers[layers.length - 1] === layer) {
-        e.preventDefault();
-        e.stopPropagation();
-        onDismiss();
-      }
+      if (e.key !== "Escape" || layers[layers.length - 1] !== layer) return;
+      // A dialog over this surface has the press — unless this surface is one
+      // standing on the dialog itself, which is the ordinary case again.
+      if (dialogAtPress && !dialogAtPress.contains(ref.current)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onDismiss();
     }
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () =>
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [enabled, onDismiss, layer]);
+  }, [enabled, onDismiss, layer, ref]);
 
   // Dismiss when a pointer goes down outside the container.
   useEffect(() => {

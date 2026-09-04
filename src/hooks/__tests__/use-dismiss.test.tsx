@@ -10,7 +10,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRef } from "react";
 import { useDismiss } from "../use-dismiss";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  document.querySelectorAll("dialog").forEach((el) => el.remove());
+});
 
 function Harness(props: {
   onDismiss: () => void;
@@ -32,6 +35,16 @@ function Harness(props: {
       <div data-testid="outside">out</div>
     </div>
   );
+}
+
+/** An open modal dialog with the focus in it, as `showModal()` leaves things. */
+function openDialog(): HTMLInputElement {
+  const dialog = document.createElement("dialog");
+  dialog.setAttribute("open", "");
+  const field = document.createElement("input");
+  dialog.append(field);
+  document.body.append(dialog);
+  return field;
 }
 
 describe("useDismiss", () => {
@@ -119,6 +132,45 @@ describe("useDismiss", () => {
       window.dispatchEvent(new Event("resize"));
     });
     expect(onDismiss).toHaveBeenCalledTimes(2);
+  });
+
+  // A modal <dialog> stands over every surface on the page and joins nothing:
+  // it is shown by a `showModal()` made on a ref, from outside. So the rail it
+  // covers is still the topmost LAYER, and would take the press meant for the
+  // palette over it — the bug this locks out.
+  it("leaves an Escape made inside an open dialog to that dialog", () => {
+    const rail = vi.fn();
+    render(<Harness onDismiss={rail} />);
+    const field = openDialog();
+
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(rail).not.toHaveBeenCalled();
+  });
+
+  // The next press, made after the dialog has gone, is the rail's again — two
+  // presses close two things, exactly as two stacked menus do.
+  it("hands Escape back to the surface once the dialog has closed", () => {
+    const rail = vi.fn();
+    render(<Harness onDismiss={rail} />);
+    const field = openDialog();
+    fireEvent.keyDown(field, { key: "Escape" });
+
+    field.closest("dialog")!.remove();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(rail).toHaveBeenCalledTimes(1);
+  });
+
+  // And a menu opened ON the dialog is a menu like any other: the exemption is
+  // for what stands BEHIND one, not for everything while one is up.
+  it("still dismisses a surface that lives inside the open dialog", () => {
+    const menu = vi.fn();
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("open", "");
+    document.body.append(dialog);
+    render(<Harness onDismiss={menu} />, { container: dialog });
+
+    fireEvent.keyDown(screen.getByText("in"), { key: "Escape" });
+    expect(menu).toHaveBeenCalledTimes(1);
   });
 
   it("attaches nothing when disabled", () => {
