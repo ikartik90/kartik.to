@@ -19,6 +19,7 @@ import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 import { getBackTarget, type BackTarget } from "@/utils/back-target";
 import { isGridDraftDirty } from "@/utils/grid-draft";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
+import { isTextEntry } from "@/utils/is-text-entry";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
@@ -106,6 +107,36 @@ export interface CommandPaletteHandlers {
   handlePublish: () => Promise<void>;
   /** Permanently delete the draft currently being viewed. */
   handleDiscardDraft: () => Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Going up a level
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether this press means "up a level" — the page ABOVE this one, rather than
+ * whatever the visitor happened to look at before it.
+ *
+ * Two gestures, because one cannot cover both places it is wanted. A bare `<`
+ * reads as the thing it does and asks for no modifier, the way ⇧D downloads in
+ * Google Photos — but it is a CHARACTER first, so it answers only where nobody
+ * is typing, and in the editor the author's focus lives in the prose. ⌘J is
+ * unlovely and arbitrary and works there regardless, which is exactly where the
+ * unsaved-work gate matters most.
+ *
+ * NOT ⌘[, which this began as. That is the key equivalent of Safari's History ▸
+ * Back menu item, and macOS runs menu key equivalents before the event reaches
+ * web content, so the listener was never called there at all. NOT ⌘I either,
+ * which looks free until you remember `article-editor` binds it to italic.
+ */
+function isBackPress(event: KeyboardEvent): boolean {
+  // Lowercase only: ⌘⇧J is a different gesture, and browsers report the
+  // shifted key as "J".
+  if (hasShortcutModifier(event)) return event.key === "j";
+  // A bare key is bare: with a chord modifier down this is some OTHER gesture,
+  // very possibly one the browser has plans for.
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  return event.key === "<" && !isTextEntry(event.target);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,27 +360,18 @@ export function useCommandPalette(
     handleBackRef.current = handleBack;
   });
 
-  // ⌘J / Ctrl J — up a level: the page above THIS page, rather than whatever
-  // was visited before it. Global, because the control it replaces was on the
-  // page rather than in the palette: it has to work without opening anything.
-  // It goes through the same gate as the command. A shortcut that skipped the
-  // unsaved-work question would be a back door round it, and the faster route
-  // is exactly the one an author takes without thinking.
-  //
-  // NOT ⌘[, which this was. That is the key equivalent of Safari's History ▸
-  // Back menu item, and macOS dispatches menu key equivalents before the event
-  // reaches web content — the listener was never called there, so the palette's
-  // chip advertised a shortcut that could not fire. ⌘J is unclaimed in Safari
-  // and in Chrome (whose Downloads is ⇧⌘J). Firefox binds ⌘J/Ctrl J to
-  // Downloads but lets a page cancel it, which this does.
+  // Global, because the control this replaces was on the page rather than in
+  // the palette: it has to work without opening anything. Both gestures go
+  // through the same gate as the command — one that skipped the unsaved-work
+  // question would be a back door round it, and the faster route is exactly
+  // the one an author takes without thinking. See `isBackPress` for which
+  // presses count, and why there are two of them.
   const handleBackRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!backTarget) return;
     function handleKeyDown(event: KeyboardEvent) {
-      // Lowercase only: ⌘⇧J is a different gesture, and browsers report the
-      // shifted key as "J".
-      if (!hasShortcutModifier(event) || event.key !== "j") return;
+      if (!isBackPress(event)) return;
       event.preventDefault();
       handleBackRef.current();
     }

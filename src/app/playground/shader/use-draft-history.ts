@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
+import { isTextEntry } from "@/utils/is-text-entry";
 
 // ---------------------------------------------------------------------------
 // ⌘Z / ⌘⇧Z on the shader playground.
@@ -33,16 +34,6 @@ import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
  */
 export const HISTORY_DEBOUNCE_MS = 500;
 
-/** Whether a press belongs to a field with an undo stack of its own. */
-function isTextEntry(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target.isContentEditable
-  );
-}
-
 export function useDraftHistory(): void {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -54,20 +45,22 @@ export function useDraftHistory(): void {
     // that is a great many renders. The push then lands seconds late or not at
     // all, so ⌘Z pressed straight after an edit finds nothing to step back to.
     // A store subscription fires only when the state actually moves.
-    const unsubscribe = useShaderPresetDraftStore.subscribe((draft, previous) => {
-      if (
-        draft.settings === previous.settings &&
-        draft.shaderId === previous.shaderId &&
-        draft.editedAspects === previous.editedAspects
-      ) {
-        return;
-      }
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(
-        () => useShaderPresetDraftStore.getState().pushHistory(),
-        HISTORY_DEBOUNCE_MS,
-      );
-    });
+    const unsubscribe = useShaderPresetDraftStore.subscribe(
+      (draft, previous) => {
+        if (
+          draft.settings === previous.settings &&
+          draft.shaderId === previous.shaderId &&
+          draft.editedAspects === previous.editedAspects
+        ) {
+          return;
+        }
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(
+          () => useShaderPresetDraftStore.getState().pushHistory(),
+          HISTORY_DEBOUNCE_MS,
+        );
+      },
+    );
 
     return () => {
       unsubscribe();

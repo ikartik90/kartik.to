@@ -420,6 +420,110 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
+    // -----------------------------------------------------------------------
+    // The bare `<`
+    //
+    // A chevron, typed without a modifier, the way Google Photos takes ⇧D and
+    // GitHub takes `t`. It reads as the thing it does, which no ⌘-chord here
+    // manages — and it costs the character `<` everywhere the visitor is not
+    // typing, which is the whole of a page being read.
+    // -----------------------------------------------------------------------
+    const pressBare = (target: EventTarget) => {
+      const event = new KeyboardEvent("keydown", {
+        key: "<",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      target.dispatchEvent(event);
+      return event;
+    };
+
+    it("goes up a level on a bare `<`", () => {
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = pressBare(document.body);
+      });
+
+      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    // In a field `<` is a character somebody meant to type, and a shortcut that
+    // ate it would be unusable — the palette's own search box included.
+    it("leaves `<` to a field being typed into", () => {
+      const input = document.createElement("input");
+      document.body.append(input);
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = pressBare(input);
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+      input.remove();
+    });
+
+    // The article editor is contenteditable rather than a field, and it is the
+    // surface most likely to be typing a bracket in earnest.
+    it("leaves `<` to a contenteditable", () => {
+      const editable = document.createElement("div");
+      Object.defineProperty(editable, "isContentEditable", { value: true });
+      document.body.append(editable);
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = pressBare(editable);
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+      editable.remove();
+    });
+
+    // ⌘< is a different gesture, and not this one. A bare-key shortcut that
+    // fired with a chord modifier down would answer for chords it was never
+    // given — ⌘< among them, which is the browser's to define.
+    it("does not answer `<` with a chord modifier held", () => {
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = (() => {
+          const e = new KeyboardEvent("keydown", {
+            key: "<",
+            shiftKey: true,
+            metaKey: true,
+            bubbles: true,
+            cancelable: true,
+          });
+          document.body.dispatchEvent(e);
+          return e;
+        })();
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it("leaves the bare key alone at the index, which has nothing behind it", () => {
+      mockPathname.mockReturnValue("/");
+      renderHook(() => useCommandPalette(close));
+
+      let event!: KeyboardEvent;
+      act(() => {
+        event = pressBare(document.body);
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
     // The platform's own modifier only: Ctrl J on a Mac is not this gesture.
     it("refuses the other platform's modifier", () => {
       renderHook(() => useCommandPalette(close));
