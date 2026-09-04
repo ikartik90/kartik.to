@@ -601,6 +601,7 @@ const barStyle = css({
   borderStyle: "solid",
   borderColor: "field.border.default",
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
   // The elevation every other floating surface here carries.
   boxShadow:
     "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
@@ -961,10 +962,18 @@ const rangeDateStyle = css({
   // Every day the range covers, its two ends included.
   "&[data-range]": {
     position: "relative",
-    // The band is a `::before` lying BEHIND the day's number, and a negative
-    // z-index only stays behind this one cell if the cell is a stacking context
-    // of its own. Without this the pseudo escapes to the page's context and
-    // paints under the stage's background, where nothing is visible at all.
+    // The band is a `::before` lying behind the day's number, and a negative
+    // z-index has to be caught SOMEWHERE: left to itself the pseudo escapes to
+    // the page's context and paints under the stage's background, where nothing
+    // is visible at all.
+    //
+    // Caught here, on the cell, it lands inside this cell's own stacking
+    // context — where a negative z-index still paints ABOVE the cell's own
+    // background and below its text. That is the point, not an accident: the
+    // range washes over every day it holds, chips included, so an end is the
+    // selection seen THROUGH the range rather than a chip sitting on top of it.
+    // Caught any higher (on the grid) the wash would slide under every chip in
+    // the month and the ends would lose it.
     isolation: "isolate",
     // A day inside the range does not recede. The weekend rule is a way of
     // reading a month at rest; this month is answering a question, and half an
@@ -994,6 +1003,22 @@ const rangeDateStyle = css({
     // with no fade the two lengths are zero, the wash starts at 0 and runs to
     // 100%, and the gradient is a flat fill.
     backgroundImage: `linear-gradient(to right, transparent, ${RANGE_WASH} var(--calchemy-range-fade-in, 0px), ${RANGE_WASH} calc(100% - var(--calchemy-range-fade-out, 0px)), transparent)`,
+  },
+  // A chip the run box reaches but cannot show through, because the chip is
+  // opaque and painted after it: the run covering this day was opened by an
+  // EARLIER cell, so its box lives in that cell's stacking context and this
+  // cell's background lands on top of it. One cell-sized copy of the wash, in
+  // this cell's own context, puts it back over the chip — without which a range
+  // had two differently coloured ends (the one that opened a run wore the wash,
+  // the one that only closed one did not). Excluded where the cell opens its
+  // own run, which already covers it: both firing would wash an end twice.
+  "&[data-range][aria-selected='true']:not([data-range-run])::before": {
+    content: '""',
+    position: "absolute",
+    zIndex: -1,
+    inset: 0,
+    borderRadius: "sm",
+    backgroundColor: RANGE_WASH,
   },
   // A fade is drawn over exactly ONE day — the first of the month the band is
   // reaching into, or the last of the one it is leaving.

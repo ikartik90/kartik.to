@@ -89,7 +89,8 @@ const stackStyle = css({
 });
 
 // A 10%-neutral hairline — the wireframe sections' faint frame.
-const wireBorder = "color-mix(in srgb, var(--colors-neutral-500) 10%, transparent)";
+const wireBorder =
+  "color-mix(in srgb, var(--colors-neutral-500) 10%, transparent)";
 
 // The header is a plain wireframe box with top + side hairline borders; its torn
 // BOTTOM edge is the Figma "bottom shim" zigzag (684:1019) painted on the wrapping
@@ -142,13 +143,18 @@ const wireIconStyle = css({
   width: "token(spacing.xxl)",
   height: "token(spacing.xxl)",
   color: "field.text.placeholder",
-  "& svg": { width: "token(spacing.full)", height: "token(spacing.full)", display: "block" },
+  "& svg": {
+    width: "token(spacing.full)",
+    height: "token(spacing.full)",
+    display: "block",
+  },
 });
 
 // The interactive form surface — bg.surface with torn top & bottom edges. The
 // block padding carries the 20px teeth allowance on top of the 16px inner inset.
 const formStyle = css({
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
   paddingInline: "xl",
   paddingBlock: "calc(token(spacing.xxl) + token(spacing.xl))",
   clipPath: TORN_CLIP,
@@ -220,7 +226,8 @@ const wirePrimaryButtonStyle = css({
   display: "flex",
   alignItems: "center",
   borderRadius: "md",
-  backgroundColor: "color-mix(in srgb, var(--colors-neutral-500) 10%, transparent)",
+  backgroundColor:
+    "color-mix(in srgb, var(--colors-neutral-500) 10%, transparent)",
 });
 
 // --- The cropped card ------------------------------------------------------
@@ -252,6 +259,7 @@ const croppedHeaderStyle = css({
 // wireframe rows above and below it.
 const croppedBodyStyle = css({
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
   // The body is CROPPED, not merely short: content taller than the card runs on
   // past the tear rather than stretching it.
   overflow: "hidden",
@@ -269,6 +277,7 @@ const croppedBodyStyle = css({
 const croppedTearStyle = css({
   height: "token(spacing.xxl)",
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
   clipPath: TORN_FOOT_CLIP,
 });
 

@@ -169,6 +169,7 @@ const barStyle = css({
   borderStyle: "solid",
   borderColor: "field.border.default",
   backgroundColor: "bg.surface",
+  "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
   // The elevation every other floating surface here carries.
   boxShadow:
     "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",

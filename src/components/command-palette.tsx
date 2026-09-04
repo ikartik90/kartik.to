@@ -37,6 +37,7 @@ import ComponentIcon from "@/assets/icons/component.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import ReturnIcon from "@/assets/icons/return.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
+import CalendarIcon from "@/assets/icons/calendar.svg";
 import ConsoleIcon from "@/assets/icons/console.svg";
 
 // ---------------------------------------------------------------------------
@@ -236,6 +237,8 @@ export function CommandPalette() {
     handleThemeToggle,
     handleShaderPlayground,
     isShaderPlayground,
+    handleCalchemyPlayground,
+    isCalchemyPlayground,
     editorKind,
     handleSaveChanges,
     handleDiscardAndExit,
@@ -635,14 +638,16 @@ export function CommandPalette() {
                 )}
 
                 {/* Playgrounds — down here with Settings for the reason Settings is:
-                    it is not about the page you are on. Nothing in it writes to the
-                    site either — it reads a shader table, draws a canvas and hands
-                    back a JSX tag — so unlike the groups above it there is no
-                    session to have and nothing for a gate to protect. A
-                    destination, so it leads the furniture.
+                    it is not about the page you are on. Nothing in either one writes
+                    to the site — one reads a shader table, draws a canvas and hands
+                    back a JSX tag; the other parses a phrase and paints the days it
+                    means — so unlike the groups above them there is no session to
+                    have and nothing for a gate to protect. Destinations, so they
+                    lead the furniture.
 
-                    Withheld while you are editing, and once you have arrived —
-                    see `offersDestinations`. */}
+                    Withheld while you are editing, and once you have arrived — see
+                    `offersDestinations`. Calchemy holds nothing unsaved, so standing
+                    on it withdraws its own row and leaves the group standing. */}
                 {offersDestinations && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Playgrounds</div>
@@ -653,6 +658,15 @@ export function CommandPalette() {
                       <ShaderIcon className={iconStyle} />
                       Shader Playground
                     </Command.Item>
+                    {!isCalchemyPlayground && (
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleCalchemyPlayground}
+                      >
+                        <CalendarIcon className={iconStyle} />
+                        Calchemy Playground
+                      </Command.Item>
+                    )}
                   </Command.Group>
                 )}
 
