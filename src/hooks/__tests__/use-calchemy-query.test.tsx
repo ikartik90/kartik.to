@@ -135,6 +135,26 @@ describe("useCalchemyQuery", () => {
     expect(result.current.dates).toEqual([]);
   });
 
+  // The rewrite the parser offers for a phrase it could not read, carried so a
+  // caller can put it in front of the reader. Taking it is an ordinary retype,
+  // which is why there is no act of its own for it.
+  it("carries the phrase the parser would have read, and drops it once taken", () => {
+    const { result, type } = open();
+    type("tomorrow until march");
+    expect(result.current.suggestion).toBe("tomorrow until march 2027");
+    expect(result.current.dates).toEqual([]);
+
+    type("tomorrow until march 2027");
+    expect(result.current.suggestion).toBeNull();
+    expect(result.current.dates.length).toBeGreaterThan(0);
+  });
+
+  it("offers no rewrite for a phrase that reads", () => {
+    const { result, type } = open();
+    type("tomorrow");
+    expect(result.current.suggestion).toBeNull();
+  });
+
   it("answers with nothing at all until the engine lands", () => {
     const { result } = renderHook(() => useCalchemyQuery(null, CONTEXT));
     act(() => result.current.setQuery("tomorrow"));

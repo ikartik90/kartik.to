@@ -151,6 +151,47 @@ describe("CalchemyPlayground", () => {
     await user.type(input, "!");
     await waitFor(() => expect(selectedLabels()).toHaveLength(31));
   });
+
+  // 0.3.0 of the parser says not just that a phrase failed but what it was
+  // reaching for. The row itself is shared with the article's demo and tested
+  // there; what belongs here is the wiring only the playground has — taking the
+  // offer is a retype, so it drops the hand-made selection exactly as typing
+  // does. ("2020 03 15" rather than a relative phrase: the playground reads the
+  // real clock, and a rewrite that only exists in some months is a test that
+  // fails in others.)
+  it("offers the parser's rewrite, and hands the grid back when it is taken", async () => {
+    const { input, user } = await renderPlayground();
+
+    await user.type(input, "2020 03 15");
+    const offer = await screen.findByRole("button", {
+      name: /^Search for .* instead$/,
+    });
+    expect(offer.textContent).toContain("2020-03-15");
+
+    // A day chosen by hand, standing against a phrase that says nothing. The
+    // 15th of this month, because it is certain to be on screen — the window
+    // opens with the current quarter in its second row — and certain to be a
+    // real day of it rather than one of the grid's padding cells.
+    await user.click(
+      screen.getByRole("gridcell", {
+        name: cellLabel(Temporal.Now.plainDateISO().with({ day: 15 })),
+      }),
+    );
+    await waitFor(() => expect(selectedLabels()).toHaveLength(1));
+
+    await user.click(offer);
+
+    expect((input as HTMLInputElement).value).toBe("2020-03-15");
+    // The rewrite reads, so the offer is withdrawn...
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /^Search for .* instead$/ }),
+      ).toBeNull(),
+    );
+    // ...and the hand-made day is gone with it. March 2020 is years outside the
+    // window on screen, so the phrase's own answer is nothing drawn at all.
+    expect(selectedLabels()).toHaveLength(0);
+  });
 });
 
 describe("named date dictionary", () => {

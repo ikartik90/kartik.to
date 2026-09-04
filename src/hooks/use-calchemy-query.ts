@@ -40,6 +40,13 @@ export interface CalchemyQuery {
   activeId: string | null;
   /** Which reading has been settled on, if any. */
   committed: string | null;
+  /**
+   * The phrase the parser would have read instead of an unreadable one, when it
+   * can work one out. Taking it is an ordinary `setQuery`, which is why there is
+   * no act of its own for it — and why a consumer that watches the phrase for
+   * side effects hears about it exactly as it does a keystroke.
+   */
+  suggestion: string | null;
   /** Point the highlight at one reading — a hover, or a click. */
   preview: (id: string) => void;
   /** Walk it by `step` readings, wrapping at both ends. */
@@ -73,11 +80,11 @@ export function useCalchemyQuery(
   // and the calendar asks for its navigation target during the very keystroke
   // that sets this state — so at the moment a cache would be read there is
   // nothing in it yet.
-  const { dates, candidates, activeId } = useMemo(
+  const { dates, candidates, activeId, suggestion } = useMemo(
     () =>
       calchemy
         ? parseQuery(calchemy, query, context, kind, active ?? undefined)
-        : { dates: [], candidates: [], activeId: null },
+        : { dates: [], candidates: [], activeId: null, suggestion: null },
     [calchemy, query, context, kind, active],
   );
 
@@ -102,6 +109,7 @@ export function useCalchemyQuery(
     candidates,
     activeId,
     committed,
+    suggestion,
     preview: setActive,
     movePreview,
     commit: setCommitted,
