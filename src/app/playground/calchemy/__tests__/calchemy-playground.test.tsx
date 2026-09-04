@@ -194,163 +194,279 @@ describe("CalchemyPlayground", () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// The named dates, which are now defined FROM the grid: the days a definition
+// stands for are whatever is lit when the add chip is pressed, so there is no
+// date field in the form at all and no way to open it with nothing selected.
+// ---------------------------------------------------------------------------
 describe("named date dictionary", () => {
-  /** Open the rail and the New Named Date popover on it. */
-  async function openForm(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole("button", { name: "Parser Settings" }));
-    await user.click(screen.getByRole("button", { name: "Add a named date" }));
-    return screen.getByRole("dialog", { name: "New Named Date" });
+  // The 15th of the month the window opens on — a real day of it rather than
+  // one of the grid's padding cells, which carry the label of the day they
+  // stand in for. Every date in this block is measured off it.
+  const base = Temporal.Now.plainDateISO().with({ day: 15 });
+
+  /** Light days on the grid, which is where a definition's days come from. */
+  async function light(
+    user: ReturnType<typeof userEvent.setup>,
+    ...days: Temporal.PlainDate[]
+  ) {
+    for (const day of days) {
+      await user.click(screen.getByRole("gridcell", { name: cellLabel(day) }));
+    }
+  }
+
+  /** Light `days` (today's 15th by default) and open the form on them. */
+  async function openForm(
+    user: ReturnType<typeof userEvent.setup>,
+    ...days: Temporal.PlainDate[]
+  ) {
+    await light(user, ...(days.length > 0 ? days : [base]));
+    await user.click(screen.getByRole("button", { name: "New named date" }));
+    return screen.getByRole("group", { name: "New named date" });
   }
 
   function aliasFields(): HTMLElement[] {
     return screen.queryAllByRole("textbox", { name: /^Alias/ });
   }
 
-  // A name usually has none, and a form that opens with an empty box for one
-  // asks a question most entries answer with silence. The section's add button
-  // is what a first alias comes from — the same bargain the dictionary section
-  // itself makes with its own header.
-  it("opens with no alias field at all", async () => {
+  /** Fill in a name and commit the form. */
+  async function define(
+    user: ReturnType<typeof userEvent.setup>,
+    name: string,
+  ) {
+    await user.type(screen.getByRole("textbox", { name: "Date name" }), name);
+    await user.click(screen.getByRole("button", { name: "Define named date" }));
+  }
+
+  function dictionary(): string {
+    return screen.getByRole("group", { name: "Named dates" }).textContent ?? "";
+  }
+
+  /** The query row, re-read every time: the morph UNMOUNTS it, so a reference
+   *  taken before a form was opened points at a node that is no longer on the
+   *  page — and typing into one of those reaches nothing. */
+  function queryField(): HTMLElement {
+    return screen.getByRole("searchbox", {
+      name: "Natural language date query",
+    });
+  }
+
+  // The chip is an offer to name WHAT IS LIT, so with nothing lit there is
+  // nothing to offer — and no form that could ask for the days instead.
+  it("offers nothing to name until the grid has days on it", async () => {
     const { user } = await renderPlayground();
-    await openForm(user);
-    expect(aliasFields()).toHaveLength(0);
+
+    expect(screen.queryByRole("button", { name: "New named date" })).toBeNull();
+
+    await light(user, base);
+    expect(screen.getByRole("button", { name: "New named date" })).toBeTruthy();
   });
 
-  it("adds one alias field per press, and focuses it", async () => {
+  // A phrase's own answer counts. "Mondays and fridays next month" is exactly
+  // the kind of set worth a name, and it was never picked by hand.
+  it("arms itself off a typed phrase too, not only a hand-made pick", async () => {
+    const { input, user } = await renderPlayground();
+
+    await user.type(input, "december");
+    await waitFor(() => expect(selectedLabels()).toHaveLength(31));
+
+    expect(screen.getByRole("button", { name: "New named date" })).toBeTruthy();
+  });
+
+  // The whole gesture: the panel becomes the form and gives the query row back
+  // when the form is done with it. The days stay lit throughout — they are the
+  // subject, not something the form took away.
+  it("morphs the query panel into the form, and back out of it", async () => {
     const { user } = await renderPlayground();
     await openForm(user);
 
-    await user.click(screen.getByRole("button", { name: "Add an alias" }));
+    expect(
+      screen.queryByRole("searchbox", { name: "Natural language date query" }),
+    ).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Date name" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.getByRole("searchbox", { name: "Natural language date query" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Date name" })).toBeNull();
+    expect(selectedLabels()).toEqual([cellLabel(base)]);
+  });
+
+  // Escape is the same retreat as Cancel, and it stops there — the rail behind
+  // the panel is not the thing being dismissed.
+  it("cancels the form on Escape", async () => {
+    const { user } = await renderPlayground();
+    await openForm(user);
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("textbox", { name: "Date name" })).toBeNull();
+    expect(
+      screen.getByRole("searchbox", { name: "Natural language date query" }),
+    ).toBeTruthy();
+  });
+
+  // What the form is FOR: every day that was lit becomes what the name means,
+  // not just the first of them.
+  it("teaches the parser every day that was lit, not only the first", async () => {
+    const { user } = await renderPlayground();
+    const second = base.add({ months: 1 });
+    await openForm(user, base, second);
+    await define(user, "Fixtures");
+
+    await user.type(queryField(), "fixtures");
+    await waitFor(() =>
+      expect(selectedLabels()).toEqual([cellLabel(base), cellLabel(second)]),
+    );
+  });
+
+  // A repeating set slides WHOLE, anchored on its first day's year — so a set
+  // that straddles a new year keeps its shape a year on rather than collapsing
+  // into one of them.
+  it("slides the whole set to the year it is asked about", async () => {
+    const { user } = await renderPlayground();
+    const second = base.add({ months: 1 });
+    await openForm(user, base, second);
+    await define(user, "Fixtures");
+
+    await user.type(queryField(), "fixtures next year");
+    await waitFor(() =>
+      expect(selectedLabels()).toEqual([
+        cellLabel(base.add({ years: 1 })),
+        cellLabel(second.add({ years: 1 })),
+      ]),
+    );
+  });
+
+  // And the other rule. Turned off, the entry is pinned to the days it was
+  // defined on and answers with them whatever year is asked.
+  it("holds its own days when it does not repeat", async () => {
+    const { user } = await renderPlayground();
+    await openForm(user);
+    await user.click(screen.getByRole("switch", { name: "Repeats every year" }));
+    await define(user, "Eclipse");
+
+    await user.type(queryField(), "eclipse next year");
+    await waitFor(() => expect(selectedLabels()).toEqual([cellLabel(base)]));
+  });
+
+  // The rule the switch can only be offered under: a set that outruns a year
+  // has no year to slide by — the second lap would land on the first. So the
+  // switch is withdrawn rather than left to mean something it cannot.
+  it("withdraws the repeat switch from a set that outruns a year", async () => {
+    const { user } = await renderPlayground();
+    const far = base.add({ months: 15 });
+    await openForm(user, base, far);
+
+    const repeats = screen.getByRole("switch", { name: "Repeats every year" });
+    expect(repeats.getAttribute("aria-checked")).toBe("false");
+    expect((repeats as HTMLButtonElement).disabled).toBe(true);
+
+    await define(user, "Season");
+
+    // Pinned, then: the days it was defined on, whatever year is asked for.
+    await user.type(queryField(), "season next year");
+    await waitFor(() =>
+      expect(selectedLabels()).toEqual([cellLabel(base), cellLabel(far)]),
+    );
+  });
+
+  // ...and it comes back when the selection is brought back inside a year,
+  // because the answer to "may this repeat" is a fact about what is lit.
+  it("restores the repeat switch when the set comes back inside a year", async () => {
+    const { user } = await renderPlayground();
+    const far = base.add({ months: 15 });
+    await openForm(user, base, far);
+
+    expect(
+      (screen.getByRole("switch", { name: "Repeats every year" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    // Taking the far day back off the grid, with the form still open.
+    await light(user, far);
+
+    const repeats = screen.getByRole("switch", { name: "Repeats every year" });
+    expect((repeats as HTMLButtonElement).disabled).toBe(false);
+    expect(repeats.getAttribute("aria-checked")).toBe("true");
+  });
+
+  // The add chip in the row is what a SECOND alias comes from; the first has a
+  // row waiting for it, because the chip has to sit at the end of one.
+  it("opens with a single alias row and appends one per press", async () => {
+    const { user } = await renderPlayground();
+    await openForm(user);
+
     expect(aliasFields()).toHaveLength(1);
-    expect(document.activeElement).toBe(aliasFields()[0]);
 
     await user.click(screen.getByRole("button", { name: "Add an alias" }));
     expect(aliasFields()).toHaveLength(2);
     expect(document.activeElement).toBe(aliasFields()[1]);
   });
 
-  // What the aliases are FOR: the engine is rebuilt with the entry's vocabulary,
-  // so a word the dictionary has never heard becomes a date the grid can draw.
+  // What the aliases are FOR: the engine is rebuilt with the entry's
+  // vocabulary, so a word the dictionary has never heard becomes a date.
   it("teaches the parser the alias, not just the name", async () => {
-    const { input, user } = await renderPlayground();
+    const { user } = await renderPlayground();
     await openForm(user);
-
-    await user.type(
-      screen.getByRole("textbox", { name: "Date name" }),
-      "Yuletide",
-    );
-    await user.click(screen.getByRole("button", { name: "Add an alias" }));
     await user.type(aliasFields()[0], "Yule");
-    await user.click(screen.getByRole("button", { name: "Add named date" }));
-
-    // The entry falls on the day the form opened on — today — so that is the
-    // one cell the alias should light up.
-    const today = new Date().toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
-    await user.type(input, "yule");
-    await waitFor(() => expect(selectedLabels()).toEqual([today]));
-  });
-
-  // The whole point of a NAMED date: the name is asked for by year, so a
-  // repeating entry has to answer for a year nobody picked in the form. The
-  // form opens on today, so "next year" is today's month and day one year on —
-  // which is inside the window the grid opens with, whatever today is.
-  it("answers for a year the form never picked when it repeats", async () => {
-    const { input, user } = await renderPlayground();
-    await openForm(user);
-
-    await user.type(
-      screen.getByRole("textbox", { name: "Date name" }),
-      "Yuletide",
-    );
-    await user.click(screen.getByRole("button", { name: "Add named date" }));
-
-    const today = Temporal.Now.plainDateISO();
-    const nextYear = today.add({ years: 1 });
-
-    await user.type(input, "yuletide next year");
-    await waitFor(() =>
-      expect(selectedLabels()).toEqual([cellLabel(nextYear)]),
-    );
-  });
-
-  // And the other shape. Turned off, the entry is pinned to the year the
-  // picker was left on, so the same phrase resolves to that one day rather
-  // than sliding a year forward with the question.
-  it("holds its own year when it does not repeat", async () => {
-    const { input, user } = await renderPlayground();
-    await openForm(user);
-
-    await user.type(
-      screen.getByRole("textbox", { name: "Date name" }),
-      "Eclipse",
-    );
-    await user.click(
-      screen.getByRole("switch", { name: "Repeats every year" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Add named date" }));
-
-    const today = Temporal.Now.plainDateISO();
-
-    await user.type(input, "eclipse next year");
-    await waitFor(() => expect(selectedLabels()).toEqual([cellLabel(today)]));
-  });
-
-  // The DAY is what the row is asked about — the dictionary is read to find out
-  // when something falls — so it is the row's label and the name is its value.
-  // Which of the two rules an entry follows is readable off that label without
-  // opening it: a repeating date is a month and a day, a pinned one carries the
-  // year that makes it a single day in history.
-  it("labels a row with its day, and names the year only when pinned", async () => {
-    const { user } = await renderPlayground();
-    const today = Temporal.Now.plainDateISO();
-    const day = rowLabel(today);
-
-    await openForm(user);
-    await user.type(
-      screen.getByRole("textbox", { name: "Date name" }),
-      "Yuletide",
-    );
-    await user.click(screen.getByRole("button", { name: "Add named date" }));
-
-    await user.click(screen.getByRole("button", { name: "Add a named date" }));
-    await user.type(
-      screen.getByRole("textbox", { name: "Date name" }),
-      "Eclipse",
-    );
-    await user.click(screen.getByRole("switch", { name: "Repeats every year" }));
-    await user.click(screen.getByRole("button", { name: "Add named date" }));
-
-    const entries =
-      screen.getByRole("group", { name: "Named dates" }).textContent ?? "";
-    expect(entries).toMatch(new RegExp(`${day}(?!,)\\s*Yuletide`));
-    expect(entries).toMatch(new RegExp(`${day}, ${today.year}\\s*Eclipse`));
-  });
-
-  /** Define one entry, all defaults but the name. */
-  async function define(
-    user: ReturnType<typeof userEvent.setup>,
-    name: string,
-  ) {
-    await user.type(screen.getByRole("textbox", { name: "Date name" }), name);
-    await user.click(screen.getByRole("button", { name: "Add named date" }));
-  }
-
-  // The row's own button opens the same popover on the entry it belongs to,
-  // filled in — an edit is the form it was defined with, not a fresh one.
-  it("opens the popover already holding the entry it was pressed on", async () => {
-    const { user } = await renderPlayground();
-    await openForm(user);
-    await user.click(screen.getByRole("button", { name: "Add an alias" }));
-    await user.type(screen.getByRole("textbox", { name: "Alias 1" }), "Yule");
     await define(user, "Yuletide");
 
+    await user.type(queryField(), "yule");
+    await waitFor(() => expect(selectedLabels()).toEqual([cellLabel(base)]));
+  });
+
+  // A row added and left blank is one the reader thought better of, not an
+  // empty word to teach the parser.
+  it("drops a blank alias row rather than teaching an empty word", async () => {
+    const { user } = await renderPlayground();
+    await openForm(user);
+    await define(user, "Yuletide");
+
+    await user.type(queryField(), "yuletide");
+    await waitFor(() => expect(selectedLabels()).toEqual([cellLabel(base)]));
+  });
+
+  // The DAY is what the row is asked about, so it is the row's label and the
+  // name is its value. Which rule the entry follows is readable off that label
+  // without opening it — a repeating date is a month and a day, a pinned one
+  // carries the year that makes it days in history — and a set says how many
+  // more days it holds.
+  it("labels a row with its days, and names the year only when pinned", async () => {
+    const { user } = await renderPlayground();
+    const day = rowLabel(base);
+
+    await openForm(user);
+    await define(user, "Yuletide");
+
+    await openForm(user, base.add({ months: 1 }));
+    await user.click(screen.getByRole("switch", { name: "Repeats every year" }));
+    await define(user, "Eclipse");
+
+    await user.click(screen.getByRole("button", { name: "Parser Settings" }));
+    expect(dictionary()).toMatch(new RegExp(`${day}(?!,)\\s*Yuletide`));
+    expect(dictionary()).toMatch(
+      new RegExp(`${rowLabel(base)}, ${base.year} \\+1\\s*Eclipse`),
+    );
+  });
+
+  // The rail's pencil opens the SAME form on the entry it belongs to — filled
+  // in, and with the entry's own days lit, because the days are what the form
+  // is standing over.
+  it("opens the form on the entry the pencil belongs to, days and all", async () => {
+    const { user } = await renderPlayground();
+    const second = base.add({ months: 1 });
+    await openForm(user, base, second);
+    await user.type(aliasFields()[0], "Yule");
+    await define(user, "Yuletide");
+
+    await user.click(screen.getByRole("button", { name: "Parser Settings" }));
     await user.click(screen.getByRole("button", { name: "Edit Yuletide" }));
 
-    expect(screen.getByRole("dialog", { name: "Edit Named Date" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Edit named date" })).toBeTruthy();
     expect(
       (screen.getByRole("textbox", { name: "Date name" }) as HTMLInputElement)
         .value,
@@ -359,15 +475,17 @@ describe("named date dictionary", () => {
       (screen.getByRole("textbox", { name: "Alias 1" }) as HTMLInputElement)
         .value,
     ).toBe("Yule");
+    expect(selectedLabels()).toEqual([cellLabel(base), cellLabel(second)]);
   });
 
-  // And saving it REPLACES the entry — including in the vocabulary, so the old
+  // And saving REPLACES the entry — including in the vocabulary, so the old
   // name stops meaning anything and the new one starts.
   it("replaces the entry it was opened on rather than adding another", async () => {
-    const { input, user } = await renderPlayground();
+    const { user } = await renderPlayground();
     await openForm(user);
     await define(user, "Yuletide");
 
+    await user.click(screen.getByRole("button", { name: "Parser Settings" }));
     await user.click(screen.getByRole("button", { name: "Edit Yuletide" }));
     await user.clear(screen.getByRole("textbox", { name: "Date name" }));
     await user.type(
@@ -376,17 +494,27 @@ describe("named date dictionary", () => {
     );
     await user.click(screen.getByRole("button", { name: "Save named date" }));
 
-    const entries =
-      screen.getByRole("group", { name: "Named dates" }).textContent ?? "";
-    expect(entries).toContain("Christmas");
-    expect(entries).not.toContain("Yuletide");
+    expect(dictionary()).toContain("Christmas");
+    expect(dictionary()).not.toContain("Yuletide");
 
-    const today = Temporal.Now.plainDateISO();
-    await user.type(input, "christmas");
-    await waitFor(() => expect(selectedLabels()).toEqual([cellLabel(today)]));
+    await user.type(queryField(), "christmas");
+    await waitFor(() => expect(selectedLabels()).toEqual([cellLabel(base)]));
 
-    await user.clear(input);
-    await user.type(input, "yuletide");
+    await user.clear(queryField());
+    await user.type(queryField(), "yuletide");
     await waitFor(() => expect(selectedLabels()).toEqual([]));
+  });
+
+  // The chip carries no words of its own, so the hover label is where its name
+  // is written out.
+  it("names the add chip on hover", async () => {
+    const { user } = await renderPlayground();
+    await light(user, base);
+
+    await user.hover(screen.getByRole("button", { name: "New named date" }));
+
+    expect(
+      screen.getByText("New named date").closest("[data-visible]"),
+    ).toBeTruthy();
   });
 });
