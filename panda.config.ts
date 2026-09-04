@@ -485,6 +485,12 @@ export default defineConfig({
 
         // Mirrors spacing, for concentric radius compliance.
         radii: {
+          // The softening at the small end, for boxes `sm` would overpower: the
+          // 20px media thumbnail, and the 1px progress track whose own height
+          // clamps this down to half a pixel anyway. Three recipes already
+          // asked for `xs` before it existed here — the scale mirrors spacing,
+          // so the hole read as a token rather than as the typo it was.
+          xs: { value: "{spacing.xs}" },
           sm: { value: "{spacing.sm}" },
           md: { value: "{spacing.md}" },
           lg: { value: "{spacing.lg}" },
@@ -2871,7 +2877,7 @@ export default defineConfig({
           base: {
             textStyle: "title",
             width: "fit-content",
-            maxWidth: "full",
+            maxWidth: "token(spacing.full)",
             wordBreak: "break-word",
             // Only clip once there is text (see articleSubheadingCaption).
             "&:not(:empty):not([data-empty])": {

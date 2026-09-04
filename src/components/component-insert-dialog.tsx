@@ -62,7 +62,7 @@ const showcaseStageStyle = css({
 });
 
 const demoPreviewStyle = css({
-  width: "full",
+  width: "token(spacing.full)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

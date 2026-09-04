@@ -42,7 +42,7 @@ const rowStyle = css({
 const fieldStyle = css({
   flex: "1 0 0",
   minWidth: 0,
-  height: "full",
+  height: "token(spacing.full)",
   padding: 0,
   border: "none",
   background: "transparent",
