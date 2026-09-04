@@ -2,8 +2,10 @@
 
 import {
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -34,6 +36,13 @@ import { Switch } from "@/components/ui/input/switch";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useCalchemyQuery } from "@/hooks/use-calchemy-query";
 import { monthGrid } from "@/utils/calchemy-grid";
+import {
+  rangeCell,
+  rangeDays,
+  rangeOf,
+  type DateRange,
+} from "@/utils/calchemy-range";
+import type { CalendarCell, WeekdayKey } from "@/utils/calendar-month";
 import { CalchemyReadings } from "@/components/calchemy-readings";
 import { CalchemyQueryField } from "@/components/calchemy-query-field";
 import { CalchemySuggestion } from "@/components/calchemy-suggestion";
@@ -337,12 +346,13 @@ const stageStyle = css({
 // window below, parked at its row's offset.
 const runStyle = css({
   position: "relative",
-  // Load-bearing since the grid became `auto-fit`: the column count is counted
-  // against THIS box, so a run that measures nothing pins the grid to one
-  // month and never sees the room to grow back. It measured exactly nothing
-  // until recently and read as centred anyway — a 960 measure shrink-wrapped
-  // around a zero-width line lands where it belongs — which is how a width
-  // spelled at the wrong scale went unnoticed here for so long.
+  // `token(spacing.full)` and not the bare `full`, which is a SPACING token:
+  // width resolves against `sizes`, which has no such entry, so the bare
+  // spelling emits `width: full` and the box collapses to nothing. It read as
+  // centred anyway while the grid held a fixed three columns — a 960 measure
+  // shrink-wrapped around a zero-width line lands in the same place — and
+  // stopped reading as anything the moment the columns became the width's
+  // answer. Same fix on the field's cap below.
   width: "token(spacing.full)",
   // The stage is a flex COLUMN, so its main axis is the one this box is a
   // century long on — and a flex item shrinks on the main axis by default.
@@ -386,6 +396,8 @@ const periodStyle = css({
 // whatever this is.
 const fieldStyle = css({
   width: "token(sizes.calchemyPlayground)",
+  // See `runStyle` — `full` alone is a spacing token, and `max-width` reads
+  // `sizes`.
   maxWidth: "token(spacing.full)",
 });
 
@@ -864,6 +876,22 @@ const barActionsStyle = css({
   gap: "sm",
   flexShrink: 0,
 });
+
+// The form's heading, standing exactly where the kinds stood — the leading half
+// of the control row, opposite the same two chips.
+//
+// It takes the BAR's ink rather than `bodyLarge`'s muted body text: this is the
+// panel saying what it has become, on the row whose other half is a pair of
+// live controls, and a muted heading beside them reads as a caption. Cut rather
+// than wrapped, for the reason the dictionary's rows are — the row is 40px, and
+// nothing on it may stand two lines tall.
+const definitionHeadingStyle = css({
+  color: "field.text.default",
+  minWidth: 0,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+});
 // The name fills the row's field column and is CUT rather than wrapped: the
 // dictionary is a list of one-line rows, and a long name must not be the one
 // that stands two lines tall.
@@ -882,6 +910,162 @@ const QUERY_KINDS = [
 ] satisfies { value: ExpectedDateValue; label: string }[];
 
 /**
+ * What to try, in the kind that is set. The kinds are a FILTER — asked for one
+ * day, "mondays next month" resolves to nothing at all rather than to some
+ * arbitrary day out of the set — so a single suggestion across all three would
+ * be an invitation to type something the parser is about to turn down. Each of
+ * these reads as its own kind and nothing else, and the range's crosses a month
+ * boundary because that is where its band has something to show.
+ */
+const QUERY_PLACEHOLDERS: Record<ExpectedDateValue, string> = {
+  single: 'Try "the second friday of march"',
+  range: 'Try "today until the end of next month"',
+  multiple: 'Try "mondays and fridays next month"',
+};
+
+// ---------------------------------------------------------------------------
+// Drawing a range.
+//
+// A range is two dates and everything between them, and drawing all of it as a
+// selection would be a lie about the gesture: thirty chips is what `multiple`
+// looks like. So only the ENDS are selected — they carry the chip, and they are
+// the only two days handed to the calendar — and the days between them are a
+// band at a fifth of the chip's strength, which the ends are read across.
+//
+// The band's arithmetic is `calchemy-range`'s (which runs it holds, where they
+// break, where they fade). What is left here is the one measurement it needs:
+// how far apart two day columns are, so a run can be drawn as ONE box over the
+// cells and the gutters between them rather than as a chip per cell.
+//
+// That number is CSS's and it moves with the viewport — `fluid` spends a
+// month's surplus width in its gutters, so the gap between columns runs from 4
+// to about 14 — but it never has to be measured in JS. Seven columns of a fixed
+// `calendarDay` spread edge to edge across the grid, so the pitch between them
+// is (grid − one column) / 6 whatever the grid's width turns out to be, and
+// container units let the cells ask the grid for it directly.
+// ---------------------------------------------------------------------------
+
+/** The wash between the ends — see `bg.calendarRange`. */
+const RANGE_WASH = "token(colors.bg.calendarRange)";
+
+// The one thing a day cell cannot work out for itself. `container-type` is what
+// makes `cqw` below the GRID's width rather than the cell's 24px: a percentage
+// in a custom property is resolved by whoever uses it, and the cells are what
+// use this.
+const monthGridStyle = css({
+  containerType: "inline-size",
+  "--calchemy-day-pitch": "calc((100cqw - token(sizes.calendarDay)) / 6)",
+});
+
+const rangeDateStyle = css({
+  // Every day the range covers, its two ends included.
+  "&[data-range]": {
+    position: "relative",
+    // The band is a `::before` lying BEHIND the day's number, and a negative
+    // z-index only stays behind this one cell if the cell is a stacking context
+    // of its own. Without this the pseudo escapes to the page's context and
+    // paints under the stage's background, where nothing is visible at all.
+    isolation: "isolate",
+    // A day inside the range does not recede. The weekend rule is a way of
+    // reading a month at rest; this month is answering a question, and half an
+    // answer greyed out is not the answer.
+    opacity: 1,
+    // The ink the selected chip carries, so the band reads as a weaker form of
+    // the same statement rather than as a tint behind unrelated days. The two
+    // ends have it from the recipe already; this is what gives it to the days
+    // between them, which are not selected.
+    color: "field.text.active",
+  },
+  // Drawn once per RUN, on the cell that opens it — the box reaches over the
+  // cells after it and the gutters between them, which is what makes a week's
+  // worth of days one band instead of seven chips.
+  "&[data-range-run]::before": {
+    content: '""',
+    position: "absolute",
+    zIndex: -1,
+    insetBlock: 0,
+    insetInlineStart: 0,
+    width:
+      "calc((var(--calchemy-range-run) - 1) * var(--calchemy-day-pitch) + token(sizes.calendarDay))",
+    // The chip's own corner, so a run that stops mid-month ends exactly as the
+    // day sitting on it does.
+    borderRadius: "sm",
+    // One gradient for all four cases, because a fade is a stop that has moved:
+    // with no fade the two lengths are zero, the wash starts at 0 and runs to
+    // 100%, and the gradient is a flat fill.
+    backgroundImage: `linear-gradient(to right, transparent, ${RANGE_WASH} var(--calchemy-range-fade-in, 0px), ${RANGE_WASH} calc(100% - var(--calchemy-range-fade-out, 0px)), transparent)`,
+  },
+  // A fade is drawn over exactly ONE day — the first of the month the band is
+  // reaching into, or the last of the one it is leaving.
+  "&[data-range-fade~='in']": {
+    "--calchemy-range-fade-in": "token(sizes.calendarDay)",
+  },
+  "&[data-range-fade~='out']": {
+    "--calchemy-range-fade-out": "token(sizes.calendarDay)",
+  },
+});
+
+/**
+ * One day cell, told where it sits in the range being drawn and — in the kinds
+ * whose selection is not a set — what a press on it means.
+ *
+ * `Calendar.Grid` clones its single child once per day with the `cell` injected,
+ * so this stands in the template's place and passes it straight through.
+ */
+function RangeDate({
+  cell,
+  range,
+  weekStartsOn,
+  onPick,
+}: {
+  /** Injected by `Calendar.Grid`; not set here. */
+  cell?: CalendarCell;
+  /** The range to draw, or null when the kind is not drawing one. */
+  range: DateRange | null;
+  weekStartsOn: WeekdayKey;
+  /**
+   * Takes the press instead of the calendar's own toggle. Null in `multiple`,
+   * where toggling IS the rule.
+   */
+  onPick: ((date: Temporal.PlainDate) => void) | null;
+}) {
+  // Spill days are never banded: a boundary date is drawn twice — once by the
+  // month that owns it, once as its neighbour's spill — and the fade is the
+  // thing saying the band carried over into that other grid.
+  const band =
+    cell && range && cell.inCurrentMonth
+      ? rangeCell(cell.date, range, weekStartsOn)
+      : null;
+  const run = band?.run;
+  const fade = [run?.fadesIn && "in", run?.fadesOut && "out"]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <Calendar.Date
+      cell={cell}
+      className={rangeDateStyle}
+      data-range={band?.role}
+      data-range-run={run ? "" : undefined}
+      data-range-fade={fade || undefined}
+      style={
+        run
+          ? ({ "--calchemy-range-run": run.length } as CSSProperties)
+          : undefined
+      }
+      onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+        if (!onPick || !cell) return;
+        // The calendar's own handler stands down on a press that has already
+        // been answered, which is how a kind holding ONE thing keeps a click
+        // from toggling a second into the set. Enter and Space arrive here too.
+        event.preventDefault();
+        onPick(cell.date);
+      }}
+    />
+  );
+}
+
+/**
  * The fields a named date is made of — a name, whatever else it answers to, and
  * two yes/no questions about it. What it does NOT ask for is the days: those
  * are `dates`, the selection the form was opened over, and they stay live while
@@ -897,12 +1081,19 @@ const QUERY_KINDS = [
  */
 function NamedDateForm({
   entry,
+  headingId,
   dates,
   onSubmit,
   onCancel,
 }: {
   /** The entry being edited, or `null` to define a new one. */
   entry: NamedDate | null;
+  /**
+   * The heading standing where the kinds stood — the form's own name, on the
+   * bar's control row. It is the label, rather than one written here, so the
+   * group is announced by the words actually on screen.
+   */
+  headingId: string;
   /** The days on the grid — the entry's subject, live while the form is open. */
   dates: Temporal.PlainDate[];
   /** The fields as filled in. Identity is the caller's — see `nextNamedDateId`. */
@@ -944,7 +1135,7 @@ function NamedDateForm({
     <div
       className={definitionStyle}
       role="group"
-      aria-label={entry ? "Edit named date" : "New named date"}
+      aria-labelledby={headingId}
       // Escape retreats from the FORM and stops there — the rail behind the
       // panel is not the thing being dismissed.
       onKeyDown={(event) => {
@@ -1119,6 +1310,8 @@ export function CalchemyPlayground() {
   // The button it was opened FROM — the panel's add chip, or one row's pencil.
   // Where focus goes back when the form is done.
   const namedDateTrigger = useRef<HTMLElement | null>(null);
+  // The heading the form is announced by — see `definitionHeadingStyle`.
+  const definitionHeadingId = useId();
 
   // The vocabulary the engine is built with. A named date is a RULE (which days
   // does this name fall on in year N), not a date, so it is handed over as a
@@ -1180,8 +1373,16 @@ export function CalchemyPlayground() {
   // What the bar currently measures, published to the scrim below. Measured
   // rather than counted: the readings section is as tall as its readings.
   const [barHeight, setBarHeight] = useState<number | null>(null);
-  // Non-null only while a hand-made selection is standing (see the header).
+  // Non-null only while a hand-made selection is standing (see the header). In
+  // `range` it holds the two ENDS rather than the days between them — that is
+  // what a range is, and it is what keeps a span picked years apart from being
+  // thirty thousand dates in a piece of component state.
   const [picked, setPicked] = useState<Temporal.PlainDate[] | null>(null);
+  // The end a range is being drawn from — set by the first press, spent by the
+  // second. Null whenever no range is half-made.
+  const [rangeAnchor, setRangeAnchor] = useState<Temporal.PlainDate | null>(
+    null,
+  );
   const stageRef = useRef<HTMLElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   // Row heights are uniform (every month draws six week rows), so one
@@ -1239,6 +1440,14 @@ export function CalchemyPlayground() {
   const closeDefinition = () => {
     setDefinition(null);
     namedDateTrigger.current?.focus();
+  };
+
+  // Back to the phrase's own answer. A half-drawn range goes with it: the end
+  // it was anchored on is no longer on the grid, and a second press would
+  // otherwise draw a range from a day nothing is showing.
+  const dropPicked = () => {
+    setPicked(null);
+    setRangeAnchor(null);
   };
 
   useEffect(() => {
@@ -1482,6 +1691,48 @@ export function CalchemyPlayground() {
     );
 
   const values = picked ?? dates;
+  // The range being drawn, in the one kind that draws one. Read off whatever is
+  // standing — the phrase's answer or a hand-made pair — because a range is its
+  // two ends however it was arrived at.
+  const range = kind === "range" ? rangeOf(values) : null;
+  // What the calendar is told is SELECTED. A range hands it the ends alone: the
+  // days between them are the band, and handing over all of them would draw the
+  // very row of chips the band exists instead of.
+  const selected = range
+    ? range.first.equals(range.last)
+      ? [range.first]
+      : [range.first, range.last]
+    : values;
+  // ...and what the dictionary is told, which is the opposite: a named date
+  // stands for DAYS, so the ends are filled back in. Only while there is a form
+  // to fill — a span picked years apart is cheap to draw and not to expand.
+  const definitionDates = definition && range ? rangeDays(range) : values;
+
+  // What a press on a day does. `multiple` leaves it to the calendar's own
+  // toggle — that IS its rule — and the two kinds that hold less than a set
+  // take it back: a single date is REPLACED by the next one pressed, and a
+  // range is drawn between two presses, the first anchoring it and the second
+  // closing it.
+  const pick =
+    kind === "multiple"
+      ? null
+      : (date: Temporal.PlainDate) => {
+          if (kind === "single") {
+            setPicked([date]);
+            return;
+          }
+          if (!rangeAnchor) {
+            setRangeAnchor(date);
+            setPicked([date]);
+            return;
+          }
+          setRangeAnchor(null);
+          setPicked(
+            rangeAnchor.equals(date)
+              ? [date]
+              : [rangeAnchor, date].sort(Temporal.PlainDate.compare),
+          );
+        };
 
   return (
     <main
@@ -1514,20 +1765,42 @@ export function CalchemyPlayground() {
       {/* The bar the year is talked to through. */}
       <div ref={barRef} className={barStyle}>
         <div className={barControlRowStyle}>
-          <SegmentedControl
-            className={kindsStyle}
-            options={QUERY_KINDS}
-            value={kind}
-            onValueChange={(next) => {
-              setKind(next as ExpectedDateValue);
-              // A new kind can change what the readings even are, so neither
-              // the highlight nor the commitment carries over. Said by
-              // re-typing the phrase into the hook, which is the one place
-              // that rule lives.
-              phrase.setQuery(query);
-            }}
-            ariaLabel="What a phrase may mean"
-          />
+          {/* The other half of the morph. While the panel is naming a
+              selection the kinds have nothing left to say — changing what a
+              phrase may mean under an open form would replace the very days
+              being named — so the row's leading half becomes the form's
+              heading, and the panel says what it has turned into. */}
+          {definition ? (
+            <Typography
+              tag="h2"
+              type="bodyLarge"
+              id={definitionHeadingId}
+              className={definitionHeadingStyle}
+            >
+              {definition.entry ? "Edit named date" : "New named date"}
+            </Typography>
+          ) : (
+            <SegmentedControl
+              className={kindsStyle}
+              options={QUERY_KINDS}
+              value={kind}
+              onValueChange={(next) => {
+                setKind(next as ExpectedDateValue);
+                // A new kind can change what the readings even are, so neither
+                // the highlight nor the commitment carries over. Said by
+                // re-typing the phrase into the hook, which is the one place
+                // that rule lives.
+                phrase.setQuery(query);
+                // The hand-made selection goes with them, for the same reason
+                // and one the kinds make plainer still: they are what a
+                // selection is ALLOWED to be. Three scattered days are not a
+                // range, and a range is not one day — so a pick is dropped
+                // rather than coerced into a shape nobody asked for.
+                dropPicked();
+              }}
+              ariaLabel="What a phrase may mean"
+            />
+          )}
           <div className={barActionsStyle}>
             {/* Only while there is something to name. A definition's days are
                 whatever is lit, so with nothing lit there is nothing to offer —
@@ -1577,7 +1850,8 @@ export function CalchemyPlayground() {
             // to remount it.
             key={definition.entry?.id ?? "new"}
             entry={definition.entry}
-            dates={values}
+            headingId={definitionHeadingId}
+            dates={definitionDates}
             onCancel={closeDefinition}
             onSubmit={(fields) => {
               const edited = definition.entry;
@@ -1597,15 +1871,14 @@ export function CalchemyPlayground() {
             {/* Same slot as the readings, and never at the same time — see the
                 component. Taking the offer retypes the phrase, so it drops the
                 hand-made selection exactly as typing does. */}
-            <CalchemySuggestion
-              query={phrase}
-              onQueryChange={() => setPicked(null)}
-            />
+            <CalchemySuggestion query={phrase} onQueryChange={dropPicked} />
             <CalchemyQueryField
               query={phrase}
-              placeholder='Try "mondays and fridays next month"'
+              // The kinds are a filter, so what is worth typing changes with
+              // them — see `QUERY_PLACEHOLDERS`.
+              placeholder={QUERY_PLACEHOLDERS[kind]}
               // Back to the phrase's answer — see the header.
-              onQueryChange={() => setPicked(null)}
+              onQueryChange={dropPicked}
             />
           </>
         )}
@@ -1631,8 +1904,18 @@ export function CalchemyPlayground() {
               // the gutters between the day columns, never into the cells.
               fluid
               selectionMode="multiple"
-              values={values}
+              // The ends alone in `range` — see `selected`.
+              values={selected}
+              // Only ever reached in `multiple`: the other two kinds answer the
+              // press themselves (see `RangeDate`), and the sweep that is the
+              // other way into this is withdrawn from them below.
               onValuesChange={setPicked}
+              // The marquee drag and its keyboard mirror, Shift+Arrow, commit
+              // MORE than one date per action — which is the one thing a range
+              // and a single date may not do. `multiple` is the only kind whose
+              // selection a sweep can even describe, so it is the only one that
+              // keeps it.
+              sweep={kind === "multiple"}
               months={window_.rows * grid.columns}
               // Controlled, and deliberately WITHOUT an `onViewChange`: which months
               // exist is decided by the scroll and nothing else. Left to itself the
@@ -1656,8 +1939,12 @@ export function CalchemyPlayground() {
                   <Calendar.Week>
                     <Calendar.Day />
                   </Calendar.Week>
-                  <Calendar.Grid>
-                    <Calendar.Date />
+                  <Calendar.Grid className={monthGridStyle}>
+                    <RangeDate
+                      range={range}
+                      weekStartsOn={WEEK_START_KEYS[weekStartsOn]}
+                      onPick={pick}
+                    />
                   </Calendar.Grid>
                 </Calendar.Period>
               </Calendar.PeriodList>

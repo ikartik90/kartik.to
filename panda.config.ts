@@ -602,6 +602,21 @@ export default defineConfig({
                   "color-mix(in srgb, var(--colors-brand-orange) 5%, transparent)",
               },
             },
+            // The band drawn BETWEEN the two ends of a range — the marquee's 5%
+            // again, and for the same reason at the opposite end of the gesture:
+            // this one is a wash the selected days are read ACROSS, so it has to
+            // stay a third of the selected chip's 15% or the days between the
+            // ends start reading as selected themselves. Named apart from the
+            // marquee because they answer to different things — one is a
+            // pointer's live extent, the other a settled selection — and a range
+            // that had to move would drag the drag band with it.
+            calendarRange: {
+              value: {
+                base: "color-mix(in srgb, var(--colors-brand-pink) 5%, transparent)",
+                _dark:
+                  "color-mix(in srgb, var(--colors-brand-orange) 5%, transparent)",
+              },
+            },
             selection: {
               value: {
                 base: "{colors.brand.orange}",
