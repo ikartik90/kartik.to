@@ -251,14 +251,10 @@ export function CommandPalette() {
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
 
-  // Two gestures reach this row, and the chip names the one that works where
-  // you are standing rather than the one that reads best. `<` needs no modifier
-  // and says what it does, but it is a character wherever somebody is typing —
-  // and in an editor the author's focus lives in the prose, so there the chip
-  // names ⌘/ (Ctrl / on a PC) instead, which fires regardless. See
-  // `isBackPress`. Neither is ⌘[, which Safari never handed over.
-  const backChord = useShortcutLabel("/");
-  const backShortcut = editorKind ? backChord : "<";
+  // The chip names the key this visitor's keyboard actually has — ⌘/ on Apple
+  // hardware, Ctrl / on a PC — which is the same shortcut the hook listens for
+  // on each. It was ⌘[ until Safari turned out never to hand that one over.
+  const backShortcut = useShortcutLabel("/");
   const saveShortcut = useShortcutLabel("S");
 
   /**

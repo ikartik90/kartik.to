@@ -19,7 +19,6 @@ import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 import { getBackTarget, type BackTarget } from "@/utils/back-target";
 import { isGridDraftDirty } from "@/utils/grid-draft";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
-import { isTextEntry } from "@/utils/is-text-entry";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
@@ -107,39 +106,6 @@ export interface CommandPaletteHandlers {
   handlePublish: () => Promise<void>;
   /** Permanently delete the draft currently being viewed. */
   handleDiscardDraft: () => Promise<void>;
-}
-
-// ---------------------------------------------------------------------------
-// Going up a level
-// ---------------------------------------------------------------------------
-
-/**
- * Whether this press means "up a level" — the page ABOVE this one, rather than
- * whatever the visitor happened to look at before it.
- *
- * Two gestures, because one cannot cover both places it is wanted. A bare `<`
- * reads as the thing it does and asks for no modifier, the way ⇧D downloads in
- * Google Photos — but it is a CHARACTER first, so it answers only where nobody
- * is typing, and in the editor the author's focus lives in the prose. ⌘/ works
- * there regardless, which is exactly where the unsaved-work gate matters most.
- *
- * NOT ⌘[, which this began as. That is the key equivalent of Safari's History ▸
- * Back menu item, and macOS runs menu key equivalents before the event reaches
- * web content, so the listener was never called there at all. NOT ⌘I either,
- * which looks free until you remember `article-editor` binds it to italic.
- *
- * The editor's slash menu is a TYPED `/` at the start of a block, so it and
- * this never contend: a chord inserts no character, and the menu opens on
- * finding one.
- */
-function isBackPress(event: KeyboardEvent): boolean {
-  // Unshifted only: ⌘⇧/ is ⌘?, which macOS gives to the Help menu, and
-  // browsers report the shifted key as "?".
-  if (hasShortcutModifier(event)) return event.key === "/";
-  // A bare key is bare: with a chord modifier down this is some OTHER gesture,
-  // very possibly one the browser has plans for.
-  if (event.metaKey || event.ctrlKey || event.altKey) return false;
-  return event.key === "<" && !isTextEntry(event.target);
 }
 
 // ---------------------------------------------------------------------------
@@ -363,18 +329,30 @@ export function useCommandPalette(
     handleBackRef.current = handleBack;
   });
 
-  // Global, because the control this replaces was on the page rather than in
-  // the palette: it has to work without opening anything. Both gestures go
-  // through the same gate as the command — one that skipped the unsaved-work
-  // question would be a back door round it, and the faster route is exactly
-  // the one an author takes without thinking. See `isBackPress` for which
-  // presses count, and why there are two of them.
+  // ⌘/ — up a level: the page above THIS page, rather than whatever was
+  // visited before it. Global, because the control it replaces was on the page
+  // rather than in the palette: it has to work without opening anything. A
+  // chord rather than a bare key so it fires wherever the cursor is, the
+  // editor's prose included.
+  //
+  // It goes through the same gate as the command. A shortcut that skipped the
+  // unsaved-work question would be a back door round it, and the faster route
+  // is exactly the one an author takes without thinking.
+  //
+  // NOT ⌘[, which this began as: that is the key equivalent of Safari's
+  // History ▸ Back menu item, and macOS runs menu key equivalents before the
+  // event reaches web content, so the listener was never called there at all.
+  // NOT ⌘I, which `article-editor` binds to italic. The editor's slash menu
+  // does not contend — that opens on a TYPED `/` at the start of a block, and
+  // a chord inserts no character.
   const handleBackRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!backTarget) return;
     function handleKeyDown(event: KeyboardEvent) {
-      if (!isBackPress(event)) return;
+      // Unshifted only: ⌘⇧/ is ⌘?, which macOS gives to the Help menu, and
+      // browsers report the shifted key as "?".
+      if (!hasShortcutModifier(event) || event.key !== "/") return;
       event.preventDefault();
       handleBackRef.current();
     }
@@ -384,11 +362,10 @@ export function useCommandPalette(
 
   // Leaving the document entirely — a reload, a closed tab, a typed URL.
   //
-  // The palette's own exits all ask before dropping buffered work, and both
-  // gestures for going up a level go through the same gate. None of those is
-  // the only way out: every editor here buffers in a store rather than the
-  // database, and an unload takes the store with it. `beforeunload` is the
-  // only word the page gets in first.
+  // The palette's own exits all ask before dropping buffered work, and ⌘/ goes
+  // through the same gate. None of those is the only way out: every editor
+  // here buffers in a store rather than the database, and an unload takes the
+  // store with it. `beforeunload` is the only word the page gets in first.
   //
   // It does NOT catch the browser's Back. The App Router answers Back from
   // `popstate` and re-renders in place, so the document never unloads and this

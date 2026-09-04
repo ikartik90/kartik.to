@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
-import { isTextEntry } from "@/utils/is-text-entry";
 
 // ---------------------------------------------------------------------------
 // ⌘Z / ⌘⇧Z on the shader playground.
@@ -33,6 +32,19 @@ import { isTextEntry } from "@/utils/is-text-entry";
  * deliberate edits are never folded into one.
  */
 export const HISTORY_DEBOUNCE_MS = 500;
+
+/** Whether a press belongs to a field with an undo stack of its own. */
+function isTextEntry(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    // Compared, not just trusted: `isContentEditable` is declared `boolean` but
+    // is absent in jsdom, so the bare chain returns `undefined` there — a lie
+    // from a function that promises a boolean.
+    target.isContentEditable === true
+  );
+}
 
 export function useDraftHistory(): void {
   useEffect(() => {

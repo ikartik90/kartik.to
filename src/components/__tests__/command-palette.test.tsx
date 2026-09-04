@@ -251,7 +251,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      expect(list().getByText("<")).toBeDefined();
+      expect(list().getByText("⌘/")).toBeDefined();
     });
 
     // Esc is the way out on a keyboard, and saying so is the whole point of the
@@ -308,7 +308,7 @@ describe("CommandPalette", () => {
       expect(dialog.close).toHaveBeenCalled();
     });
 
-    // A chip naming < or Ctrl S is an offer a phone cannot take up — the same
+    // A chip naming ⌘/ or Ctrl S is an offer a phone cannot take up — the same
     // reason the Esc hint gives way to a button above it.
     it("withholds the rows' keyboard shortcut chips", () => {
       mockPathname.mockReturnValue("/writing/my-post");
@@ -316,7 +316,6 @@ describe("CommandPalette", () => {
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
       expect(list().getByText("Back to index")).toBeDefined();
-      expect(list().queryByText("<")).toBeNull();
       expect(list().queryByText("⌘/")).toBeNull();
       expect(list().queryByText("Ctrl /")).toBeNull();
     });
@@ -719,18 +718,17 @@ describe("CommandPalette — Navigate", () => {
     expect(screen.getByText("Back to index")).toBeDefined();
   });
 
-  it("names the nearest ancestor page rather than the index every time", () => {
+  // The index from everywhere, however deep — the command is the way home, not
+  // a step up the tree. It used to name the nearest ancestor page.
+  it("names the index however deep the page is", () => {
     mockPathname.mockReturnValue("/writing/my-post/edit");
     render(<CommandPalette />);
 
-    expect(screen.getByText("Back to My Post")).toBeDefined();
+    expect(screen.getByText("Back to index")).toBeDefined();
   });
 
-  // In an editor the author's focus lives in the prose, where `<` is a
-  // character — so the chip names the chord, which fires regardless, in
-  // whichever spelling this visitor's keyboard has.
   it("shows the shortcut the platform actually types beside it", () => {
-    mockPathname.mockReturnValue("/edit/my-post");
+    mockPathname.mockReturnValue("/writing/my-post");
     render(<CommandPalette />);
     expect(screen.getByText("⌘/").tagName).toBe("KBD");
 
@@ -738,19 +736,6 @@ describe("CommandPalette — Navigate", () => {
     stubPlatform("Windows");
     render(<CommandPalette />);
     expect(screen.getByText("Ctrl /").tagName).toBe("KBD");
-  });
-
-  // `<` is `<` on every keyboard, so the readable gesture has no platform
-  // split to make — and off an editor it is the one that will actually fire.
-  it("names the bare chevron where nobody is typing", () => {
-    mockPathname.mockReturnValue("/writing/my-post");
-    render(<CommandPalette />);
-    expect(screen.getByText("<").tagName).toBe("KBD");
-
-    cleanup();
-    stubPlatform("Windows");
-    render(<CommandPalette />);
-    expect(screen.getByText("<").tagName).toBe("KBD");
   });
 
   it("goes there when the item is chosen", () => {
