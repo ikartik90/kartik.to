@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, type RefObject } from "react";
 import { usePathname } from "next/navigation";
+import { hasCursor } from "@/data/media-queries";
 import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 import { getPointerPosition } from "./use-input-modality";
 import { useHintTooltip } from "./use-hint-tooltip";
@@ -26,11 +27,21 @@ import { useHintTooltip } from "./use-hint-tooltip";
 // move — which is the whole trick, since a cursor that has not moved is still
 // exactly where `getPointerPosition` last saw it, scrolling included.
 //
-// No cursor on screen, no invitation: `getPointerPosition` answers null both
-// for a pointer that has never been over the page (touch, or a mouse parked
-// outside the window) and for one that has since left it. Neither is a place to
-// put a tooltip, and neither SPENDS the page's offer — the demo that finishes
-// after the visitor's pointer arrives still gets to make it.
+// No cursor on screen, no invitation: `getPointerPosition` answers null for a
+// mouse that has never been over the page and for one that has since left it.
+// Neither is a place to put a tooltip, and neither SPENDS the page's offer —
+// the demo that finishes after the visitor's pointer arrives still gets to
+// make it.
+//
+// A device with no cursor AT ALL is a different question, and the answer is not
+// "wait for one". A finger leaves no cursor behind, only the coordinates of the
+// last thing it touched — which is why the invitation used to arrive at some
+// arbitrary spot on a phone, wherever the visitor had last tapped, and then
+// slide about as they scrolled. So the offer DOCKS instead: the same hint on
+// the same clock, placed by the stylesheet at the foot of the screen, where an
+// invitation with no cursor to point from belongs. `hasCursor()` is asked at
+// the moment a run finishes rather than watched, because that is the only
+// moment it decides anything.
 // ---------------------------------------------------------------------------
 
 /** Has an invitation been made at all? */
@@ -54,6 +65,8 @@ export interface DemoInvitation {
   ref: RefObject<HTMLElement | null>;
   /** Is it up? Same context, same host contract. */
   visible: boolean;
+  /** Placed at the foot of the screen rather than at a cursor. Same contract. */
+  docked: boolean;
   /** A run finished — make the offer, if this page still has one to make. */
   offer: () => void;
 }
@@ -66,16 +79,19 @@ export function useDemoInvitation(
   stageRef: RefObject<HTMLElement | null>,
 ): DemoInvitation {
   const pathname = usePathname();
-  const { ref, visible, show, retire } = useHintTooltip();
+  const { ref, visible, docked, show, dock, retire } = useHintTooltip();
 
   const offer = useCallback(() => {
     if (invited && invitedOn === pathname) return;
-    const pointer = getPointerPosition();
-    if (!pointer) return;
+    const cursor = hasCursor();
+    const pointer = cursor ? getPointerPosition() : null;
+    // A device that HAS a cursor and has not shown it yet is worth waiting for.
+    if (cursor && !pointer) return;
     invited = true;
     invitedOn = pathname;
-    show(pointer.x, pointer.y);
-  }, [pathname, show]);
+    if (pointer) show(pointer.x, pointer.y);
+    else dock();
+  }, [pathname, show, dock]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -90,5 +106,5 @@ export function useDemoInvitation(
     return () => stage.removeEventListener("pointerdown", onPointerDown);
   }, [visible, stageRef, retire]);
 
-  return { ref, visible, offer };
+  return { ref, visible, docked, offer };
 }

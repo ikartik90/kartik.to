@@ -56,6 +56,13 @@ const onServer = () => false;
 type TooltipHost = {
   ref: Ref<HTMLElement>;
   visible: boolean;
+  /**
+   * Placed by the stylesheet at the foot of the viewport rather than at a
+   * cursor — for a hint offered on a device that has no cursor to trail. The
+   * positioner leaves the box's inline `left`/`top` off in that case, so the
+   * recipe's `&[data-docked]` rule is the only thing placing it.
+   */
+  docked?: boolean;
 };
 
 /** Set by Button/Link so a Tooltip rendered as their sibling reads its ref + state. */
@@ -119,6 +126,7 @@ function TooltipRoot({ children, className, ...variants }: TooltipProps) {
       ref={host?.ref as Ref<HTMLDivElement>}
       className={cx(tooltip(variants), className)}
       data-visible={host?.visible ? "" : undefined}
+      data-docked={host?.docked ? "" : undefined}
       aria-hidden
     >
       {label}

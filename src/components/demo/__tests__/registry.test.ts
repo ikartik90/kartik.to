@@ -5,6 +5,7 @@ describe("demo component registry", () => {
   it("registers every demo, sorted by label with a lazy loader", () => {
     expect(demoComponents.map((demo) => demo.id)).toEqual([
       "calchemy-demo",
+      "position-fields-consolidation",
       "scheduling-layout-redesign",
       "shader-preset-reel",
       "shift-scheduling-v0",

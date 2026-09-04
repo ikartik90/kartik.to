@@ -25,6 +25,44 @@ describe("useHintTooltip", () => {
     expect(result.current.visible).toBe(false);
   });
 
+  // The hint with nowhere to point: no cursor to seed it at, so it hands its
+  // placement to the stylesheet and says so.
+  it("docks on demand, on the same clock", () => {
+    const { result } = renderHook(() => useHintTooltip());
+    expect(result.current.docked).toBe(false);
+
+    act(() => result.current.dock());
+    expect(result.current.visible).toBe(true);
+    expect(result.current.docked).toBe(true);
+
+    act(() => vi.advanceTimersByTime(HINT_TOOLTIP_MS));
+    expect(result.current.visible).toBe(false);
+  });
+
+  it("refuses to dock once retired", () => {
+    const { result } = renderHook(() => useHintTooltip());
+
+    act(() => result.current.retire());
+    act(() => result.current.dock());
+
+    expect(result.current.visible).toBe(false);
+  });
+
+  // A docked hint drops its inline placement, which would otherwise outrank
+  // the rule that centres it.
+  it("clears the inline placement a previous show wrote", () => {
+    const el = document.createElement("div");
+    const { result } = renderHook(() => useHintTooltip());
+    result.current.ref.current = el;
+
+    act(() => result.current.show(100, 200));
+    expect(el.style.left).not.toBe("");
+
+    act(() => result.current.dock());
+    expect(el.style.left).toBe("");
+    expect(el.style.top).toBe("");
+  });
+
   it("takes a custom hint window", () => {
     const { result } = renderHook(() => useHintTooltip(500));
 

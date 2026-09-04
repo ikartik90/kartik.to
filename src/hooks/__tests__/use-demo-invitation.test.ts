@@ -2,6 +2,7 @@
 import { act, fireEvent, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { markSyntheticPointer } from "@/utils/synthetic-pointer";
+import { HAS_CURSOR_QUERY } from "@/data/media-queries";
 import { resetInputModality } from "../use-input-modality";
 import { resetDemoInvitation, useDemoInvitation } from "../use-demo-invitation";
 
@@ -10,12 +11,28 @@ const mockPathname = vi.fn<() => string | null>(
 );
 vi.mock("next/navigation", () => ({ usePathname: () => mockPathname() }));
 
+/** Answer `HAS_CURSOR_QUERY` the way the device in question would. */
+function setHasCursor(hasCursor: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === HAS_CURSOR_QUERY ? hasCursor : false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  }));
+}
+
 beforeEach(() => {
   resetInputModality();
   resetDemoInvitation();
   mockPathname.mockReturnValue("/writing/shift-scheduling");
+  setHasCursor(true);
 });
 afterEach(() => {
+  vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
 
@@ -64,9 +81,10 @@ describe("useDemoInvitation", () => {
     expect(second.result.current.visible).toBe(false);
   });
 
-  // No cursor on screen is no anchor — and no offer SPENT either, so the demo
-  // that finishes after the visitor's pointer arrives still gets to make it.
-  it("declines when there is no cursor, without spending the offer", () => {
+  // A cursor that has not been seen yet is no anchor — and no offer SPENT
+  // either, so the demo that finishes after the visitor's pointer arrives still
+  // gets to make it.
+  it("declines when the cursor has not been seen, without spending the offer", () => {
     const stageRef = setupStage();
     const first = renderHook(() => useDemoInvitation(stageRef));
 
@@ -89,6 +107,60 @@ describe("useDemoInvitation", () => {
     act(() => result.current.offer());
 
     expect(result.current.visible).toBe(false);
+  });
+
+  // A finger leaves no cursor behind, so there is no place on the page that is
+  // where the visitor is looking. The offer docks instead — bottom centre,
+  // placed by the stylesheet — rather than landing on whatever they last
+  // tapped, which is where the tracked pointer position would have put it.
+  it("docks the invitation on a device with no cursor", () => {
+    setHasCursor(false);
+    fireEvent.pointerDown(document, { clientX: 320, clientY: 40 });
+    const stageRef = setupStage();
+    const { result } = renderHook(() => useDemoInvitation(stageRef));
+    const el = document.createElement("div");
+    result.current.ref.current = el;
+
+    act(() => result.current.offer());
+
+    expect(result.current.visible).toBe(true);
+    expect(result.current.docked).toBe(true);
+    // No inline placement at all: an inline `left`/`top` outranks the rule
+    // that centres it.
+    expect(el.style.left).toBe("");
+    expect(el.style.top).toBe("");
+  });
+
+  // Docked or not, it is the page's one offer, made once.
+  it("spends the page's offer when it docks", () => {
+    setHasCursor(false);
+    const stageRef = setupStage();
+    const first = renderHook(() => useDemoInvitation(stageRef));
+    const second = renderHook(() => useDemoInvitation(stageRef));
+
+    act(() => first.result.current.offer());
+    act(() => second.result.current.offer());
+
+    expect(first.result.current.visible).toBe(true);
+    expect(second.result.current.visible).toBe(false);
+  });
+
+  // The docked box does not follow anything: a finger-scroll dispatches
+  // `pointermove` like any other pointer, and the invitation must stay put.
+  it("stays put while the visitor scrolls a touch device", () => {
+    setHasCursor(false);
+    const stageRef = setupStage();
+    const { result } = renderHook(() => useDemoInvitation(stageRef));
+    const el = document.createElement("div");
+    result.current.ref.current = el;
+    act(() => result.current.offer());
+
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 200, clientY: 500 });
+    });
+
+    expect(el.style.left).toBe("");
+    expect(el.style.top).toBe("");
   });
 
   it("makes the offer again on a different page", () => {

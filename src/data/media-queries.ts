@@ -59,3 +59,20 @@ export function isBottomSheetLayout(): boolean {
  * palette opens is not something a stylesheet can decide.
  */
 export const HAS_CURSOR_QUERY = "(hover: hover) and (pointer: fine)";
+
+/**
+ * Is there a cursor on this device right now? The imperative twin of
+ * `useHasCursor`, for a handler that has to ask at the moment something
+ * happens rather than a commit behind — a demo finishing and needing to know,
+ * there and then, whether it has a cursor to place its invitation at.
+ *
+ * False wherever there is no `matchMedia`, which is touch — the safer of the
+ * two answers for the same reason `useHasCursor` starts there.
+ */
+export function hasCursor(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(HAS_CURSOR_QUERY).matches
+  );
+}

@@ -271,6 +271,15 @@ export default defineConfig({
       narrowRail: `@media ${NARROW_RAIL_QUERY}`,
       demoFrameNarrow: "@container demoFrame (max-width: 760px)",
       demoFrameCompact: "@container demoFrame (max-width: 535px)",
+      // The Shift Scheduling v0 form once its two columns have STACKED — the
+      // one state where the calendar is alone on its line and the field column
+      // is no longer beside it. 448px is not a width picked for the demo: it is
+      // 2 × the calendar's 208px measure (7 × 24 cells + 6 × 4 gutters + 2 × 8
+      // inset) plus the 32px column gap, which is exactly the crossover the
+      // form's own flex floor already wraps at — the query restates it rather
+      // than introducing a second, disagreeing breakpoint. Container, not
+      // viewport: the form is staged in a DemoFrame that can be any width.
+      shiftFormStacked: "@container shiftForm (max-width: 448px)",
     },
   },
 
@@ -466,7 +475,7 @@ export default defineConfig({
         },
       },
 
-      containerNames: ["demoFrame", "projectsGrid"],
+      containerNames: ["demoFrame", "projectsGrid", "shiftForm"],
 
       semanticTokens: {
         colors: {
@@ -3106,6 +3115,32 @@ export default defineConfig({
               pointerEvents: "auto",
               filter: "blur(0)",
             },
+            // The one placement this box has of its own, for the one case with
+            // no cursor to hang from: the demos' invitation on a touch device,
+            // where the coordinates of the last thing a finger touched are not
+            // a place anybody is looking. Bottom centre, over the page.
+            //
+            // Placed HERE rather than written onto the element, because a phone
+            // is the one viewport that changes height while the box is up — the
+            // URL bar slides away as the visitor scrolls — and `bottom` follows
+            // that edge where a `top` computed once from `innerHeight` would be
+            // stranded. `useCursorTooltip` leaves the inline `left`/`top` off
+            // while docked so this rule is unopposed.
+            //
+            // 50px is a clearance, not a step on the spacing scale: far enough
+            // up to read as floating over the page rather than stuck to its
+            // edge, plus whatever the home indicator is holding, so it sits the
+            // same height above the glass on a phone that has one and a phone
+            // that doesn't. And nothing to press — the box is over content the
+            // visitor is being invited to touch.
+            "&[data-docked]": {
+              top: "auto",
+              left: "token(spacing.half)",
+              bottom: "calc(50px + env(safe-area-inset-bottom, 0px))",
+              translate: "-50% 0",
+              maxWidth: "calc(100% - token(spacing.3xl))",
+            },
+            "&[data-docked][data-visible]": { pointerEvents: "none" },
             // A composed trailing glyph, sized and tinted with no className.
             "& svg": {
               flexShrink: 0,
@@ -3945,7 +3980,7 @@ export default defineConfig({
         calendar: defineSlotRecipe({
           className: "calendar",
           description:
-            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). A turn is a push: the list crops, the arriving page slides in from the side the range is travelling toward and the leaving one (the `outgoing` copy) is pushed out by the same `--calendar-push` — `step` month columns, signed by the direction. Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
+            "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). A turn is a push: the list crops, the arriving page slides in from the side the range is travelling toward and the leaving one (the `outgoing` copy) is pushed out by the same `--calendar-push` — `step` month columns, signed by the direction. Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `fluid` lets the grid FILL a box wider than its months instead of hugging them, spending the surplus in the gutters between the seven columns so the day cell keeps its 24px square. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
           slots: [
             "root",
             "search",
@@ -6555,9 +6590,13 @@ export default defineConfig({
             root: {
               display: "flex",
               alignItems: "flex-start",
-              gap: "xs",
+              // 4px between the icon and the prose, on an 8px inline inset —
+              // the Figma's own (1167:7922: a 20px icon at x=8, its text
+              // opening at 32). The radius stays `sm`, which already resolves
+              // to the 4px it is drawn at.
+              gap: "sm",
               width: "token(spacing.full)",
-              paddingInline: "sm",
+              paddingInline: "md",
               paddingBlock: "md",
               borderRadius: "sm",
               backgroundColor: "bg.notice",
