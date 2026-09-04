@@ -326,7 +326,7 @@ describe("useCommandPalette", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // ⌘J
+  // ⌘/
   //
   // This was ⌘[ — the gesture the browser itself reads as "back", claimed so it
   // would land on the page above THIS one. Safari never allowed that: ⌘[ is the
@@ -369,7 +369,7 @@ describe("useCommandPalette", () => {
 
       let event!: KeyboardEvent;
       act(() => {
-        event = press("j");
+        event = press("/");
       });
 
       expect(mockPush).toHaveBeenCalledWith("/");
@@ -392,13 +392,14 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
-    // ⌘⇧J is a different gesture, and browsers report the shifted key as "J".
+    // ⌘⇧/ is ⌘?, which macOS gives to the Help menu — a different gesture, and
+    // one no page gets a say in. Browsers report the shifted key as "?".
     it("does not answer the shifted key", () => {
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
       act(() => {
-        event = press("J", { shiftKey: true });
+        event = press("?", { shiftKey: true });
       });
 
       expect(mockPush).not.toHaveBeenCalled();
@@ -413,7 +414,7 @@ describe("useCommandPalette", () => {
 
       let event!: KeyboardEvent;
       act(() => {
-        event = press("j");
+        event = press("/");
       });
 
       expect(mockPush).not.toHaveBeenCalled();
@@ -524,13 +525,13 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
-    // The platform's own modifier only: Ctrl J on a Mac is not this gesture.
+    // The platform's own modifier only: Ctrl / on a Mac is not this gesture.
     it("refuses the other platform's modifier", () => {
       renderHook(() => useCommandPalette(close));
 
       let event!: KeyboardEvent;
       act(() => {
-        event = press("j", { metaKey: false, ctrlKey: true });
+        event = press("/", { metaKey: false, ctrlKey: true });
       });
 
       expect(mockPush).not.toHaveBeenCalled();

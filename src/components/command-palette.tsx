@@ -255,9 +255,9 @@ export function CommandPalette() {
   // you are standing rather than the one that reads best. `<` needs no modifier
   // and says what it does, but it is a character wherever somebody is typing —
   // and in an editor the author's focus lives in the prose, so there the chip
-  // names ⌘J (Ctrl J on a PC) instead, which fires regardless. See
+  // names ⌘/ (Ctrl / on a PC) instead, which fires regardless. See
   // `isBackPress`. Neither is ⌘[, which Safari never handed over.
-  const backChord = useShortcutLabel("J");
+  const backChord = useShortcutLabel("/");
   const backShortcut = editorKind ? backChord : "<";
   const saveShortcut = useShortcutLabel("S");
 

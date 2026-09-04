@@ -317,8 +317,8 @@ describe("CommandPalette", () => {
 
       expect(list().getByText("Back to index")).toBeDefined();
       expect(list().queryByText("<")).toBeNull();
-      expect(list().queryByText("⌘J")).toBeNull();
-      expect(list().queryByText("Ctrl J")).toBeNull();
+      expect(list().queryByText("⌘/")).toBeNull();
+      expect(list().queryByText("Ctrl /")).toBeNull();
     });
 
     it("filters on what is typed into it, as it does anywhere else", () => {
@@ -732,12 +732,12 @@ describe("CommandPalette — Navigate", () => {
   it("shows the shortcut the platform actually types beside it", () => {
     mockPathname.mockReturnValue("/edit/my-post");
     render(<CommandPalette />);
-    expect(screen.getByText("⌘J").tagName).toBe("KBD");
+    expect(screen.getByText("⌘/").tagName).toBe("KBD");
 
     cleanup();
     stubPlatform("Windows");
     render(<CommandPalette />);
-    expect(screen.getByText("Ctrl J").tagName).toBe("KBD");
+    expect(screen.getByText("Ctrl /").tagName).toBe("KBD");
   });
 
   // `<` is `<` on every keyboard, so the readable gesture has no platform
@@ -766,7 +766,7 @@ describe("CommandPalette — Navigate", () => {
     mockPathname.mockReturnValue("/writing/my-post");
     render(<CommandPalette />);
 
-    fireEvent.keyDown(window, { key: "j", metaKey: true });
+    fireEvent.keyDown(window, { key: "/", metaKey: true });
 
     expect(mockPush).toHaveBeenCalledWith("/");
   });

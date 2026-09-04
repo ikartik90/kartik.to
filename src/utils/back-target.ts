@@ -4,7 +4,7 @@ import { filenameToLabel } from "./filename-to-label";
 // Where "back" goes, and what that place is called.
 //
 // The site's back control used to be an icon button hanging in the left gutter
-// of every page that had one; it is a command now ("Back to index", ⌘J), so the
+// of every page that had one; it is a command now ("Back to index", `<`), so the
 // destination it used to hard-code has to be worked out from the path instead.
 //
 // Up the tree, never one blind segment up: `/writing` and `/work` are prefixes
