@@ -317,7 +317,7 @@ const stageStyle = css({
 // window below, parked at its row's offset.
 const runStyle = css({
   position: "relative",
-  width: "full",
+  width: "token(spacing.full)",
   // The stage is a flex COLUMN, so its main axis is the one this box is a
   // century long on — and a flex item shrinks on the main axis by default.
   // Without this the whole run is squeezed down to the height of the viewport
@@ -348,7 +348,7 @@ const periodStyle = css({
 // whatever this is.
 const fieldStyle = css({
   width: "token(sizes.calchemyPlayground)",
-  maxWidth: "full",
+  maxWidth: "token(spacing.full)",
 });
 
 // The band the bar floats in: the 32 below it, its own 40, and 32 clear of its

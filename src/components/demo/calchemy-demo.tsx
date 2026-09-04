@@ -87,7 +87,7 @@ const demoStyle = css({
 });
 
 const loadingStyle = css({
-  width: "full",
+  width: "token(spacing.full)",
   minHeight: "calc(token(spacing.4xl) + token(spacing.5xl) * 3)",
   display: "flex",
   alignItems: "center",
@@ -103,7 +103,7 @@ const calendarSlotStyle = css({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  width: "full",
+  width: "token(spacing.full)",
 });
 
 const calendarStyle = css({

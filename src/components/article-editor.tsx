@@ -1050,20 +1050,20 @@ const editorShowcaseStyle = articleShowcase();
 
 const editorHrShellStyle = css({
   position: "relative",
-  width: "full",
+  width: "token(spacing.full)",
   paddingBlock: "3xl",
 });
 
 const editorShowcaseMediaStyle = css({
   alignSelf: "stretch",
-  width: "full",
+  width: "token(spacing.full)",
   focusVisibleRing: "none",
   cursor: "default",
 });
 
 const editorDemoPreviewStyle = css({
-  width: "full",
-  height: "full",
+  width: "token(spacing.full)",
+  height: "token(spacing.full)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1094,7 +1094,7 @@ const editorImgStyle = cx(mediaBlockStyles.image, editorShowcaseMediaStyle);
 const editorImagePlaceholderStyle = cx(
   editorShowcaseMediaStyle,
   css({
-    width: "full",
+    width: "token(spacing.full)",
   }),
 );
 
@@ -1137,7 +1137,7 @@ const editorCaptionStyle = cx(
     // Only what an EDITABLE caption needs: a full-width hit area to click
     // into and a line of height to hold the placeholder. The measure and the
     // centring come from `articleShowcase`, the same figure the reader uses.
-    width: "full",
+    width: "token(spacing.full)",
     minHeight: "1.5em",
     "&:empty::before, &[data-empty]::before": {
       content: "attr(data-placeholder)",
