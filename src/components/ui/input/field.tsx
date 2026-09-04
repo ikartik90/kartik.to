@@ -92,6 +92,13 @@ export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
    * default; `sm` and `lg` step the whole set down / up together.
    */
   size?: FieldSize;
+  /**
+   * Put the label BEFORE the control, and let it take the slack so the control
+   * sits on the field's far edge — a settings row, rather than a switch with a
+   * caption. Toggle controls only (`role="switch"` / `role="checkbox"`); a
+   * stacked text field already has its label first.
+   */
+  labelFirst?: boolean;
   children: ReactNode;
 }
 
@@ -104,12 +111,18 @@ export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
  * the root from a vertical stack to the control ∣ label/hint grid (see the
  * `field` recipe's `:has` branches), so no orientation prop is needed.
  */
-function FieldRoot({ children, className, size = "md", ...rest }: FieldProps) {
+function FieldRoot({
+  children,
+  className,
+  size = "md",
+  labelFirst = false,
+  ...rest
+}: FieldProps) {
   const uid = useId();
   const controlRef = useRef<HTMLElement | null>(null);
   const [hasLabel, setHasLabel] = useState(false);
   const [hasHint, setHasHint] = useState(false);
-  const styles = field({ size });
+  const styles = field({ size, labelFirst });
 
   const ctx: FieldContextValue = {
     controlId: `${uid}-control`,

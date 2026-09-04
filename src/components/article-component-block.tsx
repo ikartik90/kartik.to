@@ -21,7 +21,11 @@ export function ArticleComponentBlock({
 
   return (
     <figure className={articleShowcase()}>
-      <DemoFrame aspectRatio={demo.aspectRatio} logger={demo.logger}>
+      <DemoFrame
+        aspectRatio={demo.aspectRatio}
+        logger={demo.logger}
+        fill={demo.fill}
+      >
         <DemoComponent entry={demo} aspect={demo.aspectRatio} />
       </DemoFrame>
       {caption ? (

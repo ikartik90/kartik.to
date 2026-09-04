@@ -66,6 +66,21 @@ export interface DatePickerProps {
   format?: string;
   /** Shown in the trigger when nothing is selected. */
   placeholder?: string;
+  /**
+   * Whether the popover renders in a `document.body` portal. On by default, so
+   * it escapes an ancestor that clips or contains it (a DemoFrame).
+   *
+   * Turn it OFF inside a `position: fixed` surface. CSS anchor positioning will
+   * not accept an anchor whose containing-block chain does not pass through the
+   * portalled popover's own containing block — and a fixed ancestor ends that
+   * chain at the viewport, so the trigger becomes unanchorable and the calendar
+   * falls back to its static position at the foot of the document. Kept in
+   * place, popover and trigger share a containing block and the anchor
+   * resolves. The surface must then not clip its overflow (see
+   * `colorPickerPopover`). The same escape hatch Combobox carries, for the same
+   * reason.
+   */
+  portal?: boolean;
   /** Override "today" — primarily for tests/deterministic rendering. */
   today?: Temporal.PlainDate;
 }
@@ -84,6 +99,7 @@ export function DatePicker({
   weekStartsOn,
   format = DEFAULT_DATE_FORMAT,
   placeholder = "Select date",
+  portal = true,
   today,
 }: DatePickerProps) {
   const { controlId, registerControl, focusControl, styles } =
@@ -94,7 +110,7 @@ export function DatePicker({
   const [internal, setInternal] = useState<Temporal.PlainDate | null>(
     defaultValue ?? null,
   );
-  const selected = isControlled ? (value ?? null) : internal;
+  const selected = isControlled ? value ?? null : internal;
 
   const close = () => {
     setOpen(false);
@@ -129,6 +145,10 @@ export function DatePicker({
           data-placeholder={display ? undefined : ""}
           aria-haspopup="dialog"
           aria-expanded={open}
+          // In the tab order explicitly, because WebKit's default one skips a
+          // bare <button> — see `Button`. A field the keyboard cannot reach is
+          // not a field.
+          tabIndex={0}
           className={cx(styles.control, triggerClass)}
         >
           <WireframeText>{display || placeholder}</WireframeText>
@@ -141,7 +161,7 @@ export function DatePicker({
           className={datePopover()}
           role="dialog"
           ariaLabel="Choose date"
-          portal
+          portal={portal}
           onDismiss={close}
         >
           <Calendar

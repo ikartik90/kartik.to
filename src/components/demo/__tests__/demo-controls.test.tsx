@@ -44,10 +44,14 @@ describe("DemoControls", () => {
   // same call `OptionList.Toolbar` makes. Two controls do not need a keyboard
   // mode of their own, and taking one of them out of the tab order would cost
   // more than the grouping is worth.
+  //
+  // Which is what -1 would say. Every Button writes an explicit 0 (WebKit's
+  // default order skips a bare <button>), so the absence of the attribute is no
+  // longer what "in the order" looks like — being kept out of it is.
   it("leaves both controls in the tab order", () => {
     render(<DemoControls {...controls} />);
     for (const button of screen.getAllByRole("button"))
-      expect(button.getAttribute("tabindex")).toBeNull();
+      expect(button.getAttribute("tabindex")).not.toBe("-1");
   });
 
   // A control that cannot change anything invites a press and answers with

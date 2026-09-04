@@ -266,6 +266,7 @@ export function ComponentInsertDialog({
                   aspectRatio={selected.aspectRatio}
                   chrome={selected.chrome}
                   logger={selected.logger}
+                  fill={selected.fill}
                   interactive={false}
                 >
                   <div inert className={demoPreviewStyle}>

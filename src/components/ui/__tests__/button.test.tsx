@@ -13,6 +13,26 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
   });
 
+  // WebKit's default tab order reaches form fields and anything carrying an
+  // explicit tabindex — NOT a bare <button>. Safari users would tab straight
+  // past every button on the page, so each one states its own place.
+  it("states its own place in the tab order", () => {
+    render(<Button aria-label="Save" />);
+    // The ATTRIBUTE, not the property: `el.tabIndex` reports a button's
+    // default of 0 whether or not it is written down, and what WebKit reads is
+    // the attribute.
+    expect(
+      screen.getByRole("button", { name: "Save" }).getAttribute("tabindex"),
+    ).toBe("0");
+  });
+
+  it("still yields it to a caller who takes it", () => {
+    render(<Button aria-label="Skip" tabIndex={-1} />);
+    expect(
+      screen.getByRole("button", { name: "Skip" }).getAttribute("tabindex"),
+    ).toBe("-1");
+  });
+
   it("renders link variant", () => {
     render(<Button variant="link">browse to upload</Button>);
     expect(

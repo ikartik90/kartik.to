@@ -2805,6 +2805,7 @@ function EditableBlock({
           <DemoFrame
             aspectRatio={demo?.aspectRatio}
             logger={demo?.logger}
+            fill={demo?.fill}
             interactive={false}
             className={editorShowcaseMediaStyle}
             // The hook the rail reveals itself off — the same one a picture's

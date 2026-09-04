@@ -148,6 +148,24 @@ export interface PropertiesPanelProps {
    * consumer should stop rendering it. NOT the moment it was asked to close.
    */
   onDismiss: () => void;
+  /**
+   * Extra CSS selector exempted from the outside-pointerdown dismiss, on top of
+   * the panel's own trigger. For a panel that opens a surface of its OWN beside
+   * itself — a picker docked off the rail's edge, say: it is portalled, so it
+   * is outside this panel by every measure the dismiss can take, and a press in
+   * it would close the panel it belongs to.
+   */
+  ignoreSelector?: string;
+  /**
+   * Whether a press outside closes the panel (default true).
+   *
+   * True suits a panel that is transient — docked beside the object it edits,
+   * dismissed by turning to something else. Pass false for one that IS the
+   * page's settings: it stands over the surface it configures, so every press
+   * on that surface would otherwise take it away, and it is opened and closed
+   * deliberately instead. Escape and the header's close button are unaffected.
+   */
+  dismissOnOutsidePointer?: boolean;
   ref?: Ref<PropertiesPanelHandle>;
   children: ReactNode;
 }
@@ -162,6 +180,8 @@ export interface PropertiesPanelProps {
 function PropertiesPanelRoot({
   ariaLabel,
   onDismiss,
+  ignoreSelector,
+  dismissOnOutsidePointer,
   ref,
   children,
 }: PropertiesPanelProps) {
@@ -209,7 +229,12 @@ function PropertiesPanelRoot({
         className={cx(styles.root, exiting && styles.exiting)}
         role="dialog"
         ariaLabel={ariaLabel}
-        ignoreSelector={TRIGGER_SELECTOR}
+        ignoreSelector={
+          ignoreSelector
+            ? `${TRIGGER_SELECTOR}, ${ignoreSelector}`
+            : TRIGGER_SELECTOR
+        }
+        dismissOnOutsidePointer={dismissOnOutsidePointer}
         portal
         onDismiss={close}
       >

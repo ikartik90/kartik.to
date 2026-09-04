@@ -473,6 +473,7 @@ function ComponentCard({
       aspectRatio={card.aspect}
       logger={card.logger ? entry.logger ?? true : false}
       chrome={entry.chrome}
+      fill={entry.fill}
     >
       {/* The page's node when it sent one, and the browser's loader otherwise.
           A plain `??` rather than a branch on the demo's identity: which demos
