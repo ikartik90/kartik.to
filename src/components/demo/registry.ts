@@ -43,6 +43,13 @@ export interface DemoComponentEntry {
   load: () => Promise<ComponentType<DemoProps>>;
   aspectRatio?: DemoFrameAspectRatio;
   /**
+   * `"none"` drops the frame's outline. Set it for a demo that is a WIDGET
+   * rather than a specimen — the box says where a prototype ends and the page
+   * begins, which is the wrong sentence for something meant to read as a
+   * native part of the page.
+   */
+  chrome?: "none";
+  /**
    * The demo lays itself out against the frame rather than being measured and
    * centred in it — see {@link DemoFrame}'s own `fill`.
    */
@@ -147,6 +154,25 @@ const registry: Record<string, DemoRegistryEntry> = {
     // The one demo that is a picture of somewhere else: it is the shader
     // playground's window, so its card is the way in.
     link: { href: "/playground/shader", label: "Shader playground" },
+  },
+  "weather-widget": {
+    load: async () => {
+      const mod = await import("./weather-widget-demo");
+      // Fetches the reading as part of LOADING, so the frame's preloader
+      // covers it — the same bargain the reel and calchemy strike. Only the
+      // insert dialog and unsaved inserts get here; a published card is
+      // rendered on the server instead (`server-demos.tsx`).
+      return mod.prepareWeatherWidget();
+    },
+    // Square, and unusually this is the component's shape rather than a Figma
+    // frame's: it is a home-screen widget, and the square is the format every
+    // phone's weather widget already comes in — place at the top, drawing, then
+    // the number and the word.
+    aspectRatio: "1/1",
+    // No outline. Every other card here is a specimen of a prototype and wants
+    // the box that says so; this one is supposed to read as a widget sitting on
+    // the page, and a hairline around it makes it a picture of one instead.
+    chrome: "none",
   },
   "calchemy-demo": {
     // The playground in a frame: the calendar takes the middle and the query

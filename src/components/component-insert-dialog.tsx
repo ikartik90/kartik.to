@@ -264,6 +264,7 @@ export function ComponentInsertDialog({
               >
                 <DemoFrame
                   aspectRatio={selected.aspectRatio}
+                  chrome={selected.chrome}
                   logger={selected.logger}
                   fill={selected.fill}
                   interactive={false}

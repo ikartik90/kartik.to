@@ -38,6 +38,12 @@ interface DemoFrameProps
   /** When false, logger controls are inert (e.g. article edit preview). */
   interactive?: boolean;
   /**
+   * `"none"` drops the frame's outline — for a demo that is a widget rather
+   * than a specimen, where a box around it reads as a picture OF the thing
+   * instead of the thing. Everything the frame measures is unchanged.
+   */
+  chrome?: "none";
+  /**
    * The demo lays itself out against the FRAME rather than being measured at
    * its intrinsic size and centred — for one whose own furniture sits on the
    * frame's edges (the calchemy demo's query bar and chevrons). It is handed
@@ -71,6 +77,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       aspectRatio = "2/1",
       logger,
       interactive = true,
+      chrome,
       fill = false,
       className,
       style,
@@ -150,7 +157,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
         // absolute against this box, and up only while the visitor is in it.
         data-demo-frame=""
         className={cx(
-          demoFrame({ logger: loggerEnabled ? true : undefined }),
+          demoFrame({ logger: loggerEnabled ? true : undefined, chrome }),
           className,
         )}
         style={style}
