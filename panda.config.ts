@@ -8483,6 +8483,29 @@ export default defineConfig({
     // it, which is what makes it exclusive with the checkerboard by
     // construction (see `collectionGrid`'s `image` slot): an object has one
     // ground, and while it is waiting the ground is this.
+    // The grip a bottom sheet is pulled down by — the panel's own header, which
+    // is a line of text. iOS starts a selection from the touch gesture rather
+    // than from a cancelable mousedown, so it anchors on that title and paints
+    // it blue with a Copy / Look Up callout over it while the sheet is being
+    // dragged. The same defect the slider rows carry, and the same two-part
+    // answer: this stops the anchor forming, and `control-drag` covers where
+    // the gesture then travels.
+    //
+    // Global, and keyed on the attribute `useSheetDrag` hands out WITH its
+    // handlers, for the reason the media rule below is global: one hook decides
+    // what a grip is, so one rule should say what a grip refuses. One panel
+    // drags its sheet today and its header is its own; the next one to wire the
+    // hook gets this without having to know it exists.
+    //
+    // Scoped to the sheet — a docked rail's header is dragged by nobody and
+    // keeps ordinary selection, which is how its `touch-action` is scoped too.
+    "[data-sheet-grip]": {
+      _bottomSheet: {
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+      },
+    },
     "[data-media-pending]": {
       backgroundColor: "var(--colors-bg-surface)",
       // The same shape of highlight the wireframe's bars use — a travelling

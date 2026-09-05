@@ -28,6 +28,7 @@ import {
   type ColorFormat,
   type Hsb,
 } from "@/utils/color-value";
+import { beginControlDrag, endControlDrag } from "@/utils/control-drag";
 import { Button } from "../button";
 import { Typography } from "../typography";
 import { Combobox } from "./combobox";
@@ -343,6 +344,11 @@ function ColorPickerMap() {
         // reason the Slider's track does, and for the same drag that would
         // otherwise paint a selection across the panel on its way out.
         e.preventDefault();
+        // And the same second half: `preventDefault` settles a mouse, not a
+        // finger. A touch drag on this map is the slider's case exactly — iOS
+        // anchors on the nearest selectable text, which is the panel's labels
+        // outside the map — so the drag takes the page's selection too.
+        beginControlDrag(e.pointerId);
         e.currentTarget.setPointerCapture(e.pointerId);
         e.currentTarget.focus();
         const next = valueAtPointer(e);
@@ -354,6 +360,9 @@ function ColorPickerMap() {
         const next = valueAtPointer(e);
         if (next) commitHsb(next);
       }}
+      onPointerUp={(e) => endControlDrag(e.pointerId)}
+      onPointerCancel={(e) => endControlDrag(e.pointerId)}
+      onLostPointerCapture={(e) => endControlDrag(e.pointerId)}
       onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
         if (disabled) return;
         const delta = MAP_KEY_DELTA[e.key];
