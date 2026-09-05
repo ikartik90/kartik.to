@@ -723,6 +723,57 @@ describe("CommandPalette", () => {
     });
   });
 
+  // The playground is an EDITOR only for whoever can write to it. A visitor
+  // moves every slider on the page and still holds nothing that could be
+  // saved, so for them it is an ordinary page — and an ordinary page keeps its
+  // navigation. It used to withhold the lot on the strength of the route
+  // alone, which left a visitor standing on the playground with no way out
+  // named for what it does and no sight of the other playground.
+  describe("the playground as a visitor", () => {
+    beforeEach(() => {
+      mockPathname.mockReturnValue("/playground/shader");
+      mockUseSession.mockReturnValue({ data: null });
+    });
+
+    it("keeps the playgrounds group, minus the page being stood on", () => {
+      render(<CommandPalette />);
+
+      expect(list().getByText("Playgrounds")).toBeDefined();
+      expect(list().getByText("Calchemy Playground")).toBeDefined();
+      expect(list().queryByText("Shader Playground")).toBeNull();
+    });
+
+    it("says the same on a saved preset's own route", () => {
+      mockPathname.mockReturnValue("/playground/shader/preset-1");
+      render(<CommandPalette />);
+
+      expect(list().getByText("Calchemy Playground")).toBeDefined();
+      expect(list().queryByText("Shader Playground")).toBeNull();
+    });
+
+    // Navigation, not finishing with something — the visitor has nothing open
+    // to finish with.
+    it("names the way out for what it is", () => {
+      render(<CommandPalette />);
+
+      expect(list().getByText("Back to index")).toBeDefined();
+      expect(list().queryByText("Exit editor")).toBeNull();
+    });
+
+    // Unchanged for the author, who has work in hand: leaving decides what
+    // becomes of it, so it is not a destination like any other.
+    it("withholds it all from the author, who has an editor open", () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      render(<CommandPalette />);
+
+      expect(list().queryByText("Playgrounds")).toBeNull();
+      expect(list().queryByText("Calchemy Playground")).toBeNull();
+      expect(list().getByText("Exit editor")).toBeDefined();
+    });
+  });
+
   describe("closing on item select", () => {
     it("closes the dialog when the theme toggle item is selected", () => {
       render(<CommandPalette />);
@@ -824,6 +875,11 @@ describe("CommandPalette — Navigate", () => {
     expect(list().getByText("Exit editor")).toBeDefined();
 
     cleanup();
+    // Signed in for this one: the playground is an editor for whoever can
+    // write to it, and a visitor gets "Back to index" instead — see below.
+    mockUseSession.mockReturnValue({
+      data: { user: { id: "admin-id", email: "admin@example.com" } },
+    });
     mockPathname.mockReturnValue("/playground/shader");
     render(<CommandPalette />);
     expect(list().getByText("Exit editor")).toBeDefined();
@@ -839,12 +895,21 @@ describe("CommandPalette — Navigate", () => {
 
   // It used to need excepting from edit mode to keep this; out of `/edit` it
   // simply is not in edit mode. The assertion stays either way — what it is
-  // guarding is that the playground has a way back, not how it earns one.
+  // guarding is that the playground has a way back, not how it earns one. What
+  // that way is CALLED depends on who is asking: the author is finishing with
+  // an editor, the visitor is walking home from a page.
   it("keeps the shader playground's way out", () => {
     mockPathname.mockReturnValue("/playground/shader");
+    mockUseSession.mockReturnValue({
+      data: { user: { id: "admin-id", email: "admin@example.com" } },
+    });
     render(<CommandPalette />);
-
     expect(list().getByText("Exit editor")).toBeDefined();
+
+    cleanup();
+    mockUseSession.mockReturnValue({ data: null });
+    render(<CommandPalette />);
+    expect(list().getByText("Back to index")).toBeDefined();
   });
 
   it("leads the palette, and leaves Settings to close it", () => {
