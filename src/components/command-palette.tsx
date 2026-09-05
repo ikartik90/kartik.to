@@ -224,8 +224,6 @@ export function CommandPalette() {
   const {
     isAdmin,
     isDark,
-    isEditMode,
-    isHomeEditMode,
     handlePublishComponent,
     handleUnpublish,
     isPublished,
@@ -263,14 +261,19 @@ export function CommandPalette() {
   /**
    * Whether the palette should offer to take you somewhere at all.
    *
-   * Two reasons it should not, and they are different reasons for the same
-   * answer. Inside an EDITOR, leaving is not a thing you simply do: it decides
-   * what becomes of the buffered work, which is exactly why "Back to …" is
-   * withheld there too — the exits an editor offers each say what happens to
-   * the document, and a bare destination would answer that by throwing it away
-   * without saying so. And on the playground ITSELF there is nowhere to go: a
-   * command to the page you are standing on is a row that does nothing, the
-   * same rule the Drafts group follows in omitting the draft being viewed.
+   * One reason it should not: inside an EDITOR, leaving is not a thing you
+   * simply do. It decides what becomes of the buffered work, which is exactly
+   * why "Back to …" is withheld there too — the exits an editor offers each say
+   * what happens to the document, and a bare destination would answer that by
+   * throwing it away without saying so.
+   *
+   * Being on a playground is NOT that reason and never was. It only means one
+   * row of this group would point at the page you are standing on, which is
+   * dealt with a row at a time below — the same rule the Drafts group follows
+   * in omitting the draft being viewed. Asking `editorKind` rather than the
+   * route is what separates the two: the shader playground is an editor for
+   * whoever can write to it and an ordinary page for everyone else, and this
+   * used to withhold the whole group from both.
    *
    * Settings is not covered by this and should not be — it changes the page you
    * are on rather than taking you off it.
@@ -289,8 +292,7 @@ export function CommandPalette() {
           ? "This Project"
           : "This Article";
 
-  const offersDestinations =
-    !isEditMode && !isHomeEditMode && !isShaderPlayground;
+  const offersDestinations = editorKind === null;
 
   useEffect(() => {
     // Guarded rather than toggling: `showModal()` on an already-open dialog
@@ -645,19 +647,22 @@ export function CommandPalette() {
                     have and nothing for a gate to protect. Destinations, so they
                     lead the furniture.
 
-                    Withheld while you are editing, and once you have arrived — see
-                    `offersDestinations`. Calchemy holds nothing unsaved, so standing
-                    on it withdraws its own row and leaves the group standing. */}
+                    Withheld while you are editing — see `offersDestinations`.
+                    Standing on one of them withdraws that ONE row, not the group:
+                    a command to the page you are already on is a row that does
+                    nothing, but the other playground is still somewhere to go. */}
                 {offersDestinations && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Playgrounds</div>
-                    <Command.Item
-                      className={itemStyle}
-                      onSelect={handleShaderPlayground}
-                    >
-                      <ShaderIcon className={iconStyle} />
-                      Shader Playground
-                    </Command.Item>
+                    {!isShaderPlayground && (
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleShaderPlayground}
+                      >
+                        <ShaderIcon className={iconStyle} />
+                        Shader Playground
+                      </Command.Item>
+                    )}
                     {!isCalchemyPlayground && (
                       <Command.Item
                         className={itemStyle}

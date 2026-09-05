@@ -85,11 +85,15 @@ export interface CommandPaletteHandlers {
   handleThemeToggle: () => void;
   /** Open the shader playground — public, so this is offered logged out too. */
   handleShaderPlayground: () => void;
-  /** On the playground — which is an editor, so it has the same exits. */
+  /**
+   * On the playground. Withholds ONE row — the one that would lead here — and
+   * says nothing about whether an editor is open: that is `editorKind`, which
+   * asks who is standing here as well as where.
+   */
   isShaderPlayground: boolean;
   /** Open the calchemy playground — public on the same grounds as the shader one. */
   handleCalchemyPlayground: () => void;
-  /** On it. Nothing is buffered here, so this withholds ONE row, not the group. */
+  /** On it, and the same rule: its own row goes, the group stays. */
   isCalchemyPlayground: boolean;
   /**
    * Where a blocked exit was headed, or null. Non-null means the author asked
@@ -163,10 +167,27 @@ export function useCommandPalette(
   // the group — see `isCalchemyPlayground` at the call site.
   const isCalchemyPlayground = pathname === "/playground/calchemy";
 
+  // ...which turns out to be the SHADER playground's case too, for whoever
+  // cannot write to it.
+  //
+  // Being on it and editing a preset are two different facts, and the route
+  // only ever established the first. A visitor can move every slider on the
+  // page and still hold nothing that could be saved — there is no row of
+  // theirs to write to, which is why `wouldLoseWork` already answers no for
+  // them and why ⌘S is left to the browser. Calling it an editor anyway cost
+  // them the two things this page is otherwise identical to Calchemy in
+  // having: a way out named for what it does ("Back to index", not "Exit
+  // editor" — there is nothing to finish with), and the sight of the other
+  // playground while standing here.
+  //
+  // For the author it is an editor exactly as before, and the difference is
+  // real rather than cosmetic: their exits decide what becomes of the buffer.
+  const isShaderEditor = isShaderPlayground && isAdmin;
+
   // Which editor is open. Ordered most-specific first: `/edit/home` also
   // satisfies the generic edit-mode test, and it edits a GRID rather than a
   // document.
-  const editorKind: EditorKind = isShaderPlayground
+  const editorKind: EditorKind = isShaderEditor
     ? "shaderPreset"
     : isHomeEditMode
       ? "grid"

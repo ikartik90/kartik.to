@@ -201,6 +201,61 @@ describe("useCommandPalette", () => {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // Whose playground it is
+  //
+  // Being on the playground and EDITING one are two different facts, and only
+  // the author can hold the second. A visitor can move every slider on the
+  // page and still have nothing that could be written, so the route alone was
+  // never enough to call it an editor.
+  // -------------------------------------------------------------------------
+
+  describe("editorKind on the playground", () => {
+    beforeEach(() => {
+      mockPathname.mockReturnValue("/playground/shader");
+    });
+
+    // This file does not unmount between tests, and a hook left mounted on the
+    // playground keeps the ⌘S listener it binds there — which the save-shortcut
+    // cases below would then answer twice.
+    afterEach(cleanup);
+
+    it("is no editor at all for a visitor, who has nowhere to save to", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      expect(result.current.editorKind).toBeNull();
+    });
+
+    it("is the preset editor for the author, who does", () => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      expect(result.current.editorKind).toBe("shaderPreset");
+    });
+
+    it("says the same on a saved preset's own route", () => {
+      mockPathname.mockReturnValue("/playground/shader/abc123");
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      expect(result.current.editorKind).toBeNull();
+    });
+
+    // The wording follows from it: a visitor is walking home, not finishing
+    // with an editor, and one label cannot be honest about both.
+    it("names the visitor's way out as navigation", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      expect(result.current.backTarget?.label).toBe("Back to index");
+    });
+
+    it("names the author's as finishing with the editor", () => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      expect(result.current.backTarget?.label).toBe("Exit editor");
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // ⌘S
   //
@@ -511,6 +566,12 @@ describe("useCommandPalette", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/playground/shader");
       window.history.replaceState(null, "", "/playground/shader");
+      // Signed in, because that is the only state in which the command
+      // exists: the palette's Save row is admin-only and so is the ⌘S that
+      // runs it. The playground is an editor for whoever can write to it.
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
       useShaderPresetDraftStore.getState().reset();
       const preset = await import("@/app/actions/shader-preset");
       (preset.createShaderPreset as Mock).mockReset();
@@ -801,6 +862,12 @@ describe("useCommandPalette", () => {
   describe("handleDiscardAndExit — the preset", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/playground/shader");
+      // Signed in, because that is the only state in which the command
+      // exists: the palette's Save row is admin-only and so is the ⌘S that
+      // runs it. The playground is an editor for whoever can write to it.
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
       useShaderPresetDraftStore.getState().reset();
       const preset = await import("@/app/actions/shader-preset");
       (preset.createShaderPreset as Mock).mockReset();
