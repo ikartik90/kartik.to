@@ -487,6 +487,19 @@ const chromeStyle = css({
 // and the two ends of a two-column grid — the menu on the left, the theme
 // toggle pushed to the right of the second column.
 const chromeRowStyle = css({
+  // ABOVE the band's frosting, and this is painting order rather than taste.
+  // The blur layers are `position: absolute` and this row is not, and a
+  // stacking context paints its positioned descendants AFTER its in-flow ones
+  // however they are written — so the frosting landed on top of the two
+  // controls and took them into its own backdrop. The menu's ⌘K chip came out
+  // smeared with the calendar showing through it.
+  //
+  // The foot has never had the problem because its bar is a SIBLING of the
+  // scrim rather than a child, sitting a z-index above it. This is that same
+  // arrangement said from inside: the band frosts the calendar behind it, and
+  // the navigation stands clear of it.
+  position: "relative",
+  zIndex: 1,
   width: "min(token(spacing.full), token(sizes.articleShowcase))",
   maxWidth:
     "min(token(sizes.articleShowcase), calc(token(spacing.full) - 2 * token(spacing.xxl)))",
