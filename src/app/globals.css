@@ -526,6 +526,79 @@ body {
   background-color: transparent;
 }
 
+/* iOS Safari zooms the page in when a field it is focusing is set below 16px,
+   and then leaves it zoomed — the layout is responsive, so the field was
+   already the right size, and the "help" is a viewport the reader has to pinch
+   back out of. The two ways out are `maximum-scale=1` on the viewport meta and
+   a 16px floor on the controls themselves; this is the second, because the
+   first takes pinch-zoom away from everyone to fix a thing that only happens on
+   focus.
+
+   Scoped to a COARSE pointer — a finger. A trackpad never triggers the zoom, so
+   a desktop keeps the 14px its fields are drawn at, and only a touch device
+   pays the two pixels. Unlayered, so it beats the `textStyle` utility that sets
+   the size (`@layer utilities`) without depending on emission order — the same
+   move the two overrides above make.
+
+   Text entry only. A checkbox, a radio, a range or a colour well is sized off
+   its font in some engines and none of them can be typed into, so raising
+   theirs would resize a control to fix a zoom it never causes. */
+/* A slider is a DRAG target end to end, so nothing in its row may become a text
+   selection anchor.
+
+   The track already declines the selection a primary-button `pointerdown`
+   starts, and on a mouse that is the whole story — measured clean in Chromium,
+   WebKit and Firefox. A finger is a different mechanism: iOS starts its
+   selection from the touch gesture rather than from a cancelable mousedown, so
+   nothing the track's handler does is consulted, and it anchors on the nearest
+   selectable TEXT. That is the field's own label, which sits beside the frame
+   the track is inside — an element no rule written from the track can reach.
+   Dragging "Origin Min" in the shader panel highlighted the words "Origin Min"
+   and raised the Copy / Look Up callout over them.
+
+   Hence `:has()`, reaching up to the field root so the label is covered with
+   the control, and `-webkit-touch-callout` for the bar iOS floats above it. The
+   bare `[role="slider"]` catches the colour picker's saturation map, which is
+   the same gesture without a field around it.
+
+   Unlayered, so it cannot be undone by whichever recipe layer a control's own
+   rules land in. */
+[data-field]:has([role="slider"]),
+[role="slider"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* — except the readout, which is a real text field the value can be typed into.
+   `user-select` inherits, and an input that has inherited `none` cannot have its
+   number selected to be replaced. */
+[data-field]:has([role="slider"]) input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The other half, for the length of the drag: the rule above governs where a
+   press LANDS, and a drag then travels wherever the hand takes it. `Slider.Track`
+   and the colour map set this on <html> for as long as a pointer is down and
+   clear it on every route out — lift, cancel, lost capture, unmount (see
+   `src/utils/control-drag.ts`). `*` and `!important` because this has to beat
+   the `user-select: text` above and any control that sets its own, and it only
+   exists while a finger is on the page. */
+html[data-control-dragging],
+html[data-control-dragging] * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+  textarea,
+  select {
+    font-size: 1rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

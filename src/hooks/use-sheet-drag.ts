@@ -1,7 +1,14 @@
 "use client";
 
-import { useRef, useState, type PointerEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type RefObject,
+} from "react";
 import { dragOffset, shouldDismiss } from "@/utils/sheet-drag";
+import { beginControlDrag, endControlDrag } from "@/utils/control-drag";
 
 // ---------------------------------------------------------------------------
 // useSheetDrag — pull a bottom sheet down to send it away.
@@ -47,6 +54,15 @@ export interface SheetDrag {
    */
   offset: number | null;
   dragHandlers: {
+    /**
+     * Marks the element as the grip. It rides WITH the handlers rather than
+     * being left to the consumer to remember, because the two are one decision:
+     * whatever is dragged is what must not be selected while it is
+     * (`[data-sheet-grip]` in panda.config.ts's globalCss). Nobody can wire the
+     * gesture without the rule now, which is the point — this is a fix that
+     * would otherwise have to be repeated by hand at every new grip.
+     */
+    "data-sheet-grip": string;
     onPointerDown: (event: PointerEvent<HTMLElement>) => void;
     onPointerMove: (event: PointerEvent<HTMLElement>) => void;
     onPointerUp: (event: PointerEvent<HTMLElement>) => void;
@@ -75,15 +91,38 @@ export function useSheetDrag({
   const gesture = useRef<Gesture | null>(null);
 
   const end = () => {
+    // Selection goes back before the gesture is forgotten — this is the one
+    // place that knows which pointer was holding it, and every route out
+    // (release, cancel, unmount) comes through here.
+    if (gesture.current) endControlDrag(gesture.current.pointerId);
     gesture.current = null;
     setOffset(null);
   };
 
+  // The route no event covers: a drag past the threshold DISMISSES the panel,
+  // which unmounts the grip before any release reaches it. Without this the
+  // page would be left permanently unable to select — by the gesture working,
+  // not by it failing.
+  useEffect(() => {
+    const live = gesture;
+    return () => {
+      if (live.current) endControlDrag(live.current.pointerId);
+    };
+  }, []);
+
   return {
     offset,
     dragHandlers: {
+      "data-sheet-grip": "",
       onPointerDown: (event) => {
         if (!enabled()) return;
+        // The grip IS the header, and a header is a line of text. On a phone
+        // that makes it the same defect the sliders had: iOS anchors a
+        // selection on the nearest selectable text and paints the panel's own
+        // title blue while it is being pulled down. The static half of the
+        // answer is in globalCss; this is the half that covers where the drag
+        // TRAVELS, which is the length of the screen.
+        beginControlDrag(event.pointerId);
         gesture.current = {
           pointerId: event.pointerId,
           startY: event.clientY,

@@ -163,3 +163,52 @@ describe("useSheetDrag", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 });
+
+describe("useSheetDrag — text selection during the gesture", () => {
+  const dragging = () =>
+    document.documentElement.hasAttribute("data-control-dragging");
+
+  beforeEach(() => {
+    clock = 0;
+  });
+  afterEach(cleanup);
+
+  it("suspends selection for the length of the drag", () => {
+    // The grip IS the header, and the header is a line of text: without this a
+    // downward pull anchors an iOS selection on the panel's own title.
+    render(<Sheet onDismiss={vi.fn()} />);
+    expect(dragging()).toBe(false);
+    grab(100);
+    expect(dragging()).toBe(true);
+    dragTo(160);
+    expect(dragging()).toBe(true);
+    release(160);
+    expect(dragging()).toBe(false);
+  });
+
+  it("hands it back when the gesture is cancelled", () => {
+    render(<Sheet onDismiss={vi.fn()} />);
+    grab(100);
+    expect(dragging()).toBe(true);
+    fireEvent.pointerCancel(grip(), { pointerId: 1 });
+    expect(dragging()).toBe(false);
+  });
+
+  it("hands it back when the sheet unmounts mid-drag", () => {
+    // A drag past the threshold dismisses the panel, which is exactly the
+    // gesture that unmounts the grip before any release arrives.
+    const { unmount } = render(<Sheet onDismiss={vi.fn()} />);
+    grab(100);
+    expect(dragging()).toBe(true);
+    unmount();
+    expect(dragging()).toBe(false);
+  });
+
+  it("takes nothing where the sheet is not a sheet", () => {
+    // A docked rail's header is dragged by nobody, and must leave the page's
+    // selection exactly as it found it.
+    render(<Sheet onDismiss={vi.fn()} enabled={() => false} />);
+    grab(100);
+    expect(dragging()).toBe(false);
+  });
+});

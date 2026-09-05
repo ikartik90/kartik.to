@@ -4,6 +4,8 @@ import {
   createContext,
   forwardRef,
   useContext,
+  useEffect,
+  useRef,
   useState,
   type HTMLAttributes,
   type InputHTMLAttributes,
@@ -21,6 +23,7 @@ import {
   valueAtRatio,
   type SliderScale,
 } from "@/utils/slider-value";
+import { beginControlDrag, endControlDrag } from "@/utils/control-drag";
 import { Field, useField } from "./field";
 import { WireframeText, useWireframe } from "../wireframe";
 
@@ -153,6 +156,38 @@ export type SliderTrackProps = Omit<
 >;
 
 /**
+ * The pointers this track is dragging with, and the promise that every one of
+ * them hands the page's selection back.
+ *
+ * Four routes end a drag — the finger lifts, the gesture is cancelled, capture
+ * is lost, the panel closes under it — and `endControlDrag` is idempotent
+ * precisely so all four can call it without knowing about each other. The
+ * unmount case is the one no event covers: a properties panel dismissed
+ * mid-drag takes its listeners with it, and a page left permanently unable to
+ * select would be a worse bug than the one this fixes.
+ */
+function useDragPointers() {
+  const held = useRef(new Set<number>());
+  useEffect(() => {
+    const pointers = held.current;
+    return () => {
+      pointers.forEach(endControlDrag);
+      pointers.clear();
+    };
+  }, []);
+  return {
+    take: (id: number) => {
+      held.current.add(id);
+      beginControlDrag(id);
+    },
+    release: (id: number) => {
+      held.current.delete(id);
+      endControlDrag(id);
+    },
+  };
+}
+
+/**
  * The ruler and the thumb — and the field's labelable control: it carries the
  * field's id, `role="slider"` with the live value, and the `data-control` hook
  * the frame keys its focus state off. Dragging, clicking and the arrow keys all
@@ -161,13 +196,23 @@ export type SliderTrackProps = Omit<
  */
 const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
   function SliderTrack(
-    { className, onPointerDown, onPointerMove, onKeyDown, ...rest },
+    {
+      className,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel,
+      onLostPointerCapture,
+      onKeyDown,
+      ...rest
+    },
     forwardedRef,
   ) {
     const { controlId, labelId, hasLabel, hintId, hasHint, registerControl } =
       useField("Slider.Track");
     const { scale, value, ratio, ticks, disabled, commit, styles } =
       useSlider("Slider.Track");
+    const drag = useDragPointers();
 
     // A continuous slider still needs a keyboard increment; 100 stops across
     // the range is the same granularity a native range input assumes.
@@ -209,14 +254,25 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
           // is to START A TEXT SELECTION, and pointer capture does nothing
           // about it — the drag keeps steering the thumb while the browser
           // paints a selection across every label and paragraph the cursor
-          // passes on its way out of the frame. Declined here rather than with
-          // `user-select: none` on the track, which only refuses the selection
-          // an anchor INSIDE it, not the one this press just started outside.
+          // passes on its way out of the frame.
           //
           // It costs the implicit focus that a mousedown would have given the
           // track, which is why the explicit `focus()` below is load-bearing
           // rather than belt-and-braces.
           e.preventDefault();
+          // That settles a MOUSE — measured clean in Chromium, WebKit and
+          // Firefox — and settles nothing on a phone, which is one of three
+          // reasons this is not one line. iOS starts its selection from the
+          // TOUCH GESTURE rather than from a cancelable mousedown, so nothing
+          // decided here is consulted, and it anchors on the nearest selectable
+          // text: the field's own label, which sits beside the frame this track
+          // is inside and is therefore unreachable from here. globals.css
+          // covers that with a `:has()` rule over the whole field.
+          //
+          // This is the third: the rule above governs where a press LANDS, and
+          // a drag then goes wherever the hand takes it. So the page's
+          // selection is taken outright for as long as the drag runs.
+          drag.take(e.pointerId);
           // Capture on the track, so a drag that leaves the frame (or the
           // window) keeps steering the thumb and still ends cleanly.
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -228,6 +284,18 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
           if (e.defaultPrevented || disabled) return;
           if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
           commit(valueAtPointer(e));
+        }}
+        onPointerUp={(e) => {
+          onPointerUp?.(e);
+          drag.release(e.pointerId);
+        }}
+        onPointerCancel={(e) => {
+          onPointerCancel?.(e);
+          drag.release(e.pointerId);
+        }}
+        onLostPointerCapture={(e) => {
+          onLostPointerCapture?.(e);
+          drag.release(e.pointerId);
         }}
         onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
           onKeyDown?.(e);

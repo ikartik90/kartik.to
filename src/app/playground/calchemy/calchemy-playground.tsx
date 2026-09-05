@@ -265,11 +265,19 @@ const CHROME_BAND = "var(--chrome-band)";
 
 const SCRIM_BLUR = "blur(1.4px)";
 
-/** The near half of the ramp, then the tail — see the note above. */
-const SCRIM_RAMPS = [
-  "linear-gradient(to top, #000, transparent 55%)",
-  "linear-gradient(to top, #000, transparent)",
+/**
+ * The near half of the ramp, then the tail — see the note above. Built from the
+ * edge the band stands on, because both bands want the same pair pointed
+ * opposite ways: the foot's fades up off the query bar, the head's down off the
+ * two gutter controls.
+ */
+const scrimRamps = (towards: "top" | "bottom") => [
+  `linear-gradient(to ${towards}, #000, transparent 55%)`,
+  `linear-gradient(to ${towards}, #000, transparent)`,
 ];
+
+const SCRIM_RAMPS = scrimRamps("top");
+const CHROME_RAMPS = scrimRamps("bottom");
 
 /** A month's own measure: 7 day columns, their 6 gutters, and the period's
  *  padding — the 208px pitch the `calendar` recipe is built on. */
@@ -452,7 +460,8 @@ const chromeStyle = css({
   insetInlineStart: 0,
   height: `calc(${CHROME_BAND} + ${SCRIM_CLEARANCE})`,
   // The band dissolves into the page rather than ending on a line — the foot's
-  // gradient, upside down. `bg.canvas` for the same reason it uses it: this
+  // gradient, upside down, with `ScrimBlur` laying the foot's frosting over it
+  // the same way. `bg.canvas` for the same reason the foot uses it: this
   // calendar has no panel of its own to fade over.
   backgroundImage:
     "linear-gradient(to bottom, token(colors.bg.canvas), transparent)",
@@ -502,6 +511,37 @@ const chromeEndStyle = css({
   justifySelf: "end",
 });
 
+const scrimLayerStyle = css({
+  position: "absolute",
+  inset: 0,
+});
+
+/**
+ * The frosting half of a band, pointed at whichever edge asks for it: the pair
+ * of 1.4px blurs masked over different distances that the note above
+ * `SCRIM_BLUR` describes. The band itself carries the wash, which is the half
+ * that does the work — this is the garnish, and both ends of the page wear the
+ * same one.
+ */
+function ScrimBlur({ ramps }: { ramps: string[] }) {
+  return (
+    <>
+      {ramps.map((ramp) => (
+        <div
+          key={ramp}
+          className={scrimLayerStyle}
+          style={{
+            backdropFilter: SCRIM_BLUR,
+            WebkitBackdropFilter: SCRIM_BLUR,
+            maskImage: ramp,
+            WebkitMaskImage: ramp,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 /**
  * The site's own two controls, which this page has to carry itself: `Header`
  * draws them for the homepage alone, and an article hangs them off its intro
@@ -510,6 +550,9 @@ const chromeEndStyle = css({
 function PlaygroundChrome() {
   return (
     <div className={chromeStyle}>
+      {/* Behind the controls, and inert with the strip: `chromeRowStyle` takes
+          its own children's presses back, and these are not among them. */}
+      <ScrimBlur ramps={CHROME_RAMPS} />
       <div className={chromeRowStyle}>
         <MenuButton />
 
@@ -520,11 +563,6 @@ function PlaygroundChrome() {
     </div>
   );
 }
-
-const scrimLayerStyle = css({
-  position: "absolute",
-  inset: 0,
-});
 
 // No panel. The calendar's `default` tone frames itself with a field surface
 // and a hairline ring — right for the Date popover it was drawn for, wrong on
@@ -1774,18 +1812,7 @@ export function CalchemyPlayground() {
       {/* The band the query bar floats in, frosted so the bar is not sitting
           crisply on a dense field of numbers — see `SCRIM_RAMPS`. */}
       <div ref={scrimRef} className={scrimStyle} aria-hidden>
-        {SCRIM_RAMPS.map((ramp) => (
-          <div
-            key={ramp}
-            className={scrimLayerStyle}
-            style={{
-              backdropFilter: SCRIM_BLUR,
-              WebkitBackdropFilter: SCRIM_BLUR,
-              maskImage: ramp,
-              WebkitMaskImage: ramp,
-            }}
-          />
-        ))}
+        <ScrimBlur ramps={SCRIM_RAMPS} />
       </div>
       {/* The bar the year is talked to through. */}
       <div ref={barRef} className={barStyle}>

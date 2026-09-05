@@ -534,3 +534,69 @@ describe("Slider", () => {
     });
   });
 });
+
+describe("Slider — text selection during a drag", () => {
+  const dragging = () =>
+    document.documentElement.hasAttribute("data-control-dragging");
+
+  it("suspends selection for the length of the drag", () => {
+    render(
+      <Field size="sm">
+        <Field.Label>Origin Min</Field.Label>
+        <Slider min={0} max={100} defaultValue={0} />
+      </Field>,
+    );
+    const track = layoutTrack();
+
+    expect(dragging()).toBe(false);
+    fireEvent.pointerDown(track, { pointerId: 1, button: 0, clientX: atRatio(0) });
+    expect(dragging()).toBe(true);
+    fireEvent.pointerUp(track, { pointerId: 1 });
+    fireEvent.lostPointerCapture(track, { pointerId: 1 });
+    expect(dragging()).toBe(false);
+  });
+
+  it("lets go when the pointer is cancelled mid-drag", () => {
+    render(
+      <Field size="sm">
+        <Field.Label>Origin Min</Field.Label>
+        <Slider min={0} max={100} defaultValue={0} />
+      </Field>,
+    );
+    const track = layoutTrack();
+
+    fireEvent.pointerDown(track, { pointerId: 1, button: 0, clientX: atRatio(0) });
+    expect(dragging()).toBe(true);
+    fireEvent.pointerCancel(track, { pointerId: 1 });
+    expect(dragging()).toBe(false);
+  });
+
+  it("lets go when the slider unmounts mid-drag", () => {
+    const { unmount } = render(
+      <Field size="sm">
+        <Field.Label>Origin Min</Field.Label>
+        <Slider min={0} max={100} defaultValue={0} />
+      </Field>,
+    );
+    const track = layoutTrack();
+
+    fireEvent.pointerDown(track, { pointerId: 1, button: 0, clientX: atRatio(0) });
+    expect(dragging()).toBe(true);
+    // A panel closed under a finger still has to hand selection back.
+    unmount();
+    expect(dragging()).toBe(false);
+  });
+
+  it("takes no mark from a press it declines", () => {
+    render(
+      <Field size="sm">
+        <Field.Label>Origin Min</Field.Label>
+        <Slider min={0} max={100} defaultValue={0} disabled />
+      </Field>,
+    );
+    const track = layoutTrack();
+
+    fireEvent.pointerDown(track, { pointerId: 1, button: 0, clientX: atRatio(0) });
+    expect(dragging()).toBe(false);
+  });
+});

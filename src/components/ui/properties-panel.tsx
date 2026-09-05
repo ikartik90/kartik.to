@@ -14,7 +14,7 @@ import {
 } from "react";
 import { usePropertiesPanelInset } from "@/hooks/use-properties-panel-inset";
 import { propertiesPanel } from "../../../styled-system/recipes";
-import { cx } from "../../../styled-system/css";
+import { css, cx } from "../../../styled-system/css";
 import { Button } from "./button";
 import { Popover } from "./popover";
 import { Typography } from "./typography";
@@ -22,6 +22,7 @@ import { Field } from "./input/field";
 import AddIcon from "@/assets/icons/add.svg";
 import RemoveIcon from "@/assets/icons/remove.svg";
 import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
+import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
 
 // ---------------------------------------------------------------------------
 // PropertiesPanel — the docked inspector, composed the way the rest of the
@@ -263,9 +264,43 @@ function PropertiesPanelHeader({
         {children}
       </Typography>
       <Button aria-label={closeLabel} onClick={onDismiss}>
-        <RightSidebarIcon aria-hidden />
+        <PropertiesPanelDockIcon />
       </Button>
     </div>
+  );
+}
+
+// Which picture the panel's own control wears, decided the way the panel
+// decides everything else about its dock: the media query. A sheet rises from
+// the bottom of a phone and a rail comes in from the side of a desktop, and a
+// button that pointed at the wrong edge would be describing a panel the reader
+// is not about to get.
+//
+// CSS rather than `isBottomSheetLayout()`, and that is the load-bearing half:
+// the panel is rendered on the server and the query cannot be asked there, so a
+// scripted answer would hydrate the rail's glyph onto a phone and swap it a
+// frame later. It is also one button either way — the label and the press are
+// stated once, and only the picture changes.
+const railOnlyIconStyle = css({ _bottomSheet: { display: "none" } });
+const sheetOnlyIconStyle = css({
+  display: "none",
+  _bottomSheet: { display: "block" },
+});
+
+/**
+ * The glyph for "this panel" — the rail on a desktop, the sheet on a phone.
+ *
+ * Exported because the control that BRINGS the panel back does not live inside
+ * it: it sits on the page's own chrome, with no panel mounted to read a dock
+ * off. Both ends of that one toggle wear this, so the picture agrees with the
+ * panel the press is about to produce.
+ */
+function PropertiesPanelDockIcon() {
+  return (
+    <>
+      <RightSidebarIcon aria-hidden className={railOnlyIconStyle} />
+      <BottomSheetIcon aria-hidden className={sheetOnlyIconStyle} />
+    </>
   );
 }
 
@@ -472,6 +507,7 @@ function PropertiesPanelText({
 
 export const PropertiesPanel = Object.assign(PropertiesPanelRoot, {
   Header: PropertiesPanelHeader,
+  DockIcon: PropertiesPanelDockIcon,
   Section: PropertiesPanelSection,
   SectionHeader: PropertiesPanelSectionHeader,
   ControlPanel: PropertiesPanelControlPanel,
