@@ -5,6 +5,7 @@ describe("demo component registry", () => {
   it("registers every demo, sorted by label with a lazy loader", () => {
     expect(demoComponents.map((demo) => demo.id)).toEqual([
       "calchemy-demo",
+      "link-card",
       "position-fields-consolidation",
       "scheduling-layout-redesign",
       "shader-preset-reel",
@@ -14,7 +15,31 @@ describe("demo component registry", () => {
       "weather-widget",
     ]);
     for (const demo of demoComponents) {
-      expect(typeof demo.load).toBe("function");
+      // Every SPECIMEN has a chunk to fetch. The card entry has none and must
+      // not: it is drawn from its publication's own configuration, so there is
+      // nothing to load and no preloader to show between placing it and seeing
+      // it. `card` is what tells the two apart everywhere else too.
+      expect(typeof demo.load).toBe(demo.card ? "undefined" : "function");
+    }
+  });
+
+  // The one entry that is not a demo — a shell the publication fills in. It is
+  // in this registry because this registry is what the insert dialog lists, and
+  // putting a card on the grid is the same act as publishing a demo.
+  it("resolves link-card by id, as a card with no module behind it", () => {
+    expect(getDemoComponent("link-card")).toMatchObject({
+      id: "link-card",
+      label: "Link Card",
+      card: true,
+      aspectRatio: "16/9",
+    });
+    expect(getDemoComponent("link-card")?.load).toBeUndefined();
+  });
+
+  // Every other entry is a specimen and is framed as one.
+  it("marks nothing else as a card", () => {
+    for (const demo of demoComponents) {
+      if (demo.id !== "link-card") expect(demo.card).toBeUndefined();
     }
   });
 

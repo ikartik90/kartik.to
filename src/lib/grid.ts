@@ -4,6 +4,7 @@ import { orderGridItems } from "@/utils/grid-order";
 import { parsePost } from "@/lib/posts";
 import { postCover } from "@/utils/post-cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import { LinkCardConfigSchema, type LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import type { Post } from "@/domain/post";
 
@@ -76,6 +77,17 @@ export interface GridComponentCard extends GridCardBase {
   /** The registry key — not unique, so one demo can appear more than once. */
   componentId: string;
   logger: boolean;
+  /**
+   * What this publication IS, for the one registry entry that is a shell rather
+   * than a specimen — the link card. `null` for every other card, where the
+   * demo's own code is the whole content and there is nothing to configure.
+   *
+   * Read LENIENTLY off the row: a blob that no longer parses (a card pointing
+   * at a route the site has since dropped, say) becomes an empty configuration
+   * rather than an exception. The card renders blank and can be fixed in the
+   * rail, which is a better failure than the homepage 500ing over one tile.
+   */
+  props: LinkCardConfig | null;
 }
 
 export type GridCard = GridPostCard | GridComponentCard;
@@ -187,6 +199,9 @@ export async function getGridCards(): Promise<GridCard[]> {
           entry.aspectRatio ??
           COMPONENT_FALLBACK_ASPECT,
         logger: row.logger ?? Boolean(entry.logger),
+        // See `GridComponentCard.props` for why an unparseable blob is an empty
+        // configuration rather than a throw.
+        props: LinkCardConfigSchema.safeParse(row.props ?? {}).data ?? {},
         gridIndex: row.gridIndex,
         publishedAt: row.publishedAt,
         span: row.gridSpan ?? 1,

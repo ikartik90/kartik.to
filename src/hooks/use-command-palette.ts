@@ -710,7 +710,7 @@ export function useCommandPalette(
    */
   const persistGrid = async (): Promise<boolean> => {
     const { draftId, title, document, category } = useEditorStore.getState();
-    const { pins, spans, aspects, loggers, inserts, removals } =
+    const { pins, spans, aspects, loggers, props, inserts, removals } =
       useGridDraftStore.getState();
     try {
       if (draftId) {
@@ -721,6 +721,7 @@ export function useCommandPalette(
         spans,
         aspects,
         loggers,
+        props,
         inserts,
         removals,
       });

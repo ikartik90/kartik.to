@@ -16,6 +16,22 @@ export const ALLOWED_IMAGE_CONTENT_TYPES = [
 export const ALLOWED_VIDEO_CONTENT_TYPES = ["video/mp4"] as const;
 
 /**
+ * Files the bucket holds that are NOT media — a document is fetched, not
+ * rendered, and there is no element that draws one.
+ *
+ * A separate list rather than a third arm of `ALLOWED_MEDIA_CONTENT_TYPES`, and
+ * that separation is load-bearing: every media type has a `MediaKind`
+ * (`mediaKindOf`), a document has none, and folding it in would make that
+ * function's `"image"` fall-through — the branch its own test calls unreachable
+ * — the answer for a whole real format. The image dialog would then list PDFs
+ * as pictures that cannot load.
+ *
+ * The two lists meet again at {@link ALLOWED_UPLOAD_CONTENT_TYPES}, because the
+ * bucket, the signer and the admin guard are one path for both.
+ */
+export const ALLOWED_DOCUMENT_CONTENT_TYPES = ["application/pdf"] as const;
+
+/**
  * Everything the library takes. Pictures first, so the order the formats are
  * listed in — in the accept attribute, in the dialog's hint — stays the order
  * they were added in.
@@ -25,11 +41,23 @@ export const ALLOWED_MEDIA_CONTENT_TYPES = [
   ...ALLOWED_VIDEO_CONTENT_TYPES,
 ] as const;
 
+/** Everything that may be PUT into the bucket — media and documents alike. */
+export const ALLOWED_UPLOAD_CONTENT_TYPES = [
+  ...ALLOWED_MEDIA_CONTENT_TYPES,
+  ...ALLOWED_DOCUMENT_CONTENT_TYPES,
+] as const;
+
 export type AllowedImageContentType = (typeof ALLOWED_IMAGE_CONTENT_TYPES)[number];
 
 export type AllowedVideoContentType = (typeof ALLOWED_VIDEO_CONTENT_TYPES)[number];
 
+export type AllowedDocumentContentType =
+  (typeof ALLOWED_DOCUMENT_CONTENT_TYPES)[number];
+
 export type AllowedMediaContentType = (typeof ALLOWED_MEDIA_CONTENT_TYPES)[number];
+
+export type AllowedUploadContentType =
+  (typeof ALLOWED_UPLOAD_CONTENT_TYPES)[number];
 
 export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -41,17 +69,31 @@ export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
  */
 export const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+/**
+ * Between the two, for the reason both of the others exist: a print-quality
+ * portfolio or a scanned CV routinely clears the image ceiling and is nowhere
+ * near a screen recording's, so one cap shared with either would be the wrong
+ * guard in one direction or a refusal in the other.
+ */
+export const MAX_DOCUMENT_UPLOAD_BYTES = 25 * 1024 * 1024;
+
 export function isVideoContentType(
   value: string,
 ): value is AllowedVideoContentType {
   return (ALLOWED_VIDEO_CONTENT_TYPES as readonly string[]).includes(value);
 }
 
+export function isDocumentContentType(
+  value: string,
+): value is AllowedDocumentContentType {
+  return (ALLOWED_DOCUMENT_CONTENT_TYPES as readonly string[]).includes(value);
+}
+
 /** The ceiling this format is held to — see `MAX_VIDEO_UPLOAD_BYTES`. */
 export function maxUploadBytesFor(contentType: string): number {
-  return isVideoContentType(contentType)
-    ? MAX_VIDEO_UPLOAD_BYTES
-    : MAX_IMAGE_UPLOAD_BYTES;
+  if (isVideoContentType(contentType)) return MAX_VIDEO_UPLOAD_BYTES;
+  if (isDocumentContentType(contentType)) return MAX_DOCUMENT_UPLOAD_BYTES;
+  return MAX_IMAGE_UPLOAD_BYTES;
 }
 
 /**
@@ -120,7 +162,7 @@ export type MediaAsset = z.infer<typeof MediaAssetSchema>;
 export const CreateMediaUploadInputSchema = z
   .object({
     filename: z.string().min(1),
-    contentType: z.enum(ALLOWED_MEDIA_CONTENT_TYPES),
+    contentType: z.enum(ALLOWED_UPLOAD_CONTENT_TYPES),
     size: z.number().int().positive(),
     ...mediaDimensionFields,
   })
@@ -159,6 +201,20 @@ export function isAllowedMediaContentType(
   return (ALLOWED_MEDIA_CONTENT_TYPES as readonly string[]).includes(value);
 }
 
+/**
+ * Whether the bucket will take this at all — the guard the SERVER applies, and
+ * the one the upload path shares between pictures, clips and documents.
+ *
+ * Distinct from `isAllowedMediaContentType`, which answers a narrower question:
+ * whether anything can DRAW it. Every caller wants one or the other and never
+ * both, so they are two functions rather than one with a flag.
+ */
+export function isAllowedUploadContentType(
+  value: string,
+): value is AllowedUploadContentType {
+  return (ALLOWED_UPLOAD_CONTENT_TYPES as readonly string[]).includes(value);
+}
+
 export function sanitizeMediaFilename(filename: string): string {
   const base = filename.split(/[/\\]/).pop() ?? "media";
   const cleaned = base.replace(/[^\w.\-()+]/g, "-").replace(/-+/g, "-");
@@ -178,6 +234,26 @@ const MEDIA_KEY_UUID_PREFIX =
  * renamed without moving the object. Legacy objects predating that still land
  * here.
  */
+/**
+ * The same recovery, from the public URL a document node actually stores.
+ *
+ * Surfaces that hold a media NODE have a src and no key — the node deliberately
+ * stores the URL so it renders without a lookup — but they still want to show
+ * the author which file they picked, and `https://cdn…/media/<uuid>-cv.pdf` is
+ * not a name anyone reads. This is the last path segment put through the same
+ * stamp-stripper, so a picture named in the library and a picture named in the
+ * properties rail cannot come out differently.
+ *
+ * A best effort by construction: a CDN is free to rewrite the path, and then
+ * this returns whatever the last segment happens to be. That is a worse label,
+ * never a broken one.
+ */
+export function filenameFromMediaUrl(url: string): string {
+  const path = url.split(/[?#]/)[0];
+  const segment = path.split("/").pop() ?? "";
+  return filenameFromMediaKey(decodeURIComponent(segment), "");
+}
+
 export function filenameFromMediaKey(key: string, prefix = "media/"): string {
   const segment = key.startsWith(prefix) ? key.slice(prefix.length) : key;
   return segment.replace(MEDIA_KEY_UUID_PREFIX, "");

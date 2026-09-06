@@ -10,6 +10,7 @@ import {
 } from "@/app/actions/media";
 import {
   isAllowedMediaContentType,
+  isDocumentContentType,
   maxUploadBytesFor,
   mediaKindOf,
   type MediaAsset,
@@ -24,6 +25,21 @@ export type ImageInsertPhase = "upload" | "uploading" | "library";
 
 export type ImageSelectionMode = "single" | "multiple";
 
+/**
+ * Which half of the bucket this dialog is opening.
+ *
+ * The bucket holds pictures, clips and documents behind one prefix, one signer
+ * and one admin guard — but no surface ever wants two of those at once. An
+ * article block wants something it can DRAW; the link card's document picker
+ * wants a file to point at, and a PDF listed among the pictures would be a
+ * thumbnail that cannot load and a preview pane with nothing in it.
+ *
+ * So the filter is the dialog's, not the library's: `listMediaAssets` still
+ * returns everything, and this decides what is shown, what may be dropped on the
+ * drop zone, and which formats the hint names.
+ */
+export type ImageInsertAccepts = "media" | "document";
+
 export interface UseImageInsertOptions {
   open: boolean;
   initialPhase?: ImageInsertPhase;
@@ -37,6 +53,8 @@ export interface UseImageInsertOptions {
   selectionMode?: ImageSelectionMode;
   /** Hard cap on a multiple selection — the collection's remaining capacity. */
   maxSelection?: number;
+  /** Pictures and clips (the default), or documents. */
+  accepts?: ImageInsertAccepts;
   onReset?: () => void;
 }
 
@@ -119,6 +137,7 @@ export function useImageInsert({
   initialPhase = "upload",
   selectionMode = "single",
   maxSelection = Number.POSITIVE_INFINITY,
+  accepts = "media",
   onReset,
 }: UseImageInsertOptions) {
   const isMultiple = selectionMode === "multiple";
@@ -139,6 +158,29 @@ export function useImageInsert({
 
   const selectedAsset =
     assets.find((asset) => asset.key === selectedKey) ?? null;
+
+  /**
+   * Whether this dialog will show, take or insert a file of this type — see
+   * {@link ImageInsertAccepts}.
+   *
+   * One predicate for the library filter AND the drop zone, deliberately: a
+   * dialog that listed a format it would refuse on upload (or the reverse)
+   * would be two answers to one question, and the mismatch only shows up at the
+   * moment somebody drops a file.
+   */
+  const allows = useCallback(
+    (contentType: string) =>
+      accepts === "document"
+        ? isDocumentContentType(contentType)
+        : isAllowedMediaContentType(contentType),
+    [accepts],
+  );
+
+  /** The half of the library this dialog is for, newest-first as it arrives. */
+  const loadLibrary = useCallback(
+    async () => (await listMediaAssets()).filter((a) => allows(a.contentType)),
+    [allows],
+  );
 
   const reset = useCallback(() => {
     setPhase("upload");
@@ -164,7 +206,7 @@ export function useImageInsert({
 
   const refreshLibrary = useCallback(
     async (selectKey?: string) => {
-      const list = await listMediaAssets();
+      const list = await loadLibrary();
       setAssets(list);
       const key = selectKey ?? list[0]?.key ?? null;
       setSelectedKey(key);
@@ -184,7 +226,7 @@ export function useImageInsert({
       setFilenameText(asset?.filename ?? "");
       return list;
     },
-    [isMultiple, maxSelection],
+    [isMultiple, maxSelection, loadLibrary],
   );
 
   useEffect(() => {
@@ -194,7 +236,7 @@ export function useImageInsert({
 
     (async () => {
       try {
-        const list = await listMediaAssets();
+        const list = await loadLibrary();
         if (ignore) return;
         setAssets(list);
       } catch (err) {
@@ -206,7 +248,7 @@ export function useImageInsert({
     return () => {
       ignore = true;
     };
-  }, [open]);
+  }, [open, loadLibrary]);
 
   useEffect(() => {
     if (!open) {
@@ -242,7 +284,7 @@ export function useImageInsert({
     async (file: File) => {
       setError(null);
 
-      if (!isAllowedMediaContentType(file.type)) {
+      if (!allows(file.type)) {
         setError("Unsupported file type");
         return;
       }
@@ -286,7 +328,7 @@ export function useImageInsert({
         setPhase("upload");
       }
     },
-    [refreshLibrary],
+    [refreshLibrary, allows],
   );
 
   const openLibrary = useCallback(async () => {

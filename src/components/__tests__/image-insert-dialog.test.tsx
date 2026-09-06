@@ -100,7 +100,9 @@ describe("ImageInsertDialog", () => {
     render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
 
     expect(screen.getByRole("dialog", { name: "Insert Media" })).toBeDefined();
-    await user.click(screen.getByRole("button", { name: "Delete image" }));
+    // "Media" throughout, matching the dialog's own noun — the library holds
+    // clips as well as stills, and documents in its other half.
+    await user.click(screen.getByRole("button", { name: "Delete media" }));
     expect(mockDeleteSelectedAsset).toHaveBeenCalledOnce();
   });
 

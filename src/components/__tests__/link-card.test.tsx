@@ -66,13 +66,13 @@ describe("LinkCard", () => {
     expect(link.querySelector("h2")?.textContent).toBe("Atlas");
   });
 
-  it("carries a date over the cover when it is given one", () => {
+  it("carries a meta line over the cover when it is given one", () => {
     render(
       <LinkCard
         href="/writing/on-frames"
         title="On frames"
         aspect="3/2"
-        date="21 August 2026"
+        meta="21 August 2026"
       />,
     );
 
@@ -80,7 +80,7 @@ describe("LinkCard", () => {
     expect(link.contains(screen.getByText("21 August 2026"))).toBe(true);
   });
 
-  it("says nothing but its title when there is no date", () => {
+  it("says nothing but its title when there is no meta line", () => {
     render(<LinkCard href="/work/atlas" title="Atlas" aspect="3/2" />);
 
     // A listing without dates — the projects one — must not get an empty meta
@@ -132,7 +132,7 @@ describe("LinkCard", () => {
         href="/writing/on-frames"
         title="On frames"
         aspect="3/2"
-        date="21 August 2026"
+        meta="21 August 2026"
         cover={picture("/opening.png")}
       />,
     );
@@ -181,7 +181,7 @@ describe("LinkCard", () => {
         href="/writing/on-frames"
         title="On frames"
         aspect="3/2"
-        date="21 August 2026"
+        meta="21 August 2026"
         cover={picture("/opening.png", {
           backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
         })}
@@ -229,7 +229,7 @@ describe("LinkCard", () => {
         href="/writing/on-frames"
         title="On frames"
         aspect="3/2"
-        date="21 August 2026"
+        meta="21 August 2026"
         cover={picture("/opening.png")}
       />,
     );
@@ -237,5 +237,159 @@ describe("LinkCard", () => {
     const scrim = container.querySelector("[class*=link-card__scrim]");
     expect(scrim?.contains(screen.getByText("On frames"))).toBe(true);
     expect(scrim?.contains(screen.getByText("21 August 2026"))).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // The configurable card — a published link card, as opposed to a post's tile.
+  //
+  // A post's card always has a title and takes its picture from its own
+  // document. One published from the component library has neither by default:
+  // it is a shell you fill in, and every part of it is optional, so the card
+  // has to be a real thing at every stage of being built.
+  // -------------------------------------------------------------------------
+
+  it("draws no caption at all when it carries no words", () => {
+    // Not an empty caption box: the box has padding and a gap, so an empty one
+    // is a strip of dead space across the foot of the picture — and the scrim
+    // that grounds it would be shading nothing.
+    const { container } = render(
+      <LinkCard href="/playground/shader" aspect="1/1" cover={picture("/p.png")} />,
+    );
+    expect(container.querySelector("[class*=link-card__caption]")).toBeNull();
+  });
+
+  // The picture is decorative (`alt=""`, aria-hidden), so a wordless card has
+  // no accessible name of its own — the caller has to give it one.
+  it("is named by its label when it shows no words", () => {
+    render(
+      <LinkCard
+        href="/playground/shader"
+        label="Shader playground"
+        aspect="1/1"
+        cover={picture("/p.png")}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Shader playground" })).toBeTruthy();
+  });
+
+  it("shows a meta line with no title under it", () => {
+    render(<LinkCard href="/playground/shader" meta="Playground" aspect="1/1" />);
+    expect(screen.getByRole("link").textContent).toBe("Playground");
+  });
+
+  it("can carry words over a picture with no scrim under them", () => {
+    // A screenshot that is already flat and dark where the caption sits needs
+    // no wash, and one laid over it only greys the picture out.
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader"
+        title="Shader"
+        aspect="1/1"
+        cover={picture("/p.png")}
+        scrim={false}
+      />,
+    );
+    expect(container.querySelector("[class*=link-card__wash]")).toBeNull();
+    expect(container.querySelector("[class*=link-card__caption]")).toBeTruthy();
+  });
+
+  // The tone pins the caption's ink and the wash's colour to ONE theme instead
+  // of letting them follow the reader's, and it has to: what the words stand on
+  // is the picture, and the picture does not change when the page does. A
+  // caption tracking the page theme goes white on a light screenshot the moment
+  // the reader flips to dark.
+  it("pins the scrim and its ink to the tone it was given", () => {
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader"
+        title="Shader"
+        aspect="1/1"
+        cover={picture("/p.png")}
+        tone="dark"
+      />,
+    );
+    const scrim = container.querySelector("[class*=link-card__scrim]");
+    expect(scrim?.className).toContain("link-card__scrim--tone_dark");
+  });
+
+  it("lets the words follow the reader's theme when no tone is set", () => {
+    const { container } = render(
+      <LinkCard href="/work/atlas" title="Atlas" aspect="3/2" />,
+    );
+    expect(
+      container.querySelector("[class*=link-card__scrim]")?.className,
+    ).not.toContain("tone_");
+  });
+
+  // Two files, both in the DOM, swapped in CSS — the page is rendered on the
+  // server and the theme is not a question it can ask there, so a scripted
+  // answer would paint the light screenshot onto a dark page and swap it a
+  // frame later.
+  it("carries a picture per theme, and shows one of them at a time", () => {
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader"
+        aspect="1/1"
+        label="Shader"
+        cover={picture("/light.png")}
+        coverDark={picture("/dark.png")}
+      />,
+    );
+    const sources = [...container.querySelectorAll("img")].map((img) =>
+      img.getAttribute("src"),
+    );
+    expect(sources).toEqual(["/light.png", "/dark.png"]);
+  });
+
+  it("shows the one picture in both themes when only one was given", () => {
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader"
+        aspect="1/1"
+        label="Shader"
+        cover={picture("/one.png")}
+      />,
+    );
+    expect(container.querySelectorAll("img").length).toBe(1);
+  });
+
+  // A card given only a dark picture is still a card with a picture on it —
+  // the scrim and the ink reassignment key off having ANY, not off having the
+  // light one.
+  it("counts a dark-only picture as a cover", () => {
+    render(
+      <LinkCard
+        href="/playground/shader"
+        aspect="1/1"
+        label="Shader"
+        coverDark={picture("/dark.png")}
+      />,
+    );
+    expect(screen.getByRole("link").hasAttribute("data-covered")).toBe(true);
+  });
+
+  it("opens away from here when it is told to", () => {
+    render(
+      <LinkCard href="https://example.com" title="Elsewhere" aspect="1/1" newTab />,
+    );
+    const link = screen.getByRole("link", { name: "Elsewhere" });
+    expect(link.getAttribute("target")).toBe("_blank");
+    // Never `target="_blank"` without it: the opened page gets a handle on this
+    // one through `window.opener` otherwise.
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("stays in this tab by default", () => {
+    render(<LinkCard href="/work/atlas" title="Atlas" aspect="1/1" />);
+    expect(screen.getByRole("link").hasAttribute("target")).toBe(false);
+  });
+
+  // A card being built has not been pointed anywhere yet. An anchor with an
+  // empty href is a link to the page you are already on — focusable, followable
+  // and wrong — so a card with no destination is not a link at all.
+  it("is not a link until it has somewhere to go", () => {
+    render(<LinkCard title="Unfinished" aspect="1/1" />);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText("Unfinished")).toBeTruthy();
   });
 });

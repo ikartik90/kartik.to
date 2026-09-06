@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { OptionList } from "@/components/ui/input/option-list";
 import { DemoFrame } from "@/components/demo-frame";
 import { DemoComponent } from "@/components/demo-component";
+import { LinkCard } from "@/components/link-card";
 import { demoComponents } from "@/components/demo/registry";
 import CloseIcon from "@/assets/icons/cross.svg";
 
@@ -262,6 +263,23 @@ export function ComponentInsertDialog({
                 className={showcaseStageStyle}
                 style={{ transform: `scale(${previewScale})` }}
               >
+                {selected.card ? (
+                  // A card entry has no demo to frame and nothing to load — it
+                  // draws itself from a publication that does not exist yet. So
+                  // the preview is a SPECIMEN of the card rather than a picture
+                  // of what you are about to get: named after the entry, on the
+                  // plate a coverless card draws, at the shape the registry
+                  // says. What it actually shows is authored in the rail once
+                  // it is on the grid, and there is nothing honest to preview
+                  // before that has happened.
+                  <div inert className={demoPreviewStyle}>
+                    <LinkCard
+                      title={selected.label}
+                      aspect={selected.aspectRatio ?? "3/2"}
+                      interactive={false}
+                    />
+                  </div>
+                ) : (
                 <DemoFrame
                   aspectRatio={selected.aspectRatio}
                   chrome={selected.chrome}
@@ -278,6 +296,7 @@ export function ComponentInsertDialog({
                     ) : null}
                   </div>
                 </DemoFrame>
+                )}
               </div>
             </div>
           )}

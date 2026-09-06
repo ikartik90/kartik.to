@@ -112,3 +112,57 @@ describe("getGridCards", () => {
     ).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The configuration a publication carries — read back off the row, for the one
+// registry entry whose row IS the card.
+// ---------------------------------------------------------------------------
+describe("getGridCards — configuration", () => {
+  beforeEach(() => {
+    mockPostFindMany.mockReset().mockResolvedValue([]);
+    mockComponentFindMany.mockReset().mockResolvedValue([]);
+  });
+
+  const componentRow = (props: unknown) => ({
+    id: "c1",
+    componentId: "link-card",
+    aspect: null,
+    logger: null,
+    props,
+    gridIndex: null,
+    gridSpan: null,
+    publishedAt: NOW,
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+
+  const config = async () => {
+    const [card] = await getGridCards();
+    return card?.kind === "component" ? card.props : null;
+  };
+
+  it("carries the card the row holds", async () => {
+    mockComponentFindMany.mockResolvedValue([
+      componentRow({ content: { title: "Shader" } }),
+    ]);
+    expect(await config()).toEqual({ content: { title: "Shader" } });
+  });
+
+  // A demo's content is its own code, so there is nothing here to read — and an
+  // empty configuration is the same answer as none for a card that never asks.
+  it("gives a demo with nothing stored an empty configuration", async () => {
+    mockComponentFindMany.mockResolvedValue([componentRow(null)]);
+    expect(await config()).toEqual({});
+  });
+
+  // Read LENIENTLY, and this is the case it exists for: the whole configuration
+  // is one blob, so a link whose href went bad must not take the rest of the
+  // homepage with it. The card comes back unconfigured and can be fixed in the
+  // rail — a far better failure than a page that 500s over one tile.
+  it("renders a card whose stored configuration no longer parses", async () => {
+    mockComponentFindMany.mockResolvedValue([
+      componentRow({ link: { kind: "external", href: "not a url" } }),
+    ]);
+    expect(await config()).toEqual({});
+  });
+});

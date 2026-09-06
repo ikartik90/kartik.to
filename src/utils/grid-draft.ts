@@ -1,6 +1,7 @@
 import { orderGridItems } from "@/utils/grid-order";
 import type { GridCard } from "@/lib/grid";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import type { LinkCardConfig } from "@/domain/link-card";
 
 // ---------------------------------------------------------------------------
 // Unsaved edits to the grid's layout, and how they are shown before they are
@@ -65,6 +66,24 @@ export interface GridDraft {
    * away (see `saveGridLayout`).
    */
   loggers: Record<string, boolean>;
+  /**
+   * Card key → the configuration it carries.
+   *
+   * The odd one out among these records, and worth saying why it still belongs
+   * here. Every other entry is an OVERRIDE — a seat instead of chronology, a
+   * shape instead of the registry's — so an absent key means "whatever the row
+   * or the registry already said". This one is not an override of anything: for
+   * a link card the blob IS the card, because the registry entry is a shell (see
+   * `LinkCardConfigSchema`). It rides along for the reason the shape and the log
+   * panel do — edited in the same session, from the same rail, and thrown away
+   * by the same "Discard and exit".
+   *
+   * The value REPLACES what is stored rather than merging into it. The rail
+   * hands back the whole configuration on every change, and a merge would make
+   * clearing anything impossible: the absent key would fall through to the
+   * stored one forever, so a title you deleted would come back.
+   */
+  props: Record<string, LinkCardConfig>;
   inserts: PendingComponentInsert[];
   /** Card keys to take off the grid. */
   removals: string[];
@@ -76,6 +95,7 @@ export function emptyGridDraft(): GridDraft {
     spans: {},
     aspects: {},
     loggers: {},
+    props: {},
     inserts: [],
     removals: [],
   };
@@ -88,6 +108,7 @@ export function isGridDraftDirty(draft: GridDraft): boolean {
     Object.keys(draft.spans).length > 0 ||
     Object.keys(draft.aspects).length > 0 ||
     Object.keys(draft.loggers).length > 0 ||
+    Object.keys(draft.props).length > 0 ||
     draft.inserts.length > 0 ||
     draft.removals.length > 0
   );
@@ -121,7 +142,12 @@ export function applyGridDraft(
       // rather than spreading a `logger` field onto a card that has no such
       // property to be read back off it.
       const logged = card.kind === "component" && card.key in draft.loggers;
-      if (!pinned && !widened && !reshaped && !logged) return card;
+      // Same rule as `logged`: a post has no configuration to carry, so a key
+      // naming one is ignored rather than spreading a `props` field onto a card
+      // with no such property to read it back off.
+      const configured = card.kind === "component" && card.key in draft.props;
+      if (!pinned && !widened && !reshaped && !logged && !configured)
+        return card;
       return {
         ...card,
         // Both applied in one rebuild, because a card that was moved AND
@@ -137,6 +163,9 @@ export function applyGridDraft(
         // registry logs by default — so a `??` merge would drop exactly the
         // edit the control exists to make.
         ...(logged ? { logger: draft.loggers[card.key] } : null),
+        // Spread conditionally like the rest, and the whole blob at once —
+        // never merged into the stored one. See `GridDraft.props`.
+        ...(configured ? { props: draft.props[card.key] } : null),
       };
     });
 
@@ -159,6 +188,10 @@ export function applyGridDraft(
       // been used on the card — an override made before the row exists still
       // has to reach the card on screen.
       aspect: draft.aspects[insert.key] ?? insert.aspect,
+      // A link card is PLACED and then filled in, so the row does not exist for
+      // the whole first half of authoring one. Empty until the rail has been
+      // used, which is a blank card rather than a broken one.
+      props: draft.props[insert.key] ?? {},
       // An unsaved card is widened by the same control as a saved one, so the
       // draft's `spans` has to answer for it too. One column until it does.
       span: draft.spans[insert.key] ?? 1,

@@ -102,6 +102,22 @@ model Component {
   // Nothing writes this column except through `ComponentSchema`.
   aspect      String?
   logger      Boolean?
+  // What this publication IS, for the one entry that is a shell rather than a
+  // specimen — the link card. Null for every other row, and that is the honest
+  // record: a scheduling demo's content is its own code, so there is nothing a
+  // publication of it could carry here.
+  //
+  // A blob rather than columns, because the shape belongs to the ENTRY. A
+  // `mediaLight`, `mediaDark`, `linkHref`, `linkKind` and `newTab` spread across
+  // this table would be five columns that are null on every row but one, and the
+  // next configurable entry would want five more of its own. Validated in Zod
+  // (`LinkCardConfigSchema`) exactly as `aspect` and `shaderId` are, and for the
+  // same reason: the schema lives with the component, where one edit reaches it,
+  // rather than being a second copy here that a migration has to keep in step.
+  //
+  // Read leniently (`getGridCards`): a blob that no longer parses renders as an
+  // unconfigured card rather than taking the homepage down.
+  props       Json?
   // See `Post.gridIndex` / `Post.gridSpan` — identical fields, identical
   // meanings. A project and a demo are placed and sized by one control and must
   // not answer differently.

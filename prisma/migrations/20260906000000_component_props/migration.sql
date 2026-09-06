@@ -1,0 +1,12 @@
+-- The configuration a publication carries, for the one registry entry that is a
+-- shell rather than a specimen: the link card.
+--
+-- Nullable with no default, which is the same absent-means-nothing rule
+-- `aspect` and `logger` follow on this table. Every row that exists today
+-- publishes a demo whose content is its own code, so there is nothing for them
+-- to carry and NULL is the truthful value — a `'{}'` default would record an
+-- empty configuration on behalf of rows that can never have one.
+--
+-- `jsonb` rather than `json`: nothing here is ever read back as the exact text
+-- that was written, and jsonb is the type Postgres can index and compare.
+ALTER TABLE "Component" ADD COLUMN "props" JSONB;

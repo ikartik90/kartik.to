@@ -39,8 +39,16 @@ export interface DemoLink {
 export interface DemoComponentEntry {
   id: string;
   label: string;
-  /** Lazily imports the demo's module chunk (loaded after the page loads). */
-  load: () => Promise<ComponentType<DemoProps>>;
+  /**
+   * Lazily imports the demo's module chunk (loaded after the page loads).
+   *
+   * Absent for a {@link DemoComponentEntry.card} entry, which has no chunk: it
+   * is drawn from its publication's own configuration, so there is nothing to
+   * fetch and no loader to show. Nothing calls this without checking `card`
+   * first — the grid and the insert dialog both branch on it before they render
+   * anything at all.
+   */
+  load?: () => Promise<ComponentType<DemoProps>>;
   aspectRatio?: DemoFrameAspectRatio;
   /**
    * `"none"` drops the frame's outline. Set it for a demo that is a WIDGET
@@ -68,6 +76,23 @@ export interface DemoComponentEntry {
    * makes the demo inside one inert to the pointer.
    */
   link?: DemoLink;
+  /**
+   * This entry is a CARD, not a specimen: it draws itself, and it draws itself
+   * bare rather than inside a demo frame.
+   *
+   * The distinction is what the frame MEANS. A frame is a box that says "this
+   * is a prototype, and it ends here" — right for a scheduler you play with,
+   * and wrong for a tile whose whole job is to be one of the cards on the grid.
+   * `chrome: "none"` is not the same concession: that drops the outline and
+   * keeps the measured, centred, aspect-floored box, which a card does not want
+   * either.
+   *
+   * It also names the entries whose publication carries a `props` blob. A
+   * specimen's content is its own code, so a row publishing one has nothing to
+   * configure; a card is a shell, and its row IS the card — see
+   * `LinkCardConfigSchema`.
+   */
+  card?: true;
 }
 
 type DemoRegistryEntry = Omit<DemoComponentEntry, "id" | "label">;
@@ -173,6 +198,26 @@ const registry: Record<string, DemoRegistryEntry> = {
     // the box that says so; this one is supposed to read as a widget sitting on
     // the page, and a hairline around it makes it a picture of one instead.
     chrome: "none",
+  },
+  // The one entry that is not a demo. It publishes a CARD — a picture, some
+  // words and a destination — and everything about it is configured per
+  // publication in the properties rail rather than written in a module here.
+  //
+  // It is in this registry because this registry is what the insert dialog
+  // lists, and putting a card on the grid is the same act as publishing a demo:
+  // you choose it, you place it, you size it, and one `Component` row records
+  // all of that. A second library beside this one would be a second dialog, a
+  // second table and a second `saveGridLayout` fan-out, to add one kind of card.
+  //
+  // What it exists FOR is the pages that have no card of their own — the
+  // playgrounds. Articles and projects already put themselves on the grid; see
+  // `SITE_PATHS`, which is the list this card may point into.
+  "link-card": {
+    card: true,
+    // The shape a project's tile has always been. A row overrides it like any
+    // other, and a link card frequently will — a square window onto a
+    // playground, a tall one onto a document.
+    aspectRatio: "16/9",
   },
   "calchemy-demo": {
     // The playground in a frame: the calendar takes the middle and the query

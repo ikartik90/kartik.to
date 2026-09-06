@@ -10,6 +10,7 @@ import {
   GridIndexSchema,
   GridSpanSchema,
 } from "@/domain/component";
+import { LinkCardConfigSchema } from "@/domain/link-card";
 
 // ---------------------------------------------------------------------------
 // Mutations for the homepage grid — pinning, reordering, and publishing or
@@ -176,11 +177,20 @@ const GridDraftSchema = z.object({
   spans: z.record(z.string(), GridSpanSchema),
   aspects: z.record(z.string(), ComponentAspectSchema),
   loggers: z.record(z.string(), z.boolean()),
+  // Validated HERE, at the door, and not merely on the way out of the database.
+  // It is the one field on this table whose contents are typed by the author
+  // rather than chosen from a control — a URL, a path, some words — so it is
+  // the one that can arrive malformed from a client that has been tampered
+  // with. `LinkCardConfigSchema` is the same schema the card is read back
+  // through, so what is stored is exactly what renders.
+  props: z.record(z.string(), LinkCardConfigSchema),
   inserts: z.array(InsertSchema),
   removals: z.array(z.string().min(1)),
 });
 
 export type GridDraftInput = z.infer<typeof GridDraftSchema>;
+
+type LinkCardConfig = z.infer<typeof LinkCardConfigSchema>;
 
 /**
  * `post:abc` / `component:abc` → the row it names.
@@ -226,6 +236,15 @@ interface RowPatch {
    * value is set below.
    */
   logger?: boolean;
+  /**
+   * The configuration a link card carries — components only, for the reason
+   * `logger` is, and checked at the same place.
+   *
+   * Typed as the domain object rather than as Prisma's `JsonValue`: it has been
+   * through `LinkCardConfigSchema` by the time it lands here, and the cast to
+   * the column's type happens once at the write.
+   */
+  props?: LinkCardConfig;
 }
 
 /**
@@ -241,7 +260,7 @@ interface RowPatch {
  */
 export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
   await requireAdmin();
-  const { pins, spans, aspects, loggers, inserts, removals } =
+  const { pins, spans, aspects, loggers, props, inserts, removals } =
     GridDraftSchema.parse(draft);
 
   await prisma.$transaction(async (tx) => {
@@ -303,6 +322,18 @@ export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
       if (data) data.logger = logger;
     }
 
+    for (const [key, config] of Object.entries(props)) {
+      // A post is turned away here for the reason it is turned away from
+      // `loggers`, and with more at stake: `props` is a column `Post` does not
+      // have, so an update carrying one throws and rolls the whole layout back.
+      if (parseCardKey(key)?.kind !== "component") continue;
+      const data = patchFor(key);
+      // Assigned rather than merged. The rail hands back the whole
+      // configuration, so an emptied section arrives as an absent key and must
+      // land as one — see `GridDraft.props`.
+      if (data) data.props = config;
+    }
+
     for (const { target, data } of patches.values()) {
       if (target.kind === "post") {
         await tx.post.update({ where: { id: target.id }, data });
@@ -324,6 +355,11 @@ export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
           // above follows. Null only if neither said anything, so the
           // publication keeps tracking the registry.
           logger: loggers[insert.key] ?? insert.logger ?? null,
+          // A link card is placed and then filled in, so a card configured
+          // before it was ever saved has to carry that configuration into the
+          // row the save creates. Null where nothing was configured — a plain
+          // demo has nothing to put here at all.
+          props: props[insert.key] ?? null,
           // A pin made against the card before it was saved still counts —
           // it was placed by hand and the seat it was dragged to is the one
           // it should get, not the one the `[+]` originally opened.
