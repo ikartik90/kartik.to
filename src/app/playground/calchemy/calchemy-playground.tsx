@@ -50,6 +50,7 @@ import SliderIcon from "@/assets/icons/slider.svg";
 import AddIcon from "@/assets/icons/add.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import { MenuButton } from "@/components/menu-button";
+import { ScrimBlur } from "@/components/scrim-blur";
 import { ThemeToggleButton } from "@/components/theme-toggle";
 
 // ---------------------------------------------------------------------------
@@ -211,23 +212,13 @@ function readableRows(
 // (panda.config.ts): an opaque colour WASH carries the fade, and a whisper of
 // blur is laid over it.
 //
-// The wash is the load-bearing half. A colour gradient is smooth by
-// construction and renders identically everywhere, which is why no ramp is ever
-// visible in the shift-scheduling demo.
-//
-// The blur is 1.4px twice — masked over two different distances so the pair
-// composes in quadrature to ~2px where both survive and relaxes to 1.4 where
-// only the long one does. It is a garnish, and it is written knowing WebKit may
-// well drop it: an element carrying `mask-image` is a backdrop root, so its own
-// backdrop-filter can end up with nothing behind it to filter. That is a real
-// risk and an acceptable one HERE, where the wash is what does the work — the
-// same bet the edge scrims already make in this codebase.
-//
-// The alternative was to build the fade out of the blur itself, in bands. It is
-// not worth it: a `backdrop-filter` samples its backdrop clipped to its own box,
-// so a thin band blurs with nothing above it to mix in and clamps against its
-// own edge instead. Every band then lands visibly apart from its neighbour
-// however close the radii are, which is banding you can read a date through.
+// The wash is the load-bearing half, and it is this file's own — a colour
+// gradient is smooth by construction and renders identically everywhere, which
+// is why no ramp is ever visible in the shift-scheduling demo. The frosting
+// over it is `ScrimBlur`, which is shared: the home grid's cards frost their
+// captions with the same pair of layers, and two radii for one material would
+// read as two kinds of glass. Its own note carries why the blur is built the
+// way it is.
 // ---------------------------------------------------------------------------
 
 // The bar's own two measurements, and the clearance the fade runs out at. The
@@ -262,22 +253,6 @@ const SCRIM_CLEARANCE = "token(spacing.3xl)";
  * room for a band that is not there.
  */
 const CHROME_BAND = "var(--chrome-band)";
-
-const SCRIM_BLUR = "blur(1.4px)";
-
-/**
- * The near half of the ramp, then the tail — see the note above. Built from the
- * edge the band stands on, because both bands want the same pair pointed
- * opposite ways: the foot's fades up off the query bar, the head's down off the
- * two gutter controls.
- */
-const scrimRamps = (towards: "top" | "bottom") => [
-  `linear-gradient(to ${towards}, #000, transparent 55%)`,
-  `linear-gradient(to ${towards}, #000, transparent)`,
-];
-
-const SCRIM_RAMPS = scrimRamps("top");
-const CHROME_RAMPS = scrimRamps("bottom");
 
 /** A month's own measure: 7 day columns, their 6 gutters, and the period's
  *  padding — the 208px pitch the `calendar` recipe is built on. */
@@ -524,37 +499,6 @@ const chromeEndStyle = css({
   justifySelf: "end",
 });
 
-const scrimLayerStyle = css({
-  position: "absolute",
-  inset: 0,
-});
-
-/**
- * The frosting half of a band, pointed at whichever edge asks for it: the pair
- * of 1.4px blurs masked over different distances that the note above
- * `SCRIM_BLUR` describes. The band itself carries the wash, which is the half
- * that does the work — this is the garnish, and both ends of the page wear the
- * same one.
- */
-function ScrimBlur({ ramps }: { ramps: string[] }) {
-  return (
-    <>
-      {ramps.map((ramp) => (
-        <div
-          key={ramp}
-          className={scrimLayerStyle}
-          style={{
-            backdropFilter: SCRIM_BLUR,
-            WebkitBackdropFilter: SCRIM_BLUR,
-            maskImage: ramp,
-            WebkitMaskImage: ramp,
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
 /**
  * The site's own two controls, which this page has to carry itself: `Header`
  * draws them for the homepage alone, and an article hangs them off its intro
@@ -565,7 +509,7 @@ function PlaygroundChrome() {
     <div className={chromeStyle}>
       {/* Behind the controls, and inert with the strip: `chromeRowStyle` takes
           its own children's presses back, and these are not among them. */}
-      <ScrimBlur ramps={CHROME_RAMPS} />
+      <ScrimBlur towards="bottom" />
       <div className={chromeRowStyle}>
         <MenuButton />
 
@@ -1825,7 +1769,7 @@ export function CalchemyPlayground() {
       {/* The band the query bar floats in, frosted so the bar is not sitting
           crisply on a dense field of numbers — see `SCRIM_RAMPS`. */}
       <div ref={scrimRef} className={scrimStyle} aria-hidden>
-        <ScrimBlur ramps={SCRIM_RAMPS} />
+        <ScrimBlur towards="top" />
       </div>
       {/* The bar the year is talked to through. */}
       <div ref={barRef} className={barStyle}>

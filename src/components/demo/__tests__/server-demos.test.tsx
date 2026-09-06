@@ -36,6 +36,7 @@ const post = (id: string): GridCard => ({
   title: id,
   href: `/work/${id}`,
   date: null,
+  cover: null,
   gridIndex: null,
   publishedAt: new Date("2026-01-01"),
   aspect: "16/9",
