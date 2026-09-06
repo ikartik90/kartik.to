@@ -75,6 +75,75 @@ const linkCardAspectVariants = Object.fromEntries(
   ]),
 );
 
+// ---------------------------------------------------------------------------
+// The scrim a link card's caption stands on: half the card, or the words,
+// whichever is taller.
+//
+// Three versions to get here and each was wrong in a way you could see. The
+// first spent its whole fade inside the caption's box plus 32px of clearance,
+// and a ramp that steep is not a fade — the slope changed abruptly where the
+// clearance ended and the card wore a horizontal seam across the picture. The
+// second ran the ramp over the whole card, which has no seam in it anywhere
+// and buys the most contrast, and it swallowed the picture: by mid-card the
+// wash was already half-strength, so a cover with a scrim on it stopped being
+// a cover. The third held it to exactly half, which is right for every card
+// whose name fits in half — and on a 307×173 tile a two-line title starts at
+// 58% of the card, eight points ABOVE the scrim, so its first line and the
+// date over it stood on bare picture. Measured against a near-white screenshot
+// in dark mode: 1.8:1 and 1.0:1, which is white on white.
+//
+// So the share is a FLOOR, and it is a quarter. The scrim is the box the
+// caption sits in, with a `min-block-size` of a quarter of the card —
+// `max(a quarter, the words)` said in one declaration and with nothing
+// measured. A wide card, where the name is one line at the foot, is exactly a
+// quarter and no more; only a tile whose caption genuinely reaches higher goes
+// past it, and then only as far as its own words.
+//
+// A SHARE rather than a length, so the ramp is 135px on a 960×540 card with no
+// fixed number in it to go stale. And the box bounds the FROSTING as well as
+// the wash, because a blur across the top of a picture covers it just as surely
+// as a gradient does.
+// ---------------------------------------------------------------------------
+
+/** The floor: the scrim is at least this much of the card, and often exactly. */
+const CARD_SCRIM_MIN_HEIGHT = "25%";
+/** How opaque the wash ever gets — at the very foot, under the last line. */
+const CARD_WASH_PEAK = 0.95;
+
+/**
+ * Smootherstep — `6t⁵ − 15t⁴ + 10t³`, the curve whose SLOPE is zero at both
+ * ends as well as its value.
+ *
+ * That property is the whole reason it is this and not an exponent. A power
+ * curve reaches zero at the top of the ramp but arrives there travelling: it
+ * is already a quarter opaque an eighth of the way down, so the gradient reads
+ * as starting somewhere, and the eye finds that somewhere and calls it an
+ * edge. Ending at zero is not the same as ending softly. This one leaves the
+ * top of the scrim at nothing and stays at nothing long enough that there is
+ * no line to find, then does its work in the middle and settles flat into the
+ * foot — where a hard arrival would be just as findable, under the words.
+ */
+const smootherstep = (t: number) => t ** 3 * (t * (t * 6 - 15) + 10);
+
+/**
+ * Nine stops. Not for the quantisation — 0.95 of alpha across a quarter of a
+ * card is still several levels a pixel, which cannot band — but because a
+ * browser interpolates LINEARLY between stops, so the curve is only ever as
+ * smooth as the polyline describing it. Nine is where the corners stop being
+ * findable, and it matters most at the top, where the whole point is that
+ * nothing is happening yet.
+ */
+const CARD_WASH = `linear-gradient(to bottom, ${Array.from(
+  { length: 9 },
+  (_, step) => {
+    const t = step / 8;
+    const alpha = CARD_WASH_PEAK * smootherstep(t);
+    return `color-mix(in srgb, token(colors.bg.surface) ${(alpha * 100).toFixed(
+      1,
+    )}%, transparent) ${(t * 100).toFixed(1)}%`;
+  },
+).join(", ")})`;
+
 /**
  * blockquote.svg as two masks off the SAME path — `fill` gives the body,
  * `stroke` the contour — so the mark can be a translucent wash with a solid
@@ -7206,8 +7275,17 @@ export default defineConfig({
         linkCard: defineSlotRecipe({
           className: "link-card",
           description:
-            "A link rendered as one shaped tile — the projects listing's card, and the articles listing's next. `root` is the whole card and the only box with a shape: it takes an `aspect` from the app's shared ratio map and CLIPS to it, since aspect-ratio alone is only a floor. `cover` is the picture's slot, out of flow so it fills the card without being able to grow it, and a flat `bg.surface` plate until posters land. `caption` is the name — and, for a dated listing, the date — laid over the cover along its bottom edge. No hover state of its own beyond the press: the card is a picture, and a wash over a picture is a decision for when there is one.",
-          slots: ["root", "cover", "caption"],
+            "A link rendered as one shaped tile — the card the homepage grid is made of. `root` is the whole card and the only box with a shape: it takes an `aspect` from the app's shared ratio map and CLIPS to it, since aspect-ratio alone is only a floor, and it carries `data-covered` when there is a picture. `cover` is out of flow and holds the whole stack, in paint order — a flat `bg.surface` plate, the `backgroundEffect` ground the author put behind the picture, the `media` in its positioned `mediaFrame`, all inside `cover`. The `scrim` is a SIBLING of that: the box the `caption` sits in, at least half the card tall and taller only where the words are, holding `ScrimBlur`'s progressive frosting with the `wash` over it — so the blur and the gradient are bounded by the same box and neither can reach past the other. `caption` is the name and, for a dated listing, the date, and it takes the theme's strongest ink wherever there is a picture under it. No hover state of its own beyond the press.",
+          slots: [
+            "root",
+            "cover",
+            "backgroundEffect",
+            "mediaFrame",
+            "media",
+            "scrim",
+            "wash",
+            "caption",
+          ],
           base: {
             root: {
               position: "relative",
@@ -7227,7 +7305,40 @@ export default defineConfig({
               overflow: "hidden",
               textDecoration: "none",
               _active: { transform: "scale(0.98)" },
+              // Over a picture the caption takes the theme's STRONGEST ink,
+              // and the muted greys `Typography` hands out are dropped. They
+              // are tuned to sit on a flat plate; a picture is not one.
+              //
+              // Done by REASSIGNING the tokens rather than by writing a colour
+              // over the words, and the difference is the cascade rather than
+              // taste. `Typography` colours itself from a `cva`, which Panda
+              // emits into the `utilities` layer — and a layer beats
+              // specificity outright, so a `[data-covered] … :is(h2, p)` rule
+              // from the `recipes` layer loses to it however specific it is.
+              // (It was written that way first. The rule reached the
+              // stylesheet, matched the element, and did nothing.) Custom
+              // properties are not in the fight at all: the utility still
+              // wins and still says `var(--colors-text-body)`, and this is
+              // what that resolves to. Same move `bg.surface` surfaces make
+              // for `--colors-field-bg-default`, one slot up.
+              "&[data-covered]": {
+                "--colors-text-body": "var(--colors-text-title)",
+                "--colors-text-default": "var(--colors-text-title)",
+              },
             },
+            // The picture and everything laid over it, and the ORDER inside it
+            // is the whole design. A backdrop filter samples what has already
+            // painted beneath it, so a frosting layer above the wash filters
+            // the wash — which is to say it filters a near-opaque plate and
+            // does visibly nothing. That is what the first version did, and it
+            // is why the card looked like a plain gradient with a seam in it
+            // rather than like the playground's glass.
+            //
+            // So: plate, picture, frosting, wash, and then the words outside
+            // this box entirely. The picture SOFTENS under the caption and the
+            // wash tints what the blur produced. All of it is positioned with
+            // no z-index anywhere, so tree order is paint order — the order the
+            // component writes them in.
             cover: {
               position: "absolute",
               inset: 0,
@@ -7235,10 +7346,74 @@ export default defineConfig({
               "--colors-field-bg-default":
                 "var(--colors-field-bg-default-on-surface)",
             },
-            // `position: relative` for one reason only: the cover is positioned
-            // and this is not, so without it the plate paints OVER the words it
-            // is supposed to sit behind. Both positioned, no z-index, DOM order
-            // decides — which is the order they are written in.
+            // The ground the author put behind the picture, carried off the
+            // media object exactly as the reader's tile and the lightbox carry
+            // it — the effect belongs to the PICTURE, so a card showing that
+            // picture shows it on the same ground or it is showing something
+            // else. The card's corner rather than the picture's: this fills the
+            // tile, and the picture in front of it wears its own.
+            backgroundEffect: {
+              position: "absolute",
+              inset: 0,
+              borderRadius: "inherit",
+              pointerEvents: "none",
+            },
+            // The box the media composes INSIDE, and the reason it exists is
+            // paint order. An `<img>` is in-flow and the ground is positioned,
+            // and a stacking context paints its positioned descendants after
+            // its in-flow ones however they are written — so an absolutely
+            // placed ground lands on TOP of the picture it is supposed to be
+            // behind. Giving the picture a positioned box of its own puts both
+            // in the same class, where tree order settles it, which is the rule
+            // every other layer in this cover already follows.
+            //
+            // It also has to be a box rather than the media element itself:
+            // `Media` may wrap the object in a frame and an inset box of its
+            // own (`mediaFrameStyle`, `mediaBoxStyle`), and the class this
+            // recipe hands over lands on the object, not on those.
+            mediaFrame: {
+              position: "absolute",
+              inset: 0,
+            },
+            // No `object-fit` here on purpose. `Media` states one inline from
+            // the object's own layout — `DEFAULT_MEDIA_FIT` where the author
+            // chose nothing, which is `cover` and fills the tile — and an
+            // inline declaration outranks this class anyway, so a fit written
+            // here would be a second answer that is right only by luck. Same
+            // for the corner.
+            media: {
+              display: "block",
+              width: "100%",
+              height: "100%",
+            },
+            // The box the scrim IS, and the box the caption sits in — one
+            // element, which is what makes `max(half the card, the words)` a
+            // single declaration instead of a measurement. In flow, so it takes
+            // the caption's height; `min-block-size`, so it can never be less
+            // than half; last in a `flex-end` column, so it sits at the foot.
+            //
+            // The frosting and the wash are its children at `inset: 0`, which
+            // is what holds BOTH to it — see `CARD_SCRIM_MIN_HEIGHT`. The
+            // caption is a child too, and a positioned one, so it paints over
+            // them by tree order like everything else in this card.
+            scrim: {
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              minBlockSize: CARD_SCRIM_MIN_HEIGHT,
+            },
+            // The tint over the frosting, and the last thing under the words.
+            //
+            // `bg.surface` and not an ink of its own, because that is the
+            // colour the caption has ALWAYS been read against — the card's own
+            // plate — so the words keep the contrast they had in both themes
+            // and the picture is the only thing that changed behind them.
+            wash: {
+              position: "absolute",
+              inset: 0,
+              backgroundImage: CARD_WASH,
+            },
             caption: {
               position: "relative",
               display: "flex",

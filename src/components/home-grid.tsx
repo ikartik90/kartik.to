@@ -376,6 +376,7 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
                   title={card.title}
                   aspect={card.aspect}
                   date={card.date ?? undefined}
+                  cover={card.cover}
                   interactive={!editable}
                 />
               ) : (

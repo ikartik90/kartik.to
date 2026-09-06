@@ -1,7 +1,11 @@
 import { linkCard } from "../../styled-system/recipes";
 import { Typography } from "./ui/typography";
+import { BackgroundEffectLayer } from "@/components/background-effect";
+import { Media } from "@/components/media";
+import { ScrimBlur } from "@/components/scrim-blur";
 import { gridItemVars } from "@/utils/grid-item-vars";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import type { MediaNode } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // One tile of a listing: a picture at a declared shape with the name of what it
@@ -51,12 +55,19 @@ export interface LinkCardProps {
    */
   date?: string;
   /**
-   * The poster's key in R2. Accepted now and rendered by nobody: the cover is
-   * still the flat plate it has always been, and wiring the prop ahead of the
-   * picture is what lets the callers that already know their key start passing
-   * it without a second pass over every call site when posters land.
+   * The media object laid across the whole card, and `undefined` for a tile
+   * that has none: it keeps the flat plate the card has always drawn.
+   *
+   * The whole OBJECT — the file, its ground, and how it sits in that ground —
+   * because those three are one composition and a card showing two of them is
+   * showing a different picture. Rendered exactly as the reader's tile and the
+   * lightbox render it, in shares of this box rather than in the article's
+   * pixels; see `postCover`, which is where the homepage gets one.
+   *
+   * WHICH object is the caller's business, not this component's. The card has
+   * never read a `Post` and still does not.
    */
-  coverImageKey?: string;
+  cover?: MediaNode | null;
   /**
    * Whether the card can be followed. False while the grid is being edited: the
    * card is scenery then, and navigating away would discard the unsaved layout.
@@ -74,6 +85,7 @@ export function LinkCard({
   aspect,
   span,
   date,
+  cover,
   interactive = true,
 }: LinkCardProps) {
   const styles = linkCard({ aspect });
@@ -90,23 +102,89 @@ export function LinkCard({
       className={styles.root}
       style={gridItemVars(aspect, span)}
       tabIndex={interactive ? undefined : -1}
+      // Whether this tile is a picture or a plate, said once on the card
+      // itself. Nothing inside needs to ask — the scrim only exists when there
+      // is something to lay it over — so this is for anything reading the card
+      // from outside it.
+      data-covered={cover ? "" : undefined}
     >
-      {/* The picture's slot. Empty and inert until there is a picture — it is
-          out of flow, so it fills the card without ever being able to stretch
-          it, which is what leaves the caption as the only thing that could. */}
-      <div className={styles.cover} role="presentation" aria-hidden="true" />
-      <div className={styles.caption}>
-        {/* Above the title, not below it: the title is what the card is called
-            and belongs on the last line before the card's edge, with anything
-            qualifying it read on the way in. */}
-        {date && (
-          <Typography tag="p" type="caption">
-            {date}
-          </Typography>
+      {/* The picture's slot, and a flat plate behind whatever fills it — out of
+          flow, so it fills the card without ever being able to stretch it,
+          which is what leaves the caption as the only thing that could.
+
+          The media is DECORATIVE, `alt=""` and inside an aria-hidden box. The
+          link is already named by the words below it, and a card that read out
+          the diagram's description before its own title would say the picture
+          twice: once as the article's illustration and once as the name of the
+          thing you are about to open. */}
+      <div className={styles.cover} role="presentation" aria-hidden="true">
+        {cover && (
+          <>
+            {/* The ground first, and only where the object actually has one —
+                a shader is a WebGL context apiece, so an empty one is not a
+                layer that costs nothing. */}
+            {cover.backgroundEffect && (
+              <BackgroundEffectLayer
+                effect={cover.backgroundEffect}
+                className={styles.backgroundEffect}
+              />
+            )}
+            <div className={styles.mediaFrame}>
+              <Media
+                src={cover.src}
+                alt=""
+                kind={cover.kind}
+                className={styles.media}
+                // The fit, the inset and the corner off the object itself —
+                // the same three the editor previewed and the reader's tile
+                // draws. They are what leaves any of the ground visible, so a
+                // card that dropped them would carry a shader nobody could
+                // see. All of them resolve as shares of this box, so the
+                // article's composition arrives at the card's size rather than
+                // at the article's.
+                layout={cover}
+                // And the source's own shape, so the box is held from the
+                // first paint instead of opening under the reader.
+                width={cover.width}
+                height={cover.height}
+              />
+            </div>
+          </>
         )}
-        <Typography tag="h2" type="bodyLarge">
-          {title}
-        </Typography>
+      </div>
+      {/* The words, and — where there is a picture — the ground they stand on,
+          in ONE box. Written in the order they PAINT, which is the design:
+          the frosting that softens the picture, the wash that tints what the
+          frosting produced, and the caption over both. Put the wash first and
+          the frosting filters a near-opaque plate — a backdrop filter only
+          works on what has already painted — which is a blur costing two
+          compositor layers and showing nothing.
+
+          The box is the CAPTION's, with a floor of half the card, so the scrim
+          is `max(half, the words)` without anything being measured. Both
+          layers are `inset: 0` inside it, so neither the blur nor the gradient
+          can reach past it — and bounding only one of them would bound only
+          half of what the eye reads as the scrim. */}
+      <div className={styles.scrim}>
+        {cover && (
+          <>
+            <ScrimBlur towards="top" />
+            <div className={styles.wash} />
+          </>
+        )}
+        <div className={styles.caption}>
+          {/* Above the title, not below it: the title is what the card is
+              called and belongs on the last line before the card's edge, with
+              anything qualifying it read on the way in. */}
+          {date && (
+            <Typography tag="p" type="caption">
+              {date}
+            </Typography>
+          )}
+          <Typography tag="h2" type="bodyLarge">
+            {title}
+          </Typography>
+        </div>
       </div>
     </a>
   );

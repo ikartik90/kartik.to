@@ -4,7 +4,9 @@ import { orderGridItems } from "@/utils/grid-order";
 import { mergePosts, parsePost } from "@/lib/posts";
 import { articles as staticArticles } from "@/data/articles";
 import { projects as staticProjects } from "@/data/projects";
+import { postCover } from "@/utils/post-cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import type { MediaNode } from "@/domain/nodes";
 import type { Post } from "@/domain/post";
 
 // ---------------------------------------------------------------------------
@@ -47,6 +49,17 @@ export interface GridPostCard extends GridCardBase {
   href: string;
   /** Articles are filed by date; projects are not. */
   date: string | null;
+  /**
+   * The picture the tile shows, read off the post's own document, and null for
+   * one that holds no media at all.
+   *
+   * DERIVED rather than stored, which is the whole argument — see `postCover`.
+   * It is done HERE, on the server, where the document is already in hand: the
+   * card is the only part of a post the homepage sends to the browser, and
+   * shipping every article's full AST to a client component so it could find
+   * its own opening image would be the document many times over for one src.
+   */
+  cover: MediaNode | null;
 }
 
 export interface GridComponentCard extends GridCardBase {
@@ -78,6 +91,10 @@ function postToCard(post: Post): GridPostCard {
     title: post.title ?? "Untitled",
     href: `${isArticle ? "/writing" : "/work"}/${post.slug}`,
     date: isArticle && post.publishedAt ? formatDate(post.publishedAt) : null,
+    // Every post card, project and article alike. `LinkCard` is one card and
+    // the grid is one grid: articles wearing pictures while projects kept a
+    // flat plate would read as two card designs sharing a listing.
+    cover: postCover(post.content),
     gridIndex: post.gridIndex ?? null,
     publishedAt: post.publishedAt ?? null,
     // The post's own override, or the listing default. Same absent-means-
