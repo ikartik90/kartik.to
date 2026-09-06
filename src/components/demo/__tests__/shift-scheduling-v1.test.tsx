@@ -719,3 +719,85 @@ describe("ShiftSchedulingV1 — hydration safety", () => {
     expect(viewingDay).toBe(buildDay);
   });
 });
+
+// The shift's hours, beside the date it runs on: two time fields either side of
+// a rule, under ONE hint naming the clock they are quoted in.
+describe("shift time range", () => {
+  const group = () => screen.getByRole("group", { name: "Shift time" });
+  const timeTrigger = (name: "Start Time" | "End Time") => {
+    const label = within(group()).getByText(name) as HTMLLabelElement;
+    return document.getElementById(label.htmlFor) as HTMLButtonElement;
+  };
+
+  const openList = (name: "Start Time" | "End Time") => {
+    fireEvent.click(timeTrigger(name));
+    return screen.getByRole("dialog", { name: "Choose time" });
+  };
+
+  it("opens on a nine-to-five", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(timeTrigger("Start Time").textContent).toBe("9:00 AM");
+    expect(timeTrigger("End Time").textContent).toBe("5:00 PM");
+  });
+
+  it("names the clock its hours are quoted in, once, for both fields", () => {
+    render(<ShiftSchedulingV1 />);
+    // Frozen at 13 July — daylight saving is in force, and the label says so.
+    expect(
+      within(group()).getByText("Eastern Daylight Time (UTC-4)"),
+    ).toBeTruthy();
+  });
+
+  // The end of a shift is most usefully read as its LENGTH.
+  it("measures the end against the start, and the start against nothing", () => {
+    render(<ShiftSchedulingV1 />);
+    const end = openList("End Time");
+    expect(
+      within(end).getByRole("option", { name: "5:00 PM, +8 hours" }),
+    ).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    const start = openList("Start Time");
+    expect(within(start).getAllByRole("option")[0].textContent).toBe("12:00 AM");
+    expect(within(start).queryByText(/hours$/)).toBeNull();
+  });
+
+  it("re-anchors the end list when the start moves", () => {
+    render(<ShiftSchedulingV1 />);
+    fireEvent.click(within(openList("Start Time")).getByRole("option", {
+      name: "7:00 AM",
+    }));
+    expect(timeTrigger("Start Time").textContent).toBe("7:00 AM");
+
+    const end = openList("End Time");
+    expect(
+      within(end).getByRole("option", { name: "5:00 PM, +10 hours" }),
+    ).toBeTruthy();
+  });
+
+  // The group must NOT be a `[data-field]`. The field recipe's active state is
+  // `[data-field]:has([data-control][aria-expanded='true'])`, so an ancestor
+  // field would see the OPEN trigger through its own `:has` and light every
+  // frame beneath it — opening the end time lit the start field too.
+  it("does not put a field around both controls", () => {
+    render(<ShiftSchedulingV1 />);
+    expect(group().hasAttribute("data-field")).toBe(false);
+    const fields = [...document.querySelectorAll("[data-field]")];
+    const bothTriggers = fields.filter(
+      (f) => f.querySelectorAll('[data-control][aria-haspopup="dialog"]').length > 1,
+    );
+    expect(bothTriggers).toEqual([]);
+  });
+
+  it("hands the hours back on reset", () => {
+    render(<ShiftSchedulingV1 />);
+    fireEvent.click(within(openList("Start Time")).getByRole("option", {
+      name: "7:00 AM",
+    }));
+    expect(timeTrigger("Start Time").textContent).toBe("7:00 AM");
+
+    fireEvent.click(screen.getByRole("button", { name: /clear|reset/i }));
+    expect(timeTrigger("Start Time").textContent).toBe("9:00 AM");
+    expect(timeTrigger("End Time").textContent).toBe("5:00 PM");
+  });
+});

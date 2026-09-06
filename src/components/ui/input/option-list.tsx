@@ -28,6 +28,7 @@ import {
 } from "@/hooks/use-input-modality";
 import { useScrollHandoff } from "@/hooks/use-scroll-handoff";
 import { filterOptions, type OptionItem } from "@/utils/option-filter";
+import { scrollToCenter } from "@/utils/scroll-to-center";
 import { Field, useOptionalField, type FieldSearchProps } from "./field";
 import { WireframeContent } from "../wireframe";
 
@@ -557,6 +558,31 @@ function OptionListListbox({
       list.scrollTop += elBox.bottom - listBox.bottom;
     }
   }, [activeValue, activeSource]);
+
+  // A list longer than its box OPENS on its selection, centred — otherwise a
+  // select holding the fortieth option, or a time field holding 11:00 PM, opens
+  // on a screenful that does not contain the value its own trigger is showing.
+  //
+  // Separate from the cursor effect above, and deliberately not folded into it:
+  // that one follows the KEYBOARD as it moves and must ignore everything else,
+  // while this one runs exactly once, at mount, before any input has happened
+  // and so before there is a modality to respect. Refs, not deps, so a later
+  // re-render (a filter narrowing the list) can never snap the box back under a
+  // user who has since scrolled it. The search-less list already gets this for
+  // free — `autoFocus` below focuses the active row, and focusing scrolls it
+  // into view — so this is the virtual-highlight half of the same behaviour.
+  const openOnRef = useRef(activeValue);
+  useEffect(() => {
+    const list = listRef.current;
+    const el = list?.querySelector<HTMLElement>("[data-active]");
+    if (!list || !el || !openOnRef.current) return;
+    list.scrollTop = scrollToCenter({
+      rowTop: el.offsetTop - list.offsetTop,
+      rowHeight: el.offsetHeight,
+      boxHeight: list.clientHeight,
+      contentHeight: list.scrollHeight,
+    });
+  }, []);
 
   // The search-less list takes focus itself. Once, on mount: re-running it as
   // the highlight moves would fight the roving focus it hands over to, and
