@@ -1478,6 +1478,27 @@ function EditableBlock({
   // inserts an empty paragraph above it (matching showcase media).
   const handleNonTextKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
+      // Only the keystrokes aimed at the BLOCK, never the ones aimed at
+      // something inside it.
+      //
+      // A non-text block is focusable (`tabIndex={0}`) and deletes itself on
+      // Backspace, which is right while the block is what has focus. But a
+      // furniture block hosts a SLOT — the homepage grid, the icon row — and
+      // that slot is somebody else's component, with its own buttons, its own
+      // fields and its own dialogs. React's handler fires for every keystroke
+      // that bubbles out of it, so without this the alt-text box in the media
+      // dialog the link card's rail opens — which lives inside the grid, and so
+      // inside this wrapper — deleted the entire grid on the first Backspace,
+      // mid-word. Enter inserted a paragraph above it, and the arrows threw
+      // focus out of the field being typed in.
+      //
+      // A target check rather than `stopPropagation` in each of those places:
+      // the wrapper is the one that knows the rule, and the alternative is
+      // every current and future slot having to remember it. It costs the
+      // block nothing — its own keys arrive with the wrapper as the target,
+      // since there is nothing else in it to focus.
+      if (e.target !== e.currentTarget) return;
+
       switch (e.key) {
         case "ArrowUp":
           if (!e.shiftKey) {

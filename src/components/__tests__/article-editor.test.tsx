@@ -4,6 +4,7 @@ import {
   render,
   screen,
   fireEvent,
+  createEvent,
   cleanup,
   act,
   within,
@@ -625,6 +626,37 @@ describe("renumberSidenoteSups", () => {
 // ---------------------------------------------------------------------------
 // ArticleEditor component
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Furniture blocks host a SLOT — the homepage grid, the icon row — and what is
+// inside that slot is somebody else's component with its own controls, its own
+// fields and its own dialogs.
+//
+// The wrapper is a focusable non-text block, so it deletes itself on Backspace
+// like every other one. That must mean "Backspace WITH THE BLOCK FOCUSED", and
+// nothing else: React's handler fires for anything bubbling out of the slot, so
+// without a guard a keystroke aimed at a text field inside the grid — the alt
+// text on a picture being attached to a link card — deletes the whole grid out
+// from under the person typing it.
+// ---------------------------------------------------------------------------
+function furniturePost(): Document {
+  return {
+    type: "doc",
+    content: [
+      { type: "paragraph", children: [{ type: "text", text: "Intro" }] },
+      { type: "project_grid" },
+    ],
+  } as unknown as Document;
+}
+
+const furnitureDoc = () =>
+  ({
+    id: "p1",
+    title: "Home",
+    slug: "home",
+    category: "PAGE",
+    content: furniturePost(),
+  }) as never;
 
 function openSlashMenuOnBlock(block: HTMLElement) {
   block.focus();
@@ -4006,5 +4038,72 @@ describe("ArticleEditor collection block", () => {
     fireEvent.keyDown(grid, { key: "ArrowDown" });
 
     expect(document.activeElement?.tagName.toLowerCase()).toBe("figcaption");
+  });
+});
+
+describe("ArticleEditor — furniture slots", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  const grid = () => document.querySelector('[data-furniture="project_grid"]');
+
+  it("deletes the block when the block itself takes the Backspace", () => {
+    render(
+      <ArticleEditor
+        initialPost={furnitureDoc()}
+        slots={{ project_grid: <div />, social_links: <div /> }}
+      />,
+    );
+    const block = grid() as HTMLElement;
+    block.focus();
+    fireEvent.keyDown(block, { key: "Backspace" });
+    expect(grid()).toBeNull();
+  });
+
+  // The keystroke belongs to the field it was typed into. This is the alt-text
+  // box in the media dialog the link card's rail opens, which lives inside the
+  // grid and therefore inside this wrapper.
+  it("leaves the block alone when a field inside the slot takes it", () => {
+    render(
+      <ArticleEditor
+        initialPost={furnitureDoc()}
+        slots={{
+          project_grid: <input aria-label="Alt text" defaultValue="a" />,
+          social_links: <div />,
+        }}
+      />,
+    );
+    const field = screen.getByLabelText("Alt text");
+    field.focus();
+    fireEvent.keyDown(field, { key: "Backspace" });
+    expect(grid()).not.toBeNull();
+  });
+
+  // Every other key the wrapper claims is the same mistake in a different
+  // costume: Enter would insert a paragraph above the grid mid-sentence, and
+  // the arrows would throw focus out of the field being typed in.
+  it("leaves the block alone for every other key the wrapper claims", () => {
+    render(
+      <ArticleEditor
+        initialPost={furnitureDoc()}
+        slots={{
+          project_grid: <input aria-label="Alt text" defaultValue="a" />,
+          social_links: <div />,
+        }}
+      />,
+    );
+    const field = screen.getByLabelText("Alt text");
+    field.focus();
+    for (const key of ["Enter", "ArrowUp", "ArrowDown", "Delete", "Tab"]) {
+      const event = createEvent.keyDown(field, { key });
+      fireEvent(field, event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(grid()).not.toBeNull();
   });
 });
