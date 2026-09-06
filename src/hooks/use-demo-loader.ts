@@ -17,9 +17,18 @@ function loadDemoModule(entry: DemoComponentEntry): Promise<ComponentType<DemoPr
 
   let promise = loadPromises.get(entry.id);
   if (!promise) {
+    // A `card` entry has no module — it is drawn from its publication's own
+    // configuration. Nothing routes one here (the grid and the insert dialog
+    // both branch on `card` before rendering), so this is the assertion of that
+    // rather than a path anyone takes.
+    const load = entry.load;
+    if (!load) {
+      return Promise.reject(
+        new Error(`Demo "${entry.id}" is a card and has no module to load`),
+      );
+    }
     // De-duplicate concurrent instances so the module loads a single time.
-    promise = entry
-      .load()
+    promise = load()
       .then((component) => {
         loadedComponents.set(entry.id, component);
         loadPromises.delete(entry.id);

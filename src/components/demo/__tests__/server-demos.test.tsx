@@ -23,6 +23,7 @@ const component = (id: string, componentId: string): GridCard => ({
   id,
   componentId,
   logger: false,
+  props: null,
   gridIndex: null,
   publishedAt: new Date("2026-01-01"),
   aspect: "1/1",

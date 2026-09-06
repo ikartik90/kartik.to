@@ -361,3 +361,124 @@ describe("saveGridLayout — log output", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// The card a publication CARRIES — the link card's picture, words and
+// destination, which for that one entry are the whole component.
+// ---------------------------------------------------------------------------
+describe("saveGridLayout — configuration", () => {
+  beforeEach(() => {
+    [
+      postUpdate,
+      postUpdateMany,
+      componentUpdate,
+      componentUpdateMany,
+      componentCreate,
+      componentDelete,
+    ].forEach((fn) => fn.mockReset());
+  });
+
+  const config = {
+    content: { title: "Shader Playground", tone: "dark" as const },
+    link: { kind: "internal" as const, href: "/playground/shader" },
+  };
+
+  it("writes a card's configuration to its own props column", async () => {
+    await saveGridLayout(draft({ props: { "component:xyz": config } }));
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { props: config },
+    });
+  });
+
+  // The blob replaces what is stored, so a section the author removed arrives
+  // as an absent key and lands as one. A merge could never clear anything.
+  it("writes an emptied configuration as empty", async () => {
+    await saveGridLayout(draft({ props: { "component:xyz": {} } }));
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { props: {} },
+    });
+  });
+
+  it("sends a seat, a shape and a configuration as one update", async () => {
+    await saveGridLayout(
+      draft({
+        pins: { "component:xyz": 1 },
+        aspects: { "component:xyz": "1/1" },
+        props: { "component:xyz": config },
+      }),
+    );
+    expect(componentUpdate).toHaveBeenCalledOnce();
+    expect(componentUpdate).toHaveBeenCalledWith({
+      where: { id: "xyz" },
+      data: { gridIndex: 1, aspect: "1/1", props: config },
+    });
+  });
+
+  // A post row has no `props` column, so a key naming one is dropped before any
+  // write is built — reaching Prisma with it would throw and take the rest of
+  // the layout down with it.
+  it("attempts no write for a post", async () => {
+    await saveGridLayout(draft({ props: { "post:abc": config } }));
+    expect(postUpdate).not.toHaveBeenCalled();
+    expect(postUpdateMany).not.toHaveBeenCalled();
+  });
+
+  // A link card is PLACED and then filled in, so the whole of authoring one
+  // happens before the row exists. All of it has to reach the row the save
+  // creates.
+  it("carries an unsaved card's configuration into the row it creates", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          { key: "pending:1", componentId: "link-card", index: 0 },
+        ],
+        props: { "pending:1": config },
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          componentId: "link-card",
+          props: config,
+        }),
+      }),
+    );
+  });
+
+  // A demo's content is its own code, so a publication of one has nothing to
+  // put here — and null is the honest record of that rather than `{}`.
+  it("creates an ordinary demo with no configuration at all", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          { key: "pending:1", componentId: "calchemy-demo", index: 0 },
+        ],
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ props: null }),
+      }),
+    );
+  });
+
+  // Typed by hand rather than chosen from a control, so it is the one field on
+  // this table that can arrive malformed from a tampered client. "example.com"
+  // as an external href would render as a relative link INTO this site.
+  it("refuses a destination of the wrong shape", async () => {
+    await expect(
+      saveGridLayout(
+        draft({
+          props: {
+            "component:xyz": {
+              link: { kind: "external", href: "example.com" },
+            },
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(componentUpdate).not.toHaveBeenCalled();
+  });
+});

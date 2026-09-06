@@ -3,14 +3,18 @@ import {
   ALLOWED_MEDIA_CONTENT_TYPES,
   CreateMediaUploadInputSchema,
   MediaAssetSchema,
+  MAX_DOCUMENT_UPLOAD_BYTES,
   MAX_IMAGE_UPLOAD_BYTES,
   MAX_VIDEO_UPLOAD_BYTES,
   isAllowedMediaContentType,
+  isAllowedUploadContentType,
+  isDocumentContentType,
   isVideoContentType,
   maxUploadBytesFor,
   mediaKindOf,
   sanitizeMediaFilename,
   filenameFromMediaKey,
+  filenameFromMediaUrl,
 } from "../media";
 
 describe("MediaAssetSchema", () => {
@@ -188,5 +192,89 @@ describe("filenameFromMediaKey", () => {
 
   it("falls back to the whole segment when there is no uuid prefix", () => {
     expect(filenameFromMediaKey("media/legacy.png")).toBe("legacy.png");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Documents — the second thing the bucket now holds.
+//
+// A PDF is uploaded and listed exactly as a picture is, and is EXCLUDED from
+// everywhere media is offered: it has no `MediaKind`, so nothing can render it
+// as a picture or a clip, and a library row for one would be a broken image.
+// The one surface that wants it is the link card's document picker.
+// ---------------------------------------------------------------------------
+
+describe("documents", () => {
+  it("takes a PDF", () => {
+    expect(isDocumentContentType("application/pdf")).toBe(true);
+  });
+
+  it("does not mistake a picture for one", () => {
+    expect(isDocumentContentType("image/png")).toBe(false);
+  });
+
+  // The media list is what the image dialog offers and what `mediaKindOf`
+  // answers for. A document in it would be shown as a picture that cannot load.
+  it("is not one of the media types", () => {
+    expect(isAllowedMediaContentType("application/pdf")).toBe(false);
+  });
+
+  // The upload path is shared — one bucket, one signer, one allow-list — so
+  // the union is what the server validates against.
+  it("is allowed to be uploaded", () => {
+    expect(isAllowedUploadContentType("application/pdf")).toBe(true);
+    expect(isAllowedUploadContentType("image/png")).toBe(true);
+    expect(isAllowedUploadContentType("application/zip")).toBe(false);
+  });
+
+  it("passes the upload schema", () => {
+    expect(
+      CreateMediaUploadInputSchema.safeParse({
+        filename: "cv.pdf",
+        contentType: "application/pdf",
+        size: 1024,
+      }).success,
+    ).toBe(true);
+  });
+
+  // Its own ceiling, for the reason a clip has one: a print-quality portfolio
+  // is a different order of file from a screenshot, and one cap for both would
+  // either refuse ordinary documents or stop being a guard on pictures.
+  it("has a ceiling of its own", () => {
+    expect(maxUploadBytesFor("application/pdf")).toBe(
+      MAX_DOCUMENT_UPLOAD_BYTES,
+    );
+    expect(
+      CreateMediaUploadInputSchema.safeParse({
+        filename: "cv.pdf",
+        contentType: "application/pdf",
+        size: MAX_DOCUMENT_UPLOAD_BYTES + 1,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("filenameFromMediaUrl", () => {
+  it("recovers the name a node's src was uploaded under", () => {
+    expect(
+      filenameFromMediaUrl(
+        "https://cdn.example.com/media/123e4567-e89b-12d3-a456-426614174000-cv.pdf",
+      ),
+    ).toBe("cv.pdf");
+  });
+
+  // A signed URL buries the path behind a query, which is the case the plain
+  // "everything after the last slash" reading gets wrong.
+  it("ignores a query and a fragment", () => {
+    expect(
+      filenameFromMediaUrl("https://cdn.example.com/media/photo.png?sig=abc#x"),
+    ).toBe("photo.png");
+  });
+
+  // A worse label, never a broken one — a rewritten path still names something.
+  it("falls back to whatever the last segment is", () => {
+    expect(filenameFromMediaUrl("https://cdn.example.com/abc123")).toBe(
+      "abc123",
+    );
   });
 });

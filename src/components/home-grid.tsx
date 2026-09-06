@@ -10,18 +10,25 @@ import {
 } from "react";
 import { css } from "../../styled-system/css";
 import { masonryGrid } from "../../styled-system/recipes";
-import { CardPropertiesPanel } from "@/components/card-properties-panel";
+import {
+  CardPropertiesPanel,
+  type CardMediaSlot,
+} from "@/components/card-properties-panel";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DemoComponent } from "@/components/demo-component";
 import { DemoFrame } from "@/components/demo-frame";
 import { GridItem } from "@/components/grid-item";
+import { ImageInsertDialog } from "@/components/image-insert-dialog";
 import { LinkCard } from "@/components/link-card";
 import { type PropertiesPanelHandle } from "@/components/ui/properties-panel";
 import { getDemoComponent } from "@/components/demo/registry";
 import { listingColumnsFor } from "@/utils/listing-columns";
 import { useGridDraftStore } from "@/store/grid-draft";
 import { applyGridDraft } from "@/utils/grid-draft";
+import { linkCardHref, linkCardTitle, type LinkCardConfig } from "@/domain/link-card";
+import type { ImageInsertPayload } from "@/hooks/use-image-insert";
+import type { MediaNode } from "@/domain/nodes";
 import type { GridCard } from "@/lib/grid";
 
 // ---------------------------------------------------------------------------
@@ -182,6 +189,50 @@ interface PendingInsert {
   index: number;
 }
 
+/**
+ * Which slot of which card a library dialog is about to fill.
+ *
+ * The card is named by KEY rather than captured as a closure, for the reason
+ * the open panel is: the dialog outlives a render, and the grid re-projects
+ * through the draft on every edit — so a card object held across the dialog's
+ * lifetime would be a stale copy by the time Insert is pressed.
+ */
+interface PendingPick {
+  key: string;
+  /** The theme slot, for a picture. Absent when the file is a document. */
+  slot?: CardMediaSlot;
+}
+
+/**
+ * A library payload as a media node.
+ *
+ * The payload is what the LIBRARY knows about a file — a url, a description,
+ * the kind its content type declares — and a node is that plus everything an
+ * author can do to it in a frame. The article editor spells out the identical
+ * conversion for the identical reason (see `mediaNodeFrom` there): the dialog
+ * stays ignorant of the shape a document keeps.
+ *
+ * Not shared with it, and that is a judgement rather than an oversight: two
+ * call sites is where this repo PROMOTES a component, and the rule is about
+ * components. Lifting six lines of object literal into a module both a card and
+ * an editor import would make the document's shape a shared dependency for the
+ * saving of nothing.
+ */
+function mediaNodeFrom(payload: ImageInsertPayload): MediaNode {
+  return {
+    type: "media",
+    kind: payload.kind,
+    src: payload.src,
+    ...(payload.alt ? { alt: payload.alt } : {}),
+    // Both or neither: a node carrying one dimension is a record of something
+    // that went wrong, and the reserved box falls back to the house ratio for
+    // it anyway (`mediaReservedAspect`).
+    ...(payload.width && payload.height
+      ? { width: payload.width, height: payload.height }
+      : {}),
+  };
+}
+
 /** Distinct per insert, so two of the same demo remain separate cards. */
 let pendingSeq = 0;
 
@@ -218,6 +269,7 @@ interface HomeGridProps {
 export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
   const draft = useGridDraftStore();
   const [insert, setInsert] = useState<PendingInsert | null>(null);
+  const [pick, setPick] = useState<PendingPick | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState<{
     key: string;
   } | null>(null);
@@ -261,26 +313,86 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
     shown.find((card) => card.key === propertiesKey) ?? null;
 
   /**
-   * What the panel may offer for this card's log output — nothing at all
-   * unless the demo behind it logs.
+   * The registry entry behind the card the panel is open on — which is what
+   * decides WHICH sections it gets.
    *
-   * The REGISTRY answers "can this card log", because that is a fact about the
-   * demo's code; the card's own `logger` answers "is the panel on show", which
-   * is this publication's override of the registry's default. Offering the
-   * control on a demo with no logging would be a switch over nothing.
+   * The registry answers what a card CAN carry, because that is a fact about
+   * the code: whether the demo logs at all, and whether the entry is a card
+   * rather than a specimen. The row answers what it currently says — the log
+   * panel's state, the card's own content. Offering a log control on a demo
+   * that does not log would be a switch over nothing, and offering the link
+   * card's sections on a scheduler would be three.
    */
-  const loggerEntry =
+  const propertiesEntry =
     propertiesCard?.kind === "component"
       ? getDemoComponent(propertiesCard.componentId)
       : undefined;
+
+  /**
+   * What the panel may offer for this card's log output — nothing at all
+   * unless the demo behind it logs.
+   */
   const propertiesLogger =
-    propertiesCard?.kind === "component" && loggerEntry?.logger
+    propertiesCard?.kind === "component" && propertiesEntry?.logger
       ? {
           shown: propertiesCard.logger,
           onShownChange: (visible: boolean) =>
             draft.setLogger(propertiesCard.key, visible),
         }
       : undefined;
+
+  /**
+   * The card the panel authors — for the one entry that IS one.
+   *
+   * Gated on the registry's `card` rather than on the componentId, so the fact
+   * that decides how the tile RENDERS (see `ComponentCard`) is the same fact
+   * that decides which sections the rail offers. A card drawn bare with no
+   * sections to fill it in, or sections over a framed demo, are the two ways
+   * those could disagree.
+   */
+  const propertiesLinkCard =
+    propertiesCard?.kind === "component" && propertiesEntry?.card
+      ? {
+          config: propertiesCard.props ?? {},
+          onChange: (config: LinkCardConfig) =>
+            draft.setProps(propertiesCard.key, config),
+          onPickMedia: (slot: CardMediaSlot) =>
+            setPick({ key: propertiesCard.key, slot }),
+          onPickDocument: () => setPick({ key: propertiesCard.key }),
+        }
+      : undefined;
+
+  /** The card a library dialog is filling a slot on, re-read from the draft. */
+  const picked = shown.find((card) => card.key === pick?.key) ?? null;
+  const pickedConfig =
+    picked?.kind === "component" ? picked.props ?? {} : null;
+
+  /**
+   * Put the file the dialog handed back into whichever slot asked for it.
+   *
+   * One handler for both dialogs, because "which slot" was decided when the
+   * dialog was OPENED and is sitting in `pick` — branching on it here keeps the
+   * two dialogs to their one real difference, which is what they list.
+   */
+  function fillPickedSlot(payload: ImageInsertPayload) {
+    if (!pick || !pickedConfig) return;
+    if (pick.slot) {
+      draft.setProps(pick.key, {
+        ...pickedConfig,
+        media: { ...pickedConfig.media, [pick.slot]: mediaNodeFrom(payload) },
+      });
+    } else {
+      draft.setProps(pick.key, {
+        ...pickedConfig,
+        // Only the URL travels. A document is FETCHED rather than drawn, so the
+        // kind and the pixel shape the payload also carries describe nothing
+        // about it — `mediaKindOf` answers "image" for a PDF because every
+        // caller before this one had already ruled documents out.
+        link: { kind: "document", href: payload.src, newTab: pickedConfig.link?.newTab },
+      });
+    }
+    setPick(null);
+  }
 
   /**
    * Opens the panel for a card — or closes it, if that card's is the one
@@ -375,7 +487,7 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
                   href={card.href}
                   title={card.title}
                   aspect={card.aspect}
-                  date={card.date ?? undefined}
+                  meta={card.date ?? undefined}
                   cover={card.cover}
                   interactive={!editable}
                 />
@@ -402,6 +514,7 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
           // that card's values rather than the previous card's.
           key={propertiesCard.key}
           logger={propertiesLogger}
+          linkCard={propertiesLinkCard}
           onDismiss={() => setPropertiesKey(null)}
         />
       )}
@@ -433,6 +546,35 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
             }}
           />
 
+          {/* The two library dialogs the rail opens — one for pictures, one for
+              documents. They live HERE and not in the panel: the panel is a
+              portalled, fixed surface with its own outside-press dismiss, and a
+              modal opened from inside it would be a second surface fighting the
+              first for every press. The panel exempts `dialog` from that
+              dismiss so it survives the round trip.
+
+              Two elements rather than one with a switched `accepts`, because
+              the hook resets its whole state on `open` and re-reads the
+              library: one element toggling between the halves would refetch and
+              re-anchor on every switch, and the two are never open at once
+              anyway — `pick` holds exactly one slot. */}
+          <ImageInsertDialog
+            open={pick !== null && pick.slot !== undefined}
+            mode="change"
+            initialPhase="library"
+            onClose={() => setPick(null)}
+            onInsert={fillPickedSlot}
+          />
+
+          <ImageInsertDialog
+            open={pick !== null && pick.slot === undefined}
+            accepts="document"
+            mode="change"
+            initialPhase="library"
+            onClose={() => setPick(null)}
+            onInsert={fillPickedSlot}
+          />
+
           <ConfirmDialog
             open={confirmUnpublish !== null}
             title="Unpublish Component"
@@ -462,6 +604,33 @@ function ComponentCard({
 }) {
   const entry = getDemoComponent(card.componentId);
   if (!entry) return null;
+
+  // The one entry that is not a specimen. It draws itself, and it draws itself
+  // BARE — a frame is a box that says "this is a prototype, and it ends here",
+  // which is the wrong sentence for a tile whose whole job is to be one of the
+  // cards on this grid. Its content is the row's own `props`, so there is no
+  // chunk to fetch and no preloader between placing it and seeing it.
+  if (entry.card) {
+    const config = card.props ?? {};
+    return (
+      <LinkCard
+        href={linkCardHref(config)}
+        title={config.content?.title}
+        meta={config.content?.meta}
+        // A card may be a picture with no words on it, and the picture is
+        // decorative — so without this the link would be announced as its own
+        // URL. `linkCardTitle` falls back to the destination's own name.
+        label={linkCardTitle(config)}
+        aspect={card.aspect}
+        cover={config.media?.light}
+        coverDark={config.media?.dark}
+        scrim={config.content?.scrim}
+        tone={config.content?.tone}
+        newTab={config.link?.newTab}
+        interactive={!editable}
+      />
+    );
+  }
 
   const frame = (
     // The card says WHETHER the log panel shows; the registry says what it

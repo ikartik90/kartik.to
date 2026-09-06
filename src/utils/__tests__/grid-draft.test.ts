@@ -31,6 +31,7 @@ const comp = (
   id,
   componentId: "demo",
   logger: false,
+  props: null,
   gridIndex,
   publishedAt: new Date("2026-01-01"),
   aspect: "3/2",
@@ -365,6 +366,90 @@ describe("applyGridDraft — logger", () => {
       isGridDraftDirty({
         ...emptyGridDraft(),
         loggers: { "component:c1": true },
+      }),
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The card a publication CARRIES — the link card's picture, words and
+// destination, edited in the same rail and thrown away by the same discard.
+//
+// Not a placement and not an override of a registry default: this blob IS the
+// card, so a link card with nothing in the draft is a blank one rather than one
+// showing whatever the registry says.
+// ---------------------------------------------------------------------------
+describe("applyGridDraft — configuration", () => {
+  const linkCard = (id: string): Extract<GridCard, { kind: "component" }> => ({
+    ...comp(id),
+    componentId: "link-card",
+    props: {},
+  });
+
+  it("configures the card the draft configured", () => {
+    const out = applyGridDraft([linkCard("a"), linkCard("b")], {
+      ...emptyGridDraft(),
+      props: { "component:a": { content: { title: "Shader" } } },
+    });
+    const [a, b] = out as Extract<GridCard, { kind: "component" }>[];
+    expect(a.props?.content?.title).toBe("Shader");
+    expect(b.props).toEqual({});
+  });
+
+  // The blob is REPLACED, never merged: the panel hands back the whole
+  // configuration on every keystroke, and a merge would make clearing a title
+  // impossible — the absent key would fall through to the stored one forever.
+  it("replaces the stored configuration rather than merging into it", () => {
+    const stored = linkCard("a");
+    stored.props = { content: { title: "Old" }, link: undefined };
+    const [out] = applyGridDraft([stored], {
+      ...emptyGridDraft(),
+      props: { "component:a": { content: { meta: "Playground" } } },
+    }) as Extract<GridCard, { kind: "component" }>[];
+    expect(out.props).toEqual({ content: { meta: "Playground" } });
+  });
+
+  // A link card is placed and then filled in — the row does not exist while the
+  // first half of that is happening, so the edits have to reach the card on
+  // screen the same way a pending insert's shape does.
+  it("configures a card that has not been published yet", () => {
+    const [out] = applyGridDraft([], {
+      ...emptyGridDraft(),
+      inserts: [
+        {
+          key: "pending:1",
+          componentId: "link-card",
+          index: 0,
+          aspect: "16/9",
+          logger: false,
+        },
+      ],
+      props: { "pending:1": { content: { title: "Shader" } } },
+    }) as Extract<GridCard, { kind: "component" }>[];
+    expect(out.props?.content?.title).toBe("Shader");
+  });
+
+  it("leaves a card nobody configured with nothing on it", () => {
+    const [out] = applyGridDraft([], {
+      ...emptyGridDraft(),
+      inserts: [
+        {
+          key: "pending:1",
+          componentId: "link-card",
+          index: 0,
+          aspect: "16/9",
+          logger: false,
+        },
+      ],
+    }) as Extract<GridCard, { kind: "component" }>[];
+    expect(out.props).toEqual({});
+  });
+
+  it("is dirty once a card has been configured", () => {
+    expect(
+      isGridDraftDirty({
+        ...emptyGridDraft(),
+        props: { "component:a": { content: { title: "Shader" } } },
       }),
     ).toBe(true);
   });

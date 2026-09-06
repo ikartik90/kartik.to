@@ -32,6 +32,30 @@ vi.mock("@/components/demo-frame", () => ({
 vi.mock("@/components/demo-component", () => ({
   DemoComponent: () => <div data-testid="demo" />,
 }));
+// The library dialogs reach a server action, and through it `next/headers`.
+// Stubbed to the one fact the grid's own cases are about: which half of the
+// library the rail asked for.
+vi.mock("@/components/image-insert-dialog", () => ({
+  ImageInsertDialog: ({
+    open,
+    accepts = "media",
+    onInsert,
+  }: {
+    open: boolean;
+    accepts?: string;
+    onInsert: (payload: { src: string; kind: string }) => void;
+  }) =>
+    open ? (
+      <button
+        data-testid={`library:${accepts}`}
+        onClick={() =>
+          onInsert({ src: `https://cdn.test/media/uuid-picked.png`, kind: "image" })
+        }
+      >
+        pick
+      </button>
+    ) : null,
+}));
 vi.mock("@/components/demo/registry", () => ({
   // Only one of these demos logs, which is what the log control keys off —
   // "can this card log at all" is the registry's answer, not the row's.
@@ -40,6 +64,9 @@ vi.mock("@/components/demo/registry", () => ({
     label: id,
     load: vi.fn(),
     logger: id === "calchemy-demo" ? true : undefined,
+    // The one entry that is a CARD rather than a specimen — drawn bare, and
+    // configured per publication. Both halves of that key off this flag.
+    card: id === "link-card" ? true : undefined,
     // One demo in the mocked registry is a picture of somewhere else, which is
     // what the card's link keys off — see `link` on the real entry.
     link:
@@ -52,6 +79,7 @@ vi.mock("@/components/demo/registry", () => ({
 import { HomeGrid } from "../home-grid";
 import { useGridDraftStore } from "@/store/grid-draft";
 import type { GridCard } from "@/lib/grid";
+import type { LinkCardConfig } from "@/domain/link-card";
 
 const post = (id: string, gridIndex: number | null = null): GridCard => ({
   kind: "post",
@@ -73,6 +101,7 @@ const component = (id: string, gridIndex: number | null = null): GridCard => ({
   id,
   componentId: "cosmic-track",
   logger: false,
+  props: null,
   gridIndex,
   publishedAt: new Date("2026-01-01"),
   aspect: "3/2",
@@ -84,6 +113,16 @@ const linked = (id: string): GridCard => ({
   ...(component(id) as Extract<GridCard, { kind: "component" }>),
   componentId: "shader-preset-reel",
   aspect: "1/1",
+});
+
+/** A card for the one entry in the mocked registry that IS a card. */
+const linkCard = (
+  id: string,
+  props: LinkCardConfig = {},
+): Extract<GridCard, { kind: "component" }> => ({
+  ...(component(id) as Extract<GridCard, { kind: "component" }>),
+  componentId: "link-card",
+  props,
 });
 
 /** A card for the one demo in the mocked registry that logs. */
@@ -784,5 +823,182 @@ describe("HomeGrid width measurement", () => {
     render(<HomeGrid cards={[linked("a")]} />);
 
     expect(screen.getByTestId("demo")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The link card — the one published component that is a CARD rather than a
+// specimen, and the only one whose content is authored in the rail.
+// ---------------------------------------------------------------------------
+describe("HomeGrid — link cards", () => {
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute("open", "");
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.removeAttribute("open");
+    });
+    Object.values(actions).forEach((fn) => fn.mockReset());
+    useGridDraftStore.getState().reset();
+  });
+  afterEach(cleanup);
+
+  const customize = () => screen.getAllByRole("button", { name: /customize/i });
+
+  // Drawn from its own row, with no frame around it and no chunk to fetch —
+  // the demo loader is never reached, which is what the absent preloader says.
+  it("draws itself rather than loading a demo into a frame", () => {
+    render(
+      <HomeGrid
+        cards={[
+          linkCard("c1", {
+            content: { title: "Shader Playground" },
+            link: { kind: "internal", href: "/playground/shader" },
+          }),
+        ]}
+      />,
+    );
+    const link = screen.getByRole("link", { name: "Shader Playground" });
+    expect(link.getAttribute("href")).toBe("/playground/shader");
+    expect(screen.queryByTestId("demo")).toBeNull();
+  });
+
+  it("opens away from here when the card says so", () => {
+    render(
+      <HomeGrid
+        cards={[
+          linkCard("c1", {
+            content: { title: "Elsewhere" },
+            link: { kind: "external", href: "https://example.com", newTab: true },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: "Elsewhere" }).getAttribute("target"),
+    ).toBe("_blank");
+  });
+
+  // The picture is decorative, so a card with no words would otherwise be a
+  // link announced as its own URL.
+  it("names a wordless card by where it goes", () => {
+    render(
+      <HomeGrid
+        cards={[
+          linkCard("c1", {
+            link: { kind: "internal", href: "/playground/shader" },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Shader Playground" })).toBeTruthy();
+  });
+
+  it("offers its three sections in the panel, and no log control", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[linkCard("c1")]} editable />);
+    await user.click(customize()[0]);
+
+    for (const name of ["Media", "Content", "Link"]) {
+      expect(screen.getByText(name)).toBeTruthy();
+    }
+    expect(screen.queryByRole("group", { name: "Log output" })).toBeNull();
+  });
+
+  it("offers none of them on a demo", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[logging("c1")]} editable />);
+    await user.click(customize()[0]);
+    expect(screen.queryByText("Link")).toBeNull();
+  });
+
+  // The grid is edited as a draft, exactly as its placements are: nothing
+  // reaches the database until the palette's exit commits the lot.
+  it("records what the rail writes in the draft, not on the server", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[linkCard("c1")]} editable />);
+    await user.click(customize()[0]);
+    await user.click(screen.getByRole("button", { name: "Add content" }));
+    await user.type(screen.getByLabelText("Title"), "S");
+
+    expect(useGridDraftStore.getState().props["component:c1"]).toEqual({
+      content: { title: "S" },
+    });
+    expect(actions.saveGridLayout).not.toHaveBeenCalled();
+  });
+
+  it("shows the rail's edits on the card behind it", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[linkCard("c1")]} editable />);
+    await user.click(customize()[0]);
+    await user.click(screen.getByRole("button", { name: "Add content" }));
+    await user.type(screen.getByLabelText("Title"), "S");
+
+    expect(screen.getByRole("heading", { name: "S" })).toBeTruthy();
+  });
+
+  describe("the library it opens", () => {
+    const openSection = async (
+      user: ReturnType<typeof userEvent.setup>,
+      section: string,
+    ) => {
+      render(<HomeGrid cards={[linkCard("c1")]} editable />);
+      await user.click(customize()[0]);
+      await user.click(screen.getByRole("button", { name: `Add ${section}` }));
+    };
+
+    it("asks for pictures when a theme slot is being filled", async () => {
+      const user = userEvent.setup();
+      await openSection(user, "media");
+      await user.click(screen.getByRole("button", { name: "Add light media" }));
+      expect(screen.getByTestId("library:media")).toBeTruthy();
+      expect(screen.queryByTestId("library:document")).toBeNull();
+    });
+
+    it("asks for documents when the link is one", async () => {
+      const user = userEvent.setup();
+      await openSection(user, "link");
+      await user.click(screen.getByRole("option", { name: "Document" }));
+      await user.click(screen.getByRole("button", { name: "Add document" }));
+      expect(screen.getByTestId("library:document")).toBeTruthy();
+      expect(screen.queryByTestId("library:media")).toBeNull();
+    });
+
+    it("puts the picked file in the slot that asked for it", async () => {
+      const user = userEvent.setup();
+      await openSection(user, "media");
+      await user.click(screen.getByRole("button", { name: "Add dark media" }));
+      await user.click(screen.getByTestId("library:media"));
+
+      expect(
+        useGridDraftStore.getState().props["component:c1"]?.media,
+      ).toEqual({
+        dark: {
+          type: "media",
+          kind: "image",
+          src: "https://cdn.test/media/uuid-picked.png",
+        },
+      });
+    });
+
+    // Only the URL travels. A document is fetched rather than drawn, so the
+    // kind and the pixel shape the payload also carries describe nothing.
+    it("points a document link at the file, and nothing else", async () => {
+      const user = userEvent.setup();
+      await openSection(user, "link");
+      await user.click(screen.getByRole("option", { name: "Document" }));
+      await user.click(screen.getByRole("button", { name: "Add document" }));
+      await user.click(screen.getByTestId("library:document"));
+
+      expect(useGridDraftStore.getState().props["component:c1"]?.link).toEqual({
+        kind: "document",
+        href: "https://cdn.test/media/uuid-picked.png",
+        newTab: undefined,
+      });
+    });
   });
 });

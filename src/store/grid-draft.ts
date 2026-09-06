@@ -5,12 +5,14 @@ import {
   type PendingComponentInsert,
 } from "@/utils/grid-draft";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import type { LinkCardConfig } from "@/domain/link-card";
 
 interface GridDraftStore extends GridDraft {
   setPin: (key: string, index: number | null) => void;
   setSpan: (key: string, span: number) => void;
   setAspect: (key: string, aspect: DemoFrameAspectRatio) => void;
   setLogger: (key: string, logger: boolean) => void;
+  setProps: (key: string, props: LinkCardConfig) => void;
   addInsert: (insert: PendingComponentInsert) => void;
   remove: (key: string) => void;
   reset: () => void;
@@ -50,6 +52,12 @@ export const useGridDraftStore = create<GridDraftStore>()((set) => ({
   // showing and hide it in the other.
   setLogger: (key, logger) =>
     set((s) => ({ loggers: { ...s.loggers, [key]: logger } })),
+
+  // The WHOLE configuration, replacing whatever was there. The rail edits a
+  // card the way the media panel edits a picture — it owns no draft of its own
+  // and hands back the complete object on every change — so a merge here would
+  // make an emptied field un-emptiable. See `GridDraft.props`.
+  setProps: (key, props) => set((s) => ({ props: { ...s.props, [key]: props } })),
 
   addInsert: (insert) => set((s) => ({ inserts: [...s.inserts, insert] })),
 

@@ -27,13 +27,19 @@ import { OptionList } from "@/components/ui/input/option-list";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import {
   useImageInsert,
+  type ImageInsertAccepts,
   type ImageInsertPayload,
   type ImageInsertPhase,
 } from "@/hooks/use-image-insert";
-import { ALLOWED_MEDIA_CONTENT_TYPES, mediaKindOf } from "@/domain/media";
+import {
+  ALLOWED_DOCUMENT_CONTENT_TYPES,
+  ALLOWED_MEDIA_CONTENT_TYPES,
+  mediaKindOf,
+} from "@/domain/media";
 import { Media } from "@/components/media";
 import { formatFileSize, formatMediaType } from "@/utils/format-file-size";
 import CloseIcon from "@/assets/icons/cross.svg";
+import PageIcon from "@/assets/icons/page.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
 // This is the one surface that shows media it holds as an ASSET rather than as
@@ -169,12 +175,33 @@ const errorStyle = css({
 
 const iconStyle = menuIcon();
 
-// Built from the allow-list rather than restated, so the file picker cannot
+// Built from the allow-lists rather than restated, so the file picker cannot
 // drift from what `processFile` and the server will actually take.
-const ACCEPT = ALLOWED_MEDIA_CONTENT_TYPES.join(",");
+const ACCEPT = {
+  media: ALLOWED_MEDIA_CONTENT_TYPES.join(","),
+  document: ALLOWED_DOCUMENT_CONTENT_TYPES.join(","),
+} as const;
 
-/** The same list as `ACCEPT`, for the hint under the drop zone. */
-const FORMAT_NAMES = "PNG, SVG, WEBP, JPG, GIF, MP4";
+/** The same lists as `ACCEPT`, for the hint under the drop zone. */
+const FORMAT_NAMES = {
+  media: "PNG, SVG, WEBP, JPG, GIF, MP4",
+  document: "PDF",
+} as const;
+
+/**
+ * A document's stand-in in the list and in the preview pane.
+ *
+ * There is no element that draws a PDF, and nothing here tries: the pane's job
+ * is to let you check WHICH file you are about to point at, and the name, the
+ * type and the size below it answer that. An `<embed>` of a document would be a
+ * second document viewer to keep working in two browsers for a preview nobody
+ * reads at 280px.
+ */
+const documentGlyphStyle = css({
+  width: "40px",
+  height: "40px",
+  color: "text.body/50",
+});
 
 // ---------------------------------------------------------------------------
 // Component
@@ -186,6 +213,12 @@ interface ImageInsertDialogBaseProps {
   open: boolean;
   mode?: ImageDialogMode;
   initialPhase?: ImageInsertPhase;
+  /**
+   * Which half of the bucket this is opening — pictures and clips by default,
+   * or documents. See {@link ImageInsertAccepts}: it decides what the library
+   * lists, what the drop zone takes and what the dialog calls itself.
+   */
+  accepts?: ImageInsertAccepts;
   onClose: () => void;
 }
 
@@ -214,10 +247,12 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
     open,
     mode = "insert",
     initialPhase = "upload",
+    accepts = "media",
     onClose,
     selectionMode = "single",
   } = props;
   const isMultiple = selectionMode === "multiple";
+  const isDocument = accepts === "document";
   const maxSelection = (isMultiple ? props.maxSelection : undefined) ?? 6;
 
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -252,15 +287,20 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
     open,
     initialPhase,
     selectionMode,
+    accepts,
     ...(isMultiple ? { maxSelection } : {}),
   });
 
   const selectedCount = selectedKeys.length;
   // "Media" is the dialog's noun throughout — the library holds clips as well
   // as stills. It is also a mass noun, so the batch count rides along without
-  // inflecting the way "1 Image / 2 Images" did.
-  const title = mode === "change" ? "Change Media" : "Insert Media";
-  const confirmLabel = isMultiple ? `Insert ${selectedCount} Media` : title;
+  // inflecting the way "1 Image / 2 Images" did. A document dialog says
+  // "Document" for the same reason it lists nothing but documents: what you are
+  // picking is the whole difference between the two, and calling both of them
+  // "Media" would leave the two surfaces indistinguishable at the header.
+  const noun = isDocument ? "Document" : "Media";
+  const title = `${mode === "change" ? "Change" : "Insert"} ${noun}`;
+  const confirmLabel = isMultiple ? `Insert ${selectedCount} ${noun}` : title;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -354,7 +394,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
             >
               <OptionList.Listbox
                 className={libraryListStyle}
-                aria-label="Image library"
+                aria-label={`${noun} library`}
               >
                 {assets.map((asset) => (
                   // `label` carries the searchable/accessible text, since the
@@ -368,13 +408,17 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     <span className={mediaThumbnail()}>
                       {/* The row's own `label` is the accessible name, so the
                           thumbnail is decorative either way. */}
-                      <Media
-                        src={asset.url}
-                        kind={mediaKindOf(asset.contentType)}
-                        alt=""
-                        width={asset.width}
-                        height={asset.height}
-                      />
+                      {isDocument ? (
+                        <PageIcon aria-hidden />
+                      ) : (
+                        <Media
+                          src={asset.url}
+                          kind={mediaKindOf(asset.contentType)}
+                          alt=""
+                          width={asset.width}
+                          height={asset.height}
+                        />
+                      )}
                     </span>
                     <span className={libraryFilenameStyle}>
                       {asset.filename}
@@ -400,14 +444,18 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   {/* Controls here and not on the thumbnail: this pane is
                       where you check what you are about to insert, and for a
                       clip that means being able to scrub it. */}
-                  <Media
-                    src={selectedAsset.url}
-                    kind={mediaKindOf(selectedAsset.contentType)}
-                    alt={altText || selectedAsset.filename}
-                    controls
-                    width={selectedAsset.width}
-                    height={selectedAsset.height}
-                  />
+                  {isDocument ? (
+                    <PageIcon aria-hidden className={documentGlyphStyle} />
+                  ) : (
+                    <Media
+                      src={selectedAsset.url}
+                      kind={mediaKindOf(selectedAsset.contentType)}
+                      alt={altText || selectedAsset.filename}
+                      controls
+                      width={selectedAsset.width}
+                      height={selectedAsset.height}
+                    />
+                  )}
                 </figure>
                 <div className={mediaMetadataRow()}>
                   {/* Click the name to rename it — display only; the object key
@@ -426,23 +474,28 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     {formatFileSize(selectedAsset.size)}
                   </span>
                 </div>
-                <label className={mediaAltRow()}>
-                  <span className={css({ srOnly: true })}>Alt text</span>
-                  <textarea
-                    ref={altFieldRef}
-                    className={altFieldStyle}
-                    value={altText}
-                    placeholder="Add alt text..."
-                    rows={1}
-                    disabled={isBusy}
-                    onChange={(e) => updateAltText(e.target.value)}
-                  />
-                </label>
+                {/* Nothing draws a document, so there is no picture for a
+                    description to stand in for — alt text on one would be a
+                    field with no reader. */}
+                {!isDocument && (
+                  <label className={mediaAltRow()}>
+                    <span className={css({ srOnly: true })}>Alt text</span>
+                    <textarea
+                      ref={altFieldRef}
+                      className={altFieldStyle}
+                      value={altText}
+                      placeholder="Add alt text..."
+                      rows={1}
+                      disabled={isBusy}
+                      onChange={(e) => updateAltText(e.target.value)}
+                    />
+                  </label>
+                )}
                 <div className={mediaDeleteRow()}>
                   <Button
                     type="button"
                     variant="icon"
-                    aria-label="Delete image"
+                    aria-label={`Delete ${noun.toLowerCase()}`}
                     disabled={isBusy}
                     onClick={() => void deleteSelectedAsset()}
                   >
@@ -501,7 +554,10 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
             </div>
 
             {phase === "uploading" ? (
-              <ProgressBar value={uploadProgress} label="Uploading image" />
+              <ProgressBar
+                value={uploadProgress}
+                label={`Uploading ${noun.toLowerCase()}`}
+              />
             ) : error ? (
               <p className={errorStyle}>{error}</p>
             ) : (
@@ -520,7 +576,9 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   </Button>{" "}
                   a file
                 </div>
-                <p className={formatsStyle}>Supported formats: {FORMAT_NAMES}</p>
+                <p className={formatsStyle}>
+                  Supported formats: {FORMAT_NAMES[accepts]}
+                </p>
               </>
             )}
           </div>
@@ -576,7 +634,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept={ACCEPT}
+        accept={ACCEPT[accepts]}
         className={css({ display: "none" })}
         onChange={handleFileInputChange}
         tabIndex={-1}

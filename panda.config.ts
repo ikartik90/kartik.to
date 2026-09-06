@@ -7424,12 +7424,63 @@ export default defineConfig({
           },
           variants: {
             aspect: linkCardAspectVariants,
+            // Which theme the band is drawn in, PINNED, rather than the
+            // reader's.
+            //
+            // Every other surface in this app follows the page, and this one
+            // must be able not to: what the caption stands on is the PICTURE,
+            // and the picture does not change when the page does. A card whose
+            // cover is a light screenshot keeps a light screenshot in dark
+            // mode, so a wash and an ink that flipped with the page would put
+            // white words on a near-white plate — which is the 1.0:1 the scrim
+            // note above measured, arrived at from the other direction.
+            //
+            // Expressed by REASSIGNING the two tokens the band is built out of
+            // rather than by writing colours over it, for the reason the
+            // `[data-covered]` block one slot up gives at length: `Typography`
+            // colours itself from a `cva` in the `utilities` layer, and a layer
+            // beats specificity outright, so a rule from here cannot win
+            // against it — but it can change what the variable that rule reads
+            // resolves to. `bg.surface` is the wash's own colour (see `wash`),
+            // and the three text tokens are what the caption's two lines
+            // resolve through: `[data-covered]` on the root points `body` and
+            // `default` at `title`, and a custom property that refers to
+            // another is substituted where it is DECLARED — so pointing them
+            // all at one fixed ink here, on the scrim, is what actually
+            // reaches the words inside it.
+            //
+            // Held to the scrim slot deliberately. The plate behind the picture
+            // (`cover`) keeps following the page, because that is the app's own
+            // background showing through the inset of a `contain`-fitted
+            // screenshot and it should match the page around the card.
+            tone: {
+              light: {
+                scrim: {
+                  "--colors-bg-surface": "var(--colors-neutral-200)",
+                  "--colors-text-title": "var(--colors-neutral-900)",
+                  "--colors-text-body": "var(--colors-neutral-900)",
+                  "--colors-text-default": "var(--colors-neutral-900)",
+                },
+              },
+              dark: {
+                scrim: {
+                  "--colors-bg-surface": "var(--colors-neutral-800)",
+                  "--colors-text-title": "var(--colors-neutral-100)",
+                  "--colors-text-body": "var(--colors-neutral-100)",
+                  "--colors-text-default": "var(--colors-neutral-100)",
+                },
+              },
+            },
           },
           // The shape is chosen per card at RUNTIME, so the extractor never
           // sees one: without this only the ratios that happen to be written as
           // literals somewhere would be emitted, and every other card would
           // fall back to no shape at all. Same trap `demoFrameDemoArea` sprang.
-          staticCss: [{ aspect: ["*"] }],
+          //
+          // The tone is here for the same reason and in a SEPARATE entry: one
+          // object listing both would emit the cross product — every ratio
+          // times every tone — for two properties that never interact.
+          staticCss: [{ aspect: ["*"] }, { tone: ["*"] }],
         }),
 
         // -------------------------------------------------------------------
