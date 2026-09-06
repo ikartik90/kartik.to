@@ -10,8 +10,6 @@ import {
   GridIndexSchema,
   GridSpanSchema,
 } from "@/domain/component";
-import { articles as staticArticles } from "@/data/articles";
-import { projects as staticProjects } from "@/data/projects";
 
 // ---------------------------------------------------------------------------
 // Mutations for the homepage grid — pinning, reordering, and publishing or
@@ -185,38 +183,23 @@ const GridDraftSchema = z.object({
 export type GridDraftInput = z.infer<typeof GridDraftSchema>;
 
 /**
- * Post ids that come from `src/data`, not from a table.
- *
- * The grid is not drawn from the database alone: `articles.ts` and
- * `projects.ts` contribute cards whose ids ("article-1", "project-3") name no
- * row anywhere, and they carry the same toolbar as every other card. Built as a
- * Set from the same two modules the grid reads, rather than sniffed from the id
- * shape — a `startsWith("article-")` test would be a second, weaker copy of
- * what those files already say, and would start lying the day one of them is
- * renamed.
- */
-const STATIC_POST_IDS = new Set(
-  [...staticProjects, ...staticArticles].map((post) => post.id),
-);
-
-/**
  * `post:abc` / `component:abc` → the row it names.
  *
- * Null for the two kinds of card that HAVE no row: a `pending:` key, whose card
- * is created by the `inserts` list rather than updated, and a static post,
- * which exists only in `src/data`. Both are filtered here, before any write is
- * built, so nothing is attempted against them at all — a write aimed at a
- * missing row is not merely wasted, it throws P2025 and takes the whole
- * transaction with it, which would roll back a component the same session had
- * just published.
+ * Null for a `pending:` key, whose card is created by the `inserts` list rather
+ * than updated. It is filtered here, before any write is built, so nothing is
+ * attempted against it at all — a write aimed at a missing row is not merely
+ * wasted, it throws P2025 and takes the whole transaction with it, which would
+ * roll back a component the same session had just published.
+ *
+ * Static posts used to be the other such case, and needed a set of their ids
+ * read out of `src/data` to be recognised. They no longer reach the grid at
+ * all (see `getGridCards`), so every `post:` key now names a real row.
  */
 function parseCardKey(key: string): GridTarget | null {
   const [kind, ...rest] = key.split(":");
   const id = rest.join(":");
   if (!id) return null;
-  if (kind === "post") {
-    return STATIC_POST_IDS.has(id) ? null : { kind: "post", id };
-  }
+  if (kind === "post") return { kind: "post", id };
   if (kind === "component") return { kind: "component", id };
   return null;
 }
@@ -252,9 +235,9 @@ interface RowPatch {
  * components, moved three cards and then failed on the fourth would leave the
  * grid in an arrangement nobody chose and no discard could undo.
  *
- * Pending and static keys are skipped by `parseCardKey` returning null — see
- * there for why neither has a row to write to. A pending card is not lost by
- * that: the `inserts` list is where it is dealt with.
+ * Pending keys are skipped by `parseCardKey` returning null — see there for why
+ * they have no row to write to. A pending card is not lost by that: the
+ * `inserts` list is where it is dealt with.
  */
 export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
   await requireAdmin();

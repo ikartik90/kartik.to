@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getDemoComponent } from "@/components/demo/registry";
 import { orderGridItems } from "@/utils/grid-order";
-import { mergePosts, parsePost } from "@/lib/posts";
-import { articles as staticArticles } from "@/data/articles";
-import { projects as staticProjects } from "@/data/projects";
+import { parsePost } from "@/lib/posts";
 import { postCover } from "@/utils/post-cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import type { MediaNode } from "@/domain/nodes";
@@ -11,6 +9,17 @@ import type { Post } from "@/domain/post";
 
 // ---------------------------------------------------------------------------
 // The homepage feed: every published thing, in the order the grid renders it.
+//
+// Everything on it comes from a table. `src/data/articles.ts` and
+// `src/data/projects.ts` used to be merged in beside the database rows, giving
+// the page something to show before anything had been written; they are
+// fixtures for the playgrounds now, and no longer a listing. What made that
+// untenable is that a card is a control surface: a static one wore the same
+// toolbar as every other card while having no row to write to, so pinning,
+// widening, reshaping and retiring it were no-ops that looked like controls,
+// and `saveGridLayout` had to keep a set of their ids just to route around
+// them. Nothing seeds the grid now — an empty grid is the honest picture of an
+// empty database.
 //
 // Projects, articles and standalone components are ONE list here rather than
 // three sections, because the grid does not distinguish them — a card is a card,
@@ -126,11 +135,11 @@ async function safely<T>(run: () => Promise<T>, fallback: T): Promise<T> {
 /**
  * Every card on the homepage, seated.
  *
- * Reads wide and fails narrow: a database that is unreachable, or one that has
- * not had the grid columns pushed to it yet, must not take the page down — the
- * static entries in `src/data` are a real part of the listing and can still be
- * served. Each source is caught on its own so one failing does not silence the
- * others.
+ * Fails narrow: a database that is unreachable, or one that has not had the
+ * grid columns pushed to it yet, costs the grid and nothing else. The homepage
+ * is a document with the grid set into it, and the writing around it is worth
+ * serving on its own — a page missing its listing beats a page that 500s.
+ * Each source is caught separately so one failing does not silence the other.
  */
 export async function getGridCards(): Promise<GridCard[]> {
   const dbPosts = await safely(
@@ -159,8 +168,6 @@ export async function getGridCards(): Promise<GridCard[]> {
     [],
   );
 
-  const posts = mergePosts(dbPosts, [...staticProjects, ...staticArticles]);
-
   const componentCards: GridComponentCard[] = components.flatMap((row) => {
     // A publication whose demo has since left the registry renders nothing at
     // all, so it is dropped rather than shown as a hole. The row survives, and
@@ -187,5 +194,5 @@ export async function getGridCards(): Promise<GridCard[]> {
     ];
   });
 
-  return orderGridItems([...posts.map(postToCard), ...componentCards]);
+  return orderGridItems([...dbPosts.map(postToCard), ...componentCards]);
 }

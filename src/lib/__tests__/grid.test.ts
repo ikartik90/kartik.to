@@ -14,7 +14,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { getGridCards, type GridPostCard } from "@/lib/grid";
 import { articles as staticArticles } from "@/data/articles";
-import { postCover } from "@/utils/post-cover";
+import { projects as staticProjects } from "@/data/projects";
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 
@@ -76,19 +76,29 @@ describe("getGridCards", () => {
     });
   });
 
-  it("reads the cover off the post's OWN document, static entries included", async () => {
-    // Static posts are a real part of the listing — the grid reads wide and
-    // fails narrow, so they are what a visitor still gets when the database is
-    // unreachable. A cover that only appeared for database rows would make
-    // those the odd cards out on exactly the page that has nothing else.
-    const [firstArticle] = staticArticles;
-    const cards = await getGridCards();
+  it("lists nothing the database did not return", async () => {
+    // `src/data/articles.ts` and `src/data/projects.ts` are fixtures, not
+    // publications, and the listing is the database's alone.
+    //
+    // They were seeded into it so the page had something to show before
+    // anything had been written, and that is what has to stop: a static card
+    // carries the same toolbar as every other one while having no row behind
+    // it, so pinning, widening, reshaping and retiring it are all no-ops
+    // dressed as controls — see `parseCardKey`, which had to know their ids by
+    // name to keep the write from throwing. The files stay for the
+    // playgrounds; only their standing as published work goes.
+    //
+    // The slugs are read off the data modules rather than hardcoded, so a
+    // rename keeps testing the real thing instead of quietly testing nothing.
+    mockPostFindMany.mockResolvedValue([row({})]);
 
-    const card = postCards(cards).find(
-      (entry) => entry.href === `/writing/${firstArticle.slug}`,
-    );
-    expect(card?.cover).toEqual(postCover(firstArticle.content));
-    expect(card?.cover).not.toBeNull();
+    const hrefs = postCards(await getGridCards()).map((card) => card.href);
+
+    expect(hrefs).toEqual(["/work/atlas"]);
+    for (const { slug } of [...staticArticles, ...staticProjects]) {
+      expect(hrefs).not.toContain(`/writing/${slug}`);
+      expect(hrefs).not.toContain(`/work/${slug}`);
+    }
   });
 
   it("leaves a post with no media in it on the flat plate", async () => {

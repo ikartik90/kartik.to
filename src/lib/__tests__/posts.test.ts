@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Post } from "@/domain/post";
 
 const mockFindFirst = vi.fn();
 const mockFindMany = vi.fn();
@@ -30,23 +29,9 @@ const RAW_POST = {
   updatedAt: NOW,
 };
 
-const STATIC_PROJECT: Post = {
-  id: "project-1",
-  title: "Static",
-  slug: "static",
-  category: "WORK",
-  content: EMPTY_DOC,
-  publishedAt: NOW,
-  createdAt: NOW,
-  updatedAt: NOW,
-};
-
-const {
-  parseCategory,
-  mergePosts,
-  getPublishedPostBySlug,
-  resolvePost,
-} = await import("../posts");
+const { parseCategory, getPublishedPostBySlug, resolvePost } = await import(
+  "../posts"
+);
 
 describe("parseCategory", () => {
   it("parses valid categories", () => {
@@ -57,27 +42,6 @@ describe("parseCategory", () => {
   it("returns null for invalid categories", () => {
     expect(parseCategory("INVALID")).toBeNull();
     expect(parseCategory(undefined)).toBeNull();
-  });
-});
-
-describe("mergePosts", () => {
-  it("prefers DB posts over static posts with the same slug", () => {
-    const dbPost: Post = { ...STATIC_PROJECT, id: "db-1", title: "From DB" };
-    const merged = mergePosts([dbPost], [STATIC_PROJECT]);
-    expect(merged).toHaveLength(1);
-    expect(merged[0].title).toBe("From DB");
-  });
-
-  it("appends static-only posts after DB posts", () => {
-    const dbPost: Post = {
-      ...STATIC_PROJECT,
-      id: "db-1",
-      slug: "db-only",
-    };
-    const merged = mergePosts([dbPost], [STATIC_PROJECT]);
-    expect(merged).toHaveLength(2);
-    expect(merged[0].slug).toBe("db-only");
-    expect(merged[1].slug).toBe("static");
   });
 });
 
@@ -100,31 +64,35 @@ describe("resolvePost", () => {
     vi.clearAllMocks();
   });
 
-  it("returns static fallback when DB has no match", async () => {
+  // A slug the database does not know is a 404, even when `src/data` still
+  // holds a post by that name. The fixtures are not a shadow copy of the site:
+  // an article nobody can edit or unpublish should not stay reachable just
+  // because a module in the tree happens to spell its slug.
+  it("returns null when the database has no match", async () => {
     mockFindFirst.mockResolvedValue(null);
-    const post = await resolvePost("static", "WORK", {
-      staticFallback: [STATIC_PROJECT],
-      allowDraft: false,
-    });
-    expect(post?.slug).toBe("static");
+    const post = await resolvePost("static", "WORK", { allowDraft: false });
+    expect(post).toBeNull();
   });
 
-  it("prefers DB draft over static fallback when allowDraft is true", async () => {
+  it("falls through to a draft when allowDraft is true", async () => {
     const draftPost = {
       ...RAW_POST,
       id: "draft-1",
       title: "Draft version",
       publishedAt: null,
     };
-    mockFindFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(draftPost);
+    mockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(draftPost);
 
-    const post = await resolvePost("static", "WORK", {
-      staticFallback: [STATIC_PROJECT],
-      allowDraft: true,
-    });
+    const post = await resolvePost("static", "WORK", { allowDraft: true });
 
     expect(post?.title).toBe("Draft version");
+  });
+
+  // The admin's draft is a courtesy, not a bypass: a visitor asking for the
+  // same slug gets nothing.
+  it("does not reach for a draft when allowDraft is false", async () => {
+    mockFindFirst.mockResolvedValue(null);
+    await resolvePost("static", "WORK", { allowDraft: false });
+    expect(mockFindFirst).toHaveBeenCalledOnce();
   });
 });

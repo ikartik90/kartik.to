@@ -50,13 +50,23 @@ export async function getDraftPostBySlug(
   }
 }
 
+/**
+ * The post a public URL names, or null for the 404.
+ *
+ * Published first, then — for the admin alone — the unpublished draft, so that
+ * writing can be read at its real address before it goes out.
+ *
+ * There is deliberately no third step. This used to fall back to
+ * `src/data/articles.ts` / `src/data/projects.ts`, which kept those slugs
+ * reachable at `/writing/…` and `/work/…`; the fixtures are not a shadow copy
+ * of the site, and a post nobody can edit, unpublish or take down through the
+ * app has no business being served by it. They stay in the tree for the
+ * playgrounds, where a document is wanted as INPUT rather than as a page.
+ */
 export async function resolvePost(
   slug: string,
   category: PostCategory,
-  options: {
-    staticFallback: Post[];
-    allowDraft: boolean;
-  },
+  options: { allowDraft: boolean },
 ): Promise<Post | null> {
   const published = await getPublishedPostBySlug(slug, category);
   if (published) return published;
@@ -65,9 +75,6 @@ export async function resolvePost(
     const draft = await getDraftPostBySlug(slug, category);
     if (draft) return draft;
   }
-
-  const staticPost = options.staticFallback.find((p) => p.slug === slug);
-  if (staticPost) return staticPost;
 
   return null;
 }
@@ -84,10 +91,4 @@ export async function getPublishedPostsByCategory(
   } catch {
     return [];
   }
-}
-
-export function mergePosts(dbPosts: Post[], staticPosts: Post[]): Post[] {
-  const dbSlugs = new Set(dbPosts.map((p) => p.slug));
-  const staticOnly = staticPosts.filter((p) => !dbSlugs.has(p.slug));
-  return [...dbPosts, ...staticOnly];
 }
