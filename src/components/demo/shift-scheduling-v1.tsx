@@ -13,12 +13,14 @@ import {
 } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { css } from "../../../styled-system/css";
+import { field } from "../../../styled-system/recipes";
 import { ShiftFormShell } from "./shift-form-shell";
 import { DemoCursor } from "./demo-cursor";
 import { DemoControls } from "./demo-controls";
 import { DemoInvitation } from "./demo-invitation";
 import { Field } from "@/components/ui/input/field";
 import { DatePicker } from "@/components/ui/input/datepicker";
+import { TimePicker } from "@/components/ui/input/time-picker";
 import { Switch } from "@/components/ui/input/switch";
 import { TextInput } from "@/components/ui/input/text-input";
 import { Checkbox } from "@/components/ui/input/checkbox";
@@ -33,6 +35,7 @@ import {
   weekdayOf,
   type WeekdayKey,
 } from "@/utils/calendar-month";
+import { timeZoneLabel } from "@/utils/time-zone-label";
 import InfoIcon from "@/assets/icons/info.svg";
 
 // ---------------------------------------------------------------------------
@@ -125,6 +128,86 @@ const dateFieldStyle = css({
   width: "token(sizes.dateField)",
   flexShrink: 0,
 });
+
+// The shift's WHEN, on one line: the date, then the hours it runs for.
+//
+// Aligned on `flex-end` rather than the top, because the two columns are the
+// same shape only from the FEET up: three labelled frames on one line, but a
+// hint under each end of the row and none under the middle of the time range,
+// which carries one hint for its pair. Aligning their feet puts the frames on
+// one line without anyone having to write down how tall a label is — move to a
+// `lg` field, or let a hint wrap, and it still holds.
+const dateTimeRowStyle = css({
+  display: "flex",
+  flexWrap: "wrap",
+  // The design's 20px between the date and the hours it opens.
+  columnGap: "xxl",
+  rowGap: "lg",
+  alignItems: "flex-end",
+});
+
+// The range as one field: two triggers with a rule between them, over a single
+// hint.
+//
+// Each trigger gets its OWN `<Field>`, because a field context mints ONE
+// `controlId` and two triggers wearing it would be two elements with the same
+// id. The group around them is a plain div rather than a third, outer Field,
+// and that is not a shortcut — a `[data-field]` ancestor is exactly what the
+// recipe's active state watches (`[data-field]:has([data-control][aria-expanded='true'])`),
+// so an outer Field would see the OPEN trigger through its own `:has` and light
+// up every frame beneath it: opening the end time lit the start field too.
+// Nesting the archetype breaks it; standing beside it does not.
+const timeRangeStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  width: "fit-content",
+});
+
+// The shared hint, wearing the field recipe's own `hint` slot — the same
+// muted 12/20 on the same 4px step as "dd/mm/yyyy" beside it, rather than three
+// declarations restating it here and drifting the next time the field's rhythm
+// moves. Its Field.Hint counterpart needs a field context this group
+// deliberately does not have.
+const zoneHintStyle = field({ size: "md" }).hint;
+
+const timeRowStyle = css({
+  display: "flex",
+  // The frames line up along the row's foot; the rule between them sits in a
+  // box of its own height (see `hyphenStyle`) to land on their centre line.
+  alignItems: "flex-end",
+  gap: "sm",
+});
+
+const timeFieldStyle = css({
+  width: "token(sizes.dateField)",
+  flexShrink: 0,
+});
+
+// Centred on the FRAMES, which is not the same as centred on the row: each time
+// field is a label stacked on a frame, so centring in the row would float the
+// rule up into the labels' band. Instead it stands in a box exactly one frame
+// tall, sat on the row's foot with them — `spacing.4xl` being the same token the
+// `md` field draws its frame at, so the two cannot drift apart.
+const hyphenStyle = css({
+  display: "flex",
+  alignItems: "center",
+  flexShrink: 0,
+  height: "token(spacing.4xl)",
+  color: "field.text.muted",
+  textStyle: "bodyLarge",
+  userSelect: "none",
+});
+
+/**
+ * The zone the shift is quoted in. Named rather than read from the visitor's
+ * browser: the form is a rota for one place of work, and the hours on it mean
+ * that place's clock whoever happens to be looking at them.
+ */
+const SHIFT_TIME_ZONE = "America/New_York";
+
+/** A nine-to-five, so the range opens on something worth reading. */
+const OPENING_START = Temporal.PlainTime.from("09:00");
+const OPENING_END = Temporal.PlainTime.from("17:00");
 
 // The repeating-shift card (Figma 901:2365). The switch is its header and the
 // controls it governs sit under a rule in the SAME box, so the grouping is
@@ -533,6 +616,15 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
   const [lastShift, setLastShift] = useState<Temporal.PlainDate | null>(
     opening.lastShift,
   );
+  // The hours the shift runs. Plain constants, not derived from `today` — a
+  // nine-to-five is the same nine-to-five on every day the form is rendered, so
+  // unlike the dates these carry no hydration handshake.
+  const [startTime, setStartTime] = useState<Temporal.PlainTime | null>(
+    OPENING_START,
+  );
+  const [endTime, setEndTime] = useState<Temporal.PlainTime | null>(
+    OPENING_END,
+  );
   // Closed at rest, because the walkthrough's opening move is to OPEN it — and
   // a card that folds itself shut the moment the demo starts would read as a
   // glitch rather than as the first step.
@@ -619,6 +711,8 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
       setDays(new Set(opening.days));
       setFirstShift(opening.firstShift);
       setLastShift(opening.lastShift);
+      setStartTime(OPENING_START);
+      setEndTime(OPENING_END);
 
       // Focus is part of what has to be handed back. The date picker returns
       // it to its trigger as it closes — right for whoever opened the thing,
@@ -632,6 +726,31 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
         focused.blur();
     },
     [opening],
+  );
+
+  // "Eastern Daylight Time (UTC-4)" — and "Standard" for half the year, which
+  // is why it is computed. Anchored to the form's `today` rather than to the
+  // live clock, and that is the same handshake the dates make (see
+  // `SEED_TODAY`): read here, a prerendered build would bake January's answer
+  // into HTML a July visitor would then disagree with. Keyed on `today`, the
+  // server and the first client render both compute it from the seed, and the
+  // real one arrives with the remount.
+  //
+  // Noon in the zone ITSELF, so the day is unambiguously on one side of a
+  // changeover — the switch happens at 2am local, and a UTC-midnight instant
+  // would answer for the previous day.
+  const timeZoneNote = useMemo(
+    () =>
+      timeZoneLabel(
+        SHIFT_TIME_ZONE,
+        new Date(
+          today.toZonedDateTime({
+            timeZone: SHIFT_TIME_ZONE,
+            plainTime: "12:00",
+          }).epochMilliseconds,
+        ),
+      ),
+    [today],
   );
 
   const invitation = useDemoInvitation(stageRef);
@@ -722,6 +841,8 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
   const dirty =
     !firstShift?.equals(opening.firstShift) ||
     !lastShift?.equals(opening.lastShift) ||
+    !startTime?.equals(OPENING_START) ||
+    !endTime?.equals(OPENING_END) ||
     days.size !== opening.days.length ||
     !opening.days.every((key) => days.has(key));
 
@@ -768,15 +889,53 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
         >
           {/* Interactive scheduling section — the real components + the Notice. */}
           <div className={formStyle}>
-            <Field className={dateFieldStyle}>
-              {/* One name, switch or no switch. Turning the repeat on adds a
-                  SECOND date to the form; it does not turn this one into
-                  something else, and relabelling it under the pointer made the
-                  field the visitor had just filled in look like it had. */}
-              <Field.Label>Shift Date</Field.Label>
-              <DatePicker value={firstShift} onValueChange={setFirstShift} />
-              <Field.Hint>dd/mm/yyyy</Field.Hint>
-            </Field>
+            <div className={dateTimeRowStyle}>
+              <Field className={dateFieldStyle}>
+                {/* One name, switch or no switch. Turning the repeat on adds a
+                    SECOND date to the form; it does not turn this one into
+                    something else, and relabelling it under the pointer made the
+                    field the visitor had just filled in look like it had. */}
+                <Field.Label>Shift Date</Field.Label>
+                <DatePicker value={firstShift} onValueChange={setFirstShift} />
+                <Field.Hint>dd/mm/yyyy</Field.Hint>
+              </Field>
+
+              {/* The hours: two named fields either side of a rule, sharing
+                  one hint that names the clock they are BOTH quoted in. Title
+                  case, to sit level with "Shift Date" beside them. */}
+              <div
+                className={timeRangeStyle}
+                role="group"
+                aria-label="Shift time"
+              >
+                <div className={timeRowStyle}>
+                  <Field className={timeFieldStyle}>
+                    <Field.Label>Start Time</Field.Label>
+                    <TimePicker
+                      value={startTime}
+                      onValueChange={setStartTime}
+                    />
+                  </Field>
+                  <span aria-hidden className={hyphenStyle}>
+                    -
+                  </span>
+                  <Field className={timeFieldStyle}>
+                    <Field.Label>End Time</Field.Label>
+                    <TimePicker
+                      value={endTime}
+                      onValueChange={setEndTime}
+                      // The end of a shift is most usefully read as its
+                      // LENGTH, so this list carries "+8 hours" beside each
+                      // hour and runs forward from the start rather than from
+                      // midnight. The start field, having nothing to be
+                      // measured from, takes the plain day list.
+                      differenceFrom={startTime}
+                    />
+                  </Field>
+                </div>
+                <p className={zoneHintStyle}>{timeZoneNote}</p>
+              </div>
+            </div>
 
             <div className={repeatCardStyle} data-testid="repeat-card">
               <div className={switchRowStyle}>
