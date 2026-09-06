@@ -53,11 +53,6 @@ vi.mock("@/lib/prisma", () => ({
 
 import { saveGridLayout } from "../grid";
 import { emptyGridDraft } from "@/utils/grid-draft";
-import { articles as staticArticles } from "@/data/articles";
-import { projects as staticProjects } from "@/data/projects";
-
-const staticArticleId = staticArticles[0].id;
-const staticProjectId = staticProjects[0].id;
 
 const draft = (over: Partial<Parameters<typeof saveGridLayout>[0]> = {}) => ({
   ...emptyGridDraft(),
@@ -178,34 +173,13 @@ describe("saveGridLayout — widths", () => {
     ).rejects.toThrow();
   });
 
-  // --- Static cards -------------------------------------------------------
-  //
-  // The grid is not drawn from the database alone: `src/data/articles.ts` and
-  // `src/data/projects.ts` contribute seed cards that exist only in code, and
-  // they carry the same toolbar as every other card. Nothing about them belongs
-  // in a table — there is no row to hold it — so the requirement is not "the
-  // write is harmless", it is that no write is attempted.
-  //
-  // The ids are read off the data modules rather than hardcoded, so this keeps
-  // testing the real thing after a rename instead of quietly testing nothing.
-
-  it("stores nothing at all for a static post", async () => {
+  // A pending card is the only keyed card left with no row of its own, and it
+  // must not be able to roll back the rest of the draft: its edits belong to
+  // the `inserts` list, which creates the row rather than updating one.
+  it("saves the rest of the layout alongside a pending card", async () => {
     await saveGridLayout(
       draft({
-        pins: { [`post:${staticArticleId}`]: 0 },
-        spans: { [`post:${staticProjectId}`]: 2 },
-      }),
-    );
-    expect(postUpdate).not.toHaveBeenCalled();
-    expect(postUpdateMany).not.toHaveBeenCalled();
-  });
-
-  // The point of skipping rather than letting the write fail: a card that has
-  // no row must not be able to roll back the rest of the draft.
-  it("saves the rest of the layout alongside a static card", async () => {
-    await saveGridLayout(
-      draft({
-        spans: { [`post:${staticArticleId}`]: 2, "post:abc": 3 },
+        spans: { "pending:1": 2, "post:abc": 3 },
         inserts: [{ key: "pending:1", componentId: "calchemy", index: 1 }],
       }),
     );
@@ -277,14 +251,6 @@ describe("saveGridLayout — widths", () => {
         data: expect.objectContaining({ aspect: "1/1" }),
       }),
     );
-  });
-
-  it("stores no shape for a static post", async () => {
-    await saveGridLayout(
-      draft({ aspects: { [`post:${staticArticleId}`]: "1/1" } }),
-    );
-    expect(postUpdate).not.toHaveBeenCalled();
-    expect(postUpdateMany).not.toHaveBeenCalled();
   });
 
   it("refuses a shape the frame has no ratio for", async () => {

@@ -26,6 +26,15 @@ export const test = base.extend<{ pageFailures: string[] }>({
 
 export { expect };
 
-/** Slugs backed by `src/data`, so they resolve even against an empty database. */
-export const STATIC_ARTICLE_SLUG = "css-anchor-positioning";
-export const STATIC_PROJECT_SLUG = "kartik-to";
+/**
+ * Slugs that exist ONLY in `src/data`, and must not resolve anywhere.
+ *
+ * These used to be the suite's anchor: seed posts that the site served out of
+ * `articles.ts` / `projects.ts`, so a detail page could be asserted against an
+ * empty database. That is exactly what stopped — the modules stayed in the
+ * tree for the playgrounds, but nothing publishes them — so the same two slugs
+ * now pin the opposite guarantee, and the suite tests the site's real content
+ * instead of its fixtures.
+ */
+export const FIXTURE_ONLY_ARTICLE_SLUG = "css-anchor-positioning";
+export const FIXTURE_ONLY_PROJECT_SLUG = "kartik-to";
