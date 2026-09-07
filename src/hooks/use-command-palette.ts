@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useThemeStore } from "@/store/theme";
 import { useEditorStore } from "@/store/editor";
-import { publishComponent, saveGridLayout } from "@/app/actions/grid";
+import { saveGridLayout } from "@/app/actions/grid";
 import { useGridDraftStore } from "@/store/grid-draft";
 import {
   createDraft,
@@ -19,6 +19,7 @@ import type { Post, PostLink } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 import { getBackTarget, type BackTarget } from "@/utils/back-target";
 import { isGridDraftDirty } from "@/utils/grid-draft";
+import { pendingInsertFor } from "@/components/demo/registry";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import { openInNewTab } from "@/utils/open-in-new-tab";
 import { notifyContentUpdated } from "@/utils/content-sync";
@@ -54,8 +55,15 @@ export interface CommandPaletteHandlers {
   isEditMode: boolean;
   /** The grid's edit route, which needs its own palette group. */
   isHomeEditMode: boolean;
-  /** Publish a registered demo to the grid, unpinned. */
-  handlePublishComponent: (componentId: string) => Promise<void>;
+  /**
+   * Put a registered demo on the homepage — buffered, not published.
+   *
+   * The insert lands in the grid's draft beside every other edit made in this
+   * session, so the homepage's own Save is what writes it and "Discard changes
+   * and exit" takes it away again. Unpinned: it was chosen from a list rather
+   * than dropped into a seat.
+   */
+  handleNewWidget: (componentId: string) => void;
   /** Clear `publishedAt` on the post being edited, leaving it as a draft. */
   handleUnpublish: () => Promise<void>;
   /** Whether the post being edited is live — gates Unpublish. */
@@ -919,13 +927,22 @@ export function useCommandPalette(
     router.push(href);
   };
 
-  const handlePublishComponent = async (componentId: string) => {
-    try {
-      await publishComponent({ componentId });
-      router.refresh();
-    } catch (err) {
-      console.error("Failed to publish component:", err);
-    }
+  /**
+   * Add a widget to the grid being edited.
+   *
+   * It used to publish on the spot — `publishComponent`, a row, a
+   * `revalidatePath` — from a command offered on every page. That put the one
+   * edit to the homepage that could not be taken back next to a "Discard
+   * changes and exit" that took back all the others, and it wrote to the LIVE
+   * grid from pages that were not editing it at all.
+   *
+   * So it does what the grid's own `[+]` does instead: buffer the insert and
+   * let the save decide. The command moved with the behaviour — it is offered
+   * only while `/edit/home` is open, which is the only place a buffer exists to
+   * hold it.
+   */
+  const handleNewWidget = (componentId: string) => {
+    useGridDraftStore.getState().addInsert(pendingInsertFor(componentId, null));
   };
 
   return {
@@ -933,7 +950,7 @@ export function useCommandPalette(
     isDark,
     isEditMode,
     isHomeEditMode,
-    handlePublishComponent,
+    handleNewWidget,
     handleUnpublish,
     isPublished,
     editCategory,

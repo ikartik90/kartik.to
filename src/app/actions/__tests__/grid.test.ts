@@ -145,6 +145,45 @@ describe("saveGridLayout — widths", () => {
     );
   });
 
+  // The palette's "New widget…" picks a demo off a list with no seat in mind,
+  // so the row is created unpinned and the grid seats it by date — which puts
+  // it first, being the newest thing there.
+  it("creates a seatless insert unpinned", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          { key: "pending:1", componentId: "cosmic-track", index: null },
+        ],
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          componentId: "cosmic-track",
+          gridIndex: null,
+        }),
+      }),
+    );
+  });
+
+  // ...and a seat given to it afterwards is still its seat: the card is dragged
+  // with the same handle a saved one is, before the row it will land in exists.
+  it("takes a pin made against a seatless insert", async () => {
+    await saveGridLayout(
+      draft({
+        inserts: [
+          { key: "pending:1", componentId: "cosmic-track", index: null },
+        ],
+        pins: { "pending:1": 4 },
+      }),
+    );
+    expect(componentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ gridIndex: 4 }),
+      }),
+    );
+  });
+
   it("creates an untouched insert at a single column", async () => {
     await saveGridLayout(
       draft({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { demoComponents, getDemoComponent } from "../registry";
+import { demoComponents, getDemoComponent, pendingInsertFor } from "../registry";
 
 describe("demo component registry", () => {
   it("registers every demo, sorted by label with a lazy loader", () => {
@@ -93,5 +93,46 @@ describe("demo component registry", () => {
 
   it("returns undefined for an unknown id", () => {
     expect(getDemoComponent("nope")).toBeUndefined();
+  });
+});
+
+// One place answers "what does a fresh publication of this demo look like",
+// because there are two ways to ask: the grid's `[+]`, which knows the seat,
+// and the palette's "New widget…", which does not.
+describe("pendingInsertFor", () => {
+  // 2/1 in the registry — not the 3/2 fallback, so a default that never read
+  // the entry cannot pass this by coincidence.
+  it("takes the registry's shape as the card's default", () => {
+    expect(pendingInsertFor("scheduling-layout-redesign", 3)).toMatchObject({
+      componentId: "scheduling-layout-redesign",
+      index: 3,
+      aspect: "2/1",
+      logger: false,
+    });
+  });
+
+  // The registry's `logger` is a CONFIG on the entry that has one; what the
+  // insert carries is the yes/no the panel toggles.
+  it("opens the log panel for a demo the registry logs", () => {
+    expect(pendingInsertFor("calchemy-demo", 0).logger).toBe(true);
+  });
+
+  // That same entry names no shape, so it falls back to the one the frame
+  // draws at when nothing has said otherwise.
+  it("falls back to 3/2 for an entry that names no shape", () => {
+    expect(pendingInsertFor("calchemy-demo", 0).aspect).toBe("3/2");
+  });
+
+  it("carries a null seat through, for a widget chosen from a list", () => {
+    expect(pendingInsertFor("link-card", null).index).toBeNull();
+  });
+
+  // Two showings of one demo are two cards. A shared key would make the second
+  // one the first — reshaped by its overrides, removed by its removal.
+  it("hands out a distinct key every time", () => {
+    const first = pendingInsertFor("link-card", null).key;
+    const second = pendingInsertFor("link-card", null).key;
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/^pending:/);
   });
 });

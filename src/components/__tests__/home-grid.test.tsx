@@ -15,7 +15,6 @@ const { actions } = vi.hoisted(() => ({
   actions: {
     setPinned: vi.fn(),
     moveGridItem: vi.fn(),
-    publishComponent: vi.fn(),
     saveGridLayout: vi.fn(),
     unpublishComponent: vi.fn(),
   },

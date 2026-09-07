@@ -58,7 +58,6 @@ vi.mock("@/app/actions/shader-preset", () => ({
 
 vi.mock("@/app/actions/grid", () => ({
   saveGridLayout: vi.fn().mockResolvedValue(undefined),
-  publishComponent: vi.fn().mockResolvedValue("component-id"),
   setPinned: vi.fn(),
   moveGridItem: vi.fn(),
   unpublishComponent: vi.fn(),
@@ -1171,6 +1170,76 @@ describe("useCommandPalette", () => {
       const { saveGridLayout } = await import("@/app/actions/grid");
       expect(saveGridLayout).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // handleNewWidget
+  //
+  // A widget is an EDIT to the homepage, not a publication of its own. It used
+  // to be the latter — a row written the moment the picker closed — which made
+  // it the one change to the grid that "Discard changes and exit" could not
+  // take back. It goes into the same buffer as the placements now, so the same
+  // two answers decide its fate.
+  // -------------------------------------------------------------------------
+  describe("handleNewWidget", () => {
+    beforeEach(async () => {
+      mockPathname.mockReturnValue("/edit/home");
+      // The exit question is the author's alone — see `wouldLoseWork`.
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      useEditorStore.getState().reset();
+      useGridDraftStore.getState().reset();
+      const { saveGridLayout } = await import("@/app/actions/grid");
+      vi.mocked(saveGridLayout).mockClear();
+    });
+
+    it("writes nothing on its own", async () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewWidget("calchemy-demo"));
+
+      const { saveGridLayout } = await import("@/app/actions/grid");
+      expect(saveGridLayout).not.toHaveBeenCalled();
+      expect(useGridDraftStore.getState().inserts).toHaveLength(1);
+    });
+
+    // Unsaved work, so leaving asks — the widget is as much at stake as a
+    // placement is.
+    it("makes the editor dirty", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewWidget("calchemy-demo"));
+      act(() => result.current.handleBack());
+
+      expect(result.current.pendingExit).not.toBeNull();
+    });
+
+    it("reaches the server only when the homepage is saved", async () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewWidget("calchemy-demo"));
+      await act(() => result.current.handleSaveChanges());
+
+      const { saveGridLayout } = await import("@/app/actions/grid");
+      expect(saveGridLayout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inserts: [
+            expect.objectContaining({
+              componentId: "calchemy-demo",
+              index: null,
+            }),
+          ],
+        }),
+      );
+    });
+
+    // The requirement in one sentence: throw the session away and the widget
+    // goes with it, having never been published.
+    it("is thrown away with the rest when the changes are discarded", async () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleNewWidget("calchemy-demo"));
+      act(() => result.current.handleDiscardAndExit());
+
+      const { saveGridLayout } = await import("@/app/actions/grid");
+      expect(useGridDraftStore.getState().inserts).toEqual([]);
+      expect(saveGridLayout).not.toHaveBeenCalled();
     });
   });
 

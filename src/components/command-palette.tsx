@@ -205,10 +205,12 @@ export function CommandPalette() {
   const command =
     commandLine === null ? null : resolvePaletteCommand(commandLine);
 
-  // The palette owns its own component picker rather than reaching for the
-  // grid's: "New component…" has to work from any page, and the grid only
-  // exists on one of them.
-  const [pickingComponent, setPickingComponent] = useState(false);
+  // The palette owns its own picker rather than reaching for the grid's, even
+  // though both now only open over `/edit/home`. The grid's belongs to a `[+]`
+  // and carries the seat that `[+]` was pressed in; this one has no seat to
+  // carry. Sharing it would mean threading "opened from where" through a
+  // component that exists to answer "which demo".
+  const [pickingWidget, setPickingWidget] = useState(false);
 
   // Anything that removes published work asks first, in the same dialog the
   // grid uses to retire a component. One piece of state rather than a flag per
@@ -224,7 +226,7 @@ export function CommandPalette() {
   const {
     isAdmin,
     isDark,
-    handlePublishComponent,
+    handleNewWidget,
     handleUnpublish,
     isPublished,
     editCategory,
@@ -488,6 +490,31 @@ export function CommandPalette() {
                               : "Publish article"}
                           </Command.Item>
                         )}
+                        {/* A widget goes on the GRID, so it is offered where the
+                            grid is open and nowhere else. It used to sit in
+                            Publish, visible from every page, and it published on
+                            the spot: the one edit to the homepage that "Discard
+                            changes and exit" could not take back, and one that
+                            reached the live grid from pages that were not editing
+                            it. Here it is buffered like every other edit in the
+                            session, and this group's own Save is what writes it.
+
+                            Unpinned, unlike the grid's own [+], which places a
+                            card at the seat you pressed. Chosen from a list there
+                            is no seat in mind, so it takes whatever chronology
+                            gives it — the front, being the newest thing there. */}
+                        {editorKind === "grid" && (
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={() => {
+                              setPickingWidget(true);
+                              close();
+                            }}
+                          >
+                            <ComponentIcon className={iconStyle} />
+                            New widget…
+                          </Command.Item>
+                        )}
                         {/* The chip sits on THIS one, because this is what the key
                             does. ⌘S commits and leaves you in the editor — hanging
                             it off an exit would be a label that lies, the failure
@@ -592,20 +619,6 @@ export function CommandPalette() {
                             <WorkIcon className={iconStyle} />
                             New work article…
                           </Command.Item>
-                          {/* Published, but NOT pinned — unlike the grid's own [+],
-                            which places a component at a seat you chose. Arriving
-                            from the palette there is no seat in mind, so it takes
-                            whatever chronology gives it. */}
-                          <Command.Item
-                            className={itemStyle}
-                            onSelect={() => {
-                              setPickingComponent(true);
-                              close();
-                            }}
-                          >
-                            <ComponentIcon className={iconStyle} />
-                            New component…
-                          </Command.Item>
                         </Command.Group>
 
                         {/* Drafts — the draft being viewed is omitted so the
@@ -687,7 +700,7 @@ export function CommandPalette() {
                         onSelect={handleShaderPlayground}
                       >
                         <ShaderIcon className={iconStyle} />
-                        Shader Playground
+                        Waveform Studio
                       </Command.Item>
                     )}
                     {!isCalchemyPlayground && (
@@ -696,7 +709,7 @@ export function CommandPalette() {
                         onSelect={handleCalchemyPlayground}
                       >
                         <CalendarIcon className={iconStyle} />
-                        Calchemy Playground
+                        Calchemy
                       </Command.Item>
                     )}
                   </Command.Group>
@@ -750,14 +763,21 @@ export function CommandPalette() {
         onClose={() => setConfirm(null)}
       />
 
-      <ComponentInsertDialog
-        open={pickingComponent}
-        onClose={() => setPickingComponent(false)}
-        onInsert={(componentId) => {
-          void handlePublishComponent(componentId);
-          setPickingComponent(false);
-        }}
-      />
+      {/* Mounted only where the command that opens it is offered, which is a
+          correctness requirement rather than a saving: a closed `<dialog>`
+          still renders its contents into the document, so mounting this
+          everywhere put the whole demo library into the HTML of every page —
+          the same failure the note over the grid's own copy describes. */}
+      {editorKind === "grid" && (
+        <ComponentInsertDialog
+          open={pickingWidget}
+          onClose={() => setPickingWidget(false)}
+          onInsert={(componentId) => {
+            handleNewWidget(componentId);
+            setPickingWidget(false);
+          }}
+        />
+      )}
     </>
   );
 }
