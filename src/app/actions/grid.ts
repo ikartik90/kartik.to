@@ -11,6 +11,7 @@ import {
   GridSpanSchema,
 } from "@/domain/component";
 import { LinkCardConfigSchema } from "@/domain/link-card";
+import { PostCardConfigSchema, type PostCardConfig } from "@/domain/post";
 
 // ---------------------------------------------------------------------------
 // Mutations for the homepage grid — pinning, reordering, and publishing or
@@ -184,6 +185,10 @@ const GridDraftSchema = z.object({
   // with. `LinkCardConfigSchema` is the same schema the card is read back
   // through, so what is stored is exactly what renders.
   props: z.record(z.string(), LinkCardConfigSchema),
+  // The post's counterpart, validated at the door for the same reason — the
+  // same schema the card is read back through, so what is stored is what
+  // renders.
+  cards: z.record(z.string(), PostCardConfigSchema),
   inserts: z.array(InsertSchema),
   removals: z.array(z.string().min(1)),
 });
@@ -245,6 +250,12 @@ interface RowPatch {
    * the column's type happens once at the write.
    */
   props?: LinkCardConfig;
+  /**
+   * A post's card — POSTS only, the mirror of `props`, and checked at the same
+   * place: `Component` has no `card` column, and an update carrying one would
+   * throw and roll the layout back.
+   */
+  card?: PostCardConfig;
 }
 
 /**
@@ -260,7 +271,7 @@ interface RowPatch {
  */
 export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
   await requireAdmin();
-  const { pins, spans, aspects, loggers, props, inserts, removals } =
+  const { pins, spans, aspects, loggers, props, cards, inserts, removals } =
     GridDraftSchema.parse(draft);
 
   await prisma.$transaction(async (tx) => {
@@ -332,6 +343,15 @@ export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
       // configuration, so an emptied section arrives as an absent key and must
       // land as one — see `GridDraft.props`.
       if (data) data.props = config;
+    }
+
+    for (const [key, card] of Object.entries(cards)) {
+      // A component is turned away here for the reason a post is turned away
+      // from `props`: `card` is a column `Component` does not have.
+      if (parseCardKey(key)?.kind !== "post") continue;
+      const data = patchFor(key);
+      // Assigned rather than merged, like `props` — see `GridDraft.cards`.
+      if (data) data.card = card;
     }
 
     for (const { target, data } of patches.values()) {

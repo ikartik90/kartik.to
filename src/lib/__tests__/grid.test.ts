@@ -30,6 +30,7 @@ const row = (over: Record<string, unknown>) => ({
   untitledIndex: null,
   gridIndex: null,
   gridSpan: null,
+  card: null,
   createdAt: NOW,
   updatedAt: NOW,
   ...over,
@@ -164,5 +165,55 @@ describe("getGridCards — configuration", () => {
       componentRow({ link: { kind: "external", href: "not a url" } }),
     ]);
     expect(await config()).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A post's card — read back off its own row.
+// ---------------------------------------------------------------------------
+describe("getGridCards — a post's card", () => {
+  beforeEach(() => {
+    mockPostFindMany.mockReset().mockResolvedValue([]);
+    mockComponentFindMany.mockReset().mockResolvedValue([]);
+  });
+
+  const dark = { type: "media", kind: "image", src: "/dark.png" };
+
+  it("reads the card off the row", async () => {
+    mockPostFindMany.mockResolvedValue([
+      row({ card: { media: { dark }, scrim: false } }),
+    ]);
+    const [card] = postCards(await getGridCards());
+    expect(card.card).toEqual({ media: { dark }, scrim: false });
+  });
+
+  // Every post that predates this has nothing here, and draws the derived
+  // card — so an empty configuration is what a null column reads as.
+  it("gives a post with no card of its own an empty one", async () => {
+    mockPostFindMany.mockResolvedValue([row({ card: null })]);
+    const [card] = postCards(await getGridCards());
+    expect(card.card).toEqual({});
+  });
+
+  // Whether the picture is derived or authored is decided at render, not here:
+  // `cover` stays the document's, so the rail can offer it back when the
+  // author opens the Media section.
+  it("keeps the document's picture beside the authored one", async () => {
+    mockPostFindMany.mockResolvedValue([
+      row({
+        content: {
+          type: "doc",
+          content: [{ type: "media", kind: "image", src: "/first.png" }],
+        },
+        card: { media: { dark } },
+      }),
+    ]);
+    const [card] = postCards(await getGridCards());
+    expect(card.cover).toEqual({
+      type: "media",
+      kind: "image",
+      src: "/first.png",
+    });
+    expect(card.card.media).toEqual({ dark });
   });
 });

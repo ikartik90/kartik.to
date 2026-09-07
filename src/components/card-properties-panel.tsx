@@ -16,9 +16,12 @@ import { SITE_PATHS } from "@/data/site-paths";
 import { filenameFromMediaUrl } from "@/domain/media";
 import type {
   LinkCardConfig,
+  LinkCardMedia,
   LinkCardTone,
   LinkTargetKind,
 } from "@/domain/link-card";
+import type { MediaNode } from "@/domain/nodes";
+import { postCardMedia, type PostCardConfig } from "@/domain/post";
 import LinkIcon from "@/assets/icons/link.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import TitleIcon from "@/assets/icons/title.svg";
@@ -33,8 +36,9 @@ import CrossIcon from "@/assets/icons/cross-small.svg";
 // published demo are all cards, and giving each its own inspector would be
 // three surfaces to open from one button. What differs is WHICH sections are
 // on it, which is decided by what the card can actually carry — the log
-// control is here only for a card that has log output to show, and the three
-// link-card sections only for the card they author.
+// control is here only for a card that has log output to show, the three
+// link-card sections only for the card they author, and a post gets the two of
+// those it cannot derive from itself — its picture and its scrim.
 //
 // A live editor, not a form. Every control commits on change and the parent
 // owns the value, exactly as `MediaPropertiesPanel` does, so the card behind
@@ -111,6 +115,25 @@ export interface CardLinkCardProperty {
   onPickDocument: () => void;
 }
 
+/**
+ * A post's card — what this panel authors about a tile the post otherwise
+ * draws for itself. See `PostCardConfigSchema` for what that is and is not.
+ */
+export interface CardPostCardProperty {
+  /** The card as it currently stands, drafts and all. */
+  config: PostCardConfig;
+  /**
+   * The picture the document gives the card — what the Media section starts
+   * from when it is opened, so taking the picture over begins from the picture
+   * the card is already wearing rather than from a blank.
+   */
+  cover: MediaNode | null;
+  /** The WHOLE configuration, replacing what was there — as the link card's. */
+  onChange: (config: PostCardConfig) => void;
+  /** Asks for the media library, for one of the two theme slots. */
+  onPickMedia: (slot: CardMediaSlot) => void;
+}
+
 export interface CardPropertiesPanelProps {
   /**
    * The card's log output — absent when it has none.
@@ -122,6 +145,8 @@ export interface CardPropertiesPanelProps {
   logger?: CardLoggerProperty;
   /** The card's own content — absent for every card that is not a link card. */
   linkCard?: CardLinkCardProperty;
+  /** A post's picture and scrim — absent for every card that is not a post. */
+  postCard?: CardPostCardProperty;
   /** Fired once the panel has finished sliding out — see PropertiesPanel. */
   onDismiss: () => void;
   /** Handle for closing the panel from the control that opened it. */
@@ -171,6 +196,7 @@ const destinationListStyle = css({
 export function CardPropertiesPanel({
   logger,
   linkCard,
+  postCard,
   onDismiss,
   ref,
 }: CardPropertiesPanelProps) {
@@ -213,7 +239,9 @@ export function CardPropertiesPanel({
 
       {linkCard && <LinkCardSections {...linkCard} />}
 
-      {!logger && !linkCard && (
+      {postCard && <PostCardSections {...postCard} />}
+
+      {!logger && !linkCard && !postCard && (
         <Typography tag="p" type="bodySmall" className={emptyNoteStyle}>
           No properties for this card yet.
         </Typography>
@@ -252,36 +280,16 @@ function LinkCardSections({
 
   return (
     <>
-      <PropertiesPanel.Section
-        defaultEnabled={media !== undefined}
+      <MediaSection
+        media={media}
+        // From nothing: a link card with no picture is a plate with words on
+        // it, and there is nothing for the section to start from.
         onEnabledChange={(enabled) =>
           enabled ? set({ media: {} }) : clear("media")
         }
-      >
-        <PropertiesPanel.SectionHeader icon={<MediaIcon aria-hidden />}>
-          Media
-        </PropertiesPanel.SectionHeader>
-        <PropertiesPanel.ControlPanel>
-          {/* Two slots rather than one picture and a filter, because the case
-              this exists for is a SCREENSHOT: the card is a window onto
-              something that has its own light and dark appearance, and no
-              amount of inversion turns one into the other. One of them on its
-              own is a complete card — see `LinkCardMediaSchema`. */}
-          {(["light", "dark"] as const).map((slot) => (
-            <PropertiesPanel.Control
-              key={slot}
-              label={slot === "light" ? "Light" : "Dark"}
-            >
-              <FilePicker
-                noun={`${slot} media`}
-                filename={fileLabel(media?.[slot]?.src)}
-                onPick={() => onPickMedia(slot)}
-                onClear={() => set({ media: { ...media, [slot]: undefined } })}
-              />
-            </PropertiesPanel.Control>
-          ))}
-        </PropertiesPanel.ControlPanel>
-      </PropertiesPanel.Section>
+        onChange={(next) => set({ media: next })}
+        onPickMedia={onPickMedia}
+      />
 
       <PropertiesPanel.Section
         defaultEnabled={content !== undefined}
@@ -295,6 +303,8 @@ function LinkCardSections({
         <PropertiesPanel.ControlPanel>
           <ContentControls
             content={content ?? {}}
+            // What the scrim's default is read off — see `GroundControls`.
+            pictured={Boolean(media?.light || media?.dark)}
             onChange={(next) => set({ content: next })}
           />
         </PropertiesPanel.ControlPanel>
@@ -328,9 +338,12 @@ function LinkCardSections({
 /** The words on the card, and the band they stand on. */
 function ContentControls({
   content,
+  pictured,
   onChange,
 }: {
   content: NonNullable<LinkCardConfig["content"]>;
+  /** Whether the card has a picture in either slot — the scrim's default. */
+  pictured: boolean;
   onChange: (content: NonNullable<LinkCardConfig["content"]>) => void;
 }) {
   // Drafts, for the reason the media panel's caption keeps one: what is STORED
@@ -388,17 +401,55 @@ function ContentControls({
         </Field.Frame>
       </PropertiesPanel.Control>
 
-      {/* The frosting and the wash under the words. A value rather than a
-          section of its own, because a card can legitimately want words with no
-          scrim — over a picture that is already flat where the caption sits —
-          and "no scrim" and "no words" are different cards. */}
+      {/* The ground under the words. Values rather than a section of their
+          own, because a card can legitimately want words with no scrim — over
+          a picture that is already flat where the caption sits — and "no
+          scrim" and "no words" are different cards. */}
+      <GroundControls value={content} pictured={pictured} onChange={write} />
+    </>
+  );
+}
+
+/** The ground the caption stands on, and the tone it is pinned to. */
+interface Ground {
+  scrim?: boolean;
+  tone?: LinkCardTone;
+}
+
+/**
+ * The scrim and its tone — the two rows a link card's Content section and a
+ * post's card share, because they describe the same band on the same
+ * component.
+ *
+ * The switch reports what the CARD is doing, not what is stored. `LinkCard`
+ * draws the band wherever there is a picture unless told otherwise, so an
+ * absent value over a picture is a band that is on, and the switch has to say
+ * so — reading `?? false` here left it saying "off" over a band that was
+ * plainly drawn. What a press writes is DEFINITE, `true` or `false`, never
+ * "back to the default": off over a picture is a choice, and an absent key
+ * would hand the card straight back to drawing the band.
+ */
+function GroundControls({
+  value,
+  pictured,
+  onChange,
+}: {
+  value: Ground;
+  /**
+   * Whether the card is showing a picture — the default the switch reads when
+   * nothing is stored. The CALLER answers, because the two cards answer
+   * differently: a link card from its own slots, a post from `postCardMedia`.
+   */
+  pictured: boolean;
+  onChange: (patch: Ground) => void;
+}) {
+  return (
+    <>
       <PropertiesPanel.Control label="Scrim">
         <Switch
           size="sm"
-          checked={content.scrim ?? false}
-          onCheckedChange={(scrim) =>
-            write({ scrim: scrim ? true : undefined })
-          }
+          checked={value.scrim ?? pictured}
+          onCheckedChange={(scrim) => onChange({ scrim })}
         />
       </PropertiesPanel.Control>
 
@@ -408,14 +459,121 @@ function ContentControls({
       <PropertiesPanel.Control label="Mode">
         <SegmentedControl
           options={TONES}
-          value={content.tone ?? "auto"}
-          onValueChange={(value) =>
-            write({
-              tone: value === "auto" ? undefined : (value as LinkCardTone),
+          value={value.tone ?? "auto"}
+          onValueChange={(tone) =>
+            onChange({
+              tone: tone === "auto" ? undefined : (tone as LinkCardTone),
             })
           }
         />
       </PropertiesPanel.Control>
+    </>
+  );
+}
+
+/**
+ * The Media section: a picture per theme, in a section that IS the property.
+ *
+ * Two slots rather than one picture and a filter, because the case this exists
+ * for is a SCREENSHOT: the card is a window onto something that has its own
+ * light and dark appearance, and no amount of inversion turns one into the
+ * other. One of them on its own is a complete card — see `LinkCardMediaSchema`.
+ *
+ * Shared by the link card and the post, which differ only in what opening the
+ * section STARTS from — nothing, and the document's picture — so that is the
+ * one thing left to the caller.
+ */
+function MediaSection({
+  media,
+  onEnabledChange,
+  onChange,
+  onPickMedia,
+}: {
+  media: LinkCardMedia | undefined;
+  /** The section opened or closed — the caller seeds or drops the key. */
+  onEnabledChange: (enabled: boolean) => void;
+  onChange: (media: LinkCardMedia) => void;
+  onPickMedia: (slot: CardMediaSlot) => void;
+}) {
+  return (
+    <PropertiesPanel.Section
+      defaultEnabled={media !== undefined}
+      onEnabledChange={onEnabledChange}
+    >
+      <PropertiesPanel.SectionHeader icon={<MediaIcon aria-hidden />}>
+        Media
+      </PropertiesPanel.SectionHeader>
+      <PropertiesPanel.ControlPanel>
+        {(["light", "dark"] as const).map((slot) => (
+          <PropertiesPanel.Control
+            key={slot}
+            label={slot === "light" ? "Light" : "Dark"}
+          >
+            <FilePicker
+              noun={`${slot} media`}
+              filename={fileLabel(media?.[slot]?.src)}
+              onPick={() => onPickMedia(slot)}
+              onClear={() => onChange({ ...media, [slot]: undefined })}
+            />
+          </PropertiesPanel.Control>
+        ))}
+      </PropertiesPanel.ControlPanel>
+    </PropertiesPanel.Section>
+  );
+}
+
+/**
+ * The two things about a post's card that the post does not decide: its
+ * picture, and the ground its caption stands on.
+ *
+ * The Media section is the link card's, seeded differently: a post's card is
+ * already wearing the document's picture, so taking the picture over starts
+ * from that picture — the slot names it, the tile does not change, and
+ * clearing the slot means what "Remove" means everywhere else. Closing the
+ * section hands the picture back to the document.
+ *
+ * The ground is headerless and always on, the way the log control is: a post
+ * always has words, so there is nothing for a section's add/remove pair to
+ * mean, and a value belongs in a labelled row.
+ */
+function PostCardSections({
+  config,
+  cover,
+  onChange,
+  onPickMedia,
+}: CardPostCardProperty) {
+  const set = (patch: Partial<PostCardConfig>) =>
+    onChange({ ...config, ...patch });
+
+  // What the card is actually showing — the default the scrim switch reads.
+  const shown = postCardMedia(config, cover);
+
+  return (
+    <>
+      <MediaSection
+        media={config.media}
+        onEnabledChange={(enabled) => {
+          if (enabled) {
+            set({ media: cover ? { light: cover } : {} });
+            return;
+          }
+          const next = { ...config };
+          delete next.media;
+          onChange(next);
+        }}
+        onChange={(media) => set({ media })}
+        onPickMedia={onPickMedia}
+      />
+
+      <PropertiesPanel.Section enabled>
+        <PropertiesPanel.ControlPanel ariaLabel="Scrim">
+          <GroundControls
+            value={config}
+            pictured={Boolean(shown.light || shown.dark)}
+            onChange={set}
+          />
+        </PropertiesPanel.ControlPanel>
+      </PropertiesPanel.Section>
     </>
   );
 }

@@ -2,6 +2,7 @@ import { orderGridItems } from "@/utils/grid-order";
 import type { GridCard } from "@/lib/grid";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import type { LinkCardConfig } from "@/domain/link-card";
+import type { PostCardConfig } from "@/domain/post";
 
 // ---------------------------------------------------------------------------
 // Unsaved edits to the grid's layout, and how they are shown before they are
@@ -84,6 +85,21 @@ export interface GridDraft {
    * stored one forever, so a title you deleted would come back.
    */
   props: Record<string, LinkCardConfig>;
+  /**
+   * Card key → what its author has said about a POST's card: the picture per
+   * theme, and the ground the caption stands on.
+   *
+   * The post's counterpart to `props`, and kept apart from it rather than
+   * widened into one record of two shapes: the two are validated at the door
+   * by two schemas, land in two columns on two tables, and a record that held
+   * either would leave the save to guess which from the key. Same rule
+   * otherwise — the whole blob replaces what is stored, so an emptied section
+   * arrives as an absent key and lands as one.
+   *
+   * POSTS only, the mirror of `loggers` and `props`: a component's card is its
+   * `props`, and the write is where a component key is turned away.
+   */
+  cards: Record<string, PostCardConfig>;
   inserts: PendingComponentInsert[];
   /** Card keys to take off the grid. */
   removals: string[];
@@ -96,6 +112,7 @@ export function emptyGridDraft(): GridDraft {
     aspects: {},
     loggers: {},
     props: {},
+    cards: {},
     inserts: [],
     removals: [],
   };
@@ -109,6 +126,7 @@ export function isGridDraftDirty(draft: GridDraft): boolean {
     Object.keys(draft.aspects).length > 0 ||
     Object.keys(draft.loggers).length > 0 ||
     Object.keys(draft.props).length > 0 ||
+    Object.keys(draft.cards).length > 0 ||
     draft.inserts.length > 0 ||
     draft.removals.length > 0
   );
@@ -146,7 +164,17 @@ export function applyGridDraft(
       // naming one is ignored rather than spreading a `props` field onto a card
       // with no such property to read it back off.
       const configured = card.kind === "component" && card.key in draft.props;
-      if (!pinned && !widened && !reshaped && !logged && !configured)
+      // The mirror of `configured`: a post's card is its own record, and a
+      // component has no such property to spread one onto.
+      const dressed = card.kind === "post" && card.key in draft.cards;
+      if (
+        !pinned &&
+        !widened &&
+        !reshaped &&
+        !logged &&
+        !configured &&
+        !dressed
+      )
         return card;
       return {
         ...card,
@@ -166,6 +194,8 @@ export function applyGridDraft(
         // Spread conditionally like the rest, and the whole blob at once —
         // never merged into the stored one. See `GridDraft.props`.
         ...(configured ? { props: draft.props[card.key] } : null),
+        // The whole blob at once, like `props` — see `GridDraft.cards`.
+        ...(dressed ? { card: draft.cards[card.key] } : null),
       };
     });
 

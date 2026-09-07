@@ -52,6 +52,18 @@ model Post {
   // `GridSpanSchema`, not by the column, since the ceiling is however many
   // columns the grid is currently drawing.
   gridSpan       Int?
+  // How this post's CARD is drawn beyond what the post decides for it: a
+  // picture per theme, and whether the caption stands on a scrim and in which
+  // tone. Everything else about the card is derived — the title from the post,
+  // the destination from the slug, the picture from the document's first media
+  // — and these are the parts that cannot be. Sits with `aspect`, which is the
+  // same kind of fact and would live in this blob had it not come first.
+  //
+  // A blob rather than columns, for the reason `Component.props` is one: the
+  // shape belongs to the card (`PostCardConfigSchema`), where one edit reaches
+  // it. Null for every post that predates it — the truthful record of a card
+  // nobody has authored, which draws exactly as it always did.
+  card           Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }

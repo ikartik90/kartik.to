@@ -27,6 +27,7 @@ import { listingColumnsFor } from "@/utils/listing-columns";
 import { useGridDraftStore } from "@/store/grid-draft";
 import { applyGridDraft } from "@/utils/grid-draft";
 import { linkCardHref, linkCardTitle, type LinkCardConfig } from "@/domain/link-card";
+import { postCardMedia, type PostCardConfig } from "@/domain/post";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import type { MediaNode } from "@/domain/nodes";
 import type { GridCard } from "@/lib/grid";
@@ -362,34 +363,69 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
         }
       : undefined;
 
+  /**
+   * A post's card — the picture and the scrim, which are the two things about
+   * it the post does not decide. The document's own picture goes with it, so
+   * the rail can start the Media section from what the card is wearing.
+   */
+  const propertiesPostCard =
+    propertiesCard?.kind === "post"
+      ? {
+          config: propertiesCard.card,
+          cover: propertiesCard.cover,
+          onChange: (config: PostCardConfig) =>
+            draft.setCard(propertiesCard.key, config),
+          onPickMedia: (slot: CardMediaSlot) =>
+            setPick({ key: propertiesCard.key, slot }),
+        }
+      : undefined;
+
   /** The card a library dialog is filling a slot on, re-read from the draft. */
   const picked = shown.find((card) => card.key === pick?.key) ?? null;
-  const pickedConfig =
-    picked?.kind === "component" ? picked.props ?? {} : null;
 
   /**
    * Put the file the dialog handed back into whichever slot asked for it.
    *
-   * One handler for both dialogs, because "which slot" was decided when the
-   * dialog was OPENED and is sitting in `pick` — branching on it here keeps the
-   * two dialogs to their one real difference, which is what they list.
+   * One handler for both dialogs and both kinds of card, because "which slot"
+   * was decided when the dialog was OPENED and is sitting in `pick` —
+   * branching on it here keeps the two dialogs to their one real difference,
+   * which is what they list. Which RECORD the file lands in is the card's
+   * kind: a post's card is its own column, a link card's is its `props`.
    */
   function fillPickedSlot(payload: ImageInsertPayload) {
-    if (!pick || !pickedConfig) return;
-    if (pick.slot) {
-      draft.setProps(pick.key, {
-        ...pickedConfig,
-        media: { ...pickedConfig.media, [pick.slot]: mediaNodeFrom(payload) },
-      });
+    if (!pick || !picked) return;
+    if (picked.kind === "post") {
+      // A post's rail offers pictures alone — its destination is its slug —
+      // so a pick with no slot cannot have come from one.
+      if (pick.slot) {
+        draft.setCard(pick.key, {
+          ...picked.card,
+          media: { ...picked.card.media, [pick.slot]: mediaNodeFrom(payload) },
+        });
+      }
     } else {
-      draft.setProps(pick.key, {
-        ...pickedConfig,
-        // Only the URL travels. A document is FETCHED rather than drawn, so the
-        // kind and the pixel shape the payload also carries describe nothing
-        // about it — `mediaKindOf` answers "image" for a PDF because every
-        // caller before this one had already ruled documents out.
-        link: { kind: "document", href: payload.src, newTab: pickedConfig.link?.newTab },
-      });
+      const config = picked.props ?? {};
+      draft.setProps(
+        pick.key,
+        pick.slot
+          ? {
+              ...config,
+              media: { ...config.media, [pick.slot]: mediaNodeFrom(payload) },
+            }
+          : {
+              ...config,
+              // Only the URL travels. A document is FETCHED rather than drawn,
+              // so the kind and the pixel shape the payload also carries
+              // describe nothing about it — `mediaKindOf` answers "image" for
+              // a PDF because every caller before this one had already ruled
+              // documents out.
+              link: {
+                kind: "document",
+                href: payload.src,
+                newTab: config.link?.newTab,
+              },
+            },
+      );
     }
     setPick(null);
   }
@@ -483,14 +519,7 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
           >
             <div className={fillStyle} data-inert={editable ? "" : undefined}>
               {card.kind === "post" ? (
-                <LinkCard
-                  href={card.href}
-                  title={card.title}
-                  aspect={card.aspect}
-                  meta={card.date ?? undefined}
-                  cover={card.cover}
-                  interactive={!editable}
-                />
+                <PostCard card={card} editable={editable} />
               ) : (
                 <ComponentCard
                   card={card}
@@ -515,6 +544,7 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
           key={propertiesCard.key}
           logger={propertiesLogger}
           linkCard={propertiesLinkCard}
+          postCard={propertiesPostCard}
           onDismiss={() => setPropertiesKey(null)}
         />
       )}
@@ -588,6 +618,37 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * A post's tile: the post's own words and destination, over whatever picture
+ * and band its author has said anything about.
+ *
+ * Resolved HERE, at render, rather than on the server where `cover` was read:
+ * the rail edits `card` through the draft, and a picture chosen before the
+ * page was rebuilt could not show the choice until it was.
+ */
+function PostCard({
+  card,
+  editable,
+}: {
+  card: Extract<GridCard, { kind: "post" }>;
+  editable: boolean;
+}) {
+  const { light, dark } = postCardMedia(card.card, card.cover);
+  return (
+    <LinkCard
+      href={card.href}
+      title={card.title}
+      aspect={card.aspect}
+      meta={card.date ?? undefined}
+      cover={light}
+      coverDark={dark}
+      scrim={card.card.scrim}
+      tone={card.card.tone}
+      interactive={!editable}
+    />
   );
 }
 
