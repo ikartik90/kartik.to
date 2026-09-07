@@ -3,6 +3,10 @@ import { filenameToLabel } from "@/utils/filename-to-label";
 import type { DemoFrameAspectRatio } from "@/components/demo-frame";
 import type { DemoLoggerConfig } from "@/components/demo-logger";
 import type { DemoAsset } from "@/utils/demo-assets";
+import {
+  nextPendingKey,
+  type PendingComponentInsert,
+} from "@/utils/grid-draft";
 
 /**
  * What every demo may be told about the SHOWING it is in, as opposed to about
@@ -250,4 +254,32 @@ export function getDemoComponent(
   componentId: string,
 ): DemoComponentEntry | undefined {
   return demoComponents.find((entry) => entry.id === componentId);
+}
+
+/**
+ * A card for this demo, drafted rather than published.
+ *
+ * The registry's own answer to "what does a fresh showing of this look like",
+ * asked from the two places that can add one: the grid's `[+]`, which knows the
+ * seat you pressed, and the palette's "New widget…", which has none to give and
+ * passes null. Both go into `useGridDraftStore` and both are thrown away by the
+ * same "Discard changes and exit" — nothing here writes anything.
+ *
+ * The defaults are copied ONTO the insert rather than left to be looked up
+ * later, because the card is drawn before its row exists and the panel edits
+ * these two from the moment it is placed; `3/2` is the frame's own shape, for
+ * the card entry that names none.
+ */
+export function pendingInsertFor(
+  componentId: string,
+  index: number | null,
+): PendingComponentInsert {
+  const entry = getDemoComponent(componentId);
+  return {
+    key: nextPendingKey(),
+    componentId,
+    index,
+    aspect: entry?.aspectRatio ?? "3/2",
+    logger: Boolean(entry?.logger),
+  };
 }

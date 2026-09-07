@@ -509,3 +509,62 @@ describe("applyGridDraft — a post's card", () => {
     ).toBe(true);
   });
 });
+
+// The palette adds a widget with no seat in mind — it was chosen from a list,
+// not dropped into a hole — so the insert carries a null index and the card
+// takes whatever chronology gives it. Which is the front: an insert is dated
+// later than anything on the grid, so "unpinned" reads as "newest" here.
+describe("applyGridDraft — a widget added with no seat", () => {
+  const post = (id: string, gridIndex: number | null = null): GridCard => ({
+    kind: "post",
+    key: `post:${id}`,
+    id,
+    title: id,
+    href: `/work/${id}`,
+    date: null,
+    cover: null,
+    card: {},
+    gridIndex,
+    publishedAt: new Date(`2026-01-0${id.length}`),
+    aspect: "16/9",
+    span: 1,
+  });
+
+  it("floats to the front rather than claiming a seat", () => {
+    const out = applyGridDraft([post("a"), post("bb")], {
+      ...emptyGridDraft(),
+      inserts: [
+        {
+          key: "pending:1",
+          componentId: "cosmic-track",
+          index: null,
+          aspect: "3/2",
+          logger: false,
+        },
+      ],
+    });
+
+    expect(out.map((c) => c.key)).toEqual(["pending:1", "post:bb", "post:a"]);
+    expect(out[0].gridIndex).toBeNull();
+  });
+
+  // The seat stays available: dragging the card after it was added pins it,
+  // exactly as it would a card that already had a row.
+  it("still takes a pin made against it afterwards", () => {
+    const out = applyGridDraft([post("a"), post("bb")], {
+      ...emptyGridDraft(),
+      inserts: [
+        {
+          key: "pending:1",
+          componentId: "cosmic-track",
+          index: null,
+          aspect: "3/2",
+          logger: false,
+        },
+      ],
+      pins: { "pending:1": 2 },
+    });
+
+    expect(out.map((c) => c.key).indexOf("pending:1")).toBe(2);
+  });
+});

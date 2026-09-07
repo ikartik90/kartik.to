@@ -11,6 +11,8 @@ import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CommandPalette } from "../command-palette";
 import { HAS_CURSOR_QUERY } from "@/data/media-queries";
+import { useGridDraftStore } from "@/store/grid-draft";
+import { saveGridLayout } from "@/app/actions/grid";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -47,7 +49,7 @@ vi.mock("@/utils/admin-login", () => ({ adminLogin: () => mockAdminLogin() }));
 
 // Stub server actions so they never hit the network
 vi.mock("@/app/actions/grid", () => ({
-  publishComponent: vi.fn().mockResolvedValue("component-id"),
+  saveGridLayout: vi.fn().mockResolvedValue(undefined),
   setPinned: vi.fn(),
   moveGridItem: vi.fn(),
   unpublishComponent: vi.fn(),
@@ -166,9 +168,9 @@ describe("CommandPalette", () => {
       expect(screen.getByText("Playgrounds")).toBeDefined();
     });
 
-    it("offers the Shader Playground item", () => {
+    it("offers the Waveform Studio item", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Shader Playground")).toBeDefined();
+      expect(screen.getByText("Waveform Studio")).toBeDefined();
     });
   });
 
@@ -176,7 +178,7 @@ describe("CommandPalette", () => {
     it("still offers the Playgrounds group", () => {
       render(<CommandPalette />);
       expect(screen.getByText("Playgrounds")).toBeDefined();
-      expect(screen.getByText("Shader Playground")).toBeDefined();
+      expect(screen.getByText("Waveform Studio")).toBeDefined();
     });
 
     it("does not render the This Page group", () => {
@@ -224,7 +226,7 @@ describe("CommandPalette", () => {
     it("renders the Playgrounds group in the server render too", () => {
       const html = renderToString(<CommandPalette />);
       expect(html).toContain("Playgrounds");
-      expect(html).toContain("Shader Playground");
+      expect(html).toContain("Waveform Studio");
     });
   });
 
@@ -327,10 +329,10 @@ describe("CommandPalette", () => {
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
       fireEvent.change(screen.getByPlaceholderText("Search…"), {
-        target: { value: "playground" },
+        target: { value: "waveform" },
       });
 
-      expect(list().getByText("Shader Playground")).toBeDefined();
+      expect(list().getByText("Waveform Studio")).toBeDefined();
       expect(list().queryByText("Dark theme")).toBeNull();
     });
   });
@@ -386,6 +388,81 @@ describe("CommandPalette", () => {
     it("no longer offers 'New page…' (no utility for it yet)", () => {
       render(<CommandPalette />);
       expect(screen.queryByText("New page…")).toBeNull();
+    });
+
+    // It used to sit here, in Publish, and it should not: a widget goes onto
+    // the GRID, and the grid is a thing you are either editing or not. Offered
+    // from a page that is merely being read, it published straight to the live
+    // homepage with no draft to hold it and no discard to take it back.
+    it("does not offer a new widget from outside the homepage editor", () => {
+      render(<CommandPalette />);
+      expect(list().queryByText("New widget…")).toBeNull();
+      expect(list().queryByText("New component…")).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // New widget — the palette's way of putting a demo on the homepage.
+  //
+  // Offered ONLY while the homepage is being edited, and buffered like every
+  // other edit made there: the picker adds a pending insert to the grid's
+  // draft and nothing is written until "Save changes". "Discard changes and
+  // exit" takes the widget with it, which is the whole reason it moved.
+  // -------------------------------------------------------------------------
+  describe("New widget", () => {
+    beforeEach(() => {
+      useGridDraftStore.getState().reset();
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+    });
+
+    it("is offered while the homepage is being edited", () => {
+      mockPathname.mockReturnValue("/edit/home");
+      render(<CommandPalette />);
+      expect(list().getByText("New widget…")).toBeDefined();
+    });
+
+    it("is withheld from every other editor", () => {
+      mockPathname.mockReturnValue("/edit/new");
+      render(<CommandPalette />);
+      expect(list().queryByText("New widget…")).toBeNull();
+
+      cleanup();
+      mockPathname.mockReturnValue("/playground/shader");
+      render(<CommandPalette />);
+      expect(list().queryByText("New widget…")).toBeNull();
+    });
+
+    it("is withheld from a page that is merely being read", () => {
+      mockPathname.mockReturnValue("/writing/my-post");
+      render(<CommandPalette />);
+      expect(list().queryByText("New widget…")).toBeNull();
+    });
+
+    // The point of the move. Choosing a widget buffers it; the homepage's own
+    // Save is what writes it, so a discard leaves the grid as it found it.
+    it("buffers the chosen widget instead of publishing it", async () => {
+      mockPathname.mockReturnValue("/edit/home");
+      render(<CommandPalette />);
+      fireEvent.click(list().getByText("New widget…"));
+
+      // The picker is a sibling of the palette, which closes on the way into
+      // it — so this is the dialog's library, not the palette's list: pick the
+      // demo, then confirm it.
+      fireEvent.click(await screen.findByText("Calchemy Demo"));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Insert Component" }),
+      );
+
+      expect(saveGridLayout).not.toHaveBeenCalled();
+      expect(useGridDraftStore.getState().inserts).toEqual([
+        expect.objectContaining({
+          componentId: "calchemy-demo",
+          // No seat: it was chosen from a list, not dropped into a hole.
+          index: null,
+        }),
+      ]);
     });
   });
 
@@ -564,13 +641,13 @@ describe("CommandPalette", () => {
     });
   });
 
-  describe("Shader Playground", () => {
+  describe("Waveform Studio", () => {
     it("routes to the playground and closes the palette", () => {
       render(<CommandPalette />);
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByText("Shader Playground"));
+      fireEvent.click(screen.getByText("Waveform Studio"));
 
       expect(mockPush).toHaveBeenCalledWith("/playground/shader");
       expect(dialog.close).toHaveBeenCalledOnce();
@@ -580,10 +657,10 @@ describe("CommandPalette", () => {
   // The second playground, and public on the same grounds as the first: it
   // parses a phrase in the browser and paints the days it means. Nothing is
   // read from the site and nothing is written to it.
-  describe("Calchemy Playground", () => {
+  describe("Calchemy", () => {
     it("is offered logged out, beside the shader one", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Calchemy Playground")).toBeDefined();
+      expect(screen.getByText("Calchemy")).toBeDefined();
     });
 
     it("routes to the playground and closes the palette", () => {
@@ -591,7 +668,7 @@ describe("CommandPalette", () => {
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByText("Calchemy Playground"));
+      fireEvent.click(screen.getByText("Calchemy"));
 
       expect(mockPush).toHaveBeenCalledWith("/playground/calchemy");
       expect(dialog.close).toHaveBeenCalledOnce();
@@ -604,8 +681,8 @@ describe("CommandPalette", () => {
       mockPathname.mockReturnValue("/playground/calchemy");
       render(<CommandPalette />);
 
-      expect(list().queryByText("Calchemy Playground")).toBeNull();
-      expect(list().getByText("Shader Playground")).toBeDefined();
+      expect(list().queryByText("Calchemy")).toBeNull();
+      expect(list().getByText("Waveform Studio")).toBeDefined();
     });
   });
 
@@ -699,7 +776,7 @@ describe("CommandPalette", () => {
     it("offers the playground from a page that is merely being read", () => {
       mockPathname.mockReturnValue("/writing/my-post");
       render(<CommandPalette />);
-      expect(list().getByText("Shader Playground")).toBeDefined();
+      expect(list().getByText("Waveform Studio")).toBeDefined();
     });
 
     it("withholds it while a document is being edited", () => {
@@ -707,7 +784,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Shader Playground")).toBeNull();
+      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     it("withholds it while the grid is being edited", () => {
@@ -715,7 +792,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Shader Playground")).toBeNull();
+      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     // Settings is not a destination — it changes the page you are on rather
@@ -756,7 +833,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Shader Playground")).toBeNull();
+      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     // The chip has to sit on the command the key actually runs, written with
@@ -782,7 +859,7 @@ describe("CommandPalette", () => {
       // about the ROUTE, not the session — a visitor standing on the
       // playground has no more use for a command to the playground than the
       // author does.
-      expect(list().queryByText("Shader Playground")).toBeNull();
+      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     it("is not offered on any other page", () => {
@@ -818,16 +895,16 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().getByText("Playgrounds")).toBeDefined();
-      expect(list().getByText("Calchemy Playground")).toBeDefined();
-      expect(list().queryByText("Shader Playground")).toBeNull();
+      expect(list().getByText("Calchemy")).toBeDefined();
+      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     it("says the same on a saved preset's own route", () => {
       mockPathname.mockReturnValue("/playground/shader/preset-1");
       render(<CommandPalette />);
 
-      expect(list().getByText("Calchemy Playground")).toBeDefined();
-      expect(list().queryByText("Shader Playground")).toBeNull();
+      expect(list().getByText("Calchemy")).toBeDefined();
+      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     // Navigation, not finishing with something — the visitor has nothing open
@@ -848,7 +925,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Calchemy Playground")).toBeNull();
+      expect(list().queryByText("Calchemy")).toBeNull();
       expect(list().getByText("Exit editor")).toBeDefined();
     });
   });
@@ -1067,14 +1144,14 @@ describe("CommandPalette — the `>` command line", () => {
     openAndType("> window.adminLogin()");
 
     expect(list().queryByText("Settings")).toBeNull();
-    expect(list().queryByText("Shader Playground")).toBeNull();
+    expect(list().queryByText("Waveform Studio")).toBeNull();
   });
 
   it("leaves ordinary search text alone", () => {
-    openAndType("shader");
+    openAndType("waveform");
 
     expect(list().queryByText("Command")).toBeNull();
-    expect(list().getByText("Shader Playground")).toBeDefined();
+    expect(list().getByText("Waveform Studio")).toBeDefined();
   });
 
   it("recognises the console form typed out in full", () => {

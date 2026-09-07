@@ -23,8 +23,16 @@ export interface PendingComponentInsert {
   /** A temporary key, standing in for the row id it does not have yet. */
   key: string;
   componentId: string;
-  /** The seat it was inserted at — a `[+]` places what it publishes. */
-  index: number;
+  /**
+   * The seat it was inserted at, or null for no seat at all.
+   *
+   * A `[+]` PLACES what it publishes — you pressed a particular hole, so the
+   * card stays in it. The palette's "New widget…" does not: it was chosen from
+   * a list with no hole in mind, so it arrives unpinned and takes whatever
+   * chronology gives it, which is the front — an insert is dated later than
+   * anything already on the grid.
+   */
+  index: number | null;
   aspect: DemoFrameAspectRatio;
   logger: boolean;
 }
@@ -103,6 +111,20 @@ export interface GridDraft {
   inserts: PendingComponentInsert[];
   /** Card keys to take off the grid. */
   removals: string[];
+}
+
+/**
+ * A key for a card that has no row yet — `pending:1`, `pending:2`, …
+ *
+ * ONE counter for the whole app rather than one per call site, because there
+ * are now two ways to add a card (the grid's `[+]` and the palette's "New
+ * widget…") and both drop their inserts into the same store. Two counters
+ * would hand out `pending:1` twice, and the second card would be taken for the
+ * first — reshaped by its overrides, removed by its removal.
+ */
+let pendingSeq = 0;
+export function nextPendingKey(): string {
+  return `pending:${(pendingSeq += 1)}`;
 }
 
 export function emptyGridDraft(): GridDraft {

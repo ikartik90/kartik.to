@@ -22,7 +22,7 @@ import { GridItem } from "@/components/grid-item";
 import { ImageInsertDialog } from "@/components/image-insert-dialog";
 import { LinkCard } from "@/components/link-card";
 import { type PropertiesPanelHandle } from "@/components/ui/properties-panel";
-import { getDemoComponent } from "@/components/demo/registry";
+import { getDemoComponent, pendingInsertFor } from "@/components/demo/registry";
 import { listingColumnsFor } from "@/utils/listing-columns";
 import { useGridDraftStore } from "@/store/grid-draft";
 import { applyGridDraft } from "@/utils/grid-draft";
@@ -233,9 +233,6 @@ function mediaNodeFrom(payload: ImageInsertPayload): MediaNode {
       : {}),
   };
 }
-
-/** Distinct per insert, so two of the same demo remain separate cards. */
-let pendingSeq = 0;
 
 interface HomeGridProps {
   cards: GridCard[];
@@ -565,16 +562,11 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
             open={insert !== null}
             onClose={() => setInsert(null)}
             onInsert={(componentId) => {
-              const entry = getDemoComponent(componentId);
               // Pinned to the seat by default: you chose this spot, so the card
               // stays in it rather than drifting the next time something ships.
-              draft.addInsert({
-                key: `pending:${(pendingSeq += 1)}`,
-                componentId,
-                index: insert?.index ?? 0,
-                aspect: entry?.aspectRatio ?? "3/2",
-                logger: Boolean(entry?.logger),
-              });
+              // The palette's "New widget…" passes null here instead — it was
+              // chosen from a list with no spot in mind.
+              draft.addInsert(pendingInsertFor(componentId, insert?.index ?? 0));
               setInsert(null);
             }}
           />

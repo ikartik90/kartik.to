@@ -110,42 +110,20 @@ export async function moveGridItem(
   revalidatePath("/");
 }
 
-const PublishComponentSchema = z.object({
-  componentId: z.string().min(1),
-  aspect: ComponentAspectSchema.nullable().optional(),
-  logger: z.boolean().nullable().optional(),
-  gridIndex: GridIndexSchema.nullable().optional(),
-});
-
-/**
- * Put a registered demo on the homepage.
+/*
+ * There is no `publishComponent` here any more, and there should not be one.
  *
- * Nothing in the registry is on the grid by being registered — a demo exists to
- * be embedded in articles, and appearing as a project of its own is a separate
- * decision taken here. `componentId` is deliberately not unique in the schema,
- * so the same demo can be published more than once in different configurations.
+ * Putting a demo on the homepage used to be its own act — one row, written the
+ * moment the picker closed, from a command the palette offered on every page.
+ * That made it the only edit to the grid that "Discard changes and exit" could
+ * not take back, and a write to the LIVE homepage from pages that were not
+ * editing it at all.
  *
- * `aspect` and `logger` stay null unless overridden, so the registry keeps
- * answering for them and a later correction there reaches every showing.
+ * It is an edit now, like every other: both ways of adding a card — the grid's
+ * `[+]` and the palette's "New widget…" — buffer a `PendingComponentInsert`,
+ * and `saveGridLayout`'s `inserts` list below is the one place a component row
+ * is created. Reviving a straight-to-the-database publish would reopen the gap.
  */
-export async function publishComponent(
-  input: z.input<typeof PublishComponentSchema>,
-): Promise<string> {
-  await requireAdmin();
-  const data = PublishComponentSchema.parse(input);
-  const created = await prisma.component.create({
-    data: {
-      componentId: data.componentId,
-      aspect: data.aspect ?? null,
-      logger: data.logger ?? null,
-      gridIndex: data.gridIndex ?? null,
-      publishedAt: new Date(),
-    },
-    select: { id: true },
-  });
-  revalidatePath("/");
-  return created.id;
-}
 
 /**
  * Take a component off the grid.
@@ -168,7 +146,10 @@ export async function unpublishComponent(id: string): Promise<void> {
 const InsertSchema = z.object({
   key: z.string().min(1),
   componentId: z.string().min(1),
-  index: GridIndexSchema,
+  // Nullable: a widget added from the palette was chosen from a list rather
+  // than dropped into a hole, so it has no seat to keep and lands wherever
+  // chronology puts it. See `PendingComponentInsert.index`.
+  index: GridIndexSchema.nullable(),
   aspect: ComponentAspectSchema.nullable().optional(),
   logger: z.boolean().nullable().optional(),
 });
