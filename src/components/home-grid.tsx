@@ -364,15 +364,18 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
       : undefined;
 
   /**
-   * A post's card — the picture and the scrim, which are the two things about
-   * it the post does not decide. The document's own picture goes with it, so
-   * the rail can start the Media section from what the card is wearing.
+   * A post's card — the picture, the line and the scrim, which are the things
+   * about it the post does not decide. What the post DOES say goes with them:
+   * its own picture, so the rail can start the Media section from what the
+   * card is wearing, and its own meta line, so the rail offers to write one
+   * only where there is none.
    */
   const propertiesPostCard =
     propertiesCard?.kind === "post"
       ? {
           config: propertiesCard.card,
           cover: propertiesCard.cover,
+          meta: propertiesCard.date,
           onChange: (config: PostCardConfig) =>
             draft.setCard(propertiesCard.key, config),
           onPickMedia: (slot: CardMediaSlot) =>
@@ -628,6 +631,12 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
  * Resolved HERE, at render, rather than on the server where `cover` was read:
  * the rail edits `card` through the draft, and a picture chosen before the
  * page was rebuilt could not show the choice until it was.
+ *
+ * The post's own meta line WINS over the authored one, which is the rule that
+ * keeps the rail honest rather than a preference between two values: an
+ * article is filed by its date, so the rail offers no Meta row on one at all
+ * (see `PostCardSections`), and a project promoted to an article gets its date
+ * rather than a line no control on screen would then admit to.
  */
 function PostCard({
   card,
@@ -642,7 +651,7 @@ function PostCard({
       href={card.href}
       title={card.title}
       aspect={card.aspect}
-      meta={card.date ?? undefined}
+      meta={card.date ?? card.card.meta}
       cover={light}
       coverDark={dark}
       scrim={card.card.scrim}

@@ -583,6 +583,16 @@ describe("PostSchema — card", () => {
     if (result.success) expect(result.data.card).toEqual(card);
   });
 
+  // The one line of the caption a post can leave unwritten — see the schema.
+  it("carries the meta line for a card the post files under nothing", () => {
+    const result = PostSchema.safeParse({
+      ...validPost,
+      card: { meta: "Case Study" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.card).toEqual({ meta: "Case Study" });
+  });
+
   // A post's card has no content section — the words are the post's — so the
   // ground sits at the top level, where a link card's sits under `content`. A
   // blob written the link card's way is stripped, not read.

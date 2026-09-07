@@ -34,10 +34,11 @@ export type Document = z.infer<typeof DocumentSchema>;
  * A post's card is DERIVED. Its words are the post's title and date, its
  * destination is the slug, and its picture is the first media in the document
  * (`postCover`) — none of that is authored twice. This is the remainder: which
- * picture to show where the reader's theme is dark, whether the caption stands
- * on a scrim, and which tone that band is pinned to. The same three things a
- * link card's author sets, from the same schemas, so the two cards cannot be
- * given different vocabularies for one band.
+ * picture to show where the reader's theme is dark, the line above the name on
+ * a card the post files under nothing, whether the caption stands on a scrim,
+ * and which tone that band is pinned to. The same things a link card's author
+ * sets, from the same schemas, so the two cards cannot be given different
+ * vocabularies for one band.
  *
  * `media` PRESENT means the author has taken the picture over: what is in it
  * is what shows, and an emptied slot is a flat plate. Absent means the document
@@ -49,15 +50,25 @@ export type Document = z.infer<typeof DocumentSchema>;
  * everywhere else. A light slot that fell back to the document when empty
  * would be a slot reading "Add" over a card wearing a picture.
  *
- * `scrim` and `tone` sit at the top level rather than under a `content` key as
- * the link card's do, because a post's card has no content section — the words
- * are the post's. They are the ground the words stand on, and nothing else.
+ * `meta` is the one LINE of the caption a post can leave unwritten. The name
+ * and the destination are always the post's, and so is the line above the name
+ * wherever the post has one — an article's card is filed by its publication
+ * date. A project is filed by nothing, so that line is empty and this fills
+ * it: "Case Study", a client, a year. The post's own line still wins where
+ * there is one (see `PostCard`), which is what lets the rail offer this row
+ * only on the cards it can honestly claim it authors.
+ *
+ * `meta`, `scrim` and `tone` sit at the top level rather than under a
+ * `content` key as the link card's do, because a post's card has no content
+ * section — the rest of the words are the post's. They are the one line, and
+ * the ground the words stand on.
  *
  * Nothing is required, for the reason nothing in `LinkCardConfigSchema` is: an
  * empty object is a card nobody has touched, and it draws exactly as it did.
  */
 export const PostCardConfigSchema = z.object({
   media: LinkCardMediaSchema.optional(),
+  meta: z.string().optional(),
   scrim: z.boolean().optional(),
   tone: LinkCardToneSchema.optional(),
 });

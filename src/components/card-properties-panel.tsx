@@ -37,8 +37,9 @@ import CrossIcon from "@/assets/icons/cross-small.svg";
 // three surfaces to open from one button. What differs is WHICH sections are
 // on it, which is decided by what the card can actually carry — the log
 // control is here only for a card that has log output to show, the three
-// link-card sections only for the card they author, and a post gets the two of
-// those it cannot derive from itself — its picture and its scrim.
+// link-card sections only for the card they author, and a post gets the parts
+// of those it cannot derive from itself — its picture, its scrim, and the one
+// line of caption it does not already write.
 //
 // A live editor, not a form. Every control commits on change and the parent
 // owns the value, exactly as `MediaPropertiesPanel` does, so the card behind
@@ -128,6 +129,16 @@ export interface CardPostCardProperty {
    * the card is already wearing rather than from a blank.
    */
   cover: MediaNode | null;
+  /**
+   * The meta line the POST gives the card — an article's publication date —
+   * and null for one it files under nothing.
+   *
+   * It decides whether the Meta row is offered at all, rather than what the
+   * row starts from. The post's own line wins on the card (see `PostCard`), so
+   * a row over a dated tile would be a field you could type into and never see
+   * the result of — and a row this rail offers is a row that changes the card.
+   */
+  meta: string | null;
   /** The WHOLE configuration, replacing what was there — as the link card's. */
   onChange: (config: PostCardConfig) => void;
   /** Asks for the media library, for one of the two theme slots. */
@@ -145,7 +156,7 @@ export interface CardPropertiesPanelProps {
   logger?: CardLoggerProperty;
   /** The card's own content — absent for every card that is not a link card. */
   linkCard?: CardLinkCardProperty;
-  /** A post's picture and scrim — absent for every card that is not a post. */
+  /** A post's picture, line and scrim — absent for a card that is not a post. */
   postCard?: CardPostCardProperty;
   /** Fired once the panel has finished sliding out — see PropertiesPanel. */
   onDismiss: () => void;
@@ -346,14 +357,6 @@ function ContentControls({
   pictured: boolean;
   onChange: (content: NonNullable<LinkCardConfig["content"]>) => void;
 }) {
-  // Drafts, for the reason the media panel's caption keeps one: what is STORED
-  // is not what is typed. The words are trimmed on the way out and an empty one
-  // is dropped entirely, so a field derived from the stored value would swallow
-  // the space between two words and refuse to hold a title you were halfway
-  // through clearing.
-  const [titleDraft, setTitleDraft] = useState(content.title ?? "");
-  const [metaDraft, setMetaDraft] = useState(content.meta ?? "");
-
   const write = (patch: Partial<typeof content>) => {
     const next = { ...content, ...patch };
     // An emptied field is an ABSENT field, not an empty string: absent is what
@@ -369,37 +372,19 @@ function ContentControls({
       {/* Above the title in the panel because it is above the title on the
           card — a rail whose rows ran the other way round from the tile behind
           it would be describing a different card. */}
-      <PropertiesPanel.Control label="Meta">
-        {/* A bare `Field.Frame` and not a `TextInput`, which is the whole
-            reason the compound primitives exist: `Control` IS the field, and a
-            TextInput would open a second one inside it — its own label id, its
-            own control id — leaving the row's visible label pointing at
-            nothing. Every other control in this inspector composes the same
-            way. */}
-        <Field.Frame>
-          <Field.Control
-            value={metaDraft}
-            placeholder="Playground"
-            onChange={(event) => {
-              setMetaDraft(event.target.value);
-              write({ meta: event.target.value.trim() || undefined });
-            }}
-          />
-        </Field.Frame>
-      </PropertiesPanel.Control>
+      <TextControl
+        label="Meta"
+        placeholder="Playground"
+        value={content.meta}
+        onChange={(meta) => write({ meta })}
+      />
 
-      <PropertiesPanel.Control label="Title">
-        <Field.Frame>
-          <Field.Control
-            value={titleDraft}
-            placeholder="Shader Playground"
-            onChange={(event) => {
-              setTitleDraft(event.target.value);
-              write({ title: event.target.value.trim() || undefined });
-            }}
-          />
-        </Field.Frame>
-      </PropertiesPanel.Control>
+      <TextControl
+        label="Title"
+        placeholder="Shader Playground"
+        value={content.title}
+        onChange={(title) => write({ title })}
+      />
 
       {/* The ground under the words. Values rather than a section of their
           own, because a card can legitimately want words with no scrim — over
@@ -407,6 +392,53 @@ function ContentControls({
           scrim" and "no words" are different cards. */}
       <GroundControls value={content} pictured={pictured} onChange={write} />
     </>
+  );
+}
+
+/**
+ * One line of a card's caption, as a row that commits on every keystroke.
+ *
+ * It keeps a DRAFT of what is typed, for the reason the media panel's caption
+ * does: what is stored is not what is in the field. The value is trimmed on the
+ * way out and an emptied one is dropped entirely, so a field reading back the
+ * stored value would swallow the space between two words and refuse to hold a
+ * title you were halfway through clearing.
+ *
+ * `undefined` out for an empty field, never `""` — absent is what a card reads
+ * to decide there is no line to draw at all, and the caller deletes the key.
+ */
+function TextControl({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  /** What is stored — the field's starting point, not its state. */
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
+  const [draft, setDraft] = useState(value ?? "");
+
+  return (
+    <PropertiesPanel.Control label={label}>
+      {/* A bare `Field.Frame` and not a `TextInput`, which is the whole reason
+          the compound primitives exist: `Control` IS the field, and a TextInput
+          would open a second one inside it — its own label id, its own control
+          id — leaving the row's visible label pointing at nothing. Every other
+          control in this inspector composes the same way. */}
+      <Field.Frame>
+        <Field.Control
+          value={draft}
+          placeholder={placeholder}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            onChange(event.target.value.trim() || undefined);
+          }}
+        />
+      </Field.Frame>
+    </PropertiesPanel.Control>
   );
 }
 
@@ -523,8 +555,8 @@ function MediaSection({
 }
 
 /**
- * The two things about a post's card that the post does not decide: its
- * picture, and the ground its caption stands on.
+ * The things about a post's card that the post does not decide: its picture,
+ * the line above its name, and the ground its caption stands on.
  *
  * The Media section is the link card's, seeded differently: a post's card is
  * already wearing the document's picture, so taking the picture over starts
@@ -532,18 +564,38 @@ function MediaSection({
  * clearing the slot means what "Remove" means everywhere else. Closing the
  * section hands the picture back to the document.
  *
- * The ground is headerless and always on, the way the log control is: a post
- * always has words, so there is nothing for a section's add/remove pair to
- * mean, and a value belongs in a labelled row.
+ * The rest is headerless and always on, the way the log control is: a post
+ * always has words and always stands on something, so there is nothing for a
+ * section's add/remove pair to mean, and a value belongs in a labelled row.
+ *
+ * The Meta row is the one part of it that comes and goes, and it is offered
+ * only where the post writes no such line — a project. An article's card is
+ * filed by its date and the date wins (see `PostCard`), so a row there would
+ * take typing and show nothing for it. What the rail offers is what the rail
+ * can change.
  */
 function PostCardSections({
   config,
   cover,
+  meta,
   onChange,
   onPickMedia,
 }: CardPostCardProperty) {
   const set = (patch: Partial<PostCardConfig>) =>
     onChange({ ...config, ...patch });
+
+  /**
+   * Write one value, and drop the key entirely when it is emptied.
+   *
+   * An emptied line is an ABSENT line, not an empty string — the same rule the
+   * link card's content follows, and what keeps `{}` the honest shape of a
+   * card nobody has touched.
+   */
+  const write = (patch: Partial<PostCardConfig>) => {
+    const next = { ...config, ...patch };
+    if (!next.meta) delete next.meta;
+    onChange(next);
+  };
 
   // What the card is actually showing — the default the scrim switch reads.
   const shown = postCardMedia(config, cover);
@@ -566,7 +618,16 @@ function PostCardSections({
       />
 
       <PropertiesPanel.Section enabled>
-        <PropertiesPanel.ControlPanel ariaLabel="Scrim">
+        <PropertiesPanel.ControlPanel ariaLabel="Content">
+          {meta === null && (
+            <TextControl
+              label="Meta"
+              placeholder="Case Study"
+              value={config.meta}
+              onChange={(next) => write({ meta: next })}
+            />
+          )}
+
           <GroundControls
             value={config}
             pictured={Boolean(shown.light || shown.dark)}
