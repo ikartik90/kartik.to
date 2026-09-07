@@ -6681,9 +6681,15 @@ export default defineConfig({
               zIndex: 1,
             },
             caption: {
-              maxWidth: "85vw",
+              // Never wider than the showcase block the picture was enlarged
+              // FROM (960px): a picture may run to 85% of a wide screen, but
+              // the words under it keep a prose measure. Below that width the
+              // caption keeps the same 85vw margin the picture does.
+              maxWidth: "min(85vw, token(sizes.articleShowcase))",
               textAlign: "center",
-              textWrap: "pretty",
+              // No `textWrap` here — `Typography`'s `caption` type balances
+              // the lines from the utilities layer, which outranks this one,
+              // so a value set here is dead (see `articleShowcase`'s note).
             },
           },
         }),
