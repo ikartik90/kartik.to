@@ -580,27 +580,88 @@ export function useCommandPalette(
     router.push(getPostReadUrl(draft.category, draft.slug));
   };
 
-  const handlePublish = async () => {
+  /**
+   * Put the document being edited into its row, minting the row if it has none.
+   *
+   * The ONE place a document is written, because it has two callers that must
+   * not differ about it. Saving writes the buffer and stays; publishing writes
+   * the buffer and then throws the switch — and publishing used to do only the
+   * second half. `handlePublish` wrote the document on the branch that MINTED
+   * the post and nowhere else, so re-publishing an existing article flipped
+   * `publishedAt` over whatever content the last save had left behind, and
+   * every edit made since stayed in the buffer. The editor was correct and the
+   * live page was stale, with nothing anywhere to say so.
+   *
+   * Returns the post as the row now holds it, or `null` when the write failed.
+   * The caller needs the ROW rather than a boolean: publishing wants the id it
+   * is about to flip and the slug it is about to navigate to, and reading those
+   * off the store instead would be reading them from the copy that may not have
+   * landed.
+   *
+   * Deliberately does NOT navigate, clear the local snapshot or mark the buffer
+   * clean. Those are three different answers to "what happens next", and the
+   * two callers give different ones — see each.
+   */
+  const writeDocument = async (): Promise<Post | null> => {
     const { draftId, title, document, category } = useEditorStore.getState();
-    close();
-    // The in-progress work is about to be persisted server-side — drop the
-    // local autosave so it can't later override the saved copy on refresh.
-    clearAutosave(autosaveKey(draftId, category));
     try {
-      let id = draftId;
-      if (!id) {
+      if (!draftId) {
         const created = await createDraft({
           title: title || undefined,
           document,
           category,
         });
-        id = created.id;
-        useEditorStore.getState().setDraftId(id);
+        useEditorStore.getState().setDraftId(created.id);
+        setDrafts((prev) => [...prev, created]);
+        return created;
       }
-      const published = await publishPost(id);
+      const updated = await saveDraft({
+        id: draftId,
+        title: title || undefined,
+        document,
+      });
+      setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      return updated;
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+      return null;
+    }
+  };
+
+  /**
+   * The local snapshot for the session as it stands NOW.
+   *
+   * Read after the write rather than before it, because minting a post changes
+   * the key: a brand-new draft autosaves under `new:<category>` and takes an id
+   * only once the row exists. Both are dropped, so the pre-mint entry cannot
+   * come back and restore a document the row has already superseded.
+   */
+  const dropAutosave = (keyBefore: string) => {
+    clearAutosave(keyBefore);
+    const after = useEditorStore.getState();
+    clearAutosave(autosaveKey(after.draftId, after.category));
+  };
+
+  const handlePublish = async () => {
+    const { draftId, category } = useEditorStore.getState();
+    const keyBefore = autosaveKey(draftId, category);
+    close();
+
+    const saved = await writeDocument();
+    // Nothing was written, so there is nothing to publish and nowhere to go.
+    // The buffer stays dirty and the local snapshot stays put: they are now the
+    // only copies of the work, and the old order — clear the snapshot first,
+    // then navigate to the read page regardless — destroyed one and walked away
+    // from the other.
+    if (!saved) return;
+
+    try {
+      const published = await publishPost(saved.id);
+      useEditorStore.getState().setDirty(false);
+      dropAutosave(keyBefore);
       router.push(getPostReadUrl(published.category, published.slug));
       syncOtherTabs();
-      setDrafts((prev) => prev.filter((d) => d.id !== id));
+      setDrafts((prev) => prev.filter((d) => d.id !== saved.id));
     } catch (err) {
       console.error("Failed to publish:", err);
     }
@@ -620,37 +681,20 @@ export function useCommandPalette(
    * second empty draft rather than reopening this one.
    */
   const persistDocument = async (): Promise<boolean> => {
-    const { draftId, title, document, category } = useEditorStore.getState();
-    clearAutosave(autosaveKey(draftId, category));
-    try {
-      if (!draftId) {
-        const created = await createDraft({
-          title: title || undefined,
-          document,
-          category,
-        });
-        useEditorStore.getState().setDraftId(created.id);
-        router.replace(getEditUrl(created.category, created.slug));
-        setDrafts((prev) => [...prev, created]);
-      } else {
-        const updated = await saveDraft({
-          id: draftId,
-          title: title || undefined,
-          document,
-        });
-        setDrafts((prev) =>
-          prev.map((d) => (d.id === updated.id ? updated : d)),
-        );
-      }
-      // Clean again — which is what stops the unsaved-work question asking
-      // about edits that have just been written.
-      useEditorStore.getState().setDirty(false);
-      syncOtherTabs();
-      return true;
-    } catch (err) {
-      console.error("Failed to save draft:", err);
-      return false;
-    }
+    const { draftId, category } = useEditorStore.getState();
+    const keyBefore = autosaveKey(draftId, category);
+
+    const saved = await writeDocument();
+    if (!saved) return false;
+
+    if (!draftId) router.replace(getEditUrl(saved.category, saved.slug));
+    // Clean again — which is what stops the unsaved-work question asking
+    // about edits that have just been written. After the write, never before:
+    // the snapshot is the last copy of anything the server has not taken.
+    useEditorStore.getState().setDirty(false);
+    dropAutosave(keyBefore);
+    syncOtherTabs();
+    return true;
   };
 
   // Renderer mode: permanently delete the draft being viewed, then go home.

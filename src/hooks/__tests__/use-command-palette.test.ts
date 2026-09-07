@@ -6,6 +6,7 @@ import { useCommandPalette } from "../use-command-palette";
 import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 import { useEditorStore } from "@/store/editor";
 import { useGridDraftStore } from "@/store/grid-draft";
+import { autosaveKey } from "@/utils/editor-autosave";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -911,6 +912,139 @@ describe("useCommandPalette", () => {
   // -------------------------------------------------------------------------
   // One rule across every editor
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // Publish
+  // -------------------------------------------------------------------------
+
+  describe("handlePublish — the document goes with the switch", () => {
+    beforeEach(async () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      useEditorStore.getState().reset();
+      mockPathname.mockReturnValue("/edit/my-post");
+      window.localStorage.clear();
+      // Call counts, not implementations: these tests assert which writes a
+      // publish makes, so a neighbour's calls must not be visible here.
+      const actions = await import("@/app/actions/post");
+      vi.mocked(actions.createDraft).mockClear();
+      vi.mocked(actions.saveDraft).mockClear();
+      vi.mocked(actions.publishPost).mockClear();
+    });
+
+    // The bug this describes: Publish wrote the document only on the branch
+    // that MINTED the post, so re-publishing an existing one flipped
+    // `publishedAt` over whatever content the last save happened to leave
+    // behind. Every edit made since — a replaced video, in the case that found
+    // it — stayed in the buffer and never reached the row the reader is served
+    // from. The editor was right and the page was stale, which is the shape of
+    // failure that takes longest to disbelieve.
+    it("writes the buffer before flipping the switch on an existing post", async () => {
+      const { saveDraft, publishPost } = await import("@/app/actions/post");
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setDocument({
+        type: "doc",
+        content: [
+          { type: "paragraph", children: [{ type: "text", text: "new" }] },
+        ],
+      });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handlePublish());
+
+      expect(saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "existing-id",
+          document: expect.objectContaining({
+            content: [
+              { type: "paragraph", children: [{ type: "text", text: "new" }] },
+            ],
+          }),
+        }),
+      );
+      expect(publishPost).toHaveBeenCalledWith("existing-id");
+    });
+
+    // A post that has never been written is minted by the same act, and the
+    // mint already carries the document — so this path must not write twice.
+    it("mints a post that has none, and does not write it twice", async () => {
+      const { createDraft, saveDraft, publishPost } = await import(
+        "@/app/actions/post"
+      );
+      mockPathname.mockReturnValue("/edit/new");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handlePublish());
+
+      expect(createDraft).toHaveBeenCalled();
+      expect(saveDraft).not.toHaveBeenCalled();
+      expect(publishPost).toHaveBeenCalledWith("new-id");
+    });
+
+    // Publishing is a write, so the buffer that was written is no longer
+    // unsaved. Left dirty, the exit question would ask about work that is on
+    // disk — the same "asks about edits just written" fault `persistDocument`
+    // clears the flag to avoid.
+    it("leaves the buffer clean once the row holds it", async () => {
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setTitle("Changed");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handlePublish());
+
+      expect(useEditorStore.getState().isDirty).toBe(false);
+    });
+
+    // The local snapshot is the LAST copy of work the server has not taken.
+    // Dropping it before the write meant a failed publish destroyed the
+    // recovery copy and the buffer's only other home in one go.
+    it("keeps the local snapshot when the write fails", async () => {
+      const { saveDraft } = await import("@/app/actions/post");
+      vi.mocked(saveDraft).mockRejectedValueOnce(new Error("offline"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setDocument({ type: "doc", content: [] });
+      const key = autosaveKey("existing-id", "ARTICLE");
+      window.localStorage.setItem(key, "snapshot");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handlePublish());
+
+      expect(window.localStorage.getItem(key)).toBe("snapshot");
+    });
+
+    // And on the way out it does go, because the row now holds what it held.
+    it("drops the local snapshot once the row holds the document", async () => {
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setDocument({ type: "doc", content: [] });
+      const key = autosaveKey("existing-id", "ARTICLE");
+      window.localStorage.setItem(key, "snapshot");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handlePublish());
+
+      expect(window.localStorage.getItem(key)).toBeNull();
+    });
+
+    // Failing to write and then navigating to the read page is the worst of
+    // both: the author is shown a stale article AND taken away from the only
+    // place their edits still exist.
+    it("stays put, and publishes nothing, when the write fails", async () => {
+      const { saveDraft, publishPost } = await import("@/app/actions/post");
+      vi.mocked(saveDraft).mockRejectedValueOnce(new Error("offline"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setDocument({ type: "doc", content: [] });
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() => result.current.handlePublish());
+
+      expect(publishPost).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+  });
 
   describe("handleSaveChanges — the same command in all three editors", () => {
     beforeEach(() => {
