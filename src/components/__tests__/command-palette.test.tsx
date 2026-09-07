@@ -5,6 +5,7 @@ import {
   fireEvent,
   cleanup,
   within,
+  act,
 } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -61,6 +62,7 @@ vi.mock("@/app/actions/shader-preset", () => ({
 
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
+  getPublishedProjects: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn(),
   saveDraft: vi.fn(),
   publishPost: vi.fn(),
@@ -604,6 +606,83 @@ describe("CommandPalette", () => {
 
       expect(list().queryByText("Calchemy Playground")).toBeNull();
       expect(list().getByText("Shader Playground")).toBeDefined();
+    });
+  });
+
+  // The published work, offered to everyone: these are the pages the site
+  // exists for, so a visitor who opened this to go somewhere finds them.
+  describe("Projects", () => {
+    const projects = [
+      { slug: "shift-scheduling", title: "Shift Scheduling" },
+      { slug: "scheduling-extensions", title: "Scheduling Extensions" },
+    ];
+
+    beforeEach(async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue(
+        projects,
+      );
+    });
+
+    afterEach(async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    });
+
+    it("lists them for a visitor, under their own heading", async () => {
+      render(<CommandPalette />);
+      expect(await list().findByText("Shift Scheduling")).toBeDefined();
+      expect(list().getByText("Scheduling Extensions")).toBeDefined();
+      expect(list().getByText("Projects")).toBeDefined();
+    });
+
+    it("goes to the project and closes the palette", async () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(await list().findByText("Shift Scheduling"));
+
+      expect(mockPush).toHaveBeenCalledWith("/work/shift-scheduling");
+      expect(dialog.close).toHaveBeenCalledOnce();
+    });
+
+    // The rule every destination follows: the page you are standing on is not
+    // somewhere to go.
+    it("leaves out the project being read, and keeps the rest", async () => {
+      mockPathname.mockReturnValue("/work/shift-scheduling");
+      render(<CommandPalette />);
+      expect(await list().findByText("Scheduling Extensions")).toBeDefined();
+      expect(list().queryByText("Shift Scheduling")).toBeNull();
+    });
+
+    it("stands before the playgrounds", async () => {
+      render(<CommandPalette />);
+      const heading = await list().findByText("Projects");
+      const playgrounds = list().getByText("Playgrounds");
+      expect(
+        heading.compareDocumentPosition(playgrounds) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it("draws no heading when there is nothing published", async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      render(<CommandPalette />);
+      await act(async () => {});
+      expect(list().queryByText("Projects")).toBeNull();
+    });
+
+    it("is withheld while editing, as every destination is", async () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      mockPathname.mockReturnValue("/edit/new");
+      render(<CommandPalette />);
+      await act(async () => {});
+      expect(list().queryByText("Projects")).toBeNull();
+      expect(list().queryByText("Shift Scheduling")).toBeNull();
     });
   });
 

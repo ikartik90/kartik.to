@@ -66,6 +66,7 @@ vi.mock("@/app/actions/grid", () => ({
 
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
+  getPublishedProjects: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn().mockResolvedValue({
     id: "new-id",
     slug: "my-draft",
@@ -1468,6 +1469,60 @@ describe("useCommandPalette", () => {
 
       expect(mockPush).toHaveBeenCalledWith("/");
       expect(deleteDraft).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // projects — the published work, listed for everyone
+  // -------------------------------------------------------------------------
+
+  describe("projects", () => {
+    const projects = [
+      { slug: "shift-scheduling", title: "Shift Scheduling" },
+      { slug: "scheduling-extensions", title: "Scheduling Extensions" },
+    ];
+
+    beforeEach(async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      (getPublishedProjects as Mock).mockClear();
+      (getPublishedProjects as Mock).mockResolvedValue(projects);
+    });
+
+    it("are loaded for a visitor, who has no session", async () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.projects).toEqual(projects);
+    });
+
+    it("leave out the one being read", async () => {
+      mockPathname.mockReturnValue("/work/shift-scheduling");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.projects).toEqual([projects[1]]);
+    });
+
+    it("are looked up again each time the palette opens", async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      const { rerender } = renderHook(
+        ({ openKey }) => useCommandPalette(close, openKey),
+        { initialProps: { openKey: 0 } },
+      );
+      await act(async () => {});
+      expect(getPublishedProjects).toHaveBeenCalledTimes(1);
+
+      rerender({ openKey: 1 });
+      await act(async () => {});
+      expect(getPublishedProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it("handleOpenProject goes to the project and closes the palette", async () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+
+      act(() => result.current.handleOpenProject(projects[0]));
+
+      expect(mockPush).toHaveBeenCalledWith("/work/shift-scheduling");
+      expect(close).toHaveBeenCalledOnce();
     });
   });
 

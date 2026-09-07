@@ -5602,6 +5602,14 @@ export default defineConfig({
                   gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                   gridTemplateRows: "repeat(2, minmax(0, 1fr))",
                   aspectRatio: "3 / 2",
+                  // The 20px gutter in `base` is the EDITOR's: it is sized for
+                  // the control rail's overhang, and the reader has no rail.
+                  // On a phone (below `md`, the page's own breakpoint) a
+                  // gutter that wide is a large share of a tile three across,
+                  // so the reader's layouts close it to 8px. Here and on
+                  // `pair`; `single` has no gutter, and `uniform` IS the
+                  // editor (see `collectionLayout`).
+                  mdDown: { gap: "md" },
                   // Positional rather than a `data-featured` hook: index 0 IS
                   // the featured image in this model, so the selector and the
                   // data agree by construction.
@@ -5612,7 +5620,11 @@ export default defineConfig({
                 },
               },
               pair: {
-                root: { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" },
+                root: {
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  // See `featured`.
+                  mdDown: { gap: "md" },
+                },
                 cell: { aspectRatio: "1" },
               },
               single: {
@@ -6669,9 +6681,15 @@ export default defineConfig({
               zIndex: 1,
             },
             caption: {
-              maxWidth: "85vw",
+              // Never wider than the showcase block the picture was enlarged
+              // FROM (960px): a picture may run to 85% of a wide screen, but
+              // the words under it keep a prose measure. Below that width the
+              // caption keeps the same 85vw margin the picture does.
+              maxWidth: "min(85vw, token(sizes.articleShowcase))",
               textAlign: "center",
-              textWrap: "pretty",
+              // No `textWrap` here — `Typography`'s `caption` type balances
+              // the lines from the utilities layer, which outranks this one,
+              // so a value set here is dead (see `articleShowcase`'s note).
             },
           },
         }),
