@@ -482,3 +482,82 @@ describe("saveGridLayout — configuration", () => {
     expect(componentUpdate).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// A post's card — the one thing about a post's tile the post itself does not
+// decide, kept on the post's own row.
+// ---------------------------------------------------------------------------
+describe("saveGridLayout — a post's card", () => {
+  beforeEach(() => {
+    [
+      postUpdate,
+      postUpdateMany,
+      componentUpdate,
+      componentUpdateMany,
+      componentCreate,
+      componentDelete,
+    ].forEach((fn) => fn.mockReset());
+  });
+
+  const card = {
+    media: {
+      dark: {
+        type: "media" as const,
+        kind: "image" as const,
+        src: "https://cdn.test/media/dark.png",
+      },
+    },
+    scrim: false,
+    tone: "dark" as const,
+  };
+
+  it("writes the card to the post's own column", async () => {
+    await saveGridLayout(draft({ cards: { "post:abc": card } }));
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { card },
+    });
+  });
+
+  // The blob replaces what is stored — the same rule as `props`, so a section
+  // the author removed lands as an absent key.
+  it("writes an emptied card as empty", async () => {
+    await saveGridLayout(draft({ cards: { "post:abc": {} } }));
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { card: {} },
+    });
+  });
+
+  it("sends a seat and a card as one update", async () => {
+    await saveGridLayout(
+      draft({ pins: { "post:abc": 1 }, cards: { "post:abc": card } }),
+    );
+    expect(postUpdate).toHaveBeenCalledOnce();
+    expect(postUpdate).toHaveBeenCalledWith({
+      where: { id: "abc" },
+      data: { gridIndex: 1, card },
+    });
+  });
+
+  // A component row has no `card` column — its configuration is `props` — so
+  // a key naming one is dropped before any write is built, the mirror of the
+  // post guard on `props`.
+  it("attempts no write for a component", async () => {
+    await saveGridLayout(draft({ cards: { "component:xyz": card } }));
+    expect(componentUpdate).not.toHaveBeenCalled();
+    expect(componentUpdateMany).not.toHaveBeenCalled();
+  });
+
+  // Validated at the door like `props`: the tone is chosen from a control, but
+  // a tampered client can send anything, and what is stored is what renders.
+  it("refuses a tone that is not one of the two", async () => {
+    await expect(
+      saveGridLayout(
+        // @ts-expect-error -- a tampered client is exactly what the door is for
+        draft({ cards: { "post:abc": { tone: "sepia" } } }),
+      ),
+    ).rejects.toThrow();
+    expect(postUpdate).not.toHaveBeenCalled();
+  });
+});

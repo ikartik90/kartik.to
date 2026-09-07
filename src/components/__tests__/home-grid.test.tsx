@@ -89,6 +89,7 @@ const post = (id: string, gridIndex: number | null = null): GridCard => ({
   href: `/work/${id}`,
   date: null,
   cover: null,
+  card: {},
   gridIndex,
   publishedAt: new Date("2026-01-01"),
   aspect: "16/9",
@@ -999,6 +1000,89 @@ describe("HomeGrid — link cards", () => {
         href: "https://cdn.test/media/uuid-picked.png",
         newTab: undefined,
       });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A post's card, authored from the rail.
+//
+// The same rail as the link card's and the same draft under it: a picture per
+// theme and the ground the caption stands on, buffered until the palette's
+// exit commits the lot.
+// ---------------------------------------------------------------------------
+describe("HomeGrid — a post's card", () => {
+  beforeEach(() => {
+    useGridDraftStore.getState().reset();
+    actions.saveGridLayout.mockReset();
+  });
+  afterEach(cleanup);
+
+  const customize = () => screen.getAllByRole("button", { name: /customize/i });
+  const first = {
+    type: "media" as const,
+    kind: "image" as const,
+    src: "https://cdn.test/media/uuid-first.png",
+  };
+  /** A post whose document opens with a picture — the ordinary case. */
+  const pictured = (id: string): GridCard => ({
+    ...(post(id) as Extract<GridCard, { kind: "post" }>),
+    cover: first,
+  });
+
+  it("offers the picture and the scrim in the panel, and no destination", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[post("a")]} editable />);
+    await user.click(customize()[0]);
+
+    expect(screen.getByText("Media")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Scrim" })).toBeTruthy();
+    expect(screen.queryByText("Link")).toBeNull();
+    expect(screen.queryByText(/no properties/i)).toBeNull();
+  });
+
+  it("records what the rail writes in the draft, not on the server", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[pictured("a")]} editable />);
+    await user.click(customize()[0]);
+    await user.click(screen.getByRole("switch", { name: "Scrim" }));
+
+    expect(useGridDraftStore.getState().cards["post:a"]).toEqual({
+      scrim: false,
+    });
+    expect(actions.saveGridLayout).not.toHaveBeenCalled();
+  });
+
+  // Rendered through the draft, like every other edit: the band is on the
+  // card while the switch is on, and gone the moment it is not.
+  it("takes the band off the card behind it", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<HomeGrid cards={[pictured("a")]} editable />);
+    const wash = () => container.querySelector("[class*=link-card__wash]");
+    expect(wash()).not.toBeNull();
+
+    await user.click(customize()[0]);
+    await user.click(screen.getByRole("switch", { name: "Scrim" }));
+    expect(wash()).toBeNull();
+  });
+
+  // Opening Media seeds the light slot with the document's picture, so the
+  // pick lands BESIDE it rather than on a card that has just gone blank.
+  it("puts the picked file in the slot that asked for it", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[pictured("a")]} editable />);
+    await user.click(customize()[0]);
+    await user.click(screen.getByRole("button", { name: "Add media" }));
+    await user.click(screen.getByRole("button", { name: "Add dark media" }));
+    await user.click(screen.getByTestId("library:media"));
+
+    expect(useGridDraftStore.getState().cards["post:a"]?.media).toEqual({
+      light: first,
+      dark: {
+        type: "media",
+        kind: "image",
+        src: "https://cdn.test/media/uuid-picked.png",
+      },
     });
   });
 });

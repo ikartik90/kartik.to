@@ -6,6 +6,7 @@ import {
 } from "@/utils/grid-draft";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import type { LinkCardConfig } from "@/domain/link-card";
+import type { PostCardConfig } from "@/domain/post";
 
 interface GridDraftStore extends GridDraft {
   setPin: (key: string, index: number | null) => void;
@@ -13,6 +14,7 @@ interface GridDraftStore extends GridDraft {
   setAspect: (key: string, aspect: DemoFrameAspectRatio) => void;
   setLogger: (key: string, logger: boolean) => void;
   setProps: (key: string, props: LinkCardConfig) => void;
+  setCard: (key: string, card: PostCardConfig) => void;
   addInsert: (insert: PendingComponentInsert) => void;
   remove: (key: string) => void;
   reset: () => void;
@@ -58,6 +60,10 @@ export const useGridDraftStore = create<GridDraftStore>()((set) => ({
   // and hands back the complete object on every change — so a merge here would
   // make an emptied field un-emptiable. See `GridDraft.props`.
   setProps: (key, props) => set((s) => ({ props: { ...s.props, [key]: props } })),
+
+  // A post's card, replaced whole for the reason `props` is — see
+  // `GridDraft.cards`.
+  setCard: (key, card) => set((s) => ({ cards: { ...s.cards, [key]: card } })),
 
   addInsert: (insert) => set((s) => ({ inserts: [...s.inserts, insert] })),
 

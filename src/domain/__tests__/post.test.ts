@@ -10,6 +10,7 @@ import {
   DocumentSchema,
   PostCategorySchema,
   PostSchema,
+  postCardMedia,
 } from "../post";
 
 // ---------------------------------------------------------------------------
@@ -554,5 +555,89 @@ describe("CreatePostInputSchema", () => {
     if (result.success) {
       expect("id" in result.data).toBe(false);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The card a post draws on the homepage, beyond what the post decides for it
+// ---------------------------------------------------------------------------
+
+describe("PostSchema — card", () => {
+  const picture = { type: "media", kind: "image", src: "/a.png" };
+
+  it("accepts a post with no card of its own", () => {
+    expect(PostSchema.safeParse(validPost).success).toBe(true);
+    expect(PostSchema.safeParse({ ...validPost, card: null }).success).toBe(
+      true,
+    );
+  });
+
+  it("carries a picture per theme, a scrim and a tone", () => {
+    const card = {
+      media: { light: picture, dark: picture },
+      scrim: false,
+      tone: "dark",
+    };
+    const result = PostSchema.safeParse({ ...validPost, card });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.card).toEqual(card);
+  });
+
+  // A post's card has no content section — the words are the post's — so the
+  // ground sits at the top level, where a link card's sits under `content`. A
+  // blob written the link card's way is stripped, not read.
+  it("holds the ground beside the media, not under a content key", () => {
+    const result = PostSchema.safeParse({
+      ...validPost,
+      card: { content: { scrim: true } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.card).toEqual({});
+  });
+
+  // `parsePost` is the one reader of a post, and it throws on failure — so a
+  // card blob that no longer parses would 404 the article over its tile. The
+  // card is the trim; the post is the page. Lose the trim.
+  it("drops a card that no longer parses rather than the post", () => {
+    const result = PostSchema.safeParse({
+      ...validPost,
+      card: { tone: "sepia" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.card).toBeNull();
+  });
+});
+
+describe("postCardMedia", () => {
+  const derived = { type: "media", kind: "image", src: "/first.png" } as const;
+  const light = { type: "media", kind: "image", src: "/light.png" } as const;
+  const dark = { type: "media", kind: "image", src: "/dark.png" } as const;
+
+  it("shows the document's first picture when nobody has chosen one", () => {
+    expect(postCardMedia({}, derived)).toEqual({ light: derived, dark: null });
+  });
+
+  it("shows nothing when the document has none either", () => {
+    expect(postCardMedia({}, null)).toEqual({ light: null, dark: null });
+  });
+
+  it("shows what the author chose once the media has been taken over", () => {
+    expect(postCardMedia({ media: { light, dark } }, derived)).toEqual({
+      light,
+      dark,
+    });
+  });
+
+  // Taken over is taken over: an emptied slot is a flat plate, not the
+  // document's picture coming back. See `PostCardConfigSchema`.
+  it("leaves an emptied slot empty rather than falling back to the document", () => {
+    expect(postCardMedia({ media: { dark } }, derived)).toEqual({
+      light: null,
+      dark,
+    });
+    expect(postCardMedia({ media: {} }, derived)).toEqual({
+      light: null,
+      dark: null,
+    });
   });
 });

@@ -6,7 +6,7 @@ import { postCover } from "@/utils/post-cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import { LinkCardConfigSchema, type LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
-import type { Post } from "@/domain/post";
+import type { Post, PostCardConfig } from "@/domain/post";
 
 // ---------------------------------------------------------------------------
 // The homepage feed: every published thing, in the order the grid renders it.
@@ -70,6 +70,14 @@ export interface GridPostCard extends GridCardBase {
    * its own opening image would be the document many times over for one src.
    */
   cover: MediaNode | null;
+  /**
+   * What the author has said about the card beyond what the post decides — a
+   * picture per theme, the scrim, the tone. Empty for a post nobody has
+   * touched, and RESOLVED AT RENDER against `cover` (`postCardMedia`), never
+   * here: the rail edits this through the draft, and a card that arrived with
+   * its picture already chosen could not show an edit until the page reloaded.
+   */
+  card: PostCardConfig;
 }
 
 export interface GridComponentCard extends GridCardBase {
@@ -116,6 +124,10 @@ function postToCard(post: Post): GridPostCard {
     // the grid is one grid: articles wearing pictures while projects kept a
     // flat plate would read as two card designs sharing a listing.
     cover: postCover(post.content),
+    // Empty, not null, for a post with no card of its own: the schema has
+    // nothing required, and `{}` is the same "nobody has touched this" a
+    // component's `props` reads as.
+    card: post.card ?? {},
     gridIndex: post.gridIndex ?? null,
     publishedAt: post.publishedAt ?? null,
     // The post's own override, or the listing default. Same absent-means-

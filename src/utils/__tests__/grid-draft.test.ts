@@ -14,6 +14,7 @@ const post = (id: string, gridIndex: number | null = null): GridCard => ({
   href: `/work/${id}`,
   date: null,
   cover: null,
+  card: {},
   gridIndex,
   publishedAt: new Date(`2026-01-0${id.length}`),
   aspect: "16/9",
@@ -450,6 +451,60 @@ describe("applyGridDraft — configuration", () => {
       isGridDraftDirty({
         ...emptyGridDraft(),
         props: { "component:a": { content: { title: "Shader" } } },
+      }),
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A post's card — the picture per theme and the ground the caption stands on,
+// which is the one thing about a post's tile the post itself does not decide.
+// ---------------------------------------------------------------------------
+describe("applyGridDraft — a post's card", () => {
+  const dark = { type: "media" as const, kind: "image" as const, src: "/d.png" };
+  const cardOf = (card: GridCard | undefined) =>
+    card?.kind === "post" ? card.card : undefined;
+
+  it("dresses the card the draft dressed", () => {
+    const out = applyGridDraft([post("a"), post("bb")], {
+      ...emptyGridDraft(),
+      cards: { "post:a": { media: { dark }, scrim: false } },
+    });
+    expect(cardOf(out.find((c) => c.key === "post:a"))).toEqual({
+      media: { dark },
+      scrim: false,
+    });
+    expect(cardOf(out.find((c) => c.key === "post:bb"))).toEqual({});
+  });
+
+  // The whole blob, replacing what is stored — the rule `props` follows, for
+  // the same reason: the rail hands back the complete card, so a section it
+  // removed arrives as an absent key and must land as one.
+  it("replaces the stored card rather than merging into it", () => {
+    const stored = post("a");
+    if (stored.kind === "post") stored.card = { media: { dark }, tone: "dark" };
+    const [out] = applyGridDraft([stored], {
+      ...emptyGridDraft(),
+      cards: { "post:a": { scrim: false } },
+    });
+    expect(cardOf(out)).toEqual({ scrim: false });
+  });
+
+  // A component's card is its `props`; a key here naming one is a stray, and
+  // is ignored rather than spread onto a card with no such property.
+  it("ignores a key naming a component", () => {
+    const [out] = applyGridDraft([comp("a")], {
+      ...emptyGridDraft(),
+      cards: { "component:a": { scrim: false } },
+    });
+    expect(out).toEqual(comp("a"));
+  });
+
+  it("is dirty once a card has been dressed", () => {
+    expect(
+      isGridDraftDirty({
+        ...emptyGridDraft(),
+        cards: { "post:a": { scrim: false } },
       }),
     ).toBe(true);
   });

@@ -80,6 +80,8 @@ export const LinkCardMediaSchema = z.object({
   dark: MediaNodeSchema.optional(),
 });
 
+export type LinkCardMedia = z.infer<typeof LinkCardMediaSchema>;
+
 /**
  * The words on the card, and the ground they stand on.
  *

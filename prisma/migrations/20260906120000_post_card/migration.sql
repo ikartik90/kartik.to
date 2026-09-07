@@ -1,0 +1,11 @@
+-- How a post's card is drawn beyond what the post decides for it: a picture
+-- per theme, and whether the caption stands on a scrim and in which tone. See
+-- `Post.card` in the schema, and `PostCardConfigSchema` for the shape.
+--
+-- Nullable with no default, for the reason `Component.props` is: every post
+-- that exists today draws its card off its own document, and NULL is the
+-- truthful record of a card nobody has authored.
+--
+-- `jsonb` rather than `json`, as `Component.props` is — nothing here is read
+-- back as the exact text that was written.
+ALTER TABLE "Post" ADD COLUMN "card" JSONB;

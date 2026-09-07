@@ -38,6 +38,7 @@ const post = (id: string): GridCard => ({
   href: `/work/${id}`,
   date: null,
   cover: null,
+  card: {},
   gridIndex: null,
   publishedAt: new Date("2026-01-01"),
   aspect: "16/9",

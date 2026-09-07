@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CardPropertiesPanel } from "../card-properties-panel";
 import type { LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
+import type { PostCardConfig } from "@/domain/post";
 
 afterEach(cleanup);
 
@@ -360,5 +361,192 @@ describe("CardPropertiesPanel — link card", () => {
         content: { title: "Shader" },
       });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The scrim switch tells the truth about the card behind it.
+//
+// `LinkCard` draws the band wherever there is a picture unless told not to, so
+// the switch has to open ON for a pictured card with no stored value. The bug
+// this pins down was a switch reading "off" over a band that was plainly drawn.
+// ---------------------------------------------------------------------------
+describe("CardPropertiesPanel — the scrim's default", () => {
+  const scrimSwitch = () => screen.getByRole("switch", { name: "Scrim" });
+  const pictured = { media: { light: image("/a.png") } };
+
+  it("opens on for a card with a picture and no stored value", () => {
+    render(
+      <CardPropertiesPanel
+        linkCard={linkCardProps({ ...pictured, content: {} })}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(scrimSwitch().getAttribute("aria-checked")).toBe("true");
+  });
+
+  // Over the flat plate there is nothing to separate the words from, so the
+  // card draws no band — and the switch says so.
+  it("opens off for a card with no picture", () => {
+    render(
+      <CardPropertiesPanel
+        linkCard={linkCardProps({ content: {} })}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(scrimSwitch().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("reads a stored value over the default", () => {
+    render(
+      <CardPropertiesPanel
+        linkCard={linkCardProps({ ...pictured, content: { scrim: false } })}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(scrimSwitch().getAttribute("aria-checked")).toBe("false");
+  });
+
+  // Off is a VALUE, not the absence of one: an absent key would hand the card
+  // back to its default, which draws the band straight back.
+  it("writes a definite off when turned off over a picture", async () => {
+    const user = userEvent.setup();
+    const props = linkCardProps({ ...pictured, content: {} });
+    render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+    await user.click(scrimSwitch());
+    expect(props.onChange).toHaveBeenCalledWith({
+      ...pictured,
+      content: { scrim: false },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A post's card: the picture per theme, and the ground the caption stands on.
+//
+// A post's tile is derived — its words from the post, its destination from the
+// slug, its picture from the document's first media — and these are the two
+// things about it that cannot be. They take the link card's own controls, so
+// one band cannot be authored two ways.
+// ---------------------------------------------------------------------------
+const postCardProps = (
+  config: PostCardConfig = {},
+  cover: MediaNode | null = null,
+) => ({
+  config,
+  cover,
+  onChange: vi.fn(),
+  onPickMedia: vi.fn(),
+});
+
+describe("CardPropertiesPanel — post card", () => {
+  const scrimSwitch = () => screen.getByRole("switch", { name: "Scrim" });
+  const first = image("https://cdn.test/media/uuid-first.png");
+
+  it("offers the picture and the scrim, and neither words nor a destination", () => {
+    render(<CardPropertiesPanel postCard={postCardProps()} onDismiss={vi.fn()} />);
+    expect(screen.getByText("Media")).toBeTruthy();
+    expect(scrimSwitch()).toBeTruthy();
+    expect(screen.queryByText("Content")).toBeNull();
+    expect(screen.queryByText("Link")).toBeNull();
+    expect(screen.queryByText(/no properties/i)).toBeNull();
+  });
+
+  // Opening Media on a post takes the picture OVER, starting from what the
+  // card is already showing: the slot names the document's file, the tile
+  // behind the rail does not change, and clearing the slot means what
+  // "Remove" means everywhere else.
+  it("starts the media from the document's picture when opened", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({}, first);
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Add media" }));
+    expect(props.onChange).toHaveBeenCalledWith({ media: { light: first } });
+  });
+
+  it("starts the media empty for a post with no picture in it", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({}, null);
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Add media" }));
+    expect(props.onChange).toHaveBeenCalledWith({ media: {} });
+  });
+
+  it("names the file each slot is holding", () => {
+    render(
+      <CardPropertiesPanel
+        postCard={postCardProps({ media: { light: first } })}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Change light media" }).textContent,
+    ).toContain("first.png");
+  });
+
+  it("asks for the library for the slot pressed", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({ media: {} });
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Add dark media" }));
+    expect(props.onPickMedia).toHaveBeenCalledWith("dark");
+  });
+
+  it("clears one theme's picture without touching the other", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({
+      media: { light: first, dark: image("/dark.png") },
+    });
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Remove light media" }));
+    expect(props.onChange).toHaveBeenCalledWith({
+      media: { dark: image("/dark.png") },
+    });
+  });
+
+  it("hands the picture back to the document when the section goes", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({ media: { light: first }, scrim: false });
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Remove media" }));
+    expect(props.onChange).toHaveBeenCalledWith({ scrim: false });
+  });
+
+  // The default is read off the picture the card is SHOWING, which for an
+  // untouched post is the document's — the band is drawn over it, so the
+  // switch opens on.
+  it("reads the scrim's default off the derived picture", () => {
+    render(
+      <CardPropertiesPanel postCard={postCardProps({}, first)} onDismiss={vi.fn()} />,
+    );
+    expect(scrimSwitch().getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("opens the scrim off for a post with no picture anywhere", () => {
+    render(<CardPropertiesPanel postCard={postCardProps()} onDismiss={vi.fn()} />);
+    expect(scrimSwitch().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("writes the scrim beside the media, not under a content key", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({}, first);
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(scrimSwitch());
+    expect(props.onChange).toHaveBeenCalledWith({ scrim: false });
+  });
+
+  it("offers the reader's theme as well as the two pinned ones", () => {
+    render(<CardPropertiesPanel postCard={postCardProps()} onDismiss={vi.fn()} />);
+    expect(
+      screen.getAllByRole("option").map((o) => o.textContent),
+    ).toEqual(["Auto", "Light", "Dark"]);
+  });
+
+  it("pins the tone to the picture under it", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps();
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.click(screen.getByRole("option", { name: "Dark" }));
+    expect(props.onChange).toHaveBeenCalledWith({ tone: "dark" });
   });
 });
