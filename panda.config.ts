@@ -5602,6 +5602,14 @@ export default defineConfig({
                   gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                   gridTemplateRows: "repeat(2, minmax(0, 1fr))",
                   aspectRatio: "3 / 2",
+                  // The 20px gutter in `base` is the EDITOR's: it is sized for
+                  // the control rail's overhang, and the reader has no rail.
+                  // On a phone (below `md`, the page's own breakpoint) a
+                  // gutter that wide is a large share of a tile three across,
+                  // so the reader's layouts close it to 8px. Here and on
+                  // `pair`; `single` has no gutter, and `uniform` IS the
+                  // editor (see `collectionLayout`).
+                  mdDown: { gap: "md" },
                   // Positional rather than a `data-featured` hook: index 0 IS
                   // the featured image in this model, so the selector and the
                   // data agree by construction.
@@ -5612,7 +5620,11 @@ export default defineConfig({
                 },
               },
               pair: {
-                root: { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" },
+                root: {
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  // See `featured`.
+                  mdDown: { gap: "md" },
+                },
                 cell: { aspectRatio: "1" },
               },
               single: {
