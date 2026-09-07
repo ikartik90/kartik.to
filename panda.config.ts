@@ -3880,13 +3880,33 @@ export default defineConfig({
               // A toggle control flips the field from a vertical stack into the
               // control ∣ label/hint grid — detected structurally, no prop, the
               // way the active state keys off :focus-visible.
+              //
+              // The control sits on the label's FIRST LINE, not on the middle
+              // of the label. On a one-line statement the two readings are the
+              // same; on a wrapped one — a long label, or a narrow card — a
+              // centred switch floats down between the lines and stops reading
+              // as the thing the sentence starts with. So the row aligns to the
+              // top and the control is nudged back down by half the difference
+              // between one line box and its own height.
+              //
+              // `translateY` rather than a margin, because a PERCENTAGE there
+              // resolves against the element's own border box — so the control
+              // centres itself without this recipe having to know how tall a
+              // switch or a checkbox is, and the sizes stay their own recipes'
+              // business. It also takes no layout, so nothing below moves.
+              // `1lh` is the label's line box, which the size variants hand the
+              // control by giving it the label's own text style (it holds no
+              // text of its own, so that is the only thing it inherits).
               "&:has([role='switch'], [role='checkbox'])": {
                 display: "grid",
                 gridTemplateColumns: "auto 1fr",
-                alignItems: "center",
+                alignItems: "start",
                 rowGap: "xs",
                 columnGap: "md",
                 width: "fit-content",
+                "& > [role='switch'], & > [role='checkbox']": {
+                  transform: "translateY(calc((1lh - 100%) / 2))",
+                },
               },
             },
             label: {
@@ -4041,6 +4061,11 @@ export default defineConfig({
                 root: {
                   "&:has([role='switch'], [role='checkbox'])": {
                     columnGap: "sm",
+                    // Same text style as the label above, so `1lh` on the
+                    // control IS the label's line box — see the root's base.
+                    "& > [role='switch'], & > [role='checkbox']": {
+                      textStyle: "sidenote",
+                    },
                   },
                 },
               },
@@ -4049,6 +4074,13 @@ export default defineConfig({
                 control: { textStyle: "bodyLarge" },
                 hint: { textStyle: "sidenote" },
                 frame: { height: "token(spacing.4xl)" },
+                root: {
+                  "&:has([role='switch'], [role='checkbox'])": {
+                    "& > [role='switch'], & > [role='checkbox']": {
+                      textStyle: "bodySmall",
+                    },
+                  },
+                },
               },
               lg: {
                 label: { textStyle: "bodyLarge" },
@@ -4056,6 +4088,13 @@ export default defineConfig({
                 hint: { textStyle: "bodySmall" },
                 frame: {
                   height: "calc(token(spacing.4xl) + token(spacing.md))",
+                },
+                root: {
+                  "&:has([role='switch'], [role='checkbox'])": {
+                    "& > [role='switch'], & > [role='checkbox']": {
+                      textStyle: "bodyLarge",
+                    },
+                  },
                 },
               },
             },

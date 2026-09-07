@@ -160,7 +160,13 @@ const dateTimeRowStyle = css({
 const timeRangeStyle = css({
   display: "flex",
   flexDirection: "column",
+  // Hugs its two triggers where there is room for them, and no wider than the
+  // line it has landed on where there is not — on a phone the pair is ~300px
+  // against a form surface nearer 270, and a group that kept hugging would run
+  // End Time straight off the card's torn edge.
   width: "fit-content",
+  maxWidth: "token(spacing.full)",
+  minWidth: 0,
 });
 
 // The shared hint, wearing the field recipe's own `hint` slot — the same
@@ -178,9 +184,18 @@ const timeRowStyle = css({
   gap: "sm",
 });
 
+// The design's 140px, as a STARTING width rather than a floor: unlike the date
+// field beside them — one of these, and narrow enough to fit any card that can
+// hold the form at all — the hours are a PAIR, so they ask for twice that plus
+// the rule and its gaps. Given a line too short for it the two give way
+// together and stay a matched pair, which is the one thing about this row that
+// must not break; the frame already clips its own value, so a shrunk trigger
+// reads short rather than spilling. `minWidth: 0` is what actually permits it —
+// a flex item's automatic minimum is its content, and the trigger's own text
+// would otherwise hold both fields at full width.
 const timeFieldStyle = css({
   width: "token(sizes.dateField)",
-  flexShrink: 0,
+  minWidth: 0,
 });
 
 // Centred on the FRAMES, which is not the same as centred on the row: each time
@@ -398,15 +413,23 @@ const counterweightStyle = css({
 // Padding lives INSIDE the clipped box, so it travels with the block instead of
 // outliving it (Figma 902:2466 — 16px sides, 12 over, 4 under).
 //
-// The two groups are spread rather than stacked on a fixed gap, because the
-// space this block has to fill is not a constant: the Figma fitted these fields
-// to a two-line Notice, and the sentence runs to one line with no weekdays
-// selected and to three with most of them. `space-between` puts that difference
-// where it costs nothing — the gap between the note field and the checkboxes —
-// instead of at the foot, where a block taller than its box would crop the last
-// checkbox in half. The gap is 0, not `lg`: a minimum gap would be added ON TOP
-// of the free space and bring the cropping straight back, and the two line
-// boxes already hold ~12px of air between their bars without one.
+// The two groups stack from the TOP and whatever the reserve has left over
+// falls to the foot, because the space this block has to fill is not a
+// constant: the Figma fitted these fields to a card 615px wide, and a form
+// surface narrower than that re-wraps the recurrence it is counterweighting —
+// the weekday toolbar drops off Until's line, the Notice runs to four lines —
+// so on a phone the reserve is ~270px against ~185px of fields. Spreading that
+// slack (`space-between`) put all 85px of it in the ONE gap between the note
+// field and the checkboxes: a field-shaped hole in the middle of the block,
+// which reads as a placeholder input that has gone missing rather than as a
+// form the card is cropping. At the foot the same slack is simply the empty
+// half of a short form, and invisible — these rows carry no fill.
+//
+// The gap stays 0, not `lg`: it would be added on top of the content, and the
+// content is what the block can least afford when the reserve runs the other
+// way (a wide card's recurrence is SHORTER than these fields, and the overflow
+// crops the last checkbox). The two line boxes already hold ~12px of air
+// between their bars without one.
 //
 // It is sized to the RESERVE, not to `100%` of its parent — and that difference
 // is the whole reason the block opens quietly. `space-between` distributes
@@ -420,7 +443,7 @@ const counterweightStyle = css({
 const counterweightFieldsStyle = css({
   display: "flex",
   flexDirection: "column",
-  justifyContent: "space-between",
+  justifyContent: "flex-start",
   height: "var(--counterweight, 0px)",
   paddingInline: "xl",
   paddingBlockStart: "lg",
