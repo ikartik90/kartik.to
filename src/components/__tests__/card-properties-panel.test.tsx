@@ -432,9 +432,12 @@ describe("CardPropertiesPanel — the scrim's default", () => {
 const postCardProps = (
   config: PostCardConfig = {},
   cover: MediaNode | null = null,
+  /** Null is a project: a post that files its card under nothing. */
+  meta: string | null = null,
 ) => ({
   config,
   cover,
+  meta,
   onChange: vi.fn(),
   onPickMedia: vi.fn(),
 });
@@ -443,13 +446,46 @@ describe("CardPropertiesPanel — post card", () => {
   const scrimSwitch = () => screen.getByRole("switch", { name: "Scrim" });
   const first = image("https://cdn.test/media/uuid-first.png");
 
-  it("offers the picture and the scrim, and neither words nor a destination", () => {
+  it("offers the picture, the ground and the one line the post leaves open", () => {
     render(<CardPropertiesPanel postCard={postCardProps()} onDismiss={vi.fn()} />);
     expect(screen.getByText("Media")).toBeTruthy();
     expect(scrimSwitch()).toBeTruthy();
+    expect(screen.getByLabelText("Meta")).toBeTruthy();
+    // The name on the card is the post's, and so is where the card goes.
+    expect(screen.queryByLabelText("Title")).toBeNull();
     expect(screen.queryByText("Content")).toBeNull();
     expect(screen.queryByText("Link")).toBeNull();
     expect(screen.queryByText(/no properties/i)).toBeNull();
+  });
+
+  // The line belongs to the post wherever the post writes one: an article's
+  // card is filed by its date, and a row offering to overwrite a line this
+  // rail cannot take off the tile would be a control that lies about it.
+  it("leaves the meta line alone on a card the post already files", () => {
+    render(
+      <CardPropertiesPanel
+        postCard={postCardProps({}, null, "Jan 1, 2026")}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText("Meta")).toBeNull();
+    expect(scrimSwitch()).toBeTruthy();
+  });
+
+  it("writes the meta line beside the scrim, not under a content key", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps();
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.type(screen.getByLabelText("Meta"), "C");
+    expect(props.onChange).toHaveBeenCalledWith({ meta: "C" });
+  });
+
+  it("drops the line rather than storing an empty one", async () => {
+    const user = userEvent.setup();
+    const props = postCardProps({ meta: "Case Study" });
+    render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
+    await user.clear(screen.getByLabelText("Meta"));
+    expect(props.onChange).toHaveBeenCalledWith({});
   });
 
   // Opening Media on a post takes the picture OVER, starting from what the

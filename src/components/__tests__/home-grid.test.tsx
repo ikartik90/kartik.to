@@ -1029,6 +1029,11 @@ describe("HomeGrid — a post's card", () => {
     ...(post(id) as Extract<GridCard, { kind: "post" }>),
     cover: first,
   });
+  /** An article's card: one the post itself files, by its date. */
+  const dated = (id: string): GridCard => ({
+    ...(post(id) as Extract<GridCard, { kind: "post" }>),
+    date: "Jan 1, 2026",
+  });
 
   it("offers the picture and the scrim in the panel, and no destination", async () => {
     const user = userEvent.setup();
@@ -1064,6 +1069,44 @@ describe("HomeGrid — a post's card", () => {
     await user.click(customize()[0]);
     await user.click(screen.getByRole("switch", { name: "Scrim" }));
     expect(wash()).toBeNull();
+  });
+
+  it("prints the authored line on a card the post files under nothing", () => {
+    render(
+      <HomeGrid
+        cards={[
+          {
+            ...(post("a") as Extract<GridCard, { kind: "post" }>),
+            card: { meta: "Case Study" },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Case Study")).toBeTruthy();
+  });
+
+  // A dated card keeps its date, and the rail says so by not offering the row
+  // at all — the one reading under which the control cannot lie about the tile.
+  it("keeps a dated card's own line, and offers no row over it", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[dated("a")]} editable />);
+    await user.click(customize()[0]);
+
+    expect(screen.getByText("Jan 1, 2026")).toBeTruthy();
+    expect(screen.queryByLabelText("Meta")).toBeNull();
+  });
+
+  it("records the line in the draft, and shows it on the card behind", async () => {
+    const user = userEvent.setup();
+    render(<HomeGrid cards={[post("a")]} editable />);
+    await user.click(customize()[0]);
+    await user.type(screen.getByLabelText("Meta"), "Case");
+
+    expect(useGridDraftStore.getState().cards["post:a"]).toEqual({
+      meta: "Case",
+    });
+    expect(screen.getByText("Case")).toBeTruthy();
+    expect(actions.saveGridLayout).not.toHaveBeenCalled();
   });
 
   // Opening Media seeds the light slot with the document's picture, so the
