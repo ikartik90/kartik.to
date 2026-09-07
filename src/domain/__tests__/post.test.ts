@@ -9,6 +9,7 @@ import {
   CreatePostInputSchema,
   DocumentSchema,
   PostCategorySchema,
+  PostLinkSchema,
   PostSchema,
   postCardMedia,
 } from "../post";
@@ -649,5 +650,38 @@ describe("postCardMedia", () => {
       light: null,
       dark: null,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PostLinkSchema — the little of a post a list names it by
+// ---------------------------------------------------------------------------
+
+describe("PostLinkSchema", () => {
+  it("accepts a slug and a title", () => {
+    const result = PostLinkSchema.safeParse({ slug: "hello", title: "Hello" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a post that has no title yet", () => {
+    expect(PostLinkSchema.safeParse({ slug: "hello", title: null }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a link with nowhere to go", () => {
+    expect(PostLinkSchema.safeParse({ title: "Hello" }).success).toBe(false);
+    expect(PostLinkSchema.safeParse({ slug: "", title: "Hello" }).success).toBe(
+      false,
+    );
+  });
+
+  it("carries none of the document", () => {
+    const result = PostLinkSchema.safeParse({
+      slug: "hello",
+      title: "Hello",
+      content: { type: "doc", content: [] },
+    });
+    expect(result.success && "content" in result.data).toBe(false);
   });
 });

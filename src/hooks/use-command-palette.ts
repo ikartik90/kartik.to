@@ -13,8 +13,9 @@ import {
   unpublishPost,
   deleteDraft,
   getDrafts,
+  getPublishedProjects,
 } from "@/app/actions/post";
-import type { Post } from "@/domain/post";
+import type { Post, PostLink } from "@/domain/post";
 import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
 import { getBackTarget, type BackTarget } from "@/utils/back-target";
 import { isGridDraftDirty } from "@/utils/grid-draft";
@@ -61,6 +62,8 @@ export interface CommandPaletteHandlers {
   isPublished: boolean;
   editCategory: Post["category"];
   drafts: Post[];
+  /** The published projects, for everyone — minus the one being read. */
+  projects: PostLink[];
   /** The draft currently being viewed in renderer mode, or null. */
   currentDraft: Post | null;
   /**
@@ -111,6 +114,8 @@ export interface CommandPaletteHandlers {
   handleNewBlogArticle: () => void;
   handleNewWorkArticle: () => void;
   handleOpenDraft: (draft: Post) => void;
+  /** Go and read a published project. */
+  handleOpenProject: (project: PostLink) => void;
   handlePublish: () => Promise<void>;
   /** Permanently delete the draft currently being viewed. */
   handleDiscardDraft: () => Promise<void>;
@@ -229,6 +234,40 @@ export function useCommandPalette(
       ignore = true;
     };
   }, [isAdmin, openKey]);
+
+  // The published projects — listed for everyone, so fetched without asking
+  // who is here. On the drafts' schedule: once on mount, so the first ⌘K finds
+  // them already in the list rather than watching a group arrive under the
+  // cursor, and again on every open, so a project published since is there
+  // too. The palette lives in the root layout and survives every client
+  // navigation, so the mount fetch is one per visit rather than one per page.
+  const [projects, setProjects] = useState<PostLink[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    getPublishedProjects()
+      .then((data) => {
+        if (!ignore) setProjects(data);
+      })
+      .catch(() => {
+        if (!ignore) setProjects([]);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [openKey]);
+
+  // Minus the one being read: a row to the page you are standing on is a row
+  // that does nothing — the rule the playgrounds follow for themselves. Done
+  // here rather than in the component, where the drafts' omission is, because
+  // nothing else needs to know which project that is.
+  const listableProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) => getPostReadUrl("WORK", project.slug) !== pathname,
+      ),
+    [projects, pathname],
+  );
 
   // The draft (unpublished post) currently being viewed in renderer mode, if
   // the pathname matches a known draft's read URL. null in edit mode or when
@@ -580,6 +619,13 @@ export function useCommandPalette(
     router.push(getPostReadUrl(draft.category, draft.slug));
   };
 
+  // Same tab, plain `push`, on the playgrounds' terms: a project is somewhere
+  // you go to look.
+  const handleOpenProject = (project: PostLink) => {
+    close();
+    router.push(getPostReadUrl("WORK", project.slug));
+  };
+
   /**
    * Put the document being edited into its row, minting the row if it has none.
    *
@@ -892,6 +938,7 @@ export function useCommandPalette(
     isPublished,
     editCategory,
     drafts,
+    projects: listableProjects,
     currentDraft,
     backTarget,
     handleBack,
@@ -911,6 +958,7 @@ export function useCommandPalette(
     handleNewBlogArticle,
     handleNewWorkArticle,
     handleOpenDraft,
+    handleOpenProject,
     handlePublish,
     handleDiscardDraft,
   };

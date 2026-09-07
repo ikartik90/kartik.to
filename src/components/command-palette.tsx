@@ -229,6 +229,7 @@ export function CommandPalette() {
     isPublished,
     editCategory,
     drafts,
+    projects,
     currentDraft,
     backTarget,
     handleBack,
@@ -248,6 +249,7 @@ export function CommandPalette() {
     handleNewBlogArticle,
     handleNewWorkArticle,
     handleOpenDraft,
+    handleOpenProject,
     handlePublish,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
@@ -637,6 +639,31 @@ export function CommandPalette() {
                       </>
                     )}
                   </>
+                )}
+
+                {/* Projects — the published work, offered to everyone: these are
+                    the pages the site exists for, and a visitor who opened this
+                    to go somewhere should find them before the playgrounds.
+                    Destinations, so withheld while editing on the same terms
+                    (see `offersDestinations`); the project being read is
+                    already left out by the hook. No heading over nothing — the
+                    list is empty until the fetch lands, and on a site with no
+                    published work — since a heading standing over an empty
+                    group is a promise the rows never keep. */}
+                {offersDestinations && projects.length > 0 && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Projects</div>
+                    {projects.map((project) => (
+                      <Command.Item
+                        key={project.slug}
+                        className={itemStyle}
+                        onSelect={() => handleOpenProject(project)}
+                      >
+                        <WorkIcon className={iconStyle} />
+                        {project.title ?? "Untitled"}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
                 )}
 
                 {/* Playgrounds — down here with Settings for the reason Settings is:

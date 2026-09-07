@@ -5,9 +5,11 @@ import { env } from "@/lib/env";
 import { auth } from "@/lib/auth/server";
 import {
   PostCategorySchema,
+  PostLinkSchema,
   type Document,
   type Post,
   type PostCategory,
+  type PostLink,
 } from "@/domain/post";
 import { parsePost } from "@/lib/posts";
 import { revalidatePostPaths } from "@/lib/revalidate-post";
@@ -143,4 +145,21 @@ export async function getDrafts(): Promise<Post[]> {
   });
 
   return raws.map(parsePost);
+}
+
+/**
+ * The published projects, as the palette lists them — for everyone, which is
+ * why this is the one read here that asks nobody who they are. It hands out
+ * only what a row needs (see `PostLinkSchema`): the title and the address a
+ * visitor already gets from the homepage card, and none of the document.
+ * Newest first, as the homepage files them.
+ */
+export async function getPublishedProjects(): Promise<PostLink[]> {
+  const rows = await prisma.post.findMany({
+    where: { category: "WORK", publishedAt: { not: null } },
+    orderBy: { publishedAt: "desc" },
+    select: { slug: true, title: true },
+  });
+
+  return rows.map((row) => PostLinkSchema.parse(row));
 }

@@ -139,6 +139,16 @@ export const PostSchema = z.object({
 
 export type Post = z.infer<typeof PostSchema>;
 
+/**
+ * A post as a LIST knows it: enough to name it and to go there, and nothing
+ * of the document. The palette lists every published project this way, for
+ * everyone, so it has to be light enough to fetch on every open and must carry
+ * nothing a visitor is not already served at the post's own address.
+ */
+export const PostLinkSchema = PostSchema.pick({ slug: true, title: true });
+
+export type PostLink = z.infer<typeof PostLinkSchema>;
+
 // Input schema for creating a new post — omits server-generated fields
 export const CreatePostInputSchema = PostSchema.omit({
   id: true,
