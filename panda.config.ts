@@ -3984,6 +3984,27 @@ export default defineConfig({
               overflow: "hidden",
               // Clicking the frame's dead padding focuses the control.
               cursor: "text",
+              // A MULTI-LINE control (Field.TextArea) needs the shell to grow
+              // instead of holding the size variant's fixed height, which would
+              // clip every line after the first. Detected with `:has` rather
+              // than by a prop, for the reason the toggle archetype is: the
+              // frame and the control would otherwise need to be told the same
+              // thing twice and could be told differently.
+              //
+              // The HEIGHT is not here, and cannot be. Panda emits a recipe's
+              // variants into a later cascade layer than its base, and a layer
+              // beats specificity outright — so `height: auto` written here
+              // loses to `size`'s `height` no matter how specific the selector
+              // is. It is repeated in each size variant instead, which is the
+              // only place in the same layer. Everything a variant does not
+              // also set stays here, where it is said once.
+              //
+              // Padding turns vertical because the frame no longer has a fixed
+              // height centring a single line for us.
+              "&:has(textarea)": {
+                alignItems: "flex-start",
+                paddingBlock: "sm",
+              },
               backgroundColor: "field.bg.default",
               borderColor: "field.border.default",
               // The single source for the leading icon and the control (both
@@ -4031,6 +4052,18 @@ export default defineConfig({
               color: "inherit",
               transition: "color 150ms ease",
               caretColor: "field.text.active",
+              // The textarea case. `resize` is off because the frame clips its
+              // overflow, so the native grip would be drawn into a corner it
+              // cannot escape — size the box with `rows` instead. The rest
+              // undoes the element's own defaults, which differ from an
+              // input's: a textarea ships a border, a scrollbar gutter and a
+              // baseline-aligned inline box that would sit the first line off
+              // the frame's padding.
+              "&:is(textarea)": {
+                resize: "none",
+                display: "block",
+                overflowY: "auto",
+              },
               // The native `::placeholder` and the Select/Date trigger's
               // `[data-placeholder]` sentinel share one rule. On active it
               // follows the rest of the field into the accent, rather than
@@ -4080,6 +4113,10 @@ export default defineConfig({
                 // mirrors how `lg` derives its own height from `4xl` + `md`.
                 frame: {
                   height: "calc(token(spacing.xxl) + token(spacing.md))",
+                  // A multi-line control grows instead. Here rather than in the
+                  // base block because a variant's layer outranks it — see the
+                  // note on `frame`'s own `:has(textarea)`.
+                  "&:has(textarea)": { height: "auto" },
                 },
                 root: {
                   "&:has([role='switch'], [role='checkbox'])": {
@@ -4096,7 +4133,10 @@ export default defineConfig({
                 label: { textStyle: "bodySmall" },
                 control: { textStyle: "bodyLarge" },
                 hint: { textStyle: "sidenote" },
-                frame: { height: "token(spacing.4xl)" },
+                frame: {
+                  height: "token(spacing.4xl)",
+                  "&:has(textarea)": { height: "auto" },
+                },
                 root: {
                   "&:has([role='switch'], [role='checkbox'])": {
                     "& > [role='switch'], & > [role='checkbox']": {
@@ -4111,6 +4151,7 @@ export default defineConfig({
                 hint: { textStyle: "bodySmall" },
                 frame: {
                   height: "calc(token(spacing.4xl) + token(spacing.md))",
+                  "&:has(textarea)": { height: "auto" },
                 },
                 root: {
                   "&:has([role='switch'], [role='checkbox'])": {

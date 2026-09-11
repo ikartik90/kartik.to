@@ -1,0 +1,22 @@
+-- Drop the LinkedIn column from `Testimonial`.
+--
+-- The form asked for a profile URL as proof of who was speaking, and that is no
+-- longer collected — see `TestimonialSubmissionSchema`, which is down to a name
+-- and a quote.
+--
+-- This also drops `Testimonial_linkedinUrl_key` with it, which Postgres does on
+-- its own: an index over a column that no longer exists cannot survive the
+-- column. Worth stating because that index was doing real work — it was the
+-- table's NATURAL KEY, the thing that made a second send from one person an
+-- upsert over their own row rather than a duplicate. After this migration there
+-- is no key but `id`, two sends are two rows, and the honeypot in
+-- `submitTestimonial` is the only thing between an open link and a full table.
+-- Nothing replaces the unique: a unique `name` would be worse than no key at
+-- all, since it would let anybody overwrite somebody else's words by typing
+-- their name.
+--
+-- DESTRUCTIVE, and safe here only because the table is empty — verified 0 rows
+-- immediately before this was authored, the column having existed for under an
+-- hour and never having been written to in production. There is no backfill and
+-- no down migration; restoring the field means restoring the form field too.
+ALTER TABLE "Testimonial" DROP COLUMN "linkedinUrl";
