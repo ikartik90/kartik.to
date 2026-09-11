@@ -1,5 +1,6 @@
 import { css } from "../../styled-system/css";
 import { ArticleRenderer } from "@/components/article-renderer";
+import { SiteFooter } from "@/components/site-footer";
 import { HomeGrid } from "@/components/home-grid";
 import { SocialLinks } from "@/components/social-links";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
@@ -25,28 +26,31 @@ export default async function Home() {
   ]);
 
   return (
-    <main>
-      {/* `article`, because the block styles the renderer relies on — the
-          indent rule, the centring rule — are scoped to one. */}
-      <article data-home>
-        <ArticleRenderer
-          content={document ?? DEFAULT_HOME_DOCUMENT}
-          slots={{
-            /* The demos the page can render itself go down with the cards, so
-               a card whose content is a database read arrives painted rather
-               than showing a progress bar while the browser goes and gets it.
-               See `serverDemoSlots` for which demos those are. */
-            project_grid: (
-              <HomeGrid cards={cards} demos={serverDemoSlots(cards)} />
-            ),
-            social_links: (
-              <nav aria-label="Social links" className={socialRowStyle}>
-                <SocialLinks />
-              </nav>
-            ),
-          }}
-        />
-      </article>
-    </main>
+    <>
+      <main>
+        {/* `article`, because the block styles the renderer relies on — the
+            indent rule, the centring rule — are scoped to one. */}
+        <article data-home>
+          <ArticleRenderer
+            content={document ?? DEFAULT_HOME_DOCUMENT}
+            slots={{
+              /* The demos the page can render itself go down with the cards, so
+                 a card whose content is a database read arrives painted rather
+                 than showing a progress bar while the browser goes and gets it.
+                 See `serverDemoSlots` for which demos those are. */
+              project_grid: (
+                <HomeGrid cards={cards} demos={serverDemoSlots(cards)} />
+              ),
+              social_links: (
+                <nav aria-label="Social links" className={socialRowStyle}>
+                  <SocialLinks />
+                </nav>
+              ),
+            }}
+          />
+        </article>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

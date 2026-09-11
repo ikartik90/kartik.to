@@ -377,6 +377,16 @@ export default defineConfig({
           listingColumn: { value: "320px" },
           listingGrid3Up: { value: "calc(3 * {sizes.listingColumn})" },
           articleShowcase: { value: "960px" },
+          // The skyline footer's height (`SiteFooter`). The drawing crops itself
+          // to `xMidYMax slice` from a 4000 × 600 viewBox, so a box at k × its
+          // own width shows 600 / k of those units across — 1714 at 0.35: the
+          // whole harbour view (1050 units) with the waterfront carrying on
+          // either side of it to the edges, the same slice at ANY width.
+          // Floored so a phone gets a skyline rather than a strip (the sides
+          // overflow there, which is what the crop is for) and capped so it
+          // never becomes the page. The top is only cropped once the box is
+          // wider than 6.67 × its height, i.e. past 4000px at the cap.
+          siteFooter: { value: "clamp(280px, 35vw, 600px)" },
           calchemyDemo: { value: "720px" },
           // The Calchemy playground's year. The site's 960 column, spent on a
           // 3 × 4 grid of months: the gap BETWEEN months takes its 80 first —
@@ -603,6 +613,19 @@ export default defineConfig({
       containerNames: ["demoFrame", "projectsGrid", "shiftForm"],
 
       semanticTokens: {
+        opacity: {
+          // The alpha `border.divider` is built from — 25% on a light ground,
+          // 50% on a dark one — as a NUMBER, for the one place a hairline has
+          // to be flattened onto the canvas as an opaque colour rather than
+          // laid over it: the footer skyline, whose shared edges and crossing
+          // ticks would otherwise stack darker. Change the two together.
+          hairline: {
+            value: {
+              base: "0.25",
+              _dark: "0.5",
+            },
+          },
+        },
         colors: {
           bg: {
             canvas: {

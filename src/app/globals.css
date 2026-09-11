@@ -13,6 +13,14 @@ body {
 
 body {
   min-height: 100%;
+  /* A column, so the LAST thing on a page can be sent to the foot of the
+     viewport when the page is shorter than one — the skyline footer's
+     `margin-block-start: auto` (site-footer.tsx). Nothing else changes seat:
+     everything else the body holds is out of flow (the portalled popovers and
+     tooltips, the fixed panels, the dialogs in the top layer) or renders
+     nothing, and the header and main already size and centre themselves. */
+  display: flex;
+  flex-direction: column;
   /* The page scrolls INSIDE <body> (its own `overflow-x` above makes it the
      scroll container, not the viewport), so this is what puts a body-portalled
      popover in the same scrolled coordinate space as the trigger it covers.
