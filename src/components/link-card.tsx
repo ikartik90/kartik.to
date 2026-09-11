@@ -333,6 +333,11 @@ function CardCover({
           // shares of this box, so the article's composition arrives at the
           // card's size rather than at the article's.
           layout={media}
+          // The still, where the clip has one. A card is the surface that
+          // needs it most: its cover may be several megabytes of screen
+          // recording, and without a poster the tile is an empty plate until
+          // the whole of that has been fetched and seeked.
+          poster={media.kind === "video" ? media.poster : undefined}
           // And the source's own shape, so the box is held from the first paint
           // instead of opening under the reader.
           width={media.width}

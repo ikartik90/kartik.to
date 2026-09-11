@@ -8,6 +8,8 @@ import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SITE_DESCRIPTION, SITE_LOCALE, SITE_NAME } from "@/data/site";
+import { SITE_URL } from "@/lib/site-url";
 import { PALETTE_INTENT_SCRIPT } from "@/utils/palette-intent";
 
 const switzer = localFont({
@@ -23,8 +25,40 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "kartik.to",
-  description: "Kartik Iyer's digital design portfolio and blog.",
+  // What every relative URL in this app's metadata resolves against, and the
+  // reason the site had no link previews at all: `og:image` and `og:url` are
+  // read by crawlers, which have no page to resolve a path against, so Next
+  // drops a relative one entirely rather than emitting something that cannot
+  // be fetched. Without a base there was nothing to make absolute.
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_NAME,
+    // Every page below states its own name and gets the site's after it. The
+    // homepage keeps `default`, which is the site's name alone rather than the
+    // site's name twice.
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  // The defaults every page inherits and each post then overrides with its own
+  // title, description and card. The image is not named here: the file
+  // convention supplies it — `app/opengraph-image.tsx` for anything with
+  // nothing more specific, and a post's own route for a post.
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: SITE_LOCALE,
+    url: SITE_URL,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    // The large card, because what is being shared is a PICTURE of the post's
+    // tile — at `summary` it is cropped to a square thumbnail beside the text,
+    // which throws away the half of the card that is the cover.
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 // Runs synchronously before hydration to prevent flash of incorrect theme.

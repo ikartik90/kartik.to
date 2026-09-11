@@ -883,3 +883,39 @@ describe("mediaReservationStyle", () => {
     });
   });
 });
+
+describe("a clip's poster", () => {
+  /** Parse, and narrow to the arm the still actually lives on. */
+  const clip = (node: Record<string, unknown>) => {
+    const parsed = MediaNodeSchema.parse(node);
+    if (parsed.kind !== "video") throw new Error("not a clip");
+    return parsed;
+  };
+
+  it("is the frame a clip shows before it plays", () => {
+    expect(
+      clip({
+        type: "media",
+        kind: "video",
+        src: "/a.mp4",
+        poster: "https://cdn.example.com/posters/a.jpg",
+      }).poster,
+    ).toBe("https://cdn.example.com/posters/a.jpg");
+  });
+
+  it("is absent on a clip uploaded before there was one to take", () => {
+    expect(
+      clip({ type: "media", kind: "video", src: "/a.mp4" }).poster,
+    ).toBeUndefined();
+  });
+
+  it("is not a thing a picture has", () => {
+    const picture = MediaNodeSchema.parse({
+      type: "media",
+      kind: "image",
+      src: "/a.png",
+      poster: "https://cdn.example.com/posters/a.jpg",
+    });
+    expect("poster" in picture).toBe(false);
+  });
+});

@@ -10,6 +10,12 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // `scripts/` is run by Node directly rather than bundled, and Node's type
+    // stripping resolves imports by their real filename — so a script importing
+    // a util has to write `../src/utils/x.ts`. Permitted, never required: with
+    // `noEmit` there is nothing for the extension to be wrong about, and every
+    // import under `src/` is untouched.
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,

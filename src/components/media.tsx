@@ -104,6 +104,17 @@ export interface MediaProps {
   draggable?: boolean;
   /** Pictures only — a clip decides its own fetching through `preload`. */
   loading?: "lazy" | "eager";
+  /**
+   * Clips only — the still stored for this clip (`MediaNodeSchema`'s video
+   * arm), shown until the clip itself has a frame to show.
+   *
+   * It replaces a seek, not a blank: a held clip used to be given its opening
+   * frame by nudging `currentTime` past zero on `loadedmetadata`, which works
+   * and costs the reader a header fetch, a seek and a decode before anything
+   * appears. A poster is one small picture and paints on arrival. The seek is
+   * still there below, for every clip that has no still to show.
+   */
+  poster?: string;
   /** Clips only — the browser's own strip, where the clip is read rather than
    * glanced at. Independent of `transport` below, which is the house control. */
   controls?: boolean;
@@ -218,6 +229,7 @@ export function Media({
   height,
   draggable,
   loading = "lazy",
+  poster,
   controls,
   transport,
   autoPlay = true,
@@ -374,6 +386,7 @@ export function Media({
       loop
       muted
       playsInline
+      poster={poster}
       preload="metadata"
       tabIndex={tabIndex}
       onFocus={onFocus}
@@ -396,7 +409,9 @@ export function Media({
         // up as an empty box where the picture should be. Seeking a hair past
         // the start is what asks for that first frame; it is the poster a clip
         // does not have, and it costs one frame of data.
-        if (!autoPlayRef.current && node.currentTime === 0) {
+        // Not where a still was stored for this clip: the poster is already
+        // painting, and seeking behind it is a decode nobody sees.
+        if (!poster && !autoPlayRef.current && node.currentTime === 0) {
           node.currentTime = Math.min(FIRST_FRAME_SEEK_S, node.duration || 0);
         }
       }}

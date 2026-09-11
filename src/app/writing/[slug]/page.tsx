@@ -5,6 +5,7 @@ import { ArticleRenderer } from "@/components/article-renderer";
 import { SiteFooter } from "@/components/site-footer";
 import { env } from "@/lib/env";
 import { auth } from "@/lib/auth/server";
+import { postMetadata } from "@/lib/post-metadata";
 import { resolvePost } from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ async function isAdmin(): Promise<boolean> {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const article = await resolvePost(slug, "ARTICLE", { allowDraft: false });
-  return { title: article?.title ?? "Article" };
+  return postMetadata(article, `/writing/${slug}`, "Article");
 }
 
 export default async function ArticlePage({ params }: Props) {

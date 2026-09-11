@@ -427,7 +427,37 @@ const BaseMediaSchema = z.object({
  */
 export const MediaNodeSchema = z.discriminatedUnion("kind", [
   BaseMediaSchema.extend({ kind: z.literal("image") }),
-  BaseMediaSchema.extend({ kind: z.literal("video") }),
+  BaseMediaSchema.extend({
+    kind: z.literal("video"),
+    /**
+     * The frame a clip shows where it cannot play — the first of the
+     * clip-only fields the note above promised would land on this arm alone.
+     *
+     * Two surfaces need one, for the same reason from opposite ends. A
+     * <video> has nothing to draw until it has fetched and seeked the source,
+     * which on the homepage's own cover is six megabytes standing between the
+     * reader and a card with anything in it. An Open Graph image is a PNG
+     * composed on a server, where there is no decoder to play anything at all
+     * — so without this a shared link shows a clip's card as an empty plate.
+     *
+     * It is a URL rather than a key because that is what every other source in
+     * a document is, and it points at the bucket's own `posters/` corner
+     * rather than at `media/`: a still is not a library asset and must not
+     * turn up in the picker beside the clip it was taken from.
+     *
+     * WHICH frame is `capture-poster`'s answer, not a caller's — the most
+     * settled, most populated frame of a dozen sampled across the clip. Frame
+     * zero is where the fade-up and the empty state live, which is to say it
+     * is reliably the one frame that says least about the clip.
+     *
+     * Optional, and permanently so: every clip uploaded before the still
+     * existed has none, and there is no migration that can invent one — the
+     * answer is in the file, and reading it needs a browser holding that file.
+     * Such a clip goes on doing what it always did and seeks its own opening
+     * frame.
+     */
+    poster: z.url().optional(),
+  }),
 ]);
 
 export type MediaNode = z.infer<typeof MediaNodeSchema>;
