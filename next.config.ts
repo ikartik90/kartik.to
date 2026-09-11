@@ -23,6 +23,22 @@ const nextConfig: NextConfig = {
     qualities: [100],
   },
 
+  // The typeface every Open Graph card is set in, stated explicitly so it
+  // reaches the functions that draw one.
+  //
+  // Satori has no stylesheet and no `next/font`; it is handed font BYTES, and
+  // `src/lib/og/card.tsx` reads them off the filesystem at request time. Which
+  // files a serverless function's filesystem actually contains is decided by
+  // Next's tracing, and tracing infers that from static analysis of the code —
+  // it does handle `join(process.cwd(), "<literal>")`, but a missing font here
+  // is not a degraded card, it is no card at all: Satori refuses to render
+  // without one. So the trace is told rather than trusted.
+  //
+  // The glob covers `app/opengraph-image` and both `[slug]` routes under it.
+  outputFileTracingIncludes: {
+    "/**/opengraph-image": ["./public/fonts/Switzer-Variable.woff"],
+  },
+
   // Turbopack (default in Next.js 16)
   turbopack: {
     rules: {

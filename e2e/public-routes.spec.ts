@@ -95,7 +95,12 @@ test.describe("public routes", () => {
     const response = await page.goto("/playground/shader");
 
     expect(response?.status()).toBe(200);
-    await expect(page).toHaveTitle("Shader Playground");
+    // Its own name AND the site's, because the root layout titles every page
+    // below it through a `%s — kartik.to` template. The homepage is the one
+    // exception and keeps the bare name (`title.default`), which is what the
+    // listing test above asserts — so the two together are what would catch
+    // the template being dropped or reaching one page too far.
+    await expect(page).toHaveTitle("Shader Playground — kartik.to");
     // The rail, which is the page — asserting it rules out an interstitial
     // that also answers 200: Vercel's own deployment-protection login is one,
     // and an earlier CI run went green against exactly that.

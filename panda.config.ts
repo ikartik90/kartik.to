@@ -5,6 +5,10 @@ import {
   NARROW_RAIL_QUERY,
 } from "./src/data/media-queries";
 import { ASPECT_RATIOS } from "./src/utils/demo-frame-sizing";
+import {
+  CARD_SCRIM_MIN_SHARE,
+  cardWashGradient,
+} from "./src/utils/card-scrim";
 
 /**
  * check-small.svg / cross-small.svg as masks, so the brand gradient can be
@@ -106,43 +110,40 @@ const linkCardAspectVariants = Object.fromEntries(
 // ---------------------------------------------------------------------------
 
 /** The floor: the scrim is at least this much of the card, and often exactly. */
-const CARD_SCRIM_MIN_HEIGHT = "25%";
-/** How opaque the wash ever gets — at the very foot, under the last line. */
-const CARD_WASH_PEAK = 0.95;
+const CARD_SCRIM_MIN_HEIGHT = `${CARD_SCRIM_MIN_SHARE * 100}%`;
 
 /**
- * Smootherstep — `6t⁵ − 15t⁴ + 10t³`, the curve whose SLOPE is zero at both
- * ends as well as its value.
+ * The ramp itself — SMOOTHERSTEP, `6t⁵ − 15t⁴ + 10t³`, described by nine stops
+ * and mixed here out of the card's own surface token.
  *
- * That property is the whole reason it is this and not an exponent. A power
- * curve reaches zero at the top of the ramp but arrives there travelling: it
+ * The curve is `cardWashStops`, in `src/utils/card-scrim.ts`, and the only
+ * thing supplied here is the paint. It moved out because the wash has a second
+ * reader now: an Open Graph image is this same card composed by Satori, which
+ * reads neither `color-mix()` nor a token, so it cannot be given this string —
+ * and a curve restated there would be the one that stops matching the first
+ * time either is tuned. See that file; the reasoning stays here.
+ *
+ * WHY that curve: its SLOPE is zero at both ends as well as its value. A power
+ * curve reaches zero at the top of the ramp but arrives there travelling — it
  * is already a quarter opaque an eighth of the way down, so the gradient reads
- * as starting somewhere, and the eye finds that somewhere and calls it an
- * edge. Ending at zero is not the same as ending softly. This one leaves the
- * top of the scrim at nothing and stays at nothing long enough that there is
- * no line to find, then does its work in the middle and settles flat into the
- * foot — where a hard arrival would be just as findable, under the words.
+ * as starting somewhere, and the eye finds that somewhere and calls it an edge.
+ * Ending at zero is not the same as ending softly. This one leaves the top of
+ * the scrim at nothing and stays at nothing long enough that there is no line
+ * to find, then does its work in the middle and settles flat into the foot,
+ * where a hard arrival would be just as findable, under the words.
+ *
+ * WHY nine stops: not the quantisation — 0.95 of alpha across a quarter of a
+ * card is several levels a pixel, which cannot band — but because a browser
+ * interpolates LINEARLY between stops, so the curve is only ever as smooth as
+ * the polyline describing it.
+ *
+ * `bg.surface` and not an ink of its own, because that is the colour the
+ * caption has ALWAYS been read against — the card's own plate.
  */
-const smootherstep = (t: number) => t ** 3 * (t * (t * 6 - 15) + 10);
-
-/**
- * Nine stops. Not for the quantisation — 0.95 of alpha across a quarter of a
- * card is still several levels a pixel, which cannot band — but because a
- * browser interpolates LINEARLY between stops, so the curve is only ever as
- * smooth as the polyline describing it. Nine is where the corners stop being
- * findable, and it matters most at the top, where the whole point is that
- * nothing is happening yet.
- */
-const CARD_WASH = `linear-gradient(to bottom, ${Array.from(
-  { length: 9 },
-  (_, step) => {
-    const t = step / 8;
-    const alpha = CARD_WASH_PEAK * smootherstep(t);
-    return `color-mix(in srgb, token(colors.bg.surface) ${(alpha * 100).toFixed(
-      1,
-    )}%, transparent) ${(t * 100).toFixed(1)}%`;
-  },
-).join(", ")})`;
+const CARD_WASH = cardWashGradient(
+  (alpha) =>
+    `color-mix(in srgb, token(colors.bg.surface) ${(alpha * 100).toFixed(1)}%, transparent)`,
+);
 
 /**
  * blockquote.svg as two masks off the SAME path — `fill` gives the body,

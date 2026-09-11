@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getDemoComponent } from "@/components/demo/registry";
 import { orderGridItems } from "@/utils/grid-order";
 import { parsePost } from "@/lib/posts";
+import { listingDate } from "@/utils/listing-date";
 import { postCover } from "@/utils/post-cover";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import { LinkCardConfigSchema, type LinkCardConfig } from "@/domain/link-card";
@@ -100,15 +101,6 @@ export interface GridComponentCard extends GridCardBase {
 
 export type GridCard = GridPostCard | GridComponentCard;
 
-/** The listing's date format, matching what the writing list used to print. */
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function postToCard(post: Post): GridPostCard {
   const isArticle = post.category === "ARTICLE";
   return {
@@ -119,7 +111,7 @@ function postToCard(post: Post): GridPostCard {
     // unnamed record is CALLED is a fact about posts, not about tiles.
     title: post.title ?? "Untitled",
     href: `${isArticle ? "/writing" : "/work"}/${post.slug}`,
-    date: isArticle && post.publishedAt ? formatDate(post.publishedAt) : null,
+    date: isArticle && post.publishedAt ? listingDate(post.publishedAt) : null,
     // Every post card, project and article alike. `LinkCard` is one card and
     // the grid is one grid: articles wearing pictures while projects kept a
     // flat plate would read as two card designs sharing a listing.
