@@ -28,6 +28,28 @@ const eslintConfig = defineConfig([
       "react-hooks/globals": "error",
       "react-hooks/static-components": "error",
 
+      // --- One spelling of "is this the author". ---
+      // The predicate was re-typed at eleven call sites in four different
+      // spellings before this rule existed. They agreed only because
+      // `env.ADMIN_GITHUB_ID` is `z.email()` and so can never be empty — an
+      // unstated dependency that would have changed behaviour in half of them
+      // if that line were ever loosened. `isAdmin()` / `requireAdmin()` in
+      // `src/lib/auth/server.ts` is the authorization boundary; everything
+      // else asks it. The three files allowed to name the variable are
+      // exempted below.
+      // One selector, not a MemberExpression pair: `env.ADMIN_GITHUB_ID` puts
+      // the name in an `Identifier` node either way, so matching the identifier
+      // alone catches `env.X`, `process.env.X` and a bare `X` — and reports one
+      // error per violation rather than two.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Identifier[name='ADMIN_GITHUB_ID']",
+          message:
+            "Don't re-type the admin check. Import `isAdmin()` (or `requireAdmin()`) from `@/lib/auth/server` — it is the one server-side answer to whether the caller is the author.",
+        },
+      ],
+
       // Allow the conventional "omit a key via rest" idiom and _-prefixed
       // intentional throwaways.
       "@typescript-eslint/no-unused-vars": [
@@ -38,6 +60,22 @@ const eslintConfig = defineConfig([
           ignoreRestSiblings: true,
         },
       ],
+    },
+  },
+  {
+    // The three files that are ALLOWED to name the admin id, and the only
+    // three: where it is declared, where the shared predicate is written, and
+    // the proxy — which cannot call `isAdmin()` because it runs against a
+    // `NextRequest` and verifies the session cookie itself. Tests may name it
+    // too: a mocked `@/lib/env` is how they stand an environment up at all.
+    files: [
+      "src/lib/env.ts",
+      "src/lib/auth/server.ts",
+      "src/proxy.ts",
+      "**/__tests__/**",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
   {
@@ -67,6 +105,15 @@ const eslintConfig = defineConfig([
     // tree that reports zero of either, which is the same as having no lint
     // gate at all. A worktree lints itself, from its own root.
     ".claude/worktrees/**",
+    // The Claude Design sync's working directory and the bundle it emits.
+    // Neither is source: both are DERIVED from `src/` and `panda.config.ts` and
+    // come back by re-running the sync, so neither is committed — and a lint
+    // gate that reports on generated output is a lint gate nobody reads. One
+    // sync run put 130 errors and 2224 warnings in front of a source tree that
+    // has none of either, which is the same failure `.claude/worktrees/**`
+    // above was added for.
+    ".ds-sync/**",
+    "ds-bundle/**",
   ]),
 ]);
 

@@ -1,8 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { isAdmin, requireAdmin } from "@/lib/auth/server";
 import {
   ShaderPresetContentSchema,
   type ShaderPreset,
@@ -31,23 +30,9 @@ import type { ShaderId } from "@/data/shader-specs";
 // the layer that decides what may be seen.
 // ---------------------------------------------------------------------------
 
-/**
- * Whether the caller is the author — the question `requireAdmin` throws on.
- *
- * Separate from it because the reads need the ANSWER rather than the throw:
- * they serve everybody and only the size of the answer changes. Written once,
- * so the two can never come to different conclusions about the same session.
- */
-async function isAdmin(): Promise<boolean> {
-  const { data: session } = await auth.getSession();
-  return (
-    !!session?.user?.email && session.user.email === env.ADMIN_GITHUB_ID
-  );
-}
-
-async function requireAdmin(): Promise<void> {
-  if (!(await isAdmin())) throw new Error("Unauthorized");
-}
+// BOTH halves of the shared guard, because this module needs both: the writes
+// need the throw, and the reads need the ANSWER — they serve everybody and only
+// the size of what comes back changes. See `@/lib/auth/server`.
 
 /** The row as the app holds it, with the blob parsed back into content. */
 function parseShaderPreset(row: {

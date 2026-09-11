@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { css } from "../../../../styled-system/css";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { isAdmin } from "@/lib/auth/server";
 import { ArticleEditor } from "@/components/article-editor";
 import { HomeGrid } from "@/components/home-grid";
 import { SocialLinks } from "@/components/social-links";
@@ -31,11 +30,6 @@ import { getOrCreateHomePost } from "@/lib/home";
 // ---------------------------------------------------------------------------
 
 const socialRowStyle = css({ display: "flex", justifyContent: "center" });
-
-async function isAdmin(): Promise<boolean> {
-  const { data: session } = await auth.getSession();
-  return session?.user?.email === env.ADMIN_GITHUB_ID;
-}
 
 export default async function EditHomePage() {
   // 404, not 401 — the admin routes do not admit to existing.

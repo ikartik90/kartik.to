@@ -1,8 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import {
   PostCategorySchema,
   PostLinkSchema,
@@ -14,18 +13,6 @@ import {
 import { parsePost } from "@/lib/posts";
 import { revalidatePostPaths } from "@/lib/revalidate-post";
 import { generateSlug } from "@/utils/slug";
-
-// ---------------------------------------------------------------------------
-// Auth guard — uses auth.getSession() so it works regardless of whether the
-// short-lived session_data cache cookie has expired.
-// ---------------------------------------------------------------------------
-
-async function requireAdmin(): Promise<void> {
-  const { data: session } = await auth.getSession();
-  if (!session?.user?.email || session.user.email !== env.ADMIN_GITHUB_ID) {
-    throw new Error("Unauthorized");
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Actions

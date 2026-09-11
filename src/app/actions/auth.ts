@@ -19,9 +19,12 @@ import { auth } from "@/lib/auth/server";
 //
 // Nothing is gated. This is the front door, and a door that only opens for
 // people who are already inside is not one — the gate is on the way BACK, where
-// `proxy.ts` checks the session's email against `ADMIN_GITHUB_ID` and 404s
-// anyone else out of the admin routes. Signing in with GitHub is not the same
-// thing as being the author, and only the second of those is worth guarding.
+// `isAdmin()` in `@/lib/auth/server` decides whether the session that came out
+// of this handshake is the author's. Every admin page asks it before rendering
+// and every action asks it before writing; `proxy.ts` only pre-filters
+// `/admin/*` from the cookie and is not the boundary. Signing in with GitHub is
+// not the same thing as being the author, and only the second of those is worth
+// guarding.
 // ---------------------------------------------------------------------------
 
 /** Where the browser has to go to sign in, once the handshake is under way. */

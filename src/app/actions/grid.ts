@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import {
   ComponentAspectSchema,
   GridIndexSchema,
@@ -23,13 +22,6 @@ import { PostCardConfigSchema, type PostCardConfig } from "@/domain/post";
 // of the clamp, the guard and the revalidate that differ only in which
 // delegate they call.
 // ---------------------------------------------------------------------------
-
-async function requireAdmin(): Promise<void> {
-  const { data: session } = await auth.getSession();
-  if (!session?.user?.email || session.user.email !== env.ADMIN_GITHUB_ID) {
-    throw new Error("Unauthorized");
-  }
-}
 
 const TargetSchema = z.object({
   kind: z.enum(["post", "component"]),

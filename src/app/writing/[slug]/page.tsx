@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 import { ArticleIntro } from "@/components/article-intro";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { SiteFooter } from "@/components/site-footer";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { isAdmin } from "@/lib/auth/server";
 import { postMetadata } from "@/lib/post-metadata";
 import { resolvePost } from "@/lib/posts";
 
@@ -12,11 +11,6 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ slug: string }>;
-}
-
-async function isAdmin(): Promise<boolean> {
-  const { data: session } = await auth.getSession();
-  return session?.user?.email === env.ADMIN_GITHUB_ID;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
