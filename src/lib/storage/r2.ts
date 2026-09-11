@@ -21,6 +21,13 @@ const r2 = new S3Client({
 export const MEDIA_PREFIX = "media/";
 
 /**
+ * Where a testimonial's profile picture goes. A sibling of {@link
+ * MEDIA_PREFIX} rather than a folder inside it, so `listR2MediaKeys` on the
+ * library never returns one and the two sets stay genuinely separate.
+ */
+export const PROFILE_PREFIX = "profiles/";
+
+/**
  * What counts as a library object. The bucket is not exclusively the media
  * library's, so listing filters by extension rather than trusting the prefix.
  *

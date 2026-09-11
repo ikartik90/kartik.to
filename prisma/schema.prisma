@@ -233,20 +233,56 @@ model UserProfile {
 // column here for a page that does not exist yet would be inventing a workflow
 // in a migration. It is one nullable column away on the day there is one.
 model Testimonial {
-  id String @id @default(cuid())
+  id          String   @id @default(cuid())
   // What they want to be called, in their own spelling. Not derived from the
   // profile: the name on a LinkedIn page is whatever LinkedIn last scraped, and
   // this is the one they chose to be quoted under.
-  name String
+  name        String
   // The testimonial, and the reason the row exists. Plain `String` with no
   // `@db.VarChar`, and that is the same
   // call `Component.aspect` makes: the 280-character brief belongs to
   // `TESTIMONIAL_QUOTE_MAX_LENGTH`, which the schema and the form's counter both
   // read, and a width here would be a second copy of it that a change to the
   // brief would have to remember to migrate.
-  quote String
+  quote       String
   // When it arrived. No `updatedAt` beside it, because nothing updates a row
   // except the writer re-sending their own — and `createdAt` already answers
   // the only question the list asks, which is what came in and in what order.
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  // ---------------------------------------------------------------------------
+  // The two columns below are MINE, not theirs. Everything above arrives from a
+  // stranger through the form; these are added afterwards from the admin board,
+  // about a row that already exists. Nullable because that is the honest state
+  // of a row the moment it lands, and because a testimonial is perfectly
+  // readable without either.
+  // ---------------------------------------------------------------------------
+  // A face to put beside the words: the URL of something already in the media
+  // library, picked through the same dialog as every other picture on this
+  // site. A URL and not a key, because that is what the picker returns and what
+  // an `<img>` needs — a key would mean a resolution step on every read for a
+  // value that is only ever used one way.
+  avatarUrl   String?
+  // Their profile. This column existed once, held nothing, and was dropped —
+  // and this is NOT that column coming back. That one was collected from the
+  // submitter and was UNIQUE, which made it the table's natural key. This one I
+  // type by hand, and carries no unique index on purpose: a key over a field I
+  // fill in myself would turn my own typo into a collision with somebody else's
+  // row. See the note in `src/domain/testimonial.ts`.
+  linkedinUrl String?
+  // WHICH PART of `quote` a card shows. Null is the ordinary state and means
+  // "all of it" — nullable rather than defaulted to a copy of the quote,
+  // because the same words in two columns is two places for them to drift
+  // apart. The fallback costs one `??` at the point of use
+  // (`testimonialShown`).
+  //
+  // A slice, and only ever a slice. `updateTestimonialDetails` refuses anything
+  // that is not a verbatim, contiguous substring of `quote`, so this column
+  // cannot hold a sentence its author never wrote. That rule needs both columns
+  // at once, so it lives in the action rather than here — see the migration for
+  // why a CHECK was considered and rejected.
+  //
+  // `quote` is untouched by any of this and stays the canonical record of what
+  // was sent. Nothing shortens it, so an excerpt can always be widened or
+  // dropped to get back to the whole thing.
+  excerpt     String?
 }

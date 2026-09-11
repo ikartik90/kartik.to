@@ -3,7 +3,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/server";
 import {
+  TESTIMONIAL_EXCERPT_NOT_THEIRS,
+  TestimonialDetailsSchema,
   TestimonialSubmissionSchema,
+  isExcerptOfQuote,
   type Testimonial,
 } from "@/domain/testimonial";
 
@@ -127,4 +130,79 @@ export async function getTestimonials(): Promise<Testimonial[]> {
   return prisma.testimonial.findMany({
     orderBy: { createdAt: "desc" },
   });
+}
+
+/**
+ * Put a face and a profile on a row that has already arrived — the author's
+ * half, and the one action in this file that edits rather than appends.
+ *
+ * `update` and never `upsert`: there is nothing to create here. The row is the
+ * submitter's, made by them through the form; this only adds to it. A missing
+ * `id` is a bug on my side and is allowed to throw as one — the caller is the
+ * board, not a stranger, which is why this reads nothing like
+ * `submitTestimonial` and throws where that one returns.
+ *
+ * `parsed` is what reaches Prisma, never `input`. The schema strips unknown
+ * keys, so the `name` and `quote` a careless caller sends alongside are gone
+ * before the `data` object is built — which is what keeps a door opened for a
+ * picture from becoming a door onto somebody else's words. The test says so out
+ * loud.
+ *
+ * Returns the WHOLE updated row rather than an acknowledgement, so the board
+ * can replace its copy with the stored one and see the profile in the spelling
+ * it was actually normalised into.
+ *
+ * The excerpt is the one field here whose validity depends on ANOTHER field, so
+ * it is the one that costs a read before the write. See below.
+ *
+ * `name` is the one SUBMITTED field this will write, and `quote` is deliberately
+ * still not — see `TestimonialDetailsSchema` for where that line is and why.
+ */
+export async function updateTestimonialDetails(
+  input: unknown,
+): Promise<Testimonial> {
+  await requireAdmin();
+
+  const { id, name, avatarUrl, linkedinUrl, excerpt } =
+    TestimonialDetailsSchema.parse(input);
+
+  // THREE states, and the difference is why this is not a plain spread.
+  // `undefined` means the caller said nothing about the excerpt, so the stored
+  // one must survive untouched — a board editing only the picture must not
+  // silently throw away a chosen excerpt. `null` clears it. A string has to be
+  // earned, below.
+  const data: {
+    avatarUrl: string | null;
+    linkedinUrl: string | null;
+    excerpt?: string | null;
+    name?: string;
+  } = { avatarUrl, linkedinUrl };
+
+  if (excerpt !== undefined) {
+    data.excerpt = excerpt;
+  }
+
+  // Same absent-means-leave-alone rule, but with only two states rather than
+  // three: a name cannot be cleared, so the schema has already refused a blank
+  // one by the time we are here.
+  if (name !== undefined) {
+    data.name = name;
+  }
+
+  if (excerpt) {
+    // Read back rather than trusted. The quote this is checked against is the
+    // STORED one, never one sent alongside — otherwise "are these their words"
+    // would be answered by the same request trying to change them, which is no
+    // check at all. The test says so out loud.
+    const stored = await prisma.testimonial.findUnique({
+      where: { id },
+      select: { quote: true },
+    });
+    if (!stored) throw new Error("Testimonial not found");
+    if (!isExcerptOfQuote(stored.quote, excerpt)) {
+      throw new Error(TESTIMONIAL_EXCERPT_NOT_THEIRS);
+    }
+  }
+
+  return prisma.testimonial.update({ where: { id }, data });
 }

@@ -225,6 +225,7 @@ describe("useImageInsert file validation", () => {
       filename: "clip.mp4",
       contentType: "video/mp4",
       size: 1024,
+      folder: "media",
     });
   });
 
@@ -240,6 +241,7 @@ describe("useImageInsert file validation", () => {
       filename: "shot.png",
       contentType: "image/png",
       size: 1024,
+      folder: "media",
       width: 1600,
       height: 900,
     });
@@ -255,6 +257,7 @@ describe("useImageInsert file validation", () => {
       filename: "odd.svg",
       contentType: "image/svg+xml",
       size: 1024,
+      folder: "media",
     });
   });
 

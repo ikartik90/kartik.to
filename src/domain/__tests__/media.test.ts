@@ -15,6 +15,7 @@ import {
   sanitizeMediaFilename,
   filenameFromMediaKey,
   filenameFromMediaUrl,
+  MediaFolderSchema,
 } from "../media";
 
 describe("MediaAssetSchema", () => {
@@ -276,5 +277,46 @@ describe("filenameFromMediaUrl", () => {
     expect(filenameFromMediaUrl("https://cdn.example.com/abc123")).toBe(
       "abc123",
     );
+  });
+});
+
+describe("MediaFolderSchema", () => {
+  it("names the two halves of the bucket", () => {
+    expect(MediaFolderSchema.parse("media")).toBe("media");
+    expect(MediaFolderSchema.parse("profiles")).toBe("profiles");
+  });
+
+  // The folder decides a KEY PREFIX, so an unrecognised one would write an
+  // object to a path nothing lists and nothing cleans up.
+  it("refuses a folder that is not one of them", () => {
+    expect(() => MediaFolderSchema.parse("avatars")).toThrow();
+    expect(() => MediaFolderSchema.parse("")).toThrow();
+    expect(() => MediaFolderSchema.parse("../media")).toThrow();
+  });
+});
+
+describe("CreateMediaUploadInputSchema folder", () => {
+  const base = {
+    filename: "photo.png",
+    contentType: "image/png",
+    size: 500,
+  };
+
+  // Absent means the library, because every caller that existed before
+  // profiles did meant the library and none of them says so.
+  it("defaults to the media library", () => {
+    expect(CreateMediaUploadInputSchema.parse(base).folder).toBe("media");
+  });
+
+  it("takes profiles", () => {
+    expect(
+      CreateMediaUploadInputSchema.parse({ ...base, folder: "profiles" }).folder,
+    ).toBe("profiles");
+  });
+
+  it("refuses an unknown folder rather than defaulting it", () => {
+    expect(() =>
+      CreateMediaUploadInputSchema.parse({ ...base, folder: "elsewhere" }),
+    ).toThrow();
   });
 });

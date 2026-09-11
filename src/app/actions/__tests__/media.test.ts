@@ -27,6 +27,7 @@ const mockDeleteR2Object = vi.fn();
 
 vi.mock("@/lib/storage/r2", () => ({
   MEDIA_PREFIX: "media/",
+  PROFILE_PREFIX: "profiles/",
   listR2MediaKeys: (...args: unknown[]) => mockListR2MediaKeys(...args),
   headR2Object: (...args: unknown[]) => mockHeadR2Object(...args),
   createR2UploadUrl: (...args: unknown[]) => mockCreateR2UploadUrl(...args),
@@ -167,5 +168,106 @@ describe("media server actions", () => {
   it("throws when not admin", async () => {
     mockGetSession.mockResolvedValue({ data: null });
     await expect(listMediaAssets()).rejects.toThrow("Unauthorized");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Folders. The bucket holds the media library under `media/` and the faces that
+// go beside a testimonial under `profiles/`, and the folder travels with the
+// request rather than being inferred from the file — nothing about a headshot
+// looks different from any other photo.
+// ---------------------------------------------------------------------------
+describe("media folders", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSession.mockResolvedValue({
+      data: { user: { email: "admin@example.com" } },
+    });
+  });
+
+  it("createMediaUploadUrl puts a profile picture under profiles/", async () => {
+    mockCreateR2UploadUrl.mockResolvedValue({
+      uploadUrl: "https://upload",
+      publicUrl: "https://cdn.example.com/profiles/x.png",
+      key: "profiles/x.png",
+    });
+
+    await createMediaUploadUrl({
+      filename: "Head Shot.png",
+      contentType: "image/png",
+      size: 500,
+      folder: "profiles",
+    });
+
+    expect(mockCreateR2UploadUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/^profiles\/[\w-]+-Head-Shot\.png$/),
+      "image/png",
+      expect.anything(),
+    );
+  });
+
+  it("createMediaUploadUrl still defaults to the library", async () => {
+    mockCreateR2UploadUrl.mockResolvedValue({
+      uploadUrl: "https://upload",
+      publicUrl: "https://cdn.example.com/media/x.png",
+      key: "media/x.png",
+    });
+
+    await createMediaUploadUrl({
+      filename: "photo.png",
+      contentType: "image/png",
+      size: 500,
+    });
+
+    expect(mockCreateR2UploadUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/^media\//),
+      "image/png",
+      expect.anything(),
+    );
+  });
+
+  it("listMediaAssets lists the folder it is asked for", async () => {
+    mockListR2MediaKeys.mockResolvedValue([]);
+
+    await listMediaAssets("profiles");
+    expect(mockListR2MediaKeys).toHaveBeenCalledWith("profiles/");
+
+    await listMediaAssets();
+    expect(mockListR2MediaKeys).toHaveBeenLastCalledWith("media/");
+  });
+
+  // The filename shown in the library is the key with its prefix and uuid
+  // stripped. A profile key that kept its prefix would read
+  // "profiles/<uuid>-face.png" in the picker.
+  it("names a profile object by its file, not its path", async () => {
+    const key = "profiles/550e8400-e29b-41d4-a716-446655440000-face.png";
+    mockListR2MediaKeys.mockResolvedValue([key]);
+    mockHeadR2Object.mockResolvedValue({
+      size: 100,
+      contentType: "image/png",
+      alt: "",
+      filename: "",
+      metadata: {},
+    });
+
+    const [asset] = await listMediaAssets("profiles");
+    expect(asset.filename).toBe("face.png");
+  });
+
+  it("listMediaAssets refuses an unknown folder rather than falling back", async () => {
+    mockListR2MediaKeys.mockResolvedValue([]);
+    await expect(listMediaAssets("elsewhere")).rejects.toThrow();
+    expect(mockListR2MediaKeys).not.toHaveBeenCalled();
+  });
+
+  it("refuses a folder it does not have", async () => {
+    await expect(
+      createMediaUploadUrl({
+        filename: "photo.png",
+        contentType: "image/png",
+        size: 500,
+        folder: "../secrets",
+      }),
+    ).rejects.toThrow();
   });
 });

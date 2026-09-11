@@ -2,29 +2,35 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
-// The admin list. A server component, so it is called as the async function it
-// is and the element it returns is rendered — which is enough to catch the
-// thing a page like this actually gets wrong: a field that does not render, a
-// date that throws, a guard that lets the wrong person through.
+// The admin board's PAGE, which is the guard, the read, and the line of prose
+// over the top of it. A server component, so it is called as the async function
+// it is and the element it returns is rendered — which is enough to catch the
+// thing a page like this actually gets wrong: a guard that lets the wrong
+// person through, or an empty table drawn as a broken one.
+//
+// What the cards and the rail DO with the rows belongs to
+// `testimonial-board.test.tsx` and `testimonial-card.test.tsx`. The overlap
+// here is deliberate and small: these cases assert that the rows reached the
+// board at all, not how it draws them.
 // ---------------------------------------------------------------------------
 
-const { mockGetSession } = vi.hoisted(() => ({ mockGetSession: vi.fn() }));
+const { mockIsAdmin } = vi.hoisted(() => ({ mockIsAdmin: vi.fn() }));
 const mockNotFound = vi.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
 const mockGetTestimonials = vi.fn();
 
 vi.mock("next/navigation", () => ({ notFound: () => mockNotFound() }));
-// The guard now lives in `@/lib/auth/server` and is shared by every admin page.
-// Stubbed at its SESSION source rather than by replacing the module, so the
-// 404 cases below still run the real comparison — a mock of `isAdmin` would
-// make each of them assert its own stub.
-vi.mock("@neondatabase/auth/next/server", () => ({
-  createNeonAuth: () => ({ getSession: () => mockGetSession() }),
+// The SHARED guard, mocked where it lives. The page used to hand-roll its own
+// copy of this against `auth.getSession()` and `env.ADMIN_GITHUB_ID`; it now
+// asks `@/lib/auth/server`, which is the one server-side answer to "is this the
+// author" and the thing worth stubbing.
+vi.mock("@/lib/auth/server", () => ({
+  isAdmin: () => mockIsAdmin(),
 }));
-// Still stubbed: `@/lib/auth/server` reads the admin id from here, and that
-// module validates the whole environment on import and throws without a
-// DATABASE_URL.
+// Still stubbed even though the guard no longer reads it: the board below this
+// page imports the action module, which reaches `@/lib/env` — and that module
+// validates the whole environment on import and throws without a DATABASE_URL.
 vi.mock("@/lib/env", () => ({
   env: { ADMIN_GITHUB_ID: "admin@example.com" },
 }));
@@ -35,9 +41,7 @@ vi.mock("@/app/actions/testimonial", () => ({
 const { default: TestimonialsPage } = await import("../page");
 
 function signedInAsAdmin() {
-  mockGetSession.mockResolvedValue({
-    data: { user: { email: "admin@example.com" } },
-  });
+  mockIsAdmin.mockResolvedValue(true);
 }
 
 const row = {
@@ -45,6 +49,9 @@ const row = {
   name: "Ada Lovelace",
   quote: "Turned a vague brief into something we could actually ship.",
   createdAt: new Date("2026-03-09T10:00:00.000Z"),
+  // The author's half, empty — which is how every row arrives.
+  avatarUrl: null,
+  linkedinUrl: null,
 };
 
 beforeEach(() => {
@@ -54,7 +61,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("TestimonialsPage", () => {
-  it("draws each testimonial with its name and date", async () => {
+  it("draws each testimonial with its name", async () => {
     signedInAsAdmin();
     mockGetTestimonials.mockResolvedValue([row]);
 
@@ -62,9 +69,8 @@ describe("TestimonialsPage", () => {
 
     expect(screen.getByText(row.quote)).toBeTruthy();
     expect(screen.getByText("Ada Lovelace")).toBeTruthy();
-    expect(screen.getByText("9 Mar 2026")).toBeTruthy();
-    // The profile link went with the LinkedIn column.
-    expect(screen.queryByRole("link")).toBeNull();
+    // Nothing is open until a card is pressed.
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   // Without a unique key, one person sending twice is two rows. The list has to
@@ -93,23 +99,23 @@ describe("TestimonialsPage", () => {
     expect(screen.queryByRole("list")).toBeNull();
   });
 
-  it("counts what has come in", async () => {
+  it("counts what has come in, and says what to do with it", async () => {
     signedInAsAdmin();
     mockGetTestimonials.mockResolvedValue([row, { ...row, id: "t2" }]);
 
     render(await TestimonialsPage());
 
-    expect(screen.getByText("2 in, newest first.")).toBeTruthy();
+    expect(
+      screen.getByText(/2 in, newest first\. Select one to add/i),
+    ).toBeTruthy();
   });
 
-  // 404, never 401 — the route must not admit to existing. Asserted for a
-  // visitor AND for somebody else's session, and in both cases the list is
-  // never even asked for.
-  it.each([
-    ["a visitor with no session", { data: null }],
-    ["somebody else's session", { data: { user: { email: "x@example.com" } } }],
-  ])("404s for %s", async (_label, session) => {
-    mockGetSession.mockResolvedValue(session);
+  // 404, never 401 — the route must not admit to existing. The two cases that
+  // used to be asserted here (no session, somebody else's session) are the
+  // shared guard's to tell apart, and are tested where it lives; what this page
+  // owes is that a `false` becomes a 404 and that the table is never read.
+  it("404s for anybody who is not the author", async () => {
+    mockIsAdmin.mockResolvedValue(false);
 
     await expect(TestimonialsPage()).rejects.toThrow("NEXT_NOT_FOUND");
     expect(mockNotFound).toHaveBeenCalled();

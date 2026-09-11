@@ -157,6 +157,22 @@ export const MediaAssetSchema = z.object({
 
 export type MediaAsset = z.infer<typeof MediaAssetSchema>;
 
+/**
+ * Which part of the bucket an object belongs to.
+ *
+ * `media` is the library — everything the article editor and the grid draw
+ * from. `profiles` is the face beside a testimonial, kept apart because it is
+ * not library material: nobody wants a colleague's headshot offered as a cover
+ * image, and the picker for one should not have to scroll past the other.
+ *
+ * An ENUM and not a string, because this value becomes a key prefix. A free
+ * string here would let a caller write an object to any path in the bucket,
+ * including one nothing lists and nothing cleans up.
+ */
+export const MediaFolderSchema = z.enum(["media", "profiles"]);
+
+export type MediaFolder = z.infer<typeof MediaFolderSchema>;
+
 // The size bound is a refinement rather than a `.max()`, because it depends on
 // the sibling field: which ceiling applies is a question about the format.
 export const CreateMediaUploadInputSchema = z
@@ -164,6 +180,9 @@ export const CreateMediaUploadInputSchema = z
     filename: z.string().min(1),
     contentType: z.enum(ALLOWED_UPLOAD_CONTENT_TYPES),
     size: z.number().int().positive(),
+    // Defaulted rather than required: every caller that predates profiles
+    // means the library and none of them says so.
+    folder: MediaFolderSchema.default("media"),
     ...mediaDimensionFields,
   })
   .refine(({ contentType, size }) => size <= maxUploadBytesFor(contentType), {
