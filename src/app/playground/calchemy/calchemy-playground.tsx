@@ -1970,6 +1970,12 @@ export function CalchemyPlayground() {
           // using the playground, not someone dismissing the rail. It closes
           // from its own chip, its header, or Escape.
           dismissOnOutsidePointer={false}
+          // The rail and the year arrive together — both wait on the engine
+          // above — so there is no page on screen for the inset to slide, and
+          // sliding it anyway walked the whole calendar 360px sideways across a
+          // dozen frames. That was this page's entire CLS. A rail the reader
+          // opens from the chip still slides; see `usePropertiesPanelInset`.
+          animateInset={false}
           onDismiss={() => setRailChoice(false)}
         >
           <PropertiesPanel.Header>Parser Settings</PropertiesPanel.Header>
