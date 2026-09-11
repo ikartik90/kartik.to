@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { auth } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import { env } from "@/lib/env";
 import {
   CreateMediaUploadInputSchema,
@@ -22,13 +22,6 @@ import {
   publicUrlForKey,
   updateR2ObjectMetadata,
 } from "@/lib/storage/r2";
-
-async function requireAdmin(): Promise<void> {
-  const { data: session } = await auth.getSession();
-  if (!session?.user?.email || session.user.email !== env.ADMIN_GITHUB_ID) {
-    throw new Error("Unauthorized");
-  }
-}
 
 /** One metadata string as the positive integer it claims to be, or nothing. */
 function numericMetadata(value: string | undefined): number | undefined {

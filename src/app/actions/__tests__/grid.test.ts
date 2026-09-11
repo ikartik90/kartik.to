@@ -11,11 +11,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // against the wrong table is a mistake that compiles.
 // ---------------------------------------------------------------------------
 
-vi.mock("@/lib/auth/server", () => ({
-  auth: {
+// The guard now lives in `@/lib/auth/server` and is shared by every action
+// module. Stubbed at its SESSION source rather than by replacing the module, so
+// these tests still run the real comparison — a mock of `requireAdmin` would
+// make every "Unauthorized" case below assert its own stub.
+vi.mock("@neondatabase/auth/next/server", () => ({
+  createNeonAuth: () => ({
     getSession: () =>
       Promise.resolve({ data: { user: { email: "admin@example.com" } } }),
-  },
+  }),
 }));
 
 vi.mock("@/lib/env", () => ({

@@ -1,8 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import {
   TestimonialSubmissionSchema,
   type Testimonial,
@@ -33,13 +32,6 @@ import {
 // somebody doing me a favour. `getTestimonials` throws freely — the only caller
 // is mine.
 // ---------------------------------------------------------------------------
-
-async function requireAdmin(): Promise<void> {
-  const { data: session } = await auth.getSession();
-  if (session?.user?.email !== env.ADMIN_GITHUB_ID) {
-    throw new Error("Unauthorized");
-  }
-}
 
 /** Which box a refusal belongs under. `form` is the one that belongs to none of
  *  them — a write that failed after the input had already been accepted. */

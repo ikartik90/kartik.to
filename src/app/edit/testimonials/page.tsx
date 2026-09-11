@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { css } from "../../../../styled-system/css";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { isAdmin } from "@/lib/auth/server";
 import { Typography } from "@/components/ui/typography";
 import { getTestimonials } from "@/app/actions/testimonial";
 
@@ -72,11 +71,6 @@ const DATE_FORMAT = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   year: "numeric",
 });
-
-async function isAdmin(): Promise<boolean> {
-  const { data: session } = await auth.getSession();
-  return session?.user?.email === env.ADMIN_GITHUB_ID;
-}
 
 export default async function TestimonialsPage() {
   if (!(await isAdmin())) notFound();

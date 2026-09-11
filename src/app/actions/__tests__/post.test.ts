@@ -9,8 +9,12 @@ const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/server", () => ({
-  auth: { getSession: () => mockGetSession() },
+// The guard now lives in `@/lib/auth/server` and is shared by every action
+// module. Stubbed at its SESSION source rather than by replacing the module, so
+// these tests still run the real comparison — a mock of `requireAdmin` would
+// make every "Unauthorized" case below assert its own stub.
+vi.mock("@neondatabase/auth/next/server", () => ({
+  createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
 
 const mockPrismaCreate = vi.fn();

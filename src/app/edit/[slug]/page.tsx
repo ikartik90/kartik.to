@@ -1,15 +1,9 @@
 import { notFound } from "next/navigation";
-import { env } from "@/lib/env";
-import { auth } from "@/lib/auth/server";
+import { isAdmin } from "@/lib/auth/server";
 import { prisma } from "@/lib/prisma";
 import { DocumentSchema, PostSchema } from "@/domain/post";
 import { ArticleEditor } from "@/components/article-editor";
 import { parseCategory } from "@/lib/posts";
-
-async function isAdmin(): Promise<boolean> {
-  const { data: session } = await auth.getSession();
-  return session?.user?.email === env.ADMIN_GITHUB_ID;
-}
 
 interface Props {
   params: Promise<{ slug: string }>;

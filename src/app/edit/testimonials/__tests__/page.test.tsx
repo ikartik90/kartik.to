@@ -15,9 +15,16 @@ const mockNotFound = vi.fn(() => {
 const mockGetTestimonials = vi.fn();
 
 vi.mock("next/navigation", () => ({ notFound: () => mockNotFound() }));
-vi.mock("@/lib/auth/server", () => ({
-  auth: { getSession: () => mockGetSession() },
+// The guard now lives in `@/lib/auth/server` and is shared by every admin page.
+// Stubbed at its SESSION source rather than by replacing the module, so the
+// 404 cases below still run the real comparison — a mock of `isAdmin` would
+// make each of them assert its own stub.
+vi.mock("@neondatabase/auth/next/server", () => ({
+  createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
+// Still stubbed: `@/lib/auth/server` reads the admin id from here, and that
+// module validates the whole environment on import and throws without a
+// DATABASE_URL.
 vi.mock("@/lib/env", () => ({
   env: { ADMIN_GITHUB_ID: "admin@example.com" },
 }));

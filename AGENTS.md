@@ -29,8 +29,8 @@ Project Root
 ├── `src/`
 │ ├── `app/`: Next.js App Router (Public, Hidden Admin, API)
 │ │ ├── `api/`: API Route Handlers (Auth callbacks, webhooks)
-│ │ ├── `(public)/`: Public route group
-│ │ └── `(admin)/`: Hidden admin route group
+│ │ ├── `actions/`: Server Actions. Every non-public one opens with `requireAdmin()`
+│ │ └── `edit/`: The hidden admin surface. Every page opens with `isAdmin()` + `notFound()`
 │ ├── `assets/`: Global static assets (Images, Fonts, SVGs)
 │ ├── `components/`: Global Shared Library (Flat structure; grouped by rationale only) with `__tests__/`
 │ │ └── `ui/`: Atomic Panda CSS Recipes & Primitives with `__tests__/`
@@ -40,7 +40,7 @@ Project Root
 │ ├── `store/`: Zustand global state management with `__tests__/`
 │ ├── `utils/`: Pure utility functions with `__tests__/`
 │ ├── `data/`: Static content, constants, and theme tokens
-│ └── `proxy.ts`: Stealth Gate. Intercepts `(admin)` routes; returns `404` (not `401`) if your specific GitHub ID is not authenticated or authorized.
+│ └── `proxy.ts`: Optimistic pre-filter for `/admin/*`. Reads the session cookie and `404`s (not `401`) anyone who is not the admin. It is NOT the security boundary — see Stealth Auth Strategy.
 ├── `prisma/`: Prisma schema and migrations
 ├── `panda.config.ts`: Panda CSS design system configuration
 └── `AGENTS.md`: This file (The architectural contract)
@@ -87,8 +87,10 @@ Project Root
 ## Stealth Auth Strategy
 
 - **Console-Triggered Login**: Authentication is triggered via a global helper (e.g., `window.adminLogin()`) defined in a client-side utility and Neon Auth OAuth routes. There are no visible login buttons.
-- **Middleware Masking**: Requests to the `(admin)` route group must return a `404` for anyone who is not the authorized and authenticated admin.
-- **Single-User Lock**: `proxy.ts` must verify the Neon Auth token/session against an environment-stored `ADMIN_GITHUB_ID`.
+- **The Boundary is the Data Layer**: `isAdmin()` / `requireAdmin()` in `src/lib/auth/server.ts` is the one server-side answer to "is the caller the author", and the only place `ADMIN_GITHUB_ID` may be compared (ESLint enforces this). Every admin page under `src/app/edit/` must open with `if (!(await isAdmin())) notFound()`, and every Server Action must open with `await requireAdmin()` unless it is deliberately public — in which case say so in the module's header, as `submitTestimonial` and the published-content reads do. Next recommends authorizing "as close as possible to your data source" precisely because a route's guard does not cover the actions reachable from it.
+- **Never a Layout**: Do not make `src/app/edit/layout.tsx` the gate. Next calls that pattern "not recommended" — "Next.js applications have multiple entry points, which will not prevent nested route segments and Server Actions from being accessed."
+- **The Proxy is a Pre-Filter, Not the Gate**: `proxy.ts` runs on every route including prefetches, so it may only read the session cookie — an "optimistic" check in Next's terms, and explicitly "optional". It masks `/admin/*` with a `404` and nothing else may depend on it; removing it must not expose anything.
+- **404 Masking**: A refusal is always a `404`, never a `401` — at the page, in the proxy, and in any read that would otherwise confirm an unpublished row exists.
 
 ## Styling (Panda CSS)
 
