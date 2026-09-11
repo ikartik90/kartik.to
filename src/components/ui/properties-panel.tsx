@@ -167,6 +167,18 @@ export interface PropertiesPanelProps {
    * deliberately instead. Escape and the header's close button are unaffected.
    */
   dismissOnOutsidePointer?: boolean;
+  /**
+   * Whether the page SLIDES into the width this panel takes (default true).
+   *
+   * Pass false on a page that opens with the panel already up AND draws nothing
+   * until it does — the calchemy playground, whose rail and whose calendar both
+   * arrive the moment its engine lands. There is nothing on screen to slide
+   * there, and the slide is a layout animation: it walks the page 360px
+   * sideways across a dozen painted frames, every one of them a layout shift.
+   * See `usePropertiesPanelInset`, which has the rest of it. A panel the reader
+   * opens slides regardless of this.
+   */
+  animateInset?: boolean;
   ref?: Ref<PropertiesPanelHandle>;
   children: ReactNode;
 }
@@ -183,6 +195,7 @@ function PropertiesPanelRoot({
   onDismiss,
   ignoreSelector,
   dismissOnOutsidePointer,
+  animateInset,
   ref,
   children,
 }: PropertiesPanelProps) {
@@ -200,7 +213,7 @@ function PropertiesPanelRoot({
   // the moment the panel is asked to leave rather than when it has gone — so
   // the content expands across the same 200ms the panel spends sliding out,
   // instead of snapping open behind it.
-  usePropertiesPanelInset(!exiting);
+  usePropertiesPanelInset(!exiting, { animate: animateInset });
   // Escape, the header button, a press outside, and the trigger that opened
   // it all end up here — so the panel leaves the same way whichever of them
   // asked, and the timing lives in exactly one place.

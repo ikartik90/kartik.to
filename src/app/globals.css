@@ -79,6 +79,26 @@ body {
   }
 }
 
+/* ...but not when the panel was simply THERE on arrival.
+
+   `padding-inline-end` is a layout property, so the 200ms above does not fade
+   the page across — it WALKS it, 360px sideways over a dozen painted frames,
+   every one of them a layout shift. That is the right trade when the reader
+   opened the panel and the page is moving with the thing they opened. It is
+   the wrong one when a panel is part of the page's opening layout and there was
+   never anything to move: the calchemy playground mounts its rail once an async
+   engine lands, and this transition was the whole of that page's CLS.
+
+   `usePropertiesPanelInset` decides which is which — it marks the page for the
+   one frame the uninvited inset needs to land in, and takes the mark off again
+   on the next, so the reader's own next press still slides. The whole
+   declaration goes rather than the one property: `transition` cannot drop a
+   single entry, and for one frame on a page that has not been touched yet
+   there is nothing else of the body's mid-flight to protect. */
+body[data-properties-panel-instant] {
+  transition: none;
+}
+
 /* Custom cursor handed to the OS via the `cursor` property — the compositor
    moves it, so it never drops frames when the main thread is busy (e.g. the
    social-icon WebGL shader). PNGs (with `image-set` for retina) so Safari, which
