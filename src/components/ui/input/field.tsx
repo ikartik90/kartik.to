@@ -11,6 +11,7 @@ import {
   type HTMLAttributes,
   type InputHTMLAttributes,
   type LabelHTMLAttributes,
+  type TextareaHTMLAttributes,
   type ReactNode,
 } from "react";
 import { css, cx } from "../../../../styled-system/css";
@@ -266,6 +267,59 @@ const FieldControl = forwardRef<HTMLInputElement, FieldControlProps>(
   },
 );
 
+export type FieldTextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
+
+/**
+ * The value slot for a MULTI-LINE field — the same `control` styles on a native
+ * textarea, carrying the same `data-control` so the frame forwards focus to it
+ * exactly as it does to an input.
+ *
+ * A part of its own rather than a `multiline` flag on {@link FieldControl},
+ * because the two do not share an element type: every ref, every event and every
+ * native attribute below differs between `HTMLInputElement` and
+ * `HTMLTextAreaElement`, and a flag would force one of them to lie about the
+ * other. The FRAME is what they share, and it adapts on its own — the `field`
+ * recipe detects a textarea with `:has` and lets the shell grow, so there is no
+ * prop to pass and no way for the two to fall out of step.
+ *
+ * `resize` is off in the recipe: the frame clips its overflow, so the native
+ * grip would be drawn into a corner it cannot escape. Size the box with `rows`.
+ */
+const FieldTextArea = forwardRef<HTMLTextAreaElement, FieldTextAreaProps>(
+  function FieldTextArea({ className, ...rest }, forwardedRef) {
+    const { controlId, hintId, hasHint, registerControl, styles } =
+      useField("Field.TextArea");
+    const isWireframe = useWireframe() !== null;
+
+    // Same swap {@link FieldControl} makes, and for the same reason: a textarea
+    // holds no children and no pseudo-element, so there is nowhere to put a bar.
+    if (isWireframe) {
+      const stand = rest.placeholder ?? rest.value ?? rest.defaultValue;
+      const text = typeof stand === "string" && stand !== "" ? stand : undefined;
+      return (
+        <span id={controlId} className={cx(styles.control, className)}>
+          <Skeleton width={text ? undefined : "45%"}>{text}</Skeleton>
+        </span>
+      );
+    }
+
+    return (
+      <textarea
+        ref={(node) => {
+          registerControl(node);
+          if (typeof forwardedRef === "function") forwardedRef(node);
+          else if (forwardedRef) forwardedRef.current = node;
+        }}
+        id={controlId}
+        data-control
+        aria-describedby={hasHint ? hintId : undefined}
+        className={cx(styles.control, className)}
+        {...rest}
+      />
+    );
+  },
+);
+
 export interface FieldHintProps extends HTMLAttributes<HTMLParagraphElement> {
   /**
    * Override this hint's typography, independent of the field `size` (see
@@ -350,6 +404,7 @@ export const Field = Object.assign(FieldRoot, {
   Label: FieldLabel,
   Frame: FieldFrame,
   Control: FieldControl,
+  TextArea: FieldTextArea,
   Hint: FieldHint,
   Search: FieldSearch,
 });

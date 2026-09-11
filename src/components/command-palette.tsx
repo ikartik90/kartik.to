@@ -37,6 +37,7 @@ import ComponentIcon from "@/assets/icons/component.svg";
 import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import ReturnIcon from "@/assets/icons/return.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
+import QuoteIcon from "@/assets/icons/quote.svg";
 import CalendarIcon from "@/assets/icons/calendar.svg";
 import ConsoleIcon from "@/assets/icons/console.svg";
 
@@ -240,6 +241,8 @@ export function CommandPalette() {
     isShaderPlayground,
     handleCalchemyPlayground,
     isCalchemyPlayground,
+    handleTestimonials,
+    isTestimonials,
     editorKind,
     handleSaveChanges,
     handleDiscardAndExit,
@@ -691,6 +694,34 @@ export function CommandPalette() {
                     Standing on one of them withdraws that ONE row, not the group:
                     a command to the page you are already on is a row that does
                     nothing, but the other playground is still somewhere to go. */}
+                {/* Inbox — what other people have sent me, which is a category
+                    of destination the palette has not had before. One row today;
+                    it is a group rather than a loose item because the next thing
+                    somebody sends through a form belongs beside it rather than
+                    under "Playgrounds".
+
+                    ADMIN ONLY, and that is the whole reason it is down here with
+                    the destinations instead of up with the editor commands: it is
+                    not about the page you are on, it is somewhere to go — but
+                    somewhere only I may go. The page behind it 404s for everyone
+                    else, so this row is the same refusal said earlier and more
+                    politely.
+
+                    Withheld while editing, and withheld while standing on it,
+                    exactly as the playgrounds are. */}
+                {isAdmin && offersDestinations && !isTestimonials && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Inbox</div>
+                    <Command.Item
+                      className={itemStyle}
+                      onSelect={handleTestimonials}
+                    >
+                      <QuoteIcon className={iconStyle} />
+                      Testimonials
+                    </Command.Item>
+                  </Command.Group>
+                )}
+
                 {offersDestinations && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Playgrounds</div>

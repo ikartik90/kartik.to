@@ -107,6 +107,15 @@ export interface CommandPaletteHandlers {
   /** On it, and the same rule: its own row goes, the group stays. */
   isCalchemyPlayground: boolean;
   /**
+   * Open the list of collected testimonials — the AUTHOR'S, unlike the
+   * playgrounds above it. The words were written for me by people who have not
+   * agreed to have them shown, so the row is drawn only for an admin session
+   * and the page behind it 404s for anyone else.
+   */
+  handleTestimonials: () => void;
+  /** On it: its own row goes, the same rule the playgrounds follow. */
+  isTestimonials: boolean;
+  /**
    * Where a blocked exit was headed, or null. Non-null means the author asked
    * to leave an editor with unsaved work in it and has been asked what to do.
    */
@@ -179,6 +188,11 @@ export function useCommandPalette(
   // being on it is not being in an editor. It only takes its own row out of
   // the group — see `isCalchemyPlayground` at the call site.
   const isCalchemyPlayground = pathname === "/playground/calchemy";
+
+  // The testimonials list. Not a playground and not an editor — it holds
+  // nothing unsaved and offers nothing to write — so it is a destination like
+  // the playgrounds, and the only thing that sets it apart is who may go there.
+  const isTestimonials = pathname === "/edit/testimonials";
 
   // ...which turns out to be the SHADER playground's case too, for whoever
   // cannot write to it.
@@ -497,6 +511,11 @@ export function useCommandPalette(
   const handleCalchemyPlayground = () => {
     close();
     router.push("/playground/calchemy");
+  };
+
+  const handleTestimonials = () => {
+    close();
+    router.push("/edit/testimonials");
   };
 
   /**
@@ -964,6 +983,8 @@ export function useCommandPalette(
     isShaderPlayground,
     handleCalchemyPlayground,
     isCalchemyPlayground,
+    handleTestimonials,
+    isTestimonials,
     editorKind,
     handleSaveChanges,
     handleDiscardAndExit,

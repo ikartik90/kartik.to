@@ -207,3 +207,46 @@ model UserProfile {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// A few words somebody who has worked with me agreed to put their name to,
+// collected through the form at `/vouch`.
+//
+// The ONLY table in this schema a stranger writes. Every other row here is the
+// author's, made from an admin surface behind a session the proxy has already
+// checked; these arrive from whoever I sent the link to, with no account to
+// check them against. That is not a reason to treat the data as suspect once it
+// is here — it is the reason `TestimonialSubmissionSchema` is the only way in,
+// and the reason the form's page is kept out of the nav, the palette,
+// `SITE_PATHS` and the crawlers: the link's obscurity is part of the gate.
+//
+// NO NATURAL KEY, and it briefly had one. A unique `linkedinUrl` made the
+// profile this table's identity, so a second send from one person corrected the
+// first instead of duplicating it. The field was dropped on 2026-09-10 and
+// nothing replaces it: a unique `name` would be worse than no key at all, since
+// it would let anybody overwrite somebody else's words by typing their name.
+// Two sends are therefore two rows, and `id` is the only identity here.
+//
+// No `publishedAt`, and its absence is deliberate rather than an oversight.
+// `Post` and `ShaderPreset` carry one because the same row is both the draft and
+// the published thing, so the column is what separates them. A testimonial is
+// not published by this table at all — it is raw material I read, and putting a
+// column here for a page that does not exist yet would be inventing a workflow
+// in a migration. It is one nullable column away on the day there is one.
+model Testimonial {
+  id String @id @default(cuid())
+  // What they want to be called, in their own spelling. Not derived from the
+  // profile: the name on a LinkedIn page is whatever LinkedIn last scraped, and
+  // this is the one they chose to be quoted under.
+  name String
+  // The testimonial, and the reason the row exists. Plain `String` with no
+  // `@db.VarChar`, and that is the same
+  // call `Component.aspect` makes: the 280-character brief belongs to
+  // `TESTIMONIAL_QUOTE_MAX_LENGTH`, which the schema and the form's counter both
+  // read, and a width here would be a second copy of it that a change to the
+  // brief would have to remember to migrate.
+  quote String
+  // When it arrived. No `updatedAt` beside it, because nothing updates a row
+  // except the writer re-sending their own — and `createdAt` already answers
+  // the only question the list asks, which is what came in and in what order.
+  createdAt DateTime @default(now())
+}
