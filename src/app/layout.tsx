@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import "@/lib/env";
+import { Analytics } from "@/components/analytics";
 import { ContentSyncProvider } from "@/components/content-sync-provider";
 import { Header } from "@/components/header";
 import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
@@ -101,6 +102,9 @@ export default function RootLayout({
         <CommandPalette />
         <Header />
         {children}
+        {/* Last, and rendering nothing: both clients only attach a deferred
+            script. See analytics.tsx for why the admin surface is filtered. */}
+        <Analytics />
       </body>
     </html>
   );
