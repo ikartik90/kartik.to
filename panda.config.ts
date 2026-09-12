@@ -1537,7 +1537,7 @@ export default defineConfig({
         action: defineRecipe({
           className: "action",
           description:
-            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature. `size` is the third axis: on `text`, `md` is the 40px/`bodyLarge` default and `sm` a 32px/`bodySmall` chip on an 8px inline inset (the option row's pitch); on `icon`, `sm` is the 24px chip — the same 20px glyph on a 2px inset instead of 4px — for an icon that belongs to a line of text rather than to a toolbar.",
+            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature. `size` is the third axis, and applies to the `text` chip: `md` is the 40px/`bodyLarge` default, `sm` a 32px/`bodySmall` chip on an 8px inline inset (the option row's pitch). An icon chip has ONE inset — a smaller icon is a smaller GLYPH in the same chip, which is the icon's business and not the chip's; see `SocialIconLink`.",
           base: {
             cursor: "pointer",
             border: "none",
@@ -1643,10 +1643,10 @@ export default defineConfig({
             },
             // The chip's scale — the third axis, orthogonal to both of the
             // above. Empty for the same reason `emphasis` is: `md` is what
-            // both shapes already draw, and `sm` is applied by the compounds
-            // below — a 32px chip for `text`, a 24px one for `icon`. Inert for
-            // `link` (inline text that takes the surrounding line box, not a
-            // box of its own).
+            // `text` already draws, and `sm` is applied by the compound below.
+            // Inert for `icon` (one inset, whatever the glyph in it measures)
+            // and `link` (inline text that takes the surrounding line box, not
+            // a box of its own).
             size: {
               md: {},
               sm: {},
@@ -1694,20 +1694,6 @@ export default defineConfig({
                 // and `surface` is exactly what `surfaceGlass` is 75% of.
                 _hover: { backgroundColor: "bg.surface" },
               },
-            },
-            {
-              variant: "icon",
-              size: "sm",
-              // The 24px icon chip — the glyph's own 20px with 2px around it
-              // rather than the toolbar's 4px. For an icon that belongs to the
-              // line of text beside it rather than to a bar of controls: the
-              // testimonial card's profile link, sitting against a 14px name.
-              //
-              // The GLYPH does not change, and this is the whole reason the
-              // size axis stops at the padding for `icon`: the social icons are
-              // masked by a shader placed at a fixed 20px box, so a smaller
-              // glyph here would be a smaller glyph on the homepage's row too.
-              css: { padding: "xs" },
             },
             {
               variant: "text",
@@ -9122,12 +9108,13 @@ export default defineConfig({
               position: "relative",
               zIndex: 2,
               flexShrink: 0,
-              // The chip itself is taken to 24px by `size="sm"` on the link —
-              // see the `icon`+`sm` compound in the `action` recipe. It cannot
-              // be done from here: a slot recipe lands in `recipes.slots`,
-              // which the un-nested `recipes` layer the `action` chip is in
-              // beats outright, so a descendant override written in this slot
-              // is emitted and then loses to the padding it is overriding.
+              // 24px here rather than the row's 28, and none of it set from
+              // this slot: the link is drawn at `size="sm"`, which is a 16px
+              // GLYPH in the same 4px inset every icon chip wears, so the box
+              // follows the icon down. A slot recipe could not do it anyway —
+              // slots land in `recipes.slots`, which the un-nested `recipes`
+              // layer the chip is in beats outright, so an override written
+              // here is emitted and then loses to the rule it is overriding.
               // Level with the NAME, which is the line it belongs to. Centring
               // it against the byline instead drops it to the middle of a
               // three-line identity, beside the tagline rather than the name.

@@ -32,11 +32,28 @@ const BRAND_PINK = "#FF4D97";
 const BRAND_ORANGE = "#FFAB6F";
 const TRANSPARENT = "#00000000";
 
-/** The icon's drawn size, and so the shader's. */
-const ICON_PX = 20;
+/**
+ * The icon's drawn size, and so the shader's.
+ *
+ * TWO of them, because an icon that belongs to a LINE OF TEXT is not the same
+ * object as one in a row of its own: the homepage's social row draws at 20px,
+ * and a testimonial's profile link at 16px beside a 14px name. The chip around
+ * it does not change — it is the same 4px inset either way, so the press comes
+ * down to 24px with the glyph rather than shrinking to its outline.
+ *
+ * The shader follows the icon rather than this constant: it is placed and
+ * sized from the SLOT it is claimed by (see `placementFor`), which is what
+ * lets one WebGL context serve icons of both sizes.
+ */
+const ICON_PX = { md: 20, sm: 16 } as const;
+
+/** Which of the two an icon is drawn at. */
+export type SocialIconSize = keyof typeof ICON_PX;
 
 // Cap the render buffer so retina screens don't quadruple the fragment work on
 // a 20px icon. 40×40 ≈ 2×; smoke is soft, so it reads fine well below native DPR.
+// The 16px icon's own 2× lands under this, so the cap only ever bites the
+// larger one — which is the one it was measured against.
 const SHADER_MAX_PIXELS = 40 * 40;
 
 // How far ahead of the cursor to look. At an ordinary mouse speed this is a
@@ -177,20 +194,27 @@ const StageContext = createContext<StageContext | null>(null);
 
 interface Placement {
   maskSrc: string;
+  /** The claimed slot's box — the shader is drawn at the icon's own size. */
+  size: number;
   left: number;
   top: number;
 }
 
 const stageStyle = css({ position: "relative" });
 
+// The slot IS the icon's box: the stage measures it to place and size the
+// shader, so these two are the one place an icon's size is written.
 const slotStyle = css({
   position: "relative",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: "token(spacing.xxl)",
-  height: "token(spacing.xxl)",
 });
+
+const slotSizeStyle = {
+  md: css({ width: "token(spacing.xxl)", height: "token(spacing.xxl)" }),
+  sm: css({ width: "token(spacing.xl)", height: "token(spacing.xl)" }),
+} as const satisfies Record<SocialIconSize, string>;
 
 const iconLayerStyle = css({
   position: "absolute",
@@ -247,10 +271,15 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
       if (!stage) return null;
       const slotBox = element.getBoundingClientRect();
       const stageBox = stage.getBoundingClientRect();
+      // MEASURED, not looked up. The stage holds one shader for icons that are
+      // not all the same size, so the box it draws in has to come from the slot
+      // claiming it rather than from a constant the stage picks.
+      const size = Math.round(slotBox.width);
       return {
         maskSrc,
-        left: slotBox.left - stageBox.left + (slotBox.width - ICON_PX) / 2,
-        top: slotBox.top - stageBox.top + (slotBox.height - ICON_PX) / 2,
+        size,
+        left: slotBox.left - stageBox.left + (slotBox.width - size) / 2,
+        top: slotBox.top - stageBox.top + (slotBox.height - size) / 2,
       };
     },
     [],
@@ -274,6 +303,7 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
         setPlacement((current) =>
           current &&
           current.maskSrc === next.maskSrc &&
+          current.size === next.size &&
           current.left === next.left &&
           current.top === next.top
             ? current
@@ -434,8 +464,8 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
             fragmentShader={gemSmokeFragmentShader}
             mipmaps={["u_image"]}
             uniforms={uniforms}
-            width={ICON_PX}
-            height={ICON_PX}
+            width={placement.size}
+            height={placement.size}
             speed={showing ? 1 : 0}
             maxPixelCount={SHADER_MAX_PIXELS}
           />
@@ -452,10 +482,13 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
 export function SocialIconShader({
   maskSrc,
   active,
+  size = "md",
   children,
 }: {
   maskSrc: string;
   active: boolean;
+  /** The icon's drawn size — the box the shader is placed and sized from. */
+  size?: SocialIconSize;
   children: ReactNode;
 }) {
   const stage = useContext(StageContext);
@@ -478,7 +511,7 @@ export function SocialIconShader({
   }, [stage, active, maskSrc]);
 
   return (
-    <span ref={slotRef} className={slotStyle}>
+    <span ref={slotRef} className={cx(slotStyle, slotSizeStyle[size])}>
       <span
         className={cx(iconLayerStyle, active && iconHiddenStyle)}
         aria-hidden

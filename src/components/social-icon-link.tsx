@@ -4,8 +4,8 @@ import { useState, type FC, type RefObject, type SVGProps } from "react";
 import { css, cx } from "../../styled-system/css";
 import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
-import { SocialIconShader } from "./social-icon-shader";
-import { Link, type ActionSize } from "./ui/link";
+import { SocialIconShader, type SocialIconSize } from "./social-icon-shader";
+import { Link } from "./ui/link";
 import GotoIcon from "@/assets/icons/goto.svg";
 
 // ---------------------------------------------------------------------------
@@ -32,7 +32,17 @@ import GotoIcon from "@/assets/icons/goto.svg";
 // `social-links.tsx`, which is the one surface that has it.
 // ---------------------------------------------------------------------------
 
-const triggerIconStyle = menuIcon();
+// The glyph, at one of the two sizes an icon is drawn at. `menuIcon` is the
+// 20px default; the 16px override is an atomic utility, which is the only
+// spelling that lands — `menuIcon` and the `action` chip's own `& svg` rule are
+// both recipes, and a recipe cannot be beaten from inside the recipe layer.
+const triggerIconStyle = {
+  md: menuIcon(),
+  sm: cx(
+    menuIcon(),
+    css({ width: "token(spacing.xl)", height: "token(spacing.xl)" }),
+  ),
+} as const satisfies Record<SocialIconSize, string>;
 const tooltipIconStyle = tooltipIcon();
 
 // The wrapper both the hover region and the tooltip's anchor hang off — see the
@@ -77,11 +87,14 @@ export interface SocialIconLinkProps {
   maskSrc: string;
   Icon: FC<SVGProps<SVGSVGElement>>;
   /**
-   * The chip around the glyph: the 28px toolbar one by default, 24px at `sm`.
-   * The GLYPH is 20px either way — one shader instance, placed at a fixed box,
-   * serves every icon on the page — so this is the inset and nothing else.
+   * How big the GLYPH is drawn: the row's 20px by default, 16px at `sm` for an
+   * icon that belongs to a line of text rather than to a set of its own.
+   *
+   * The chip around it is untouched — the same 4px inset either way — so the
+   * press follows the glyph down to 24px rather than shrinking to its outline.
+   * The shader follows too: it is sized from the slot, not from a constant.
    */
-  size?: ActionSize;
+  size?: SocialIconSize;
   /** Applied to the wrapper, so a caller can place the icon in its own layout. */
   className?: string;
   /** For a set that coordinates across its items — see `SocialLinks`. */
@@ -95,7 +108,7 @@ export function SocialIconLink({
   ariaLabel,
   maskSrc,
   Icon,
-  size,
+  size = "md",
   className,
   onMouseEnter,
   onMouseLeave,
@@ -134,7 +147,6 @@ export function SocialIconLink({
       <Link
         href={href}
         variant="icon"
-        size={size}
         aria-label={ariaLabel ?? label}
         target="_blank"
         rel="noopener noreferrer"
@@ -142,8 +154,8 @@ export function SocialIconLink({
         // (see the [data-social-trigger] rule in globals.css).
         data-social-trigger
       >
-        <SocialIconShader maskSrc={maskSrc} active={triggerHovered}>
-          <Icon className={triggerIconStyle} aria-hidden />
+        <SocialIconShader maskSrc={maskSrc} active={triggerHovered} size={size}>
+          <Icon className={triggerIconStyle[size]} aria-hidden />
         </SocialIconShader>
       </Link>
 

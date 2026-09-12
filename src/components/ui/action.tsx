@@ -35,10 +35,10 @@ export type ActionEmphasis = "secondary" | "tertiary" | "glass";
 
 /**
  * The scale a Button/Link takes — mirrors the recipe's `size`, orthogonal to
- * both `variant` (the shape) and `emphasis` (the fill). On `text`, `md` is the
- * 40px chip and `sm` the 32px one; on `icon`, `sm` is the 24px chip — the same
- * 20px glyph, drawn in for an icon that belongs to a line of text rather than
- * to a toolbar. Inert for `link`, which is inline text.
+ * both `variant` (the shape) and `emphasis` (the fill). `md` is the 40px chip;
+ * `sm` is the 32px one. Only the `text` shape has two sizes: an icon button has
+ * one inset (a smaller icon is a smaller glyph in the same chip), and a link is
+ * inline text.
  */
 export type ActionSize = "md" | "sm";
 
