@@ -14,6 +14,7 @@ import {
   maxUploadBytesFor,
   mediaKindOf,
   type MediaAsset,
+  type MediaFolder,
 } from "@/domain/media";
 import type { MediaKind } from "@/domain/nodes";
 import { measureMediaFile } from "@/utils/measure-media";
@@ -55,6 +56,15 @@ export interface UseImageInsertOptions {
   maxSelection?: number;
   /** Pictures and clips (the default), or documents. */
   accepts?: ImageInsertAccepts;
+  /**
+   * Which folder of the bucket this dialog reads and writes — the media
+   * library by default, `profiles` for the face beside a testimonial.
+   *
+   * ONE value for both halves on purpose. A dialog that listed the library but
+   * uploaded into `profiles` would lose the picture the moment it was added:
+   * the upload lands somewhere the list it just refreshed does not look.
+   */
+  folder?: MediaFolder;
   onReset?: () => void;
 }
 
@@ -138,6 +148,7 @@ export function useImageInsert({
   selectionMode = "single",
   maxSelection = Number.POSITIVE_INFINITY,
   accepts = "media",
+  folder = "media",
   onReset,
 }: UseImageInsertOptions) {
   const isMultiple = selectionMode === "multiple";
@@ -178,8 +189,9 @@ export function useImageInsert({
 
   /** The half of the library this dialog is for, newest-first as it arrives. */
   const loadLibrary = useCallback(
-    async () => (await listMediaAssets()).filter((a) => allows(a.contentType)),
-    [allows],
+    async () =>
+      (await listMediaAssets(folder)).filter((a) => allows(a.contentType)),
+    [allows, folder],
   );
 
   const reset = useCallback(() => {
@@ -312,6 +324,7 @@ export function useImageInsert({
           filename: file.name,
           contentType: file.type,
           size: file.size,
+          folder,
           ...(shape ?? {}),
         });
 
@@ -328,7 +341,7 @@ export function useImageInsert({
         setPhase("upload");
       }
     },
-    [refreshLibrary, allows],
+    [refreshLibrary, allows, folder],
   );
 
   const openLibrary = useCallback(async () => {

@@ -7,14 +7,17 @@ import {
   CreateMediaUploadInputSchema,
   DeleteMediaInputSchema,
   MediaAssetSchema,
+  MediaFolderSchema,
   UpdateMediaAltInputSchema,
   UpdateMediaFilenameInputSchema,
   filenameFromMediaKey,
   sanitizeMediaFilename,
   type MediaAsset,
+  type MediaFolder,
 } from "@/domain/media";
 import {
   MEDIA_PREFIX,
+  PROFILE_PREFIX,
   createR2UploadUrl,
   deleteR2Object,
   headR2Object,
@@ -22,6 +25,21 @@ import {
   publicUrlForKey,
   updateR2ObjectMetadata,
 } from "@/lib/storage/r2";
+
+/**
+ * A folder's key prefix. The only place the two are tied together — a second
+ * copy of this map is how an object gets written under one prefix and looked
+ * for under another.
+ */
+const FOLDER_PREFIX: Record<MediaFolder, string> = {
+  media: MEDIA_PREFIX,
+  profiles: PROFILE_PREFIX,
+};
+
+/** The prefix an existing key already carries, for reading its name back. */
+function prefixOfKey(key: string): string {
+  return key.startsWith(PROFILE_PREFIX) ? PROFILE_PREFIX : MEDIA_PREFIX;
+}
 
 /** One metadata string as the positive integer it claims to be, or nothing. */
 function numericMetadata(value: string | undefined): number | undefined {
@@ -39,7 +57,7 @@ async function keyToMediaAsset(key: string): Promise<MediaAsset | null> {
     url,
     // The stored name is the source of truth (it survives renaming); the key is
     // only the fallback for objects uploaded before the name was recorded.
-    filename: head.filename || filenameFromMediaKey(key, MEDIA_PREFIX),
+    filename: head.filename || filenameFromMediaKey(key, prefixOfKey(key)),
     contentType: head.contentType,
     size: head.size,
     alt: head.alt || undefined,
@@ -52,14 +70,20 @@ async function keyToMediaAsset(key: string): Promise<MediaAsset | null> {
   });
 }
 
-export async function listMediaAssets(): Promise<MediaAsset[]> {
+/**
+ * One folder's objects. Defaults to the library, so every caller that predates
+ * profiles keeps the behaviour it was written against.
+ */
+export async function listMediaAssets(folder?: unknown): Promise<MediaAsset[]> {
   await requireAdmin();
 
   if (!env.R2_PUBLIC_BASE_URL) {
     throw new Error("R2_PUBLIC_BASE_URL is not configured");
   }
 
-  const keys = await listR2MediaKeys();
+  const keys = await listR2MediaKeys(
+    FOLDER_PREFIX[MediaFolderSchema.default("media").parse(folder)],
+  );
   const assets = await Promise.all(keys.map(keyToMediaAsset));
   return assets.filter((a): a is MediaAsset => a !== null);
 }
@@ -73,10 +97,10 @@ export async function createMediaUploadUrl(
     throw new Error("R2_PUBLIC_BASE_URL is not configured");
   }
 
-  const { filename, contentType, width, height } =
+  const { filename, contentType, width, height, folder } =
     CreateMediaUploadInputSchema.parse(input);
   const safeName = sanitizeMediaFilename(filename);
-  const key = `${MEDIA_PREFIX}${randomUUID()}-${safeName}`;
+  const key = `${FOLDER_PREFIX[folder]}${randomUUID()}-${safeName}`;
 
   // Record the name alongside the object so it can later be edited without
   // moving the object (the key is immutable once anything links to it).

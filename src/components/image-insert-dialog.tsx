@@ -35,6 +35,7 @@ import {
   ALLOWED_DOCUMENT_CONTENT_TYPES,
   ALLOWED_MEDIA_CONTENT_TYPES,
   mediaKindOf,
+  type MediaFolder,
 } from "@/domain/media";
 import { Media } from "@/components/media";
 import { formatFileSize, formatMediaType } from "@/utils/format-file-size";
@@ -219,6 +220,11 @@ interface ImageInsertDialogBaseProps {
    * lists, what the drop zone takes and what the dialog calls itself.
    */
   accepts?: ImageInsertAccepts;
+  /**
+   * Which folder of the bucket to list and upload into. See {@link
+   * MediaFolder} — `profiles` keeps testimonial faces out of the library.
+   */
+  folder?: MediaFolder;
   onClose: () => void;
 }
 
@@ -248,6 +254,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
     mode = "insert",
     initialPhase = "upload",
     accepts = "media",
+    folder = "media",
     onClose,
     selectionMode = "single",
   } = props;
@@ -288,6 +295,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
     initialPhase,
     selectionMode,
     accepts,
+    folder,
     ...(isMultiple ? { maxSelection } : {}),
   });
 

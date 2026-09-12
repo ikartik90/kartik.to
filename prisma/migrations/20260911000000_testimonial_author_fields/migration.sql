@@ -1,0 +1,27 @@
+-- Give a testimonial a face and a profile — the author's half of the row.
+--
+-- Everything `Testimonial` held until now was typed by a stranger into the form
+-- at `/vouch`. These two are typed by me, from the admin board, about a row that
+-- has already arrived: a picture to put beside the words, and a link to whoever
+-- said them.
+--
+-- NULLABLE, unlike every column above them, and for a reason that is the mirror
+-- of why those are NOT NULL. A submission is complete the moment it validates —
+-- there is no half-filled testimonial worth keeping. A row's author half starts
+-- empty by definition: it cannot be filled until the row exists to fill it, and
+-- a testimonial with neither picture nor profile is a perfectly good one.
+--
+-- `linkedinUrl` IS THE SAME NAME AS THE COLUMN DROPPED ONE MIGRATION AGO, AND
+-- IS NOT THAT COLUMN. The old one was collected FROM the submitter and carried
+-- `Testimonial_linkedinUrl_key`, a unique index that made the profile the
+-- table's natural key so a second send corrected the first rather than
+-- duplicating it. Nothing like it is created here, deliberately: a unique index
+-- over a field I fill in by hand would turn one mis-paste of mine into a
+-- constraint violation against somebody else's row, and the upsert it used to
+-- enable has no caller left — writing is `create`, and these are `update`.
+--
+-- Additive and reversible: two nullable columns on a table whose existing rows
+-- are all still valid without them, so there is nothing to backfill and no
+-- default to choose.
+ALTER TABLE "Testimonial" ADD COLUMN "avatarUrl" TEXT;
+ALTER TABLE "Testimonial" ADD COLUMN "linkedinUrl" TEXT;

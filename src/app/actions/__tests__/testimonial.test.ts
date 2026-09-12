@@ -23,12 +23,16 @@ vi.mock("@neondatabase/auth/next/server", () => ({
 
 const mockCreate = vi.fn();
 const mockFindMany = vi.fn();
+const mockUpdate = vi.fn();
+const mockFindUnique = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     testimonial: {
       create: (...args: unknown[]) => mockCreate(...args),
       findMany: (...args: unknown[]) => mockFindMany(...args),
+      update: (...args: unknown[]) => mockUpdate(...args),
+      findUnique: (...args: unknown[]) => mockFindUnique(...args),
     },
   },
 }));
@@ -37,7 +41,8 @@ vi.mock("@/lib/env", () => ({
   env: { ADMIN_GITHUB_ID: "admin@example.com" },
 }));
 
-const { submitTestimonial, getTestimonials } = await import("../testimonial");
+const { submitTestimonial, getTestimonials, updateTestimonialDetails } =
+  await import("../testimonial");
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -51,7 +56,15 @@ const submission = {
 };
 
 function row(overrides: Record<string, unknown> = {}) {
-  return { id: "t1", ...submission, createdAt: NOW, ...overrides };
+  return {
+    id: "t1",
+    ...submission,
+    createdAt: NOW,
+    avatarUrl: null,
+    linkedinUrl: null,
+    excerpt: null,
+    ...overrides,
+  };
 }
 
 function signedOut() {
@@ -195,5 +208,219 @@ describe("getTestimonials", () => {
 
     await expect(getTestimonials()).rejects.toThrow();
     expect(mockFindMany).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateTestimonialDetails
+//
+// The author's door onto the author's two fields. Everything worth testing here
+// is a boundary: who may open it, what it will take, and — the one that matters
+// most — what it refuses to touch on the way through.
+// ---------------------------------------------------------------------------
+
+describe("updateTestimonialDetails", () => {
+  const details = {
+    id: "t1",
+    avatarUrl: "https://cdn.example.com/media/ada.jpg",
+    linkedinUrl: "https://www.linkedin.com/in/ada",
+  };
+
+  it("writes a picture and a profile onto one row", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row(details));
+
+    await expect(updateTestimonialDetails(details)).resolves.toEqual(
+      row(details),
+    );
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: "t1" },
+      data: {
+        avatarUrl: "https://cdn.example.com/media/ada.jpg",
+        linkedinUrl: "https://www.linkedin.com/in/ada",
+      },
+    });
+  });
+
+  // The rail clears a field by emptying it, and an empty box has to reach the
+  // column as NULL rather than as the empty string — otherwise "no profile"
+  // becomes a profile whose URL happens to be nothing.
+  it("clears both fields when they are emptied", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({ id: "t1", avatarUrl: "", linkedinUrl: "" });
+
+    expect(mockUpdate.mock.calls[0][0].data).toEqual({
+      avatarUrl: null,
+      linkedinUrl: null,
+    });
+  });
+
+  it("stores a profile in one spelling however it was typed", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: null,
+      linkedinUrl: "uk.linkedin.com/in/ada/?trk=nav",
+    });
+
+    expect(mockUpdate.mock.calls[0][0].data.linkedinUrl).toBe(
+      "https://www.linkedin.com/in/ada",
+    );
+  });
+
+  // THE IMPORTANT ONE, and the line moved once: the name became editable (it is
+  // a label on an attribution, and people put job titles in it), the QUOTE did
+  // not. A caller that posts a quote must not be able to edit what somebody else
+  // wrote through a door that was opened for a picture.
+  it("cannot reach the quote", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({
+      ...details,
+      quote: "Words I did not write.",
+    });
+
+    expect(Object.keys(mockUpdate.mock.calls[0][0].data).sort()).toEqual([
+      "avatarUrl",
+      "linkedinUrl",
+    ]);
+  });
+
+  it.each([
+    ["a URL that is not a profile", { linkedinUrl: "https://example.com/ada" }],
+    ["a picture that is not a URL", { avatarUrl: "ada.jpg" }],
+    ["no row to write to", { id: "" }],
+  ])("refuses %s", async (_label, bad) => {
+    signedInAsAdmin();
+
+    await expect(
+      updateTestimonialDetails({ ...details, ...bad }),
+    ).rejects.toThrow();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  // Writing is open on the way IN because it has to be. Nothing about that
+  // applies here: this edits a row that already exists, from a board only I can
+  // reach, and the guard is checked before the input is even looked at.
+  it.each([
+    ["a visitor with no session", signedOut],
+    ["somebody else's session", signedInAsSomeoneElse],
+  ])("refuses %s", async (_label, arrange) => {
+    arrange();
+
+    await expect(updateTestimonialDetails(details)).rejects.toThrow();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The excerpt — the one field on this row whose validity depends on ANOTHER
+// field, which is why the action reads the row before it writes it.
+// ---------------------------------------------------------------------------
+
+describe("updateTestimonialDetails (excerpt)", () => {
+  const base = { id: "t1", avatarUrl: null, linkedinUrl: null };
+
+  beforeEach(() => {
+    signedInAsAdmin();
+    mockFindUnique.mockResolvedValue(row());
+    mockUpdate.mockImplementation(async ({ data }) => row(data));
+  });
+
+  it("stores a portion of what they wrote", async () => {
+    await updateTestimonialDetails({ ...base, excerpt: "Shipped the thing" });
+
+    expect(mockUpdate.mock.calls[0][0].data.excerpt).toBe("Shipped the thing");
+  });
+
+  // THE ONE THAT MATTERS. The excerpt is checked against the stored quote, not
+  // against anything the caller sent alongside — otherwise "is this their
+  // words" is answered by the same request that is trying to change them.
+  it("refuses words they never wrote", async () => {
+    await expect(
+      updateTestimonialDetails({ ...base, excerpt: "Shipped it late, badly." }),
+    ).rejects.toThrow(/their words/i);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a quote stitched out of two real fragments", async () => {
+    await expect(
+      updateTestimonialDetails({ ...base, excerpt: "Shipped the beautiful." }),
+    ).rejects.toThrow(/their words/i);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  // A caller cannot smuggle its own quote in to make the check pass.
+  it("checks against the STORED quote, not a supplied one", async () => {
+    await expect(
+      updateTestimonialDetails({
+        ...base,
+        quote: "Anything I like.",
+        excerpt: "Anything I like.",
+      }),
+    ).rejects.toThrow(/their words/i);
+  });
+
+  it("clears the excerpt back to the whole quote", async () => {
+    await updateTestimonialDetails({ ...base, excerpt: "" });
+
+    expect(mockUpdate.mock.calls[0][0].data.excerpt).toBeNull();
+    // Cleared without consulting the quote — there is nothing to check.
+    expect(mockFindUnique).not.toHaveBeenCalled();
+  });
+
+  // Editing only the picture must not silently wipe a chosen excerpt.
+  it("leaves an existing excerpt alone when it is not named", async () => {
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: "https://cdn.example.com/media/ada.jpg",
+      linkedinUrl: null,
+    });
+
+    expect("excerpt" in mockUpdate.mock.calls[0][0].data).toBe(false);
+  });
+
+  it("writes a corrected name", async () => {
+    await updateTestimonialDetails({ ...base, name: "Lalit Arya" });
+
+    expect(mockUpdate.mock.calls[0][0].data.name).toBe("Lalit Arya");
+  });
+
+  it("leaves the name alone when it is not named", async () => {
+    await updateTestimonialDetails(base);
+
+    expect("name" in mockUpdate.mock.calls[0][0].data).toBe(false);
+  });
+
+  it("refuses a blank name rather than clearing it", async () => {
+    await expect(
+      updateTestimonialDetails({ ...base, name: "  " }),
+    ).rejects.toThrow();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  // The line that did not move: the name became editable, the words did not.
+  it("still cannot touch the quote", async () => {
+    await updateTestimonialDetails({
+      ...base,
+      name: "Lalit Arya",
+      quote: "Words I did not write.",
+    });
+
+    expect("quote" in mockUpdate.mock.calls[0][0].data).toBe(false);
+  });
+
+  it("refuses when the row is gone", async () => {
+    mockFindUnique.mockResolvedValue(null);
+
+    await expect(
+      updateTestimonialDetails({ ...base, excerpt: "Shipped the thing" }),
+    ).rejects.toThrow();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

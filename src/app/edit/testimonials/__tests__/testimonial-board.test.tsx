@@ -1,0 +1,472 @@
+import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// ---------------------------------------------------------------------------
+// The board: a card per row, a rail on the selected one, and the two fields the
+// rail writes showing up on the card they belong to.
+//
+// That last part is the whole point of this surface and the thing most worth
+// testing. The value travels a long way — field → action → stored row → card —
+// and every hop is somewhere it could be dropped, or land on the wrong card.
+// ---------------------------------------------------------------------------
+
+const mockUpdate = vi.fn();
+vi.mock("@/app/actions/testimonial", () => ({
+  updateTestimonialDetails: (input: unknown) => mockUpdate(input),
+}));
+
+// The real dialog reaches a server action, and through it `next/headers`.
+// Stubbed to the one fact this file's cases are about: a picture was chosen.
+const PICKED = "https://cdn.test/media/uuid-ada.jpg";
+vi.mock("@/components/image-insert-dialog", () => ({
+  ImageInsertDialog: ({
+    open,
+    folder,
+    onInsert,
+  }: {
+    open: boolean;
+    folder?: string;
+    onInsert: (payload: { src: string; kind: string }) => void;
+  }) =>
+    open ? (
+      <button
+        data-folder={folder}
+        onClick={() => onInsert({ src: PICKED, kind: "image" })}
+      >
+        pick a picture
+      </button>
+    ) : null,
+}));
+
+const { TestimonialBoard } = await import("../testimonial-board");
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const ada = {
+  id: "t1",
+  name: "Ada Lovelace",
+  quote: "Turned a vague brief into something we could actually ship.",
+  createdAt: new Date("2026-03-09T10:00:00.000Z"),
+  avatarUrl: null,
+  linkedinUrl: null,
+  excerpt: null,
+};
+
+const grace = {
+  id: "t2",
+  name: "Grace Hopper",
+  quote: "Read the spec closer than the person who wrote it.",
+  createdAt: new Date("2026-03-08T10:00:00.000Z"),
+  avatarUrl: null,
+  linkedinUrl: null,
+  excerpt: null,
+};
+
+/** The action's honest behaviour: the stored row, with the write applied. */
+function storesWhatItIsGiven() {
+  mockUpdate.mockImplementation(async (input) => {
+    const row = [ada, grace].find((r) => r.id === input.id)!;
+    // Mirrors the action: an unnamed excerpt leaves the stored one alone, and a
+    // quote that is not a slice of the row's own words is refused outright.
+    if (typeof input.excerpt === "string" && input.excerpt !== "") {
+      if (!row.quote.includes(input.excerpt.trim())) {
+        throw new Error("An excerpt has to be their words.");
+      }
+    }
+    if (typeof input.name === "string" && input.name.trim() === "") {
+      throw new Error("A testimonial needs a name on it.");
+    }
+    return {
+      ...row,
+      name: input.name ?? row.name,
+      avatarUrl: input.avatarUrl,
+      linkedinUrl: input.linkedinUrl,
+      excerpt:
+        input.excerpt === undefined ? row.excerpt : (input.excerpt || null),
+    };
+  });
+}
+
+const card = (name: RegExp | string) => screen.getByRole("button", { name });
+const rail = () => screen.getByRole("dialog");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  storesWhatItIsGiven();
+});
+afterEach(() => cleanup());
+
+describe("TestimonialBoard", () => {
+  it("draws a card for every row", () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    expect(screen.getByText(ada.quote)).toBeTruthy();
+    expect(screen.getByText(grace.quote)).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens the rail on the card that was pressed", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(card(/grace hopper/i));
+
+    expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
+    expect(card(/grace hopper/i).getAttribute("aria-pressed")).toBe("true");
+    expect(card(/ada lovelace/i).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  // The rail is one surface for the whole board, so moving to another card has
+  // to re-point it — not open a second one, and not keep showing the first.
+  it("moves the rail to the next card selected", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(card(/grace hopper/i));
+
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
+  });
+
+  // ---- The picture -------------------------------------------------------
+
+  it("puts a picked picture on the card it was picked for", async () => {
+    const { container } = render(
+      <TestimonialBoard testimonials={[ada, grace]} />,
+    );
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(within(rail()).getByRole("button", { name: /picture/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add picture/i }));
+    await userEvent.click(screen.getByRole("button", { name: /pick a picture/i }));
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", avatarUrl: PICKED }),
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        container.querySelector(`img[src="${PICKED}"]`),
+      ).not.toBeNull(),
+    );
+    // On ONE card. A picture that landed on every row would pass every
+    // assertion above.
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+  });
+
+  // A testimonial's face is not library material. The dialog that adds one
+  // opens on `profiles/` — the same folder it uploads into, so a picture added
+  // here is still there the next time the picker is opened.
+  it("picks from the profiles folder rather than the media library", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(within(rail()).getByRole("button", { name: /picture/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add picture/i }));
+
+    expect(
+      screen
+        .getByRole("button", { name: /pick a picture/i })
+        .getAttribute("data-folder"),
+    ).toBe("profiles");
+  });
+
+  it("takes the picture off again", async () => {
+    const { container } = render(
+      <TestimonialBoard testimonials={[{ ...ada, avatarUrl: PICKED }]} />,
+    );
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(
+      within(rail()).getByRole("button", { name: /remove picture/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", avatarUrl: null }),
+      ),
+    );
+    await waitFor(() =>
+      expect(container.querySelector("img")).toBeNull(),
+    );
+  });
+
+  // ---- The profile -------------------------------------------------------
+
+  it("puts a typed profile on the card, as its handle", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(within(rail()).getByRole("button", { name: /linkedin/i }));
+    await userEvent.type(
+      within(rail()).getByLabelText(/url/i),
+      "linkedin.com/in/ada-lovelace",
+    );
+
+    // CANONICAL, not as typed. The rail normalises before it commits, so the
+    // board's own copy of the row is the spelling the column will hold and the
+    // card never flashes the raw typing before settling on the stored form.
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "t1",
+          linkedinUrl: "https://www.linkedin.com/in/ada-lovelace",
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("in/ada-lovelace")).toBeTruthy(),
+    );
+  });
+
+  // The box is labelled LinkedIn. Typing something else is answered rather than
+  // stored, and — the load-bearing half — nothing is written while it is wrong.
+  it("says so, and writes nothing, when the URL is not a profile", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(within(rail()).getByRole("button", { name: /linkedin/i }));
+    await userEvent.type(
+      within(rail()).getByLabelText(/url/i),
+      "https://example.com/in/ada",
+    );
+
+    await waitFor(() =>
+      expect(within(rail()).getByText(/does not look like/i)).toBeTruthy(),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  // Typing a URL passes through a dozen states that are not one. The message
+  // has to go when the value comes good, or it is a complaint about a field
+  // that is now correct.
+  it("stops complaining once the URL is a profile", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(within(rail()).getByRole("button", { name: /linkedin/i }));
+
+    const box = within(rail()).getByLabelText(/url/i);
+    await userEvent.type(box, "nonsense");
+    await waitFor(() =>
+      expect(within(rail()).getByText(/does not look like/i)).toBeTruthy(),
+    );
+
+    await userEvent.clear(box);
+    await userEvent.type(box, "linkedin.com/in/ada");
+
+    await waitFor(() =>
+      expect(within(rail()).queryByText(/does not look like/i)).toBeNull(),
+    );
+  });
+
+  it("takes the profile off again", async () => {
+    render(
+      <TestimonialBoard
+        testimonials={[{ ...ada, linkedinUrl: "https://www.linkedin.com/in/ada" }]}
+      />,
+    );
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(
+      within(rail()).getByRole("button", { name: /remove linkedin/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", linkedinUrl: null }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByText("in/ada")).toBeNull());
+  });
+
+  // The card cannot hold a link (it is a button), so the rail is the only place
+  // the profile is actually reachable from.
+  it("offers the stored profile as a link, which the card cannot", async () => {
+    render(
+      <TestimonialBoard
+        testimonials={[{ ...ada, linkedinUrl: "https://www.linkedin.com/in/ada" }]}
+      />,
+    );
+
+    await userEvent.click(card(/ada lovelace/i));
+
+    const link = within(rail()).getByRole("link");
+    expect(link.getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
+  });
+
+  // A write that fails must not leave the card showing a value the database
+  // does not have — that is a board that lies about what is stored.
+  it("puts the card back when the write fails", async () => {
+    const { container } = render(<TestimonialBoard testimonials={[ada]} />);
+    mockUpdate.mockRejectedValue(new Error("connection lost"));
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(within(rail()).getByRole("button", { name: /picture/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add picture/i }));
+    await userEvent.click(screen.getByRole("button", { name: /pick a picture/i }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    await waitFor(() => expect(container.querySelector("img")).toBeNull());
+    expect(within(rail()).getByText(/could not save/i)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The excerpt — choosing which portion of somebody's words a card carries.
+// ---------------------------------------------------------------------------
+
+describe("TestimonialBoard (excerpt)", () => {
+  const openExcerpt = async () => {
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(
+      within(rail()).getByRole("button", { name: /excerpt/i }),
+    );
+    // By ROLE, not by label alone: the section's control group is named
+    // "Excerpt" too, so a bare label query matches the box and its container.
+    return within(rail()).getByRole("textbox", { name: "Excerpt" });
+  };
+
+  it("shows the chosen portion on the card", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    const box = await openExcerpt();
+    await userEvent.clear(box);
+    await userEvent.type(box, "something we could actually ship");
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "t1",
+          excerpt: "something we could actually ship",
+        }),
+      ),
+    );
+    // Scoped to the CARD: the rail's box holds the same words, so an
+    // unscoped query would pass on the textarea alone and prove nothing.
+    await waitFor(() =>
+      expect(card(/ada lovelace/i).textContent).toContain(
+        "something we could actually ship",
+      ),
+    );
+    expect(card(/ada lovelace/i).textContent).not.toContain(
+      "Turned a vague brief",
+    );
+  });
+
+  // Opening the section hands you the whole thing to cut down, which is the
+  // gesture the rule expects — trim, do not retype.
+  it("opens with the whole quote to trim", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+
+    const box = await openExcerpt();
+
+    expect((box as HTMLTextAreaElement).value).toBe(ada.quote);
+  });
+
+  // The board must not let a misquote leave the screen, let alone reach the
+  // column. The refusal is shown and the card does not change.
+  it("refuses words they never wrote, and says so", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+
+    const box = await openExcerpt();
+    await userEvent.clear(box);
+    await userEvent.type(box, "Shipped it late and badly.");
+
+    await waitFor(() =>
+      expect(within(rail()).getByText(/their words/i)).toBeTruthy(),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(screen.getByText(ada.quote)).toBeTruthy();
+  });
+
+  it("goes back to the whole quote when the excerpt is removed", async () => {
+    render(
+      <TestimonialBoard
+        testimonials={[{ ...ada, excerpt: "a vague brief" }]}
+      />,
+    );
+
+    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(
+      within(rail()).getByRole("button", { name: /remove excerpt/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", excerpt: null }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByText(ada.quote)).toBeTruthy());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The name — the one field here that was written by somebody else and is still
+// mine to correct. People put job titles in it.
+// ---------------------------------------------------------------------------
+
+describe("TestimonialBoard (name)", () => {
+  const nameBox = () =>
+    within(rail()).getByRole("textbox", { name: "Name" });
+
+  /** The card carrying these words. Found by the QUOTE, which renaming does not
+   *  change — and scoped, because the rail's header shows the name too. */
+  const cardSaying = (quote: string) =>
+    screen.getByText(quote).closest("button")!;
+
+  it("opens with the stored name in it", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+    await userEvent.click(card(/ada lovelace/i));
+
+    expect((nameBox() as HTMLInputElement).value).toBe("Ada Lovelace");
+  });
+
+  it("writes a corrected name and shows it on the card", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+    await userEvent.click(card(/ada lovelace/i));
+
+    await userEvent.clear(nameBox());
+    await userEvent.type(nameBox(), "Ada L");
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", name: "Ada L" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(cardSaying(ada.quote).textContent).toContain("Ada L"),
+    );
+    // The other card is untouched.
+    expect(cardSaying(grace.quote).textContent).toContain("Grace Hopper");
+  });
+
+  // A name cannot be cleared — the column is NOT NULL and a testimonial
+  // credited to nobody is not a state worth having. An emptied box is answered,
+  // not obeyed, and nothing is written.
+  it("refuses an emptied name rather than clearing it", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+    await userEvent.click(card(/ada lovelace/i));
+
+    await userEvent.clear(nameBox());
+
+    await waitFor(() =>
+      expect(within(rail()).getByText(/needs a name/i)).toBeTruthy(),
+    );
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(cardSaying(ada.quote).textContent).toContain("Ada Lovelace");
+  });
+
+  // The line that did not move.
+  it("offers no way to edit the words themselves", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+    await userEvent.click(card(/ada lovelace/i));
+
+    expect(
+      within(rail()).queryByRole("textbox", { name: "Quote" }),
+    ).toBeNull();
+  });
+});

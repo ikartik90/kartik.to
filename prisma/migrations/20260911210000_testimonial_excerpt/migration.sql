@@ -1,0 +1,27 @@
+-- Let a card quote PART of a testimonial.
+--
+-- Most of the collected testimonials run close to the 280-character cap, and a
+-- board of six full ones is a wall of prose nobody reads. `excerpt` names the
+-- portion worth putting on a card. The testimonial itself is untouched: `quote`
+-- stays the canonical record of what was actually sent, nothing truncates it,
+-- and an excerpt can be widened or dropped at any time to get back to all of it.
+--
+-- NULLABLE, and null is the ordinary state — it means "show the whole quote".
+-- There is deliberately no default copying `quote` into it: the same words in
+-- two columns is two places for them to drift apart, and the fallback costs one
+-- `??` at the point of use (`testimonialShown`).
+--
+-- NO CONSTRAINT HERE, and that is a deliberate limit rather than an oversight.
+-- The rule this column lives under is that an excerpt must appear VERBATIM AND
+-- CONTIGUOUSLY inside `quote` — these are somebody else's words, and a free-text
+-- excerpt field would be a box for putting sentences into their mouth. Postgres
+-- could almost express that (`CHECK (position(excerpt in quote) > 0)`), but a
+-- CHECK across two columns of the same row would still not survive the one case
+-- that matters, and a violation would surface as a constraint error rather than
+-- as something a person can be told. So it is enforced in
+-- `updateTestimonialDetails`, which is the only writer, and which answers with
+-- `TESTIMONIAL_EXCERPT_NOT_THEIRS`.
+--
+-- Additive: one nullable column on a table whose existing rows are all still
+-- valid without it. Nothing to backfill.
+ALTER TABLE "Testimonial" ADD COLUMN "excerpt" TEXT;

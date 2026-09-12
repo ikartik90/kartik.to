@@ -397,6 +397,12 @@ export default defineConfig({
           calchemyPlayground: { value: "960px" },
           librarySidebar: { value: "200px" },
           imagePreviewMax: { value: "280px" },
+          // The narrowest a testimonial card may be drawn, which is the
+          // narrowest a few lines of prose read well at — below this the quote
+          // breaks into a ragged column of four-word rows. It is what the
+          // board's `auto-fill` tracks are sized against, so the number of
+          // columns is decided by the words rather than declared.
+          testimonialCard: { value: "280px" },
           insertDialogHeight: { value: "480px" },
           // A 32px `sm` action chip on a 6px inset — the row hugs its buttons
           // rather than framing the taller 40px chip it used to hold.
@@ -8775,6 +8781,186 @@ export default defineConfig({
           },
           defaultVariants: {
             available: true,
+          },
+        }),
+
+        // ------------------------------------------------------------------
+        // One collected testimonial, on the admin board at `/edit/testimonials`
+        // — the words somebody sent through `/vouch`, with the face and the
+        // profile I put beside them afterwards.
+        //
+        // A CARD THAT IS A BUTTON, which is what most of this recipe is about.
+        // Selecting it opens the rail that edits it, so the whole card is the
+        // hit target — and a `<button>` is the only element that gets keyboard
+        // operation, focus and the pressed state for free. The cost is that a
+        // button's own appearance has to be taken off it first (`all: unset` is
+        // too blunt — it would take the focus ring with it), and that NOTHING
+        // inside may be interactive: a link nested in a button is not operable
+        // by keyboard in any browser. That is why the profile is drawn here as
+        // its handle in text rather than as a link to it — the rail is where it
+        // is clickable, and the card is where it is VISIBLE.
+        //
+        // The picture and the profile are each absent until I add them, so
+        // every slot below has to read as deliberate while empty. The avatar
+        // keeps its circle and shows the initial; the handle row simply is not
+        // drawn. Neither leaves a hole where something is loading.
+        // ------------------------------------------------------------------
+        testimonialCard: defineSlotRecipe({
+          className: "testimonial-card",
+          description:
+            "Testimonial card — one collected testimonial on the admin board, composed as root > quote + byline(avatar + identity(name, handle)). The root is a <button>: pressing it opens the properties rail that edits the card, so the whole surface is the target and the `selected` variant marks which card the rail is currently on. Nothing inside is interactive (a link inside a button is not keyboard-operable), so a stored LinkedIn profile shows as its handle in text and is clickable only from the rail.",
+          slots: [
+            "root",
+            "quote",
+            "byline",
+            "avatar",
+            "identity",
+            "name",
+            "handle",
+          ],
+          base: {
+            root: {
+              // Undoing the button, one property at a time rather than with
+              // `all: unset` — which would also throw away the focus ring the
+              // whole point of using a button was to keep.
+              appearance: "none",
+              font: "inherit",
+              textAlign: "start",
+              cursor: "pointer",
+
+              display: "flex",
+              flexDirection: "column",
+              // NOT `space-between`. Who said it goes on top and the words
+              // follow directly under; with the ends pushed apart, a short
+              // quote would hang at the bottom of a card stretched to its
+              // neighbour's height, leaving a hole under the name.
+              justifyContent: "flex-start",
+              gap: "lg",
+              width: "token(spacing.full)",
+              // NO height. The card is as tall as the words in it, which is
+              // what makes the board read almost like a masonry wall once the
+              // excerpts differ in length. It used to be `100%` — stretched to
+              // the tallest card in its row — which is the right call when
+              // every card holds the same SHAPE of thing (a cover, a title) and
+              // the wrong one here, where the content IS the variation.
+
+              padding: "xl",
+              borderRadius: "lg",
+              borderWidth: "token(spacing.xxs)",
+              borderStyle: "solid",
+              borderColor: "border.divider",
+              backgroundColor: "bg.surface",
+              // Colour and border only, so a card taking selection does not
+              // move — nothing here changes the box's size.
+              transition: "background-color 150ms ease, border-color 150ms ease",
+              _hover: { backgroundColor: "bg.itemHover" },
+            },
+            quote: {
+              // `bodySmall`, not the `quote` style the words will get on a
+              // published page. This is a board, not the page: the job here is
+              // to read six of them at once and find the one being annotated,
+              // and 20px prose in a 280px track turns a testimonial into a
+              // ragged column. The rail is where one row is looked at closely.
+              textStyle: "bodySmall",
+              color: "text.body",
+              margin: "none",
+              // NOT clamped. A line clamp is the wrong trade on this surface:
+              // the cap on a testimonial is 280 characters, so the longest one
+              // possible still fits in a card, and hiding the end of the very
+              // quote being annotated is hiding the thing the board exists to
+              // show. Unequal cards are the cost, and the grid absorbs it —
+              // every card in a row stretches to the tallest.
+            },
+            // Who said it, ABOVE the words rather than under them: the board
+            // is scanned for a person, and the face is what the eye lands on.
+            // `flex-start` rather than `center` so the avatar stays level with
+            // the first line of a name that has wrapped onto two.
+            byline: {
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "lg",
+              minWidth: 0,
+            },
+            avatar: {
+              flexShrink: 0,
+              display: "grid",
+              placeItems: "center",
+              width: "token(spacing.4xl)",
+              height: "token(spacing.4xl)",
+              borderRadius: "full",
+              overflow: "hidden",
+              // The ring is what keeps an EMPTY avatar legible as a slot
+              // waiting for a picture rather than as a gap in the layout — and
+              // it is the same inset outline every other picture on this site
+              // wears, so a filled one is not a special case.
+              boxShadow: "inset 0 0 0 token(spacing.xxs) token(colors.border.imageOutline)",
+              backgroundColor: "bg.itemHover",
+              // The initial, shown only while there is no picture over it.
+              textStyle: "bodySmall",
+              color: "text.body/50",
+              textTransform: "uppercase",
+              "& img": {
+                width: "token(spacing.full)",
+                height: "token(spacing.full)",
+                objectFit: "cover",
+                display: "block",
+              },
+            },
+            identity: {
+              display: "flex",
+              flexDirection: "column",
+              gap: "3xs",
+              minWidth: 0,
+            },
+            name: {
+              textStyle: "bodySmall",
+              color: "text.default",
+              margin: "none",
+              // WRAPS. These are self-described — "Lalit Arya - Senior UX
+              // Designer" is one value in the `name` column — and a single
+              // ellipsised line would cut the title off every one of them.
+              // Nothing here is a fixed-height row, so there is nothing for a
+              // second line to break.
+              wordBreak: "break-word",
+            },
+            // The profile, as its handle. Drawn at all only when there is one —
+            // see the note at the top about why it is text and not a link.
+            handle: {
+              display: "flex",
+              alignItems: "center",
+              gap: "xs",
+              textStyle: "fineprint",
+              color: "text.body/50",
+              minWidth: 0,
+              "& svg": {
+                flexShrink: 0,
+                width: "token(spacing.lg)",
+                height: "token(spacing.lg)",
+                display: "block",
+              },
+              "& span": { wordBreak: "break-word" },
+            },
+          },
+          variants: {
+            /**
+             * Whether the rail is currently editing THIS card.
+             *
+             * Drawn on the border rather than with a ring or a shadow, because
+             * the card already has a border: thickening the same edge moves
+             * nothing, where an added outline would shift a grid of cards by a
+             * pixel as selection travels across it.
+             */
+            selected: {
+              true: {
+                root: {
+                  borderColor: "border.focusRing",
+                  backgroundColor: "bg.itemHover",
+                },
+              },
+            },
+          },
+          defaultVariants: {
+            selected: false,
           },
         }),
       },
