@@ -5800,20 +5800,25 @@ export default defineConfig({
         // rather than an input, because a file's name is not editable here —
         // it is edited in the library, where the file is (`updateMediaFilename`).
         //
-        // ONE FRAME, at the full width of the rail. The replace button used to
-        // stand outside it, which cost the field 36px and left it visibly
-        // shorter than every other row in the panel — a picture slot reading as
-        // a lesser control than the name above it. Inside, it is what the field
-        // family already calls a trailing action, and the box is the same box.
+        // THE FRAME IS A FIELD AND NOTHING MORE. The design draws the replace
+        // button OUTSIDE it — field, 8px, a 28px chip — which is the properties
+        // row the panel already lays out: `propertyRowField` then the reserved
+        // `propertyRowAction` column, the one kept empty "the day a row needs a
+        // reset or an overflow button". So the control hands the panel two
+        // children and the row places them; it holds no grid of its own. Its
+        // first two attempts both did, and both cost the field width: a
+        // sub-grid inside the field column squeezed the frame 36px narrower
+        // than every other field in the rail, and folding the button into the
+        // frame only hid that by making the field a different shape from the
+        // one the design draws.
         //
-        // The whole frame is the trigger; the button is the same act, drawn
-        // where the design puts it. One act, two targets: the field is the big,
-        // obvious one, and the button is the one that says out loud what
-        // pressing it does.
+        // One act, two targets: the whole frame is the trigger, which is the
+        // big and obvious one, and the chip beside it is the one that says out
+        // loud what pressing does.
         imageField: defineSlotRecipe({
           className: "image-field",
           description:
-            "Image input — a 16px thumbnail of the file, a hairline, and the file's name inside the shared `field` frame, with a replace action at its trailing edge (Figma 1233:2639). The frame is a button: pressing it opens the media library. An empty slot draws a glyph in the cell and asks in the family's placeholder tone; it has nothing to replace, so the trailing action is not drawn.",
+            "Image input — a 16px thumbnail of the file, a hairline, and the file's name inside the shared `field` frame, with a replace chip in the properties row's action column beside it (Figma 1233:2639). The frame is a button: pressing it opens the media library. An empty slot draws a glyph in the cell and asks in the family's placeholder tone; it has nothing to replace, so no chip is drawn and the column simply stays empty.",
           slots: [
             "frame",
             "trigger",
@@ -5821,10 +5826,9 @@ export default defineConfig({
             "media",
             "separator",
             "name",
-            "replace",
           ],
           base: {
-            // The frame keeps its 8px inset, its 28px height and its full width
+            // The frame keeps its inset, its 28px height and its column's width
             // from `field`; all it is told here is that it is pressed rather
             // than typed in.
             frame: { cursor: "pointer" },
@@ -5893,43 +5897,18 @@ export default defineConfig({
               },
             },
             // One line, ellipsised: a library name is as long as it is, and the
-            // rail is 220px wide. Everything about how it is SET — size, face,
-            // weight, and the placeholder tone an empty slot asks in — comes
-            // from the field's own `control` slot, which the component wears
-            // alongside this one. Setting type here is how it ended up 16px in
-            // a row of 14px values: the slot had no typography, so it took the
-            // page's.
+            // field column is 212px. Everything about how it is SET — size,
+            // face, weight, and the placeholder tone an empty slot asks in —
+            // comes from the field's own `control` slot, which the component
+            // wears alongside this one. Setting type here is how it ended up
+            // 16px in a row of 14px values: the slot had no typography, so it
+            // took the page's.
             name: {
               flex: "1 1 auto",
               minWidth: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-            },
-            // The trailing action, INSIDE the frame — the colour field's swatch
-            // arrangement exactly: a bare button, no border of its own, so the
-            // field is not the one control in the app with two edges. It takes
-            // the frame's colour, which means it lights with the field.
-            replace: {
-              appearance: "none",
-              margin: "none",
-              padding: "none",
-              borderWidth: "0",
-              backgroundColor: "transparent",
-              color: "inherit",
-              cursor: "pointer",
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "color 150ms ease",
-              "& svg": {
-                width: "token(spacing.xxl)",
-                height: "token(spacing.xxl)",
-                display: "block",
-              },
-              "& svg path[stroke]": { stroke: "currentColor" },
-              _disabled: { cursor: "not-allowed" },
             },
           },
         }),

@@ -1,6 +1,7 @@
 "use client";
 
 import { testimonialCard } from "../../../../styled-system/recipes";
+import { PROPERTIES_TRIGGER_ATTR } from "@/components/ui/properties-panel";
 import { testimonialShown, type Testimonial } from "@/domain/testimonial";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import { SocialIconLink } from "@/components/social-icon-link";
@@ -90,6 +91,12 @@ export function TestimonialCard({
           profile beside it be a real link. */}
       <button
         type="button"
+        // This card is what OPENS the rail, so it is exempt from the rail's
+        // outside-press dismiss. Without it, pressing a second card closed the
+        // panel on pointerdown and the click reopened it on the next — the rail
+        // sliding out and back in on every selection, which is not what
+        // choosing a card means.
+        {...PROPERTIES_TRIGGER_ATTR}
         // `aria-pressed` rather than `aria-selected`, which is only valid
         // inside a listbox/grid/tab role — this is a set of plain buttons, and
         // one of them is currently the one being edited.
