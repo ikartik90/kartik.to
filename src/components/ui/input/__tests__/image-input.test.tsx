@@ -141,4 +141,27 @@ describe("ImageInput", () => {
       screen.getByText("rajat-saxena.png").hasAttribute("data-placeholder"),
     ).toBe(false);
   });
+
+  // -------------------------------------------------------------------------
+  // The design draws the chip OUTSIDE the field — a 220px field, 8px, a 28px
+  // button (Figma 1233:2639) — and the properties row reserves a column for
+  // exactly that. Inside the frame it changes the shape of the control; in a
+  // grid of its own inside the field column it takes 36px off the field and
+  // leaves a picture slot narrower than every other row in the rail. So: two
+  // children of the row, and the row places them.
+  // -------------------------------------------------------------------------
+  it("puts the replace chip beside the field, not inside it", () => {
+    renderInput({ src: PICTURE });
+
+    const frame = document.querySelector(
+      `.${field({ size: "sm" }).frame.split(" ")[0]}`,
+    );
+    const replace = screen.getByRole("button", { name: "Replace picture" });
+
+    expect(frame).not.toBeNull();
+    expect(frame!.contains(replace)).toBe(false);
+    // Siblings: the field's own children, which in a properties row are the
+    // field column and the action column.
+    expect(replace.parentElement).toBe(frame!.parentElement);
+  });
 });

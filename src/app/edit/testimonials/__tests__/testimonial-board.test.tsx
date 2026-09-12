@@ -1,4 +1,11 @@
-import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -142,6 +149,37 @@ describe("TestimonialBoard", () => {
 
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
+  });
+
+  // ...and STAYS UP while it does. The panel dismisses itself on any outside
+  // pointerdown, and a card is outside it — so pressing the next card started
+  // the rail's slide-out, and the click that followed re-selected into a panel
+  // already on its way off screen. The card is the control that OPENS the
+  // panel, so it is exempt from that dismiss (`PROPERTIES_TRIGGER_ATTR`).
+  //
+  // Two things this has to do to be able to fail, both learned the hard way:
+  //   • press WITHOUT releasing. A whole click is one task here, so React
+  //     coalesces the close and the re-open into a single render and the rail
+  //     never leaves the DOM — where a browser commits and paints between the
+  //     two, and shows the collapse.
+  //   • wait out the exit. The panel outlives the decision to close it by 200ms
+  //     so it can slide rather than vanish, so the DOM looks untouched for as
+  //     long as the animation runs.
+  it("keeps the rail standing when the next card is pressed", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(selectCard(/ada lovelace/i));
+    const standing = rail();
+
+    fireEvent.pointerDown(selectCard(/grace hopper/i));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    expect(screen.queryByRole("dialog")).toBe(standing);
+
+    // ...and the press still selects, in that same standing rail.
+    await userEvent.click(selectCard(/grace hopper/i));
+    expect(rail()).toBe(standing);
+    expect(within(standing).getByText("Grace Hopper")).toBeTruthy();
   });
 
   // ---- The picture -------------------------------------------------------

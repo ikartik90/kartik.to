@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { cx } from "../../../../styled-system/css";
 import { imageField } from "../../../../styled-system/recipes";
+import { Button } from "@/components/ui/button";
 import { Media } from "@/components/media";
 import { filenameFromMediaUrl } from "@/domain/media";
 import type { MediaKind } from "@/domain/nodes";
@@ -25,21 +26,28 @@ import ReplaceIcon from "@/assets/icons/replace.svg";
 // control, so a card's cover and a testimonial's portrait are edited in the
 // same row rather than in two hand-rolled ones.
 //
-// ONE FRAME, the width of every other row. The name is set in the field's own
-// `control` slot rather than in a style of its own — that is how the two stay
-// the same size as the rail's `size` changes, and how the empty slot asks in
-// the same placeholder tone as an empty text field. Written here instead, it
-// took the page's 16px into a row of 14px values and stood out as a bigger,
-// looser line than everything above it.
+// It hands its row TWO children and lets the panel place them — the field in
+// the field column, the replace chip in the action column the properties row
+// already reserves. That is the design (Figma 1233:2639: a field, 8px, a 28px
+// chip) and it is the only arrangement in which this field is the same width as
+// every other field in the rail: a grid of its own inside the field column took
+// 36px off the frame, and moving the chip inside the frame changed the shape of
+// the control rather than fixing it.
+//
+// The name is set in the field's own `control` slot rather than in a style of
+// its own — that is how it stays the size of every other value as the rail's
+// `size` changes, and how an empty slot asks in the same placeholder tone as an
+// empty text field. Written here instead, it took the page's 16px into a row of
+// 14px values and stood out as a bigger, looser line than everything above it.
 //
 // It owns no library and no dialog — `onPick` is the whole of its outward
 // contract. WHICH library opens (pictures or documents) is the caller's to
 // decide, because it is the caller that holds the slot.
 //
 // Two targets for one act: the field itself, which is the big and obvious one,
-// and the replace action at its trailing edge, which says out loud what
-// pressing does. An empty slot has nothing to replace, so it stands alone and
-// asks instead.
+// and the chip beside it, which says out loud what pressing does. An empty slot
+// has nothing to replace, so no chip is drawn — the column stays empty and the
+// field asks instead.
 //
 // There is no clear: emptying a slot is the SECTION's job — closing the Picture
 // section is how a portrait is removed, and closing Media drops both covers.
@@ -95,49 +103,52 @@ export function ImageInput({
   const filename = src ? filenameFromMediaUrl(src) : undefined;
 
   return (
-    <Field.Frame className={cx(styles.frame, className)}>
-      <button
-        type="button"
-        // The field lights up while it is engaged, like every other control
-        // in the family — the `field` recipe keys that off any `[data-control]`
-        // in focus.
-        data-control
-        aria-label={`${filename ? "Change" : "Add"} ${noun}`}
-        disabled={disabled}
-        className={styles.trigger}
-        onClick={onPick}
-      >
-        <span className={styles.thumbnail}>
-          {thumbnailFor(src, kind, poster, styles.media)}
-        </span>
-        <span className={styles.separator} aria-hidden />
-        <span
-          className={cx(fieldStyles.control, styles.name)}
-          // The family's own placeholder attribute, so an empty slot is written
-          // in the placeholder tone — and shifts with the field when it is
-          // engaged, exactly as an empty text field's prompt does.
-          data-placeholder={filename ? undefined : ""}
-        >
-          {filename ?? `Add ${noun}`}
-        </span>
-      </button>
-
-      {/* Nothing to replace in an empty slot — the field is asking already. */}
-      {filename ? (
+    <>
+      <Field.Frame className={cx(styles.frame, className)}>
         <button
           type="button"
-          // Carries `data-control` for the reason the opacity box does: the
-          // field stays lit while THIS is the part in hand.
+          // The field lights up while it is engaged, like every other control
+          // in the family — the `field` recipe keys that off any
+          // `[data-control]` in focus, and the frame is this control's only one.
           data-control
+          aria-label={`${filename ? "Change" : "Add"} ${noun}`}
+          disabled={disabled}
+          className={styles.trigger}
+          onClick={onPick}
+        >
+          <span className={styles.thumbnail}>
+            {thumbnailFor(src, kind, poster, styles.media)}
+          </span>
+          <span className={styles.separator} aria-hidden />
+          <span
+            className={cx(fieldStyles.control, styles.name)}
+            // The family's own placeholder attribute, so an empty slot is
+            // written in the placeholder tone — and shifts with the field when
+            // it is engaged, exactly as an empty text field's prompt does.
+            data-placeholder={filename ? undefined : ""}
+          >
+            {filename ?? `Add ${noun}`}
+          </span>
+        </button>
+      </Field.Frame>
+
+      {/* The row's third child, which is the action column. Nothing to replace
+          in an empty slot — the field is asking already — and the column simply
+          stays empty, so a filled row and an empty one still line up. */}
+      {filename ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="icon"
+          emphasis="tertiary"
           aria-label={`Replace ${noun}`}
           disabled={disabled}
-          className={styles.replace}
           onClick={onPick}
         >
           <ReplaceIcon aria-hidden />
-        </button>
+        </Button>
       ) : null}
-    </Field.Frame>
+    </>
   );
 }
 
