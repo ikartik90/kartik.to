@@ -14,6 +14,7 @@ import {
   useActionTooltip,
   type ActionVariant,
   type ActionEmphasis,
+  type ActionSize,
 } from "./action";
 import { Tooltip } from "./tooltip";
 import { WireframeContent } from "./wireframe";
@@ -59,6 +60,11 @@ export interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
    */
   emphasis?: ActionEmphasis;
   /**
+   * The chip's scale, independent of both axes above. `sm` is the 32px text
+   * chip and the 24px icon one.
+   */
+  size?: ActionSize;
+  /**
    * Force a plain <a> instead of next/link. Auto-detected for absolute /
    * mailto: / tel: hrefs and whenever a `target` is set.
    */
@@ -70,6 +76,7 @@ function LinkRoot(
     href,
     variant,
     emphasis,
+    size = "md",
     external,
     className,
     children,
@@ -91,7 +98,7 @@ function LinkRoot(
   const safeRel =
     rel ?? (target === "_blank" ? "noopener noreferrer" : undefined);
   const classes = cx(
-    action({ variant: resolvedVariant, emphasis: resolvedEmphasis }),
+    action({ variant: resolvedVariant, emphasis: resolvedEmphasis, size }),
     className,
   );
 
@@ -141,4 +148,4 @@ export const Link = Object.assign(forwardRef(LinkRoot), {
   Tooltip,
 });
 
-export type { ActionVariant, ActionEmphasis };
+export type { ActionVariant, ActionEmphasis, ActionSize };
