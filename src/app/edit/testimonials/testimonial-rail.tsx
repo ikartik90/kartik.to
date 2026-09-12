@@ -7,6 +7,7 @@ import {
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
 import { Field } from "@/components/ui/input/field";
+import { Switch } from "@/components/ui/input/switch";
 import { ImageInput } from "@/components/ui/input/image-input";
 import { Link } from "@/components/ui/link";
 import { Notice } from "@/components/ui/notice";
@@ -93,6 +94,9 @@ export interface TestimonialRailProps {
   onNameChange: (name: string) => void;
   /** What they do, or null once the box is emptied. */
   onTaglineChange: (tagline: string | null) => void;
+  /** On or off the homepage. The only control here whose effect is not on this
+   *  page — see the Visibility section below. */
+  onPublishedChange: (published: boolean) => void;
   /** A write that did not land. The board owns it; this only shows it. */
   problem: string | null;
   onDismiss: () => void;
@@ -152,9 +156,10 @@ function RailContents({
   onExcerptChange,
   onNameChange,
   onTaglineChange,
+  onPublishedChange,
   problem,
 }: RailContentsProps) {
-  const { name, quote, avatarUrl, linkedinUrl, excerpt, tagline } =
+  const { name, quote, avatarUrl, linkedinUrl, excerpt, tagline, publishedAt } =
     testimonial;
 
   // What is in the BOX, which is not what is in the row: the row holds
@@ -338,6 +343,37 @@ function RailContents({
           </Notice>
         </div>
       )}
+
+      {/* THE ONE CONTROL HERE WHOSE EFFECT IS NOT ON THIS PAGE, which is why it
+          is first: everything below changes how a card is DRAWN, and this
+          changes who can see it at all.
+
+          A SWITCH rather than an add/remove section, unlike the three below
+          it. Those are properties a row may simply not have — no picture, no
+          profile — and closing the section is how you say so. Publication is
+          not like that: every row is either on the homepage or not, there is
+          no third state, and a two-position control is the honest shape for a
+          two-position fact.
+
+          Off is the state a row ARRIVES in. `/vouch` is open to anyone holding
+          the link, so this switch is the whole of the review between a
+          stranger's submission and the front page. */}
+      <PropertiesPanel.Section enabled>
+        <PropertiesPanel.ControlPanel ariaLabel="Visibility">
+          <PropertiesPanel.Control label="Published">
+            {/* Drawn off the STORED timestamp, not off a local draft: there is
+                nothing to type and so nothing to debounce, and a switch that
+                held its own idea of the answer could disagree with the row
+                after a failed write. The board puts the row back on failure and
+                this follows it. */}
+            <Switch
+              size="sm"
+              checked={publishedAt !== null}
+              onCheckedChange={onPublishedChange}
+            />
+          </PropertiesPanel.Control>
+        </PropertiesPanel.ControlPanel>
+      </PropertiesPanel.Section>
 
       {/* ALWAYS ON, and drawn with no section header: a name is not something
           you add or remove, it is a property every testimonial has. That is the

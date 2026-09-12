@@ -1,10 +1,12 @@
 import { css } from "../../styled-system/css";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { SiteFooter } from "@/components/site-footer";
+import { TestimonialWall } from "@/components/testimonial-wall";
 import { HomeGrid } from "@/components/home-grid";
 import { SocialLinks } from "@/components/social-links";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
 import { serverDemoSlots } from "@/components/demo/server-demos";
+import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { getGridCards } from "@/lib/grid";
 import { getHomeDocument } from "@/lib/home";
 
@@ -20,9 +22,10 @@ import { getHomeDocument } from "@/lib/home";
 const socialRowStyle = css({ display: "flex", justifyContent: "center" });
 
 export default async function Home() {
-  const [document, cards] = await Promise.all([
+  const [document, cards, testimonials] = await Promise.all([
     getHomeDocument(),
     getGridCards(),
+    getPublishedTestimonials(),
   ]);
 
   return (
@@ -50,6 +53,18 @@ export default async function Home() {
           />
         </article>
       </main>
+
+      {/* BETWEEN THE DOCUMENT AND THE SKYLINE, and deliberately outside
+          `<main>`: these are other people's words about the work rather than
+          part of the page's own argument, and the document above is a post that
+          can be edited like any other — a band of testimonials is not something
+          it should be able to grow a second copy of.
+
+          It renders nothing at all when nothing is published, which is the
+          state every row starts in. The overlap onto the footer is the band's
+          own business; see `TestimonialWall`. */}
+      <TestimonialWall testimonials={testimonials} />
+
       <SiteFooter />
     </>
   );

@@ -47,12 +47,13 @@ vi.mock("@/components/image-insert-dialog", () => ({
 }));
 
 const { TestimonialBoard } = await import("../testimonial-board");
+type Row = import("@/domain/testimonial").Testimonial;
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const ada = {
+const ada: Row = {
   id: "t1",
   name: "Ada Lovelace",
   quote: "Turned a vague brief into something we could actually ship.",
@@ -61,9 +62,10 @@ const ada = {
   linkedinUrl: null,
   tagline: null,
   excerpt: null,
+  publishedAt: null,
 };
 
-const grace = {
+const grace: Row = {
   id: "t2",
   name: "Grace Hopper",
   quote: "Read the spec closer than the person who wrote it.",
@@ -72,12 +74,20 @@ const grace = {
   linkedinUrl: null,
   tagline: null,
   excerpt: null,
+  publishedAt: null,
 };
 
-/** The action's honest behaviour: the stored row, with the write applied. */
-function storesWhatItIsGiven() {
+/**
+ * The action's honest behaviour: the stored row, with the write applied.
+ *
+ * Takes the rows it is standing in for, because a stub that rebuilt them from
+ * the module's fixtures would answer with THOSE values for any field the test
+ * had overridden — which is how a published row came back unpublished from a
+ * write that never mentioned publication.
+ */
+function storesWhatItIsGiven(seed: Row[] = [ada, grace]) {
   mockUpdate.mockImplementation(async (input) => {
-    const row = [ada, grace].find((r) => r.id === input.id)!;
+    const row = seed.find((r) => r.id === input.id)!;
     // Mirrors the action: an unnamed excerpt leaves the stored one alone, and a
     // quote that is not a slice of the row's own words is refused outright.
     if (typeof input.excerpt === "string" && input.excerpt !== "") {
@@ -97,6 +107,14 @@ function storesWhatItIsGiven() {
         input.excerpt === undefined ? row.excerpt : (input.excerpt || null),
       tagline:
         input.tagline === undefined ? row.tagline : (input.tagline || null),
+      // The action's three-state rule, mirrored: absent leaves the stored
+      // publication alone, and a boolean becomes an instant or a null.
+      publishedAt:
+        input.published === undefined
+          ? row.publishedAt
+          : input.published
+            ? new Date()
+            : null,
     };
   });
 }
@@ -269,8 +287,11 @@ describe("TestimonialBoard", () => {
         }),
       ),
     );
+    // The HANDLE, which is what the card shows and what the tooltip carries —
+    // `in/` is LinkedIn's routing rather than any part of a name, and it says
+    // nothing that the glyph beside it is not already saying.
     await waitFor(() =>
-      expect(screen.getByText("in/ada-lovelace")).toBeTruthy(),
+      expect(screen.getByText("ada-lovelace")).toBeTruthy(),
     );
   });
 
@@ -606,5 +627,119 @@ describe("TestimonialBoard (tagline)", () => {
     expect(
       (within(rail()).getByLabelText("Tagline") as HTMLInputElement).value,
     ).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Publishing — the switch between a private table and the homepage.
+//
+// The one control on this board whose effect is not on this board. Everything
+// else here changes how a card is DRAWN; this changes who can see it at all, so
+// what these cases check is that the switch says what is stored and that a save
+// of something else never moves it.
+// ---------------------------------------------------------------------------
+
+describe("TestimonialBoard (published)", () => {
+  const publishedAda = {
+    ...ada,
+    publishedAt: new Date("2026-03-10T10:00:00.000Z"),
+  };
+
+  /** Select a card and hand back the switch that publishes it. */
+  async function openPublishSwitch(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: /Edit Ada/ }));
+    return screen.getByRole("switch", { name: /Published/i });
+  }
+
+  it("shows an unpublished row as off", async () => {
+    const user = userEvent.setup();
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    expect(
+      (await openPublishSwitch(user)).getAttribute("aria-checked"),
+    ).toBe("false");
+  });
+
+  it("shows a published row as on", async () => {
+    const user = userEvent.setup();
+    storesWhatItIsGiven([publishedAda, grace]);
+    render(<TestimonialBoard testimonials={[publishedAda, grace]} />);
+
+    expect(
+      (await openPublishSwitch(user)).getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
+  it("publishes the row the switch belongs to", async () => {
+    const user = userEvent.setup();
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await user.click(await openPublishSwitch(user));
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", published: true }),
+      ),
+    );
+  });
+
+  it("takes a published row back off the homepage", async () => {
+    const user = userEvent.setup();
+    storesWhatItIsGiven([publishedAda]);
+    render(<TestimonialBoard testimonials={[publishedAda]} />);
+
+    await user.click(await openPublishSwitch(user));
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "t1", published: false }),
+      ),
+    );
+  });
+
+  // The case the three-state rule in the action exists for, asserted from the
+  // surface that would trip it. The board sends the other five fields whole on
+  // every save; this one must NOT go along for the ride, or `publishedAt` is
+  // re-stamped on every keystroke's worth of save and quietly becomes "last
+  // edited" rather than "published".
+  it("says nothing about publication when an unrelated field is edited", async () => {
+    const user = userEvent.setup();
+    storesWhatItIsGiven([publishedAda]);
+    render(<TestimonialBoard testimonials={[publishedAda]} />);
+
+    await user.click(screen.getByRole("button", { name: /Edit Ada/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Tagline" }),
+      "Countess",
+    );
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ tagline: "Countess" }),
+      ),
+    );
+    expect(mockUpdate.mock.calls[0][0]).not.toHaveProperty("published");
+  });
+
+  // ...and the row stays on the homepage through it. The assertion above is
+  // about the payload; this is about what the reader ends up with, which is the
+  // thing that would actually be broken.
+  it("leaves the row published while an unrelated field is edited", async () => {
+    const user = userEvent.setup();
+    storesWhatItIsGiven([publishedAda]);
+    render(<TestimonialBoard testimonials={[publishedAda]} />);
+
+    await user.click(screen.getByRole("button", { name: /Edit Ada/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Tagline" }),
+      "Countess",
+    );
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(
+      screen
+        .getByRole("switch", { name: /Published/i })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
   });
 });

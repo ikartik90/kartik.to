@@ -103,6 +103,23 @@ export interface Testimonial extends TestimonialSubmission {
   linkedinUrl: string | null;
   /** The portion of `quote` a card shows, or null for all of it. See below. */
   excerpt: string | null;
+  /**
+   * When these words went onto the homepage, or null if they have not.
+   *
+   * THE ONE FIELD HERE THAT IS ABOUT THE READER rather than about the row, and
+   * the only reason it exists is who writes this table. Everywhere else on this
+   * site I am the author, so a published flag would be ceremony; here the form
+   * is open to anyone holding the link, and a homepage that simply read the
+   * table would put the next stranger's submission in front of every visitor
+   * the moment it was sent.
+   *
+   * A DATE and not a boolean, the same spelling `Post.publishedAt` uses — two
+   * tables answering the same question should not answer it in two shapes.
+   * Nothing orders by it (the wall reads newest-first by `createdAt`, as the
+   * board does); it is read as a yes/no and kept as a date because the date is
+   * free and occasionally worth knowing.
+   */
+  publishedAt: Date | null;
 }
 
 /**
@@ -302,6 +319,26 @@ export const TestimonialDetailsSchema = z.object({
    * the picture would silently throw away a chosen excerpt.
    */
   excerpt: z.union([blank, z.string().trim().min(1)]).nullish(),
+  /**
+   * Whether these words are on the homepage.
+   *
+   * A BOOLEAN here and a TIMESTAMP in the column, and the asymmetry is
+   * deliberate: a switch has two positions, and what the rail knows is which
+   * one it is in. Turning the answer into an instant is the action's job, so a
+   * caller cannot hand the column a publication date of its own choosing.
+   *
+   * STRICTLY a boolean — no coercion. `z.coerce.boolean()` would read the
+   * string "false" as `true`, which on this particular field means publishing
+   * something nobody asked to publish; a gate that can be opened by a typo is
+   * not a gate.
+   *
+   * OPTIONAL, with the same three-state rule as the excerpt and the tagline,
+   * and it matters more here than on either of them: a board writing a picture
+   * says nothing about publication, and must not take a testimonial off the
+   * homepage as a side effect of an unrelated edit. Absent means "leave it
+   * where it is"; `false` is the only thing that unpublishes.
+   */
+  published: z.boolean().optional(),
 });
 
 export type TestimonialDetails = z.infer<typeof TestimonialDetailsSchema>;
@@ -360,4 +397,53 @@ export function testimonialShown(
   testimonial: Pick<Testimonial, "quote" | "excerpt">,
 ): string {
   return testimonial.excerpt ?? testimonial.quote;
+}
+
+// ---------------------------------------------------------------------------
+// WHAT A CARD DRAWS BESIDE THE WORDS.
+//
+// Both of these were written twice — once on the admin board's card and once on
+// the homepage wall's — before being moved here, which is the honest place for
+// them: they are questions about a testimonial, and there are now two surfaces
+// that have to answer them identically. A board showing `in/ada` while the
+// homepage shows the whole URL is not a styling difference, it is two
+// components disagreeing about what the value IS.
+// ---------------------------------------------------------------------------
+
+/**
+ * What to write in an empty avatar.
+ *
+ * The first CHARACTER, not the first letter of each word: initials would need
+ * to know which parts of a name are given names, and no rule for that survives
+ * contact with the names people actually have. One character is a placeholder
+ * admitting to being one.
+ *
+ * Sliced by CODE POINT rather than by `charAt`, which would cut a surrogate
+ * pair in half and draw the first half of a character. Names are not ASCII.
+ */
+export function testimonialInitial(name: string): string {
+  return [...name.trim()][0] ?? "";
+}
+
+/**
+ * A profile URL as the bit of it worth reading — `ada` out of forty characters
+ * of scheme, host and routing.
+ *
+ * THE HANDLE ALONE. `in/` is LinkedIn's word for "the thing at the end of this
+ * is a person", which is not news anywhere this is shown — it sits beside a
+ * LinkedIn glyph, under a person's name — and it is not part of what anybody is
+ * called. Everything else in the path stays: a company page shown as its bare
+ * slug would be claiming to be somebody's handle.
+ *
+ * The URL is stored canonically ({@link LinkedInProfileUrlSchema}), so this is
+ * a slice rather than a parse. Falls back to the whole value if it ever meets
+ * one that is not, or one with nothing after the host: showing something odd
+ * beats showing nothing, and the rail has the real value either way.
+ */
+export function linkedInHandle(url: string): string {
+  const path = url
+    .replace(/^https?:\/\/[^/]+\//i, "")
+    .replace(/^in\//i, "")
+    .replace(/\/+$/, "");
+  return path === "" ? url : path;
 }

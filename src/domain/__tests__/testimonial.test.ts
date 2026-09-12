@@ -8,6 +8,8 @@ import {
   TestimonialSubmissionSchema,
   isExcerptOfQuote,
   testimonialShown,
+  testimonialInitial,
+  linkedInHandle,
 } from "../testimonial";
 
 const valid = {
@@ -398,5 +400,122 @@ describe("TestimonialDetailsSchema (tagline)", () => {
         tagline: "x".repeat(TESTIMONIAL_TAGLINE_MAX_LENGTH + 1),
       }),
     ).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The publish gate — the one field about the READER rather than about the row.
+// ---------------------------------------------------------------------------
+
+describe("TestimonialDetailsSchema (published)", () => {
+  const base = { id: "t1", avatarUrl: null, linkedinUrl: null };
+
+  it.each([true, false])("takes the switch's position (%s)", (published) => {
+    expect(
+      TestimonialDetailsSchema.parse({ ...base, published }).published,
+    ).toBe(published);
+  });
+
+  // The same absent-means-leave-alone rule the excerpt and the tagline follow,
+  // and it matters most here: a board saving a picture must not take the words
+  // off the homepage as a side effect.
+  it("says nothing about publication it was not asked about", () => {
+    expect(TestimonialDetailsSchema.parse(base).published).toBeUndefined();
+  });
+
+  // A gate that could be opened by a string is not a gate. The submission
+  // schema strips unknown keys, so this is really about MY OWN callers — but
+  // "published: 'no'" reaching the column as `true` is the exact accident this
+  // refuses.
+  it.each(["true", "yes", 1, null])("refuses %j as an answer", (published) => {
+    expect(() =>
+      TestimonialDetailsSchema.parse({ ...base, published }),
+    ).toThrow();
+  });
+});
+
+describe("TestimonialSubmissionSchema (published)", () => {
+  // THE POINT OF THE COLUMN. A stranger posting `published: true` through the
+  // open form must not land on the homepage — the schema names two fields and
+  // strips everything else, so the key is gone before Prisma sees the object.
+  it("strips a publication a stranger tried to grant themselves", () => {
+    const parsed = TestimonialSubmissionSchema.parse({
+      name: "Ada",
+      quote: "Worth reading.",
+      published: true,
+      publishedAt: new Date(),
+    });
+    expect(parsed).toEqual({ name: "Ada", quote: "Worth reading." });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a card draws, beyond the words — shared by the admin board and the
+// homepage wall, which is the whole reason these are here rather than in a
+// component.
+// ---------------------------------------------------------------------------
+
+describe("testimonialInitial", () => {
+  it("stands in for a missing picture with the first character", () => {
+    expect(testimonialInitial("Ada Lovelace")).toBe("A");
+  });
+
+  it("ignores the space somebody left in front of their name", () => {
+    expect(testimonialInitial("  Grace Hopper")).toBe("G");
+  });
+
+  // ONE character, not initials. Deciding which parts of a name are given names
+  // is a rule that does not survive contact with real names, and a placeholder
+  // should not pretend to know.
+  it("takes one character, not a set of initials", () => {
+    expect(testimonialInitial("Ada Lovelace")).toHaveLength(1);
+  });
+
+  it("draws nothing rather than guessing at an empty name", () => {
+    expect(testimonialInitial("   ")).toBe("");
+  });
+
+  // Names are not ASCII. `charAt` splits a surrogate pair down the middle and
+  // renders half a character; the first CODE POINT is the first letter.
+  it("keeps a character that is two code units wide", () => {
+    expect(testimonialInitial("𝒜da")).toBe("𝒜");
+  });
+});
+
+describe("linkedInHandle", () => {
+  // THE HANDLE, and nothing around it. `in/` is LinkedIn's word for "this is a
+  // person", which is not news beside a LinkedIn glyph and is not part of
+  // anybody's name — what a reader is being shown is who the profile belongs
+  // to.
+  it("reads a profile URL as the handle alone", () => {
+    expect(linkedInHandle("https://www.linkedin.com/in/ada")).toBe("ada");
+  });
+
+  it("ignores a trailing slash, which is how a browser hands the URL over", () => {
+    expect(linkedInHandle("https://www.linkedin.com/in/ada/")).toBe("ada");
+  });
+
+  // Only the person prefix is dropped. Anything else in the path is part of
+  // what distinguishes the page, so it stays — a company page shown as its bare
+  // slug would claim to be a person's handle.
+  it("keeps a path that is not a person's", () => {
+    expect(linkedInHandle("https://www.linkedin.com/company/acme")).toBe(
+      "company/acme",
+    );
+  });
+
+  // The stored spelling is canonical, so this is a slice rather than a parse —
+  // but a value that got in before the schema did should show as itself rather
+  // than as nothing.
+  it("shows an unparseable value as itself", () => {
+    expect(linkedInHandle("not-a-url")).toBe("not-a-url");
+  });
+
+  // ...and the same for a URL with no path at all, which would otherwise show
+  // as an empty tooltip.
+  it("falls back to the whole value when there is no handle in it", () => {
+    expect(linkedInHandle("https://www.linkedin.com/")).toBe(
+      "https://www.linkedin.com/",
+    );
   });
 });
