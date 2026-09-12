@@ -5,7 +5,7 @@ import { css, cx } from "../../styled-system/css";
 import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { SocialIconShader } from "./social-icon-shader";
-import { Link } from "./ui/link";
+import { Link, type ActionSize } from "./ui/link";
 import GotoIcon from "@/assets/icons/goto.svg";
 
 // ---------------------------------------------------------------------------
@@ -76,6 +76,12 @@ export interface SocialIconLinkProps {
   /** The glyph's silhouette, for the shader to be masked to. */
   maskSrc: string;
   Icon: FC<SVGProps<SVGSVGElement>>;
+  /**
+   * The chip around the glyph: the 28px toolbar one by default, 24px at `sm`.
+   * The GLYPH is 20px either way — one shader instance, placed at a fixed box,
+   * serves every icon on the page — so this is the inset and nothing else.
+   */
+  size?: ActionSize;
   /** Applied to the wrapper, so a caller can place the icon in its own layout. */
   className?: string;
   /** For a set that coordinates across its items — see `SocialLinks`. */
@@ -89,6 +95,7 @@ export function SocialIconLink({
   ariaLabel,
   maskSrc,
   Icon,
+  size,
   className,
   onMouseEnter,
   onMouseLeave,
@@ -127,6 +134,7 @@ export function SocialIconLink({
       <Link
         href={href}
         variant="icon"
+        size={size}
         aria-label={ariaLabel ?? label}
         target="_blank"
         rel="noopener noreferrer"
