@@ -33,7 +33,8 @@ const BRAND_ORANGE = "#FFAB6F";
 const TRANSPARENT = "#00000000";
 
 /**
- * The icon's drawn size, and so the shader's.
+ * Which size an icon is drawn at: 20px (`spacing.xxl`) or 16px (`spacing.xl`),
+ * written on the slot below and NOWHERE else.
  *
  * TWO of them, because an icon that belongs to a LINE OF TEXT is not the same
  * object as one in a row of its own: the homepage's social row draws at 20px,
@@ -41,14 +42,12 @@ const TRANSPARENT = "#00000000";
  * it does not change — it is the same 4px inset either way, so the press comes
  * down to 24px with the glyph rather than shrinking to its outline.
  *
- * The shader follows the icon rather than this constant: it is placed and
- * sized from the SLOT it is claimed by (see `placementFor`), which is what
- * lets one WebGL context serve icons of both sizes.
+ * There is no pixel count left in this file's JavaScript, and that is the
+ * point: the shader is placed and sized from the SLOT it is claimed by (see
+ * `placementFor`), which is what lets one WebGL context serve both sizes. A
+ * constant here would be a second answer to a question the DOM already has.
  */
-const ICON_PX = { md: 20, sm: 16 } as const;
-
-/** Which of the two an icon is drawn at. */
-export type SocialIconSize = keyof typeof ICON_PX;
+export type SocialIconSize = "md" | "sm";
 
 // Cap the render buffer so retina screens don't quadruple the fragment work on
 // a 20px icon. 40×40 ≈ 2×; smoke is soft, so it reads fine well below native DPR.
@@ -212,6 +211,7 @@ const slotStyle = css({
 });
 
 const slotSizeStyle = {
+  // 20px, and 16px.
   md: css({ width: "token(spacing.xxl)", height: "token(spacing.xxl)" }),
   sm: css({ width: "token(spacing.xl)", height: "token(spacing.xl)" }),
 } as const satisfies Record<SocialIconSize, string>;
