@@ -9007,11 +9007,6 @@ export default defineConfig({
               borderRadius: "inherit",
             },
             quote: {
-              // The last line never left alone. These are 280 characters in a
-              // 280px track, so an orphan is the common case rather than the
-              // unlucky one, and the card has no fixed height for the extra
-              // line `pretty` may cost to break.
-              textWrap: "pretty",
               // `bodySmall`, not the `quote` style the words will get on a
               // published page. This is a board, not the page: the job here is
               // to read six of them at once and find the one being annotated,
