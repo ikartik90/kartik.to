@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/server";
 import {
@@ -270,5 +271,22 @@ export async function updateTestimonialDetails(
     }
   }
 
-  return prisma.testimonial.update({ where: { id }, data });
+  const saved = await prisma.testimonial.update({ where: { id }, data });
+
+  // THE SECOND HALF OF PUBLISHING, and leaving it out is how a row came to be
+  // stamped `publishedAt` in Postgres while the homepage went on serving the
+  // eight cards it had been built with. The band is rendered on the server and
+  // cached; the write changed the table and nothing that anybody looks at.
+  //
+  // BOTH PATHS, ON EVERY WRITE rather than only on the publish switch. A
+  // published testimonial's name, face, tagline and excerpt are all on the
+  // front page too, so editing one of those changes that page exactly as much
+  // as publishing does — and the board is the other page reading this table.
+  //
+  // After the write, never before: a refused one leaves both pages correct, and
+  // rebuilding them would be saying something had changed when nothing had.
+  revalidatePath("/");
+  revalidatePath("/edit/testimonials");
+
+  return saved;
 }

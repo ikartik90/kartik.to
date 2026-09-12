@@ -41,6 +41,11 @@ vi.mock("@/lib/env", () => ({
   env: { ADMIN_GITHUB_ID: "admin@example.com" },
 }));
 
+const mockRevalidatePath = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+}));
+
 const {
   submitTestimonial,
   getTestimonials,
@@ -589,5 +594,86 @@ describe("updateTestimonialDetails (published)", () => {
     });
 
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty("publishedAt");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Revalidation — the difference between a write that happened and a write
+// anybody can see.
+//
+// The homepage is a cached render. Publishing a testimonial changed the table
+// and nothing else: the row was `publishedAt`-stamped in Postgres and the band
+// on the front page went on serving the eight it was built with. So this is not
+// a nicety about freshness, it is the second half of publishing, and every
+// other write in this codebase already does it — `grid.ts` four times over,
+// `revalidatePostPaths` for a post.
+// ---------------------------------------------------------------------------
+
+describe("updateTestimonialDetails (revalidation)", () => {
+  const stored = row({ id: "t1" });
+
+  beforeEach(() => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(stored);
+  });
+
+  it("rebuilds the homepage when a row is published", async () => {
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: null,
+      linkedinUrl: null,
+      published: true,
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  // ...and when it is taken down, which is the case that would otherwise leave
+  // somebody's words on the front page after they had been withdrawn.
+  it("rebuilds the homepage when a row is taken down", async () => {
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: null,
+      linkedinUrl: null,
+      published: false,
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  // EVERY write, not just the publish switch. A published testimonial's name,
+  // face, tagline and excerpt are all on the homepage too, so editing one of
+  // those is as much a change to that page as publishing is.
+  it("rebuilds the homepage when any other field is edited", async () => {
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: "https://cdn.test/ada.jpg",
+      linkedinUrl: null,
+      tagline: "Countess",
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("rebuilds the board it was edited from", async () => {
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: null,
+      linkedinUrl: null,
+      published: true,
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/edit/testimonials");
+  });
+
+  // A refused write leaves the pages as they are: nothing changed, so there is
+  // nothing to rebuild, and rebuilding anyway would say otherwise.
+  it("rebuilds nothing when the write was refused", async () => {
+    signedOut();
+    await expect(
+      updateTestimonialDetails({
+        id: "t1",
+        avatarUrl: null,
+        linkedinUrl: null,
+        published: true,
+      }),
+    ).rejects.toThrow();
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 });
