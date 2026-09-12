@@ -163,6 +163,36 @@ describe("PropertiesPanel", () => {
   });
 });
 
+describe("PropertiesPanel.Header", () => {
+  // The strip is `space-between` — a title at one end, the dismiss button at
+  // the other — so an action put in it has to join the button rather than
+  // become a third child floating between them. What a test can see of that is
+  // the order: title, then whatever was given, then the way out.
+  it("draws its actions before the control that sends the panel away", () => {
+    render(
+      <PropertiesPanel ariaLabel="Media properties" onDismiss={() => {}}>
+        <PropertiesPanel.Header
+          actions={<button type="button">Publish</button>}
+        >
+          Ada Lovelace
+        </PropertiesPanel.Header>
+      </PropertiesPanel>,
+    );
+
+    const names = screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label") ?? button.textContent);
+    expect(names).toEqual(["Publish", "Close properties panel"]);
+  });
+
+  // Every other panel in the app passes none, and the strip has to look the
+  // same when it gets none.
+  it("is the title and the way out when it is given no actions", () => {
+    render(<Harness />);
+    expect(screen.getAllByRole("button")).toHaveLength(2); // dismiss + section
+  });
+});
+
 describe("PropertiesPanel.Section", () => {
   // Mounted, not hidden: a collapsed section must hold no focusable control to
   // tab into and no stale value to read back.

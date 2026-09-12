@@ -6,11 +6,12 @@ import {
   PropertiesPanel,
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
+import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
-import { Switch } from "@/components/ui/input/switch";
 import { ImageInput } from "@/components/ui/input/image-input";
 import { Link } from "@/components/ui/link";
 import { Notice } from "@/components/ui/notice";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   LinkedInProfileUrlSchema,
   TESTIMONIAL_EXCERPT_NOT_THEIRS,
@@ -20,6 +21,8 @@ import {
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import MediaIcon from "@/assets/icons/media.svg";
+import PublishIcon from "@/assets/icons/publish.svg";
+import UnpublishIcon from "@/assets/icons/unpublish.svg";
 
 // ---------------------------------------------------------------------------
 // The rail that edits one collected testimonial — the two fields that are mine
@@ -161,6 +164,9 @@ function RailContents({
 }: RailContentsProps) {
   const { name, quote, avatarUrl, linkedinUrl, excerpt, tagline, publishedAt } =
     testimonial;
+  // The column holds an instant and the control has two positions — see the
+  // domain's `published`, which is the same asymmetry from the other side.
+  const published = publishedAt !== null;
 
   // What is in the BOX, which is not what is in the row: the row holds
   // `https://www.linkedin.com/in/ada` and the box holds whatever is being typed
@@ -326,8 +332,46 @@ function RailContents({
   return (
     <>
       {/* Whose row this is, and the only place either of their words appears
-          in the rail. Not editable — see the note at the top. */}
-      <PropertiesPanel.Header>{name}</PropertiesPanel.Header>
+          in the rail. Not editable — see the note at the top.
+
+          THE ONE CONTROL HERE WHOSE EFFECT IS NOT ON THIS PAGE, which is why it
+          is beside the name rather than under it: everything below changes how
+          a card is DRAWN, and this changes who can see it at all. The strip
+          names the person; the button says whether the world has met them.
+
+          The same control the shader playground publishes a preset with, and
+          for the same reasons. ONE button, not a pair, because it is one fact
+          with two settings and a pair side by side would always have one of
+          them inert — so the glyph and the label both flip. The playground put
+          its pair in a heading of their own rather than in the panel's header,
+          and that is the right call THERE: its header says "Properties", which
+          names the panel rather than the preset. This one says who said the
+          words, which is exactly what publishing is about.
+
+          Off is the state a row ARRIVES in. `/vouch` is open to anyone holding
+          the link, so this button is the whole of the review between a
+          stranger's submission and the front page.
+
+          Drawn off the STORED timestamp, not off a local draft: there is
+          nothing to type and so nothing to debounce, and a control holding its
+          own idea of the answer could disagree with the row after a failed
+          write. The board puts the row back on failure and this follows it. */}
+      <PropertiesPanel.Header
+        actions={
+          <Button
+            variant="icon"
+            aria-label={published ? "Unpublish" : "Publish"}
+            onClick={() => onPublishedChange(!published)}
+          >
+            {published ? <UnpublishIcon /> : <PublishIcon />}
+            <Button.Tooltip>
+              <Tooltip.Text>{published ? "Unpublish" : "Publish"}</Tooltip.Text>
+            </Button.Tooltip>
+          </Button>
+        }
+      >
+        {name}
+      </PropertiesPanel.Header>
 
       {/* A write that did not land, said once for the whole rail rather than
           under the field that provoked it. It belongs to the ROW: the picture
@@ -343,37 +387,6 @@ function RailContents({
           </Notice>
         </div>
       )}
-
-      {/* THE ONE CONTROL HERE WHOSE EFFECT IS NOT ON THIS PAGE, which is why it
-          is first: everything below changes how a card is DRAWN, and this
-          changes who can see it at all.
-
-          A SWITCH rather than an add/remove section, unlike the three below
-          it. Those are properties a row may simply not have — no picture, no
-          profile — and closing the section is how you say so. Publication is
-          not like that: every row is either on the homepage or not, there is
-          no third state, and a two-position control is the honest shape for a
-          two-position fact.
-
-          Off is the state a row ARRIVES in. `/vouch` is open to anyone holding
-          the link, so this switch is the whole of the review between a
-          stranger's submission and the front page. */}
-      <PropertiesPanel.Section enabled>
-        <PropertiesPanel.ControlPanel ariaLabel="Visibility">
-          <PropertiesPanel.Control label="Published">
-            {/* Drawn off the STORED timestamp, not off a local draft: there is
-                nothing to type and so nothing to debounce, and a switch that
-                held its own idea of the answer could disagree with the row
-                after a failed write. The board puts the row back on failure and
-                this follows it. */}
-            <Switch
-              size="sm"
-              checked={publishedAt !== null}
-              onCheckedChange={onPublishedChange}
-            />
-          </PropertiesPanel.Control>
-        </PropertiesPanel.ControlPanel>
-      </PropertiesPanel.Section>
 
       {/* ALWAYS ON, and drawn with no section header: a name is not something
           you add or remove, it is a property every testimonial has. That is the
