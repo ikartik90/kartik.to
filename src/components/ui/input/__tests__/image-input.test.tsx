@@ -2,6 +2,7 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { field } from "../../../../../styled-system/recipes";
 import { Field } from "../field";
 import { ImageInput, type ImageInputProps } from "../image-input";
 
@@ -108,5 +109,36 @@ describe("ImageInput", () => {
     const replace = screen.getByRole("button", { name: "Replace picture" });
     expect((field as HTMLButtonElement).disabled).toBe(true);
     expect((replace as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // The name is SET by the field, not by itself. Written as a style of its own
+  // it had no typography at all, so it took the page's 16px and stood in a rail
+  // of 14px values as a visibly bigger, looser line — and it would not have
+  // followed the field's `size` either.
+  // -------------------------------------------------------------------------
+  it("wears the field's own control typography, at the field's size", () => {
+    renderInput({ src: PICTURE });
+
+    const name = screen.getByText("rajat-saxena.png");
+    for (const className of field({ size: "sm" }).control.split(" ")) {
+      expect(name.className).toContain(className);
+    }
+  });
+
+  // The same attribute an empty text input is written with, so "Add picture"
+  // is the placeholder tone rather than a tone of its own — and shifts with the
+  // field when it is engaged, as every other prompt in the family does.
+  it("asks in the family's placeholder tone when the slot is empty", () => {
+    renderInput();
+    expect(screen.getByText("Add picture").hasAttribute("data-placeholder")).toBe(
+      true,
+    );
+
+    cleanup();
+    renderInput({ src: PICTURE });
+    expect(
+      screen.getByText("rajat-saxena.png").hasAttribute("data-placeholder"),
+    ).toBe(false);
   });
 });

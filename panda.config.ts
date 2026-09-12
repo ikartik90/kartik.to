@@ -5800,53 +5800,34 @@ export default defineConfig({
         // rather than an input, because a file's name is not editable here —
         // it is edited in the library, where the file is (`updateMediaFilename`).
         //
-        // The whole frame is the trigger, and the replace button beside it is
-        // the same act drawn where the design puts it. One act, two targets:
-        // the field is the big, obvious one, and the button is the one that
-        // says out loud what pressing it does.
+        // ONE FRAME, at the full width of the rail. The replace button used to
+        // stand outside it, which cost the field 36px and left it visibly
+        // shorter than every other row in the panel — a picture slot reading as
+        // a lesser control than the name above it. Inside, it is what the field
+        // family already calls a trailing action, and the box is the same box.
+        //
+        // The whole frame is the trigger; the button is the same act, drawn
+        // where the design puts it. One act, two targets: the field is the big,
+        // obvious one, and the button is the one that says out loud what
+        // pressing it does.
         imageField: defineSlotRecipe({
           className: "image-field",
           description:
-            "Image input — a 16px thumbnail of the file, a hairline, and the file's name inside the shared `field` frame, with a replace button beside it (Figma 1233:2639). The frame is a button: pressing it opens the media library. An empty slot draws a glyph in the cell and asks in muted text; it has nothing to replace, so the trailing button is not drawn.",
+            "Image input — a 16px thumbnail of the file, a hairline, and the file's name inside the shared `field` frame, with a replace action at its trailing edge (Figma 1233:2639). The frame is a button: pressing it opens the media library. An empty slot draws a glyph in the cell and asks in the family's placeholder tone; it has nothing to replace, so the trailing action is not drawn.",
           slots: [
-            "row",
             "frame",
             "trigger",
             "thumbnail",
             "media",
             "separator",
             "name",
-            "spacer",
+            "replace",
           ],
           base: {
-            // Field, then the replace button, at the frame's own gap. A GRID
-            // rather than a flex row, because the button's column is held
-            // whether or not there is a button in it: an empty slot that let
-            // its field grow into that column would be wider than the filled
-            // slot above it, and a Media section with one picture in it would
-            // have a ragged right edge. Every control in the rail is one width.
-            row: {
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) auto",
-              alignItems: "center",
-              gap: "md",
-              width: "token(spacing.full)",
-              minWidth: 0,
-            },
-            // The column the replace button would occupy, when there is none.
-            // Built from the button's own parts — a 20px glyph in 4px of
-            // padding — so the two cannot come apart.
-            spacer: {
-              width: "calc(token(spacing.xxl) + token(spacing.md))",
-              height: "calc(token(spacing.xxl) + token(spacing.md))",
-            },
-            // The frame keeps its 8px inset and its 28px height from `field`;
-            // all it is told here is that it is pressed rather than typed in.
-            frame: {
-              flex: "1 1 auto",
-              minWidth: 0,
-              cursor: "pointer",
-            },
+            // The frame keeps its 8px inset, its 28px height and its full width
+            // from `field`; all it is told here is that it is pressed rather
+            // than typed in.
+            frame: { cursor: "pointer" },
             // One child filling the frame, so the hairline can run the frame's
             // full height — `alignSelf: stretch` has nothing to stretch to
             // inside a button that is only as tall as its text.
@@ -5912,16 +5893,43 @@ export default defineConfig({
               },
             },
             // One line, ellipsised: a library name is as long as it is, and the
-            // rail is 220px wide.
+            // rail is 220px wide. Everything about how it is SET — size, face,
+            // weight, and the placeholder tone an empty slot asks in — comes
+            // from the field's own `control` slot, which the component wears
+            // alongside this one. Setting type here is how it ended up 16px in
+            // a row of 14px values: the slot had no typography, so it took the
+            // page's.
             name: {
               flex: "1 1 auto",
               minWidth: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              // An empty slot ASKS, in the muted tone a placeholder is written
-              // in everywhere else in the family.
-              "&[data-empty]": { color: "field.text.muted" },
+            },
+            // The trailing action, INSIDE the frame — the colour field's swatch
+            // arrangement exactly: a bare button, no border of its own, so the
+            // field is not the one control in the app with two edges. It takes
+            // the frame's colour, which means it lights with the field.
+            replace: {
+              appearance: "none",
+              margin: "none",
+              padding: "none",
+              borderWidth: "0",
+              backgroundColor: "transparent",
+              color: "inherit",
+              cursor: "pointer",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 150ms ease",
+              "& svg": {
+                width: "token(spacing.xxl)",
+                height: "token(spacing.xxl)",
+                display: "block",
+              },
+              "& svg path[stroke]": { stroke: "currentColor" },
+              _disabled: { cursor: "not-allowed" },
             },
           },
         }),

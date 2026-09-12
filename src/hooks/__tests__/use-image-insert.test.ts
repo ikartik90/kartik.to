@@ -5,12 +5,15 @@ import { useImageInsert } from "../use-image-insert";
 const mockListMediaAssets = vi.fn();
 const mockCreateMediaUploadUrl = vi.fn();
 const mockUpdateMediaAlt = vi.fn();
+const mockUpdateMediaFilename = vi.fn();
 const mockDeleteMedia = vi.fn();
 
 vi.mock("@/app/actions/media", () => ({
   listMediaAssets: (...args: unknown[]) => mockListMediaAssets(...args),
   createMediaUploadUrl: (...args: unknown[]) => mockCreateMediaUploadUrl(...args),
   updateMediaAlt: (...args: unknown[]) => mockUpdateMediaAlt(...args),
+  updateMediaFilename: (...args: unknown[]) =>
+    mockUpdateMediaFilename(...args),
   deleteMedia: (...args: unknown[]) => mockDeleteMedia(...args),
 }));
 
@@ -644,5 +647,94 @@ describe("uploading several files at once", () => {
     expect(mockCreateMediaUploadUrl).toHaveBeenCalledTimes(2);
     expect(result.current.selectedKey).toBe("media/uuid-a.png");
     expect(result.current.selectedKeys).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Renaming, which had no coverage here at all — which is how it shipped
+  // working for the library and broken for every other folder. The edit is
+  // debounced, so the test has to let the pause run out; what it asserts is
+  // that the key it saves under is the ANCHORED one, prefix and all.
+  // -------------------------------------------------------------------------
+  const FACE = {
+    key: "profiles/550e8400-e29b-41d4-a716-446655440000-face.png",
+    url: "https://cdn/profiles/face.png",
+    filename: "face.png",
+    contentType: "image/png",
+    size: 100,
+  };
+
+  /** Open on the library with one profile picture in it, anchored. */
+  async function renderWithFace() {
+    mockListMediaAssets.mockResolvedValue([FACE]);
+    const view = renderHook(() =>
+      useImageInsert({ open: true, initialPhase: "library" }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => view.result.current.selectAsset(FACE.key));
+    return view;
+  }
+
+  it("renames the anchored file under whichever folder it lives in", async () => {
+    vi.useFakeTimers();
+    try {
+      mockUpdateMediaFilename.mockResolvedValue({
+        ...FACE,
+        filename: "Rajat Saxena",
+      });
+      const { result } = await renderWithFace();
+
+      act(() => result.current.updateFilename("Rajat Saxena"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(mockUpdateMediaFilename).toHaveBeenCalledWith({
+        key: FACE.key,
+        filename: "Rajat Saxena",
+      });
+      expect(result.current.filenameText).toBe("Rajat Saxena");
+      expect(result.current.error).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A rename that fails must SAY so. Swallowing it is what made a refused
+  // rename look like the field forgetting what you typed: the name stood until
+  // the next refresh and then sprang back, with nothing on screen in between.
+  it("says so when a rename is refused, rather than failing quietly", async () => {
+    vi.useFakeTimers();
+    try {
+      mockUpdateMediaFilename.mockRejectedValue(new Error("Invalid media key"));
+      const { result } = await renderWithFace();
+
+      act(() => result.current.updateFilename("Rajat Saxena"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(result.current.error).toBe("Invalid media key");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says so when a description is refused too", async () => {
+    vi.useFakeTimers();
+    try {
+      mockUpdateMediaAlt.mockRejectedValue(new Error("Invalid media key"));
+      const { result } = await renderWithFace();
+
+      act(() => result.current.updateAltText("A face"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(result.current.error).toBe("Invalid media key");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
