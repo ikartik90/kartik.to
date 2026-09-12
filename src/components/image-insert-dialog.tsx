@@ -177,7 +177,7 @@ const errorStyle = css({
 const iconStyle = menuIcon();
 
 // Built from the allow-lists rather than restated, so the file picker cannot
-// drift from what `processFile` and the server will actually take.
+// drift from what `processFiles` and the server will actually take.
 const ACCEPT = {
   media: ALLOWED_MEDIA_CONTENT_TYPES.join(","),
   document: ALLOWED_DOCUMENT_CONTENT_TYPES.join(","),
@@ -276,11 +276,13 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
     altText,
     filenameText,
     uploadProgress,
+    uploadIndex,
+    uploadTotal,
     isDragOver,
     setIsDragOver,
     error,
     isBusy,
-    processFile,
+    processFiles,
     openLibrary,
     goToUpload,
     selectAsset,
@@ -346,17 +348,17 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
   }
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (file) void processFile(file);
+    if (files.length > 0) void processFiles(files);
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragOver(false);
     if (isBusy || phase === "library") return;
-    const file = e.dataTransfer.files?.[0];
-    if (file) void processFile(file);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length > 0) void processFiles(files);
   }
 
   return (
@@ -562,10 +564,20 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
             </div>
 
             {phase === "uploading" ? (
-              <ProgressBar
-                value={uploadProgress}
-                label={`Uploading ${noun.toLowerCase()}`}
-              />
+              <>
+                <ProgressBar
+                  value={uploadProgress}
+                  label={`Uploading ${noun.toLowerCase()}`}
+                />
+                {/* The bar measures the whole drop in bytes, so on its own it
+                    cannot say how far through the FILES you are — which is the
+                    only question worth asking of a batch that is part way up. */}
+                {uploadTotal > 1 && (
+                  <p className={formatsStyle} aria-live="polite">
+                    Uploading {uploadIndex} of {uploadTotal}
+                  </p>
+                )}
+              </>
             ) : error ? (
               <p className={errorStyle}>{error}</p>
             ) : (
@@ -582,7 +594,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   >
                     browse to upload
                   </Button>{" "}
-                  a file
+                  one or more files
                 </div>
                 <p className={formatsStyle}>
                   Supported formats: {FORMAT_NAMES[accepts]}
@@ -642,6 +654,10 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
       <input
         ref={fileInputRef}
         type="file"
+        // A library is a place files LIVE, not a queue of exactly what this
+        // block needs — uploading five and inserting one of them is ordinary,
+        // so the batch is allowed even where the selection is single.
+        multiple
         accept={ACCEPT[accepts]}
         className={css({ display: "none" })}
         onChange={handleFileInputChange}

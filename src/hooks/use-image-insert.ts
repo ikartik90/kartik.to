@@ -161,6 +161,10 @@ export function useImageInsert({
   const [altText, setAltText] = useState("");
   const [filenameText, setFilenameText] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
+  // Which file of the drop is on the wire, and how many there are — the bar
+  // itself is one measure of the whole batch, so this is what says "3 of 5".
+  const [uploadIndex, setUploadIndex] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -202,6 +206,8 @@ export function useImageInsert({
     setAltText("");
     setFilenameText("");
     setUploadProgress(0);
+    setUploadIndex(0);
+    setUploadTotal(0);
     setIsDragOver(false);
     setError(null);
     setIsDeleting(false);
@@ -217,21 +223,26 @@ export function useImageInsert({
   }, [onReset]);
 
   const refreshLibrary = useCallback(
-    async (selectKey?: string) => {
+    async (arrivals: string[] = []) => {
       const list = await loadLibrary();
       setAssets(list);
-      const key = selectKey ?? list[0]?.key ?? null;
+      // The anchor lands on the FIRST of an arrival: a drop of five reads top
+      // down, so the panel opens on the one you would check first.
+      const key = arrivals[0] ?? list[0]?.key ?? null;
       setSelectedKey(key);
-      // An image uploaded mid-batch JOINS the batch rather than replacing it —
-      // "upload one more" is the natural way to finish a collection. Only an
-      // explicit key does this; the bare refresh that opens the library is just
+      // Images uploaded mid-batch JOIN the batch rather than replacing it —
+      // "upload a few more" is the natural way to finish a collection. Only an
+      // arrival does this; the bare refresh that opens the library is just
       // parking the anchor and must not select anything.
-      if (isMultiple && selectKey) {
-        setSelectedKeys((prev) =>
-          prev.includes(selectKey) || prev.length >= maxSelection
-            ? prev
-            : [...prev, selectKey],
-        );
+      if (isMultiple && arrivals.length > 0) {
+        setSelectedKeys((prev) => {
+          const next = [...prev];
+          for (const arrival of arrivals) {
+            if (next.length >= maxSelection) break;
+            if (!next.includes(arrival)) next.push(arrival);
+          }
+          return next;
+        });
       }
       const asset = list.find((item) => item.key === key);
       setAltText(asset?.alt ?? "");
@@ -292,62 +303,126 @@ export function useImageInsert({
     };
   }, [open, initialPhase, refreshLibrary]);
 
-  const processFile = useCallback(
-    async (file: File) => {
-      setError(null);
-
-      if (!allows(file.type)) {
-        setError("Unsupported file type");
-        return;
-      }
-
+  /** Why the library will not take this file, or `null` if it will. */
+  const refusalFor = useCallback(
+    (file: File): string | null => {
+      if (!allows(file.type)) return "Unsupported file type";
       // The ceiling depends on the format — a clip is allowed to be an order
       // larger than a picture. Same check the server makes when it signs the
       // upload; this one exists to answer before the round trip.
-      if (file.size > maxUploadBytesFor(file.type)) {
-        setError("File is too large");
+      if (file.size > maxUploadBytesFor(file.type)) return "File is too large";
+      return null;
+    },
+    [allows],
+  );
+
+  /**
+   * Upload everything that was dropped or picked — a drop is a BATCH, and one
+   * file is only the shortest one.
+   *
+   * Sequential rather than parallel: five clips PUT at once share one uplink,
+   * so nothing finishes sooner and the bar can no longer say which file it is
+   * describing. What IS shared is the measure — progress is weighed across the
+   * whole batch in bytes, so the bar fills once rather than snapping back to
+   * zero on every file, and a 40MB clip dropped beside two screenshots does
+   * not report itself two-thirds done before it has begun.
+   *
+   * A refusal is per FILE. Whatever the finder handed over is what arrives
+   * here, and one `.mov` among four screenshots is a file to skip and name,
+   * never a reason to throw the other four away. Same for a PUT that fails
+   * mid-batch: the files either side of it still land.
+   */
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      setError(null);
+      if (files.length === 0) return;
+
+      // A lone file is refused in its own words — naming it would be telling
+      // somebody the name of the one file they just dropped.
+      const describe = (file: File, reason: string) =>
+        files.length === 1 ? reason : `${file.name}: ${reason}`;
+
+      const accepted: File[] = [];
+      const skipped: string[] = [];
+      for (const file of files) {
+        const refusal = refusalFor(file);
+        if (refusal) skipped.push(describe(file, refusal));
+        else accepted.push(file);
+      }
+
+      if (accepted.length === 0) {
+        setError(skipped.join(", "));
         return;
       }
 
       setPhase("uploading");
       setUploadProgress(0);
+      setUploadTotal(accepted.length);
+      setUploadIndex(1);
 
-      try {
-        // Measured HERE, from the file in hand, and never again: this is the
-        // only moment anything holds the bytes and the answer at the same
-        // time. It rides into the signing request, so recording it costs no
-        // round trip of its own — and `null` when the browser will not decode
-        // the file, which the object simply stores without.
-        const shape = await measureMediaFile(file);
+      const totalBytes = accepted.reduce((sum, file) => sum + file.size, 0);
+      let storedBytes = 0;
+      const arrivals: string[] = [];
 
-        const { uploadUrl, key } = await createMediaUploadUrl({
-          filename: file.name,
-          contentType: file.type,
-          size: file.size,
-          folder,
-          ...(shape ?? {}),
-        });
+      for (const [index, file] of accepted.entries()) {
+        setUploadIndex(index + 1);
+        try {
+          // Measured HERE, from the file in hand, and never again: this is the
+          // only moment anything holds the bytes and the answer at the same
+          // time. It rides into the signing request, so recording it costs no
+          // round trip of its own — and `null` when the browser will not
+          // decode the file, which the object simply stores without.
+          const shape = await measureMediaFile(file);
 
-        await uploadFileWithProgress(uploadUrl, file, setUploadProgress);
-        // Hold the filled (100%) bar for a beat — overlapping the library
-        // refresh — so the brand fill visibly completes before the view swaps.
-        await Promise.all([
-          refreshLibrary(key),
-          delay(PROGRESS_COMPLETE_HOLD_MS),
-        ]);
-        setPhase("library");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Upload failed");
-        setPhase("upload");
+          const { uploadUrl, key } = await createMediaUploadUrl({
+            filename: file.name,
+            contentType: file.type,
+            size: file.size,
+            folder,
+            ...(shape ?? {}),
+          });
+
+          await uploadFileWithProgress(uploadUrl, file, (percent) =>
+            setUploadProgress(
+              Math.round(
+                ((storedBytes + (percent / 100) * file.size) / totalBytes) * 100,
+              ),
+            ),
+          );
+          arrivals.push(key);
+        } catch (err) {
+          skipped.push(
+            describe(file, err instanceof Error ? err.message : "Upload failed"),
+          );
+        }
+        storedBytes += file.size;
+        setUploadProgress(Math.round((storedBytes / totalBytes) * 100));
       }
+
+      // Nothing landed: stay on the drop zone, where the file can be tried
+      // again, rather than showing an empty-handed library.
+      if (arrivals.length === 0) {
+        setError(skipped.join(", ") || "Upload failed");
+        setPhase("upload");
+        return;
+      }
+
+      setError(skipped.length > 0 ? skipped.join(", ") : null);
+      // Hold the filled (100%) bar for a beat — overlapping the library
+      // refresh — so the brand fill visibly completes before the view swaps.
+      await Promise.all([
+        refreshLibrary(arrivals),
+        delay(PROGRESS_COMPLETE_HOLD_MS),
+      ]);
+      setPhase("library");
     },
-    [refreshLibrary, allows, folder],
+    [refreshLibrary, refusalFor, folder],
   );
 
   const openLibrary = useCallback(async () => {
     setError(null);
     try {
-      await refreshLibrary(selectedKey ?? undefined);
+      await refreshLibrary(selectedKey ? [selectedKey] : []);
       setPhase("library");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load library");
@@ -543,11 +618,13 @@ export function useImageInsert({
     altText,
     filenameText,
     uploadProgress,
+    uploadIndex,
+    uploadTotal,
     isDragOver,
     setIsDragOver,
     error,
     isBusy,
-    processFile,
+    processFiles,
     openLibrary,
     goToUpload,
     selectAsset,

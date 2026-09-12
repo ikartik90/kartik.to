@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useImageInsert } from "../use-image-insert";
 
@@ -208,7 +208,7 @@ describe("useImageInsert file validation", () => {
   const drop = async (file: File) => {
     const { result } = renderHook(() => useImageInsert({ open: true }));
     await act(async () => {
-      await result.current.processFile(file);
+      await result.current.processFiles([file]);
     });
     return result;
   };
@@ -441,5 +441,208 @@ describe("useImageInsert (selectionMode: multiple)", () => {
 
     expect(mockDeleteMedia).toHaveBeenCalledWith({ key: "media/b.png" });
     expect(result.current.selectedKeys).toEqual(["media/a.png"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A drop is a BATCH — one file is just the shortest one
+// ---------------------------------------------------------------------------
+
+describe("uploading several files at once", () => {
+  /** A PUT that reports half-way and then lands. */
+  class FakeXhr {
+    upload: {
+      onprogress:
+        | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void)
+        | null;
+    } = { onprogress: null };
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    status = 200;
+    open() {}
+    setRequestHeader() {}
+    send() {
+      this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 });
+      this.onload?.();
+    }
+  }
+
+  /** A file of a known size, so batch progress has something to weigh. */
+  const fileOf = (name: string, type = "image/png", size = 100) => {
+    const file = new File(["x"], name, { type });
+    Object.defineProperty(file, "size", { value: size });
+    return file;
+  };
+
+  const storedAsset = (name: string) => ({
+    key: `media/uuid-${name}`,
+    url: `https://cdn/${name}`,
+    filename: name,
+    contentType: "image/png",
+    size: 100,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListMediaAssets.mockResolvedValue([]);
+    mockMeasureMediaFile.mockResolvedValue(null);
+    mockCreateMediaUploadUrl.mockImplementation(
+      async ({ filename }: { filename: string }) => ({
+        uploadUrl: `https://upload.example/${filename}`,
+        publicUrl: `https://cdn/${filename}`,
+        key: `media/uuid-${filename}`,
+      }),
+    );
+    mockUpdateMediaAlt.mockResolvedValue({ key: "media/uuid-a.png" });
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  const dropAll = async (
+    files: File[],
+    options: { selectionMode?: "single" | "multiple"; maxSelection?: number } = {},
+  ) => {
+    const { result } = renderHook(() => useImageInsert({ open: true, ...options }));
+    await act(async () => {
+      await result.current.processFiles(files);
+    });
+    return result;
+  };
+
+  it("uploads every file it was handed", async () => {
+    await dropAll([fileOf("a.png"), fileOf("b.png"), fileOf("c.png")]);
+
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledTimes(3);
+    expect(mockCreateMediaUploadUrl).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ filename: "b.png" }),
+    );
+  });
+
+  // One bar for the whole drop, not a bar that snaps back to zero on every
+  // file: the second file starts where the first finished. Weighed in BYTES,
+  // so a 40MB clip dropped beside two screenshots does not report itself
+  // two-thirds done before it has begun.
+  it("measures progress across the batch, not across one file", async () => {
+    /** A PUT that reports half-way and then waits to be landed by the test. */
+    class HeldXhr {
+      static landings: (() => void)[] = [];
+      upload: {
+        onprogress:
+          | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void)
+          | null;
+      } = { onprogress: null };
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      status = 200;
+      open() {}
+      setRequestHeader() {}
+      send() {
+        this.upload.onprogress?.({
+          lengthComputable: true,
+          loaded: 50,
+          total: 100,
+        });
+        HeldXhr.landings.push(() => this.onload?.());
+      }
+    }
+    HeldXhr.landings = [];
+    vi.stubGlobal("XMLHttpRequest", HeldXhr);
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const { result } = renderHook(() => useImageInsert({ open: true }));
+    let batch: Promise<void>;
+
+    await act(async () => {
+      batch = result.current.processFiles([fileOf("a.png"), fileOf("b.png")]);
+      await flush();
+    });
+    // Half of the first of two equal files — a per-file bar would say 50.
+    expect(result.current.uploadProgress).toBe(25);
+
+    await act(async () => {
+      HeldXhr.landings.shift()?.();
+      await flush();
+    });
+    // The second file begins with the first one's bytes already behind it.
+    expect(result.current.uploadProgress).toBe(75);
+
+    await act(async () => {
+      HeldXhr.landings.shift()?.();
+      await batch;
+    });
+    expect(result.current.uploadProgress).toBe(100);
+    expect(result.current.phase).toBe("library");
+  });
+
+  // A drop is whatever the finder handed over — one bad file in it is a file
+  // to skip, not a reason to refuse the other four.
+  it("carries on past a file it cannot take, and names the one it skipped", async () => {
+    const result = await dropAll([
+      fileOf("a.png"),
+      fileOf("clip.mov", "video/quicktime"),
+      fileOf("b.png"),
+    ]);
+
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledTimes(2);
+    expect(result.current.phase).toBe("library");
+    expect(result.current.error).toContain("clip.mov");
+  });
+
+  it("still refuses a lone file the plain way", async () => {
+    const result = await dropAll([fileOf("clip.mov", "video/quicktime")]);
+
+    expect(result.current.error).toBe("Unsupported file type");
+    expect(result.current.phase).toBe("upload");
+    expect(mockCreateMediaUploadUrl).not.toHaveBeenCalled();
+  });
+
+  // Uploading into a batch picker adds to the batch — the whole point of
+  // dropping five files on a collection is inserting five.
+  it("joins the whole upload to a multiple selection, in the order dropped", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      storedAsset("b.png"),
+      storedAsset("a.png"),
+    ]);
+
+    const result = await dropAll([fileOf("a.png"), fileOf("b.png")], {
+      selectionMode: "multiple",
+      maxSelection: 6,
+    });
+
+    expect(result.current.selectedKeys).toEqual([
+      "media/uuid-a.png",
+      "media/uuid-b.png",
+    ]);
+  });
+
+  it("stops joining at the cap, and keeps what fits", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      storedAsset("b.png"),
+      storedAsset("a.png"),
+    ]);
+
+    const result = await dropAll([fileOf("a.png"), fileOf("b.png")], {
+      selectionMode: "multiple",
+      maxSelection: 1,
+    });
+
+    expect(result.current.selectedKeys).toEqual(["media/uuid-a.png"]);
+  });
+
+  // Single-select takes the batch too: uploading five and inserting one is an
+  // ordinary thing to want. The first arrival is what the panel opens on.
+  it("uploads a batch into a single-select dialog and anchors on the first", async () => {
+    mockListMediaAssets.mockResolvedValue([
+      storedAsset("b.png"),
+      storedAsset("a.png"),
+    ]);
+
+    const result = await dropAll([fileOf("a.png"), fileOf("b.png")]);
+
+    expect(mockCreateMediaUploadUrl).toHaveBeenCalledTimes(2);
+    expect(result.current.selectedKey).toBe("media/uuid-a.png");
+    expect(result.current.selectedKeys).toEqual([]);
   });
 });

@@ -193,19 +193,33 @@ describe("CardPropertiesPanel — link card", () => {
       ).toContain("shader.png");
     });
 
-    it("clears one theme's picture without touching the other", async () => {
+    // Swapping a picture is the SLOT's act; emptying one is the section's (the
+    // test below). A filled slot therefore offers the field and the replace
+    // button beside it — Figma 1233:2639 — and no third control.
+    it("offers to replace a filled slot, never to clear it", async () => {
       const user = userEvent.setup();
       const props = linkCardProps({
         media: { light: image("/light.png"), dark: image("/dark.png") },
       });
       render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+
+      expect(
+        within(section("Media")!)
+          .getAllByRole("button")
+          .map((b) => b.getAttribute("aria-label")),
+      ).toEqual([
+        "Change light media",
+        "Replace light media",
+        "Change dark media",
+        "Replace dark media",
+      ]);
+
       await user.click(
-        screen.getByRole("button", { name: "Remove dark media" }),
+        screen.getByRole("button", { name: "Replace dark media" }),
       );
-      expect(props.onChange).toHaveBeenCalledWith({
-        media: { light: image("/light.png") },
-      });
+      expect(props.onPickMedia).toHaveBeenCalledWith("dark");
     });
+
 
     it("takes the whole section away, and both pictures with it", async () => {
       const user = userEvent.setup();
@@ -528,17 +542,23 @@ describe("CardPropertiesPanel — post card", () => {
     expect(props.onPickMedia).toHaveBeenCalledWith("dark");
   });
 
-  it("clears one theme's picture without touching the other", async () => {
+  // As on the link card: the slot swaps, the section empties.
+  it("offers to replace a filled slot, never to clear it", async () => {
     const user = userEvent.setup();
     const props = postCardProps({
       media: { light: first, dark: image("/dark.png") },
     });
     render(<CardPropertiesPanel postCard={props} onDismiss={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "Remove light media" }));
-    expect(props.onChange).toHaveBeenCalledWith({
-      media: { dark: image("/dark.png") },
-    });
+
+    expect(
+      screen.queryByRole("button", { name: "Remove light media" }),
+    ).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Replace light media" }),
+    );
+    expect(props.onPickMedia).toHaveBeenCalledWith("light");
   });
+
 
   it("hands the picture back to the document when the section goes", async () => {
     const user = userEvent.setup();

@@ -8,9 +8,9 @@ import { TestimonialCard } from "../testimonial-card";
 // ---------------------------------------------------------------------------
 // The card is mostly a layout, and a layout has no failing state worth
 // asserting. What IS worth asserting is everything it DERIVES: the initial it
-// falls back to, the handle it reads out of a stored URL, and the two halves of
-// a row that are allowed to be absent. Each one is a small piece of logic that
-// would otherwise only be checked by looking at it.
+// falls back to, the profile it turns into a link, and the halves of a row that
+// are allowed to be absent. Each one is a small piece of logic that would
+// otherwise only be checked by looking at it.
 // ---------------------------------------------------------------------------
 
 afterEach(() => cleanup());
@@ -25,6 +25,7 @@ const testimonial: Testimonial = {
   createdAt: new Date("2026-03-09T10:00:00.000Z"),
   avatarUrl: null,
   linkedinUrl: null,
+  tagline: null,
   excerpt: null,
 };
 
@@ -58,9 +59,12 @@ describe("TestimonialCard", () => {
     expect(
       name.compareDocumentPosition(quote) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      container.querySelector("button")?.firstElementChild?.contains(name),
-    ).toBe(true);
+    // The byline is the card's first block — the button beside it is an empty
+    // overlay and holds no words at all.
+    expect(container.firstElementChild?.firstElementChild?.tagName).toBe(
+      "BUTTON",
+    );
+    expect(screen.getByRole("button").textContent).toBe("");
   });
 
   // Whatever the card is showing, it shows ALL of it. Clamping would hide the
@@ -158,25 +162,57 @@ describe("TestimonialCard", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 
-  // The handle and not the URL: `https://www.linkedin.com/in/ada` is forty
-  // characters of scheme and host to say one thing.
-  it("reads a stored profile back as its handle", () => {
-    draw({ linkedinUrl: "https://www.linkedin.com/in/ada-lovelace" });
+  // WHO THEY ARE, under their name — the line the card used to spend on a
+  // profile path.
+  it("writes the tagline under the name", () => {
+    draw({ tagline: "Analyst, Analytical Engine" });
 
-    expect(screen.getByText("in/ada-lovelace")).toBeTruthy();
+    expect(screen.getByText("Analyst, Analytical Engine")).toBeTruthy();
   });
 
-  it("draws no handle row at all when there is no profile", () => {
+  it("draws no second line when there is no tagline", () => {
     draw();
 
-    expect(screen.queryByText(/^in\//)).toBeNull();
+    expect(screen.queryByText(/Analyst/)).toBeNull();
   });
 
-  // A link inside a button is not operable by keyboard in any browser, and the
-  // card IS a button. The profile is clickable from the rail instead.
-  it("nests no link inside the button", () => {
-    draw({ linkedinUrl: "https://www.linkedin.com/in/ada" });
+  // The profile is a LINK now, and named for whose it is: a board of twelve
+  // cards would otherwise be twelve links all called "LinkedIn".
+  it("offers a stored profile as a link to it", () => {
+    draw({ linkedinUrl: "https://www.linkedin.com/in/ada-lovelace" });
+
+    const link = screen.getByRole("link", { name: /ada lovelace on linkedin/i });
+    expect(link.getAttribute("href")).toBe(
+      "https://www.linkedin.com/in/ada-lovelace",
+    );
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+
+  it("draws no profile link at all when there is none", () => {
+    draw();
 
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  // The card is still one press away from the rail, and the link is still a
+  // link: a link nested inside a button is not keyboard-operable in any
+  // browser, so the two are SIBLINGS — the button holds the card's content and
+  // the link sits over its corner.
+  it("keeps the profile link outside the button that selects the row", () => {
+    draw({ linkedinUrl: "https://www.linkedin.com/in/ada" });
+
+    const select = screen.getByRole("button", { name: /ada lovelace/i });
+    expect(select.querySelector("a")).toBeNull();
+    expect(screen.getByRole("link")).toBeTruthy();
+  });
+
+  it("does not select the row when the profile link is pressed", async () => {
+    const { onSelect } = draw({
+      linkedinUrl: "https://www.linkedin.com/in/ada",
+    });
+
+    await userEvent.click(screen.getByRole("link"));
+
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

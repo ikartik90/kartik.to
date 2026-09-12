@@ -31,6 +31,12 @@ export const PROFILE_PREFIX = "profiles/";
  * What counts as a library object. The bucket is not exclusively the media
  * library's, so listing filters by extension rather than trusting the prefix.
  *
+ * It covers everything the bucket will TAKE (`ALLOWED_UPLOAD_CONTENT_TYPES`),
+ * documents included — the two halves of the picker are a filter the dialog
+ * applies to this list, not two listings. While `pdf` was missing here the
+ * document half was permanently empty: an uploaded CV landed in the bucket and
+ * was never listed again, so it could not be inserted, renamed or deleted.
+ *
  * This is the ONE remaining place an extension decides anything, and it decides
  * only whether an object belongs to the library — never what it is. The
  * renderer used to read the kind back off the same string, which made this list
@@ -40,7 +46,7 @@ export const PROFILE_PREFIX = "profiles/";
  * asymmetry it leaves: an object under a bare key is invisible to this filter
  * but perfectly renderable once it is in a document.
  */
-const MEDIA_KEY_PATTERN = /\.(png|jpe?g|gif|webp|svg|mp4)$/i;
+const MEDIA_KEY_PATTERN = /\.(png|jpe?g|gif|webp|svg|mp4|pdf)$/i;
 
 export function publicUrlForKey(key: string): string | null {
   return env.R2_PUBLIC_BASE_URL ? `${env.R2_PUBLIC_BASE_URL}/${key}` : null;

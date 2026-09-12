@@ -422,7 +422,7 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
 
   return (
     <StageContext.Provider value={stage}>
-      <div ref={stageRef} className={stageStyle}>
+      <div ref={stageRef} className={stageStyle} data-social-shader-stage>
         {children}
         {enabled && warm && placement && uniforms && (
           <ShaderMount

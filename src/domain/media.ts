@@ -234,10 +234,46 @@ export function isAllowedUploadContentType(
   return (ALLOWED_UPLOAD_CONTENT_TYPES as readonly string[]).includes(value);
 }
 
+/**
+ * How long a stored name may be. Object metadata travels in a header, so this
+ * is a courtesy to the store as much as to the row it has to fit in.
+ */
+const MAX_MEDIA_NAME_LENGTH = 120;
+
+/**
+ * A name the author typed, made storable — and NOTHING more.
+ *
+ * Renaming is display-only: the object key is minted once and never moves, so
+ * a name edited here reaches no URL, no path and no signature. It is a label,
+ * and it is held to a label's standard rather than a key's. Passing it through
+ * {@link sanitizeMediaFilename} (which is written for keys) turned "Old shift
+ * form" into "Old-shift-form" as you typed it — the field arguing with its own
+ * author about a string only they will ever read.
+ *
+ * What it does strip is what the STORE cannot hold: object metadata is carried
+ * in an HTTP header, which is US-ASCII, so an accent has to go. The letter
+ * under it does not — folding first leaves "Resume", where dropping the whole
+ * character leaves "Rsum".
+ */
+export function sanitizeMediaDisplayName(name: string): string {
+  return (
+    name
+      // Accents split off their letters, so only the marks are dropped below.
+      .normalize("NFD")
+      // Whitespace first: a tab is a word boundary, and stripping it as a
+      // control character would run the words either side of it together.
+      .replace(/\s+/g, " ")
+      // Control characters, combining marks and everything past ASCII.
+      .replace(/[^\x20-\x7e]/g, "")
+      .trim()
+      .slice(0, MAX_MEDIA_NAME_LENGTH)
+  );
+}
+
 export function sanitizeMediaFilename(filename: string): string {
   const base = filename.split(/[/\\]/).pop() ?? "media";
   const cleaned = base.replace(/[^\w.\-()+]/g, "-").replace(/-+/g, "-");
-  return cleaned.length > 0 ? cleaned.slice(0, 120) : "media";
+  return cleaned.length > 0 ? cleaned.slice(0, MAX_MEDIA_NAME_LENGTH) : "media";
 }
 
 /** The `<uuid>-` stamp `createMediaUploadUrl` prefixes onto every object key. */

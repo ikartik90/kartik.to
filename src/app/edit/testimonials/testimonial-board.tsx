@@ -6,6 +6,7 @@ import { ImageInsertDialog } from "@/components/image-insert-dialog";
 import type { PropertiesPanelHandle } from "@/components/ui/properties-panel";
 import { updateTestimonialDetails } from "@/app/actions/testimonial";
 import type { Testimonial } from "@/domain/testimonial";
+import { SocialShaderStage } from "@/components/social-icon-shader";
 import { TestimonialCard } from "./testimonial-card";
 import { TestimonialRail } from "./testimonial-rail";
 
@@ -88,7 +89,10 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
     async (
       id: string,
       change: Partial<
-        Pick<Testimonial, "avatarUrl" | "linkedinUrl" | "excerpt" | "name">
+        Pick<
+          Testimonial,
+          "avatarUrl" | "linkedinUrl" | "excerpt" | "name" | "tagline"
+        >
       >,
     ) => {
       const before = rows.find((row) => row.id === id);
@@ -104,6 +108,7 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
           avatarUrl: after.avatarUrl,
           linkedinUrl: after.linkedinUrl,
           excerpt: after.excerpt,
+          tagline: after.tagline,
           name: after.name,
         });
         setRows((current) =>
@@ -135,6 +140,13 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
     [selectedId, writeDetails],
   );
 
+  const setTagline = useCallback(
+    (tagline: string | null) => {
+      if (selectedId) void writeDetails(selectedId, { tagline });
+    },
+    [selectedId, writeDetails],
+  );
+
   const setExcerpt = useCallback(
     (excerpt: string | null) => {
       if (selectedId) void writeDetails(selectedId, { excerpt });
@@ -151,29 +163,35 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
 
   return (
     <>
-      <ul className={boardStyle}>
-        {rows.map((row) => (
-          <li key={row.id}>
-            <TestimonialCard
-              testimonial={row}
-              selected={row.id === selectedId}
-              onSelect={() => {
-                // A stale failure from the last row would otherwise greet the
-                // next one as if its own write had gone wrong.
-                setProblem(null);
-                setSelectedId(row.id);
-              }}
-            />
-          </li>
-        ))}
-      </ul>
+      {/* ONE stage for the whole board, not one per card. A stage holds a
+          single WebGL context and moves it to whichever icon is hovered, so a
+          stage per card would be a context per card — a dozen of them, against
+          a browser limit of about sixteen. The profile links inside register
+          with this one. */}
+      <SocialShaderStage>
+        <ul className={boardStyle}>
+          {rows.map((row) => (
+            <li key={row.id}>
+              <TestimonialCard
+                testimonial={row}
+                selected={row.id === selectedId}
+                onSelect={() => {
+                  // A stale failure from the last row would otherwise greet the
+                  // next one as if its own write had gone wrong.
+                  setProblem(null);
+                  setSelectedId(row.id);
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      </SocialShaderStage>
 
       {/* A SIBLING of the grid rather than a child of the card it edits: it is
           fixed to the viewport and portals to the body to get there, so it
           takes no space here and needs none. */}
       {selected && (
         <TestimonialRail
-          key={selected.id}
           ref={railRef}
           testimonial={selected}
           onPickPicture={() => setPicking(true)}
@@ -181,6 +199,7 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
           onProfileChange={setProfile}
           onExcerptChange={setExcerpt}
           onNameChange={setName}
+          onTaglineChange={setTagline}
           problem={problem}
           onDismiss={() => setSelectedId(null)}
         />

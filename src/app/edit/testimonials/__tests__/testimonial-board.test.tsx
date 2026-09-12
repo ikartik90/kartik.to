@@ -52,6 +52,7 @@ const ada = {
   createdAt: new Date("2026-03-09T10:00:00.000Z"),
   avatarUrl: null,
   linkedinUrl: null,
+  tagline: null,
   excerpt: null,
 };
 
@@ -62,6 +63,7 @@ const grace = {
   createdAt: new Date("2026-03-08T10:00:00.000Z"),
   avatarUrl: null,
   linkedinUrl: null,
+  tagline: null,
   excerpt: null,
 };
 
@@ -86,11 +88,23 @@ function storesWhatItIsGiven() {
       linkedinUrl: input.linkedinUrl,
       excerpt:
         input.excerpt === undefined ? row.excerpt : (input.excerpt || null),
+      tagline:
+        input.tagline === undefined ? row.tagline : (input.tagline || null),
     };
   });
 }
 
-const card = (name: RegExp | string) => screen.getByRole("button", { name });
+/**
+ * One card, by whose it is. The button is an empty overlay stretched over the
+ * card (so the profile beside it can be a real link), so the words are in its
+ * PARENT — which is the card.
+ */
+const card = (name: RegExp | string) =>
+  screen.getByRole("button", { name }).parentElement!;
+
+/** The same card's select button, for a press. */
+const selectCard = (name: RegExp | string) =>
+  screen.getByRole("button", { name });
 const rail = () => screen.getByRole("dialog");
 
 beforeEach(() => {
@@ -111,11 +125,11 @@ describe("TestimonialBoard", () => {
   it("opens the rail on the card that was pressed", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
-    await userEvent.click(card(/grace hopper/i));
+    await userEvent.click(selectCard(/grace hopper/i));
 
     expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
-    expect(card(/grace hopper/i).getAttribute("aria-pressed")).toBe("true");
-    expect(card(/ada lovelace/i).getAttribute("aria-pressed")).toBe("false");
+    expect(selectCard(/grace hopper/i).getAttribute("aria-pressed")).toBe("true");
+    expect(selectCard(/ada lovelace/i).getAttribute("aria-pressed")).toBe("false");
   });
 
   // The rail is one surface for the whole board, so moving to another card has
@@ -123,8 +137,8 @@ describe("TestimonialBoard", () => {
   it("moves the rail to the next card selected", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
-    await userEvent.click(card(/ada lovelace/i));
-    await userEvent.click(card(/grace hopper/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
+    await userEvent.click(selectCard(/grace hopper/i));
 
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
@@ -137,7 +151,7 @@ describe("TestimonialBoard", () => {
       <TestimonialBoard testimonials={[ada, grace]} />,
     );
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(within(rail()).getByRole("button", { name: /picture/i }));
     await userEvent.click(screen.getByRole("button", { name: /add picture/i }));
     await userEvent.click(screen.getByRole("button", { name: /pick a picture/i }));
@@ -163,7 +177,7 @@ describe("TestimonialBoard", () => {
   it("picks from the profiles folder rather than the media library", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(within(rail()).getByRole("button", { name: /picture/i }));
     await userEvent.click(screen.getByRole("button", { name: /add picture/i }));
 
@@ -179,7 +193,7 @@ describe("TestimonialBoard", () => {
       <TestimonialBoard testimonials={[{ ...ada, avatarUrl: PICKED }]} />,
     );
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /remove picture/i }),
     );
@@ -199,7 +213,7 @@ describe("TestimonialBoard", () => {
   it("puts a typed profile on the card, as its handle", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(within(rail()).getByRole("button", { name: /linkedin/i }));
     await userEvent.type(
       within(rail()).getByLabelText(/url/i),
@@ -227,7 +241,7 @@ describe("TestimonialBoard", () => {
   it("says so, and writes nothing, when the URL is not a profile", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(within(rail()).getByRole("button", { name: /linkedin/i }));
     await userEvent.type(
       within(rail()).getByLabelText(/url/i),
@@ -246,7 +260,7 @@ describe("TestimonialBoard", () => {
   it("stops complaining once the URL is a profile", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(within(rail()).getByRole("button", { name: /linkedin/i }));
 
     const box = within(rail()).getByLabelText(/url/i);
@@ -270,7 +284,7 @@ describe("TestimonialBoard", () => {
       />,
     );
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /remove linkedin/i }),
     );
@@ -292,7 +306,7 @@ describe("TestimonialBoard", () => {
       />,
     );
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
 
     const link = within(rail()).getByRole("link");
     expect(link.getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
@@ -304,7 +318,7 @@ describe("TestimonialBoard", () => {
     const { container } = render(<TestimonialBoard testimonials={[ada]} />);
     mockUpdate.mockRejectedValue(new Error("connection lost"));
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(within(rail()).getByRole("button", { name: /picture/i }));
     await userEvent.click(screen.getByRole("button", { name: /add picture/i }));
     await userEvent.click(screen.getByRole("button", { name: /pick a picture/i }));
@@ -321,7 +335,7 @@ describe("TestimonialBoard", () => {
 
 describe("TestimonialBoard (excerpt)", () => {
   const openExcerpt = async () => {
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /excerpt/i }),
     );
@@ -390,7 +404,7 @@ describe("TestimonialBoard (excerpt)", () => {
       />,
     );
 
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /remove excerpt/i }),
     );
@@ -416,18 +430,18 @@ describe("TestimonialBoard (name)", () => {
   /** The card carrying these words. Found by the QUOTE, which renaming does not
    *  change — and scoped, because the rail's header shows the name too. */
   const cardSaying = (quote: string) =>
-    screen.getByText(quote).closest("button")!;
+    screen.getByText(quote).closest("[class*='testimonial-card__root']")!;
 
   it("opens with the stored name in it", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
 
     expect((nameBox() as HTMLInputElement).value).toBe("Ada Lovelace");
   });
 
   it("writes a corrected name and shows it on the card", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
 
     await userEvent.clear(nameBox());
     await userEvent.type(nameBox(), "Ada L");
@@ -449,7 +463,7 @@ describe("TestimonialBoard (name)", () => {
   // not obeyed, and nothing is written.
   it("refuses an emptied name rather than clearing it", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
 
     await userEvent.clear(nameBox());
 
@@ -463,10 +477,96 @@ describe("TestimonialBoard (name)", () => {
   // The line that did not move.
   it("offers no way to edit the words themselves", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
-    await userEvent.click(card(/ada lovelace/i));
+    await userEvent.click(selectCard(/ada lovelace/i));
 
     expect(
       within(rail()).queryByRole("textbox", { name: "Quote" }),
     ).toBeNull();
+  });
+});
+// ---------------------------------------------------------------------------
+// The tagline, and the rail that stays put while you move between cards.
+// ---------------------------------------------------------------------------
+
+describe("TestimonialBoard (tagline)", () => {
+  it("writes a typed tagline to the row it was typed for", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(selectCard(/ada lovelace/i));
+    await userEvent.type(
+      within(rail()).getByLabelText("Tagline"),
+      "Analyst, Analytical Engine",
+    );
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "t1",
+          tagline: "Analyst, Analytical Engine",
+        }),
+      ),
+    );
+  });
+
+  it("puts the stored tagline on the card, under the name", async () => {
+    render(<TestimonialBoard testimonials={[ada]} />);
+
+    await userEvent.click(selectCard(/ada lovelace/i));
+    await userEvent.type(within(rail()).getByLabelText("Tagline"), "Analyst");
+
+    await waitFor(() =>
+      expect(within(card(/ada lovelace/i)).getByText("Analyst")).toBeTruthy(),
+    );
+  });
+
+  // A stage holds ONE WebGL context and moves it to whichever icon is hovered.
+  // One per card would be a context per card, against a browser limit of about
+  // sixteen — so the board wraps the whole grid in a single stage.
+  it("gives the whole board one shader stage, not one per card", async () => {
+    render(
+      <TestimonialBoard
+        testimonials={[
+          { ...ada, linkedinUrl: "https://www.linkedin.com/in/ada" },
+          { ...grace, linkedinUrl: "https://www.linkedin.com/in/grace" },
+        ]}
+      />,
+    );
+
+    expect(
+      document.querySelectorAll("[data-social-shader-stage]").length,
+    ).toBe(1);
+    expect(screen.getAllByRole("link").length).toBe(2);
+  });
+
+  // Moving between cards used to tear the panel down and build it again — the
+  // rail slid out and back in on every press. It is ONE surface for the whole
+  // board and it stays open until it is closed.
+  it("keeps the rail open when another card is selected", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(selectCard(/ada lovelace/i));
+    const panel = rail();
+
+    await userEvent.click(selectCard(/grace hopper/i));
+
+    // The same element, not a replacement wearing the same role.
+    expect(rail()).toBe(panel);
+    expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
+  });
+
+  // What the remount used to buy, kept: the boxes belong to the row on screen,
+  // so a value half-typed for one card can never be sitting in another's.
+  it("carries no half-typed value across a selection", async () => {
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await userEvent.click(selectCard(/ada lovelace/i));
+    const box = within(rail()).getByLabelText("Tagline");
+    await userEvent.type(box, "Analyst");
+
+    await userEvent.click(selectCard(/grace hopper/i));
+
+    expect(
+      (within(rail()).getByLabelText("Tagline") as HTMLInputElement).value,
+    ).toBe("");
   });
 });
