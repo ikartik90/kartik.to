@@ -9007,17 +9007,16 @@ export default defineConfig({
               borderRadius: "inherit",
             },
             quote: {
-              // The last line never left alone. These are 280 characters in a
-              // 280px track, so an orphan is the common case rather than the
-              // unlucky one, and the card has no fixed height for the extra
-              // line `pretty` may cost to break.
-              textWrap: "pretty",
-              // `bodySmall`, not the `quote` style the words will get on a
-              // published page. This is a board, not the page: the job here is
-              // to read six of them at once and find the one being annotated,
-              // and 20px prose in a 280px track turns a testimonial into a
-              // ragged column. The rail is where one row is looked at closely.
-              textStyle: "bodySmall",
+              // `sidenote`, not the `quote` style the words will get on a
+              // published page, and a step below the name that owns them. This
+              // is a board, not the page: the job is to read six at once and
+              // find the one being annotated, and 20px prose in a 280px track
+              // turns a testimonial into a ragged column. At 12px the whole
+              // quote is one glance, the name above it stays the thing the eye
+              // lands on, and the 0.5% tracking the sub-14px family carries is
+              // what keeps a full 280 characters legible that small. The rail
+              // is where one row is looked at closely.
+              textStyle: "sidenote",
               color: "text.body",
               margin: "none",
               // NOT clamped. A line clamp is the wrong trade on this surface:
