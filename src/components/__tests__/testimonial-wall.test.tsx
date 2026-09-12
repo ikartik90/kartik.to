@@ -298,6 +298,39 @@ describe("dealIntoColumns", () => {
     expect(deal(9).map((column) => column.length)).toEqual([2, 2, 1, 2, 2]);
   });
 
+  // THE THIRD ROW GOES TO THE EDGES. Two rows fill from the middle out; past
+  // that the outermost columns take their third card first, because they are
+  // the ones with room for it — the stagger starts them at the top of the band
+  // and steps every column inwards further down, so depth is cheapest at the
+  // edges and most expensive over the tower.
+  it.each([
+    [10, [3, 2, 1, 2, 2]],
+    [11, [3, 2, 1, 2, 3]],
+    [12, [3, 3, 1, 2, 3]],
+    [13, [3, 3, 1, 3, 3]],
+  ])("gives the edges the third card, with %i published", (count, shape) => {
+    expect(deal(count).map((column) => column.length)).toEqual(shape);
+  });
+
+  // ...and holds them there. Anything past a third row goes back to filling
+  // from the middle out, so the edges stop at three while there is a band's
+  // worth of cards to deal.
+  it("keeps the outermost columns to three", () => {
+    for (let count = 10; count <= 13; count++) {
+      const dealt = deal(count);
+      expect(dealt[0].length).toBeLessThanOrEqual(3);
+      expect(dealt[4].length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it.each([10, 11, 12, 13])("still deals every card once, with %i", (count) => {
+    expect(
+      deal(count)
+        .flat()
+        .sort((a, b) => a - b),
+    ).toEqual(Array.from({ length: count }, (_, i) => i));
+  });
+
   it("has a column for every column, even with nothing to put in them", () => {
     expect(deal(0)).toEqual([[], [], [], [], []]);
   });
