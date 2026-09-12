@@ -1,6 +1,10 @@
 // ---------------------------------------------------------------------------
 // What the analytics clients are allowed to report.
 //
+// Two things are never reported: the author's own browsing, and the hidden
+// surface they browse it from. The first is `analytics-opt-out.ts` — a mark on
+// this browser — and the second is the paths below.
+//
 // This site has exactly one author and a hidden surface to author on, and the
 // two facts make the default wrong in two separate ways. The numbers are
 // wrong because every visit to `/edit/*` is me, so the busiest "page" on the
@@ -20,6 +24,8 @@
 // number in a dashboard; a stealth path sent because the string looked odd
 // costs the reason the filter exists.
 // ---------------------------------------------------------------------------
+
+import { isAnalyticsOptedOut } from "./analytics-opt-out";
 
 /**
  * The admin surface, as paths.
@@ -60,14 +66,22 @@ function pathnameOf(url: string): string | null {
 
 /**
  * A `beforeSend` for both `@vercel/analytics` and `@vercel/speed-insights`:
- * returns the event for a public page and `null` for the admin surface.
+ * returns the event for a visitor on a public page, and `null` for the admin
+ * surface or for the author's own browser.
+ *
+ * The mark is read per event rather than closed over, because the vendor script
+ * is handed this function once at mount and calls it for every pageview after
+ * that — including the ones that follow the load on which the author's session
+ * resolved and marked the browser.
  *
  * Generic over the event so it satisfies both packages' `BeforeSend` types,
  * which agree on `url` and differ everywhere else.
  */
-export function dropStealthEvents<T extends { url: string }>(
+export function dropPrivateEvents<T extends { url: string }>(
   event: T,
 ): T | null {
+  if (isAnalyticsOptedOut()) return null;
+
   const pathname = pathnameOf(event.url);
   if (pathname === null) return null;
 
