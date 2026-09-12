@@ -83,6 +83,22 @@ const FADE_MS = 350;
  * short list clusters where the eye already is instead of stranding cards at
  * the far edges where they are half off-screen anyway.
  *
+ * ...AND A THIRD, ONCE THERE ARE MORE THAN NINE. Nine is the last hand that
+ * fills the band two rows deep (2·2·1·2·2). The tenth card starts a third row,
+ * and that row is dealt to the EDGES first — the reverse of the other two.
+ *
+ * Which is the same fact about the stagger read from the other end. The
+ * outermost columns start at the top of the band and every step inwards starts
+ * lower, so the room between a column's last card and the drawing beneath it is
+ * greatest at the edges and least over the tower: depth is cheap there and
+ * expensive in the middle. Two rows go where they can be READ; a third goes
+ * where it FITS. It also keeps the band's silhouette — a third row in an inner
+ * column would deepen the part of the shape that is already lowest.
+ *
+ * Past a third row it is the middle-out order again, so the edges hold three
+ * for every hand between ten and thirteen, which is every hand this page is
+ * realistically dealt.
+ *
  * Deterministic, so the server and the client deal the same hand from the same
  * order — the rotation moves cards by reordering the list, never by dealing it
  * differently.
@@ -102,9 +118,21 @@ export function dealIntoColumns<T>(items: T[], columns = COLUMNS): T[][] {
   const outwards = Array.from({ length: columns }, (_, i) => i)
     .filter((i) => i !== centre)
     .sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre) || a - b);
+  // ...and the same columns from the outside in, which is the order the third
+  // row is dealt in. Sorted rather than reversed: reversing would turn the
+  // left-before-right tie-break into right-before-left, and hand the tenth card
+  // to the fifth column instead of the first.
+  const edgesFirst = Array.from({ length: columns }, (_, i) => i)
+    .filter((i) => i !== centre)
+    .sort((a, b) => Math.abs(b - centre) - Math.abs(a - centre) || a - b);
+
+  // Two rows outwards, a third to the edges, and the middle-out order again for
+  // anything past that — written as the sequence of columns rather than as a
+  // rule per card, because the sequence IS the rule and reads as one line.
+  const seats = [...outwards, ...outwards, ...edgesFirst];
 
   items.slice(1).forEach((item, i) => {
-    dealt[outwards[i % outwards.length]].push(item);
+    dealt[seats[i] ?? outwards[(i - seats.length) % outwards.length]].push(item);
   });
 
   return dealt;
