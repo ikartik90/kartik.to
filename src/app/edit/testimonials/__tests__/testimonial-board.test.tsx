@@ -631,12 +631,16 @@ describe("TestimonialBoard (tagline)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Publishing — the switch between a private table and the homepage.
+// Publishing — the one press between a private table and the homepage.
 //
 // The one control on this board whose effect is not on this board. Everything
 // else here changes how a card is DRAWN; this changes who can see it at all, so
-// what these cases check is that the switch says what is stored and that a save
+// what these cases check is that the button says what is stored and that a save
 // of something else never moves it.
+//
+// ONE button with two faces rather than two buttons, so the thing to assert is
+// which face it is wearing: the name IS the state, and a row that is already
+// published offers to take it down.
 // ---------------------------------------------------------------------------
 
 describe("TestimonialBoard (published)", () => {
@@ -645,36 +649,38 @@ describe("TestimonialBoard (published)", () => {
     publishedAt: new Date("2026-03-10T10:00:00.000Z"),
   };
 
-  /** Select a card and hand back the switch that publishes it. */
-  async function openPublishSwitch(user: ReturnType<typeof userEvent.setup>) {
+  /** Select a card and hand back the button that publishes it. */
+  async function openPublishButton(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: /Edit Ada/ }));
-    return screen.getByRole("switch", { name: /Published/i });
+    return within(rail()).getByRole("button", {
+      name: /^(Publish|Unpublish)$/,
+    });
   }
 
-  it("shows an unpublished row as off", async () => {
+  it("offers to publish a row that is not published", async () => {
     const user = userEvent.setup();
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
-    expect(
-      (await openPublishSwitch(user)).getAttribute("aria-checked"),
-    ).toBe("false");
+    expect((await openPublishButton(user)).getAttribute("aria-label")).toBe(
+      "Publish",
+    );
   });
 
-  it("shows a published row as on", async () => {
+  it("offers to take down a row that is", async () => {
     const user = userEvent.setup();
     storesWhatItIsGiven([publishedAda, grace]);
     render(<TestimonialBoard testimonials={[publishedAda, grace]} />);
 
-    expect(
-      (await openPublishSwitch(user)).getAttribute("aria-checked"),
-    ).toBe("true");
+    expect((await openPublishButton(user)).getAttribute("aria-label")).toBe(
+      "Unpublish",
+    );
   });
 
-  it("publishes the row the switch belongs to", async () => {
+  it("publishes the row the button belongs to", async () => {
     const user = userEvent.setup();
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
-    await user.click(await openPublishSwitch(user));
+    await user.click(await openPublishButton(user));
 
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith(
@@ -688,12 +694,28 @@ describe("TestimonialBoard (published)", () => {
     storesWhatItIsGiven([publishedAda]);
     render(<TestimonialBoard testimonials={[publishedAda]} />);
 
-    await user.click(await openPublishSwitch(user));
+    await user.click(await openPublishButton(user));
 
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ id: "t1", published: false }),
       ),
+    );
+  });
+
+  // The press flips what it offers next, which is the whole of "one button with
+  // two faces" — and it is drawn off the STORED row, so this also proves the
+  // board's optimistic copy reached the rail.
+  it("turns into its opposite once the row has moved", async () => {
+    const user = userEvent.setup();
+    render(<TestimonialBoard testimonials={[ada, grace]} />);
+
+    await user.click(await openPublishButton(user));
+
+    await waitFor(() =>
+      expect(
+        within(rail()).getByRole("button", { name: "Unpublish" }),
+      ).toBeTruthy(),
     );
   });
 
@@ -736,10 +758,10 @@ describe("TestimonialBoard (published)", () => {
     );
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    // Still offering to take it DOWN, which is the button saying the row is
+    // still up.
     expect(
-      screen
-        .getByRole("switch", { name: /Published/i })
-        .getAttribute("aria-checked"),
-    ).toBe("true");
+      within(rail()).getByRole("button", { name: "Unpublish" }),
+    ).toBeTruthy();
   });
 });

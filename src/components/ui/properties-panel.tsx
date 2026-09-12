@@ -258,17 +258,44 @@ function PropertiesPanelRoot({
   );
 }
 
+/**
+ * The strip's own end, where the dismiss button lives and anything given to
+ * `actions` lines up beside it.
+ *
+ * A box of its own because the strip is `space-between`: a title and one button
+ * sit at the two ends, and a third child would be centred between them. `xs` is
+ * the gap every other cluster of icon chips in this app is drawn with.
+ */
+const headerActionsStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "xs",
+});
+
 export interface PropertiesPanelHeaderProps {
   /** The panel's title. */
   children: ReactNode;
   /** Overrides the dismiss button's accessible name. */
   closeLabel?: string;
+  /**
+   * Controls that act on the thing this strip NAMES, drawn before the dismiss
+   * button.
+   *
+   * For a panel whose title is a row rather than a word. "Properties" names the
+   * panel, and an action on the document would be wrongly placed beside it —
+   * which is why the shader playground moved its preset actions down into a
+   * heading of their own. A panel headed with somebody's NAME is the other
+   * case: a control that decides whether those words are on the homepage
+   * belongs next to whose words they are.
+   */
+  actions?: ReactNode;
 }
 
 /** Title over the whole panel, with the control that sends it back to the edge. */
 function PropertiesPanelHeader({
   children,
   closeLabel = "Close properties panel",
+  actions,
 }: PropertiesPanelHeaderProps) {
   const { styles, onDismiss } = usePanel("PropertiesPanel.Header");
   return (
@@ -276,9 +303,12 @@ function PropertiesPanelHeader({
       <Typography tag="p" type="bodyLarge" className={styles.title}>
         {children}
       </Typography>
-      <Button aria-label={closeLabel} onClick={onDismiss}>
-        <PropertiesPanelDockIcon />
-      </Button>
+      <div className={headerActionsStyle}>
+        {actions}
+        <Button aria-label={closeLabel} onClick={onDismiss}>
+          <PropertiesPanelDockIcon />
+        </Button>
+      </div>
     </div>
   );
 }
