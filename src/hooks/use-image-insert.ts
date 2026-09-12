@@ -497,8 +497,12 @@ export function useImageInsert({
           setAssets((prev) =>
             prev.map((item) => (item.key === updated.key ? updated : item)),
           );
-        } catch {
-          // Non-blocking — alt stays in local state until retry
+        } catch (err) {
+          // Non-blocking — the typing is not interrupted and the text stands
+          // — but a refusal is SAID. Swallowed, it read as the field
+          // forgetting what you typed: the value held until the next refresh
+          // and then sprang back to the stored one, unexplained.
+          setError(err instanceof Error ? err.message : "Failed to save alt text");
         }
       }, 400);
     },
@@ -526,8 +530,9 @@ export function useImageInsert({
           setAssets((prev) =>
             prev.map((item) => (item.key === updated.key ? updated : item)),
           );
-        } catch {
-          // Non-blocking — the name stays in local state until retry
+        } catch (err) {
+          // Said, not swallowed — see `updateAltText`.
+          setError(err instanceof Error ? err.message : "Failed to rename file");
         }
       }, 400);
     },

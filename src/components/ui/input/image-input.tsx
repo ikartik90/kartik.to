@@ -1,12 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cx } from "../../../../styled-system/css";
 import { imageField } from "../../../../styled-system/recipes";
-import { Button } from "@/components/ui/button";
 import { Media } from "@/components/media";
 import { filenameFromMediaUrl } from "@/domain/media";
 import type { MediaKind } from "@/domain/nodes";
-import { Field } from "./field";
+import { Field, useField } from "./field";
 import MediaIcon from "@/assets/icons/media.svg";
 import PageIcon from "@/assets/icons/page.svg";
 import ReplaceIcon from "@/assets/icons/replace.svg";
@@ -25,12 +25,19 @@ import ReplaceIcon from "@/assets/icons/replace.svg";
 // control, so a card's cover and a testimonial's portrait are edited in the
 // same row rather than in two hand-rolled ones.
 //
+// ONE FRAME, the width of every other row. The name is set in the field's own
+// `control` slot rather than in a style of its own — that is how the two stay
+// the same size as the rail's `size` changes, and how the empty slot asks in
+// the same placeholder tone as an empty text field. Written here instead, it
+// took the page's 16px into a row of 14px values and stood out as a bigger,
+// looser line than everything above it.
+//
 // It owns no library and no dialog — `onPick` is the whole of its outward
 // contract. WHICH library opens (pictures or documents) is the caller's to
 // decide, because it is the caller that holds the slot.
 //
 // Two targets for one act: the field itself, which is the big and obvious one,
-// and the replace button the design puts beside it, which says out loud what
+// and the replace action at its trailing edge, which says out loud what
 // pressing does. An empty slot has nothing to replace, so it stands alone and
 // asks instead.
 //
@@ -67,7 +74,7 @@ export interface ImageInputProps {
   /** Open the library. The same act on both controls. */
   onPick: () => void;
   disabled?: boolean;
-  /** Applied to the row, so a caller can size the control in its rail. */
+  /** Applied to the field frame, as on every other control in the family. */
   className?: string;
 }
 
@@ -80,50 +87,57 @@ export function ImageInput({
   disabled = false,
   className,
 }: ImageInputProps) {
+  // The field's own slot styles. The name is not a `Field.Control` (it holds no
+  // value and claims no id), so it is handed the `control` class the way the
+  // colour field's opacity box is — see ColorInput.
+  const { styles: fieldStyles } = useField("ImageInput");
   const styles = imageField();
   const filename = src ? filenameFromMediaUrl(src) : undefined;
 
   return (
-    <div className={className ? `${styles.row} ${className}` : styles.row}>
-      <Field.Frame className={styles.frame}>
+    <Field.Frame className={cx(styles.frame, className)}>
+      <button
+        type="button"
+        // The field lights up while it is engaged, like every other control
+        // in the family — the `field` recipe keys that off any `[data-control]`
+        // in focus.
+        data-control
+        aria-label={`${filename ? "Change" : "Add"} ${noun}`}
+        disabled={disabled}
+        className={styles.trigger}
+        onClick={onPick}
+      >
+        <span className={styles.thumbnail}>
+          {thumbnailFor(src, kind, poster, styles.media)}
+        </span>
+        <span className={styles.separator} aria-hidden />
+        <span
+          className={cx(fieldStyles.control, styles.name)}
+          // The family's own placeholder attribute, so an empty slot is written
+          // in the placeholder tone — and shifts with the field when it is
+          // engaged, exactly as an empty text field's prompt does.
+          data-placeholder={filename ? undefined : ""}
+        >
+          {filename ?? `Add ${noun}`}
+        </span>
+      </button>
+
+      {/* Nothing to replace in an empty slot — the field is asking already. */}
+      {filename ? (
         <button
           type="button"
-          // The field lights up while it is engaged, like every other control
-          // in the family — the `field` recipe keys that off any
-          // `[data-control]` in focus, and the frame is this control's only one.
+          // Carries `data-control` for the reason the opacity box does: the
+          // field stays lit while THIS is the part in hand.
           data-control
-          aria-label={`${filename ? "Change" : "Add"} ${noun}`}
-          disabled={disabled}
-          className={styles.trigger}
-          onClick={onPick}
-        >
-          <span className={styles.thumbnail}>{thumbnailFor(src, kind, poster, styles.media)}</span>
-          <span className={styles.separator} aria-hidden />
-          <span className={styles.name} data-empty={filename ? undefined : ""}>
-            {filename ?? `Add ${noun}`}
-          </span>
-        </button>
-      </Field.Frame>
-
-      {/* Nothing to replace in an empty slot — the field is asking already.
-          Its column is still held, so a filled slot and an empty one in the
-          same section are the same width. */}
-      {filename ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="icon"
-          emphasis="tertiary"
           aria-label={`Replace ${noun}`}
           disabled={disabled}
+          className={styles.replace}
           onClick={onPick}
         >
           <ReplaceIcon aria-hidden />
-        </Button>
-      ) : (
-        <span className={styles.spacer} aria-hidden />
-      )}
-    </div>
+        </button>
+      ) : null}
+    </Field.Frame>
   );
 }
 

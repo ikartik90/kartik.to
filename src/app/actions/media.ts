@@ -37,6 +37,24 @@ const FOLDER_PREFIX: Record<MediaFolder, string> = {
   profiles: PROFILE_PREFIX,
 };
 
+/**
+ * Whether a key names an object in the media LIBRARY — under any of its
+ * folders.
+ *
+ * Every edit used to ask `startsWith(MEDIA_PREFIX)` instead, which is the
+ * library as it was before it had folders: a face under `profiles/` could be
+ * uploaded, listed and inserted, and then could not be renamed, described or
+ * deleted. Derived from `FOLDER_PREFIX` rather than spelling the folders out
+ * again, so a third folder is editable the day it is added.
+ *
+ * Still a guard, not a formality — an icon, a poster and anything under a bare
+ * key are all outside it, and each of those has its own actions and its own
+ * rules about what may happen to it.
+ */
+function isLibraryKey(key: string): boolean {
+  return Object.values(FOLDER_PREFIX).some((prefix) => key.startsWith(prefix));
+}
+
 /** The prefix an existing key already carries, for reading its name back. */
 function prefixOfKey(key: string): string {
   return key.startsWith(PROFILE_PREFIX) ? PROFILE_PREFIX : MEDIA_PREFIX;
@@ -134,7 +152,7 @@ export async function updateMediaAlt(input: unknown): Promise<MediaAsset> {
   }
 
   const { key, alt } = UpdateMediaAltInputSchema.parse(input);
-  if (!key.startsWith(MEDIA_PREFIX)) {
+  if (!isLibraryKey(key)) {
     throw new Error("Invalid media key");
   }
 
@@ -159,7 +177,7 @@ export async function updateMediaFilename(input: unknown): Promise<MediaAsset> {
   }
 
   const { key, filename } = UpdateMediaFilenameInputSchema.parse(input);
-  if (!key.startsWith(MEDIA_PREFIX)) {
+  if (!isLibraryKey(key)) {
     throw new Error("Invalid media key");
   }
 
@@ -179,7 +197,7 @@ export async function deleteMedia(input: unknown): Promise<void> {
   await requireAdmin();
 
   const { key } = DeleteMediaInputSchema.parse(input);
-  if (!key.startsWith(MEDIA_PREFIX)) {
+  if (!isLibraryKey(key)) {
     throw new Error("Invalid media key");
   }
 

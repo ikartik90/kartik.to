@@ -273,4 +273,74 @@ describe("media folders", () => {
       }),
     ).rejects.toThrow();
   });
+
+  // -------------------------------------------------------------------------
+  // A folder is where an object LIVES, not what may be done to it. Every edit
+  // below was written against `media/` alone, so a face under `profiles/` was
+  // listed, shown and inserted — and then refused the moment you tried to
+  // rename it. A failed rename is non-blocking in the dialog, so the refusal
+  // never reached the screen: the typed name simply sprang back to the one off
+  // the key, as though the field had not been edited at all.
+  // -------------------------------------------------------------------------
+  const PROFILE_KEY = "profiles/550e8400-e29b-41d4-a716-446655440000-face.png";
+
+  it("renames a profile picture, like any other object in the library", async () => {
+    mockHeadR2Object.mockResolvedValue({
+      size: 100,
+      contentType: "image/png",
+      filename: "Rajat Saxena",
+    });
+
+    const asset = await updateMediaFilename({
+      key: PROFILE_KEY,
+      filename: "Rajat Saxena",
+    });
+
+    expect(mockUpdateR2ObjectMetadata).toHaveBeenCalledWith(PROFILE_KEY, {
+      filename: "Rajat Saxena",
+    });
+    expect(asset.filename).toBe("Rajat Saxena");
+  });
+
+  it("describes a profile picture", async () => {
+    mockHeadR2Object.mockResolvedValue({
+      size: 100,
+      contentType: "image/png",
+      alt: "Rajat, smiling",
+    });
+
+    const asset = await updateMediaAlt({
+      key: PROFILE_KEY,
+      alt: "Rajat, smiling",
+    });
+
+    expect(mockUpdateR2ObjectMetadata).toHaveBeenCalledWith(PROFILE_KEY, {
+      alt: "Rajat, smiling",
+    });
+    expect(asset.alt).toBe("Rajat, smiling");
+  });
+
+  it("deletes a profile picture", async () => {
+    await deleteMedia({ key: PROFILE_KEY });
+    expect(mockDeleteR2Object).toHaveBeenCalledWith(PROFILE_KEY);
+  });
+
+  // Widened to the library's FOLDERS, not dropped: the rest of the bucket is
+  // still out of reach. An icon is approved and retired by its own actions, a
+  // poster belongs to the clip it was taken from, and neither is something the
+  // media dialog may rename or delete.
+  it.each(["icons/star.svg", "posters/x.jpg", "secrets.env", "../etc/passwd"])(
+    "refuses %s, which is not a library object",
+    async (key) => {
+      await expect(
+        updateMediaFilename({ key, filename: "anything" }),
+      ).rejects.toThrow("Invalid media key");
+      await expect(updateMediaAlt({ key, alt: "anything" })).rejects.toThrow(
+        "Invalid media key",
+      );
+      await expect(deleteMedia({ key })).rejects.toThrow("Invalid media key");
+      expect(mockUpdateR2ObjectMetadata).not.toHaveBeenCalled();
+      expect(mockDeleteR2Object).not.toHaveBeenCalled();
+    },
+  );
 });
