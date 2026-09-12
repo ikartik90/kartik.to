@@ -146,10 +146,12 @@ export function TestimonialCard({
             ariaLabel={`${name} on LinkedIn`}
             maskSrc={LINKEDIN_MASK}
             Icon={LinkedInIcon}
-            // The 24px chip rather than the 28px toolbar one. The glyph is the
-            // house 20px either way; what comes in is the inset around it, so
-            // the icon sits against the name as part of the byline rather than
-            // as a control parked at the end of it.
+            // A 16px glyph rather than the row's 20px, which takes the chip
+            // to 24px with it — the inset is the same 4px every icon chip
+            // wears. The row under the homepage intro is a set of icons and
+            // carries its own weight; this one belongs to a line of text, and
+            // at the row's size it read as a control parked at the end of the
+            // byline rather than as part of it.
             size="sm"
           />
         )}
