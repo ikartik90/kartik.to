@@ -26,9 +26,24 @@ import {
 // have sent it. That is obscurity rather than security, and it is sized to the
 // stake — the worst a leak buys is junk in a table I read by hand.
 //
-// Reading is closed because the words are not mine to show. Somebody wrote them
-// for a page that does not exist yet, and until it does they are private
-// correspondence that happens to live in Postgres.
+// Reading USED to be closed outright, because the words were written for a page
+// that did not exist. It exists now — the wall at the foot of the homepage — so
+// there are two reads here rather than one, and the line between them is the
+// `publishedAt` column:
+//
+//   * `getPublishedTestimonials` is DELIBERATELY PUBLIC, the one action in this
+//     module that neither calls `requireAdmin()` nor should. Its caller is the
+//     homepage, served to everybody. It is safe to be public because it is not
+//     a read of the table: it is a read of the rows I have put on the page, and
+//     the gate is in the query rather than in the caller.
+//   * `getTestimonials` stays the author's, and is still the only way to see a
+//     row that has not been published — which is every row, the moment it
+//     arrives.
+//
+// That column is what lets the form stay open. `/vouch` has no session to check
+// anybody against, so without a gate the homepage would publish whatever
+// arrived next the instant it was sent; with one, a submission lands in a table
+// and waits for me.
 //
 // NOTHING HERE THROWS AT A STRANGER. `submitTestimonial` returns its refusals
 // as values, because the alternative is a Next.js error page in front of
@@ -133,6 +148,34 @@ export async function getTestimonials(): Promise<Testimonial[]> {
 }
 
 /**
+ * The testimonials on the homepage — everything I have published, newest first.
+ *
+ * PUBLIC ON PURPOSE, and the only action in this file without a guard. Said out
+ * loud here because the house rule is that every Server Action opens with
+ * `requireAdmin()` unless it is deliberately public, and this is the exception
+ * rather than an omission: the caller is the homepage, and a guard on it would
+ * mean nobody could read the wall.
+ *
+ * THE GATE IS THE `where`, not the caller. `publishedAt: { not: null }` is
+ * applied by the database, so an unpublished row is never loaded, never
+ * serialised into the page's payload, and never reaches a browser — which is a
+ * stronger guarantee than filtering rows after fetching them, where every
+ * unpublished quote still travels to the client inside the RSC stream and is
+ * merely not drawn.
+ *
+ * `createdAt` and not `publishedAt` for the order, so the wall reads in the
+ * same sequence as the board I curate it from. Publishing eight rows at once —
+ * as the backfill migration did — would otherwise leave them with one instant
+ * between them and no order at all.
+ */
+export async function getPublishedTestimonials(): Promise<Testimonial[]> {
+  return prisma.testimonial.findMany({
+    where: { publishedAt: { not: null } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/**
  * Put a face and a profile on a row that has already arrived — the author's
  * half, and the one action in this file that edits rather than appends.
  *
@@ -163,7 +206,7 @@ export async function updateTestimonialDetails(
 ): Promise<Testimonial> {
   await requireAdmin();
 
-  const { id, name, avatarUrl, linkedinUrl, excerpt, tagline } =
+  const { id, name, avatarUrl, linkedinUrl, excerpt, tagline, published } =
     TestimonialDetailsSchema.parse(input);
 
   // THREE states, and the difference is why this is not a plain spread.
@@ -177,6 +220,7 @@ export async function updateTestimonialDetails(
     excerpt?: string | null;
     tagline?: string | null;
     name?: string;
+    publishedAt?: Date | null;
   } = { avatarUrl, linkedinUrl };
 
   if (excerpt !== undefined) {
@@ -195,6 +239,20 @@ export async function updateTestimonialDetails(
   // one by the time we are here.
   if (name !== undefined) {
     data.name = name;
+  }
+
+  // A BOOLEAN in, a TIMESTAMP out. The switch knows its position and this knows
+  // what o'clock it is, which is the right division: a caller cannot post a
+  // publication date of its own — `publishedAt` is not a key
+  // `TestimonialDetailsSchema` names, so it is stripped before we get here —
+  // and the column cannot end up holding an instant that never happened.
+  //
+  // The absent case is load-bearing rather than tidy. The board sends the whole
+  // row on every edit, so without it, adding a picture would re-stamp the
+  // publication date of an already-published testimonial on each keystroke's
+  // worth of save.
+  if (published !== undefined) {
+    data.publishedAt = published ? new Date() : null;
   }
 
   if (excerpt) {

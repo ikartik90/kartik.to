@@ -388,6 +388,28 @@ export default defineConfig({
           // never becomes the page. The top is only cropped once the box is
           // wider than 6.67 × its height, i.e. past 4000px at the cap.
           siteFooter: { value: "clamp(280px, 35vw, 600px)" },
+          // How far below the top of the skyline's box the CN Tower's antenna
+          // begins — the one number the homepage's testimonial band needs in
+          // order to stop above it.
+          //
+          // MEASURED OFF THE DRAWING rather than guessed. The skyline is a
+          // 4000×600 viewBox sliced `xMidYMax`, and because the box is always
+          // far taller in proportion than the artwork, the scale is decided by
+          // the HEIGHT — every on-screen length in that picture is its viewBox
+          // length × `siteFooter / 600`. The antenna's tip is at y 17.9 of
+          // those 600 units, which is why this is written as that ratio rather
+          // than as a number: the footer's height is a clamp, so the tip is 8px
+          // down on a phone and 18px down on a wide display, and anything
+          // holding clear of it has to move when the clamp does.
+          //
+          // For the record, since the band also has to clear the tower
+          // SIDEWAYS: it spans x 1968.2 → 2026.5 of the same viewBox — 58.3
+          // units, so at most 58px on screen, centred on the 2000 that `xMid`
+          // pins to the middle of the viewport. Every card is wider than that,
+          // so the band's middle column covers the tower's line whatever it
+          // holds; clearing the tower is entirely a question of stopping above
+          // this tip.
+          skylineTowerTip: { value: "calc({sizes.siteFooter} * 17.9 / 600)" },
           calchemyDemo: { value: "720px" },
           // The Calchemy playground's year. The site's 960 column, spent on a
           // 3 × 4 grid of months: the gap BETWEEN months takes its 80 first —
@@ -403,6 +425,19 @@ export default defineConfig({
           // board's `auto-fill` tracks are sized against, so the number of
           // columns is decided by the words rather than declared.
           testimonialCard: { value: "280px" },
+          // What a card may grow to once the band has more room than it needs.
+          // The band is a fixed FIVE columns (see `TestimonialBand`), so past a
+          // certain width the choice is between wider cards and a band that
+          // stops short of the screen — and a quote reads perfectly well at
+          // 400px, where it stops reading like a column and starts reading like
+          // a paragraph.
+          testimonialCardWide: { value: "400px" },
+          // The tallest a card gets: a full 280-character quote in the
+          // NARROWEST column, which is the worst case, measured rather than
+          // estimated. The band reserves this much room above the tower so the
+          // middle column always has somewhere to put a card, whichever one the
+          // rotation deals it.
+          testimonialCardTallest: { value: "320px" },
           insertDialogHeight: { value: "480px" },
           // A 32px `sm` action chip on a 6px inset — the row hugs its buttons
           // rather than framing the taller 40px chip it used to hold.
@@ -8935,7 +8970,7 @@ export default defineConfig({
         testimonialCard: defineSlotRecipe({
           className: "testimonial-card",
           description:
-            "Testimonial card — one collected testimonial on the admin board, composed as root > byline(avatar + identity(name, tagline) + profile) + quote + select. `select` is an empty button stretched over the whole card: pressing anywhere opens the properties rail, and the `selected` variant marks which card the rail is on. The profile is a real link (the house social icon, shader and all) sitting above that overlay at the byline's far edge — which is only possible because it is a SIBLING of the button rather than a child.",
+            "Testimonial card — one collected testimonial, composed as root > byline(avatar + identity(name, tagline) + profile) + quote + select. `select` is an empty control stretched over the whole card, and what it IS follows the surface: a button that opens the properties rail on the admin board (the `selected` variant marks which card the rail is on), and an anchor to the person's profile on the page. The board also draws the profile as a real link (the house social icon, shader and all) above that overlay at the byline's far edge — only possible because it is a SIBLING of the button rather than a child; the page does not, because there the card itself is that link.",
           slots: [
             "root",
             "select",
@@ -8952,7 +8987,6 @@ export default defineConfig({
               // The overlay hangs off this, so the card is its containing
               // block — and the profile link stacks against it.
               position: "relative",
-              cursor: "pointer",
 
               display: "flex",
               flexDirection: "column",
@@ -9137,9 +9171,90 @@ export default defineConfig({
                 },
               },
             },
+            /**
+             * WHICH SURFACE this card is on, and the two answers differ in
+             * exactly two ways.
+             *
+             * `board` is `/edit/testimonials`: the whole card is a button that
+             * opens the rail, so it takes a pointer and a hover wash, and the
+             * words are set at `sidenote` because the job there is to read six
+             * at once and find the one being annotated.
+             *
+             * `page` is the homepage wall: a testimonial is a quote and nothing
+             * more. The pointer and the hover would both be promises the card
+             * cannot keep, and the words are being READ rather than scanned, so
+             * they step up a size.
+             *
+             * ONE variant rather than two booleans, because it is one fact. A
+             * card that was a control but set for reading, or vice versa, is
+             * not a state either surface wants — and naming the surface says
+             * why the pair move together.
+             *
+             * A variant rather than a second recipe because the card itself is
+             * the same object in both places: same frame, same byline, same
+             * near-masonry behaviour. Only its job changes.
+             */
+            surface: {
+              board: { root: { cursor: "pointer" } },
+              page: {
+                root: {
+                  cursor: "auto",
+                  // Undone explicitly rather than left to the base: `_hover`
+                  // is in the base layer, and the wash it draws is the board's
+                  // answer to "this row is about to be edited", which is not
+                  // what happens when you press one of these.
+                  _hover: { backgroundColor: "bg.surface" },
+
+                  // A CARD WITH A PROFILE BEHIND IT IS A LINK, and the whole
+                  // card is the hit area — the icon that used to be the only
+                  // way through is gone, and `select` is stretched over the
+                  // card as an anchor instead. So the edge answers the pointer.
+                  //
+                  // THE SAME HAIRLINE AT FULL STRENGTH. The resting edge is the
+                  // divider at half (the base's `border.divider/50`) and the
+                  // hovered one is the divider itself — fifty percent more
+                  // opacity, taken off the value the card is actually written
+                  // with rather than off the alpha it lands on.
+                  //
+                  // It was `/75` first, which is the other reading of the same
+                  // instruction, and it does not survive contact with a 1px
+                  // line: the divider's own colour is already half-transparent,
+                  // so 50% of it is 0.25 alpha and 75% is 0.375, and composited
+                  // on `bg.surface` that is rgb(43,46,52) against rgb(50,56,63)
+                  // — seven values of red across one pixel. At full strength
+                  // the step is twice that and can actually be seen, which is
+                  // the whole job of a hover state.
+                  //
+                  // Written as one colour at two strengths so a change to the
+                  // divider carries to both, and it arrives over the
+                  // border-color transition the base already declares.
+                  //
+                  // Gated on the mark rather than applied to every card,
+                  // because a testimonial with no profile stored is a quote and
+                  // nothing else. An edge that lights under the pointer is a
+                  // promise that pressing does something, and that card has
+                  // nothing to press.
+                  "&[data-linked]:hover": {
+                    borderColor: "border.divider",
+                  },
+                },
+                quote: {
+                  // `bodySmall`, and NOT the 20px `quote` style this slot's
+                  // note above anticipated. That note assumed a published page
+                  // would give these words a page's measure; the wall gives
+                  // them a 280px card instead, and 20px in a 280px track is
+                  // about twenty characters a line — which turns a 280-character
+                  // testimonial into a twelve-line ribbon and the wall into
+                  // something nobody reaches the bottom of. 14px is the reading
+                  // size the card can actually hold.
+                  textStyle: "bodySmall",
+                },
+              },
+            },
           },
           defaultVariants: {
             selected: false,
+            surface: "board",
           },
         }),
       },

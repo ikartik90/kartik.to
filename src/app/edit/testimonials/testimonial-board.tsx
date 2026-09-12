@@ -91,7 +91,12 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
       change: Partial<
         Pick<
           Testimonial,
-          "avatarUrl" | "linkedinUrl" | "excerpt" | "name" | "tagline"
+          | "avatarUrl"
+          | "linkedinUrl"
+          | "excerpt"
+          | "name"
+          | "tagline"
+          | "publishedAt"
         >
       >,
     ) => {
@@ -110,6 +115,16 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
           excerpt: after.excerpt,
           tagline: after.tagline,
           name: after.name,
+          // THE ONE FIELD NOT SENT ON EVERY WRITE, and the exception is the
+          // point. The five above are sent whole each time because re-writing a
+          // value with itself costs nothing. Publication is a TIMESTAMP behind
+          // a boolean, so re-writing it with itself would re-stamp the moment —
+          // and "published" would quietly come to mean "last edited". So it
+          // goes only when the switch was the thing that moved, and the
+          // action's absent-means-leave-alone rule does the rest.
+          ...("publishedAt" in change
+            ? { published: change.publishedAt !== null }
+            : {}),
         });
         setRows((current) =>
           current.map((row) => (row.id === id ? { ...row, ...stored } : row)),
@@ -150,6 +165,25 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
   const setExcerpt = useCallback(
     (excerpt: string | null) => {
       if (selectedId) void writeDetails(selectedId, { excerpt });
+    },
+    [selectedId, writeDetails],
+  );
+
+  /**
+   * Put these words on the homepage, or take them off.
+   *
+   * The board holds a DATE optimistically because that is what the row holds;
+   * the one the server stamps replaces it when the write lands. Which instant
+   * it is never reaches the screen — the switch reads it as a yes/no — so the
+   * guess costs nothing even while it is wrong.
+   */
+  const setPublished = useCallback(
+    (published: boolean) => {
+      if (selectedId) {
+        void writeDetails(selectedId, {
+          publishedAt: published ? new Date() : null,
+        });
+      }
     },
     [selectedId, writeDetails],
   );
@@ -200,6 +234,7 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
           onExcerptChange={setExcerpt}
           onNameChange={setName}
           onTaglineChange={setTagline}
+          onPublishedChange={setPublished}
           problem={problem}
           onDismiss={() => setSelectedId(null)}
         />

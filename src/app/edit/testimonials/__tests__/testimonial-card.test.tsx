@@ -27,6 +27,7 @@ const testimonial: Testimonial = {
   linkedinUrl: null,
   tagline: null,
   excerpt: null,
+  publishedAt: null,
 };
 
 function draw(overrides: Partial<Testimonial> = {}, onSelect = vi.fn()) {

@@ -2,7 +2,12 @@
 
 import { testimonialCard } from "../../../../styled-system/recipes";
 import { PROPERTIES_TRIGGER_ATTR } from "@/components/ui/properties-panel";
-import { testimonialShown, type Testimonial } from "@/domain/testimonial";
+import {
+  linkedInHandle,
+  testimonialInitial,
+  testimonialShown,
+  type Testimonial,
+} from "@/domain/testimonial";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import { SocialIconLink } from "@/components/social-icon-link";
 
@@ -42,32 +47,6 @@ const LINKEDIN_MASK = "/social-shader-masks/linkedin.svg";
 // ordered newest-first, so the information is in the ORDER — printing it as
 // well was a column of numbers nothing was looking up.
 // ---------------------------------------------------------------------------
-
-/**
- * What to write in an empty avatar.
- *
- * The first CHARACTER, not the first letter of each word: initials would need
- * to know which parts of a name are given names, and no rule for that survives
- * contact with the names people actually have. One character is a placeholder
- * admitting to being one.
- */
-function initialOf(name: string): string {
-  return name.trim().charAt(0);
-}
-
-/**
- * A profile URL as the bit of it worth reading — `in/ada` out of forty
- * characters of scheme and host.
- *
- * The URL is stored canonically (`LinkedInProfileUrlSchema`), so this is a
- * slice rather than a parse. Falls back to the whole value if it ever meets one
- * that is not: showing something odd beats showing nothing, and the rail has
- * the real value either way.
- */
-function handleOf(url: string): string {
-  const path = url.replace(/^https?:\/\/[^/]+\//i, "");
-  return path === "" ? url : path;
-}
 
 export interface TestimonialCardProps {
   testimonial: Testimonial;
@@ -120,7 +99,7 @@ export function TestimonialCard({
               height={40}
             />
           ) : (
-            initialOf(name)
+            testimonialInitial(name)
           )}
         </span>
 
@@ -140,7 +119,7 @@ export function TestimonialCard({
           <SocialIconLink
             className={styles.profile}
             href={linkedinUrl}
-            label={handleOf(linkedinUrl)}
+            label={linkedInHandle(linkedinUrl)}
             // Whose profile, because a board of twelve cards would otherwise be
             // twelve links announcing themselves as a path.
             ariaLabel={`${name} on LinkedIn`}

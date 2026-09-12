@@ -291,4 +291,24 @@ model Testimonial {
   // was sent. Nothing shortens it, so an excerpt can always be widened or
   // dropped to get back to the whole thing.
   excerpt     String?
+  // WHETHER THESE WORDS ARE ON THE HOMEPAGE, and the only column in this table
+  // that is about the reader rather than about the row.
+  //
+  // It exists because of who writes this table. `/vouch` is open to anyone
+  // holding the link — there is no account and no session to check them
+  // against — so a homepage that simply read the table would publish whatever
+  // arrived next, unreviewed, the moment it was sent. Every other surface here
+  // is written by me and needs no such gate; this one is the exception, and
+  // this column is the gate.
+  //
+  // A TIMESTAMP and not a boolean, matching `Post.publishedAt` exactly: the two
+  // answer the same question and there is no reason for a reader to learn two
+  // spellings of it. Null means "not on the page", which is the honest state of
+  // a row the moment it lands.
+  //
+  // Backfilled to `now()` for every row that already existed — see the
+  // migration. Those eight were collected, annotated and read by hand before
+  // the column existed, so defaulting them to unpublished would have hidden
+  // work that was already done; the gate is for what arrives NEXT.
+  publishedAt DateTime?
 }

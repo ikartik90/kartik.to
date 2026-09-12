@@ -41,8 +41,12 @@ vi.mock("@/lib/env", () => ({
   env: { ADMIN_GITHUB_ID: "admin@example.com" },
 }));
 
-const { submitTestimonial, getTestimonials, updateTestimonialDetails } =
-  await import("../testimonial");
+const {
+  submitTestimonial,
+  getTestimonials,
+  getPublishedTestimonials,
+  updateTestimonialDetails,
+} = await import("../testimonial");
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -63,6 +67,8 @@ function row(overrides: Record<string, unknown> = {}) {
     avatarUrl: null,
     linkedinUrl: null,
     excerpt: null,
+    tagline: null,
+    publishedAt: null,
     ...overrides,
   };
 }
@@ -463,5 +469,125 @@ describe("updateTestimonialDetails (excerpt)", () => {
       updateTestimonialDetails({ ...base, excerpt: "Shipped the thing" }),
     ).rejects.toThrow();
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `getPublishedTestimonials` — the homepage's read, and the one read in this
+// file that is deliberately open to everybody.
+//
+// Every test here is really the same test asked twice: does the gate hold when
+// nobody is signed in? That is the only state that matters, because the only
+// caller is a page served to strangers.
+// ---------------------------------------------------------------------------
+
+describe("getPublishedTestimonials", () => {
+  it("serves a stranger — the homepage has no session to offer", async () => {
+    signedOut();
+    mockFindMany.mockResolvedValue([]);
+
+    await expect(getPublishedTestimonials()).resolves.toEqual([]);
+  });
+
+  it("asks the database for published rows only", async () => {
+    signedOut();
+    mockFindMany.mockResolvedValue([]);
+
+    await getPublishedTestimonials();
+
+    // The filter is the WHOLE of this action's job, so it is asserted on the
+    // query rather than inferred from the rows a mock chose to return: a read
+    // that fetched everything and filtered in JavaScript would pass a
+    // rows-based assertion and still ship every unpublished row to the client.
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { publishedAt: { not: null } },
+      }),
+    );
+  });
+
+  it("reads newest first, the order the board shows", async () => {
+    signedOut();
+    mockFindMany.mockResolvedValue([]);
+
+    await getPublishedTestimonials();
+
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: "desc" } }),
+    );
+  });
+
+  it("hands back what the database gave it", async () => {
+    signedOut();
+    const published = [row({ id: "t1", publishedAt: NOW })];
+    mockFindMany.mockResolvedValue(published);
+
+    await expect(getPublishedTestimonials()).resolves.toEqual(published);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Publishing — the switch in the rail, and the column it writes.
+// ---------------------------------------------------------------------------
+
+describe("updateTestimonialDetails (published)", () => {
+  const details = { id: "t1", avatarUrl: null, linkedinUrl: null };
+
+  it("is the author's alone", async () => {
+    signedOut();
+
+    await expect(
+      updateTestimonialDetails({ ...details, published: true }),
+    ).rejects.toThrow("Unauthorized");
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("stamps the moment when the switch goes on", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({ ...details, published: true });
+
+    const { data } = mockUpdate.mock.calls[0][0];
+    expect(data.publishedAt).toBeInstanceOf(Date);
+  });
+
+  it("clears the column when the switch goes off", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({ ...details, published: false });
+
+    expect(mockUpdate.mock.calls[0][0].data.publishedAt).toBeNull();
+  });
+
+  // The three-state rule, and the case it exists for: adding a picture to a
+  // published testimonial must not take it off the homepage, and adding one to
+  // an unpublished testimonial must not put it on.
+  it("leaves publication alone when it was not asked about", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({
+      ...details,
+      avatarUrl: "https://example.com/ada.png",
+    });
+
+    expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty("publishedAt");
+  });
+
+  // The date is the ACTION's to write. A caller handing over its own instant —
+  // or a stale one, or a future one — is writing a publication date rather than
+  // answering the switch's question, and the schema has already stripped it.
+  it("refuses a publication date chosen by the caller", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({
+      ...details,
+      publishedAt: new Date("1999-01-01T00:00:00.000Z"),
+    });
+
+    expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty("publishedAt");
   });
 });
