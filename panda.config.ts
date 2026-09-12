@@ -5787,6 +5787,145 @@ export default defineConfig({
           },
         }),
 
+        // The same field, one part along: a FILE as the thing being edited
+        // (Figma 1233:2639). The layer names in that frame are the colour
+        // field's, unchanged, and deliberately so — a 16px cell, a hairline,
+        // and the value beside it is one shape, and a picture slot in the rail
+        // has no business being a different one.
+        //
+        // What differs is what each part holds. The cell draws the file itself
+        // rather than a colour, so it carries no checkerboard: a picture is
+        // opaque, and the thing a thumbnail must not be confused with is the
+        // EMPTY slot, which shows a glyph instead. The value is static text
+        // rather than an input, because a file's name is not editable here —
+        // it is edited in the library, where the file is (`updateMediaFilename`).
+        //
+        // The whole frame is the trigger, and the replace button beside it is
+        // the same act drawn where the design puts it. One act, two targets:
+        // the field is the big, obvious one, and the button is the one that
+        // says out loud what pressing it does.
+        imageField: defineSlotRecipe({
+          className: "image-field",
+          description:
+            "Image input — a 16px thumbnail of the file, a hairline, and the file's name inside the shared `field` frame, with a replace button beside it (Figma 1233:2639). The frame is a button: pressing it opens the media library. An empty slot draws a glyph in the cell and asks in muted text; it has nothing to replace, so the trailing button is not drawn.",
+          slots: [
+            "row",
+            "frame",
+            "trigger",
+            "thumbnail",
+            "media",
+            "separator",
+            "name",
+            "spacer",
+          ],
+          base: {
+            // Field, then the replace button, at the frame's own gap. A GRID
+            // rather than a flex row, because the button's column is held
+            // whether or not there is a button in it: an empty slot that let
+            // its field grow into that column would be wider than the filled
+            // slot above it, and a Media section with one picture in it would
+            // have a ragged right edge. Every control in the rail is one width.
+            row: {
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              alignItems: "center",
+              gap: "md",
+              width: "token(spacing.full)",
+              minWidth: 0,
+            },
+            // The column the replace button would occupy, when there is none.
+            // Built from the button's own parts — a 20px glyph in 4px of
+            // padding — so the two cannot come apart.
+            spacer: {
+              width: "calc(token(spacing.xxl) + token(spacing.md))",
+              height: "calc(token(spacing.xxl) + token(spacing.md))",
+            },
+            // The frame keeps its 8px inset and its 28px height from `field`;
+            // all it is told here is that it is pressed rather than typed in.
+            frame: {
+              flex: "1 1 auto",
+              minWidth: 0,
+              cursor: "pointer",
+            },
+            // One child filling the frame, so the hairline can run the frame's
+            // full height — `alignSelf: stretch` has nothing to stretch to
+            // inside a button that is only as tall as its text.
+            trigger: {
+              appearance: "none",
+              margin: "none",
+              padding: "none",
+              borderWidth: "0",
+              backgroundColor: "transparent",
+              color: "inherit",
+              font: "inherit",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              alignSelf: "stretch",
+              gap: "md",
+              flex: "1 1 auto",
+              minWidth: 0,
+              textAlign: "start",
+              _disabled: { cursor: "not-allowed" },
+            },
+            // The colour field's swatch at the same size and corner, holding a
+            // picture instead of a colour. The hairline is the swatch's, for
+            // the swatch's reason: a pale screenshot on a pale field would
+            // otherwise have no edge at all.
+            thumbnail: {
+              position: "relative",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "token(spacing.xl)",
+              height: "token(spacing.xl)",
+              borderRadius: "sm",
+              overflow: "hidden",
+              backgroundColor: "field.bg.default",
+              boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+              // The glyph an empty slot (or a document, which nothing draws)
+              // shows instead of a picture.
+              "& svg": {
+                width: "token(spacing.lg)",
+                height: "token(spacing.lg)",
+                color: "field.text.muted",
+              },
+            },
+            // The file itself, filling the cell. `cover` because the cell is
+            // square and almost nothing in the library is.
+            media: {
+              width: "token(spacing.full)",
+              height: "token(spacing.full)",
+              objectFit: "cover",
+            },
+            // The colour field's hairline, to the letter — the two fields stack
+            // in one rail and must divide themselves identically.
+            separator: {
+              alignSelf: "stretch",
+              flexShrink: 0,
+              width: "token(spacing.3xs)",
+              backgroundColor: "field.border.default",
+              transition: "background-color 150ms ease",
+              "[data-field]:has([data-control]:focus-visible) &": {
+                backgroundColor: "field.border.active",
+              },
+            },
+            // One line, ellipsised: a library name is as long as it is, and the
+            // rail is 220px wide.
+            name: {
+              flex: "1 1 auto",
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              // An empty slot ASKS, in the muted tone a placeholder is written
+              // in everywhere else in the family.
+              "&[data-empty]": { color: "field.text.muted" },
+            },
+          },
+        }),
+
         // ---------------------------------------------------------------------
         // The ramp, as a grid of swatches (Figma 1088:2591).
         //
@@ -8808,24 +8947,23 @@ export default defineConfig({
         testimonialCard: defineSlotRecipe({
           className: "testimonial-card",
           description:
-            "Testimonial card — one collected testimonial on the admin board, composed as root > quote + byline(avatar + identity(name, handle)). The root is a <button>: pressing it opens the properties rail that edits the card, so the whole surface is the target and the `selected` variant marks which card the rail is currently on. Nothing inside is interactive (a link inside a button is not keyboard-operable), so a stored LinkedIn profile shows as its handle in text and is clickable only from the rail.",
+            "Testimonial card — one collected testimonial on the admin board, composed as root > byline(avatar + identity(name, tagline) + profile) + quote + select. `select` is an empty button stretched over the whole card: pressing anywhere opens the properties rail, and the `selected` variant marks which card the rail is on. The profile is a real link (the house social icon, shader and all) sitting above that overlay at the byline's far edge — which is only possible because it is a SIBLING of the button rather than a child.",
           slots: [
             "root",
+            "select",
             "quote",
             "byline",
             "avatar",
             "identity",
             "name",
-            "handle",
+            "tagline",
+            "profile",
           ],
           base: {
             root: {
-              // Undoing the button, one property at a time rather than with
-              // `all: unset` — which would also throw away the focus ring the
-              // whole point of using a button was to keep.
-              appearance: "none",
-              font: "inherit",
-              textAlign: "start",
+              // The overlay hangs off this, so the card is its containing
+              // block — and the profile link stacks against it.
+              position: "relative",
               cursor: "pointer",
 
               display: "flex",
@@ -8855,6 +8993,25 @@ export default defineConfig({
               transition: "background-color 150ms ease, border-color 150ms ease",
               _hover: { backgroundColor: "bg.itemHover" },
             },
+            // The hit target: an empty button covering the card, over the
+            // content so a press anywhere lands on it, and under the one thing
+            // that must stay reachable — the profile link.
+            select: {
+              appearance: "none",
+              margin: "none",
+              padding: "none",
+              borderWidth: "0",
+              backgroundColor: "transparent",
+              font: "inherit",
+              color: "inherit",
+              cursor: "pointer",
+              position: "absolute",
+              inset: 0,
+              zIndex: 1,
+              // So the keyboard ring traces the card's own corners rather than
+              // a square inside them.
+              borderRadius: "inherit",
+            },
             quote: {
               // `bodySmall`, not the `quote` style the words will get on a
               // published page. This is a board, not the page: the job here is
@@ -8878,6 +9035,11 @@ export default defineConfig({
             byline: {
               display: "flex",
               alignItems: "flex-start",
+              // The profile sits at the FAR edge, with the words taking the
+              // slack between — the icon is a fixed 20px and the name is
+              // whatever length it is, so pushing them apart is the only
+              // arrangement that reads the same on every card.
+              justifyContent: "space-between",
               gap: "lg",
               minWidth: 0,
             },
@@ -8894,7 +9056,7 @@ export default defineConfig({
               // it is the same inset outline every other picture on this site
               // wears, so a filled one is not a special case.
               boxShadow: "inset 0 0 0 token(spacing.xxs) token(colors.border.imageOutline)",
-              backgroundColor: "bg.itemHover",
+              backgroundColor: "bg.surfaceRaised",
               // The initial, shown only while there is no picture over it.
               textStyle: "bodySmall",
               color: "text.body/50",
@@ -8911,6 +9073,11 @@ export default defineConfig({
               flexDirection: "column",
               gap: "3xs",
               minWidth: 0,
+              // Takes the slack between the avatar and the profile, so the
+              // words start AT the avatar rather than floating in the middle of
+              // the row — which is what `space-between` does to three children
+              // when the middle one is content-sized.
+              flex: "1 1 auto",
             },
             name: {
               textStyle: "bodySmall",
@@ -8923,22 +9090,29 @@ export default defineConfig({
               // second line to break.
               wordBreak: "break-word",
             },
-            // The profile, as its handle. Drawn at all only when there is one —
-            // see the note at the top about why it is text and not a link.
-            handle: {
-              display: "flex",
-              alignItems: "center",
-              gap: "xs",
+            // What they do, under their name — drawn only when there is one,
+            // so a row without a tagline leaves no gap reading as a line still
+            // loading.
+            tagline: {
               textStyle: "fineprint",
               color: "text.body/50",
+              margin: "none",
               minWidth: 0,
-              "& svg": {
-                flexShrink: 0,
-                width: "token(spacing.lg)",
-                height: "token(spacing.lg)",
-                display: "block",
-              },
-              "& span": { wordBreak: "break-word" },
+              // Wraps for the reason the name does: it is a role and a company,
+              // and a card is 280px wide.
+              wordBreak: "break-word",
+            },
+            // The profile link's place in the byline: above the overlay that
+            // covers everything else, and centred against the avatar rather
+            // than pinned to the top of a byline that may be two lines tall.
+            profile: {
+              position: "relative",
+              zIndex: 2,
+              flexShrink: 0,
+              // Level with the NAME, which is the line it belongs to. Centring
+              // it against the byline instead drops it to the middle of a
+              // three-line identity, beside the tagline rather than the name.
+              alignSelf: "flex-start",
             },
           },
           variants: {

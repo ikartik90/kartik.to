@@ -67,7 +67,11 @@ describe("r2 storage helpers", () => {
     expect(result.publicUrl).toBe("https://cdn.example.com/media/x.png");
   });
 
-  it("listR2MediaKeys filters to media extensions, clips included", async () => {
+  // Documents included: the library holds the bucket's whole insertable half,
+  // and the dialog picks which part of it to show. A filter that could not see
+  // a PDF made the document picker permanently empty — you could upload a CV
+  // and never see it again, let alone rename it.
+  it("listR2MediaKeys filters to library extensions — clips and documents included", async () => {
     mockSend.mockResolvedValueOnce({
       Contents: [
         { Key: "media/a.png" },
@@ -75,12 +79,18 @@ describe("r2 storage helpers", () => {
         { Key: "media/b.jpg" },
         { Key: "media/c.mp4" },
         { Key: "media/d.mov" },
+        { Key: "media/e.pdf" },
       ],
       IsTruncated: false,
     });
 
     const keys = await listR2MediaKeys();
-    expect(keys).toEqual(["media/c.mp4", "media/b.jpg", "media/a.png"]);
+    expect(keys).toEqual([
+      "media/e.pdf",
+      "media/c.mp4",
+      "media/b.jpg",
+      "media/a.png",
+    ]);
   });
 
   it("headR2Object returns metadata", async () => {

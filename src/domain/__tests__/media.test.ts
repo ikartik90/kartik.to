@@ -13,6 +13,7 @@ import {
   maxUploadBytesFor,
   mediaKindOf,
   sanitizeMediaFilename,
+  sanitizeMediaDisplayName,
   filenameFromMediaKey,
   filenameFromMediaUrl,
   MediaFolderSchema,
@@ -169,6 +170,33 @@ describe("mediaKindOf", () => {
 describe("sanitizeMediaFilename", () => {
   it("strips path segments and unsafe characters", () => {
     expect(sanitizeMediaFilename("../../weird name!.png")).toBe("weird-name-.png");
+  });
+});
+
+// A rename never reaches a key, so it is held to a far looser standard than
+// the one above: the name is a label the author reads, and a label that turns
+// "Old shift form" into "Old-shift-form" as you type it is the sanitiser
+// editing your notes for you.
+describe("sanitizeMediaDisplayName", () => {
+  it("keeps a name a person would actually type", () => {
+    expect(sanitizeMediaDisplayName("Old shift form (v2).mp4")).toBe(
+      "Old shift form (v2).mp4",
+    );
+  });
+
+  // Object metadata is carried in an HTTP header, which is US-ASCII — so the
+  // accents cannot be stored, but the LETTERS can: folding beats dropping,
+  // which would leave "Rsum".
+  it("folds an accent rather than dropping the letter under it", () => {
+    expect(sanitizeMediaDisplayName("Résumé.pdf")).toBe("Resume.pdf");
+  });
+
+  it("collapses whitespace and drops control characters", () => {
+    expect(sanitizeMediaDisplayName("  two\n\tnames  ")).toBe("two names");
+  });
+
+  it("caps a name at the length the store will take", () => {
+    expect(sanitizeMediaDisplayName("a".repeat(200))).toHaveLength(120);
   });
 });
 

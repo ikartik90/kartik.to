@@ -6,14 +6,13 @@ import {
   PropertiesPanel,
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
-import { Button } from "@/components/ui/button";
 import { OptionList } from "@/components/ui/input/option-list";
 import { SegmentedControl } from "@/components/ui/input/segmented-control";
 import { Switch } from "@/components/ui/input/switch";
 import { Field } from "@/components/ui/input/field";
+import { ImageInput } from "@/components/ui/input/image-input";
 import { Typography } from "@/components/ui/typography";
 import { SITE_PATHS } from "@/data/site-paths";
-import { filenameFromMediaUrl } from "@/domain/media";
 import type {
   LinkCardConfig,
   LinkCardMedia,
@@ -25,7 +24,6 @@ import { postCardMedia, type PostCardConfig } from "@/domain/post";
 import LinkIcon from "@/assets/icons/link.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import TitleIcon from "@/assets/icons/title.svg";
-import CrossIcon from "@/assets/icons/cross-small.svg";
 
 // ---------------------------------------------------------------------------
 // CardPropertiesPanel — everything about one card of the homepage grid that
@@ -178,25 +176,21 @@ const emptyNoteStyle = css({
  * The name button takes the slack and truncates, so a long filename cannot push
  * the clear button off the end of a 280px rail.
  */
-const pickerRowStyle = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "2xs",
-  minWidth: 0,
-});
-
-const pickerButtonStyle = css({
-  flex: "1 1 auto",
-  minWidth: 0,
-  justifyContent: "flex-start",
-  overflow: "hidden",
-});
-
-const pickerNameStyle = css({
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-});
+/**
+ * What a slot's media node hands the {@link ImageInput} — the file, and the two
+ * facts about it the thumbnail cannot recover on its own.
+ *
+ * `poster` is read only off the arm that HAS one: a clip's still is on the
+ * video arm of `MediaNodeSchema`, and a picture has no such key to read.
+ */
+function slotFile(node: MediaNode | undefined) {
+  if (!node) return {};
+  return {
+    src: node.src,
+    kind: node.kind,
+    ...(node.kind === "video" && node.poster ? { poster: node.poster } : {}),
+  };
+}
 
 /** The site's own pages, listed inline — see `SiteDestination`. */
 const destinationListStyle = css({
@@ -298,7 +292,6 @@ function LinkCardSections({
         onEnabledChange={(enabled) =>
           enabled ? set({ media: {} }) : clear("media")
         }
-        onChange={(next) => set({ media: next })}
         onPickMedia={onPickMedia}
       />
 
@@ -518,13 +511,16 @@ function GroundControls({
 function MediaSection({
   media,
   onEnabledChange,
-  onChange,
   onPickMedia,
 }: {
   media: LinkCardMedia | undefined;
-  /** The section opened or closed — the caller seeds or drops the key. */
+  /**
+   * The section opened or closed — the caller seeds or drops the key. It is
+   * also how a picture is REMOVED: the slots themselves only ever swap one
+   * file for another (see {@link ImageInput}), so closing the section is what
+   * empties them.
+   */
   onEnabledChange: (enabled: boolean) => void;
-  onChange: (media: LinkCardMedia) => void;
   onPickMedia: (slot: CardMediaSlot) => void;
 }) {
   return (
@@ -541,11 +537,10 @@ function MediaSection({
             key={slot}
             label={slot === "light" ? "Light" : "Dark"}
           >
-            <FilePicker
+            <ImageInput
               noun={`${slot} media`}
-              filename={fileLabel(media?.[slot]?.src)}
+              {...slotFile(media?.[slot])}
               onPick={() => onPickMedia(slot)}
-              onClear={() => onChange({ ...media, [slot]: undefined })}
             />
           </PropertiesPanel.Control>
         ))}
@@ -613,7 +608,6 @@ function PostCardSections({
           delete next.media;
           onChange(next);
         }}
-        onChange={(media) => set({ media })}
         onPickMedia={onPickMedia}
       />
 
@@ -700,13 +694,11 @@ function LinkControls({
 
       {link.kind === "document" && (
         <PropertiesPanel.Control label="File">
-          <FilePicker
+          <ImageInput
             noun="document"
-            filename={fileLabel(link.href)}
+            kind="document"
+            src={link.href}
             onPick={onPickDocument}
-            onClear={() =>
-              onChange({ ...link, kind: "document", href: undefined })
-            }
           />
         </PropertiesPanel.Control>
       )}
@@ -767,70 +759,3 @@ function SiteDestination({
   );
 }
 
-/**
- * One slot holding a file from the library: press it to choose, press the cross
- * to empty it.
- *
- * TWO buttons and not one, because the two acts are genuinely different and the
- * card behind the rail shows it: replacing a picture leaves a card with a
- * picture, and clearing one leaves a card without. A single control that cycled
- * between them would make emptying a slot a thing you discover.
- *
- * The label says WHICH slot ("Add dark media", "Change document") rather than
- * relying on the row's label to name it, because a button is not labelable by a
- * `<label>` — the field's own text names nothing here, so the only accessible
- * name is the one written on.
- */
-function FilePicker({
-  noun,
-  filename,
-  onPick,
-  onClear,
-}: {
-  /** Names this slot in the controls' labels — "light media", "document". */
-  noun: string;
-  /** What is in the slot, or `undefined` for an empty one. */
-  filename: string | undefined;
-  onPick: () => void;
-  onClear: () => void;
-}) {
-  return (
-    <div className={pickerRowStyle}>
-      <Button
-        type="button"
-        size="sm"
-        emphasis="tertiary"
-        aria-label={`${filename ? "Change" : "Add"} ${noun}`}
-        className={pickerButtonStyle}
-        onClick={onPick}
-      >
-        <Button.Text className={pickerNameStyle}>
-          {filename ?? `Add ${noun}`}
-        </Button.Text>
-      </Button>
-      {filename && (
-        <Button
-          type="button"
-          size="sm"
-          variant="icon"
-          emphasis="tertiary"
-          aria-label={`Remove ${noun}`}
-          onClick={onClear}
-        >
-          <CrossIcon aria-hidden />
-        </Button>
-      )}
-    </div>
-  );
-}
-
-/**
- * What to call the file in a slot — the name it was uploaded under, never the
- * URL it is stored as.
- *
- * `undefined` in, `undefined` out, so "the slot is empty" travels as one value
- * through the picker rather than being asked twice.
- */
-function fileLabel(src: string | undefined): string | undefined {
-  return src ? filenameFromMediaUrl(src) : undefined;
-}

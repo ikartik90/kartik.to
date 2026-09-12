@@ -6,8 +6,8 @@ import {
   PropertiesPanel,
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
-import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
+import { ImageInput } from "@/components/ui/input/image-input";
 import { Link } from "@/components/ui/link";
 import { Notice } from "@/components/ui/notice";
 import {
@@ -16,12 +16,9 @@ import {
   isExcerptOfQuote,
   type Testimonial,
 } from "@/domain/testimonial";
-import { filenameFromMediaUrl } from "@/domain/media";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
-import TitleIcon from "@/assets/icons/title.svg";
 import MediaIcon from "@/assets/icons/media.svg";
-import CrossIcon from "@/assets/icons/cross-small.svg";
 
 // ---------------------------------------------------------------------------
 // The rail that edits one collected testimonial — the two fields that are mine
@@ -61,24 +58,6 @@ import CrossIcon from "@/assets/icons/cross-small.svg";
  */
 const COMMIT_DELAY_MS = 400;
 
-const pickerRowStyle = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "xs",
-  minWidth: 0,
-});
-
-// The button is as wide as the field track and the name inside it is clipped,
-// rather than the button growing to fit a 60-character R2 filename and pushing
-// the row's action column off the panel.
-const pickerButtonStyle = css({ flex: "1 1 0", minWidth: 0 });
-
-const pickerNameStyle = css({
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-});
-
 // The notice is a section's width but not a section: it carries the same inline
 // inset the header and the control panels do, so it lines up with them, and a
 // block of its own space so it does not sit flush against the title above it.
@@ -112,24 +91,71 @@ export interface TestimonialRailProps {
   onExcerptChange: (excerpt: string | null) => void;
   /** A tidied name. Never blank — the rail refuses that before it gets here. */
   onNameChange: (name: string) => void;
+  /** What they do, or null once the box is emptied. */
+  onTaglineChange: (tagline: string | null) => void;
   /** A write that did not land. The board owns it; this only shows it. */
   problem: string | null;
   onDismiss: () => void;
   ref?: Ref<PropertiesPanelHandle>;
 }
 
+/**
+ * The panel itself — one surface for the whole board, opened when a card is
+ * selected and closed only when it is dismissed.
+ *
+ * The split below is the whole reason this is two components. Everything inside
+ * a rail is a DRAFT of one row — a URL half-typed, a tagline mid-word — and
+ * none of it may survive a move to another card. Keying the panel on the row's
+ * id used to answer that, and answered too much with it: the panel was torn
+ * down and rebuilt on every selection, so choosing the next card slid the rail
+ * out and back in. The key belongs one level in, on the CONTENTS, which is the
+ * thing that is actually per-row.
+ */
 export function TestimonialRail({
+  testimonial,
+  problem,
+  onDismiss,
+  ref,
+  ...row
+}: TestimonialRailProps) {
+  return (
+    <PropertiesPanel
+      ref={ref}
+      ariaLabel={`Details for ${testimonial.name}'s testimonial`}
+      // The media library is a modal `<dialog>` opened from a control in here.
+      // Portalled, so it is outside this panel by every measure the dismiss can
+      // take, and a press in it would otherwise close the rail it belongs to.
+      ignoreSelector="dialog"
+      onDismiss={onDismiss}
+    >
+      <RailContents
+        key={testimonial.id}
+        testimonial={testimonial}
+        problem={problem}
+        {...row}
+      />
+    </PropertiesPanel>
+  );
+}
+
+type RailContentsProps = Omit<TestimonialRailProps, "onDismiss" | "ref">;
+
+/**
+ * Everything the panel holds, remounted per row — which is what resets the
+ * drafts and the sections' open state when the board moves to another card.
+ */
+function RailContents({
   testimonial,
   onPickPicture,
   onClearPicture,
   onProfileChange,
   onExcerptChange,
   onNameChange,
+  onTaglineChange,
   problem,
-  onDismiss,
-  ref,
-}: TestimonialRailProps) {
-  const { name, quote, avatarUrl, linkedinUrl, excerpt } = testimonial;
+}: RailContentsProps) {
+  const { name, quote, avatarUrl, linkedinUrl, excerpt, tagline } =
+    testimonial;
 
   // What is in the BOX, which is not what is in the row: the row holds
   // `https://www.linkedin.com/in/ada` and the box holds whatever is being typed
@@ -153,6 +179,9 @@ export function TestimonialRail({
   const [problemWithName, setProblemWithName] = useState<string | null>(null);
   const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [taglineDraft, setTaglineDraft] = useState(tagline ?? "");
+  const taglineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const cancelPendingCommit = useCallback(() => {
     if (commitTimer.current === null) return;
     clearTimeout(commitTimer.current);
@@ -171,12 +200,19 @@ export function TestimonialRail({
     nameTimer.current = null;
   }, []);
 
+  const cancelPendingTagline = useCallback(() => {
+    if (taglineTimer.current === null) return;
+    clearTimeout(taglineTimer.current);
+    taglineTimer.current = null;
+  }, []);
+
   // A pending commit outlives its own rail otherwise: select another card
   // within the pause and the timer fires against a panel that is gone, writing
   // the abandoned value onto the row it was typed for.
   useEffect(() => cancelPendingCommit, [cancelPendingCommit]);
   useEffect(() => cancelPendingExcerpt, [cancelPendingExcerpt]);
   useEffect(() => cancelPendingName, [cancelPendingName]);
+  useEffect(() => cancelPendingTagline, [cancelPendingTagline]);
 
   /**
    * Correct the spelling of who said it.
@@ -198,6 +234,23 @@ export function TestimonialRail({
 
       setProblemWithName(null);
       if (typed !== name) onNameChange(typed);
+    }, COMMIT_DELAY_MS);
+  };
+
+  /**
+   * Say what they do, under their name.
+   *
+   * An emptied box CLEARS the column — the opposite of the name above it, and
+   * the same rule the picture and the profile follow: most rows will never
+   * have a tagline, so blank is an ordinary answer rather than a mistake.
+   */
+  const typeTagline = (value: string) => {
+    setTaglineDraft(value);
+    cancelPendingTagline();
+    taglineTimer.current = setTimeout(() => {
+      const typed = value.trim();
+      const next = typed === "" ? null : typed;
+      if (next !== tagline) onTaglineChange(next);
     }, COMMIT_DELAY_MS);
   };
 
@@ -266,15 +319,7 @@ export function TestimonialRail({
   };
 
   return (
-    <PropertiesPanel
-      ref={ref}
-      ariaLabel={`Details for ${name}'s testimonial`}
-      // The media library is a modal `<dialog>` opened from a control in here.
-      // Portalled, so it is outside this panel by every measure the dismiss can
-      // take, and a press in it would otherwise close the rail it belongs to.
-      ignoreSelector="dialog"
-      onDismiss={onDismiss}
-    >
+    <>
       {/* Whose row this is, and the only place either of their words appears
           in the rail. Not editable — see the note at the top. */}
       <PropertiesPanel.Header>{name}</PropertiesPanel.Header>
@@ -301,10 +346,13 @@ export function TestimonialRail({
           to be named by. */}
       <PropertiesPanel.Section enabled>
         <PropertiesPanel.ControlPanel ariaLabel="Attribution">
-          <PropertiesPanel.Control label={<TitleIcon aria-hidden />}>
+          {/* Named in words rather than by an icon. The row's label IS the
+              control's accessible name once it says something — `Field.Label`
+              carries the `htmlFor` — so the box no longer needs an `aria-label`
+              repeating it. */}
+          <PropertiesPanel.Control label="Name">
             <Field.Frame>
               <Field.Control
-                aria-label="Name"
                 value={nameDraft}
                 onChange={(event) => typeName(event.target.value)}
               />
@@ -312,6 +360,21 @@ export function TestimonialRail({
             {problemWithName && (
               <Field.Hint data-property-hint>{problemWithName}</Field.Hint>
             )}
+          </PropertiesPanel.Control>
+
+          {/* Directly under the name, because that is where it is read: the
+              card draws the two as two lines of one attribution. Blank is a
+              perfectly good answer — most rows will never have one — so this
+              box clears the column rather than complaining, which is the
+              opposite of the name above it. */}
+          <PropertiesPanel.Control label="Tagline">
+            <Field.Frame>
+              <Field.Control
+                value={taglineDraft}
+                placeholder="Senior Product Designer at…"
+                onChange={(event) => typeTagline(event.target.value)}
+              />
+            </Field.Frame>
           </PropertiesPanel.Control>
         </PropertiesPanel.ControlPanel>
       </PropertiesPanel.Section>
@@ -363,36 +426,15 @@ export function TestimonialRail({
         </PropertiesPanel.SectionHeader>
         <PropertiesPanel.ControlPanel>
           <PropertiesPanel.Control label="Image">
-            <div className={pickerRowStyle}>
-              {/* Labelled rather than left to the row's label, because a button
-                  is not labelable by a `<label>`: the filename written on it is
-                  its only other accessible name, and that changes with the
-                  picture. */}
-              <Button
-                type="button"
-                size="sm"
-                emphasis="tertiary"
-                aria-label={avatarUrl ? "Change picture" : "Add picture"}
-                className={pickerButtonStyle}
-                onClick={onPickPicture}
-              >
-                <Button.Text className={pickerNameStyle}>
-                  {avatarUrl ? filenameFromMediaUrl(avatarUrl) : "Add picture"}
-                </Button.Text>
-              </Button>
-              {avatarUrl && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="icon"
-                  emphasis="tertiary"
-                  aria-label="Clear picture"
-                  onClick={onClearPicture}
-                >
-                  <CrossIcon aria-hidden />
-                </Button>
-              )}
-            </div>
+            {/* The same control every picture slot in the app wears — the
+                portrait, and a card's two covers. Removing the picture is the
+                SECTION's act (see `onEnabledChange` above), which is why there
+                is no clear beside it. */}
+            <ImageInput
+              noun="picture"
+              src={avatarUrl ?? undefined}
+              onPick={onPickPicture}
+            />
           </PropertiesPanel.Control>
         </PropertiesPanel.ControlPanel>
       </PropertiesPanel.Section>
@@ -447,6 +489,6 @@ export function TestimonialRail({
           </PropertiesPanel.Control>
         </PropertiesPanel.ControlPanel>
       </PropertiesPanel.Section>
-    </PropertiesPanel>
+    </>
   );
 }

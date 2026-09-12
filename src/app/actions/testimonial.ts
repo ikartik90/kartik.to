@@ -163,7 +163,7 @@ export async function updateTestimonialDetails(
 ): Promise<Testimonial> {
   await requireAdmin();
 
-  const { id, name, avatarUrl, linkedinUrl, excerpt } =
+  const { id, name, avatarUrl, linkedinUrl, excerpt, tagline } =
     TestimonialDetailsSchema.parse(input);
 
   // THREE states, and the difference is why this is not a plain spread.
@@ -175,11 +175,19 @@ export async function updateTestimonialDetails(
     avatarUrl: string | null;
     linkedinUrl: string | null;
     excerpt?: string | null;
+    tagline?: string | null;
     name?: string;
   } = { avatarUrl, linkedinUrl };
 
   if (excerpt !== undefined) {
     data.excerpt = excerpt;
+  }
+
+  // Same three states as the excerpt above, and nothing more to check: a
+  // tagline is mine to write, so there is no "are these their words" question
+  // to ask of it.
+  if (tagline !== undefined) {
+    data.tagline = tagline;
   }
 
   // Same absent-means-leave-alone rule, but with only two states rather than

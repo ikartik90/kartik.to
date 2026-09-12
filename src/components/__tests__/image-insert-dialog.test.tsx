@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ImageInsertDialog } from "../image-insert-dialog";
 
 const mockDeleteSelectedAsset = vi.fn();
+const mockProcessFiles = vi.fn();
 const mockUpdateFilename = vi.fn();
 const mockSelectAsset = vi.fn();
 const mockToggleAsset = vi.fn();
@@ -53,11 +54,13 @@ function defaultHook() {
     altText: "",
     filenameText: "favicon.png",
     uploadProgress: 0,
+    uploadIndex: 0,
+    uploadTotal: 0,
     isDragOver: false,
     setIsDragOver: vi.fn(),
     error: null,
     isBusy: false,
-    processFile: vi.fn(),
+    processFiles: mockProcessFiles,
     openLibrary: vi.fn(),
     goToUpload: vi.fn(),
     selectAsset: mockSelectAsset,
@@ -258,5 +261,51 @@ describe("ImageInsertDialog (multi-select)", () => {
       { src: "https://cdn/b.png" },
       { src: "https://cdn/a.png" },
     ]);
+  });
+});
+// ---------------------------------------------------------------------------
+// A drop is a batch — the picker and the drop zone both take several files
+// ---------------------------------------------------------------------------
+
+describe("ImageInsertDialog (uploading)", () => {
+  const file = (name: string) => new File(["x"], name, { type: "image/png" });
+
+  const renderUploading = (state: Record<string, unknown> = {}) => {
+    hookState = { phase: "upload", ...state };
+    render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
+  };
+
+  /** The drop zone — a div with a button role, named by its own hint. */
+  const dropZone = () =>
+    screen.getByText(/Drag and drop/).closest('[role="button"]')!;
+
+  // Picking five and inserting one is an ordinary thing to want: the library
+  // is where files live, not a queue of exactly what this block needs.
+  it("lets the file picker take more than one file", () => {
+    renderUploading();
+    const input = document.querySelector('input[type="file"]');
+    expect((input as HTMLInputElement).multiple).toBe(true);
+  });
+
+  it("hands the whole drop to the hook, not just the first file", () => {
+    renderUploading();
+
+    fireEvent.drop(dropZone(), {
+      dataTransfer: { files: [file("a.png"), file("b.png")] },
+    });
+
+    expect(mockProcessFiles).toHaveBeenCalledOnce();
+    expect(mockProcessFiles.mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it("says which file of the batch is on the wire", () => {
+    renderUploading({ phase: "uploading", uploadIndex: 2, uploadTotal: 3 });
+    expect(screen.getByText("Uploading 2 of 3")).toBeDefined();
+  });
+
+  // One file is the shortest batch, and counting it would be noise.
+  it("counts nothing when there is only one file", () => {
+    renderUploading({ phase: "uploading", uploadIndex: 1, uploadTotal: 1 });
+    expect(screen.queryByText(/Uploading 1 of/)).toBeNull();
   });
 });

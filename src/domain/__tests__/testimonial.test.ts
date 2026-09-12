@@ -4,6 +4,7 @@ import {
   TESTIMONIAL_NAME_MAX_LENGTH,
   TESTIMONIAL_QUOTE_MAX_LENGTH,
   TestimonialDetailsSchema,
+  TESTIMONIAL_TAGLINE_MAX_LENGTH,
   TestimonialSubmissionSchema,
   isExcerptOfQuote,
   testimonialShown,
@@ -360,5 +361,42 @@ describe("TestimonialDetailsSchema (excerpt)", () => {
       TestimonialDetailsSchema.parse({ ...base, excerpt: "  vague brief \n" })
         .excerpt,
     ).toBe("vague brief");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The tagline — who they are, under their name.
+// ---------------------------------------------------------------------------
+
+describe("TestimonialDetailsSchema (tagline)", () => {
+  const base = { id: "t1", avatarUrl: null, linkedinUrl: null };
+
+  it("takes a line about who said it", () => {
+    const details = TestimonialDetailsSchema.parse({
+      ...base,
+      tagline: "Senior Product Designer at Shyft",
+    });
+    expect(details.tagline).toBe("Senior Product Designer at Shyft");
+  });
+
+  it("reads a blank box as no tagline at all", () => {
+    expect(
+      TestimonialDetailsSchema.parse({ ...base, tagline: "   " }).tagline,
+    ).toBeNull();
+  });
+
+  // The same three states the excerpt has, and for the same reason: a board
+  // saving a picture must not silently drop a tagline it said nothing about.
+  it("says nothing about a tagline it was not given", () => {
+    expect(TestimonialDetailsSchema.parse(base).tagline).toBeUndefined();
+  });
+
+  it("refuses a paragraph pasted into the tagline box", () => {
+    expect(() =>
+      TestimonialDetailsSchema.parse({
+        ...base,
+        tagline: "x".repeat(TESTIMONIAL_TAGLINE_MAX_LENGTH + 1),
+      }),
+    ).toThrow();
   });
 });

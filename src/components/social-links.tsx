@@ -19,9 +19,9 @@ import TwitterIcon from "@/assets/icons/twitter.svg";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { css, cx } from "../../styled-system/css";
 import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
+import { SocialIconLink } from "./social-icon-link";
 import { SocialIconShader, SocialShaderStage } from "./social-icon-shader";
 import { Button } from "./ui/button";
-import { Link } from "./ui/link";
 
 const COPY_SUCCESS_MS = 2000;
 const EMAIL_COPY_TEXT = "ikartik90@gmail.com";
@@ -429,11 +429,24 @@ function SocialLinkItem({
     setTooltipHovered(false);
   }
 
-  const icon = (
-    <SocialIconShader maskSrc={item.maskSrc} active={triggerHovered}>
-      <item.Icon className={triggerIconStyle} aria-hidden />
-    </SocialIconShader>
-  );
+  // A LINK is the shared control — the icon, its shader and the cursor tooltip
+  // are one implementation now, used here and by a testimonial's profile on the
+  // admin board. Everything kept below belongs to the EMAIL: it copies rather
+  // than navigates, and its tooltip morphs through a copied state.
+  if (item.action === "link") {
+    return (
+      <li>
+        <SocialIconLink
+          href={item.href}
+          label={item.label}
+          maskSrc={item.maskSrc}
+          Icon={item.Icon}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+      </li>
+    );
+  }
 
   return (
     <li
@@ -445,34 +458,20 @@ function SocialLinkItem({
       onMouseEnter={handleTriggerMouseEnter}
       onMouseLeave={handleTriggerMouseLeave}
     >
-      {item.action === "link" ? (
-        <Link
-          href={item.href}
-          variant="icon"
-          aria-label={item.label}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={onDismiss}
-          // The WebGL shader IS the hover state — no background chip behind it
-          // (see the [data-social-trigger] rule in globals.css).
-          data-social-trigger
-        >
-          {icon}
-        </Link>
-      ) : (
-        <Button
-          variant="icon"
-          aria-label={triggerLabel}
-          aria-live="polite"
-          onClick={(event) => {
-            event.preventDefault();
-            onEmailTriggerClick();
-          }}
-          data-social-trigger
-        >
-          {icon}
-        </Button>
-      )}
+      <Button
+        variant="icon"
+        aria-label={triggerLabel}
+        aria-live="polite"
+        onClick={(event) => {
+          event.preventDefault();
+          onEmailTriggerClick();
+        }}
+        data-social-trigger
+      >
+        <SocialIconShader maskSrc={item.maskSrc} active={triggerHovered}>
+          <item.Icon className={triggerIconStyle} aria-hidden />
+        </SocialIconShader>
+      </Button>
       <SocialTooltip
         item={item}
         copySuccess={copySuccess}

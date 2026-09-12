@@ -262,6 +262,12 @@ model Testimonial {
   // an `<img>` needs — a key would mean a resolution step on every read for a
   // value that is only ever used one way.
   avatarUrl   String?
+  // What they do, under their name on the card — "Senior Product Designer at
+  // Shyft". Mine to write: the form collects a name and a quote and nothing
+  // else, so a role is something I know about them rather than something they
+  // sent. Kept OUT of `name` on purpose — people type their own title into that
+  // box, and a column of its own is what lets a card draw the two as two lines.
+  tagline     String?
   // Their profile. This column existed once, held nothing, and was dropped —
   // and this is NOT that column coming back. That one was collected from the
   // submitter and was UNIQUE, which made it the table's natural key. This one I

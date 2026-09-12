@@ -3,6 +3,10 @@
 import { testimonialCard } from "../../../../styled-system/recipes";
 import { testimonialShown, type Testimonial } from "@/domain/testimonial";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
+import { SocialIconLink } from "@/components/social-icon-link";
+
+/** The glyph's silhouette, the same file the homepage's row is masked to. */
+const LINKEDIN_MASK = "/social-shader-masks/linkedin.svg";
 
 // ---------------------------------------------------------------------------
 // One collected testimonial, on the board at `/edit/testimonials`.
@@ -77,18 +81,24 @@ export function TestimonialCard({
   onSelect,
 }: TestimonialCardProps) {
   const styles = testimonialCard({ selected });
-  const { name, avatarUrl, linkedinUrl } = testimonial;
+  const { name, avatarUrl, linkedinUrl, tagline } = testimonial;
 
   return (
-    <button
-      type="button"
-      // `aria-pressed` rather than `aria-selected`, which is only valid inside
-      // a listbox/grid/tab role — this is a set of plain buttons, and one of
-      // them is currently the one being edited.
-      aria-pressed={selected}
-      className={styles.root}
-      onClick={onSelect}
-    >
+    <div className={styles.root}>
+      {/* The hit target, and nothing else — see the recipe. Named by a label
+          rather than by the words it used to wrap, which is what lets the
+          profile beside it be a real link. */}
+      <button
+        type="button"
+        // `aria-pressed` rather than `aria-selected`, which is only valid
+        // inside a listbox/grid/tab role — this is a set of plain buttons, and
+        // one of them is currently the one being edited.
+        aria-pressed={selected}
+        aria-label={`Edit ${name}'s testimonial`}
+        className={styles.select}
+        onClick={onSelect}
+      />
+
       <div className={styles.byline}>
         <span className={styles.avatar}>
           {avatarUrl ? (
@@ -109,22 +119,34 @@ export function TestimonialCard({
 
         <span className={styles.identity}>
           <span className={styles.name}>{name}</span>
-          {/* Absent rather than empty when there is no profile. An empty row
-              here would leave a gap under the name that reads as a handle
-              still loading. */}
-          {linkedinUrl && (
-            <span className={styles.handle}>
-              <LinkedInIcon aria-hidden />
-              <span>{handleOf(linkedinUrl)}</span>
-            </span>
-          )}
+          {/* Absent rather than empty when there is none, so a row without one
+              leaves no gap under the name reading as a line still loading. */}
+          {tagline && <span className={styles.tagline}>{tagline}</span>}
         </span>
+
+        {/* The same control the homepage's social row is made of — shader,
+            cursor tooltip and all. The tooltip carries the HANDLE, which is
+            what the card used to print under the name: the information is
+            still a hover away, and the line it was taking up now says
+            something about the person instead. */}
+        {linkedinUrl && (
+          <SocialIconLink
+            className={styles.profile}
+            href={linkedinUrl}
+            label={handleOf(linkedinUrl)}
+            // Whose profile, because a board of twelve cards would otherwise be
+            // twelve links announcing themselves as a path.
+            ariaLabel={`${name} on LinkedIn`}
+            maskSrc={LINKEDIN_MASK}
+            Icon={LinkedInIcon}
+          />
+        )}
       </div>
 
       {/* The chosen portion, or all of it. Asked of the domain rather than
           spelled out here, so this card, a future public page and a link
           preview cannot disagree about which words a testimonial shows. */}
       <p className={styles.quote}>{testimonialShown(testimonial)}</p>
-    </button>
+    </div>
   );
 }

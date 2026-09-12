@@ -11,6 +11,7 @@ import {
   UpdateMediaAltInputSchema,
   UpdateMediaFilenameInputSchema,
   filenameFromMediaKey,
+  sanitizeMediaDisplayName,
   sanitizeMediaFilename,
   type MediaAsset,
   type MediaFolder,
@@ -162,7 +163,11 @@ export async function updateMediaFilename(input: unknown): Promise<MediaAsset> {
     throw new Error("Invalid media key");
   }
 
-  await updateR2ObjectMetadata(key, { filename: sanitizeMediaFilename(filename) });
+  // The DISPLAY sanitiser, not the key's: nothing here touches the object key,
+  // so the only thing a name has to survive is the header it is stored in.
+  await updateR2ObjectMetadata(key, {
+    filename: sanitizeMediaDisplayName(filename),
+  });
   const asset = await keyToMediaAsset(key);
   if (!asset) {
     throw new Error("Media asset not found");

@@ -37,6 +37,14 @@ export const TESTIMONIAL_QUOTE_MAX_LENGTH = 280;
 export const TESTIMONIAL_NAME_MAX_LENGTH = 80;
 
 /**
+ * Room for a role and the place it is held — "Senior Product Designer at
+ * Shyft" — and not for a sentence. The same cap as the name, because it is the
+ * same kind of value: one line under another, on a card sized for the words
+ * above it.
+ */
+export const TESTIMONIAL_TAGLINE_MAX_LENGTH = 80;
+
+/**
  * What the form at `/vouch` posts, and the only shape allowed to become a row.
  *
  * Trimmed BEFORE it is measured, so trailing whitespace can neither smuggle a
@@ -79,6 +87,18 @@ export interface Testimonial extends TestimonialSubmission {
   createdAt: Date;
   /** A picture from the media library, put there by me. See below. */
   avatarUrl: string | null;
+  /**
+   * What they do, in my words, under their name — "Senior Product Designer at
+   * Shyft".
+   *
+   * MINE to write, like the other three, and for a reason worth saying: the
+   * form asks for a name and a quote and nothing else, so a role is something
+   * I know about the person rather than something they told me. It is also why
+   * this is not part of `name`: people put their title in that box themselves
+   * ("Lalit Arya - Senior UX Designer"), and a field of its own is what lets
+   * the card draw the two as two lines instead of one long one.
+   */
+  tagline: string | null;
   /** Their profile, typed by me. NOT collected from them — see below. */
   linkedinUrl: string | null;
   /** The portion of `quote` a card shows, or null for all of it. See below. */
@@ -253,6 +273,21 @@ export const TestimonialDetailsSchema = z.object({
     .optional(),
   /** A picture already in the media library, or none. */
   avatarUrl: z.union([blank, z.url()]).nullable(),
+  /**
+   * Their role, under the name — or nothing.
+   *
+   * THREE states, like the excerpt and unlike the two beside it: absent means
+   * "leave whatever is stored alone", null (or a blank box) clears it, and a
+   * string replaces it. The board sends the whole row today, so two would do;
+   * three costs one `if` in the action and makes a partial write from anywhere
+   * else safe by construction rather than by habit.
+   */
+  tagline: z
+    .union([
+      blank,
+      z.string().trim().min(1).max(TESTIMONIAL_TAGLINE_MAX_LENGTH),
+    ])
+    .nullish(),
   linkedinUrl: z.union([blank, LinkedInProfileUrlSchema]).nullable(),
   /**
    * SHAPE only — that this is some text or nothing. Whether it is a legitimate

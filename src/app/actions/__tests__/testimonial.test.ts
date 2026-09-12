@@ -385,6 +385,47 @@ describe("updateTestimonialDetails (excerpt)", () => {
     expect("excerpt" in mockUpdate.mock.calls[0][0].data).toBe(false);
   });
 
+  // The tagline follows the excerpt's three states rather than the picture's
+  // two: a board saving one field must not clear a line it said nothing about.
+  it("writes a tagline under the name", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: null,
+      linkedinUrl: null,
+      tagline: "Senior Product Designer at Shyft",
+    });
+
+    expect(mockUpdate.mock.calls[0][0].data.tagline).toBe(
+      "Senior Product Designer at Shyft",
+    );
+  });
+
+  it("clears the tagline when the box is emptied", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({
+      id: "t1",
+      avatarUrl: null,
+      linkedinUrl: null,
+      tagline: "",
+    });
+
+    expect(mockUpdate.mock.calls[0][0].data.tagline).toBeNull();
+  });
+
+  it("leaves a stored tagline alone when it is not named", async () => {
+    signedInAsAdmin();
+    mockUpdate.mockResolvedValue(row());
+
+    await updateTestimonialDetails({ id: "t1", avatarUrl: null, linkedinUrl: null });
+
+    expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty("tagline");
+  });
+
   it("writes a corrected name", async () => {
     await updateTestimonialDetails({ ...base, name: "Lalit Arya" });
 

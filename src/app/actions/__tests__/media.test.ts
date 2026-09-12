@@ -149,13 +149,16 @@ describe("media server actions", () => {
     expect(asset.filename).toBe("invoice.png");
   });
 
-  it("sanitizes a renamed filename", async () => {
+  // Held to the DISPLAY standard, not the key's: nothing about this name ever
+  // reaches an object key, so a space is just a space. It used to come back
+  // "my-invoice-.png", which is the rename field arguing with the author.
+  it("keeps a renamed file readable, and only strips what a header cannot hold", async () => {
     mockHeadR2Object.mockResolvedValue({ size: 100, contentType: "image/png" });
 
-    await updateMediaFilename({ key: KEY, filename: "my invoice!.png" });
+    await updateMediaFilename({ key: KEY, filename: "  my invoice!.png  " });
 
     expect(mockUpdateR2ObjectMetadata).toHaveBeenCalledWith(KEY, {
-      filename: "my-invoice-.png",
+      filename: "my invoice!.png",
     });
   });
 
