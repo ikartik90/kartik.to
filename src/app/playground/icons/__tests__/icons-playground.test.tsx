@@ -44,6 +44,7 @@ Object.defineProperty(window, "matchMedia", {
   value: vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} })),
 });
 
+const { BOTTOM_SHEET_QUERY } = await import("@/data/media-queries");
 const { IconsPlayground } = await import("../icons-playground");
 
 const CHECK = `<svg viewBox="0 0 20 20" fill="none"><path d="M4 10L9 15L16 5" stroke="white" stroke-width="1.25"/></svg>`;
@@ -303,6 +304,60 @@ describe("the selection", () => {
   it("counts the set beside the download", async () => {
     await open();
     expect(screen.getByText("2 icons")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A PHONE. The panel is a sheet there, rising over the very grid it configures
+// — so it starts down, and the way back up is put where the thumb already is.
+// ---------------------------------------------------------------------------
+
+describe("on a phone", () => {
+  /** Answer the sheet's own query truthfully, and every other query no. */
+  const asPhone = () =>
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches: query === BOTTOM_SHEET_QUERY,
+        addEventListener() {},
+        removeEventListener() {},
+      })),
+    );
+
+  const panel = () => screen.queryByRole("dialog", { name: "Icon properties" });
+  const dock = () => screen.queryByRole("button", { name: "Icon properties" });
+
+  it("opens with the sheet down, and the way back up in the search box", async () => {
+    asPhone();
+    await open();
+
+    // The sheet would otherwise land on top of the set the moment the page
+    // did, hiding what it was opened to look at.
+    expect(panel()).toBeNull();
+
+    // And the press that raises it sits in the bar the thumb is already on,
+    // rather than floating over the grid.
+    const box = screen.getByRole("searchbox", { name: "Search icons by name" });
+    const row = box.parentElement as HTMLElement;
+    expect(within(row).getByRole("button", { name: "Icon properties" })).toBeTruthy();
+  });
+
+  it("raises the sheet when it is pressed, and takes the press away with it", async () => {
+    asPhone();
+    await open();
+
+    await userEvent.click(dock() as HTMLElement);
+
+    expect(panel()).toBeTruthy();
+    // Nothing offers to open what is already open.
+    expect(dock()).toBeNull();
+  });
+
+  it("leaves the panel up on a desktop, where it takes nothing from the grid", async () => {
+    await open();
+
+    expect(panel()).toBeTruthy();
+    expect(dock()).toBeNull();
   });
 });
 

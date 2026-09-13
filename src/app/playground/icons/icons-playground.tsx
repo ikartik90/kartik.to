@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { hotkey, menuIcon } from "../../../../styled-system/recipes";
 import InfoIcon from "@/assets/icons/info.svg";
+import { isBottomSheetLayout } from "@/data/media-queries";
 import { useTrickleProgress } from "@/hooks/use-demo-loader";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -287,6 +288,28 @@ export function IconsPlayground() {
 
   const [settings, setSettings] = useState<IconViewSettings>(DEFAULT_ICON_SETTINGS);
   const [open, setOpen] = useState(true);
+
+  // WHERE the panel docks, and therefore how it opens. A rail stands beside
+  // the grid and costs it nothing; a sheet rises over the very set it
+  // configures, so on a phone it starts down and the grid is what the page
+  // opens on.
+  //
+  // Asked once, on mount, because the server has no viewport to ask — the same
+  // one-commit-later correction `useHasCursor` makes. `open` stays true for
+  // the first render so the desktop's inset is reserved in the server's HTML
+  // (see `PANEL_RESERVED_ATTR`), and `sheet` gates both docks so neither is
+  // hydrated onto the wrong device: until this has run there is no panel
+  // trigger at all, which is exactly right — the panel is up.
+  const [sheet, setSheet] = useState(false);
+  useEffect(() => {
+    if (!isBottomSheetLayout()) return;
+    // Syncing to the DEVICE, which is not a render-derived value — the same
+    // one-commit-later correction `useHasCursor` makes, and what the shader
+    // playground's own sheet does on arrival.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSheet(true);
+    setOpen(false);
+  }, []);
   const [selection, setSelection] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [query, setQuery] = useState("");
@@ -458,13 +481,30 @@ export function IconsPlayground() {
             onValueChange={setQuery}
             placeholder="Search icons…"
             ariaLabel="Search icons by name"
+            // The sheet's way back up, at the end of the row the thumb is
+            // already on rather than floating over the grid — and only while
+            // it is down. `DockIcon` draws the sheet's own glyph here, since
+            // that is the panel this press is about to produce.
+            action={
+              !open && sheet ? (
+                <Button
+                  variant="icon"
+                  aria-label="Icon properties"
+                  onClick={() => setOpen(true)}
+                >
+                  <PropertiesPanel.DockIcon />
+                </Button>
+              ) : undefined
+            }
           />
         </div>
       </div>
 
       {/* The panel's way back, mounted only while it is away — a button
-          offering to open what is already open would be inert half the time. */}
-      {!open && (
+          offering to open what is already open would be inert half the time.
+          Floating over the page for a RAIL; for a sheet it is in the bar
+          instead (see the search row above), where the thumb already is. */}
+      {!open && !sheet && (
         <Button
           variant="icon"
           aria-label="Icon properties"
