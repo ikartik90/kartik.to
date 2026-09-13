@@ -79,6 +79,20 @@ const BAR_WIDTH = "min(480px, calc(100dvw - 2 * token(spacing.3xl)))";
 const SCRIM_CLEARANCE = "token(spacing.3xl)";
 const BAR_SPACE = `calc(${BAR_INSET} + ${BAR_HEIGHT} + ${SCRIM_CLEARANCE})`;
 
+// The air under the last row, which has to do two things rather than one.
+//
+// `BAR_SPACE` only gets the row to the TOP EDGE of the frosted band — level
+// with where the fade begins, which is not the same as clear of it: a
+// progressive blur samples from beyond its own box, so a row resting exactly
+// on that line is drawn with its bottom smeared into the band. The extra
+// clearance is what puts the last row somewhere it can actually be read, and
+// it is the same `SCRIM_CLEARANCE` the first row gets under the chrome.
+//
+// Which makes the foot the deeper of the two ends — 163px against the head's
+// 112px — and deliberately: the head's band holds two chrome buttons, the
+// foot's holds a floating search bar, so equal PADDING would not be equal air.
+const CANVAS_FOOT = `calc(${BAR_SPACE} + ${SCRIM_CLEARANCE})`;
+
 // The viewport, with the grid in the middle of what the docked panel leaves of
 // it: `usePropertiesPanelInset` insets the body while the panel is open, so
 // nothing here reserves the panel's width a second time.
@@ -123,16 +137,25 @@ const canvasStyle = css({
   userSelect: "none",
   // The surface reaches the foot of the VIEWPORT, not the foot of the grid.
   // A set of three icons leaves the page taller than its own content, and a
-  // sweep begun in that dead space used to catch nothing — where a file
-  // dropped there is worse than nothing, since an unclaimed drop is the
-  // browser navigating away from the page to open the file.
-  minHeight: "100dvh",
+  // sweep begun in that dead space catches nothing — where a file dropped
+  // there is worse than nothing, since an unclaimed drop is the browser
+  // navigating away from the page to open the file.
+  //
+  // GROW, never a `min-height` floor. `main` is a column flex container, so a
+  // `min-height: 100dvh` item is one the flexbox is free to shrink back TO
+  // 100dvh: with two hundred icons in it the box stayed a viewport tall while
+  // its content ran on past the bottom, which quietly took the foot padding
+  // below out of the flow with it and left the last row hard against the
+  // bottom of the screen. Growing has neither problem — it fills what is left
+  // when the grid is short, and keeps its whole content height when it is not.
+  flexGrow: 1,
+  flexShrink: 0,
   // Clear of the frosted band pinned over the top — its height plus the same
   // clearance the foot keeps, so the first row of icons is never under it.
   paddingBlockStart: `calc(var(--chrome-band) + ${SCRIM_CLEARANCE})`,
   // Room at the foot for the bar that floats over it, so the last row never
   // comes to rest behind the frosting.
-  paddingBlockEnd: BAR_SPACE,
+  paddingBlockEnd: CANVAS_FOOT,
   display: "flex",
   flexDirection: "column",
   gap: "xl",
@@ -144,7 +167,7 @@ const emptyStyle = css({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  minHeight: `calc(100dvh - var(--chrome-band) - ${SCRIM_CLEARANCE} - ${BAR_SPACE})`,
+  minHeight: `calc(100dvh - var(--chrome-band) - ${SCRIM_CLEARANCE} - ${CANVAS_FOOT})`,
   color: "text.body",
   textAlign: "center",
 });
