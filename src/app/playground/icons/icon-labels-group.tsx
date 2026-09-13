@@ -7,23 +7,38 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
 import { PropertiesPanel } from "@/components/ui/properties-panel";
 import { Tooltip } from "@/components/ui/tooltip";
-import { MAX_ICON_ALIASES, type IconAsset } from "@/domain/icon";
+import {
+  MAX_ICON_ALIASES,
+  applyAliasEdit,
+  commonIconAliases,
+  type IconAsset,
+} from "@/domain/icon";
 
 // ---------------------------------------------------------------------------
-// What ONE icon is called, and the other words it answers to.
+// What an icon is called, and the other words it answers to.
 //
 // The two facts an icon's own file cannot carry, and the only part of this
-// panel that is about a single icon rather than about the set or the view of
-// it. So it is rendered only where it has one icon to be about — the page
-// hands it exactly one or does not render it at all — which is the same rule
-// the action chips keep: never a control that cannot mean anything.
+// panel that is about the icons themselves rather than about the set or the
+// view of it.
 //
-// STATE. The fields are a draft, seeded from the icon and living until the
-// selection moves. Nothing resets them from the outside: the page gives this
-// component `key={icon.key}`, so choosing another icon is a REMOUNT and the
-// draft goes with the icon it belonged to. An effect syncing props into state
-// would be the same thing, one render later and with a stale frame in front
-// of you.
+// A NAME is one icon's, so that field appears only when one is selected — two
+// icons cannot share a name. ALIASES are not: a tag names a family, and
+// naming a family one icon at a time is how eleven marks end up under `arrow`
+// and a twelfth under `arrows`. So the fields go on working over a selection,
+// showing the words they ALL answer to (`commonIconAliases`) and writing every
+// edit to every one of them.
+//
+// What is not shown cannot be disturbed. An icon's own words — the ones the
+// rest of the selection does not have — are never on screen and never
+// touched: adding a tag to twelve icons must not strip the eleven words only
+// one of them had. `applyAliasEdit` is that rule, and it is the domain's.
+//
+// STATE. The fields are a draft, seeded from the selection and living until
+// the selection moves. Nothing resets them from the outside: the page gives
+// this component a `key` made of the keys it is about, so choosing other icons
+// is a REMOUNT and the draft goes with the icons it belonged to. An effect
+// syncing props into state would be the same thing, one render later and with
+// a stale frame in front of you.
 //
 // WHEN IT SAVES. On the way out of a field, never on the way through it: a
 // write per keystroke is two hundred writes to spell an alias, and a word is
@@ -36,19 +51,42 @@ import { MAX_ICON_ALIASES, type IconAsset } from "@/domain/icon";
 // costs nothing but the row.
 // ---------------------------------------------------------------------------
 
-export interface IconLabelsGroupProps {
-  /** The one icon being named. */
-  icon: IconAsset;
-  /** Store the name and the words, both at once — they are one row. */
-  onSave: (key: string, title: string, aliases: string[]) => void;
+export interface IconLabelEdit {
+  key: string;
+  title: string;
+  aliases: string[];
 }
 
-export function IconLabelsGroup({ icon, onSave }: IconLabelsGroupProps) {
-  const [title, setTitle] = useState(icon.title);
-  const [aliases, setAliases] = useState<string[]>(icon.aliases);
+export interface IconLabelsGroupProps {
+  /** The icons being named — one, or the whole selection. Never empty. */
+  icons: IconAsset[];
+  /**
+   * Store what changed, for every icon it changed on. One call rather than
+   * one per icon, so the set is re-read once at the end rather than after
+   * each of twelve writes.
+   */
+  onSave: (edits: IconLabelEdit[]) => void;
+}
 
-  const save = (nextTitle: string, nextAliases: string[]) =>
-    onSave(icon.key, nextTitle, nextAliases);
+export function IconLabelsGroup({ icons, onSave }: IconLabelsGroupProps) {
+  const single = icons.length === 1 ? icons[0] : null;
+
+  // What was on screen when the editing began, and what it says now. `base` is
+  // read once at mount — the component is remounted when the selection moves —
+  // so a row's POSITION in it stays the anchor an edit is matched against.
+  const [base] = useState(() => commonIconAliases(icons.map((i) => i.aliases)));
+  const [title, setTitle] = useState(single?.title ?? "");
+  const [aliases, setAliases] = useState<string[]>(base);
+
+  const save = (nextTitle: string, draft: string[]) =>
+    onSave(
+      icons.map((icon) => ({
+        key: icon.key,
+        // A name is only ever edited one icon at a time; the rest keep theirs.
+        title: single ? nextTitle : icon.title,
+        aliases: applyAliasEdit(icon.aliases, base, draft),
+      })),
+    );
 
   const setAlias = (index: number, value: string) =>
     setAliases((current) =>
@@ -82,24 +120,27 @@ export function IconLabelsGroup({ icon, onSave }: IconLabelsGroupProps) {
       }
     >
       {/* The name, which is not an alias — it is what the icon is CALLED, and
-          what its tooltip says. Emptying it hands the icon back to its
-          filename rather than leaving it nameless. */}
-      <PropertiesPanel.Control label="Icon name">
-        {/* A bare `Field.Frame` rather than a `TextInput`: `Control` IS the
-            field, and a second one inside it would leave the row's visible
-            label pointing at its own control instead of this one. */}
-        <Field.Frame>
-          <Field.Control
-            value={title}
-            placeholder={icon.name}
-            onChange={(event) => setTitle(event.target.value)}
-            onBlur={() => save(title, aliases)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-          />
-        </Field.Frame>
-      </PropertiesPanel.Control>
+          what its tooltip says. One icon's, so it is here only when one is
+          selected; emptying it hands that icon back to its filename rather
+          than leaving it nameless. */}
+      {single && (
+        <PropertiesPanel.Control label="Icon name">
+          {/* A bare `Field.Frame` rather than a `TextInput`: `Control` IS the
+              field, and a second one inside it would leave the row's visible
+              label pointing at its own control instead of this one. */}
+          <Field.Frame>
+            <Field.Control
+              value={title}
+              placeholder={single.name}
+              onChange={(event) => setTitle(event.target.value)}
+              onBlur={() => save(title, aliases)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+          </Field.Frame>
+        </PropertiesPanel.Control>
+      )}
 
       {aliases.map((alias, index) => (
         <PropertiesPanel.Control
@@ -115,7 +156,9 @@ export function IconLabelsGroup({ icon, onSave }: IconLabelsGroupProps) {
             <Field.Control
               aria-label={`Alias ${index + 1}`}
               value={alias}
-              placeholder="Another word for it"
+              placeholder={
+                single ? "Another word for it" : "A word they all answer to"
+              }
               onChange={(event) => setAlias(index, event.target.value)}
               onBlur={() => save(title, aliases)}
               onKeyDown={(event) => {

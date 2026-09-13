@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/icon-set";
 import { MAX_ICON_BYTES, type IconAsset } from "@/domain/icon";
 import { readIconSvg, type IconSvg } from "@/utils/icon-svg";
+import type { IconLabelEdit } from "./icon-labels-group";
 
 // ---------------------------------------------------------------------------
 // The set, loaded: what is in the bucket, and the file behind each one.
@@ -65,8 +66,8 @@ export interface IconLibrary {
   /** The last thing that went wrong, in words a person can act on. */
   problem: string | null;
   upload: (files: File[]) => Promise<void>;
-  /** Name one icon, and give it the words it can be found under. */
-  rename: (key: string, title: string, aliases: string[]) => Promise<void>;
+  /** Name icons, and give them the words they can be found under. */
+  rename: (edits: IconLabelEdit[]) => Promise<void>;
   approve: (keys: string[]) => Promise<void>;
   remove: (keys: string[]) => Promise<void>;
 }
@@ -247,7 +248,14 @@ export function useIconLibrary(): IconLibrary {
   );
 
   /**
-   * What one icon is called, and the words it answers to — one row, one write.
+   * What icons are called, and the words they answer to — one write each, one
+   * re-read at the end.
+   *
+   * Takes a LIST because an alias is a tag: adding one to twelve icons is one
+   * act, and re-listing the set after each of the twelve would be twelve
+   * listings for one press. The writes go one at a time rather than through
+   * `Promise.all` so a bucket that starts refusing does not have eleven more
+   * requests already in flight.
    *
    * No `busy` flag around it, unlike publishing and deleting: those act on a
    * selection and leave the set changed under you, where this is a person
@@ -255,10 +263,11 @@ export function useIconLibrary(): IconLibrary {
    * be felt as a stutter, and nothing about the write needs the guard.
    */
   const rename = useCallback(
-    async (key: string, title: string, aliases: string[]) => {
+    async (edits: IconLabelEdit[]) => {
+      if (edits.length === 0) return;
       setProblem(null);
       try {
-        await setIconLabels({ key, title, aliases });
+        for (const edit of edits) await setIconLabels(edit);
       } catch (error) {
         if (alive.current) setProblem(messageOf(error, "Could not rename"));
       } finally {

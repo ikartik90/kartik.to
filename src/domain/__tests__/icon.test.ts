@@ -6,7 +6,9 @@ import {
   ICON_SIZES,
   ICON_STROKES,
   ICON_ZOOMS,
+  applyAliasEdit,
   cleanIconAliases,
+  commonIconAliases,
   iconTitleFrom,
   matchesIcon,
   IconAssetSchema,
@@ -313,6 +315,83 @@ describe("an icon's name and the words it answers to", () => {
     expect(cleanIconAliases(["Arrow", "", "   ", "Caret"])).toEqual([
       "Arrow",
       "Caret",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Aliases across a SELECTION. A tag is worth having because it names a family,
+// and naming a family one icon at a time is how you end up with eleven marks
+// under `arrow` and a twelfth under `arrows`.
+// ---------------------------------------------------------------------------
+
+describe("aliases over several icons at once", () => {
+  it("shows only the words every one of them answers to", () => {
+    expect(
+      commonIconAliases([
+        ["Arrow", "Caret", "Up"],
+        ["arrow", "Down", "caret"],
+        ["Caret", "Arrow"],
+      ]),
+    ).toEqual(["Arrow", "Caret"]);
+  });
+
+  it("keeps the first icon's spelling and order, not the others'", () => {
+    // They are the same tag however it was typed, and the list has to be shown
+    // in ONE spelling — the first is as good as any and is stable.
+    expect(commonIconAliases([["Arrow"], ["ARROW"]])).toEqual(["Arrow"]);
+  });
+
+  it("is the whole list for one icon, and nothing for none", () => {
+    expect(commonIconAliases([["Arrow", "Caret"]])).toEqual(["Arrow", "Caret"]);
+    expect(commonIconAliases([])).toEqual([]);
+  });
+
+  it("is empty when they have nothing in common", () => {
+    expect(commonIconAliases([["Arrow"], ["Caret"]])).toEqual([]);
+  });
+});
+
+describe("applyAliasEdit", () => {
+  // `base` is what was on screen when the editing began — the common list —
+  // and `draft` is what it says now. An icon's OWN words are the ones that
+  // were never shown, and nothing done to the common list may disturb them.
+
+  it("adds a word to every icon, keeping what each already had", () => {
+    expect(applyAliasEdit(["Arrow", "Private"], ["Arrow"], ["Arrow", "Caret"]))
+      .toEqual(["Arrow", "Private", "Caret"]);
+  });
+
+  it("removes a common word without touching the words it did not show", () => {
+    expect(applyAliasEdit(["Arrow", "Private"], ["Arrow"], [""])).toEqual([
+      "Private",
+    ]);
+  });
+
+  it("renames a common word on every icon that had it", () => {
+    // A rename is a remove and an add, and the result cannot tell them apart:
+    // the new word lands at the end rather than in the old one's place. The
+    // icon's own words keep their order, which is the part worth keeping.
+    expect(applyAliasEdit(["Arrow", "Private"], ["Arrow"], ["Caret"])).toEqual([
+      "Private",
+      "Caret",
+    ]);
+  });
+
+  it("is the draft itself when the icon is the only one selected", () => {
+    // One icon: its own list IS the common list, so nothing is hidden and the
+    // draft is the whole answer — which is what the single-icon panel does.
+    expect(applyAliasEdit(["A", "B"], ["A", "B"], ["A", "C"])).toEqual(["A", "C"]);
+  });
+
+  it("does not add a word the icon already answers to in another casing", () => {
+    expect(applyAliasEdit(["arrow"], [], ["Arrow"])).toEqual(["arrow"]);
+  });
+
+  it("leaves an icon alone when the draft says what the base said", () => {
+    expect(applyAliasEdit(["Arrow", "Private"], ["Arrow"], ["Arrow"])).toEqual([
+      "Arrow",
+      "Private",
     ]);
   });
 });

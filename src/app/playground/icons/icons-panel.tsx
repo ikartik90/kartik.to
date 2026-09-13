@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
 import { Slider } from "@/components/ui/input/slider";
 import { PropertiesPanel } from "@/components/ui/properties-panel";
-import { IconLabelsGroup } from "./icon-labels-group";
+import { IconLabelsGroup, type IconLabelEdit } from "./icon-labels-group";
 import { Tooltip } from "@/components/ui/tooltip";
 import {
   type IconAsset,
@@ -103,13 +103,13 @@ export interface IconsPanelProps {
   onPublish: () => void;
   onDelete: () => void;
   /**
-   * The one icon being named, where there is exactly one — the page decides,
-   * because "exactly one, and I am the author" is a fact about the selection
-   * rather than about this panel. Null the rest of the time, and the section
-   * is then not rendered at all.
+   * The icons being named — the whole selection, or none of it. The page
+   * decides, because "what is selected, and am I the author" is a fact about
+   * the page rather than about this panel; empty means the section is not
+   * rendered at all.
    */
-  named: IconAsset | null;
-  onRename: (key: string, title: string, aliases: string[]) => void;
+  named: IconAsset[];
+  onRename: (edits: IconLabelEdit[]) => void;
   onDismiss: () => void;
 }
 
@@ -281,11 +281,15 @@ export function IconsPanel({
         />
       </PropertiesPanel.Group>
 
-      {/* Keyed by the icon, so choosing another one REMOUNTS the fields with
-          that icon's own name in them. A draft belongs to the icon it was
+      {/* Keyed by the SELECTION, so choosing other icons remounts the fields
+          with their own words in them. A draft belongs to the icons it was
           typed about. */}
-      {named && (
-        <IconLabelsGroup key={named.key} icon={named} onSave={onRename} />
+      {named.length > 0 && (
+        <IconLabelsGroup
+          key={named.map((icon) => icon.key).join("\u0000")}
+          icons={named}
+          onSave={onRename}
+        />
       )}
 
       <PropertiesPanel.Group title="Icon">

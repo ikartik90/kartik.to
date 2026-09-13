@@ -494,10 +494,10 @@ export function IconsPlayground() {
           onUpload={(files) => void library.upload(files)}
           onPublish={publish}
           onDelete={() => setPendingDelete(true)}
-          // Exactly one, and mine to name. Two icons cannot share one name,
-          // and none is nothing to name — see `IconLabelsGroup`.
-          named={isAdmin && chosen.length === 1 ? chosen[0].icon : null}
-          onRename={(key, title, aliases) => void library.rename(key, title, aliases)}
+          // Whatever is taken, and mine to name. One icon gets a name field
+          // too; several share only their aliases — see `IconLabelsGroup`.
+          named={isAdmin ? chosen.map((entry) => entry.icon) : []}
+          onRename={(edits) => void library.rename(edits)}
           onDismiss={() => setOpen(false)}
         />
       )}

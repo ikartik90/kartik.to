@@ -499,10 +499,10 @@ describe("what the author is shown", () => {
     expect(chip("Delete 2")).toBeTruthy();
   });
 
-  it("names one icon at a time, and only when exactly one is taken", async () => {
-    // The name and the aliases are an ICON's, and the sidebar is the page's,
-    // so the section is rendered only when there is exactly one icon for it
-    // to be about — never disabled, never showing one icon's name over five.
+  it("offers a name for one icon only, though the aliases go on working", async () => {
+    // A NAME is one icon's — two cannot share one — so that field is there
+    // only when exactly one is taken. The aliases are tags and are not: the
+    // section stays for a selection, showing what they have in common.
     await open();
     expect(screen.queryByRole("textbox", { name: "Icon name" })).toBeNull();
 
@@ -546,6 +546,86 @@ describe("what the author is shown", () => {
     expect(
       (screen.getByRole("textbox", { name: "Alias 2" }) as HTMLInputElement).value,
     ).toBe("");
+  });
+
+  it("shows only the words a whole selection has in common", async () => {
+    mockListIcons.mockResolvedValue([
+      asset("check.svg", 20, "approved", ["Tick", "Done", "Yes"]),
+      asset("solid.svg", 20, "held", ["tick", "Filled", "yes"]),
+    ]);
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^solid\.svg/ }), {
+      shiftKey: true,
+    });
+
+    // Two icons cannot share one name, so that field goes; the tags stay,
+    // narrowed to the ones both of them answer to — in the first's spelling.
+    expect(screen.queryByRole("textbox", { name: "Icon name" })).toBeNull();
+    expect(
+      screen.getAllByRole("textbox", { name: /^Alias / }).map((el) => (el as HTMLInputElement).value),
+    ).toEqual(["Tick", "Yes"]);
+  });
+
+  it("adds an alias to every icon in the selection, keeping what each had", async () => {
+    mockListIcons.mockResolvedValue([
+      asset("check.svg", 20, "approved", ["Tick", "Done"]),
+      asset("solid.svg", 20, "held", ["Tick", "Filled"]),
+    ]);
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^solid\.svg/ }), {
+      shiftKey: true,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Add alias" }));
+    const added = screen.getByRole("textbox", { name: "Alias 2" });
+    await userEvent.type(added, "Confirm");
+    fireEvent.blur(added);
+
+    // Both icons get the new word, and NEITHER loses the word the other never
+    // had — `Done` and `Filled` were not on screen to be edited.
+    await waitFor(() =>
+      expect(mockSetIconLabels).toHaveBeenCalledWith({
+        key: "icons/check.svg",
+        title: "Check",
+        aliases: ["Tick", "Done", "Confirm"],
+      }),
+    );
+    expect(mockSetIconLabels).toHaveBeenCalledWith({
+      key: "icons/solid.svg",
+      title: "Solid",
+      aliases: ["Tick", "Filled", "Confirm"],
+    });
+  });
+
+  it("takes a common alias off all of them at once", async () => {
+    mockListIcons.mockResolvedValue([
+      asset("check.svg", 20, "approved", ["Tick", "Done"]),
+      asset("solid.svg", 20, "held", ["Tick", "Filled"]),
+    ]);
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^solid\.svg/ }), {
+      shiftKey: true,
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Remove alias 1" }));
+
+    await waitFor(() =>
+      expect(mockSetIconLabels).toHaveBeenCalledWith({
+        key: "icons/check.svg",
+        title: "Check",
+        aliases: ["Done"],
+      }),
+    );
+    expect(mockSetIconLabels).toHaveBeenCalledWith({
+      key: "icons/solid.svg",
+      title: "Solid",
+      aliases: ["Filled"],
+    });
   });
 
   it("takes an alias back out", async () => {
