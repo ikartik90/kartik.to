@@ -104,6 +104,10 @@ describe("r2 storage helpers", () => {
     expect(head).toEqual({
       size: 512,
       contentType: "image/png",
+      // The whole map as it was stored, alongside the fields the media
+      // library has read out of it for years — a caller storing its own facts
+      // (the icon set does) reads them from here.
+      metadata: { alt: "desc" },
       alt: "desc",
     });
   });

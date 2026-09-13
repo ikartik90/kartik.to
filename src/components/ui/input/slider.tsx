@@ -362,7 +362,19 @@ function SliderSeparator({ className, ...rest }: SliderSeparatorProps) {
 export type SliderOutputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "children" | "type" | "value" | "defaultValue"
->;
+> & {
+  /**
+   * How the committed value is written, for a scale counted in something —
+   * `1.5x`, `60%`, `24px`. Replaces the default entirely, which fixes the
+   * decimals to the step so a column of values lines up (1.00 under 1.25);
+   * a unit usually wants the number as spoken instead, trailing zeros gone.
+   *
+   * It never applies to what is being TYPED: the draft is shown back exactly
+   * as entered, or a "2" would gain its unit under the caret and could not
+   * become "2.5".
+   */
+  format?: (value: number) => string;
+};
 
 /** A finished number — "0." and "-" are on the way to one, and 0 is not. */
 const NUMERIC = /^-?(\d+(\.\d+)?|\.\d+)$/;
@@ -387,13 +399,15 @@ function SliderOutput({
   className,
   onChange,
   onBlur,
+  format,
   ...rest
 }: SliderOutputProps) {
   const { scale, value, disabled, commit, styles } = useSlider("Slider.Output");
   const { hasLabel, labelId, styles: fieldStyles } = useField("Slider.Output");
   const [draft, setDraft] = useState<string | null>(null);
   const isWireframe = useWireframe() !== null;
-  const text = draft ?? formatSliderValue(value, scale.step);
+  const text =
+    draft ?? (format ? format(value) : formatSliderValue(value, scale.step));
 
   // An <input> holds no children, so there is nowhere to put a placeholder bar
   // — the same trade `Field.Control` makes. The static readout takes over.

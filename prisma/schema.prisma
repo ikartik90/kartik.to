@@ -312,3 +312,37 @@ model Testimonial {
   // work that was already done; the gate is for what arrives NEXT.
   publishedAt DateTime?
 }
+
+/// What the bucket cannot say about an icon: the name it is called by, and the
+/// words it can be found under.
+///
+/// The set itself is still a bucket prefix — the objects under `icons/` ARE
+/// the set, and everything readable from the bytes is read from the bytes.
+/// This table holds only what the file has no way to carry, and it exists as
+/// a TABLE rather than as object metadata for one reason: the icons listing
+/// searches by these words, and metadata cannot be listed by. Reading it costs
+/// one query for the whole set beside the HEADs the listing already makes;
+/// as metadata it would have been free to write and impossible to search.
+///
+/// A row is the EXCEPTION, not the rule. An icon with no row is an icon called
+/// what its filename says (`iconTitleFrom`) and findable under that alone,
+/// which is every icon the moment it is uploaded — so nothing backfills, and
+/// clearing the fields deletes the row rather than storing a name that would
+/// have to be told apart from an unset one.
+model Icon {
+  /// The R2 object key, which is what the bucket and this table agree on. It
+  /// is minted with a uuid and never changes, so it is the id: a filename
+  /// would collide the moment two `check.svg` were uploaded.
+  key       String   @id
+  /// What the icon is called. Never empty — see the note above about deleting.
+  title     String
+  /// The other words it answers to. Tags rather than names: two icons may
+  /// hold the same one, which is what makes typing `arrow` useful, so there
+  /// is no unique constraint and no separate table to join through. A plain
+  /// array because nothing ever asks "which icons are tagged X" from the
+  /// database — the whole set is already in the browser, and the search runs
+  /// there against what is on screen.
+  aliases   String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

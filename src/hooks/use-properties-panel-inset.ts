@@ -24,6 +24,29 @@ export const PANEL_INSET_ATTR = "data-properties-panel";
 export const PANEL_INSET_INSTANT_ATTR = "data-properties-panel-instant";
 
 /**
+ * The attribute a page puts on its own root to reserve the inset in the
+ * SERVER's HTML, for the width its panel is about to take.
+ *
+ * For a page that opens with a panel already up. The mark below is set from an
+ * effect and so cannot exist before React has hydrated, which is long after the
+ * server's HTML has painted — such a page paints once un-inset and then jumps,
+ * and no effect timing can get ahead of that because the paint happened before
+ * any effect existed. Said in markup, the first paint is already inset and
+ * hydration changes nothing.
+ *
+ * Render it while the panel is open and drop it when it closes:
+ *
+ * ```tsx
+ * <main data-properties-panel-reserved={open || undefined}>
+ * ```
+ *
+ * Dropping it is safe to do from client state: the page is on screen by then,
+ * so the reader closing a panel is an input-driven move, which is both what
+ * they asked for and what the layout-shift metric already forgives.
+ */
+export const PANEL_RESERVED_ATTR = "data-properties-panel-reserved";
+
+/**
  * How long after a press a panel still counts as having been OPENED by it.
  *
  * 500ms because that is the window the layout-shift metric itself forgives

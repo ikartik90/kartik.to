@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCursorTooltipPosition } from "../cursor";
+import { getAnchoredTooltipPosition, getCursorTooltipPosition } from "../cursor";
 
 describe("getCursorTooltipPosition", () => {
   it("places the tooltip at the bottom-right of the selection cursor", () => {
@@ -103,6 +103,75 @@ describe("getCursorTooltipPosition", () => {
           reservedRight: 332,
         }),
       ).toEqual({ left: "4px", top: "219px" });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The other placement: hung under the thing it names rather than the cursor.
+//
+// For a label whose subject is already marked on the page — a selected tile in
+// the icons grid — where a box trailing the pointer would be saying which icon
+// you are pointing at, a question the highlight has already answered.
+// ---------------------------------------------------------------------------
+
+describe("getAnchoredTooltipPosition", () => {
+  const anchor = { left: 400, width: 100, bottom: 300 };
+
+  it("hangs centred under the anchor, by the gap", () => {
+    expect(getAnchoredTooltipPosition(anchor, { width: 60, viewportWidth: 1000 }))
+      .toEqual({ left: "420px", top: "302px" });
+  });
+
+  it("centres a label wider than the thing it names", () => {
+    expect(getAnchoredTooltipPosition(anchor, { width: 200, viewportWidth: 1000 }))
+      .toEqual({ left: "350px", top: "302px" });
+  });
+
+  it("holds its height when it has to slide", () => {
+    // Unlike the cursor placement, there is no glyph under it to drop clear
+    // of — sliding along the anchor's edge keeps it level.
+    const { top } = getAnchoredTooltipPosition(
+      { left: 940, width: 40, bottom: 300 },
+      { width: 120, viewportWidth: 1000 },
+    );
+    expect(top).toBe("302px");
+  });
+
+  it("slides in from the near edge, leaving the gap", () => {
+    expect(
+      getAnchoredTooltipPosition(
+        { left: 940, width: 40, bottom: 300 },
+        { width: 120, viewportWidth: 1000 },
+      ).left,
+    ).toBe("876px");
+  });
+
+  it("keeps clear of the far edge too", () => {
+    expect(
+      getAnchoredTooltipPosition(
+        { left: 0, width: 40, bottom: 300 },
+        { width: 120, viewportWidth: 1000 },
+      ).left,
+    ).toBe("4px");
+  });
+
+  // A docked properties panel lies OVER the page, so fitting on screen and
+  // being seen are different questions — the same reserved strip the cursor
+  // placement respects.
+  it("measures the near edge against a docked panel, not the viewport", () => {
+    expect(
+      getAnchoredTooltipPosition(
+        { left: 600, width: 40, bottom: 300 },
+        { width: 120, viewportWidth: 1000, reservedRight: 360 },
+      ).left,
+    ).toBe("516px");
+  });
+
+  it("is the plain placement with nothing measured", () => {
+    expect(getAnchoredTooltipPosition(anchor)).toEqual({
+      left: "400px",
+      top: "302px",
     });
   });
 });

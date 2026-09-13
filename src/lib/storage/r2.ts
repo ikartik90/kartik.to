@@ -21,6 +21,15 @@ const r2 = new S3Client({
 export const MEDIA_PREFIX = "media/";
 
 /**
+ * The icon set's own corner of the bucket. Separate from the media library's
+ * prefix rather than a folder inside it, and the separation is what every
+ * guard in `actions/icon.ts` is written against: an icon key can never name a
+ * media object, so approving or deleting an icon cannot reach a published
+ * article's picture.
+ */
+export const ICON_PREFIX = "icons/";
+
+/**
  * Where a testimonial's profile picture goes. A sibling of {@link
  * MEDIA_PREFIX} rather than a folder inside it, so `listR2MediaKeys` on the
  * library never returns one and the two sets stay genuinely separate.
@@ -97,9 +106,46 @@ export async function listR2MediaKeys(prefix = MEDIA_PREFIX): Promise<string[]> 
   return keys.sort((a, b) => b.localeCompare(a));
 }
 
+/**
+ * Every icon in the set. An icon is an SVG and nothing else, so the filter is
+ * the extension alone — and unlike the media library's, this one is a fact
+ * about the format rather than a guess about the kind.
+ */
+export async function listR2IconKeys(): Promise<string[]> {
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const response = await r2.send(
+      new ListObjectsV2Command({
+        Bucket: env.R2_BUCKET_NAME,
+        Prefix: ICON_PREFIX,
+        ContinuationToken: continuationToken,
+      }),
+    );
+
+    for (const item of response.Contents ?? []) {
+      if (item.Key && /\.svg$/i.test(item.Key)) keys.push(item.Key);
+    }
+
+    continuationToken = response.IsTruncated
+      ? response.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  return keys;
+}
+
 export interface R2ObjectHead {
   size: number;
   contentType: string;
+  /**
+   * Everything the object was stored with, as the map of strings S3 keeps it
+   * as. The named fields below are the media library's, read out for it; a
+   * caller storing its own facts (the icon set's grid, weight and review
+   * state) reads them from here and parses them itself.
+   */
+  metadata: Record<string, string>;
   alt?: string;
   /** The original upload name, editable independently of the immutable key. */
   filename?: string;
@@ -124,12 +170,26 @@ export async function headR2Object(key: string): Promise<R2ObjectHead> {
   return {
     size: response.ContentLength ?? 0,
     contentType: response.ContentType ?? "application/octet-stream",
+    metadata: response.Metadata ?? {},
     alt: response.Metadata?.alt,
     filename: response.Metadata?.filename,
     width: response.Metadata?.width,
     height: response.Metadata?.height,
   };
 }
+
+/**
+ * How long a stored object may be held. Every key under this bucket carries a
+ * uuid, so an object's bytes never change — a re-upload mints a new key — and
+ * the public endpoint sends no cache header of its own. Without this, every
+ * visit re-fetches every object: the icons playground was pulling all two
+ * hundred of its files down again on each load, which at 568 bytes apiece is
+ * entirely a cost in ROUND TRIPS rather than in bytes.
+ *
+ * Metadata edits (an alt text, a review state) rewrite the object without
+ * touching its bytes, so a year is safe for those too.
+ */
+const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 /**
  * Patch a subset of an object's user metadata in place. S3/R2 has no partial
@@ -153,6 +213,7 @@ export async function updateR2ObjectMetadata(
       CopySource: `${env.R2_BUCKET_NAME}/${key}`,
       Key: key,
       ContentType: current.ContentType,
+      CacheControl: IMMUTABLE_CACHE_CONTROL,
       Metadata: { ...current.Metadata, ...patch },
       MetadataDirective: "REPLACE",
     }),

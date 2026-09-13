@@ -302,7 +302,14 @@ describe("CardPropertiesPanel — link card", () => {
         within(screen.getByRole("group", { name: "Link" }))
           .getAllByRole("option")
           .map((o) => o.textContent),
-      ).toEqual(["Internal", "External", "Document", "Shader Playground", "Calchemy Playground"]);
+      ).toEqual([
+        "Internal",
+        "External",
+        "Document",
+        "Shader Playground",
+        "Calchemy Playground",
+        "Icons Playground",
+      ]);
     });
 
     // Changing the sort of link drops the destination with it: a URL is not a

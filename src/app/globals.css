@@ -73,7 +73,25 @@ body {
 }
 
 @media (min-width: 820px) {
-  body[data-properties-panel] {
+  body[data-properties-panel],
+  /* ...and the same width, reserved by a page that has not opened its panel
+     YET. `data-properties-panel` is set from an effect, so it cannot exist
+     until React has hydrated — and hydration is long after the server's HTML
+     has painted. A page that opens WITH a panel up therefore paints once
+     without the inset and then jumps into it, which is a layout shift nothing
+     downstream can undo: by the time any effect runs, the reader is already
+     looking at the un-inset page.
+
+     So the page says so in markup instead. `usePropertiesPanelInset` exports
+     the attribute (`PANEL_RESERVED_ATTR`) and a page puts it on its own root
+     while its panel is open — server-rendered, in the first HTML, so the first
+     paint is already inset and hydration changes nothing. Folded into THIS
+     rule rather than written as a second one so the two can never reserve the
+     width slightly differently, which is the whole reason the mark is central.
+
+     `:has()` because the page's root is a descendant of the body this insets,
+     and CSS has no other way to look down. */
+  body:has([data-properties-panel-reserved]) {
     padding-inline-end: var(--sizes-properties-panel-width);
     --page-inset-end: var(--sizes-properties-panel-width);
   }
