@@ -1639,12 +1639,24 @@ export default defineConfig({
                 // For the icon+label case; harmless for the icon-only majority.
                 textStyle: "bodySmall",
                 backgroundColor: "transparent",
-                _hover: { backgroundColor: "field.bg.hover" },
+                // The wash is for buttons that are NOT on. Scoped rather than
+                // left to source order: a bare `_hover` and the pressed rule
+                // below carry the SAME specificity, and Panda emits hover
+                // last — so pointing at an on toggle repainted the brand chip
+                // neutral grey and left the glyph brand-coloured on top of it.
+                // `icon-tile` scopes its own hover for exactly this reason.
+                //
+                // `:is(:hover, [data-hover])` rather than `_hover` because the
+                // condition has to be written into one selector with the
+                // `:not()`; this is what that shortcut expands to.
+                "&:not([aria-pressed='true']):is(:hover, [data-hover])": {
+                  backgroundColor: "field.bg.hover",
+                },
                 // ON — a toggle whose state is worth seeing at rest (a rail
                 // that is showing, a mark that is applied), in the brand chip
                 // every pressed toggle in the system wears; see the option
-                // list. Above hover, so an on button does not read as merely
-                // pointed at, and below the press, so it still answers a click.
+                // list. Hover cannot reach past it now, and the press still
+                // can, so an on button still answers a click.
                 "&[aria-pressed='true']": {
                   backgroundColor: "field.bg.active",
                   color: "field.text.active",
