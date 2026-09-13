@@ -642,6 +642,26 @@ describe("what the author is shown", () => {
     ).toEqual(["Tick", "Yes"]);
   });
 
+  it("is a heading and a way to add one when they share no words at all", async () => {
+    mockListIcons.mockResolvedValue([
+      asset("check.svg", 20, "approved", ["Tick"]),
+      asset("solid.svg", 20, "held", ["Filled"]),
+    ]);
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^solid\.svg/ }), {
+      shiftKey: true,
+    });
+
+    // The section stays — a word can be given to both of them from here — but
+    // there is nothing to list, and an empty control panel is a band of inset
+    // under the heading reading as a row that lost its contents.
+    expect(screen.getByRole("button", { name: "Add alias" })).toBeTruthy();
+    expect(screen.queryAllByRole("textbox", { name: /^Alias / })).toEqual([]);
+    expect(screen.queryByRole("group", { name: "Aliases" })).toBeNull();
+  });
+
   it("adds an alias to every icon in the selection, keeping what each had", async () => {
     mockListIcons.mockResolvedValue([
       asset("check.svg", 20, "approved", ["Tick", "Done"]),
@@ -1503,18 +1523,26 @@ describe("size and stroke, locked together", () => {
     expect(button.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("stands in the stroke row, not between the two", async () => {
+  it("stands between the two rows, in neither of them", async () => {
+    // It is about BOTH scales, so it is not a chip in the stroke row's action
+    // column — which would read as the stroke's, the way every other chip in
+    // the panel belongs to the row it sits in. It takes that column once, for
+    // the pair, bracketed to both (Figma 1274:3765).
     await open();
 
-    const strokeRow = screen
-      .getByRole("slider", { name: "Stroke" })
-      .closest("[data-property-control]") as HTMLElement;
-    expect(within(strokeRow).getByRole("button", { name: /link size and stroke/i })).toBeTruthy();
+    const rows = ["Size", "Stroke"].map(
+      (name) =>
+        screen
+          .getByRole("slider", { name })
+          .closest("[data-property-control]") as HTMLElement,
+    );
+    for (const row of rows) expect(within(row).queryByRole("button")).toBeNull();
 
-    const sizeRow = screen
-      .getByRole("slider", { name: "Size" })
-      .closest("[data-property-control]") as HTMLElement;
-    expect(within(sizeRow).queryByRole("button")).toBeNull();
+    const tie = screen
+      .getByRole("button", { name: /link size and stroke/i })
+      .closest("[data-property-tie]") as HTMLElement;
+    expect(tie).toBeTruthy();
+    for (const row of rows) expect(tie.contains(row)).toBe(true);
   });
 
   it("brings the stroke along when the size moves", async () => {

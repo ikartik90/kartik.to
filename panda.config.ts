@@ -6745,6 +6745,70 @@ export default defineConfig({
                 alignItems: "center",
               },
 
+              // SEVERAL ROWS UNDER ONE ACTION — the icon set's size and
+              // stroke, which move together (Figma 1274:3765). The rows keep
+              // their own label ∣ field grid and give the action column up;
+              // the tie takes it once, for the pair.
+              "& [data-property-tie]": {
+                display: "flex",
+                alignItems: "center",
+                gap: "md",
+              },
+              "& [data-property-tie] > [data-property-tie-rows]": {
+                display: "flex",
+                flexDirection: "column",
+                gap: "md",
+                flex: 1,
+                minWidth: 0,
+              },
+              // Two columns, not three. A row that kept its own action column
+              // would push the tie's chip a column further out than every
+              // other chip in the panel, and break the line they stand in.
+              "& [data-property-tie] [data-property-control]": {
+                gridTemplateColumns:
+                  "token(sizes.propertyRowLabel) token(sizes.propertyRowField)",
+              },
+              // THE BRACKET. Two corners rather than an asset: it is drawn
+              // from each row's midline — where the field's edge stops — out
+              // to the chip's centreline and into its top and bottom edge, so
+              // it takes the field's own hairline and follows it into both
+              // themes. The arm is as long as the gap plus half the chip, and
+              // as tall as the 4px the corner needs (`spacing.sm`, a 2px
+              // straight and a 2px turn), which is how far the chip's edge is
+              // from the row it is bracketed to.
+              "& [data-property-tie-action]": {
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                flexShrink: 0,
+                "&::before, &::after": {
+                  content: '""',
+                  position: "absolute",
+                  right: "calc(token(sizes.toolbarButton) / 2)",
+                  width:
+                    "calc(token(spacing.md) + token(sizes.toolbarButton) / 2)",
+                  height: "token(spacing.sm)",
+                  borderColor: "field.border.default",
+                  borderRightWidth: "token(spacing.xxs)",
+                  borderRightStyle: "solid",
+                },
+                // A whole pixel rather than the field frame's half: this is a
+                // line in the open with nothing behind it to be the boundary
+                // of, and at 0.5px it is a smudge on the panel's ground.
+                "&::before": {
+                  bottom: "token(spacing.full)",
+                  borderTopWidth: "token(spacing.xxs)",
+                  borderTopStyle: "solid",
+                  borderTopRightRadius: "xs",
+                },
+                "&::after": {
+                  top: "token(spacing.full)",
+                  borderBottomWidth: "token(spacing.xxs)",
+                  borderBottomStyle: "solid",
+                  borderBottomRightRadius: "xs",
+                },
+              },
+
               // A SHEET is as wide as the phone; the ROW was drawn for a rail
               // whose width is the sum of its three columns and nothing else
               // (see `propertiesPanelWidth`). Left alone it keeps that 336px
@@ -6774,6 +6838,13 @@ export default defineConfig({
                   width: "token(spacing.full)",
                   gridTemplateColumns:
                     "token(sizes.propertyRowLabel) minmax(0, 1fr) token(sizes.propertyRowAction)",
+                },
+                // The same slack, one track short: a tied row has no action
+                // column of its own to hold the extra back from.
+                "& [data-property-tie] [data-property-control]": {
+                  width: "token(spacing.full)",
+                  gridTemplateColumns:
+                    "token(sizes.propertyRowLabel) minmax(0, 1fr)",
                 },
               },
             },

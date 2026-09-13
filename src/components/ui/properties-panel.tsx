@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Children,
   createContext,
   useCallback,
   useContext,
@@ -504,8 +505,15 @@ function PropertiesPanelGroup({
       {/* Absent rather than empty for a group that is only a heading: the
           control panel carries its own inset, so an empty one would leave a
           strip of nothing under the title and make the chips beside it look
-          like a row that had lost its contents. */}
-      {children && (
+          like a row that had lost its contents.
+
+          Counted rather than tested for truth. A group whose contents are
+          decided per render hands down a LIST — `[false, []]` for an alias
+          section with no name to edit and no words in common — and a list is
+          truthy however empty it is. `Children.toArray` drops the nulls and
+          the booleans and flattens what is left, which is the question being
+          asked: is there anything here to draw. */}
+      {Children.toArray(children).length > 0 && (
         <div className={styles.controlPanel} role="group" aria-label={title}>
           {children}
         </div>
@@ -577,6 +585,41 @@ function PropertiesPanelControl({
   );
 }
 
+export interface PropertiesPanelTieProps {
+  /**
+   * The one control the rows are tied to — the lock that makes an icon's size
+   * and stroke move together. It stands in the action column the rows give
+   * up, centred against them.
+   */
+  action: ReactNode;
+  /** The rows it is about: two or more {@link PropertiesPanelControl}s. */
+  children: ReactNode;
+}
+
+/**
+ * Several rows under ONE action (Figma 1274:3765).
+ *
+ * A row reserves an action column for the chip that acts on THAT row, and a
+ * chip about two of them has nowhere honest to stand: put in the second row it
+ * reads as the second row's, which is how the icon set's size/stroke lock came
+ * to look like a property of the stroke. So the rows give their action column
+ * up, the tie takes it once for the pair, and a bracket drawn from each row's
+ * midline into the chip says which rows it is about.
+ *
+ * Everything visible here is the recipe's, keyed off `data-property-tie` — the
+ * bracket included, which is two bordered corners rather than an asset, so it
+ * takes the field's own hairline in both themes.
+ */
+function PropertiesPanelTie({ action, children }: PropertiesPanelTieProps) {
+  usePanel("PropertiesPanel.Tie");
+  return (
+    <div data-property-tie>
+      <div data-property-tie-rows>{children}</div>
+      <div data-property-tie-action>{action}</div>
+    </div>
+  );
+}
+
 export interface PropertiesPanelTextProps {
   value: string;
   onValueChange: (value: string) => void;
@@ -625,5 +668,6 @@ export const PropertiesPanel = Object.assign(PropertiesPanelRoot, {
   Group: PropertiesPanelGroup,
   ControlPanel: PropertiesPanelControlPanel,
   Control: PropertiesPanelControl,
+  Tie: PropertiesPanelTie,
   Text: PropertiesPanelText,
 });
