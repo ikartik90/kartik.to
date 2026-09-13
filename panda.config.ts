@@ -739,12 +739,18 @@ export default defineConfig({
                   "color-mix(in srgb, var(--colors-neutral-800) 75%, transparent)",
               },
             },
-            // `field.bg.default` composited over `surface` — the calendar's own
-            // surface as ONE opaque colour, which the edge scrims need as a
-            // solid gradient stop. Written as the composite rather than the hex
-            // so it tracks either half: dark is 25% #576675 over #2E3338 =
-            // #384047, the Figma value (723:2265).
-            calendarScrim: {
+            // `field.bg.default` composited over `surface` — one step up from
+            // the surface, as ONE opaque colour. Written as the composite
+            // rather than the hex so it tracks either half: dark is 25%
+            // #576675 over #2E3338 = #384047 (Figma 723:2265, 1222:1902).
+            //
+            // Two surfaces need it flattened rather than layered, for the same
+            // reason in two shapes: the calendar's edge scrims need a solid
+            // gradient stop, and the icons bar's hint ledge is a tab standing
+            // BESIDE its pill rather than on it, so it has nothing to take the
+            // surface half from and the page would otherwise read through it.
+            // It was `calendarScrim` while the calendar was the only caller.
+            surfaceRaised: {
               value: {
                 base: "color-mix(in srgb, var(--colors-neutral-500) 15%, var(--colors-neutral-200))",
                 _dark:
@@ -4920,7 +4926,7 @@ export default defineConfig({
                     left: 0,
                     justifyContent: "flex-start",
                     backgroundImage:
-                      "linear-gradient(to right, token(colors.bg.calendarScrim), transparent)",
+                      "linear-gradient(to right, token(colors.bg.surfaceRaised), transparent)",
                     "&::before": {
                       maskImage:
                         "linear-gradient(to right, #000, transparent 55%)",
@@ -4941,7 +4947,7 @@ export default defineConfig({
                     right: 0,
                     justifyContent: "flex-end",
                     backgroundImage:
-                      "linear-gradient(to left, token(colors.bg.calendarScrim), transparent)",
+                      "linear-gradient(to left, token(colors.bg.surfaceRaised), transparent)",
                     "&::before": {
                       maskImage:
                         "linear-gradient(to left, #000, transparent 55%)",

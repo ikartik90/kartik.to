@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { css, cx } from "../../styled-system/css";
 import { menuIcon } from "../../styled-system/recipes";
 import { Field } from "@/components/ui/input/field";
@@ -74,6 +74,15 @@ export interface SearchFieldProps {
    * it — the palette's arrangement, which calchemy's readings follow.
    */
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  /**
+   * One control at the row's end, after the box — the icons bar puts the
+   * press that raises its bottom sheet there.
+   *
+   * A slot rather than a prop for the button itself, because what belongs at
+   * the end of a search row is the consumer's business: this component owns
+   * the glyph, the box and the type they are set in, and nothing else.
+   */
+  action?: ReactNode;
   /** Applied to the ROW, which is what a pill positions and rules off. */
   className?: string;
 }
@@ -84,6 +93,7 @@ export function SearchField({
   placeholder,
   ariaLabel,
   onKeyDown,
+  action,
   className,
 }: SearchFieldProps) {
   return (
@@ -97,6 +107,7 @@ export function SearchField({
         placeholder={placeholder}
         aria-label={ariaLabel}
       />
+      {action}
     </div>
   );
 }

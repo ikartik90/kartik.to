@@ -96,6 +96,21 @@ const gridStyle = css({
     gridTemplateColumns:
       "repeat(auto-fill, minmax(max(calc(var(--icon-draw) + 2 * token(spacing.md)), calc((token(spacing.full) - 9 * token(spacing.sm)) / 10)), 1fr))",
   },
+
+  // A PHONE: four across, which is the same claim the ten makes at the other
+  // end — a number of columns the sheet is read as, rather than however many
+  // happen to fit. Five 20px icons across a 375px screen is a row of specks
+  // with nothing between them; four is a mark you can judge and a gap you can
+  // aim a thumb into.
+  //
+  // Same `auto-fill` over a floor rather than a flat `repeat(4, …)`, and for
+  // the same reason: at 4× on a 24 grid the drawing is 96px and a quarter of
+  // the screen is not, so the row falls back to the number that DOES fit
+  // instead of clipping every icon in it.
+  _bottomSheet: {
+    gridTemplateColumns:
+      "repeat(auto-fill, minmax(max(calc(var(--icon-draw) + 2 * token(spacing.md)), calc((token(spacing.full) - 3 * token(spacing.sm)) / 4)), 1fr))",
+  },
 });
 
 // The band itself, in the same brand pair a taken tile wears — it is the same
