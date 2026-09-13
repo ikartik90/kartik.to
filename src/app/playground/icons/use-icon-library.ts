@@ -8,7 +8,7 @@ import {
   listIcons,
   setIconLabels,
   setIconReview,
-} from "@/app/actions/icon";
+} from "@/app/actions/icon-set";
 import { MAX_ICON_BYTES, type IconAsset } from "@/domain/icon";
 import { readIconSvg, type IconSvg } from "@/utils/icon-svg";
 

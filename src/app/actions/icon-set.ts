@@ -29,6 +29,12 @@ import {
 } from "@/lib/storage/r2";
 
 // ---------------------------------------------------------------------------
+// NOT `icon.ts`, and the name is load-bearing: `icon` is one of Next's
+// metadata file conventions and it is valid in `app/**/*`, so a module called
+// `icon.ts` anywhere under `app/` — this folder included — is compiled as an
+// app-icon route and the build fails asking for a default export. Dev never
+// notices, because a route nobody requests is never compiled.
+//
 // The icon set's server side: one public read, and three doors only the author
 // can open.
 //

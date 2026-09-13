@@ -23,7 +23,7 @@ export const MEDIA_PREFIX = "media/";
 /**
  * The icon set's own corner of the bucket. Separate from the media library's
  * prefix rather than a folder inside it, and the separation is what every
- * guard in `actions/icon.ts` is written against: an icon key can never name a
+ * guard in `actions/icon-set.ts` is written against: an icon key can never name a
  * media object, so approving or deleting an icon cannot reach a published
  * article's picture.
  */

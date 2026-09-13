@@ -17,7 +17,7 @@ const mockDeleteIcon = vi.fn();
 /** Both the PUT and the read-back of each listed file go through this. */
 const mockFetch = vi.fn();
 
-vi.mock("@/app/actions/icon", () => ({
+vi.mock("@/app/actions/icon-set", () => ({
   listIcons: () => mockListIcons(),
   createIconUploadUrl: (...args: unknown[]) => mockCreateIconUploadUrl(...args),
   finalizeIconUpload: (...args: unknown[]) => mockFinalizeIconUpload(...args),

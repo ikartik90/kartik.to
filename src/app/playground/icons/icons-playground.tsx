@@ -47,7 +47,7 @@ import { useIconMarquee } from "./use-icon-marquee";
 // Public, on the same grounds as the two playgrounds beside it: the sliders
 // write nothing, and the grid is a set of icons anybody may look at. Uploading
 // to it, publishing a held icon and deleting one are the author's, and are
-// gated on the server rather than here — see `actions/icon`.
+// gated on the server rather than here — see `actions/icon-set`.
 //
 // Layout is the shader playground's, because it is the same kind of page: the
 // main area is the thing being judged, the sidebar is every control that acts

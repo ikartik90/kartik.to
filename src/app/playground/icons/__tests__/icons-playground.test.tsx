@@ -21,7 +21,7 @@ const mockSetIconReview = vi.fn();
 const mockDeleteIcon = vi.fn();
 const mockSetIconLabels = vi.fn();
 
-vi.mock("@/app/actions/icon", () => ({
+vi.mock("@/app/actions/icon-set", () => ({
   listIcons: () => mockListIcons(),
   createIconUploadUrl: (...args: unknown[]) => mockCreateIconUploadUrl(...args),
   finalizeIconUpload: (...args: unknown[]) => mockFinalizeIconUpload(...args),
