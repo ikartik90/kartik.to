@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { getCursorTooltipPosition } from "@/data/cursor";
+import {
+  getAnchoredTooltipPosition,
+  getCursorTooltipPosition,
+} from "@/data/cursor";
 import { PANEL_INSET_ATTR } from "@/hooks/use-properties-panel-inset";
 import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 
@@ -17,6 +20,17 @@ import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 // element `ref` and `seed(x, y)` — call `seed` from the pointer event that
 // opens the tooltip so it appears in place instead of at a stale spot before
 // the first pointermove lands.
+//
+// ANCHORED is the case where trailing the cursor would answer a question the
+// page has already answered. A SELECTED tile in the icons grid is marked in
+// the brand colour, so a label following the pointer around it would be
+// pointing at the thing that is already pointed at; hung under the tile it
+// reads as that tile's name instead. Pass the element and it positions from
+// its rect, tracking SCROLL rather than the pointer — the anchor moves with
+// the page, and the box is fixed. `seedAnchor(el)` is `seed`'s twin for it,
+// and for the same reason: called from the handler that opens the label, it
+// lands in place rather than a frame later, which matters most when moving
+// between two anchored triggers with the box already at full opacity.
 //
 // DOCKED is the case with no cursor to trail: a touch device, where the demos'
 // invitation is drawn at the foot of the screen instead. The placement is the
@@ -49,9 +63,15 @@ function reservedRightInset(): number {
   return parseFloat(getComputedStyle(document.body).paddingInlineEnd) || 0;
 }
 
-export function useCursorTooltip(visible: boolean, docked = false) {
+export function useCursorTooltip(
+  visible: boolean,
+  docked = false,
+  /** Hang it under this element instead of the cursor — see the note above. */
+  anchor?: HTMLElement | null,
+) {
   const ref = useRef<HTMLElement | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
+  const anchorRef = useRef<HTMLElement | null>(anchor ?? null);
   const rafRef = useRef(0);
 
   const position = useCallback(() => {
@@ -62,15 +82,15 @@ export function useCursorTooltip(visible: boolean, docked = false) {
     // and only ever compared against the usable edge, so this is one
     // measurement per frame that already had to touch layout, not a
     // read-write-read.
-    const { left, top } = getCursorTooltipPosition(
-      pointerRef.current.x,
-      pointerRef.current.y,
-      {
-        width: el.offsetWidth,
-        viewportWidth: window.innerWidth,
-        reservedRight: reservedRightInset(),
-      },
-    );
+    const fit = {
+      width: el.offsetWidth,
+      viewportWidth: window.innerWidth,
+      reservedRight: reservedRightInset(),
+    };
+    const anchored = anchorRef.current;
+    const { left, top } = anchored
+      ? getAnchoredTooltipPosition(anchored.getBoundingClientRect(), fit)
+      : getCursorTooltipPosition(pointerRef.current.x, pointerRef.current.y, fit);
     el.style.left = left;
     el.style.top = top;
   }, []);
@@ -87,6 +107,34 @@ export function useCursorTooltip(visible: boolean, docked = false) {
     el.style.top = "";
   }, [docked, visible]);
 
+  // The prop is the truth about which mode this is; the ref is what `position`
+  // reads inside a rAF. Kept in step here, and repositioned on the way past so
+  // an anchor that changes while the label is up follows it.
+  useEffect(() => {
+    anchorRef.current = anchor ?? null;
+    // Never while docked: that placement is the stylesheet's, and an inline
+    // `left`/`top` written here would outrank the rule that centres it — the
+    // very thing the effect above clears. It runs first, so this would undo it.
+    if (visible && !docked) position();
+  }, [anchor, visible, docked, position]);
+
+  // An anchor is a box in the PAGE and the label is fixed to the viewport, so
+  // everything that moves the page under it has to move the label with it.
+  // Scroll in the capture phase, because the scroller is some ancestor of the
+  // anchor rather than the window and a scroll event does not bubble.
+  useEffect(() => {
+    if (!visible || docked || !anchor) return;
+
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    };
+  }, [visible, docked, anchor, schedule]);
+
   useEffect(() => {
     if (!visible || docked) return;
 
@@ -97,7 +145,11 @@ export function useCursorTooltip(visible: boolean, docked = false) {
       // following the show would tear the label off the thing it names.
       if (isSyntheticPointer(event)) return;
       pointerRef.current = { x: event.clientX, y: event.clientY };
-      schedule();
+      // An anchored label is placed from its element, not from here — but the
+      // pointer is still RECORDED, because the anchor can be taken away while
+      // the label is up (deselecting the tile it hangs under) and the box then
+      // has to have somewhere current to go. Tracked and not followed.
+      if (!anchorRef.current) schedule();
     }
 
     window.addEventListener("pointermove", onPointerMove);
@@ -111,10 +163,23 @@ export function useCursorTooltip(visible: boolean, docked = false) {
   const seed = useCallback(
     (x: number, y: number) => {
       pointerRef.current = { x, y };
+      // A trigger with no anchor of its own takes the label off the last one:
+      // moving from an anchored trigger to a plain one otherwise leaves the
+      // box hanging under the element the pointer has already left.
+      anchorRef.current = null;
       position();
     },
     [position],
   );
 
-  return { ref, seed };
+  /** `seed`'s twin for the anchored mode — see the note at the top. */
+  const seedAnchor = useCallback(
+    (element: HTMLElement) => {
+      anchorRef.current = element;
+      position();
+    },
+    [position],
+  );
+
+  return { ref, seed, seedAnchor };
 }

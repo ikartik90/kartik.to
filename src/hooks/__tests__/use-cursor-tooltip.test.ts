@@ -149,3 +149,148 @@ describe("useCursorTooltip", () => {
     expect(el.style.left).not.toBe("515px");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hung under an element instead of trailed from the cursor.
+//
+// For a label whose subject is already marked on the page — a selected tile in
+// the icons grid — where following the pointer would answer a question the
+// highlight has already answered. ANCHORED_TOOLTIP_GAP = 2.
+// ---------------------------------------------------------------------------
+
+describe("useCursorTooltip anchored to an element", () => {
+  // The same synchronous rAF as the block above: a reposition scheduled by a
+  // scroll or a pointermove is observable without waiting a frame.
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** An element that reports a rect, which jsdom otherwise says is all zeros. */
+  function anchorAt(rect: { left: number; width: number; bottom: number }) {
+    const el = document.createElement("div");
+    el.getBoundingClientRect = () =>
+      ({ ...rect, right: rect.left + rect.width, top: rect.bottom - 40 }) as DOMRect;
+    return el;
+  }
+
+  function tooltipOfWidth(width: number) {
+    const el = document.createElement("div");
+    Object.defineProperty(el, "offsetWidth", { value: width, configurable: true });
+    return el;
+  }
+
+  it("seedAnchor hangs it centred under the element", () => {
+    const el = tooltipOfWidth(60);
+    const anchor = anchorAt({ left: 400, width: 100, bottom: 300 });
+
+    const { result } = renderHook(() => useCursorTooltip(false, false, anchor));
+    result.current.ref.current = el;
+
+    act(() => result.current.seedAnchor(anchor));
+
+    expect(el.style.left).toBe("420px");
+    expect(el.style.top).toBe("302px");
+  });
+
+  it("does not follow the pointer while it is anchored", () => {
+    const el = tooltipOfWidth(60);
+    const anchor = anchorAt({ left: 400, width: 100, bottom: 300 });
+
+    const { result } = renderHook(() => useCursorTooltip(true, false, anchor));
+    result.current.ref.current = el;
+    act(() => result.current.seedAnchor(anchor));
+
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 700, clientY: 800 });
+    });
+
+    // Still under the tile, not out at the cursor.
+    expect(el.style.left).toBe("420px");
+    expect(el.style.top).toBe("302px");
+  });
+
+  it("follows the anchor when the page scrolls under it", () => {
+    const el = tooltipOfWidth(60);
+    let bottom = 300;
+    const anchor = document.createElement("div");
+    anchor.getBoundingClientRect = () =>
+      ({ left: 400, width: 100, bottom, right: 500, top: bottom - 40 }) as DOMRect;
+
+    const { result } = renderHook(() => useCursorTooltip(true, false, anchor));
+    result.current.ref.current = el;
+    act(() => result.current.seedAnchor(anchor));
+
+    bottom = 120;
+    act(() => {
+      fireEvent.scroll(window);
+    });
+
+    expect(el.style.top).toBe("122px");
+  });
+
+  it("goes back to the cursor when the anchor is taken away", () => {
+    const el = tooltipOfWidth(60);
+    const anchor = anchorAt({ left: 400, width: 100, bottom: 300 });
+
+    const { result, rerender } = renderHook(
+      ({ anchor }: { anchor: HTMLElement | null }) =>
+        useCursorTooltip(true, false, anchor),
+      { initialProps: { anchor: anchor as HTMLElement | null } },
+    );
+    result.current.ref.current = el;
+
+    rerender({ anchor: null });
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 300, clientY: 400 });
+    });
+
+    expect(el.style.left).toBe("315px");
+    expect(el.style.top).toBe("417px");
+  });
+
+  it("keeps the pointer current while anchored, so it can go back to it", () => {
+    // Deselecting the tile the label hangs under takes the anchor away with
+    // the pointer still where it is. Untracked, the box would jump to
+    // wherever the cursor last was before it became anchored.
+    const el = tooltipOfWidth(60);
+    const anchor = anchorAt({ left: 400, width: 100, bottom: 300 });
+
+    const { result, rerender } = renderHook(
+      ({ anchor }: { anchor: HTMLElement | null }) =>
+        useCursorTooltip(true, false, anchor),
+      { initialProps: { anchor: anchor as HTMLElement | null } },
+    );
+    result.current.ref.current = el;
+    act(() => result.current.seedAnchor(anchor));
+
+    act(() => {
+      fireEvent.pointerMove(window, { clientX: 500, clientY: 600 });
+    });
+    // Not followed while anchored.
+    expect(el.style.left).toBe("420px");
+
+    rerender({ anchor: null });
+
+    // Placed at where the pointer actually is, with no move needed to find out.
+    expect(el.style.left).toBe("515px");
+    expect(el.style.top).toBe("617px");
+  });
+
+  it("seed takes the anchor off, for a move onto an unanchored trigger", () => {
+    const el = tooltipOfWidth(60);
+    const anchor = anchorAt({ left: 400, width: 100, bottom: 300 });
+
+    const { result } = renderHook(() => useCursorTooltip(true, false, anchor));
+    result.current.ref.current = el;
+    act(() => result.current.seedAnchor(anchor));
+    act(() => result.current.seed(100, 200));
+
+    expect(el.style.left).toBe("115px");
+    expect(el.style.top).toBe("217px");
+  });
+});

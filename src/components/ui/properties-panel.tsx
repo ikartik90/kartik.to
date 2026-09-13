@@ -48,7 +48,8 @@ import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
 // a header over its sections; a section is a header over its control panel; a
 // control panel is a column of rows. Each level is a part, so a new section is
 // a new `<Section>` and a new control is a new `<Control>`, with nothing to
-// widen and no shape prop to extend.
+// widen and no shape prop to extend. A `<Group>` is the section that is
+// always on: the same strip and body, with a title and no add/remove pair.
 //
 // A section's control panel is MOUNTED, not hidden: enabling adds it to the
 // DOM and disabling takes it away, which is what makes the add/remove pair
@@ -445,6 +446,74 @@ function PropertiesPanelSectionHeader({
   );
 }
 
+export interface PropertiesPanelGroupProps {
+  /** The heading — and the name of the group of controls under it. */
+  title: string;
+  /**
+   * Controls that sit AGAINST the heading rather than in the panel below it —
+   * the strip's own end, where a `Section` keeps its add/remove button.
+   *
+   * For a control that acts on what the group NAMES rather than on a property
+   * in it: a reset beside the heading, or a heading with two chips and nothing
+   * under it, which is a group whose whole content is its strip.
+   */
+  actions?: ReactNode;
+  children?: ReactNode;
+}
+
+// The actions sit together at the strip's end rather than being left to the
+// header's own `space-between`, which would push two of them to opposite ends.
+const groupActionsStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "xs",
+});
+
+/**
+ * A titled, ALWAYS-ON section: a heading strip over its controls, with no
+ * add/remove button in the strip. For a panel whose every group describes
+ * properties the thing HAS — a shader's parameters, its colours, its motion —
+ * where there is nothing for adding one to mean, and the headers exist because
+ * there are several groups and they need telling apart. (A single always-on
+ * group draws no header at all: see `Section` with `enabled` held true.)
+ *
+ * The one part that does not insist on the panel's context. The shader
+ * playground's rail is a hand-rolled panel over the same recipe — it has to
+ * be, for its drag-to-dismiss sheet — and its groups are these; inside a
+ * `PropertiesPanel` the styles are the panel's, and outside one the recipe is
+ * asked directly.
+ */
+function PropertiesPanelGroup({
+  title,
+  actions,
+  children,
+}: PropertiesPanelGroupProps) {
+  const panel = useContext(PanelContext);
+  const styles = panel?.styles ?? propertiesPanel();
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <div className={styles.sectionTitle}>
+          <Typography tag="p" type="bodySmall">
+            {title}
+          </Typography>
+        </div>
+        {actions && <div className={groupActionsStyle}>{actions}</div>}
+      </div>
+      {/* Absent rather than empty for a group that is only a heading: the
+          control panel carries its own inset, so an empty one would leave a
+          strip of nothing under the title and make the chips beside it look
+          like a row that had lost its contents. */}
+      {children && (
+        <div className={styles.controlPanel} role="group" aria-label={title}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export interface PropertiesPanelControlPanelProps {
   /**
    * Names the group when its section has no {@link PropertiesPanelSectionHeader}
@@ -553,6 +622,7 @@ export const PropertiesPanel = Object.assign(PropertiesPanelRoot, {
   DockIcon: PropertiesPanelDockIcon,
   Section: PropertiesPanelSection,
   SectionHeader: PropertiesPanelSectionHeader,
+  Group: PropertiesPanelGroup,
   ControlPanel: PropertiesPanelControlPanel,
   Control: PropertiesPanelControl,
   Text: PropertiesPanelText,

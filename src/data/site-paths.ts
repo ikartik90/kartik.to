@@ -25,6 +25,7 @@ export interface SitePath {
 export const SITE_PATHS: SitePath[] = [
   { path: "/playground/shader", label: "Shader Playground" },
   { path: "/playground/calchemy", label: "Calchemy Playground" },
+  { path: "/playground/icons", label: "Icons Playground" },
 ];
 
 /** The destination's own name, for a card that shows no words over it. */

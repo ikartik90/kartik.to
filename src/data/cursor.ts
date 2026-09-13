@@ -7,6 +7,14 @@ export const CURSOR_TOOLTIP_OFFSET = { x: 15, y: 17 } as const;
 const EDGE_GAP = 4;
 
 /**
+ * How far under its anchor a tooltip hangs when it is hung under one rather
+ * than trailed from the cursor. Close enough to read as attached to the thing
+ * it names — which is the whole point of anchoring it — and clear enough not
+ * to look welded on.
+ */
+export const ANCHORED_TOOLTIP_GAP = 2;
+
+/**
  * Extra drop for a label that has been shifted.
  *
  * It slides left rather than swinging to the far side of the cursor, so at the
@@ -93,4 +101,53 @@ export function getCursorTooltipPosition(
     left: `${Math.max(EDGE_GAP, rightmost)}px`,
     top: `${top + SHIFTED_DROP}px`,
   };
+}
+
+/** The box a tooltip is hung under — a `DOMRect`, or the three parts of one. */
+export interface TooltipAnchor {
+  left: number;
+  width: number;
+  bottom: number;
+}
+
+/**
+ * Places a fixed tooltip centred under the element it names.
+ *
+ * The other placement, for the case where trailing the cursor would be
+ * answering a question the page has already answered: the icons grid marks a
+ * SELECTED tile in the brand colour, so a label following the pointer around
+ * would be pointing at something that is already pointed at. Hung under the
+ * tile instead, it reads as that tile's name rather than as the cursor's.
+ *
+ * Same edge rules as {@link getCursorTooltipPosition} — it slides in to leave
+ * `EDGE_GAP`, and measures the near edge against a docked panel rather than
+ * the viewport, since a fixed rail takes no space in the layout and a label
+ * placed against the viewport would paint underneath it. Two differences, both
+ * because there is no cursor in this one:
+ *
+ *   - it can run into EITHER edge, being centred rather than hung to one side;
+ *   - having slid, it does not drop. `SHIFTED_DROP` exists to clear a cursor
+ *     glyph the label has come to sit under, and there is no glyph here.
+ *
+ * The panel exception is gone too. That one asks whether the POINTER is on the
+ * rail, and an anchored label has no pointer — its anchor is an element in the
+ * page, which is never the rail.
+ */
+export function getAnchoredTooltipPosition(
+  anchor: TooltipAnchor,
+  fit?: TooltipFit,
+) {
+  const top = anchor.bottom + ANCHORED_TOOLTIP_GAP;
+
+  if (!fit) return { left: `${anchor.left}px`, top: `${top}px` };
+
+  const centred = anchor.left + anchor.width / 2 - fit.width / 2;
+  const usableRight = fit.viewportWidth - (fit.reservedRight ?? 0);
+  const rightmost = usableRight - EDGE_GAP - fit.width;
+
+  // Far edge last, so a label too wide for the space left gives up the near
+  // edge rather than running off the start of the line.
+  const left = Math.max(EDGE_GAP, Math.min(centred, rightmost));
+
+  return { left: `${left}px`, top: `${top}px` };
 }
