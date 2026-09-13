@@ -320,6 +320,70 @@ export function cleanIconAliases(aliases: string[]): string[] {
 }
 
 /**
+ * The words EVERY one of them answers to, in the first one's spelling.
+ *
+ * What the panel shows when several icons are selected. A tag names a family,
+ * and naming a family one icon at a time is how eleven marks end up under
+ * `arrow` and a twelfth under `arrows` — so the alias fields go on working
+ * over a selection, and the list they show is the intersection.
+ *
+ * Folded for comparison and not for display: `Arrow` and `ARROW` are the same
+ * tag, typed twice, and the list has to be shown in one spelling. The first
+ * icon's is as good as any and is stable while the selection holds.
+ */
+export function commonIconAliases(lists: string[][]): string[] {
+  const [first, ...rest] = lists;
+  if (!first) return [];
+
+  return first.filter((alias) =>
+    rest.every((other) =>
+      other.some((word) => word.toLowerCase() === alias.toLowerCase()),
+    ),
+  );
+}
+
+/**
+ * One icon's alias list after an edit made against the COMMON list.
+ *
+ * Three arguments because an edit over a selection is three facts: what this
+ * icon holds (`own`), what was on screen when the editing began (`base`, the
+ * common list), and what the fields say now (`draft`). Everything the icon
+ * holds that was never shown is untouchable — it is not what was being edited,
+ * and a tag added to twelve icons must not quietly strip the eleven words only
+ * one of them had.
+ *
+ * The rule is a SET rule and deliberately not a positional one: a word that
+ * was on screen and is no longer in the draft goes, a word in the draft
+ * arrives, and everything else stays. Matching rows to `base` by index reads
+ * more precisely — it can tell a rename from a remove-and-add — but it breaks
+ * the moment a row is deleted, because every row after it then answers for
+ * its neighbour. The three edits are indistinguishable in the result anyway.
+ *
+ * Order is the icon's own, with new words appended: a word it already had
+ * stays where it was, so re-tagging a family does not reshuffle the lists of
+ * the icons in it. For a single icon `own` and `base` are the same list —
+ * nothing is hidden — so this reduces to "the draft is the answer", which is
+ * what the panel did before it could act on more than one.
+ */
+export function applyAliasEdit(
+  own: string[],
+  base: string[],
+  draft: string[],
+): string[] {
+  const fold = (value: string) => value.trim().toLowerCase();
+  const shown = new Set(base.map(fold));
+  const asked = new Set(draft.map(fold).filter(Boolean));
+
+  // Everything it had that was not on screen, plus everything on screen that
+  // is still being asked for — in the order it already held them.
+  const kept = own.filter(
+    (alias) => !shown.has(fold(alias)) || asked.has(fold(alias)),
+  );
+
+  return cleanIconAliases([...kept, ...draft]);
+}
+
+/**
  * Whether an icon answers to what was typed, under any of its names.
  *
  * One bag of words rather than three searches: the filename, the name it is
