@@ -17,15 +17,18 @@ const mockDeleteIcon = vi.fn();
 /** Both the PUT and the read-back of each listed file go through this. */
 const mockFetch = vi.fn();
 
+const mockListHeldIcons = vi.fn();
+
 vi.mock("@/app/actions/icon-set", () => ({
   listIcons: () => mockListIcons(),
+  listHeldIcons: () => mockListHeldIcons(),
   createIconUploadUrl: (...args: unknown[]) => mockCreateIconUploadUrl(...args),
   finalizeIconUpload: (...args: unknown[]) => mockFinalizeIconUpload(...args),
   setIconReview: (...args: unknown[]) => mockSetIconReview(...args),
   deleteIcon: (...args: unknown[]) => mockDeleteIcon(...args),
 }));
 
-const { useIconLibrary } = await import("../use-icon-library");
+const { useIconLibrary, svgFilesFrom } = await import("../use-icon-library");
 
 const STROKED = `<svg viewBox="0 0 16 16" fill="none"><path d="M2 8H14" stroke="white" stroke-width="1"/></svg>`;
 const FLATTENED = `<svg viewBox="0 0 20 20"><path d="M4 10L9 15L16 5L15 4Z" fill="#000"/></svg>`;
@@ -159,5 +162,179 @@ describe("uploading", () => {
 
     expect(mockCreateIconUploadUrl).not.toHaveBeenCalled();
     expect(result.current.problem).toMatch(/not a square SVG icon/);
+  });
+});
+
+describe("what counts as an icon file", () => {
+  const named = (name: string, type: string) => new File([STROKED], name, { type });
+
+  it("takes an SVG the system typed for us", () => {
+    expect(svgFilesFrom([named("check.svg", "image/svg+xml")])).toHaveLength(1);
+  });
+
+  it("takes an SVG the system typed as nothing at all", () => {
+    // Dropping out of Finder, and out of several Linux file managers, hands
+    // over a `File` with an empty `type`. Judging on the type alone would
+    // throw away every icon from the one place a set is actually dragged
+    // from, so the extension is the second answer.
+    expect(svgFilesFrom([named("check.svg", "")])).toHaveLength(1);
+  });
+
+  it("does not care how the extension was capitalised", () => {
+    expect(svgFilesFrom([named("Check.SVG", "")])).toHaveLength(1);
+  });
+
+  it("keeps the icons out of a mixed drop and leaves the rest", () => {
+    // A folder dragged from Finder arrives as a typeless, extensionless entry
+    // rather than as its contents, so a mixed drop is the ordinary case.
+    const kept = svgFilesFrom([
+      named("logo.png", "image/png"),
+      named("icons", ""),
+      named("arrow.svg", "image/svg+xml"),
+    ]);
+    expect(kept.map((file) => file.name)).toEqual(["arrow.svg"]);
+  });
+});
+
+describe("a batch that is not all icons", () => {
+  it("uploads the icons in it rather than stopping at the first stranger", async () => {
+    // The batch stops at the first FAILURE because a failure is usually true
+    // of the rest. A PNG among the SVGs is not a failure of the SVGs.
+    const { result } = await libraryReady();
+
+    await act(async () => {
+      await result.current.upload([
+        new File(["x"], "logo.png", { type: "image/png" }),
+        file("dash.svg", STROKED),
+      ]);
+    });
+
+    expect(mockCreateIconUploadUrl).toHaveBeenCalledTimes(1);
+    expect(mockCreateIconUploadUrl).toHaveBeenCalledWith({
+      filename: "dash.svg",
+      size: expect.any(Number),
+    });
+  });
+
+  it("says what it left behind, by name", async () => {
+    const { result } = await libraryReady();
+
+    await act(async () => {
+      await result.current.upload([
+        new File(["x"], "logo.png", { type: "image/png" }),
+        file("dash.svg", STROKED),
+      ]);
+    });
+
+    expect(result.current.problem).toBe("logo.png is not an SVG");
+  });
+
+  it("counts them when there are several, rather than listing a folder", async () => {
+    const { result } = await libraryReady();
+
+    await act(async () => {
+      await result.current.upload([
+        new File(["x"], "logo.png", { type: "image/png" }),
+        new File(["x"], "mark.jpg", { type: "image/jpeg" }),
+        new File(["x"], "seal.gif", { type: "image/gif" }),
+      ]);
+    });
+
+    expect(result.current.problem).toBe("logo.png and 2 more are not SVGs");
+    expect(mockCreateIconUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it("lets a real failure have the last word", async () => {
+    // Both things went wrong. The one that stopped an upload is the one worth
+    // reading, so it replaces the note about what was skipped.
+    mockCreateIconUploadUrl.mockRejectedValue(new Error("Not signed in"));
+    const { result } = await libraryReady();
+
+    await act(async () => {
+      await result.current.upload([
+        new File(["x"], "logo.png", { type: "image/png" }),
+        file("dash.svg", STROKED),
+      ]);
+    });
+
+    expect(result.current.problem).toBe("Not signed in");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// What the page already had.
+//
+// The approved set arrives IN the HTML, parsed — so the library opens holding
+// it rather than asking for it. What is left to ask for is the one slice the
+// server could not prerender, and only the author may have it.
+// ---------------------------------------------------------------------------
+
+describe("the set the page arrived with", () => {
+  const prerendered = (name: string) => ({
+    icon: asset(name),
+    svg: { viewBox: 16, flattened: false, nodes: [{ tag: "path", attrs: { d: "M2 8H14" }, children: [] }] },
+  });
+
+  beforeEach(() => {
+    mockListHeldIcons.mockResolvedValue([]);
+  });
+
+  it("opens drawable, with nothing to wait for", async () => {
+    const { result } = renderHook(() => useIconLibrary([prerendered("dash.svg")]));
+
+    // Not "settles quickly" — there is no loading state to leave. The very
+    // first render has the geometry, because the server sent it.
+    expect(result.current.loading).toBe(false);
+    expect(result.current.preloading).toBe(false);
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0].svg).toMatchObject({ viewBox: 16 });
+  });
+
+  it("asks the bucket for nothing at all", async () => {
+    // THE measurement that mattered: a visit used to cost one request per
+    // icon, straight to the bucket, and nothing about it could be cached.
+    renderHook(() => useIconLibrary([prerendered("dash.svg"), prerendered("plus.svg")]));
+    await waitFor(() => expect(mockListHeldIcons).toHaveBeenCalled());
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockListIcons).not.toHaveBeenCalled();
+  });
+
+  it("adds the author's held icons to what the HTML carried", async () => {
+    mockListHeldIcons.mockResolvedValue([asset("draft.svg")]);
+    mockFetch.mockResolvedValue({ ok: true, text: () => Promise.resolve(STROKED) });
+
+    const { result } = renderHook(() => useIconLibrary([prerendered("dash.svg")]));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(2));
+    // The prerendered one still holds the geometry it came with; the held one
+    // is fetched, because its file was never in the payload.
+    expect(result.current.entries.map((entry) => entry.icon.name).sort()).toEqual([
+      "dash.svg",
+      "draft.svg",
+    ]);
+  });
+
+  it("says nothing when a visitor is refused the held slice", async () => {
+    // A visitor asks and is told no. That is the expected answer, not a fault
+    // worth printing across the panel.
+    mockListHeldIcons.mockRejectedValue(new Error("Unauthorized"));
+
+    const { result } = renderHook(() => useIconLibrary([prerendered("dash.svg")]));
+
+    await waitFor(() => expect(mockListHeldIcons).toHaveBeenCalled());
+    expect(result.current.problem).toBeNull();
+    expect(result.current.entries).toHaveLength(1);
+  });
+
+  it("still reads the set itself when the page sent none", async () => {
+    // The empty-bucket case, and every existing caller: with nothing
+    // prerendered there is nothing to open with, so it asks as it always did.
+    mockListIcons.mockResolvedValue([asset("dash.svg")]);
+    const { result } = await libraryReady();
+
+    expect(mockListIcons).toHaveBeenCalled();
+    expect(result.current.entries).toHaveLength(1);
   });
 });

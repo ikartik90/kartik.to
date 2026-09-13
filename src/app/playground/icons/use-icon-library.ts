@@ -5,10 +5,12 @@ import {
   createIconUploadUrl,
   deleteIcon,
   finalizeIconUpload,
+  listHeldIcons,
   listIcons,
   setIconLabels,
   setIconReview,
 } from "@/app/actions/icon-set";
+import type { PrerenderedIcon } from "@/lib/icons";
 import { MAX_ICON_BYTES, type IconAsset } from "@/domain/icon";
 import { readIconSvg, type IconSvg } from "@/utils/icon-svg";
 import type { IconLabelEdit } from "./icon-labels-group";
@@ -31,6 +33,19 @@ import type { IconLabelEdit } from "./icon-labels-group";
 // (a re-upload mints a new uuid), so a file that has arrived once is the file
 // forever. A refresh after an upload or a delete therefore costs one action
 // call and one fetch for whatever is new.
+//
+// MOST OF THIS NOW RUNS FOR ALMOST NOTHING, and that is the point. The approved
+// set arrives in the page's HTML, already parsed (`@/lib/icons`), so the
+// library opens holding it: no listing, no two hundred and eighty requests, no
+// preloader. What is left for the client is the part that could not be
+// prerendered — the author's held icons, whose very existence depends on who is
+// asking — and everything that happens AFTER a write, when the page in hand is
+// older than the set.
+//
+// Doing it on the client cost a second on a warm cache and four on a cold one,
+// every visit, measured. It is all still here because it is still needed: an
+// upload adds a file the prerendered page has never seen, and the empty-bucket
+// case has nothing to prerender at all.
 // ---------------------------------------------------------------------------
 
 /**
@@ -76,17 +91,68 @@ function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export function useIconLibrary(): IconLibrary {
-  const [icons, setIcons] = useState<IconAsset[]>([]);
-  const [sources, setSources] = useState<Record<string, IconSvg | null>>({});
-  const [loading, setLoading] = useState(true);
+/**
+ * The icons out of a pile of files.
+ *
+ * Two answers rather than one, because the first is not always given. A file
+ * dropped out of Finder — and out of several Linux file managers — arrives
+ * with an empty `type`, so a filter on the MIME type alone throws away every
+ * icon from the one place a set is actually dragged from. The extension is
+ * the fallback, and between them they also turn away the thing a folder drops
+ * as: a typeless, extensionless entry that is not its contents.
+ *
+ * It is only a sort, not a check. Whether a file is an icon — square, and
+ * drawable — is `readIconSvg`'s to say, one file at a time and after it has
+ * been read; this is what a batch may be split on before any of that.
+ */
+export function svgFilesFrom(files: File[]): File[] {
+  return files.filter(
+    (file) =>
+      file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg"),
+  );
+}
+
+/** What was left out of a batch, said in one line rather than as a list. */
+function skippedMessage(skipped: File[]): string | null {
+  const [first, ...rest] = skipped;
+  if (!first) return null;
+  return rest.length === 0
+    ? `${first.name} is not an SVG`
+    : `${first.name} and ${rest.length} more are not SVGs`;
+}
+
+export function useIconLibrary(
+  /**
+   * The approved set as the server drew it — icons and geometry both. Empty
+   * only where there is genuinely nothing to prerender, which is a bucket with
+   * no approved icon in it.
+   */
+  prerendered: readonly PrerenderedIcon[] = [],
+): IconLibrary {
+  // What the HTML carried, taken once. A `useState` initialiser rather than an
+  // effect because it must be true on the FIRST render: the server rendered
+  // these tiles with their drawings in them, and a client whose first render
+  // had empty tiles would be a hydration mismatch — React throws the server's
+  // HTML away and redraws, which is the whole saving spent on nothing.
+  const [seeded] = useState(() => ({
+    icons: prerendered.map((entry) => entry.icon),
+    sources: Object.fromEntries(
+      prerendered.map((entry) => [entry.icon.key, entry.svg]),
+    ) as Record<string, IconSvg | null>,
+  }));
+
+  const [icons, setIcons] = useState<IconAsset[]>(seeded.icons);
+  const [sources, setSources] = useState<Record<string, IconSvg | null>>(seeded.sources);
+  const [loading, setLoading] = useState(seeded.icons.length === 0);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   // Which keys have been asked for, so a re-render or a second listing cannot
   // set the same fetch going twice. A ref rather than state: it is bookkeeping
   // about requests in flight, and nothing on screen reads it.
-  const asked = useRef(new Set<string>());
+  // Every prerendered file is already in hand, so none of them is ever asked
+  // for — the fetch effect below reads this to decide what is new.
+  const asked = useRef(new Set<string>(seeded.icons.map((icon) => icon.key)));
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -115,16 +181,42 @@ export function useIconLibrary(): IconLibrary {
     }
   }, []);
 
-  // The set is read on MOUNT, not on the server, and it has to be: the page is
-  // public and statically rendered, but what the listing contains depends on
-  // who is asking — the author sees the held icons and nobody else does. A
-  // server read would have to make the route dynamic for every visitor to
-  // answer a question only one person's answer differs on. One read per visit,
-  // since the page outlives every client navigation within it.
+  /**
+   * The author's own icons, added to what the page already had.
+   *
+   * This is the ONE read that cannot be prerendered, and the reason is the
+   * whole shape of this file: a held icon is the author's and nobody else's,
+   * so the answer depends on who is asking, and a page that asked would have
+   * to be rendered per visitor. Asking HERE instead leaves the page static for
+   * everyone and costs one request to the one person it concerns.
+   *
+   * A refusal is silent. `listHeldIcons` throws `Unauthorized` at every
+   * visitor, which is the expected answer rather than a fault — printing it
+   * across the panel would tell them there is something they are missing.
+   */
+  const addHeld = useCallback(async () => {
+    try {
+      const held = await listHeldIcons();
+      if (!alive.current || held.length === 0) return;
+      setIcons((current) => {
+        const known = new Set(current.map((icon) => icon.key));
+        return [...current, ...held.filter((icon) => !known.has(icon.key))].sort(
+          (a, b) => a.name.localeCompare(b.name),
+        );
+      });
+    } catch {
+      // Not the author. Nothing to add and nothing to say.
+    }
+  }, []);
+
+  // On arrival: the set if the page brought none, and the held slice either
+  // way. The full listing is the fallback — an empty bucket prerenders
+  // nothing, and every caller that passes no set at all still works as before.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh();
-  }, [refresh]);
+    if (seeded.icons.length === 0) void refresh();
+    void addHeld();
+  }, [refresh, addHeld, seeded.icons.length]);
 
   // Fetch and parse whatever has appeared in the listing since last time. A
   // file that will not parse is recorded as `null` rather than retried: it is
@@ -210,14 +302,26 @@ export function useIconLibrary(): IconLibrary {
    * Upload a batch, in order, stopping at the first failure. In order because
    * a set is uploaded a folder at a time and a hundred parallel PUTs is a
    * denial of service on your own bucket; stopping because the failures worth
-   * reporting (a wrong file type, a missing CORS rule) are true of the rest of
-   * the batch too.
+   * reporting (a file the grid cannot draw, a missing CORS rule) are true of
+   * the rest of the batch too.
+   *
+   * What is NOT an icon is sorted out first rather than allowed to be that
+   * first failure. A batch arrives as a folder — a drop on the grid, or a
+   * picker someone set to "All Files" — and one stray PNG in it is a fact
+   * about the PNG, not about the forty SVGs behind it. So the strangers are
+   * named and the icons go on, where before the whole folder stopped at
+   * whichever one the system happened to list first.
    */
   const upload = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return;
+    async (batch: File[]) => {
+      const files = svgFilesFrom(batch);
+      const skipped = skippedMessage(batch.filter((file) => !files.includes(file)));
+      if (files.length === 0 && !skipped) return;
+
       setBusy(true);
-      setProblem(null);
+      // The note about what was skipped stands until something worse happens:
+      // a real failure below replaces it, which is the right way round.
+      setProblem(skipped);
       try {
         for (const file of files) await uploadOne(file);
       } catch (error) {

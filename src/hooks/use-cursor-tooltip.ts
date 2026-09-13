@@ -53,12 +53,16 @@ import { isSyntheticPointer } from "@/utils/synthetic-pointer";
  * of the 820px gate — below it the panel overlays instead of insetting, the
  * padding is absent, and there is no narrower edge to aim at.
  *
+ * Exported because it is the app's answer rather than this hook's: the icons
+ * grid hangs a label under every icon that has been taken, places all of them
+ * in one batched pass of its own, and has to aim at the same usable edge.
+ *
  * Gated on the attribute so the common case is one attribute check per frame:
  * the computed-style read only happens on a page that actually has a rail up.
  * Mid-slide it returns the interpolated width, which is the right answer — the
  * label tracks the panel in rather than jumping when it lands.
  */
-function reservedRightInset(): number {
+export function reservedRightInset(): number {
   if (!document.body.hasAttribute(PANEL_INSET_ATTR)) return 0;
   return parseFloat(getComputedStyle(document.body).paddingInlineEnd) || 0;
 }

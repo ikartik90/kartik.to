@@ -34,6 +34,11 @@ vi.mock("@/lib/storage/r2", () => ({
   publicUrlForKey: (key: string) => `https://cdn.example.com/${key}`,
 }));
 
+const mockRevalidatePath = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+}));
+
 const mockIconFindMany = vi.fn();
 const mockIconUpsert = vi.fn();
 const mockIconDeleteMany = vi.fn();
@@ -50,12 +55,14 @@ vi.mock("@/lib/prisma", () => ({
 
 const {
   listIcons,
+  listHeldIcons,
   createIconUploadUrl,
   finalizeIconUpload,
   setIconReview,
   setIconLabels,
   deleteIcon,
 } = await import("../icon-set");
+const { listApprovedIconsWithSvg } = await import("@/lib/icons");
 
 const STROKED = "icons/550e8400-e29b-41d4-a716-446655440000-check.svg";
 const FLAT = "icons/550e8400-e29b-41d4-a716-446655440001-trash.svg";
@@ -423,5 +430,147 @@ describe("icon labels", () => {
 
     expect(mockDeleteR2Object).toHaveBeenCalledWith(STROKED);
     expect(mockIconDeleteMany).toHaveBeenCalledWith({ where: { key: STROKED } });
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// The set as the SERVER draws it.
+//
+// The page prerenders the approved icons, so this read must ask nothing about
+// who is calling — a session read is what would make the route dynamic, and
+// the whole point is that the answer is the same for everyone.
+// ---------------------------------------------------------------------------
+
+describe("the set the page is prerendered from", () => {
+  const SOURCES: Record<string, string> = {
+    [`https://cdn.example.com/${STROKED}`]:
+      '<svg viewBox="0 0 20 20" fill="none"><path d="M4 10L9 15" stroke="#000" stroke-width="1.25"/></svg>',
+    [`https://cdn.example.com/${FLAT}`]:
+      '<svg viewBox="0 0 20 20"><path d="M4 10L9 15L16 5Z" fill="#000"/></svg>',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signedOut();
+    mockIconFindMany.mockResolvedValue([]);
+    mockListR2IconKeys.mockResolvedValue([STROKED, FLAT]);
+    mockHeadR2Object.mockImplementation((key: string) =>
+      key === FLAT
+        ? head({ filename: "trash.svg", flattened: "1", review: "held" })
+        : head(),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve({ ok: true, text: () => Promise.resolve(SOURCES[url] ?? "") }),
+      ),
+    );
+  });
+
+  it("draws every approved icon, parsed and ready", async () => {
+    const set = await listApprovedIconsWithSvg();
+
+    expect(set).toHaveLength(1);
+    expect(set[0].icon.name).toBe("check.svg");
+    // Parsed on the SERVER — the geometry is in hand, so the page can be HTML
+    // rather than a request for two hundred files.
+    expect(set[0].svg).toMatchObject({ viewBox: 20, flattened: false });
+    expect(set[0].svg?.nodes.length).toBeGreaterThan(0);
+  });
+
+  it("leaves the held icons out of it entirely, not merely unmarked", async () => {
+    // The page this feeds is public HTML. A held icon that reached it would be
+    // in the payload for everyone, whatever the grid chose to draw — which is
+    // the one thing holding an icon back has to prevent.
+    const set = await listApprovedIconsWithSvg();
+    expect(set.map((entry) => entry.icon.key)).not.toContain(FLAT);
+  });
+
+  it("asks nothing about who is calling, even when the author is", async () => {
+    // A session read is what would make the route dynamic. The approved set is
+    // the same for everyone, so this must never look.
+    signedIn();
+    const set = await listApprovedIconsWithSvg();
+
+    expect(mockGetSession).not.toHaveBeenCalled();
+    expect(set).toHaveLength(1);
+  });
+
+  it("keeps an icon whose file will not come, rather than dropping the tile", async () => {
+    // The listing says it exists; the grid marks it broken. Dropping it here
+    // would make a failed read look like a deleted icon.
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, text: () => Promise.resolve("") })));
+    const set = await listApprovedIconsWithSvg();
+
+    expect(set).toHaveLength(1);
+    expect(set[0].svg).toBeNull();
+  });
+});
+
+describe("listHeldIcons", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIconFindMany.mockResolvedValue([]);
+    mockListR2IconKeys.mockResolvedValue([STROKED, FLAT]);
+    mockHeadR2Object.mockImplementation((key: string) =>
+      key === FLAT
+        ? head({ filename: "trash.svg", flattened: "1", review: "held" })
+        : head(),
+    );
+  });
+
+  it("hands the author the part of the set the page did not prerender", async () => {
+    signedIn();
+    const held = await listHeldIcons();
+
+    expect(held.map((icon) => icon.name)).toEqual(["trash.svg"]);
+  });
+
+  it("refuses anyone else", async () => {
+    signedOut();
+    await expect(listHeldIcons()).rejects.toThrow("Unauthorized");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Revalidation.
+//
+// The grid is prerendered now, so a write that does not say so leaves the page
+// showing the set as it was at the last build — the icon uploaded a minute ago
+// simply is not there, and nothing in the UI can explain why.
+// ---------------------------------------------------------------------------
+
+describe("what a write tells the prerendered page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    signedIn();
+    mockIconFindMany.mockResolvedValue([]);
+    mockListR2IconKeys.mockResolvedValue([STROKED]);
+    mockHeadR2Object.mockResolvedValue(head());
+    mockIconUpsert.mockResolvedValue({});
+    mockIconDeleteMany.mockResolvedValue({});
+    mockUpdateR2ObjectMetadata.mockResolvedValue({});
+    mockDeleteR2Object.mockResolvedValue({});
+  });
+
+  it("rebuilds the page when an icon lands", async () => {
+    await finalizeIconUpload({ key: STROKED, native: 20, flattened: false });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/playground/icons");
+  });
+
+  it("rebuilds it when one is published", async () => {
+    await setIconReview({ key: STROKED, review: "approved" });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/playground/icons");
+  });
+
+  it("rebuilds it when one is deleted", async () => {
+    await deleteIcon({ key: STROKED });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/playground/icons");
+  });
+
+  it("rebuilds it when one is renamed, since the name is in the HTML", async () => {
+    await setIconLabels({ key: STROKED, title: "Tick", aliases: ["check"] });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/playground/icons");
   });
 });

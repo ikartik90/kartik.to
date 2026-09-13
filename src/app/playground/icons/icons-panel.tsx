@@ -6,6 +6,7 @@ import DownloadIcon from "@/assets/icons/download.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 import AddIcon from "@/assets/icons/add.svg";
+import LockIcon from "@/assets/icons/lock.svg";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
 import { Slider } from "@/components/ui/input/slider";
@@ -17,6 +18,7 @@ import {
   ICON_SIZES,
   ICON_STROKES,
   ICON_ZOOMS,
+  iconSettingsLockedTo,
   type IconViewSettings,
 } from "@/domain/icon";
 
@@ -100,6 +102,14 @@ export interface IconsPanelProps {
   busy: boolean;
   problem: string | null;
   onUpload: (files: File[]) => void;
+  /**
+   * Whether size and stroke move together. Owned by the PAGE rather than by
+   * this panel: the panel is unmounted every time it is dismissed, and a tie
+   * that came undone each time the sidebar was put away would be a setting
+   * that forgets itself.
+   */
+  locked: boolean;
+  onLockedChange: (locked: boolean) => void;
   onPublish: () => void;
   onDelete: () => void;
   /**
@@ -126,6 +136,8 @@ export function IconsPanel({
   busy,
   problem,
   onUpload,
+  locked,
+  onLockedChange,
   onPublish,
   onDelete,
   named,
@@ -137,6 +149,10 @@ export function IconsPanel({
   // object as a ref — see the note in `.cursor/rules`. The handler finds the
   // input by id.
   const fileInputId = useId();
+
+  /** A change to one scale, with the other brought along if they are tied. */
+  const tied = (next: IconViewSettings, lead: "size" | "stroke") =>
+    locked ? iconSettingsLockedTo(next, lead) : next;
 
   const openFilePicker = () => {
     const input = document.getElementById(fileInputId);
@@ -299,7 +315,7 @@ export function IconsPanel({
             max={ICON_SIZES[ICON_SIZES.length - 1]}
             step={ICON_SIZES[1] - ICON_SIZES[0]}
             value={settings.size}
-            onValueChange={(size) => onChange({ ...settings, size })}
+            onValueChange={(size) => onChange(tied({ ...settings, size }, "size"))}
           />
         </PropertiesPanel.Control>
 
@@ -309,8 +325,35 @@ export function IconsPanel({
             max={ICON_STROKES[ICON_STROKES.length - 1]}
             step={ICON_STROKES[1] - ICON_STROKES[0]}
             value={settings.stroke}
-            onValueChange={(stroke) => onChange({ ...settings, stroke })}
+            onValueChange={(stroke) =>
+              onChange(tied({ ...settings, stroke }, "stroke"))
+            }
           />
+
+          {/* The tie, in the row's ACTION column — the third track every row
+              in this panel reserves and almost none of them spends. It stands
+              against the stroke rather than between the two rows because the
+              stroke is the follower: the size is the measurement you set, and
+              the line is what comes along with it.
+
+              An icon `Button` carrying `aria-pressed` is the house's one
+              pressed-toggle chip — it wears the brand fill at rest when it is
+              on, which is what makes a tie you cannot otherwise see visible
+              without hovering anything. The name says what PRESSING it would
+              do, since the glyph alone cannot. */}
+          <Button
+            variant="icon"
+            aria-pressed={locked}
+            aria-label={locked ? "Unlink size and stroke" : "Link size and stroke"}
+            onClick={() => onLockedChange(!locked)}
+          >
+            <LockIcon />
+            <Button.Tooltip>
+              <Tooltip.Text>
+                {locked ? "Unlink size and stroke" : "Link size and stroke"}
+              </Tooltip.Text>
+            </Button.Tooltip>
+          </Button>
         </PropertiesPanel.Control>
       </PropertiesPanel.Group>
 

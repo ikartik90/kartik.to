@@ -205,8 +205,11 @@ describe("the size and weight controls", () => {
     expect(drawing("close.svg").getAttribute("width")).toBe("24");
   });
 
-  it("re-weights the line without touching the box", async () => {
+  it("re-weights the line without touching the box, once untied", async () => {
     await open();
+    // The two are locked together on arrival, so weighing the line ALONE is
+    // now something you ask for. See the lock's own tests below.
+    await userEvent.click(screen.getByRole("button", { name: "Unlink size and stroke" }));
 
     const stroke = screen.getByRole("slider", { name: "Stroke" });
     stroke.focus();
@@ -222,6 +225,22 @@ describe("the size and weight controls", () => {
       drawing("close.svg").querySelector("path")?.getAttribute("stroke-width"),
     ).toBe("1.2");
     expect(drawing("check.svg").getAttribute("width")).toBe("20");
+  });
+
+  it("runs the stroke from a whole pixel to four, a quarter at a time", async () => {
+    await open();
+
+    const stroke = screen.getByRole("slider", { name: "Stroke" });
+    expect(stroke.getAttribute("aria-valuemin")).toBe("1");
+    expect(stroke.getAttribute("aria-valuemax")).toBe("4");
+
+    // The step, asked of the control rather than read off an attribute it
+    // does not carry: from the bottom of the scale, one press is a quarter.
+    stroke.focus();
+    await userEvent.keyboard("{Home}");
+    await waitFor(() => expect(stroke.getAttribute("aria-valuenow")).toBe("1"));
+    await userEvent.keyboard("{ArrowRight}");
+    await waitFor(() => expect(stroke.getAttribute("aria-valuenow")).toBe("1.25"));
   });
 
   it("magnifies the icon and its line together", async () => {
@@ -904,16 +923,64 @@ describe("the icon's label", () => {
     standAt(target, { left: 100, width: 60, bottom: 300 });
 
     await userEvent.click(target);
-    fireEvent.pointerEnter(target, {
-      pointerType: "mouse",
-      clientX: 100,
-      clientY: 200,
-    });
 
     // Centred on the tile, and clear of it by ANCHORED_TOOLTIP_GAP — nowhere
     // near the cursor's own 217px.
-    expect(box("Check").style.top).toBe("302px");
+    await waitFor(() => expect(box("Check").style.top).toBe("302px"));
     expect(box("Check").style.left).toBe("130px");
+  });
+
+  it("keeps naming a taken icon once the pointer has gone", async () => {
+    // THE point of the anchored placement, and what it was missing: a taken
+    // icon is named for as long as it is TAKEN, not for as long as it is
+    // pointed at. The label needed a hover to exist at all, so a selection of
+    // six icons could only be read one at a time by going back and pointing
+    // at each of them — which is the comparison the page exists for, made
+    // impossible by its own label.
+    await open();
+    const target = tile("check.svg");
+    standAt(target, { left: 100, width: 60, bottom: 300 });
+
+    await userEvent.click(target);
+    fireEvent.pointerLeave(target, { pointerType: "mouse" });
+
+    await waitFor(() => expect(box("Check").hasAttribute("data-visible")).toBe(true));
+    expect(box("Check").style.top).toBe("302px");
+  });
+
+  it("names every icon in the selection, not just the one under the pointer", async () => {
+    await open();
+    standAt(tile("check.svg"), { left: 100, width: 60, bottom: 300 });
+    standAt(tile("close.svg"), { left: 200, width: 60, bottom: 300 });
+
+    await userEvent.click(tile("check.svg"));
+    fireEvent.click(tile("close.svg"), { shiftKey: true });
+    fireEvent.pointerLeave(tile("close.svg"), { pointerType: "mouse" });
+
+    // Both named, with nothing pointed at — which is what a comparison looks
+    // like: you take the four you are deciding between and read them.
+    await waitFor(() => expect(box("Check").hasAttribute("data-visible")).toBe(true));
+    expect(box("Close").hasAttribute("data-visible")).toBe(true);
+    // Each under its OWN tile, which is the whole reason there are two.
+    expect(box("Check").style.left).toBe("130px");
+    expect(box("Close").style.left).toBe("230px");
+  });
+
+  it("takes the label away when the icon is let go of", async () => {
+    await open();
+    const target = tile("check.svg");
+    standAt(target, { left: 100, width: 60, bottom: 300 });
+
+    fireEvent.click(target);
+    fireEvent.pointerLeave(target, { pointerType: "mouse" });
+    await waitFor(() => expect(box("Check").hasAttribute("data-visible")).toBe(true));
+
+    fireEvent.click(target);
+    fireEvent.pointerLeave(target, { pointerType: "mouse" });
+
+    // Gone outright, box and all: there is no taken icon left for it to name,
+    // and nothing is pointed at either.
+    await waitFor(() => expect(screen.queryByText("Check")).toBeNull());
   });
 
   it("moves under the icon the moment it is taken, not on the next hover", async () => {
@@ -930,7 +997,50 @@ describe("the icon's label", () => {
 
     await userEvent.click(target);
 
+    // The cursor label lets go of the name as the anchored one takes it, so
+    // the page never says it twice.
+    await waitFor(() => expect(box("Check").style.top).toBe("302px"));
+  });
+
+  it("does not name a hovered icon twice once it is taken", async () => {
+    await open();
+    const target = tile("check.svg");
+    standAt(target, { left: 100, width: 60, bottom: 300 });
+
+    await userEvent.click(target);
+    fireEvent.pointerEnter(target, {
+      pointerType: "mouse",
+      clientX: 100,
+      clientY: 200,
+    });
+
+    // One label, and it is the anchored one — pointing at a tile that is
+    // already marked and already named has nothing left to say.
+    await waitFor(() => expect(screen.getAllByText("Check")).toHaveLength(1));
     expect(box("Check").style.top).toBe("302px");
+  });
+
+  it("gives a hovered icon back its cursor label when it is let go of", async () => {
+    await open();
+    const target = tile("check.svg");
+    standAt(target, { left: 100, width: 60, bottom: 300 });
+
+    fireEvent.pointerEnter(target, {
+      pointerType: "mouse",
+      clientX: 100,
+      clientY: 200,
+    });
+    // `fireEvent`, not `userEvent`: a simulated click carries a pointer move
+    // of its own to (0, 0), and where the cursor label lands is the subject
+    // of this test.
+    fireEvent.click(target);
+    await waitFor(() => expect(box("Check").style.top).toBe("302px"));
+
+    fireEvent.click(target);
+
+    // Still pointed at, so it is still named — at the cursor again, since
+    // there is no longer a marked tile to hang it under.
+    await waitFor(() => expect(box("Check").style.top).toBe("217px"));
   });
 
   // A browser draws its OWN hint from `aria-label` on a control with no
@@ -975,10 +1085,13 @@ describe("taking icons", () => {
   const tile = (name: string) =>
     screen.getByRole("button", { name: new RegExp(`^${name}`) });
 
+  // Scoped to the TILES. `aria-pressed` is the right state for any toggle,
+  // and the panel has one of its own now (the size/stroke lock), so "every
+  // pressed button on the page" stopped meaning "every icon taken".
   const taken = () =>
-    screen
-      .queryAllByRole("button", { pressed: true })
-      .map((el) => el.textContent?.split(",")[0]);
+    Array.from(
+      document.querySelectorAll('[data-icon-tile][aria-pressed="true"]'),
+    ).map((el) => el.textContent?.split(",")[0]);
 
   const sheet = () =>
     document.querySelector("[data-icon-sheet]") as HTMLElement;
@@ -1234,5 +1347,250 @@ describe("while the set is still coming", () => {
 
     const tile = await screen.findByRole("button", { name: /^nonsense\.svg/ });
     await waitFor(() => expect(tile.querySelector("[data-icon-broken]")).toBeTruthy());
+  });
+});
+
+describe("dropping icons onto the set", () => {
+  /** The canvas — the whole room under the chrome, which is the target. */
+  const canvas = () =>
+    document.querySelector("[data-icon-sheet]") as HTMLElement;
+
+  /** A drag carrying files, as the platform hands one over. */
+  const withFiles = (files: File[]) => ({
+    dataTransfer: { files, items: files, types: ["Files"] },
+  });
+
+  const svg = (name: string) =>
+    new File([CHECK], name, { type: "image/svg+xml" });
+
+  beforeEach(() => {
+    mockCreateIconUploadUrl.mockResolvedValue({
+      uploadUrl: "https://upload.example/signed",
+      publicUrl: "https://cdn.example.com/icons/chevron-down.svg",
+      key: "icons/uuid-chevron-down.svg",
+    });
+    mockFinalizeIconUpload.mockResolvedValue(asset("chevron-down.svg", 20));
+  });
+
+  it("uploads what the author drops on it", async () => {
+    signedIn();
+    await open();
+
+    fireEvent.drop(canvas(), withFiles([svg("chevron-down.svg")]));
+
+    await waitFor(() =>
+      expect(mockCreateIconUploadUrl).toHaveBeenCalledWith({
+        filename: "chevron-down.svg",
+        size: expect.any(Number),
+      }),
+    );
+    await waitFor(() => expect(mockFinalizeIconUpload).toHaveBeenCalled());
+  });
+
+  it("says it will take them while they are held over the set", async () => {
+    signedIn();
+    await open();
+    expect(screen.queryByText("Drop SVGs to add")).toBeNull();
+
+    fireEvent.dragEnter(canvas(), withFiles([svg("chevron-down.svg")]));
+    expect(screen.getByText("Drop SVGs to add")).toBeTruthy();
+
+    fireEvent.dragLeave(canvas(), withFiles([svg("chevron-down.svg")]));
+    expect(screen.queryByText("Drop SVGs to add")).toBeNull();
+  });
+
+  it("keeps saying so as the hand crosses the icons under it", async () => {
+    // The fix this test exists for: `dragenter` and `dragleave` fire on every
+    // element the pointer passes over, so a sheet of two hundred tiles beat
+    // the offer on and off like a strobe. The surface counts what it is
+    // inside rather than believing one leave.
+    signedIn();
+    await open();
+
+    const held = withFiles([svg("chevron-down.svg")]);
+    fireEvent.dragEnter(canvas(), held);
+    const tile = document.querySelector("[data-icon-tile]") as HTMLElement;
+
+    // Onto a tile, and off it again — which is one crossing, not an exit.
+    fireEvent.dragEnter(tile, held);
+    fireEvent.dragLeave(tile, held);
+    expect(screen.getByText("Drop SVGs to add")).toBeTruthy();
+
+    // Out of the canvas itself, which is.
+    fireEvent.dragLeave(canvas(), held);
+    expect(screen.queryByText("Drop SVGs to add")).toBeNull();
+  });
+
+  it("puts the offer away once the drop has been taken", async () => {
+    signedIn();
+    await open();
+
+    const held = withFiles([svg("chevron-down.svg")]);
+    fireEvent.dragEnter(canvas(), held);
+    fireEvent.drop(canvas(), held);
+    expect(screen.queryByText("Drop SVGs to add")).toBeNull();
+  });
+
+  it("ignores a drag that is not carrying files", async () => {
+    // Text dragged out of the search box crosses the grid on its way to
+    // nowhere. Offering to add it as an icon would be a lie.
+    signedIn();
+    await open();
+
+    fireEvent.dragEnter(canvas(), {
+      dataTransfer: { files: [], items: [], types: ["text/plain"] },
+    });
+    expect(screen.queryByText("Drop SVGs to add")).toBeNull();
+  });
+
+  it("takes the icons out of a mixed drop and says what it left", async () => {
+    signedIn();
+    await open();
+
+    fireEvent.drop(
+      canvas(),
+      withFiles([
+        new File(["x"], "logo.png", { type: "image/png" }),
+        svg("chevron-down.svg"),
+      ]),
+    );
+
+    await waitFor(() => expect(mockCreateIconUploadUrl).toHaveBeenCalledTimes(1));
+    expect(mockCreateIconUploadUrl).toHaveBeenCalledWith({
+      filename: "chevron-down.svg",
+      size: expect.any(Number),
+    });
+    expect(screen.getByText("logo.png is not an SVG")).toBeTruthy();
+  });
+
+  it("offers a visitor nothing, and uploads nothing they drop", async () => {
+    // The gesture does not exist for anyone who is not the author — no
+    // overlay to reveal that the page takes uploads at all, and the browser's
+    // own handling of a dropped file left alone.
+    await open();
+
+    const held = withFiles([svg("chevron-down.svg")]);
+    fireEvent.dragEnter(canvas(), held);
+    expect(screen.queryByText("Drop SVGs to add")).toBeNull();
+
+    fireEvent.drop(canvas(), held);
+    await waitFor(() => expect(mockListIcons).toHaveBeenCalled());
+    expect(mockCreateIconUploadUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe("size and stroke, locked together", () => {
+  // Read off the two controls rather than off a drawing: what an icon's own
+  // `stroke-width` says is the weight RE-EXPRESSED in that icon's grid units
+  // (1.25px in a 64px box is 0.39 units on a 20 grid), which is the subject of
+  // the tests above and would make every assertion here arithmetic.
+  const value = (name: string) =>
+    screen.getByRole("slider", { name }).getAttribute("aria-valuenow");
+  const box = () => value("Size");
+  const weight = () => value("Stroke");
+
+  const lock = () => screen.getByRole("button", { name: /link size and stroke/i });
+
+  it("arrives locked, and says so", async () => {
+    // Pressed at rest, because the state is worth seeing without touching it:
+    // the tie is the reason moving one slider moves the other, and a reader
+    // who cannot see it is left with a page that seems to have a mind of its
+    // own. The NAME says what pressing would do, which is the house pattern
+    // for a toggle whose glyph and label both flip.
+    await open();
+
+    const button = screen.getByRole("button", { name: "Unlink size and stroke" });
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("stands in the stroke row, not between the two", async () => {
+    await open();
+
+    const strokeRow = screen
+      .getByRole("slider", { name: "Stroke" })
+      .closest("[data-property-control]") as HTMLElement;
+    expect(within(strokeRow).getByRole("button", { name: /link size and stroke/i })).toBeTruthy();
+
+    const sizeRow = screen
+      .getByRole("slider", { name: "Size" })
+      .closest("[data-property-control]") as HTMLElement;
+    expect(within(sizeRow).queryByRole("button")).toBeNull();
+  });
+
+  it("brings the stroke along when the size moves", async () => {
+    await open();
+    expect(box()).toBe("20");
+    expect(weight()).toBe("1.25");
+
+    screen.getByRole("slider", { name: "Size" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    // One step of each scale: 20 → 24, and the stroke standing at the same
+    // step goes 1.25 → 1.5.
+    await waitFor(() => expect(box()).toBe("24"));
+    expect(weight()).toBe("1.5");
+  });
+
+  it("brings the size along when the stroke moves", async () => {
+    await open();
+
+    screen.getByRole("slider", { name: "Stroke" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    await waitFor(() => expect(weight()).toBe("1.5"));
+    expect(box()).toBe("24");
+  });
+
+  it("holds at the end of the scales rather than dragging one past it", async () => {
+    await open();
+
+    const size = screen.getByRole("slider", { name: "Size" });
+    size.focus();
+    await userEvent.keyboard("{End}");
+
+    await waitFor(() => expect(box()).toBe("64"));
+    expect(weight()).toBe("4");
+  });
+
+  it("lets them apart when it is turned off, and leaves them where they were", async () => {
+    await open();
+    await userEvent.click(lock());
+
+    // Untying changes NOTHING on screen — it is a statement about what the
+    // next drag will do, not an edit.
+    expect(box()).toBe("20");
+    expect(weight()).toBe("1.25");
+
+    screen.getByRole("slider", { name: "Size" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    await waitFor(() => expect(box()).toBe("24"));
+    expect(weight()).toBe("1.25");
+  });
+
+  it("snaps the line back onto the box when it is tied again", async () => {
+    // The deliberate half of the answer: a pair pulled apart and re-tied
+    // comes back together on the SIZE's step, because the box is what you
+    // were looking at while you pulled them apart.
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Unlink size and stroke" }));
+
+    const size = screen.getByRole("slider", { name: "Size" });
+    size.focus();
+    await userEvent.keyboard("{End}");
+    await waitFor(() => expect(box()).toBe("64"));
+    expect(weight()).toBe("1.25");
+
+    await userEvent.click(screen.getByRole("button", { name: "Link size and stroke" }));
+
+    await waitFor(() => expect(weight()).toBe("4"));
+    expect(box()).toBe("64");
+  });
+
+  it("is the author's page and the visitor's alike", async () => {
+    // Nothing about the tie writes to the set — it is how the grid is being
+    // LOOKED at, like the sliders it stands among.
+    await open();
+    expect(screen.getByRole("button", { name: /link size and stroke/i })).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useRef,
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { css } from "../../../../styled-system/css";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
+import { useTakenLabels } from "./use-taken-labels";
 import { Tooltip, TooltipHostContext } from "@/components/ui/tooltip";
 import type { IconViewSettings } from "@/domain/icon";
 import { selectionAfterClick, type Rect } from "./icon-selection";
@@ -28,26 +30,25 @@ import type { IconEntry } from "./use-icon-library";
 // of the gesture is `consumeSweep`, the flag that stops the click ending a
 // drag from undoing the drag.
 //
-// POINTING. ONE tooltip for the whole grid rather than one per tile — the set
-// runs to a couple of hundred icons, and a tooltip is a portalled node with a
-// hook behind it, so per-tile would be two hundred hidden boxes in the body
-// to keep one visible. The grid holds the hover and the label moves.
+// POINTING. Two kinds of label, and the difference is whether the icon has
+// been TAKEN:
 //
-// WHERE the label is drawn depends on whether the icon is taken:
+//   hovering    ONE box for the whole grid, at the cursor, trailing it like
+//               every other tooltip on the site. Nothing else on screen says
+//               which tile you mean, so the label has to be where you are
+//               looking — and only one tile can be pointed at, so one box
+//               serves two hundred of them.
 //
-//   hovering    at the cursor, trailing it like every other tooltip on the
-//               site. Nothing else on screen says which tile you mean, so the
-//               label has to be where you are looking.
+//   taken       one box per taken icon, hung two pixels under its tile and
+//               LEFT THERE. A taken icon is named for as long as it is taken,
+//               because reading four marks side by side is what the selection
+//               is for; a label that came and went with the pointer could name
+//               only one of the four, and only while you pointed at it.
 //
-//   selected    hung two pixels under the tile. A taken tile is already marked
-//               — the brand wash and the mark in brand ink — so a label
-//               chasing the pointer would be answering a question the tile has
-//               already answered, and answering it in the wrong place.
-//
-// Both placements are `useCursorTooltip`'s; this only chooses. The anchor is
-// derived from the CURRENT selection rather than latched when the hover
-// opened, so pressing the tile you are pointing at moves the label under it on
-// the spot instead of on the next hover.
+// The two never overlap: the cursor label goes quiet over a tile that already
+// has a label of its own, so the page never says one name twice. Taken labels
+// are placed in one batched pass — see `use-taken-labels` for why that is not
+// two hundred copies of `useCursorTooltip`.
 // ---------------------------------------------------------------------------
 
 // The column the set is read as, centred in the canvas the band is drawn on.
@@ -168,16 +169,28 @@ export function IconGrid({
 }: IconGridProps) {
   const [hint, setHint] = useState<IconHint | null>(null);
 
-  // Read against the LIVE selection, so the label moves under a tile the
-  // moment it is taken rather than waiting for the pointer to leave and come
-  // back. Null while the icon is merely hovered, which is the cursor mode.
-  const anchor = hint && selection.includes(hint.key) ? hint.element : null;
+  // The tiles, for the taken labels to hang from. Made here and handed down
+  // rather than taken off the hook's result: anything off a hook result that
+  // reaches a `ref` attribute makes the React Compiler read the whole object
+  // as a ref, and every other property read during render then fails.
+  const surfaceRef = useRef<HTMLDivElement>(null);
 
-  const { ref, seed, seedAnchor } = useCursorTooltip(
-    Boolean(hint?.visible),
-    false,
-    anchor,
+  const taken = entries.filter((entry) => selection.includes(entry.icon.key));
+  const labels = useTakenLabels(
+    surfaceRef,
+    taken.map((entry) => entry.icon.key),
   );
+
+  // The cursor label names only what is NOT taken. Read against the LIVE
+  // selection rather than latched when the hover opened, so taking the tile
+  // you are pointing at hands the name over to the anchored label on the spot
+  // — and letting go of it hands the name back, since the pointer is still
+  // there. Both the text and the visibility come off this, because a box
+  // still holding the word while its anchored twin says it too would be the
+  // page naming one icon twice.
+  const hovering = hint && !selection.includes(hint.key) ? hint : null;
+
+  const { ref, seed } = useCursorTooltip(Boolean(hovering?.visible), false);
 
   // A finger never opens the label: the tap is over before it lands, nothing
   // on a touchscreen corresponds to leaving, and the name it carries is
@@ -188,11 +201,9 @@ export function IconGrid({
     if (event.pointerType === "touch") return;
     const element = event.currentTarget;
 
-    // Seeded from the handler so the label opens in place. It matters most
-    // moving between two selected tiles, where the box is already at full
-    // opacity and would otherwise be seen at the old tile for a frame.
-    if (selection.includes(entry.icon.key)) seedAnchor(element);
-    else seed(event.clientX, event.clientY);
+    // Seeded from the handler so the label opens in place rather than at the
+    // last pointer position a frame ago.
+    seed(event.clientX, event.clientY);
 
     setHint({
       key: entry.icon.key,
@@ -224,7 +235,7 @@ export function IconGrid({
   return (
     <>
       <div className={columnStyle}>
-        <div className={gridStyle} style={iconWellStyle(settings)}>
+        <div ref={surfaceRef} className={gridStyle} style={iconWellStyle(settings)}>
           {entries.map((entry) => (
             <IconTile
               key={entry.icon.key}
@@ -241,15 +252,33 @@ export function IconGrid({
 
       </div>
 
-      {/* The label. Fed by context rather than by props because that is the
-          seam `Tooltip` has — it carries no position or visibility of its own,
-          and a host supplies both (see `Button.Tooltip`, which is the same
-          arrangement with the host being one button rather than a grid). */}
-      <TooltipHostContext.Provider value={{ ref, visible: Boolean(hint?.visible) && !sweeping }}>
+      {/* The label for whatever is merely POINTED AT. Fed by context rather
+          than by props because that is the seam `Tooltip` has — it carries no
+          position or visibility of its own, and a host supplies both (see
+          `Button.Tooltip`, which is the same arrangement with the host being
+          one button rather than a grid). */}
+      <TooltipHostContext.Provider
+        value={{ ref, visible: Boolean(hovering?.visible) && !sweeping }}
+      >
         <Tooltip>
-          <Tooltip.Text>{hint?.label ?? ""}</Tooltip.Text>
+          <Tooltip.Text>{hovering?.label ?? ""}</Tooltip.Text>
         </Tooltip>
       </TooltipHostContext.Provider>
+
+      {/* And one for each icon that has been TAKEN, which stays up as long as
+          it is. Keyed by the icon so a label belongs to a mark rather than to
+          a position in the selection: taking a fifth icon must not slide the
+          other four's boxes onto each other's tiles. */}
+      {taken.map((entry) => (
+        <TooltipHostContext.Provider
+          key={entry.icon.key}
+          value={{ ref: labels.register(entry.icon.key), visible: !sweeping }}
+        >
+          <Tooltip>
+            <Tooltip.Text>{entry.icon.title}</Tooltip.Text>
+          </Tooltip>
+        </TooltipHostContext.Provider>
+      ))}
     </>
   );
 }
