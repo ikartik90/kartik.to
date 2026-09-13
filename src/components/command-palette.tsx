@@ -241,6 +241,8 @@ export function CommandPalette() {
     isShaderPlayground,
     handleCalchemyPlayground,
     isCalchemyPlayground,
+    handleIconsPlayground,
+    isIconsPlayground,
     handleTestimonials,
     isTestimonials,
     editorKind,
@@ -741,6 +743,15 @@ export function CommandPalette() {
                       >
                         <CalendarIcon className={iconStyle} />
                         Calchemy
+                      </Command.Item>
+                    )}
+                    {!isIconsPlayground && (
+                      <Command.Item
+                        className={itemStyle}
+                        onSelect={handleIconsPlayground}
+                      >
+                        <ComponentIcon className={iconStyle} />
+                        Icon Studio
                       </Command.Item>
                     )}
                   </Command.Group>

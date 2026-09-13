@@ -106,11 +106,15 @@ export interface CommandPaletteHandlers {
   handleCalchemyPlayground: () => void;
   /** On it, and the same rule: its own row goes, the group stays. */
   isCalchemyPlayground: boolean;
+  /** Open the icons playground — public, and the same reasoning again. */
+  handleIconsPlayground: () => void;
+  /** On it: its own row goes, the group stays. */
+  isIconsPlayground: boolean;
   /**
-   * Open the list of collected testimonials — the AUTHOR'S, unlike the
-   * playgrounds above it. The words were written for me by people who have not
-   * agreed to have them shown, so the row is drawn only for an admin session
-   * and the page behind it 404s for anyone else.
+   * Open the list of collected testimonials — the AUTHOR'S, unlike the three
+   * above it. The words were written for me by people who have not agreed to
+   * have them shown, so the row is drawn only for an admin session and the page
+   * behind it 404s for anyone else.
    */
   handleTestimonials: () => void;
   /** On it: its own row goes, the same rule the playgrounds follow. */
@@ -189,9 +193,15 @@ export function useCommandPalette(
   // the group — see `isCalchemyPlayground` at the call site.
   const isCalchemyPlayground = pathname === "/playground/calchemy";
 
+  // The third, and the same plain case as Calchemy: the author can write to
+  // it (uploading an icon, publishing a held one), but nothing on the page is
+  // BUFFERED — every one of those actions goes straight to the bucket — so
+  // there is no unsaved work for an exit to ask about and it is not an editor.
+  const isIconsPlayground = pathname === "/playground/icons";
+
   // The testimonials list. Not a playground and not an editor — it holds
   // nothing unsaved and offers nothing to write — so it is a destination like
-  // the playgrounds, and the only thing that sets it apart is who may go there.
+  // the three above, and the only thing that sets it apart is who may go there.
   const isTestimonials = pathname === "/edit/testimonials";
 
   // ...which turns out to be the SHADER playground's case too, for whoever
@@ -511,6 +521,11 @@ export function useCommandPalette(
   const handleCalchemyPlayground = () => {
     close();
     router.push("/playground/calchemy");
+  };
+
+  const handleIconsPlayground = () => {
+    close();
+    router.push("/playground/icons");
   };
 
   const handleTestimonials = () => {
@@ -983,6 +998,8 @@ export function useCommandPalette(
     isShaderPlayground,
     handleCalchemyPlayground,
     isCalchemyPlayground,
+    handleIconsPlayground,
+    isIconsPlayground,
     handleTestimonials,
     isTestimonials,
     editorKind,

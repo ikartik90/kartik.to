@@ -686,6 +686,35 @@ describe("CommandPalette", () => {
     });
   });
 
+  // The third, public on the same grounds again: the sliders write nothing,
+  // and the three presses that DO write are checked on the server.
+  describe("Icon Studio", () => {
+    it("is offered logged out, beside the other two", () => {
+      render(<CommandPalette />);
+      expect(screen.getByText("Icon Studio")).toBeDefined();
+    });
+
+    it("routes to the playground and closes the palette", () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(screen.getByText("Icon Studio"));
+
+      expect(mockPush).toHaveBeenCalledWith("/playground/icons");
+      expect(dialog.close).toHaveBeenCalledOnce();
+    });
+
+    it("stops advertising itself once you are on it, and still offers the others", () => {
+      mockPathname.mockReturnValue("/playground/icons");
+      render(<CommandPalette />);
+
+      expect(list().queryByText("Icon Studio")).toBeNull();
+      expect(list().getByText("Waveform Studio")).toBeDefined();
+      expect(list().getByText("Calchemy")).toBeDefined();
+    });
+  });
+
   // The published work, offered to everyone: these are the pages the site
   // exists for, so a visitor who opened this to go somewhere finds them.
   describe("Projects", () => {
