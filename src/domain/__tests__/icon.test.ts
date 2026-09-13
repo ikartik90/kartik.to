@@ -9,6 +9,7 @@ import {
   applyAliasEdit,
   cleanIconAliases,
   commonIconAliases,
+  iconSettingsLockedTo,
   iconTitleFrom,
   matchesIcon,
   IconAssetSchema,
@@ -241,16 +242,25 @@ describe("the settings the grid opens on", () => {
     expect(DEFAULT_ICON_SETTINGS.zoom).toBe(1);
   });
 
+  it("gives size and stroke the same NUMBER of steps, so they can be tied", () => {
+    // The lock is index parity — step 7 of one scale against step 7 of the
+    // other — so the two scales having the same length is not a coincidence
+    // to be enjoyed but the invariant the tie rests on. Shorten either and
+    // `iconSettingsLockedTo` starts handing back the value it was given.
+    expect(ICON_STROKES).toHaveLength(ICON_SIZES.length);
+  });
+
   it("steps evenly, so all three scales can be sliders", () => {
     // Even steps are what lets each be a real scale rather than a segmented
     // control dressed as one: 4px, 0.25px and half a multiple of true size,
     // the whole way along. The house pairings still fall on stops (16 at 1,
-    // 20 at 1.25, 24 at 1.5), they are simply no longer the only ones.
+    // 20 at 1.25, 24 at 1.5), they are simply no longer the only ones — and
+    // on the same STEP of each scale, which is what the lock ties together.
     expect(ICON_SIZES).toEqual([
       16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64,
     ]);
     expect(ICON_STROKES).toEqual([
-      0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5,
+      1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4,
     ]);
     expect(ICON_ZOOMS).toEqual([1, 1.5, 2, 2.5, 3, 3.5, 4]);
 
@@ -393,5 +403,42 @@ describe("applyAliasEdit", () => {
       "Arrow",
       "Private",
     ]);
+  });
+});
+
+describe("size and stroke, tied together", () => {
+  const at = (size: number, stroke: number) => ({ size, stroke, zoom: 1 });
+
+  it("takes the stroke standing at the same step as the size", () => {
+    // 16 is the first size and 1 the first stroke; 64 is the thirteenth and
+    // 4 the thirteenth. The pairing the set is authored to — 20 at 1.25 — is
+    // step two of both, which is why the grid opens already tied.
+    expect(iconSettingsLockedTo(at(16, 3), "size")).toMatchObject({ size: 16, stroke: 1 });
+    expect(iconSettingsLockedTo(at(20, 3), "size")).toMatchObject({ size: 20, stroke: 1.25 });
+    expect(iconSettingsLockedTo(at(64, 1), "size")).toMatchObject({ size: 64, stroke: 4 });
+  });
+
+  it("leads from the stroke just as readily, for the slider that moved", () => {
+    expect(iconSettingsLockedTo(at(16, 4), "stroke")).toMatchObject({ size: 64, stroke: 4 });
+    expect(iconSettingsLockedTo(at(64, 1), "stroke")).toMatchObject({ size: 16, stroke: 1 });
+  });
+
+  it("carries the rest of the settings through untouched", () => {
+    // The zoom is a magnifying glass and no part of the tie.
+    expect(iconSettingsLockedTo({ size: 64, stroke: 1, zoom: 2.5 }, "size")).toEqual({
+      size: 64,
+      stroke: 4,
+      zoom: 2.5,
+    });
+  });
+
+  it("hands back a pair it cannot place rather than guessing at one", () => {
+    // Nothing on the page produces an off-scale value — both sliders are
+    // stepped — so a value that is not a stop arrived from somewhere that
+    // was not asked, and snapping it would be this function inventing a
+    // setting the reader never chose.
+    const odd = at(21, 1.3);
+    expect(iconSettingsLockedTo(odd, "size")).toBe(odd);
+    expect(iconSettingsLockedTo(odd, "stroke")).toBe(odd);
   });
 });

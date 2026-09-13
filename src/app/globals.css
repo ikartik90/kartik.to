@@ -424,6 +424,16 @@ body[data-properties-panel-instant] {
     backdrop-filter: blur(var(--spacing-md));
   }
 
+  /* The icon playground's offer to take a dropped file frosts the set behind
+     it, for the same reason and at the same strength. The tint over it is
+     light on purpose (see `dropOverlayStyle`): what is being dropped ONTO
+     should still be there to see, as shape if not as detail. Here rather than
+     in `css()` for the reason given just above. */
+  [data-icon-drop] {
+    -webkit-backdrop-filter: blur(var(--spacing-md));
+    backdrop-filter: blur(var(--spacing-md));
+  }
+
   /* The social row belongs to the intro above it, not to the projects below.
      Both gaps were the article's uniform 16px, which measures equal and does
      not READ equal: the grid is a solid mass of cards and pulls the eye, so an

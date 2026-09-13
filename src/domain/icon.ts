@@ -24,22 +24,31 @@ import { z } from "zod";
  * one optical weight at three scales, which is why the two halves of the set
  * can sit in one grid — but they are no longer the only stops. The set is
  * looked at far past the sizes it ships in: an icon at 64 is where a bad
- * join or an off-grid curve becomes obvious, and a weight at 0.5 or 2.5 is
- * how you find out whether a drawing survives a lighter or heavier line
- * before anyone commits to one.
+ * join or an off-grid curve becomes obvious, and a weight at 1 or 4 is how you
+ * find out whether a drawing survives a lighter or heavier line before anyone
+ * commits to one.
  *
- * Two independent controls, because seeing a 16px icon carry a 2.5px line is
- * exactly the sort of thing this page is for.
+ * Two controls that can be taken APART, because seeing a 16px icon carry a 4px
+ * line is exactly the sort of thing this page is for — but which are tied
+ * together by default, since the pairing is what the set is authored to and
+ * the loose pair is the special case. See {@link iconSettingsLockedTo}.
  *
  * Evenly stepped on purpose (4px and 0.25px, the whole way), which is what
  * lets both be real sliders rather than segmented controls dressed as scales:
  * a thumb halfway along says a value halfway along.
+ *
+ * The same NUMBER of steps on purpose too, and that is the load-bearing half:
+ * thirteen sizes against thirteen strokes is what lets the lock be index
+ * parity rather than a ratio, and it is what puts each house pairing on the
+ * same step of both scales — 16 at 1 is step one of each, 20 at 1.25 step two.
+ * Change the length of either and the lock quietly stops tying anything, which
+ * is why a domain test holds the two to the same length.
  */
 export const ICON_SIZES = [
   16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64,
 ] as const;
 export const ICON_STROKES = [
-  0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5,
+  1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4,
 ] as const;
 
 /**
@@ -81,6 +90,34 @@ export const DEFAULT_ICON_SETTINGS: IconViewSettings = {
   stroke: 1.25,
   zoom: 1,
 };
+
+/**
+ * Both scales moved to the step ONE of them is standing on — the lock, as a
+ * value rather than as a behaviour.
+ *
+ * `lead` is the scale being followed, which is the slider the hand is on: drag
+ * the size and the stroke comes to meet it, drag the stroke and the size does.
+ * Turning the lock ON leads from the size, which is the deliberate half of the
+ * answer — re-tying a pair that was pulled apart snaps the line back onto the
+ * box rather than the box onto the line, because the box is the thing you were
+ * looking at while you pulled them apart.
+ *
+ * Index parity, not a ratio. The two scales are the same length (see above),
+ * so step seven of one is step seven of the other and the arithmetic is a
+ * lookup — which is also why a pair that is not ON either scale is handed
+ * straight back: it has no step, and snapping it to the nearest one would be
+ * this function choosing a setting nobody asked for.
+ */
+export function iconSettingsLockedTo<Settings extends IconSettings>(
+  settings: Settings,
+  lead: "size" | "stroke",
+): Settings {
+  const scale: readonly number[] = lead === "size" ? ICON_SIZES : ICON_STROKES;
+  const step = scale.indexOf(lead === "size" ? settings.size : settings.stroke);
+  if (step < 0) return settings;
+
+  return { ...settings, size: ICON_SIZES[step], stroke: ICON_STROKES[step] };
+}
 
 /**
  * Whether an icon is on show.

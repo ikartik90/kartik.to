@@ -19,6 +19,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { Typography } from "@/components/ui/typography";
 import {
   DEFAULT_ICON_SETTINGS,
+  iconSettingsLockedTo,
   matchesIcon,
   type IconViewSettings,
 } from "@/domain/icon";
@@ -31,6 +32,8 @@ import {
 import { IconGrid, MarqueeBand } from "./icon-grid";
 import { preloaderPercent } from "./icon-progress";
 import { IconsPanel } from "./icons-panel";
+import type { PrerenderedIcon } from "@/lib/icons";
+import { useIconDrop } from "./use-icon-drop";
 import { useIconLibrary } from "./use-icon-library";
 import { useIconMarquee } from "./use-icon-marquee";
 
@@ -118,6 +121,12 @@ const pageStyle = css({
 const canvasStyle = css({
   position: "relative",
   userSelect: "none",
+  // The surface reaches the foot of the VIEWPORT, not the foot of the grid.
+  // A set of three icons leaves the page taller than its own content, and a
+  // sweep begun in that dead space used to catch nothing — where a file
+  // dropped there is worse than nothing, since an unclaimed drop is the
+  // browser navigating away from the page to open the file.
+  minHeight: "100dvh",
   // Clear of the frosted band pinned over the top — its height plus the same
   // clearance the foot keeps, so the first row of icons is never under it.
   paddingBlockStart: `calc(var(--chrome-band) + ${SCRIM_CLEARANCE})`,
@@ -275,6 +284,59 @@ const preloaderStyle = css({
   marginInline: "auto",
 });
 
+// The offer, while files are held over the set. FIXED rather than laid over
+// the canvas box, because the canvas is as tall as however many icons are in
+// the set and a label centred in that is a label nobody can see. Its edges are
+// the ones the frosted band uses — clear of the chrome at the top, and inset
+// from the right by whatever the docked panel is holding, since a fixed box is
+// measured against the viewport rather than the padded body.
+//
+// Nothing in it is a drop target: the canvas underneath takes the drop, and an
+// overlay that appeared under the cursor would fire an enter/leave pair of its
+// own on the way in — see the depth counting in `use-icon-drop`.
+const dropOverlayStyle = css({
+  position: "fixed",
+  insetBlockStart: "var(--chrome-band)",
+  insetBlockEnd: 0,
+  insetInlineStart: 0,
+  right: "var(--page-inset-end, 0px)",
+  zIndex: 3,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "3xl",
+  pointerEvents: "none",
+  // Enough of the page to read the words against, and no more: you are
+  // dropping onto the SET, and a veil that took it away would be answering the
+  // gesture by hiding its target. The blur does most of the work — it kills
+  // the detail while keeping the shape of what is under it — so the tint over
+  // it is light. It is in `globals.css` keyed off the attribute below, because
+  // `css()` rejects both spellings of `backdrop-filter` and Panda's own
+  // utility emits only the `-webkit-` one, which Chromium ignores.
+  backgroundColor: "bg.canvas/40",
+});
+
+// The frame the offer is written in, and what says the whole room is the
+// target rather than the words in the middle of it.
+//
+// Its line is a WHOLE pixel off the label's own colour, not the half-pixel
+// quarter-alpha a field's edge is drawn in: that is a hairline meant to be
+// found at the boundary of two filled surfaces, and run around the edge of a
+// veiled page at 25% it was not visible at all.
+const dropFrameStyle = css({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "token(spacing.full)",
+  height: "token(spacing.full)",
+  borderRadius: "md",
+  borderWidth: "token(spacing.xxs)",
+  borderStyle: "dashed",
+  borderColor: "text.body/30",
+  color: "text.body",
+  textAlign: "center",
+});
+
 const triggerStyle = css({
   position: "fixed",
   insetBlockStart: "xxl",
@@ -282,9 +344,18 @@ const triggerStyle = css({
   zIndex: 2,
 });
 
-export function IconsPlayground() {
+export interface IconsPlaygroundProps {
+  /**
+   * The approved set, drawn by the server and already parsed — see the route.
+   * Defaulted so the component can still be mounted on its own, which is what
+   * an empty bucket and every unit test do.
+   */
+  prerendered?: readonly PrerenderedIcon[];
+}
+
+export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
   const isAdmin = useIsAdmin();
-  const library = useIconLibrary();
+  const library = useIconLibrary(prerendered);
 
   const [settings, setSettings] = useState<IconViewSettings>(DEFAULT_ICON_SETTINGS);
   const [open, setOpen] = useState(true);
@@ -310,6 +381,11 @@ export function IconsPlayground() {
     setSheet(true);
     setOpen(false);
   }, []);
+  // Whether the two icon scales move together. On by default: the pairing is
+  // what the set is authored to, and a page that opened with them loose would
+  // be opening on the special case. Held HERE rather than in the panel, which
+  // is unmounted every time it is dismissed.
+  const [locked, setLocked] = useState(true);
   const [selection, setSelection] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [query, setQuery] = useState("");
@@ -324,6 +400,17 @@ export function IconsPlayground() {
     surfaceRef: canvasRef,
     selection,
     onSelectionChange: setSelection,
+  });
+
+  // Files dropped on the same surface the sweep is drawn on, since both are
+  // gestures of the page rather than of the grid. Only the author's: `enabled`
+  // attaches the handlers at all, so a visitor's drop stays the browser's — it
+  // is what to DRAW, and the upload behind it is gated on the server like
+  // every other write here. The batch goes to the library whole; which of the
+  // files are icons is `svgFilesFrom`'s to say.
+  const drop = useIconDrop({
+    enabled: isAdmin,
+    onFiles: (files) => void library.upload(files),
   });
 
   const { entries } = library;
@@ -412,6 +499,7 @@ export function IconsPlayground() {
         data-icon-sheet
         className={canvasStyle}
         {...marquee.surfaceProps}
+        {...drop.surfaceProps}
       >
         {library.preloading ? (
           <div className={emptyStyle}>
@@ -451,6 +539,16 @@ export function IconsPlayground() {
         )}
 
         {marquee.band && <MarqueeBand rect={marquee.band} />}
+
+        {drop.over && (
+          <div className={dropOverlayStyle} data-icon-drop>
+            <div className={dropFrameStyle}>
+              <Typography tag="p" type="bodyLarge">
+                Drop SVGs to add
+              </Typography>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* The band the bar floats in, and the bar. The calchemy playground's
@@ -532,6 +630,14 @@ export function IconsPlayground() {
           busy={library.busy}
           problem={library.problem}
           onUpload={(files) => void library.upload(files)}
+          locked={locked}
+          // Tying them again SNAPS, and leads from the size: the box is what
+          // you were looking at while you pulled the two apart, so the line
+          // comes back onto it rather than the other way about.
+          onLockedChange={(next) => {
+            setLocked(next);
+            if (next) setSettings(iconSettingsLockedTo(settings, "size"));
+          }}
           onPublish={publish}
           onDelete={() => setPendingDelete(true)}
           // Whatever is taken, and mine to name. One icon gets a name field

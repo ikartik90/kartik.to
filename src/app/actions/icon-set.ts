@@ -2,17 +2,17 @@
 
 import { randomUUID } from "crypto";
 import { isAdmin, requireAdmin } from "@/lib/auth/server";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { keyToIcon, listAllIcons } from "@/lib/icons";
 import { env } from "@/lib/env";
 import {
   CreateIconUploadInputSchema,
   FinalizeIconUploadInputSchema,
-  IconAssetSchema,
   IconKeyInputSchema,
   SetIconLabelsInputSchema,
   SetIconReviewInputSchema,
   cleanIconAliases,
-  iconTitleFrom,
   iconNameFromKey,
   reviewForUpload,
   sanitizeIconFilename,
@@ -22,9 +22,6 @@ import {
   ICON_PREFIX,
   createR2UploadUrl,
   deleteR2Object,
-  headR2Object,
-  listR2IconKeys,
-  publicUrlForKey,
   updateR2ObjectMetadata,
 } from "@/lib/storage/r2";
 
@@ -38,17 +35,33 @@ import {
 // The icon set's server side: one public read, and three doors only the author
 // can open.
 //
-// `listIcons` asks for no session in order to answer, because the page it
-// feeds is public — but it does ASK, because the author sees more of the set
-// than a visitor does. A held icon is not dimmed or badged on the way out to a
-// visitor; it is not in the list at all, which is the only way to hold
-// something back that a client cannot undo.
+// The READ is split in two, and the split is WHO IS ASKING:
+//
+//   approved   the same set for everyone, so it is read without a session at
+//              all (`@/lib/icons`) and the page prerenders from it. A visit
+//              costs no icon requests.
+//
+//   held       the author's alone, and `listHeldIcons` checks. A held icon is
+//              not dimmed or badged on the way out to a visitor — it is not in
+//              the answer, and it is not in the prerendered HTML either, which
+//              is the only way to hold something back that a client cannot
+//              undo.
+//
+// Because the page is prerendered, every write below has to rebuild it — see
+// `ICONS_PATH`.
 //
 // Every writing action names its key against {@link ICON_PREFIX} before it
 // does anything. The bucket is shared with the media library, and an
 // unchecked key on `deleteIcon` would be a signed-in delete of any published
 // article's picture from a page that has no business naming one.
 // ---------------------------------------------------------------------------
+
+/**
+ * The route drawn from this set. A write that does not rebuild it leaves the
+ * page showing the set as it was at the last build — an icon uploaded a minute
+ * ago simply is not there, and nothing on screen can explain why.
+ */
+const ICONS_PATH = "/playground/icons";
 
 /** An icon key, or a thrown error. See the note above about the shared bucket. */
 function requireIconKey(key: string): string {
@@ -63,77 +76,31 @@ function requirePublicBase(): void {
 }
 
 /**
- * One object as an icon.
+ * The set as the caller may see it: the whole bucket for the author, the
+ * published part of it for everyone else.
  *
- * The three metadata fields are all optional in practice, because an object
- * could have been put in the bucket by hand — and each falls back in the
- * direction that cannot mislead: the key's own name, the grid the set is
- * authored on, and `held`, which shows it to nobody until it has been looked
- * at.
+ * Used by the author's page after a write, when it re-reads what it has just
+ * changed. A visitor's first view of the set does not come through here at all
+ * — it is prerendered into the HTML (`@/lib/icons`), which is the point.
  */
-async function keyToIcon(
-  key: string,
-  labels?: IconLabels,
-): Promise<IconAsset | null> {
-  const url = publicUrlForKey(key);
-  if (!url) return null;
-
-  const { metadata } = await headR2Object(key);
-  const native = Number.parseInt(metadata.native ?? "", 10);
-  const name = metadata.filename || iconNameFromKey(key);
-
-  return IconAssetSchema.parse({
-    key,
-    url,
-    name,
-    native: Number.isInteger(native) && native > 0 ? native : 20,
-    flattened: metadata.flattened === "1",
-    review: metadata.review === "approved" ? "approved" : "held",
-    // The row is the exception. An icon nobody has renamed is called what its
-    // filename says, which is why nothing was ever backfilled into `Icon`.
-    title: labels?.title || iconTitleFrom(name),
-    aliases: labels?.aliases ?? [],
-  });
-}
-
-/** What the `Icon` table has to say about one key, where it has anything. */
-interface IconLabels {
-  title: string;
-  aliases: string[];
+export async function listIcons(): Promise<IconAsset[]> {
+  const author = await isAdmin();
+  const icons = await listAllIcons();
+  return icons.filter((icon) => author || icon.review === "approved");
 }
 
 /**
- * The set, in name order — the author's whole bucket, or the published part of
- * it for everyone else.
+ * The part of the set the page could NOT prerender — the author's own, held
+ * back for review. Fetched by the author's browser on arrival and added to
+ * what the HTML already carried.
  *
- * Sorted by NAME rather than by key or by upload date, because the key carries
- * a uuid and the date is invisible on screen: an icon grid that reshuffles
- * between visits is one you cannot learn the shape of.
+ * It is the one icon read that checks, because it is the one whose answer
+ * depends on who is asking.
  */
-export async function listIcons(): Promise<IconAsset[]> {
-  requirePublicBase();
-
-  const author = await isAdmin();
-  const keys = await listR2IconKeys();
-
-  // ONE query for the set, against one HEAD per object — which is the reason
-  // these two facts are in a table and not in the object's metadata: metadata
-  // rides along with a HEAD but cannot be searched, and this listing is what
-  // the search box filters. Keyed up front so the mapping below stays a
-  // lookup rather than a scan per icon.
-  const rows = await prisma.icon.findMany({ where: { key: { in: keys } } });
-  const labels = new Map(
-    rows.map((row) => [row.key, { title: row.title, aliases: row.aliases }]),
-  );
-
-  const icons = await Promise.all(
-    keys.map((key) => keyToIcon(key, labels.get(key))),
-  );
-
-  return icons
-    .filter((icon): icon is IconAsset => icon !== null)
-    .filter((icon) => author || icon.review === "approved")
-    .sort((a, b) => a.name.localeCompare(b.name));
+export async function listHeldIcons(): Promise<IconAsset[]> {
+  await requireAdmin();
+  const icons = await listAllIcons();
+  return icons.filter((icon) => icon.review === "held");
 }
 
 export async function createIconUploadUrl(
@@ -188,6 +155,8 @@ export async function finalizeIconUpload(input: unknown): Promise<IconAsset> {
 
   const icon = await keyToIcon(key);
   if (!icon) throw new Error("Icon not found");
+
+  revalidatePath(ICONS_PATH);
   return icon;
 }
 
@@ -206,6 +175,8 @@ export async function setIconReview(input: unknown): Promise<IconAsset> {
 
   const icon = await keyToIcon(key);
   if (!icon) throw new Error("Icon not found");
+
+  revalidatePath(ICONS_PATH);
   return icon;
 }
 
@@ -221,6 +192,8 @@ export async function deleteIcon(input: unknown): Promise<void> {
   // never written is not an error worth throwing on the way out of a delete
   // that already succeeded.
   await prisma.icon.deleteMany({ where: { key } });
+
+  revalidatePath(ICONS_PATH);
 }
 
 /**
@@ -247,6 +220,7 @@ export async function setIconLabels(input: unknown): Promise<void> {
 
   if (!name) {
     await prisma.icon.deleteMany({ where: { key } });
+    revalidatePath(ICONS_PATH);
     return;
   }
 
@@ -255,4 +229,9 @@ export async function setIconLabels(input: unknown): Promise<void> {
     create: { key, title: name, aliases: words },
     update: { title: name, aliases: words },
   });
+
+  // The name is IN the prerendered HTML — it is what a taken icon's label says
+  // and what the search box filters on — so renaming one is a change to the
+  // page, not only to a row.
+  revalidatePath(ICONS_PATH);
 }
