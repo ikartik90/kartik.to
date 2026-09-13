@@ -6,7 +6,7 @@ import DownloadIcon from "@/assets/icons/download.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 import AddIcon from "@/assets/icons/add.svg";
-import LockIcon from "@/assets/icons/lock.svg";
+import LinkIcon from "@/assets/icons/link.svg";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input/field";
 import { Slider } from "@/components/ui/input/slider";
@@ -309,52 +309,60 @@ export function IconsPanel({
       )}
 
       <PropertiesPanel.Group title="Icon">
-        <PropertiesPanel.Control label="Size">
-          <Slider
-            min={ICON_SIZES[0]}
-            max={ICON_SIZES[ICON_SIZES.length - 1]}
-            step={ICON_SIZES[1] - ICON_SIZES[0]}
-            value={settings.size}
-            onValueChange={(size) => onChange(tied({ ...settings, size }, "size"))}
-          />
-        </PropertiesPanel.Control>
+        {/* The two scales stand TOGETHER under the tie, which is about both of
+            them (Figma 1274:3765). It used to sit in the stroke row's action
+            column, where it read as a property of the stroke; a `Tie` gives it
+            that column once, centred against the pair and bracketed into each
+            row's midline.
 
-        <PropertiesPanel.Control label="Stroke">
-          <Slider
-            min={ICON_STROKES[0]}
-            max={ICON_STROKES[ICON_STROKES.length - 1]}
-            step={ICON_STROKES[1] - ICON_STROKES[0]}
-            value={settings.stroke}
-            onValueChange={(stroke) =>
-              onChange(tied({ ...settings, stroke }, "stroke"))
-            }
-          />
+            An icon `Button` carrying `aria-pressed` is the house's one
+            pressed-toggle chip — it wears the brand fill at rest when it is
+            on, which is what makes a tie you cannot otherwise see visible
+            without hovering anything. The name says what PRESSING it would
+            do, since the glyph alone cannot. */}
+        <PropertiesPanel.Tie
+          action={
+            <Button
+              variant="icon"
+              aria-pressed={locked}
+              aria-label={
+                locked ? "Unlink size and stroke" : "Link size and stroke"
+              }
+              onClick={() => onLockedChange(!locked)}
+            >
+              <LinkIcon />
+              <Button.Tooltip>
+                <Tooltip.Text>
+                  {locked ? "Unlink size and stroke" : "Link size and stroke"}
+                </Tooltip.Text>
+              </Button.Tooltip>
+            </Button>
+          }
+        >
+          <PropertiesPanel.Control label="Size">
+            <Slider
+              min={ICON_SIZES[0]}
+              max={ICON_SIZES[ICON_SIZES.length - 1]}
+              step={ICON_SIZES[1] - ICON_SIZES[0]}
+              value={settings.size}
+              onValueChange={(size) =>
+                onChange(tied({ ...settings, size }, "size"))
+              }
+            />
+          </PropertiesPanel.Control>
 
-          {/* The tie, in the row's ACTION column — the third track every row
-              in this panel reserves and almost none of them spends. It stands
-              against the stroke rather than between the two rows because the
-              stroke is the follower: the size is the measurement you set, and
-              the line is what comes along with it.
-
-              An icon `Button` carrying `aria-pressed` is the house's one
-              pressed-toggle chip — it wears the brand fill at rest when it is
-              on, which is what makes a tie you cannot otherwise see visible
-              without hovering anything. The name says what PRESSING it would
-              do, since the glyph alone cannot. */}
-          <Button
-            variant="icon"
-            aria-pressed={locked}
-            aria-label={locked ? "Unlink size and stroke" : "Link size and stroke"}
-            onClick={() => onLockedChange(!locked)}
-          >
-            <LockIcon />
-            <Button.Tooltip>
-              <Tooltip.Text>
-                {locked ? "Unlink size and stroke" : "Link size and stroke"}
-              </Tooltip.Text>
-            </Button.Tooltip>
-          </Button>
-        </PropertiesPanel.Control>
+          <PropertiesPanel.Control label="Stroke">
+            <Slider
+              min={ICON_STROKES[0]}
+              max={ICON_STROKES[ICON_STROKES.length - 1]}
+              step={ICON_STROKES[1] - ICON_STROKES[0]}
+              value={settings.stroke}
+              onValueChange={(stroke) =>
+                onChange(tied({ ...settings, stroke }, "stroke"))
+              }
+            />
+          </PropertiesPanel.Control>
+        </PropertiesPanel.Tie>
       </PropertiesPanel.Group>
 
       <PropertiesPanel.Group title="Preview">

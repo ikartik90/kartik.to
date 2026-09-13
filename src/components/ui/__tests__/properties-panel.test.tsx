@@ -4,6 +4,7 @@ import {
   cleanup,
   waitFor,
   fireEvent,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -437,6 +438,99 @@ describe("PropertiesPanel parts outside their parent", () => {
         </PropertiesPanel>,
       ),
     ).toThrow(/must be used within <PropertiesPanel.Section>/);
+    spy.mockRestore();
+  });
+});
+
+// A GROUP is the always-on, titled section: a heading strip over its controls
+// with nothing to add or remove.
+describe("PropertiesPanel.Group", () => {
+  it("draws no panel for a group whose children come to nothing", () => {
+    // The control panel carries its own inset, so an empty one leaves a strip
+    // of nothing under the title and makes the chips beside it look like a row
+    // that had lost its contents. A group whose contents are decided per render
+    // hands down a LIST — `[false, []]` for an alias section with no name to
+    // edit and no words in common — and a list is truthy however empty it is.
+    const nothing: boolean[] = [];
+    render(
+      <PropertiesPanel ariaLabel="Film properties" onDismiss={vi.fn()}>
+        <PropertiesPanel.Group
+          title="Aliases"
+          actions={<button type="button">Add</button>}
+        >
+          {false}
+          {nothing.map((_, at) => (
+            <span key={at} />
+          ))}
+        </PropertiesPanel.Group>
+      </PropertiesPanel>,
+    );
+
+    expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Aliases" })).toBeNull();
+  });
+});
+
+// A TIE is ONE control standing against SEVERAL rows — the icon set's size
+// and stroke, which move together (Figma 1274:3765). A chip in the last row's
+// action column would read as that row's; the tie takes the action column
+// once, for the pair, and brackets itself to both.
+describe("PropertiesPanel.Tie", () => {
+  const tied = () =>
+    render(
+      <PropertiesPanel ariaLabel="Icon properties" onDismiss={vi.fn()}>
+        <PropertiesPanel.Group title="Icon">
+          <PropertiesPanel.Tie
+            action={<button type="button">Link size and stroke</button>}
+          >
+            <PropertiesPanel.Control label="Size">
+              <Field.Frame>
+                <Field.Control defaultValue="64" />
+              </Field.Frame>
+            </PropertiesPanel.Control>
+            <PropertiesPanel.Control label="Stroke">
+              <Field.Frame>
+                <Field.Control defaultValue="4" />
+              </Field.Frame>
+            </PropertiesPanel.Control>
+          </PropertiesPanel.Tie>
+        </PropertiesPanel.Group>
+      </PropertiesPanel>,
+    );
+
+  it("stands its action beside the rows, in neither of them", () => {
+    tied();
+
+    const rows = ["Size", "Stroke"].map(
+      (name) =>
+        screen
+          .getByRole("textbox", { name })
+          .closest("[data-property-control]") as HTMLElement,
+    );
+    for (const row of rows) expect(within(row).queryByRole("button")).toBeNull();
+
+    const tie = screen
+      .getByRole("button", { name: "Link size and stroke" })
+      .closest("[data-property-tie]") as HTMLElement;
+    expect(tie).toBeTruthy();
+    for (const row of rows) expect(tie.contains(row)).toBe(true);
+  });
+
+  it("keeps the rows inside the group the panel names", () => {
+    tied();
+
+    // The tie is a wrapper around rows, not a section of its own: the
+    // controls in it are still the group's, and still reachable by its name.
+    const group = screen.getByRole("group", { name: "Icon" });
+    expect(within(group).getByRole("textbox", { name: "Size" })).toBeTruthy();
+    expect(within(group).getByRole("textbox", { name: "Stroke" })).toBeTruthy();
+  });
+
+  it("insists on the panel's context, as every row-level part does", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() =>
+      render(<PropertiesPanel.Tie action={null}>rows</PropertiesPanel.Tie>),
+    ).toThrow(/must be used within <PropertiesPanel>/);
     spy.mockRestore();
   });
 });
