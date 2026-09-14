@@ -23,6 +23,32 @@ const nextConfig: NextConfig = {
     qualities: [100],
   },
 
+  async redirects() {
+    return [
+      {
+        // `www.kartik.to` served a second, identical copy of the whole site,
+        // and search engines split what little credit the site had between the
+        // two. Every `www.` host now answers with a permanent redirect to the
+        // same path on the bare domain.
+        source: "/:path*",
+        has: [{ type: "host", value: "www\\.(?<domain>.+)" }],
+        destination: "https://:domain/:path*",
+        permanent: true,
+      },
+    ];
+  },
+
+  async rewrites() {
+    // A post's Markdown copy lives at its own address with `.md` appended, the
+    // `llms.txt` convention. A segment cannot be named `[slug].md`, so the
+    // handler is an `md` route beside the page and this maps the address onto
+    // it — before the dynamic `[slug]` page can claim `scheduling.md` as a slug.
+    return [
+      { source: "/work/:slug.md", destination: "/work/:slug/md" },
+      { source: "/writing/:slug.md", destination: "/writing/:slug/md" },
+    ];
+  },
+
   // The typeface every Open Graph card is set in, stated explicitly so it
   // reaches the functions that draw one.
   //

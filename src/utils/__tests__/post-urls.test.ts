@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getEditUrl, getPostReadUrl } from "../post-urls";
+import {
+  getEditUrl,
+  getPostMarkdownUrl,
+  getPostReadUrl,
+} from "../post-urls";
 
 describe("getPostReadUrl", () => {
   it("returns /writing/slug for ARTICLE", () => {
@@ -12,6 +16,15 @@ describe("getPostReadUrl", () => {
 
   it("returns /slug for PAGE", () => {
     expect(getPostReadUrl("PAGE", "about")).toBe("/about");
+  });
+});
+
+describe("getPostMarkdownUrl", () => {
+  it("is the post's own address with .md on the end", () => {
+    expect(getPostMarkdownUrl("WORK", "my-project")).toBe(
+      "/work/my-project.md",
+    );
+    expect(getPostMarkdownUrl("ARTICLE", "my-post")).toBe("/writing/my-post.md");
   });
 });
 

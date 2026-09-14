@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SITE_LOCALE, SITE_NAME } from "@/data/site";
+import { AUTHOR, SITE_LOCALE, SITE_NAME } from "@/data/site";
 import { postSummary } from "@/utils/post-summary";
 import type { Post } from "@/domain/post";
 
@@ -46,7 +46,13 @@ export function postMetadata(
     // stated at all because a post is reachable at exactly one address and a
     // link shared with a tracking query on it should still be understood as
     // that address.
-    alternates: { canonical: path },
+    //
+    // The Markdown alternate is the same post for AI agents, served by the `md`
+    // route beside the page (see `getPostMarkdownUrl`).
+    alternates: {
+      canonical: path,
+      types: { "text/markdown": `${path}.md` },
+    },
     openGraph: {
       // `article` rather than the site's `website`: it is what the post IS,
       // and it is the type that carries a publication date.
@@ -56,6 +62,7 @@ export function postMetadata(
       description,
       publishedTime: post.publishedAt?.toISOString(),
       modifiedTime: post.updatedAt.toISOString(),
+      authors: [AUTHOR.name],
       // RESTATED from the root layout, which looks redundant and is not: Next
       // REPLACES `openGraph` and `twitter` wholesale rather than merging into
       // the parent's, so a page that says anything at all about its card says
@@ -66,6 +73,11 @@ export function postMetadata(
       siteName: SITE_NAME,
       locale: SITE_LOCALE,
     },
-    twitter: { card: "summary_large_image", title, description },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      creator: AUTHOR.twitterHandle,
+    },
   };
 }
