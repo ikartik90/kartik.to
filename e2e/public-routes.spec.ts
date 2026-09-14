@@ -22,7 +22,9 @@ test.describe("public routes", () => {
   }) => {
     await page.goto("/");
 
-    await expect(page).toHaveTitle("kartik.to");
+    await expect(page).toHaveTitle(
+      "Kartik Iyer: Product Designer, Engineer, Builder",
+    );
     // The header only renders on "/", so its presence doubles as a check that
     // the client-side `usePathname` branch hydrated. The name is the logo's
     // alt text now that nothing spells it out beside the picture — which is
@@ -95,12 +97,12 @@ test.describe("public routes", () => {
     const response = await page.goto("/playground/shader");
 
     expect(response?.status()).toBe(200);
-    // Its own name AND the site's, because the root layout titles every page
-    // below it through a `%s — kartik.to` template. The homepage is the one
-    // exception and keeps the bare name (`title.default`), which is what the
+    // Its own name AND the author's, because the root layout titles every page
+    // below it through a `%s — Kartik Iyer` template. The homepage is the one
+    // exception and keeps its own title (`title.default`), which is what the
     // listing test above asserts — so the two together are what would catch
     // the template being dropped or reaching one page too far.
-    await expect(page).toHaveTitle("Shader Playground — kartik.to");
+    await expect(page).toHaveTitle("Shader Playground — Kartik Iyer");
     // The rail, which is the page — asserting it rules out an interstitial
     // that also answers 200: Vercel's own deployment-protection login is one,
     // and an earlier CI run went green against exactly that.
@@ -108,6 +110,32 @@ test.describe("public routes", () => {
       page.getByRole("complementary", { name: "Properties" }),
     ).toBeVisible();
     expect(pageFailures).toEqual([]);
+  });
+
+  // What search engines and AI agents read instead of the page. Each is built
+  // from the database per request, so this is the check that they build on the
+  // deployment and not only in a unit test's mocks.
+  test("crawlers and agents can read the site", async ({ page, request }) => {
+    const robots = await request.get("/robots.txt");
+    expect(robots.status()).toBe(200);
+    expect(await robots.text()).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
+
+    const sitemap = await request.get("/sitemap.xml");
+    expect(sitemap.status()).toBe(200);
+    expect(await sitemap.text()).toContain("<urlset");
+
+    const llms = await request.get("/llms.txt");
+    expect(llms.status()).toBe(200);
+    expect(await llms.text()).toMatch(/^# Kartik Iyer\n/);
+
+    // A published post's Markdown copy, found from the listing like the card
+    // test above rather than from a slug written down here.
+    await page.goto("/");
+    const href = await POST_CARDS(page).first().getAttribute("href");
+    const markdown = await request.get(`${href}.md`);
+    expect(markdown.status()).toBe(200);
+    expect(markdown.headers()["content-type"]).toContain("text/markdown");
+    expect((await markdown.text()).trim()).not.toBe("");
   });
 
   test("an unknown slug 404s rather than erroring", async ({ page }) => {

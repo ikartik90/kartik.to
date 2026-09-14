@@ -35,14 +35,6 @@ const nextConfig: NextConfig = {
         destination: "https://:domain/:path*",
         permanent: true,
       },
-      {
-        // The project's first slug, from before it was named for what it is.
-        // It was already live and indexed, so the old address — and its card
-        // and Markdown copy under it — keeps working.
-        source: "/work/scheduling-extensions/:path*",
-        destination: "/work/redesigning-shift-scheduling/:path*",
-        permanent: true,
-      },
     ];
   },
 

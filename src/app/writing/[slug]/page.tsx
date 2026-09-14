@@ -1,9 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { ArticleIntro } from "@/components/article-intro";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
+import { movedPostPath } from "@/data/moved-posts";
 import { isAdmin } from "@/lib/auth/server";
 import { postMetadata } from "@/lib/post-metadata";
 import { resolvePost } from "@/lib/posts";
@@ -28,7 +29,11 @@ export default async function ArticlePage({ params }: Props) {
     allowDraft: await isAdmin(),
   });
 
-  if (!article) notFound();
+  if (!article) {
+    const moved = movedPostPath("ARTICLE", slug);
+    if (moved) permanentRedirect(moved);
+    notFound();
+  }
 
   return (
     <>
