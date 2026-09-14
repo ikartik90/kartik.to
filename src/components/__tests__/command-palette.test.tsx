@@ -112,7 +112,7 @@ function list() {
 }
 
 /** Two playground rows, which carry what the playground is after its name. */
-const CALCHEMY = "Calchemy: Headless Parser for Natural Language Dates";
+const CALCHEMY = "Calchemy: Natural-Language Date Parser";
 const CREST_ICONS = "Crest Icons: 300+ Handcrafted SVG Icons";
 
 afterEach(() => {

@@ -742,7 +742,7 @@ export function CommandPalette() {
                         onSelect={handleCalchemyPlayground}
                       >
                         <CalendarIcon className={iconStyle} />
-                        Calchemy: Headless Parser for Natural Language Dates
+                        Calchemy: Natural-Language Date Parser
                       </Command.Item>
                     )}
                     {!isIconsPlayground && (
