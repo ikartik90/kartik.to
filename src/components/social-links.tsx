@@ -16,6 +16,7 @@ import GotoIcon from "@/assets/icons/goto.svg";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import OctocatIcon from "@/assets/icons/octocat.svg";
 import TwitterIcon from "@/assets/icons/twitter.svg";
+import { SOCIAL_PROFILES } from "@/data/site";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { css, cx } from "../../styled-system/css";
 import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
@@ -31,7 +32,7 @@ const SOCIAL_ITEMS = [
   {
     id: "github",
     label: "GitHub",
-    href: "https://github.com/ikartik90",
+    href: SOCIAL_PROFILES.github,
     Icon: OctocatIcon,
     maskSrc: "/social-shader-masks/octocat.svg",
     action: "link",
@@ -39,7 +40,7 @@ const SOCIAL_ITEMS = [
   {
     id: "twitter",
     label: "Follow me",
-    href: "https://twitter.com/ikartik90",
+    href: SOCIAL_PROFILES.twitter,
     Icon: TwitterIcon,
     maskSrc: "/social-shader-masks/twitter.svg",
     action: "link",
@@ -47,7 +48,7 @@ const SOCIAL_ITEMS = [
   {
     id: "linkedin",
     label: "LinkedIn",
-    href: "https://linkedin.com/in/ikartik90",
+    href: SOCIAL_PROFILES.linkedin,
     Icon: LinkedInIcon,
     maskSrc: "/social-shader-masks/linkedin.svg",
     action: "link",

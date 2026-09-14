@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { css } from "../../styled-system/css";
 import { ArticleRenderer } from "@/components/article-renderer";
+import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { TestimonialWall } from "@/components/testimonial-wall";
 import { HomeGrid } from "@/components/home-grid";
@@ -9,6 +11,9 @@ import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { getGridCards } from "@/lib/grid";
 import { getHomeDocument } from "@/lib/home";
+import { SITE_URL } from "@/lib/site-url";
+import { SITE_TITLE } from "@/data/site";
+import { homeJsonLd } from "@/utils/structured-data";
 
 // The homepage is a document, not a layout. It was three hardcoded sections —
 // an intro, a project listing and a writing list — and folding the listings
@@ -21,6 +26,16 @@ import { getHomeDocument } from "@/lib/home";
 // of a flex container, so the centred paragraph above it does not carry here.
 const socialRowStyle = css({ display: "flex", justifyContent: "center" });
 
+// Canonical here rather than in the root layout, which every page inherits: a
+// layout-level canonical would name the homepage as the address of every page
+// that does not state its own.
+export const metadata: Metadata = { alternates: { canonical: "/" } };
+
+// The page's one heading, for screen readers and search engines. The document
+// below is a grid of cards with no words of its own, so nothing on the page
+// said whose it is; the visible design has no heading to give it.
+const headingStyle = css({ srOnly: true });
+
 export default async function Home() {
   const [document, cards, testimonials] = await Promise.all([
     getHomeDocument(),
@@ -31,6 +46,8 @@ export default async function Home() {
   return (
     <>
       <main>
+        <JsonLd data={homeJsonLd(SITE_URL)} />
+        <h1 className={headingStyle}>{SITE_TITLE}</h1>
         {/* `article`, because the block styles the renderer relies on — the
             indent rule, the centring rule — are scoped to one. */}
         <article data-home>

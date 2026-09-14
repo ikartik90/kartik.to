@@ -11,6 +11,15 @@ export function getPostReadUrl(category: PostCategory, slug: string): string {
   }
 }
 
+/**
+ * The post as Markdown, for AI agents — the `llms.txt` convention of the page's
+ * own address with `.md` appended. `next.config.ts` rewrites it to the `md`
+ * route handler beside the page.
+ */
+export function getPostMarkdownUrl(category: PostCategory, slug: string): string {
+  return `${getPostReadUrl(category, slug)}.md`;
+}
+
 export function getEditUrl(category: PostCategory, slug?: string): string {
   if (slug) {
     return `/edit/${slug}?category=${category}`;

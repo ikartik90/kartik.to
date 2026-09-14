@@ -1,0 +1,16 @@
+import { getPublishedPostsByCategory } from "@/lib/posts";
+import { SITE_URL } from "@/lib/site-url";
+import { llmsTxt } from "@/utils/site-index";
+
+// `/llms.txt` — the site in Markdown for AI agents (https://llmstxt.org).
+// Read on every request for the same reason as `sitemap.ts`.
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const posts = await Promise.all(
+    (["WORK", "ARTICLE"] as const).map(getPublishedPostsByCategory),
+  );
+  return new Response(llmsTxt(posts.flat(), SITE_URL), {
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}

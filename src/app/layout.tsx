@@ -9,7 +9,13 @@ import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
-import { SITE_DESCRIPTION, SITE_LOCALE, SITE_NAME } from "@/data/site";
+import {
+  AUTHOR,
+  SITE_DESCRIPTION,
+  SITE_LOCALE,
+  SITE_NAME,
+  SITE_TITLE,
+} from "@/data/site";
 import { SITE_URL } from "@/lib/site-url";
 import { PALETTE_INTENT_SCRIPT } from "@/utils/palette-intent";
 
@@ -33,13 +39,17 @@ export const metadata: Metadata = {
   // be fetched. Without a base there was nothing to make absolute.
   metadataBase: new URL(SITE_URL),
   title: {
-    default: SITE_NAME,
-    // Every page below states its own name and gets the site's after it. The
-    // homepage keeps `default`, which is the site's name alone rather than the
-    // site's name twice.
-    template: `%s — ${SITE_NAME}`,
+    default: SITE_TITLE,
+    // Every page below states its own name and gets the author's after it —
+    // the name is what gets searched for, where the domain is not. The
+    // homepage keeps `default`, which already leads with it.
+    template: `%s — ${AUTHOR.name}`,
   },
   description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: AUTHOR.name, url: SITE_URL }],
+  creator: AUTHOR.name,
+  publisher: AUTHOR.name,
   // The defaults every page inherits and each post then overrides with its own
   // title, description and card. The image is not named here: the file
   // convention supplies it — `app/opengraph-image.tsx` for anything with
@@ -49,7 +59,7 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     locale: SITE_LOCALE,
     url: SITE_URL,
-    title: SITE_NAME,
+    title: SITE_TITLE,
     description: SITE_DESCRIPTION,
   },
   twitter: {
@@ -57,8 +67,9 @@ export const metadata: Metadata = {
     // tile — at `summary` it is cropped to a square thumbnail beside the text,
     // which throws away the half of the card that is the cover.
     card: "summary_large_image",
-    title: SITE_NAME,
+    title: SITE_TITLE,
     description: SITE_DESCRIPTION,
+    creator: AUTHOR.twitterHandle,
   },
 };
 
