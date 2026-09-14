@@ -7684,6 +7684,24 @@ export default defineConfig({
               overflow: "hidden",
               textDecoration: "none",
               _active: { transform: "scale(0.98)" },
+              // The edge, drawn OVER everything the card holds. A border on
+              // the root itself paints with its background, beneath the cover —
+              // and the cover is a picture edge to edge, so a clip as dark as
+              // the page (or as light, in the light theme) took the card's
+              // outline with it and left only the stretch the scrim lightens.
+              // Last in tree order and positioned, so it paints after the cover
+              // and the scrim without a z-index. The demo frame's hairline, so
+              // a card reads the same whether it holds a demo or a picture.
+              _after: {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                borderWidth: "token(spacing.3xs)",
+                borderStyle: "solid",
+                borderColor: "border.divider",
+                pointerEvents: "none",
+              },
               // Over a picture the caption takes the theme's STRONGEST ink,
               // and the muted greys `Typography` hands out are dropped. They
               // are tuned to sit on a flat plate; a picture is not one.

@@ -3,11 +3,13 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { css, cx } from "../../styled-system/css";
+import ShuffleIcon from "@/assets/icons/shuffle.svg";
 import type { Testimonial } from "@/domain/testimonial";
 import {
   SKYLINE_VIEWBOX_HEIGHT,
@@ -15,6 +17,9 @@ import {
   skylineTopAt,
 } from "@/data/skyline-profile";
 import { TestimonialQuote } from "./testimonial-quote";
+import { Button } from "./ui/button";
+import { Tooltip } from "./ui/tooltip";
+import { Typography } from "./ui/typography";
 
 // ---------------------------------------------------------------------------
 // The band of published testimonials at the foot of the homepage — a wide,
@@ -36,7 +41,8 @@ import { TestimonialQuote } from "./testimonial-quote";
 //     edge, and the edges fade rather than stop.
 //   * CARDS THAT TAKE TURNS. Anything past the edge would otherwise never be
 //     read, so every `ROTATION_MS` one off-screen card trades places with one
-//     on screen. See `useRotation`.
+//     on screen — and the shuffle button under the heading makes the same trade
+//     on demand. See `useAutoShuffle` and `pickTrade`.
 //
 // THE TOWER DECIDES THE MIDDLE COLUMN. The skyline behind this is drawn
 // `xMidYMax`, so the CN Tower is pinned to the centre of the viewport at every
@@ -55,10 +61,9 @@ import { TestimonialQuote } from "./testimonial-quote";
 // a card cannot fit either side of it, so below `md` the five columns become
 // one horizontal rail that swipes, in normal flow, ending before the skyline
 // begins. Nothing overlaps because nothing can — the rail is as tall as its
-// tallest card, whichever one you have swiped into view. The rotation stops
-// there too: a reader who can reach every card by swiping does not need them
-// brought to them, and moving one under a thumb mid-swipe is a worse thing to
-// do than leaving it where it was.
+// tallest card, whichever one you have swiped into view. Nothing shuffles there
+// either, on a timer or a press: a reader who can swipe to every card has
+// nothing to shuffle in.
 // ---------------------------------------------------------------------------
 
 /** How many columns the band is dealt into. ODD, so there is a true middle one
@@ -66,7 +71,7 @@ import { TestimonialQuote } from "./testimonial-quote";
  *  testimonials spread over seven columns is a scattering rather than a band. */
 const COLUMNS = 5;
 
-/** How long a card stays put before it may be traded off-screen. */
+/** How long the band holds still before it trades a card on its own. */
 const ROTATION_MS = 8000;
 
 /** How long each half of a swap takes — out, then in. Slow enough to read as
@@ -100,7 +105,7 @@ const FADE_MS = 350;
  * realistically dealt.
  *
  * Deterministic, so the server and the client deal the same hand from the same
- * order — the rotation moves cards by reordering the list, never by dealing it
+ * order — the shuffle moves cards by reordering the list, never by dealing it
  * differently.
  *
  * Exported for its test: this is the only real logic in the file, and "which
@@ -240,6 +245,52 @@ const bandStyle = css({
   },
 });
 
+/**
+ * The heading, its subheading and the shuffle, stacked on the page's centre
+ * line — which is the tower's line too, so the stack stands over the middle
+ * column's card at every width without being placed against it.
+ *
+ * In flow above the wall rather than laid over the band's stagger, so the
+ * skyline clearance below measures the columns exactly as before: the header
+ * only moves the whole band down by its own height.
+ */
+const headerStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  textAlign: "center",
+  paddingInline: "xl",
+  // Off the rail's top edge by the page's section step inside a section.
+  marginBlockEnd: "3xl",
+
+  md: {
+    // A `4xl` closer to the centre card, which already hangs two `4xl` below
+    // the band's top (`COLUMN_STAGGER`) — so the stack reaches a little way into
+    // the band, down into the notch the stagger leaves over the middle column.
+    marginBlockEnd: "calc({spacing.3xl} - {spacing.4xl})",
+    // Only as wide as the words, so the part of the header that overlaps the
+    // band is over that notch and never over a card in another column...
+    inlineSize: "fit-content",
+    marginInline: "auto",
+    // ...and above the wall, whose own transparent box would otherwise take
+    // the presses aimed at the bottom of the shuffle button.
+    position: "relative",
+    zIndex: 1,
+  },
+});
+
+/** A breath between the words and the control, so it reads as acting on the
+ *  cards below rather than as part of the subheading.
+ *
+ *  The staggered band only. Below `md` the cards are a rail the reader swipes
+ *  through, which already reaches every card — a shuffle there has nothing to
+ *  bring into view. `mdDown` is the exact complement of the `md` that turns the
+ *  rail into the band (`wallStyle`), so the two can never both be showing. */
+const shuffleStyle = css({
+  marginBlockStart: "lg",
+  mdDown: { display: "none" },
+});
+
 const wallStyle = css({
   // ---------------------------------------------------------------------
   // Phone: the five columns end to end as one rail, swiped sideways.
@@ -297,7 +348,7 @@ const wallStyle = css({
     // stretching would flatten it straight back out.
     alignItems: "start",
     // AT LEAST five full columns, however narrow the screen — which is what
-    // puts the outer cards past the edge and makes the rotation worth having —
+    // puts the outer cards past the edge and makes the shuffle worth having —
     // and no wider than five comfortable ones, so a very wide display gets
     // roomier cards rather than five columns of stretched prose.
     inlineSize: `clamp(calc(${COLUMNS} * {sizes.testimonialCard} + ${COLUMNS - 1} * {spacing.xl}), calc(100% + 2 * ${BLEED}), calc(${COLUMNS} * {sizes.testimonialCardWide} + ${COLUMNS - 1} * {spacing.xl}))`,
@@ -414,7 +465,7 @@ const cardStyle = css({
   md: {
     // THE SWAP, AND WHY IT IS A TRANSITION RATHER THAN AN ANIMATION.
     //
-    // A rotation exchanges two cards, and doing that in one frame is a flicker
+    // A shuffle exchanges two cards, and doing that in one frame is a flicker
     // in the corner of the eye of somebody reading something else entirely.
     // So the two slots fade out, trade places while they cannot be seen, and
     // fade back in — `FADE_MS` each way.
@@ -434,7 +485,7 @@ const cardStyle = css({
   },
 });
 
-/** Where a card sits in the band's order — what the rotation trades. */
+/** Where a card sits in the band's order — what the shuffle trades. */
 const SLOT_ATTR = "data-testimonial-slot";
 
 /**
@@ -479,21 +530,21 @@ const CLEARANCE_PX = 96;
  * it is measured rather than assumed.
  *
  * MEASURED AGAINST THE DEEPEST HAND, NOT THE ONE ON SCREEN, and that is the
- * difference between a floor and a floor most of the time. The rotation deals
+ * difference between a floor and a floor most of the time. The shuffle deals
  * the same cards into the same shaped columns in a different order, and the
  * cards are different heights — so a column whose card is replaced by one
  * seventy pixels taller reaches seventy pixels further down, into air that was
  * measured when something shorter was standing there. That is not a hypothesis:
  * left to the visible hand the middle column measured 96px clear on load and
- * 24px clear a rotation later, with the band never moving, because nothing it
+ * 24px clear a shuffle later, with the band never moving, because nothing it
  * was watching had changed size.
  *
  * So each column is placed by how far down it could EVER reach: its own top,
  * plus the tallest cards in the set stacked in it. The set is fixed and a
  * column's card count does not change (`dealIntoColumns` deals by index), so
- * that figure is the same for every order the rotation can produce — which is
+ * that figure is the same for every order the shuffle can produce — which is
  * what keeps the band still. The alternative, re-placing the band on each swap,
- * holds the number and moves the footer up and down every eight seconds.
+ * holds the number and moves the footer up and down on every press.
  *
  * ONE SHIFT FOR THE WHOLE BAND, not a margin per column, and that is the
  * difference between this and the version before it. Placing each column
@@ -550,7 +601,7 @@ function useSkylineClearance(
         SKYLINE_VIEWBOX_WIDTH / 2 + (x - middle) / scale;
 
       // Every card in the band, tallest first. The same list whatever order the
-      // rotation has them in, which is the whole point of it.
+      // shuffle has them in, which is the whole point of it.
       const tallest = [...wall.querySelectorAll<HTMLElement>(`[${SLOT_ATTR}]`)]
         .map((card) => card.getBoundingClientRect().height)
         .sort((a, b) => b - a);
@@ -602,7 +653,7 @@ function useSkylineClearance(
     // height is pinned by the `min-block-size` that reserves the tower's room,
     // so a column growing inside it — a face arriving late, a font swapping,
     // a card wrapping to another line — changes nothing the wall can report. A
-    // rotation no longer changes the answer, but everything else about a
+    // shuffle no longer changes the answer, but everything else about a
     // column's height still does.
     const observer = new ResizeObserver(place);
     observer.observe(wall);
@@ -616,104 +667,117 @@ function useSkylineClearance(
 }
 
 /**
- * Trade one off-screen card for one on screen, every {@link ROTATION_MS}.
+ * The two slots one trade swaps — the timer's or a press's alike: one card
+ * wholly past the edge of the window, and one a reader can see part of.
+ *
+ * EVERY SEEN CARD TAKES AN EQUAL TURN. The seen one is picked uniformly from
+ * all of them, clipped or not, so no card in view is traded more often than
+ * its neighbours.
  *
  * The band is deliberately wider than the window, so at any moment two or three
  * testimonials are past the edge. Without this they would be decoration — words
- * somebody wrote that nobody can read. With it, every card comes into view if
- * you leave the page alone long enough.
+ * somebody wrote that nobody can read. With it, every card comes into view for
+ * a reader who waits, or presses.
  *
  * ONE CARD AT A TIME, which is the whole reason this is a swap rather than a
  * reshuffle: moving one card changes one column's height, and the eye follows
- * it. Re-dealing the whole band every eight seconds would be the page
- * rearranging itself under a reader.
+ * it. Re-dealing the whole band on a press would leave the reader looking for
+ * the card they had just been reading.
  *
  * MEASURED, NOT ASSUMED. Which cards are off-screen depends on the window, the
  * column widths and how tall the cards happen to be, so it is read off
  * `getBoundingClientRect` rather than derived from a column index — the band
  * does not need to know its own layout in order to know what is hidden.
  *
- * It stops for the three cases where moving content is the wrong thing to do: a
- * reader who has asked for reduced motion, a pointer resting on the band, and
- * focus inside it — the last two so that reading a card, or tabbing to a
+ * ...AND NEVER A DEAD BUTTON. Where nothing is wholly past the edge (a display
+ * wide enough to show some of every column) or nothing is in view, any two
+ * cards trade instead — every card again with the same chance — because a press
+ * that visibly does nothing reads as broken.
+ */
+function pickTrade(wall: HTMLElement): [number, number] | null {
+  const hidden: number[] = [];
+  const shown: number[] = [];
+  for (const element of wall.querySelectorAll(`[${SLOT_ATTR}]`)) {
+    const slot = Number(element.getAttribute(SLOT_ATTR));
+    const box = element.getBoundingClientRect();
+    // ANY PART inside the window counts as shown, and a card the edge clips is
+    // no exception. It used to be: only a card WHOLLY inside counted, and just
+    // past `md` the columns either side of the centre are cut by the edges — so
+    // the centre card was the only one shown, and every press traded it.
+    (box.right > 0 && box.left < window.innerWidth ? shown : hidden).push(slot);
+  }
+
+  const pick = (from: number[]) =>
+    from[Math.floor(Math.random() * from.length)];
+  if (hidden.length > 0 && shown.length > 0) return [pick(hidden), pick(shown)];
+
+  const all = [...hidden, ...shown];
+  if (all.length < 2) return null;
+  const first = pick(all);
+  return [first, pick(all.filter((slot) => slot !== first))];
+}
+
+/**
+ * Trade a card on the band's own, every {@link ROTATION_MS} — as well as on a
+ * press of the shuffle, never instead of it.
+ *
+ * Without this, the cards past the edge wait for a reader who thinks to press;
+ * with it, every card comes into view for one who simply leaves the page open.
+ * The press is for a reader who does not want to wait, and it starts the
+ * countdown again (`restart`), so the band never trades a card on its own a
+ * moment after one was asked for.
+ *
+ * It stops for the cases where moving content is the wrong thing to do: a
+ * reader who has asked for reduced motion, a pointer resting on the cards, and
+ * focus inside them — the last two so that reading a card, or tabbing to a
  * profile link, is never interrupted by the card leaving.
  *
- * ...and for a fourth, which is the whole of the rail. See `tick`.
+ * ...and on the phone's rail, where the reader swipes to every card themselves
+ * and one swapped out from under a thumb is worse than none. Asked of the
+ * layout rather than of a breakpoint repeated from `panda.config.ts` — the same
+ * question `useSkylineClearance` asks — and asked again on every tick, because
+ * dragging the window across `md` re-runs nothing here.
  */
-function useRotation(
-  count: number,
-  swap: (a: number, b: number) => void,
-  rootRef: React.RefObject<HTMLDivElement | null>,
+function useAutoShuffle(
+  shuffle: () => void,
+  wallRef: React.RefObject<HTMLDivElement | null>,
 ) {
   const [held, setHeld] = useState(false);
-  // Kept in a ref so the interval below is not torn down and rebuilt: with a
-  // dependency on `swap` the timer would restart on every rotation, and the
-  // eight seconds would never elapse. Assigned in an effect rather than during
-  // the render that produced it, because a ref written while rendering is a
-  // value React is entitled to throw away.
-  const swapRef = useRef(swap);
+  // Bumped by a press. A dependency of the interval, so a press tears the timer
+  // down and starts a fresh eight seconds.
+  const [round, setRound] = useState(0);
+  // Kept in a ref so the interval is not rebuilt whenever `shuffle` is: a timer
+  // that restarted on every render would never reach eight seconds. Assigned in
+  // an effect rather than during render, because a ref written while rendering
+  // is a value React is entitled to throw away.
+  const shuffleRef = useRef(shuffle);
   useEffect(() => {
-    swapRef.current = swap;
+    shuffleRef.current = shuffle;
   });
 
   useEffect(() => {
-    if (held || count < 2) return;
-    if (typeof window === "undefined" || !window.matchMedia) return;
+    if (held || !window.matchMedia) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const tick = () => {
-      const root = rootRef.current;
-      if (!root) return;
-
-      // THE BAND ONLY. Below `md` these are a rail the reader scrolls
-      // themselves, and a swap there is wrong twice over. Everything past the
-      // fold measures as hidden, so the trade is between a card somebody is
-      // looking at and one they have already scrolled away from; and the pane
-      // keeps its scroll offset while the content under it changes, so a card
-      // a reader swiped to is replaced by one they did not. The rotation exists
-      // because the BAND is wider than the screen with no way to reach the rest
-      // of it — the rail has one, and it is the reader's thumb.
-      //
-      // Asked of the layout rather than of a breakpoint repeated from
-      // `panda.config.ts`, which is the same question `useSkylineClearance`
-      // asks, and it re-asks on every tick: the answer changes when the window
-      // is dragged across `md` and nothing re-runs this effect.
-      if (getComputedStyle(root).display !== "grid") return;
-
-      const hidden: number[] = [];
-      const shown: number[] = [];
-      for (const element of root.querySelectorAll(`[${SLOT_ATTR}]`)) {
-        const slot = Number(element.getAttribute(SLOT_ATTR));
-        const box = element.getBoundingClientRect();
-        // Wholly inside the window counts as shown; anything clipped by either
-        // edge is a candidate to be brought in, because a card half past the
-        // edge is still half unread.
-        (box.left >= 0 && box.right <= window.innerWidth ? shown : hidden).push(
-          slot,
-        );
-      }
-
-      // Nothing hidden (a display wide enough to show the whole band) or
-      // nothing shown: either way there is no trade to make.
-      if (hidden.length === 0 || shown.length === 0) return;
-
-      const pick = (from: number[]) =>
-        from[Math.floor(Math.random() * from.length)];
-      swapRef.current(pick(hidden), pick(shown));
-    };
-
-    const timer = setInterval(tick, ROTATION_MS);
+    const timer = setInterval(() => {
+      const wall = wallRef.current;
+      if (!wall || getComputedStyle(wall).display !== "grid") return;
+      shuffleRef.current();
+    }, ROTATION_MS);
     return () => clearInterval(timer);
-  }, [held, count, rootRef]);
+  }, [held, round, wallRef]);
 
   return {
-    // `pointerenter`/`leave` rather than `mouseenter`, so a touch that swipes
-    // the rail does not latch the band shut. Focus is captured so a profile
-    // link anywhere inside counts as somebody reading.
-    onPointerEnter: () => setHeld(true),
-    onPointerLeave: () => setHeld(false),
-    onFocusCapture: () => setHeld(true),
-    onBlurCapture: () => setHeld(false),
+    restart: () => setRound((current) => current + 1),
+    hold: {
+      // `pointerenter`/`leave` rather than `mouseenter`, so a touch that swipes
+      // the rail does not latch the band shut. Focus is captured so a profile
+      // link anywhere inside counts as somebody reading.
+      onPointerEnter: () => setHeld(true),
+      onPointerLeave: () => setHeld(false),
+      onFocusCapture: () => setHeld(true),
+      onBlurCapture: () => setHeld(false),
+    },
   };
 }
 
@@ -725,7 +789,7 @@ export interface TestimonialWallProps {
 
 export function TestimonialWall({ testimonials }: TestimonialWallProps) {
   // The band's own order, seeded from the server's and its own from then on.
-  // The rotation reorders THIS; the dealing below is a pure function of it, so
+  // The shuffle reorders THIS; the dealing below is a pure function of it, so
   // a swap here moves two cards between columns and changes nothing else.
   //
   // Held ALONGSIDE the prop it came from, rather than synchronised to it from
@@ -746,7 +810,11 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
   const [swapping, setSwapping] = useState<readonly number[]>([]);
   const wallRef = useRef<HTMLDivElement>(null);
   const bandRef = useRef<HTMLElement>(null);
+  const headingId = useId();
   const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Up from the press until both cards have faded back in. A press inside that
+  // window would start a second trade over the first — see `shuffle`.
+  const trading = useRef(false);
   // Where the cards were, read in the instant before the order changes, and the
   // glides that reading turned into. See `swap` and the layout effect under it.
   const settleFrom = useRef<Map<number, number> | null>(null);
@@ -787,6 +855,7 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
    */
   const swap = useCallback((a: number, b: number) => {
     if (a === b) return;
+    trading.current = true;
     setSwapping([a, b]);
 
     swapTimer.current = setTimeout(() => {
@@ -809,9 +878,30 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
       // cards in, still transparent. Dropping the mark in the same frame would
       // let the browser collapse both changes into a single style
       // recalculation, and the pair would simply appear.
-      requestAnimationFrame(() => requestAnimationFrame(() => setSwapping([])));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setSwapping([]);
+          trading.current = false;
+        }),
+      );
     }, FADE_MS);
   }, []);
+
+  /**
+   * One trade, from a press or the timer, and nothing while the last is running.
+   *
+   * IGNORED MID-TRADE rather than queued. A second press while two cards are
+   * faded out would mark two more and move all four, or put the first pair
+   * straight back — and a press queued behind the fade would fire after the
+   * reader has already seen nothing happen and pressed again.
+   */
+  const shuffle = useCallback(() => {
+    if (trading.current || !wallRef.current) return;
+    const pair = pickTrade(wallRef.current);
+    if (pair) swap(...pair);
+  }, [swap]);
+
+  const auto = useAutoShuffle(shuffle, wallRef);
 
   /**
    * Put every card that moved back where it was, and let it glide.
@@ -839,13 +929,15 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
    *
    * Runs after every render and does nothing unless a swap staged a reading,
    * which is `null` on all of them but one. A reader who has asked for reduced
-   * motion never gets here at all — `useRotation` does not start.
+   * motion still gets the trade they pressed for, but not the glide: the cards
+   * below it take their new places in the frame the order changes.
    */
   useLayoutEffect(() => {
     const wall = wallRef.current;
     const before = settleFrom.current;
     settleFrom.current = null;
     if (!wall || !before) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
     const after = cardTops(wall);
     for (const [slot, from] of before) {
@@ -870,7 +962,6 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
     }
   });
 
-  const hold = useRotation(order.length, swap, wallRef);
   // Reads the drawing and slides the band until the closest column is exactly
   // clear of it. Given the column count so it re-measures when a testimonial is
   // published or unpublished.
@@ -886,18 +977,38 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
   const slotOf = new Map(order.map((row, index) => [row.id, index]));
 
   return (
-    // Named, because it is a landmark with no heading over it. A visible
-    // heading was considered and left out: the cards say what they are, and a
-    // title would be the only piece of furniture on this page announcing its
-    // own section.
-    <section ref={bandRef} aria-label="Testimonials" className={bandStyle}>
+    // Named by its own heading, so the landmark and what a reader sees over it
+    // say the same thing.
+    <section ref={bandRef} aria-labelledby={headingId} className={bandStyle}>
+      <header className={headerStyle}>
+        <Typography tag="h2" type="title" id={headingId}>
+          Music to my ears
+        </Typography>
+        <Typography tag="p" type="bodyLarge">
+          Affirmations from those who have worked closely with me
+        </Typography>
+        <Button
+          variant="icon"
+          aria-label="Shuffle"
+          onClick={() => {
+            shuffle();
+            auto.restart();
+          }}
+          className={shuffleStyle}
+        >
+          <ShuffleIcon aria-hidden />
+          <Button.Tooltip>
+            <Tooltip.Text>Shuffle</Tooltip.Text>
+          </Button.Tooltip>
+        </Button>
+      </header>
       {/* NO SHADER STAGE. There was one — the band used to draw the house
           social icon on every card, and a stage is what lends those a single
           WebGL context rather than one each. The cards have no icon now (the
           whole card is the link), so the stage would be a context held open for
           nothing, off a page budget of about sixteen that the demos and the
           homepage's own icon row are already sharing. */}
-      <div ref={wallRef} className={wallStyle} {...hold}>
+      <div ref={wallRef} className={wallStyle} {...auto.hold}>
         {columns.map((column, index) =>
           // Absent rather than empty: an empty `<ul>` is a list announced to
           // anyone listening with nothing in it. Happens whenever fewer
