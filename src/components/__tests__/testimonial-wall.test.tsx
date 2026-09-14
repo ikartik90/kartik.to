@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Testimonial } from "@/domain/testimonial";
 import { TestimonialWall, dealIntoColumns } from "../testimonial-wall";
@@ -51,9 +58,23 @@ describe("TestimonialWall", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("is a landmark with a name, since it has no heading", () => {
+  it("is a landmark named by its heading", () => {
     render(<TestimonialWall testimonials={rows(4)} />);
-    expect(screen.getByRole("region", { name: "Testimonials" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Music to my ears" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Music to my ears" }),
+    ).toBeTruthy();
+  });
+
+  it("carries its subheading under the heading", () => {
+    render(<TestimonialWall testimonials={rows(4)} />);
+    expect(
+      screen.getByText(
+        "Affirmations from those who have worked closely with me",
+      ),
+    ).toBeTruthy();
   });
 
   it("draws a card for every published testimonial", () => {
@@ -87,6 +108,266 @@ describe("TestimonialWall", () => {
     expect(lists()).toHaveLength(1);
   });
 
+  describe("shuffle", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    /** Where every card is, by name: column, then place in the column. */
+    const seats = () =>
+      new Map(
+        lists().flatMap((list, column) =>
+          within(list)
+            .getAllByRole("listitem")
+            .map((card, place) => [
+              card.querySelector("figcaption")?.textContent ?? "",
+              `${column}:${place}`,
+            ]),
+        ),
+      );
+
+    /** The cards sitting somewhere other than where they were. */
+    const moved = (before: Map<string, string>) =>
+      [...seats()].filter(([name, seat]) => before.get(name) !== seat);
+
+    const press = () =>
+      fireEvent.click(screen.getByRole("button", { name: "Shuffle" }));
+
+    // The fade out, the trade and the fade back in, with room to spare.
+    const settle = () => act(() => vi.advanceTimersByTime(2000));
+
+    it("offers a shuffle button", () => {
+      render(<TestimonialWall testimonials={rows(8)} />);
+      expect(screen.getByRole("button", { name: "Shuffle" })).toBeTruthy();
+    });
+
+    // ONE TRADE A PRESS, the same exchange the band has always made: two cards
+    // swap seats and nothing else moves.
+    it("trades two cards on each press", () => {
+      render(<TestimonialWall testimonials={rows(8)} />);
+      const before = seats();
+
+      press();
+      settle();
+
+      const changed = moved(before);
+      expect(changed).toHaveLength(2);
+      const [[a, seatOfA], [b, seatOfB]] = changed;
+      expect(seatOfA).toBe(before.get(b));
+      expect(seatOfB).toBe(before.get(a));
+    });
+
+    it("trades again on the next press", () => {
+      render(<TestimonialWall testimonials={rows(8)} />);
+
+      press();
+      settle();
+      const before = seats();
+      press();
+      settle();
+
+      expect(moved(before)).toHaveLength(2);
+    });
+
+    // THE CENTRE CARD WAS TRADED ON EVERY PRESS. Just past `md` the columns
+    // either side of it are cut by the window's edge, and a card had to be
+    // WHOLLY inside the window to count as shown — so the centre card was the
+    // only one that did, and every trade was made with it. A card the window
+    // clips is on screen all the same, and takes its turn like the rest.
+    it("gives a card clipped by the window's edge the same turns as the rest", () => {
+      // Five columns of 280px, laid out as they are just past `md` on a 1024px
+      // window: the middle one wholly inside, its neighbours cut by the edges,
+      // and the outer two past them entirely.
+      const LEFT = [-320, -20, 372, 764, 1064];
+      vi.spyOn(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+      ).mockImplementation(function (this: HTMLElement) {
+        const list = this.parentElement;
+        const column = [...(list?.parentElement?.children ?? [])].indexOf(
+          list as Element,
+        );
+        const card = this.matches("li");
+        return DOMRect.fromRect({
+          x: card ? LEFT[column] : 0,
+          width: card ? 280 : 0,
+        });
+      });
+      render(<TestimonialWall testimonials={rows(8)} />);
+
+      // Every seat a reader can see any part of: the middle column's one card
+      // and the two in each of its neighbours.
+      const traded = new Map<string, number>();
+      for (let i = 0; i < 200; i++) {
+        const before = seats();
+        press();
+        settle();
+        for (const [name] of moved(before)) {
+          const seat = before.get(name) ?? "";
+          if (/^[123]:/.test(seat)) {
+            traded.set(seat, (traded.get(seat) ?? 0) + 1);
+          }
+        }
+      }
+
+      // One seen card a press, over five seen seats: forty turns apiece in
+      // expectation. The bounds are five standard deviations wide, so a fair
+      // hand never fails this and a hand that always picks the centre (200
+      // against 0) always does.
+      expect([...traded.keys()].sort()).toEqual([
+        "1:0",
+        "1:1",
+        "2:0",
+        "3:0",
+        "3:1",
+      ]);
+      for (const turns of traded.values()) {
+        expect(turns).toBeGreaterThan(10);
+        expect(turns).toBeLessThan(90);
+      }
+    });
+
+    // A press while two cards are still faded out would start a second trade
+    // over the first, and the band would move four cards — or put the first two
+    // straight back.
+    it("ignores a press while a trade is still under way", () => {
+      render(<TestimonialWall testimonials={rows(8)} />);
+      const before = seats();
+
+      press();
+      press();
+      settle();
+
+      expect(moved(before)).toHaveLength(2);
+    });
+
+    // THE BUTTON IS AS WELL AS THE TIMER, NOT INSTEAD OF IT. Left alone the
+    // band still trades a card every eight seconds; the button only lets a
+    // reader ask for one sooner.
+    describe("on its own", () => {
+      /** Whether the reader has asked for reduced motion. */
+      let reduced = false;
+      /** What the stylesheet has made of the wall: the band, or the rail. */
+      let layout = "grid";
+
+      beforeEach(() => {
+        reduced = false;
+        layout = "grid";
+        vi.stubGlobal(
+          "matchMedia",
+          vi.fn((query: string) => ({
+            matches: query.includes("reduced-motion") && reduced,
+          })),
+        );
+        // The band, not the phone's rail: the stylesheet decides which, and
+        // jsdom has no stylesheet to ask.
+        const real = window.getComputedStyle.bind(window);
+        vi.spyOn(window, "getComputedStyle").mockImplementation(
+          (element, pseudo) => {
+            const style = real(element, pseudo);
+            return new Proxy(style, {
+              get: (target, key) =>
+                key === "display" ? layout : Reflect.get(target, key, target),
+            });
+          },
+        );
+      });
+      afterEach(() => vi.unstubAllGlobals());
+
+      const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+      const wall = () => lists()[0].parentElement as HTMLElement;
+
+      it("trades two cards every eight seconds", () => {
+        render(<TestimonialWall testimonials={rows(8)} />);
+        const before = seats();
+
+        wait(7000);
+        expect(moved(before)).toHaveLength(0);
+
+        wait(1000);
+        settle();
+        expect(moved(before)).toHaveLength(2);
+      });
+
+      it("keeps trading after the first", () => {
+        render(<TestimonialWall testimonials={rows(8)} />);
+        wait(8000);
+        settle();
+        const before = seats();
+
+        wait(6000);
+        settle();
+
+        expect(moved(before)).toHaveLength(2);
+      });
+
+      // A reader in the middle of a card must not have it taken away.
+      it("holds still while the pointer rests on the cards", () => {
+        render(<TestimonialWall testimonials={rows(8)} />);
+        const before = seats();
+
+        fireEvent.pointerEnter(wall());
+        wait(30000);
+
+        expect(moved(before)).toHaveLength(0);
+      });
+
+      it("holds still while focus is inside the cards", () => {
+        render(
+          <TestimonialWall
+            testimonials={rows(8).map((testimonial) => ({
+              ...testimonial,
+              linkedinUrl: "https://www.linkedin.com/in/someone",
+            }))}
+          />,
+        );
+        const before = seats();
+
+        fireEvent.focus(within(wall()).getAllByRole("link")[0]);
+        wait(30000);
+
+        expect(moved(before)).toHaveLength(0);
+      });
+
+      it("never moves a card unasked for a reader who wants less motion", () => {
+        reduced = true;
+        render(<TestimonialWall testimonials={rows(8)} />);
+        const before = seats();
+
+        wait(30000);
+
+        expect(moved(before)).toHaveLength(0);
+      });
+
+      // The phone's rail is swiped by the reader, who can reach every card that
+      // way — and a card swapped out from under a thumb is worse than none.
+      it("leaves the phone's rail alone", () => {
+        layout = "flex";
+        render(<TestimonialWall testimonials={rows(8)} />);
+        const before = seats();
+
+        wait(30000);
+
+        expect(moved(before)).toHaveLength(0);
+      });
+
+      // A press starts the countdown again, so the band never trades a card on
+      // its own a moment after the reader asked for one.
+      it("waits a full eight seconds after a press", () => {
+        render(<TestimonialWall testimonials={rows(8)} />);
+        wait(6000);
+        const before = seats();
+
+        press();
+        wait(7000);
+
+        expect(moved(before)).toHaveLength(2);
+      });
+    });
+  });
+
   // The wall used to carry one — a single WebGL context moved between the
   // LinkedIn icons on the cards. The icons are gone (the whole card is the link
   // now), and a context kept for nothing is a context off a budget of about
@@ -117,10 +398,12 @@ describe("TestimonialQuote (through the wall)", () => {
   });
 
   // Nothing on this card is pressable except a profile, so a card without one
-  // contributes no controls at all.
+  // contributes no controls at all. The band's own shuffle is not the card's.
   it("is not a control, unlike the card on the board", () => {
     render(<TestimonialWall testimonials={[row()]} />);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(
+      within(screen.getByRole("listitem")).queryAllByRole("button"),
+    ).toHaveLength(0);
   });
 
   // ...and where there IS a profile it is a real link, which the board's card
@@ -336,7 +619,7 @@ describe("dealIntoColumns", () => {
   });
 
   // Deterministic: the server and the client deal the same hand from the same
-  // order, so hydration matches and the rotation moves cards by reordering the
+  // order, so hydration matches and the shuffle moves cards by reordering the
   // list rather than by dealing it differently.
   it("deals the same hand from the same order", () => {
     expect(deal(8)).toEqual(deal(8));

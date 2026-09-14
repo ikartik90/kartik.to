@@ -111,6 +111,10 @@ function list() {
   return within(document.querySelector("[cmdk-list]") as HTMLElement);
 }
 
+/** Two playground rows, which carry what the playground is after its name. */
+const CALCHEMY = "Calchemy: Headless Parser for Natural Language Dates";
+const CREST_ICONS = "Crest Icons: 300+ Handcrafted SVG Icons";
+
 afterEach(() => {
   cleanup();
   delete (navigator as { userAgentData?: unknown }).userAgentData;
@@ -660,7 +664,7 @@ describe("CommandPalette", () => {
   describe("Calchemy", () => {
     it("is offered logged out, beside the shader one", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Calchemy")).toBeDefined();
+      expect(screen.getByText(CALCHEMY)).toBeDefined();
     });
 
     it("routes to the playground and closes the palette", () => {
@@ -668,7 +672,7 @@ describe("CommandPalette", () => {
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByText("Calchemy"));
+      fireEvent.click(screen.getByText(CALCHEMY));
 
       expect(mockPush).toHaveBeenCalledWith("/playground/calchemy");
       expect(dialog.close).toHaveBeenCalledOnce();
@@ -681,17 +685,17 @@ describe("CommandPalette", () => {
       mockPathname.mockReturnValue("/playground/calchemy");
       render(<CommandPalette />);
 
-      expect(list().queryByText("Calchemy")).toBeNull();
+      expect(list().queryByText(CALCHEMY)).toBeNull();
       expect(list().getByText("Waveform Studio")).toBeDefined();
     });
   });
 
   // The third, public on the same grounds again: the sliders write nothing,
   // and the three presses that DO write are checked on the server.
-  describe("Icon Studio", () => {
+  describe("Crest Icons", () => {
     it("is offered logged out, beside the other two", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Icon Studio")).toBeDefined();
+      expect(screen.getByText(CREST_ICONS)).toBeDefined();
     });
 
     it("routes to the playground and closes the palette", () => {
@@ -699,7 +703,7 @@ describe("CommandPalette", () => {
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByText("Icon Studio"));
+      fireEvent.click(screen.getByText(CREST_ICONS));
 
       expect(mockPush).toHaveBeenCalledWith("/playground/icons");
       expect(dialog.close).toHaveBeenCalledOnce();
@@ -709,9 +713,9 @@ describe("CommandPalette", () => {
       mockPathname.mockReturnValue("/playground/icons");
       render(<CommandPalette />);
 
-      expect(list().queryByText("Icon Studio")).toBeNull();
+      expect(list().queryByText(CREST_ICONS)).toBeNull();
       expect(list().getByText("Waveform Studio")).toBeDefined();
-      expect(list().getByText("Calchemy")).toBeDefined();
+      expect(list().getByText(CALCHEMY)).toBeDefined();
     });
   });
 
@@ -924,7 +928,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().getByText("Playgrounds")).toBeDefined();
-      expect(list().getByText("Calchemy")).toBeDefined();
+      expect(list().getByText(CALCHEMY)).toBeDefined();
       expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
@@ -932,7 +936,7 @@ describe("CommandPalette", () => {
       mockPathname.mockReturnValue("/playground/shader/preset-1");
       render(<CommandPalette />);
 
-      expect(list().getByText("Calchemy")).toBeDefined();
+      expect(list().getByText(CALCHEMY)).toBeDefined();
       expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
@@ -954,7 +958,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Calchemy")).toBeNull();
+      expect(list().queryByText(CALCHEMY)).toBeNull();
       expect(list().getByText("Exit editor")).toBeDefined();
     });
   });

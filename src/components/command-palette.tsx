@@ -742,7 +742,7 @@ export function CommandPalette() {
                         onSelect={handleCalchemyPlayground}
                       >
                         <CalendarIcon className={iconStyle} />
-                        Calchemy
+                        Calchemy: Headless Parser for Natural Language Dates
                       </Command.Item>
                     )}
                     {!isIconsPlayground && (
@@ -751,7 +751,7 @@ export function CommandPalette() {
                         onSelect={handleIconsPlayground}
                       >
                         <ComponentIcon className={iconStyle} />
-                        Icon Studio
+                        Crest Icons: 300+ Handcrafted SVG Icons
                       </Command.Item>
                     )}
                   </Command.Group>
