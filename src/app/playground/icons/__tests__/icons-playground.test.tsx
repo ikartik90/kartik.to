@@ -790,7 +790,7 @@ describe("what the author is shown", () => {
     expect(within(dialog).getByText(/check\.svg/)).toBeTruthy();
     expect(mockDeleteIcon).not.toHaveBeenCalled();
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await userEvent.click(within(dialog).getByRole("option", { name: "Delete" }));
     await waitFor(() =>
       expect(mockDeleteIcon).toHaveBeenCalledWith({ key: "icons/check.svg" }),
     );

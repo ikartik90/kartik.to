@@ -7,6 +7,7 @@ import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 import { useEditorStore } from "@/store/editor";
 import { useGridDraftStore } from "@/store/grid-draft";
 import { autosaveKey } from "@/utils/editor-autosave";
+import { isGridDraftDirty } from "@/utils/grid-draft";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -1170,6 +1171,40 @@ describe("useCommandPalette", () => {
       const { saveGridLayout } = await import("@/app/actions/grid");
       expect(saveGridLayout).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalled();
+    });
+
+    // The editor restores a local snapshot over the saved copy when it opens —
+    // so a discard that left the snapshot behind was undone the next time the
+    // page was edited: the thrown-away work came straight back.
+    it("throws the local snapshot away with a document's edits", () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore.getState().setTitle("Changed");
+      const key = autosaveKey("existing-id", "ARTICLE");
+      window.localStorage.setItem(key, "snapshot");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+      act(() => result.current.confirmExitDiscard());
+
+      expect(window.localStorage.getItem(key)).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith("/writing/my-post");
+    });
+
+    it("throws the local snapshot away with the homepage's edits", () => {
+      mockPathname.mockReturnValue("/edit/home");
+      useEditorStore.setState({ draftId: "home-id", category: "ARTICLE" });
+      useEditorStore.getState().setTitle("Changed");
+      useGridDraftStore.getState().setPin("post:1", 3);
+      const key = autosaveKey("home-id", "ARTICLE");
+      window.localStorage.setItem(key, "snapshot");
+
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleBack());
+      act(() => result.current.confirmExitDiscard());
+
+      expect(window.localStorage.getItem(key)).toBeNull();
+      expect(isGridDraftDirty(useGridDraftStore.getState())).toBe(false);
     });
   });
 

@@ -1616,6 +1616,7 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
         title="Delete Preset"
         message="You are about to delete this preset. This cannot be undone."
         confirmLabel="Delete"
+        confirmIcon={TrashIcon}
         onConfirm={() => void deletePreset()}
         onClose={() => setPendingDelete(false)}
       />
