@@ -3084,6 +3084,23 @@ function emptyParagraphBlock(): BlockNode {
   return { type: "paragraph", children: [{ type: "text", text: "" }] };
 }
 
+/**
+ * The layout a paragraph made off `source` keeps: its indent and its centring.
+ * Only the fields that are set, so a plain block yields a plain paragraph.
+ */
+function inheritedLayout(
+  source: BlockNode | undefined,
+): { indent?: true; align?: "center" } {
+  const { indent, align } = (source ?? {}) as {
+    indent?: boolean;
+    align?: "center";
+  };
+  return {
+    ...(indent ? { indent: true } : {}),
+    ...(align === "center" ? { align } : {}),
+  };
+}
+
 /** True when the figure is second-to-last and followed by a synthetic trailing paragraph. */
 function hasSyntheticTrailingParagraph(
   blocks: BlockNode[],
@@ -3762,7 +3779,7 @@ export function ArticleEditor({
     // The new block inherits the current block's type for list items only, so
     // pressing Enter continues the list. Every other block type (headings,
     // blockquotes, metrics, …) splits into a default paragraph — which carries
-    // the indent forward so splitting an indented block keeps both halves indented.
+    // the indent and centring forward so both halves keep the same layout.
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
       if (isListItemType(current.type)) {
@@ -3776,11 +3793,10 @@ export function ArticleEditor({
           ...(marker ? { marker } : {}),
         } as BlockNode;
       }
-      const indent = (current as { indent?: boolean }).indent;
       return {
         type: "paragraph",
         children: afterNodes,
-        ...(indent ? { indent: true } : {}),
+        ...inheritedLayout(current),
       };
     })();
 
@@ -3799,13 +3815,11 @@ export function ArticleEditor({
     }, 0);
   }
 
-  // A fresh empty paragraph that inherits `indent` from `source` — so a new
-  // node created off an indented block (Enter at its start/end) stays indented.
+  // A fresh empty paragraph that inherits `indent` and `align` from `source` —
+  // so a new node created off an indented or centred block (Enter at its
+  // start/end) keeps that layout.
   function emptyParagraphInheriting(source: BlockNode | undefined): BlockNode {
-    const base = emptyParagraphBlock();
-    return (source as { indent?: boolean } | undefined)?.indent
-      ? ({ ...base, indent: true } as BlockNode)
-      : base;
+    return { ...emptyParagraphBlock(), ...inheritedLayout(source) } as BlockNode;
   }
 
   function insertParagraphBefore(index: number) {
