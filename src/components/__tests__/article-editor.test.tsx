@@ -3514,6 +3514,64 @@ describe("ArticleEditor block indent", () => {
     expect((content[1] as { indent?: boolean }).indent).toBe(true);
   });
 
+  // Centring rides along exactly like the indent: splitting the homepage's
+  // centred intro into several paragraphs must not range the rest left.
+  describe("centring", () => {
+    const alignOf = (i: number) =>
+      (useEditorStore.getState().document.content[i] as { align?: string })
+        .align;
+
+    it("carries the centring to the new paragraph when splitting mid-block", () => {
+      const el = seed({ ...para("hello world"), align: "center" });
+      el.focus();
+      const sel = window.getSelection()!;
+      const range = document.createRange();
+      range.setStart(el.firstChild!, 5);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      fireEvent.keyDown(el, { key: "Enter" });
+
+      expect(alignOf(0)).toBe("center");
+      expect(alignOf(1)).toBe("center");
+      expect(
+        document.querySelector("p[data-block-index='1'][data-align='center']"),
+      ).not.toBeNull();
+    });
+
+    it("carries the centring to a new paragraph on Enter at the end", () => {
+      const el = seed({ ...para("hello"), align: "center" });
+      el.focus();
+      caretAtEnd(el);
+
+      fireEvent.keyDown(el, { key: "Enter" });
+
+      expect(alignOf(1)).toBe("center");
+    });
+
+    it("carries the centring to the empty paragraph on Enter at the start", () => {
+      const el = seed({ ...para("hello"), align: "center" });
+      el.focus();
+      caretAtStart(el);
+
+      fireEvent.keyDown(el, { key: "Enter" });
+
+      expect(alignOf(0)).toBe("center");
+      expect(alignOf(1)).toBe("center");
+    });
+
+    it("does not centre the paragraph split off a left-aligned one", () => {
+      const el = seed(para("hello"));
+      el.focus();
+      caretAtEnd(el);
+
+      fireEvent.keyDown(el, { key: "Enter" });
+
+      expect(alignOf(1)).toBeUndefined();
+    });
+  });
+
   it("splitting an indented heading yields an indented paragraph", () => {
     const el = seed({
       type: "heading",
