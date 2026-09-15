@@ -31,6 +31,7 @@ import { postCardMedia, type PostCardConfig } from "@/domain/post";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import type { MediaNode } from "@/domain/nodes";
 import type { GridCard } from "@/lib/grid";
+import UnpublishIcon from "@/assets/icons/unpublish.svg";
 
 // ---------------------------------------------------------------------------
 // The homepage. Projects, articles and published components in one masonry
@@ -605,6 +606,7 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
             title="Unpublish Component"
             message="You are about to unpublish this component. Do you want to proceed?"
             confirmLabel="Unpublish"
+            confirmIcon={UnpublishIcon}
             onConfirm={() => {
               if (confirmUnpublish) draft.remove(confirmUnpublish.key);
             }}

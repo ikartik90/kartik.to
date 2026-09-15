@@ -1094,7 +1094,7 @@ describe("ShaderPlayground delete", () => {
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("option", { name: "Delete" }));
 
     await waitFor(() => expect(deleteShaderPreset).toHaveBeenCalledWith("preset-1"));
     await waitFor(() =>
@@ -1110,7 +1110,7 @@ describe("ShaderPlayground delete", () => {
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("option", { name: "Cancel" }));
 
     expect(deleteShaderPreset).not.toHaveBeenCalled();
     expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("preset-1");
@@ -1127,7 +1127,7 @@ describe("ShaderPlayground delete", () => {
     await user.click(
       await screen.findByRole("button", { name: "Delete preset" }),
     );
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("option", { name: "Delete" }));
 
     await waitFor(() => expect(deleteShaderPreset).toHaveBeenCalled());
     expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe("preset-1");

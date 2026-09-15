@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { css, cx } from "../../styled-system/css";
 import {
+  commandGroup,
+  commandHeader,
+  commandList,
   dialogPanel,
   hotkey,
   menuIcon,
@@ -12,7 +15,10 @@ import {
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ComponentInsertDialog } from "@/components/component-insert-dialog";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  ConfirmDialog,
+  type ConfirmDialogProps,
+} from "@/components/confirm-dialog";
 import { useCommandPalette } from "@/hooks/use-command-palette";
 import { useHasCursor } from "@/hooks/use-has-cursor";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
@@ -45,18 +51,7 @@ import ConsoleIcon from "@/assets/icons/console.svg";
 // Styles
 // ---------------------------------------------------------------------------
 
-const inputRowStyle = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "md",
-  height: "token(spacing.4xl)",
-  paddingInline: "lg",
-  borderBottomWidth: "token(spacing.3xs)",
-  borderBottomStyle: "solid",
-  borderColor: "border.divider",
-  flexShrink: 0,
-  color: "text.body",
-});
+const inputRowStyle = commandHeader();
 
 const inputStyle = css({
   flex: "1 0 0",
@@ -107,19 +102,9 @@ const hotkeyLabelStyle = css({
   whiteSpace: "nowrap",
 });
 
-const listStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: "sm",
-  paddingBlock: "md",
-  overflowY: "auto",
-});
+const listStyle = commandList();
 
-const groupStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  paddingInline: "sm",
-});
+const groupStyle = commandGroup();
 
 const groupHeadingStyle = css({
   display: "flex",
@@ -221,6 +206,7 @@ export function CommandPalette() {
     title: string;
     message: string;
     confirmLabel: string;
+    confirmIcon: ConfirmDialogProps["confirmIcon"];
     onConfirm: () => void;
   } | null>(null);
 
@@ -554,6 +540,7 @@ export function CommandPalette() {
                                 title: `Unpublish ${noun}`,
                                 message: `You are about to unpublish this ${noun.toLowerCase()}. Do you want to proceed?`,
                                 confirmLabel: "Unpublish",
+                                confirmIcon: UnpublishIcon,
                                 onConfirm: () => void handleUnpublish(),
                               });
                               close();
@@ -596,6 +583,7 @@ export function CommandPalette() {
                                   message:
                                     "You are about to permanently delete this draft. Do you want to proceed?",
                                   confirmLabel: "Delete",
+                                  confirmIcon: TrashIcon,
                                   onConfirm: () => void handleDiscardDraft(),
                                 });
                                 close();
@@ -789,8 +777,13 @@ export function CommandPalette() {
         title="Unsaved Changes"
         message="You have unsaved changes to this preset. How do you want to proceed?"
         confirmLabel="Save changes and exit"
+        confirmIcon={SaveIcon}
         onConfirm={() => void confirmExitSave()}
-        alternate={{ label: "Discard changes", onClick: confirmExitDiscard }}
+        alternate={{
+          label: "Discard changes",
+          icon: TrashIcon,
+          onClick: confirmExitDiscard,
+        }}
         onClose={cancelExit}
       />
 
@@ -801,6 +794,7 @@ export function CommandPalette() {
         title={confirm?.title ?? ""}
         message={confirm?.message ?? ""}
         confirmLabel={confirm?.confirmLabel ?? ""}
+        confirmIcon={confirm?.confirmIcon ?? TrashIcon}
         onConfirm={() => confirm?.onConfirm()}
         onClose={() => setConfirm(null)}
       />

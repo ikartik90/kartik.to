@@ -892,17 +892,28 @@ export function useCommandPalette(
     }
   };
 
-  /** Drop the open editor's buffer. Nothing was written, so nothing is undone. */
+  /**
+   * Drop the open editor's buffer. Nothing was written, so nothing is undone.
+   *
+   * The document's local snapshot goes with it, and it has to go HERE rather
+   * than in each caller: the editor restores that snapshot over the saved copy
+   * when it opens, so a discard that left it behind brought the thrown-away
+   * work straight back the next time the page was edited. Read before the reset,
+   * which forgets which draft it was.
+   */
   const discardEditor = () => {
+    const { draftId, category } = useEditorStore.getState();
     switch (editorKind) {
       case "shaderPreset":
         useShaderPresetDraftStore.getState().reset();
         return;
       case "grid":
+        clearAutosave(autosaveKey(draftId, category));
         useGridDraftStore.getState().reset();
         useEditorStore.getState().reset();
         return;
       case "document":
+        clearAutosave(autosaveKey(draftId, category));
         useEditorStore.getState().reset();
         return;
     }
@@ -953,9 +964,7 @@ export function useCommandPalette(
    * state for it to undo.
    */
   const handleDiscardAndExit = () => {
-    const { draftId, category } = useEditorStore.getState();
     const href = exitHref();
-    clearAutosave(autosaveKey(draftId, category));
     discardEditor();
     close();
     router.push(href);

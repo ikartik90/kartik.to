@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { css } from "../../../../styled-system/css";
 import { hotkey, menuIcon } from "../../../../styled-system/recipes";
 import InfoIcon from "@/assets/icons/info.svg";
+import TrashIcon from "@/assets/icons/trash.svg";
 import { isBottomSheetLayout } from "@/data/media-queries";
 import { useTrickleProgress } from "@/hooks/use-demo-loader";
 import { useIsAdmin } from "@/hooks/use-is-admin";
@@ -680,6 +681,7 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
             : `Delete ${chosen.length} icons? This cannot be undone.`
         }
         confirmLabel="Delete"
+        confirmIcon={TrashIcon}
         onConfirm={remove}
         onClose={() => setPendingDelete(false)}
       />
