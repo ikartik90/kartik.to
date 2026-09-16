@@ -102,7 +102,7 @@ test.describe("public routes", () => {
     // exception and keeps its own title (`title.default`), which is what the
     // listing test above asserts — so the two together are what would catch
     // the template being dropped or reaching one page too far.
-    await expect(page).toHaveTitle("Shader Playground — Kartik Iyer");
+    await expect(page).toHaveTitle("Waveform Studio — Kartik Iyer");
     // The rail, which is the page — asserting it rules out an interstitial
     // that also answers 200: Vercel's own deployment-protection login is one,
     // and an earlier CI run went green against exactly that.
