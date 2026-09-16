@@ -18,8 +18,8 @@ import { TestimonialForm } from "./testimonial-form";
 //   - no nav entry and no footer link;
 //   - not in `SITE_PATHS`, so it cannot be chosen as a link card's destination;
 //   - not in the command palette, public rows or admin ones;
-//   - `robots: { index: false, follow: false }`, the same refusal the two
-//     playgrounds file, so it stays out of search results.
+//   - `robots: { index: false, follow: false }`, so it stays out of search
+//     results.
 //
 // That is obscurity, and obscurity is a weak gate. It is the RIGHT weak gate
 // here: the link is handed out one person at a time, the worst a leak buys

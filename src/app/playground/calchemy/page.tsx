@@ -12,8 +12,8 @@ import { CalchemyPlayground } from "./calchemy-playground";
 // loads in the browser, reads a phrase and paints the days it means. There was
 // never anything behind the gate to protect.
 //
-// Kept out of the index all the same. It is a tool with a name rather than a
-// page with a subject, and it has no business turning up in a search for one.
+// Indexed like the other playgrounds: `site-index` lists it in `sitemap.xml`
+// and `llms.txt`, so its metadata must not refuse a crawler.
 //
 // The playground itself is a client component: an engine that loads in the
 // browser, a phrase, and the days it means. None of it is the server's
@@ -23,7 +23,6 @@ import { CalchemyPlayground } from "./calchemy-playground";
 export const metadata: Metadata = {
   title: SITE_PAGES.calchemy.title,
   description: "Fire natural language date queries at a year of calendar.",
-  robots: { index: false, follow: false },
 };
 
 export default function CalchemyPlaygroundPage() {
