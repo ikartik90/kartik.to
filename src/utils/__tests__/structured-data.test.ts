@@ -60,6 +60,10 @@ describe("homeJsonLd", () => {
     });
   });
 
+  it("knows the person by their full name too", () => {
+    expect(ofType(data, "Person")!.alternateName).toBe("Shanker Kartik Iyer");
+  });
+
   it("ties the person to their profiles elsewhere", () => {
     expect(ofType(data, "Person")!.sameAs).toEqual(
       expect.arrayContaining([
@@ -113,6 +117,23 @@ describe("postJsonLd", () => {
     expect(ofType(data, "BlogPosting")).toMatchObject({
       url: `${SITE}/writing/on-craft`,
     });
+  });
+
+  it("describes the About page as an AboutPage about the person", () => {
+    const data = postJsonLd(
+      post({ category: "PAGE", slug: "about", title: "About Me" }),
+      SITE,
+    );
+    expect(ofType(data, "AboutPage")).toMatchObject({
+      url: `${SITE}/about`,
+      headline: "About Me",
+      mainEntity: { "@id": `${SITE}/#person` },
+    });
+  });
+
+  it("describes any other page as a plain WebPage", () => {
+    const data = postJsonLd(post({ category: "PAGE", slug: "uses" }), SITE);
+    expect(ofType(data, "WebPage")).not.toHaveProperty("mainEntity");
   });
 
   it("falls back to a name for a post without a title", () => {

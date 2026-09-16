@@ -138,6 +138,29 @@ test.describe("public routes", () => {
     expect((await markdown.text()).trim()).not.toBe("");
   });
 
+  // Reached the way a visitor reaches it — the homepage only links to About
+  // once it is published, so an unpublished page skips rather than fails.
+  test("the About page is titled and described for search", async ({ page }) => {
+    await page.goto("/");
+    const link = page.locator('a[href="/about"]').first();
+    test.skip((await link.count()) === 0, "About is not published");
+
+    await page.goto("/about");
+    // The tab and the result say who it is about; the heading stays the post's.
+    await expect(page).toHaveTitle(
+      "About Kartik Iyer — Product Designer & Design Engineer in Toronto",
+    );
+    const graph = JSON.parse(
+      (await page
+        .locator('script[type="application/ld+json"]')
+        .textContent()) ?? "{}",
+    )["@graph"] as { "@type": string; alternateName?: string }[];
+    expect(graph.map((node) => node["@type"])).toContain("AboutPage");
+    expect(graph.find((node) => node["@type"] === "Person")?.alternateName).toBe(
+      "Shanker Kartik Iyer",
+    );
+  });
+
   test("an unknown slug 404s rather than erroring", async ({ page }) => {
     const response = await page.goto("/writing/no-such-article-exists");
     expect(response?.status()).toBe(404);

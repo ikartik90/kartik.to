@@ -6,6 +6,7 @@ import {
   SITE_TITLE,
   SOCIAL_PROFILES,
 } from "@/data/site";
+import { ABOUT_SLUG } from "@/data/page-slugs";
 import { postSummary } from "@/utils/post-summary";
 import { getPostReadUrl } from "@/utils/post-urls";
 
@@ -43,6 +44,7 @@ function personNode(siteUrl: string): JsonLdNode {
     "@type": "Person",
     "@id": ids(siteUrl).person,
     name: AUTHOR.name,
+    alternateName: AUTHOR.fullName,
     url: siteUrl,
     image: `${siteUrl}${AUTHOR.avatar}`,
     jobTitle: [...AUTHOR.jobTitles],
@@ -113,10 +115,13 @@ export function postJsonLd(post: Post, siteUrl: string): JsonLd {
   const { type, fallbackTitle } = POST_TYPES[post.category];
   const url = `${siteUrl}${getPostReadUrl(post.category, post.slug)}`;
   const description = postSummary(post.content);
+  // schema.org has a type for exactly this page, and it is about the person.
+  const isAbout = post.category === "PAGE" && post.slug === ABOUT_SLUG;
 
   return graph(
     {
-      "@type": type,
+      "@type": isAbout ? "AboutPage" : type,
+      ...(isAbout ? { mainEntity: { "@id": person } } : {}),
       "@id": `${url}#article`,
       url,
       mainEntityOfPage: url,

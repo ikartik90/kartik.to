@@ -5,6 +5,7 @@ import { ArticleRenderer } from "@/components/article-renderer";
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { ABOUT_SLUG } from "@/data/page-slugs";
+import { ABOUT_TITLE } from "@/data/site";
 import { isAdmin } from "@/lib/auth/server";
 import { postMetadata } from "@/lib/post-metadata";
 import { resolvePost } from "@/lib/posts";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await resolvePost(ABOUT_SLUG, "PAGE", { allowDraft: false });
-  return postMetadata(page, "/about", "About");
+  return postMetadata(page, "/about", "About", { searchTitle: ABOUT_TITLE });
 }
 
 export default async function AboutPage() {

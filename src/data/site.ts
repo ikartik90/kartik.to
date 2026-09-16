@@ -23,6 +23,14 @@ export const SITE_DESCRIPTION =
 export const SITE_LOCALE = "en_US";
 
 /**
+ * The About page's title in search results and link previews. The page's own
+ * heading stays the post's title ("About Me"); a title is the strongest words
+ * a page has for search, and "About Me" names nobody.
+ */
+export const ABOUT_TITLE =
+  "About Kartik Iyer — Product Designer & Design Engineer in Toronto";
+
+/**
  * Who the site is by — stated once for the structured data, the metadata and
  * `llms.txt`, which all describe the same person to machines that cannot read
  * the page's pictures.
@@ -32,6 +40,8 @@ export const SITE_LOCALE = "en_US";
  */
 export const AUTHOR = {
   name: "Kartik Iyer",
+  // The full name the About page opens with, so a search for it finds him too.
+  fullName: "Shanker Kartik Iyer",
   jobTitles: ["Product Designer", "Founding Designer", "Design Engineer"],
   knowsAbout: [
     "Product design",
