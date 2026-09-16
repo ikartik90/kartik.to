@@ -169,8 +169,8 @@ describe("linkCardTitle", () => {
   // a decorative image has no accessible name at all.
   it("falls back to the destination for a card with no words", () => {
     expect(
-      linkCardTitle({ link: { kind: "internal", href: SITE_PATHS[0].path } }),
-    ).toBe(SITE_PATHS[0].label);
+      linkCardTitle({ link: { kind: "internal", href: "/playground/shader" } }),
+    ).toBe("Waveform Studio");
   });
 });
 

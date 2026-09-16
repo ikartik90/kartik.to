@@ -6,29 +6,52 @@
 // for", and those are two different sets. `/edit/*` is admin surface and must
 // never be offered; `/writing/*` and `/work/*` are the posts, and every
 // published one of them ALREADY has a card on this grid. A link card pointing at
-// an article would be that article twice over in the same listing, which is
-// precisely the case the picker exists to keep out — see `SitePathSchema`.
+// an article would be that article twice over in the same listing, and the
+// picker, which offers nothing but this list, is what keeps that out.
+// `InternalPathSchema` checks a stored path's shape and deliberately not its
+// membership here.
 //
 // What is left is the pages that are not posts and have no card of their own:
 // the playgrounds. That is what the link card was added for.
 //
-// The labels are the picker's rows and the fallback name of a card carrying no
-// words of its own (`linkCardTitle`), so they read as destinations rather than
-// as route segments.
+// Each page has TWO names, written here once so no surface drifts from the
+// rest. `title` is the public one — the browser tab and a search result (the
+// route's own metadata), the palette row, the line in `llms.txt`, and the name
+// a card with no words is announced by (`linkCardTitle`). `label` is short, and
+// it appears in one place: the link-card picker in the rail, where the rows
+// only have to tell each other apart.
 // ---------------------------------------------------------------------------
 
 export interface SitePath {
   path: string;
+  /** The picker's row. */
   label: string;
+  /** What everyone else reads. */
+  title: string;
 }
 
-export const SITE_PATHS: SitePath[] = [
-  { path: "/playground/shader", label: "Shader Playground" },
-  { path: "/playground/calchemy", label: "Calchemy Playground" },
-  { path: "/playground/icons", label: "Icons Playground" },
-];
+export const SITE_PAGES = {
+  shader: {
+    path: "/playground/shader",
+    label: "Shader Playground",
+    title: "Waveform Studio",
+  },
+  calchemy: {
+    path: "/playground/calchemy",
+    label: "Calchemy Playground",
+    title: "Calchemy: Natural-Language Date Parser",
+  },
+  icons: {
+    path: "/playground/icons",
+    label: "Icons Playground",
+    title: "Crest Icons: 300+ Handcrafted SVG Icons",
+  },
+} satisfies Record<string, SitePath>;
 
-/** The destination's own name, for a card that shows no words over it. */
-export function sitePathLabel(path: string): string | undefined {
-  return SITE_PATHS.find((entry) => entry.path === path)?.label;
+/** Every page, in the order the picker lists them. */
+export const SITE_PATHS: SitePath[] = Object.values(SITE_PAGES);
+
+/** The public name of the page at `path`, if this list holds it. */
+export function sitePathTitle(path: string): string | undefined {
+  return SITE_PATHS.find((entry) => entry.path === path)?.title;
 }

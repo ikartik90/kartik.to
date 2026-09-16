@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import type { Post } from "@/domain/post";
 import { AUTHOR, SITE_DESCRIPTION, SITE_TITLE, SOCIAL_PROFILES } from "@/data/site";
 import { HOME_SLUG } from "@/data/page-slugs";
-import { sitePathLabel } from "@/data/site-paths";
+import { sitePathTitle } from "@/data/site-paths";
 import { postCover } from "@/utils/post-cover";
 import { postSummary } from "@/utils/post-summary";
 import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
@@ -112,7 +112,7 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
     ...section(
       "Playgrounds",
       INDEXED_PATHS.map(
-        (path) => `- [${sitePathLabel(path) ?? path}](${siteUrl}${path})`,
+        (path) => `- [${sitePathTitle(path) ?? path}](${siteUrl}${path})`,
       ),
     ),
     ...section(

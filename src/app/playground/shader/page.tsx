@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SITE_PAGES } from "@/data/site-paths";
 import { ShaderPlayground } from "./shader-playground";
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ import { ShaderPlayground } from "./shader-playground";
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: "Shader Playground",
+  title: SITE_PAGES.shader.title,
   description: "Tune a preset's shader background and copy it out as JSX.",
 };
 

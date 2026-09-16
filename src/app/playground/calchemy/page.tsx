@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SITE_PAGES } from "@/data/site-paths";
 import { CalchemyPlayground } from "./calchemy-playground";
 
 // ---------------------------------------------------------------------------
@@ -20,7 +21,7 @@ import { CalchemyPlayground } from "./calchemy-playground";
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: "Calchemy Playground",
+  title: SITE_PAGES.calchemy.title,
   description: "Fire natural language date queries at a year of calendar.",
   robots: { index: false, follow: false },
 };

@@ -27,6 +27,7 @@ import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { takePaletteIntent } from "@/utils/palette-intent";
 import { parseCommandLine } from "@/utils/palette-command";
 import { resolvePaletteCommand } from "@/data/palette-commands";
+import { SITE_PAGES } from "@/data/site-paths";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
@@ -721,7 +722,7 @@ export function CommandPalette() {
                         onSelect={handleShaderPlayground}
                       >
                         <ShaderIcon className={iconStyle} />
-                        Waveform Studio
+                        {SITE_PAGES.shader.title}
                       </Command.Item>
                     )}
                     {!isCalchemyPlayground && (
@@ -730,7 +731,7 @@ export function CommandPalette() {
                         onSelect={handleCalchemyPlayground}
                       >
                         <CalendarIcon className={iconStyle} />
-                        Calchemy: Natural-Language Date Parser
+                        {SITE_PAGES.calchemy.title}
                       </Command.Item>
                     )}
                     {!isIconsPlayground && (
@@ -739,7 +740,7 @@ export function CommandPalette() {
                         onSelect={handleIconsPlayground}
                       >
                         <ComponentIcon className={iconStyle} />
-                        Crest Icons: 300+ Handcrafted SVG Icons
+                        {SITE_PAGES.icons.title}
                       </Command.Item>
                     )}
                   </Command.Group>
