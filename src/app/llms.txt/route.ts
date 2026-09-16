@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const posts = await Promise.all(
-    (["WORK", "ARTICLE"] as const).map(getPublishedPostsByCategory),
+    (["PAGE", "WORK", "ARTICLE"] as const).map(getPublishedPostsByCategory),
   );
   return new Response(llmsTxt(posts.flat(), SITE_URL), {
     headers: { "Content-Type": "text/plain; charset=utf-8" },

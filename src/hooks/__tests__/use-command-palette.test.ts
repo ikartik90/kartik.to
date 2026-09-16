@@ -1324,6 +1324,17 @@ describe("useCommandPalette", () => {
       expect(main.contentEditable).not.toBe("true");
     });
 
+    // Its own route for the homepage's reason: `/edit/about` is what creates
+    // the record the first time, which the generic `/edit/:slug` cannot.
+    it("opens the About page's editor from the About page", () => {
+      mockPathname.mockReturnValue("/about");
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      act(() => result.current.handleEditPage());
+      expect(mockPush).toHaveBeenCalledWith("/edit/about");
+      expect(main.contentEditable).not.toBe("true");
+    });
+
     it("returns to the homepage on discarding the grid's layout", () => {
       mockPathname.mockReturnValue("/edit/home");
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1333,18 +1344,18 @@ describe("useCommandPalette", () => {
     });
 
     it("sets contentEditable on <main>", () => {
-      // A page that is neither the grid nor a post: the homepage now has real
-      // editing of its own and never reaches this branch.
-      mockPathname.mockReturnValue("/about");
+      // A page that is neither the grid nor a post: the homepage and the About
+      // page have real editing of their own and never reach this branch.
+      mockPathname.mockReturnValue("/vouch");
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleEditPage());
       expect(main.contentEditable).toBe("true");
     });
 
     it("falls back to document.body when no <main> exists", () => {
-      // A page that is neither the grid nor a post: the homepage now has real
-      // editing of its own and never reaches this branch.
-      mockPathname.mockReturnValue("/about");
+      // A page that is neither the grid nor a post: the homepage and the About
+      // page have real editing of their own and never reach this branch.
+      mockPathname.mockReturnValue("/vouch");
       main.parentNode?.removeChild(main);
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleEditPage());
@@ -1353,9 +1364,9 @@ describe("useCommandPalette", () => {
     });
 
     it("places the caret at position 0 of the first text node", () => {
-      // A page that is neither the grid nor a post: the homepage now has real
-      // editing of its own and never reaches this branch.
-      mockPathname.mockReturnValue("/about");
+      // A page that is neither the grid nor a post: the homepage and the About
+      // page have real editing of their own and never reach this branch.
+      mockPathname.mockReturnValue("/vouch");
       const addRange = vi.fn<(range: Range) => void>();
       vi.spyOn(window, "getSelection").mockReturnValue({
         removeAllRanges: vi.fn<() => void>(),
@@ -1623,6 +1634,17 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(async () => {});
       expect(result.current.currentDraft?.id).toBe("draft-1");
+    });
+
+    it("is the About page's draft when reading it at /about", async () => {
+      const { getDrafts } = await import("@/app/actions/post");
+      (getDrafts as Mock).mockResolvedValue([
+        { ...draftPost, id: "about-1", slug: "about", category: "PAGE" },
+      ]);
+      mockPathname.mockReturnValue("/about");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.currentDraft?.id).toBe("about-1");
     });
 
     it("is null when the viewed article is not a draft", async () => {

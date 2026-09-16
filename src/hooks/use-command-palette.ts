@@ -320,6 +320,13 @@ export function useCommandPalette(
         drafts.find((d) => d.category === "WORK" && d.slug === workSlug) ?? null
       );
     }
+    // A PAGE is read at `/<slug>` (see `getPostReadUrl`) — the About page.
+    const pageSlug = pathname.match(/^\/([^/]+)$/)?.[1];
+    if (pageSlug) {
+      return (
+        drafts.find((d) => d.category === "PAGE" && d.slug === pageSlug) ?? null
+      );
+    }
     return null;
   }, [isEditMode, pathname, drafts]);
 
@@ -602,6 +609,13 @@ export function useCommandPalette(
     if (isHome) {
       close();
       router.push("/edit/home");
+      return;
+    }
+    // Its own edit route too, which creates the About page's record the first
+    // time — the generic `/edit/:slug` needs a row to exist already.
+    if (pathname === "/about") {
+      close();
+      router.push("/edit/about");
       return;
     }
     const articleSlug = pathname.match(/^\/writing\/([^/]+)$/)?.[1];

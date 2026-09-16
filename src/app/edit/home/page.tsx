@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { css } from "../../../../styled-system/css";
 import { isAdmin } from "@/lib/auth/server";
 import { ArticleEditor } from "@/components/article-editor";
 import { HomeGrid } from "@/components/home-grid";
-import { SocialLinks } from "@/components/social-links";
+import { IntroLinks } from "@/components/intro-links";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getGridCards } from "@/lib/grid";
 import { getOrCreateHomePost } from "@/lib/home";
+import { isAboutPublished } from "@/lib/about";
 
 // ---------------------------------------------------------------------------
 // The homepage, editable — the grid's `/edit/:slug`, and the whole page's.
@@ -29,15 +29,14 @@ import { getOrCreateHomePost } from "@/lib/home";
 // A STATIC segment, so Next matches it ahead of `/edit/[slug]`.
 // ---------------------------------------------------------------------------
 
-const socialRowStyle = css({ display: "flex", justifyContent: "center" });
-
 export default async function EditHomePage() {
   // 404, not 401 — the admin routes do not admit to existing.
   if (!(await isAdmin())) notFound();
 
-  const [post, cards] = await Promise.all([
+  const [post, cards, aboutPublished] = await Promise.all([
     getOrCreateHomePost(),
     getGridCards(),
+    isAboutPublished(),
   ]);
 
   return (
@@ -55,11 +54,7 @@ export default async function EditHomePage() {
             project_grid: (
               <HomeGrid cards={cards} demos={serverDemoSlots(cards)} editable />
             ),
-            social_links: (
-              <nav aria-label="Social links" className={socialRowStyle}>
-                <SocialLinks />
-              </nav>
-            ),
+            social_links: <IntroLinks aboutPublished={aboutPublished} />,
           }}
         />
       </article>

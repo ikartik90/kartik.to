@@ -29,6 +29,14 @@ const home = post({
   updatedAt: new Date("2026-09-13T00:00:00.000Z"),
 });
 
+const about = post({
+  slug: "about",
+  category: "PAGE",
+  title: "About",
+  updatedAt: new Date("2026-09-14T00:00:00.000Z"),
+  content: { type: "doc", content: [words("I design interfaces.")] },
+});
+
 const project = post({
   slug: "scheduling-extensions",
   title: "Redesigning Shift Scheduling",
@@ -81,6 +89,41 @@ describe("sitemapEntries", () => {
       sitemapEntries([draft], SITE).map((entry) => entry.url),
     ).not.toContain(`${SITE}/work/draft`);
   });
+
+  describe("with the About page", () => {
+    const withAbout = sitemapEntries([home, about, project, essay], SITE);
+
+    it("lists it after the homepage, at its own address", () => {
+      expect(withAbout.map((entry) => entry.url)).toEqual([
+        SITE,
+        `${SITE}/about`,
+        `${SITE}/work/scheduling-extensions`,
+        `${SITE}/writing/on-craft`,
+        `${SITE}/playground/shader`,
+      ]);
+    });
+
+    it("dates it by its own last edit", () => {
+      expect(withAbout[1].lastModified).toEqual(
+        new Date("2026-09-14T00:00:00.000Z"),
+      );
+    });
+
+    // The homepage shows the posts' cards, not the About page, so editing the
+    // About page is not a change to the homepage.
+    it("does not date the homepage by it", () => {
+      expect(withAbout[0].lastModified).toEqual(
+        new Date("2026-09-13T00:00:00.000Z"),
+      );
+    });
+
+    it("leaves it out while it is a draft", () => {
+      const draft = { ...about, publishedAt: null };
+      expect(
+        sitemapEntries([home, draft], SITE).map((entry) => entry.url),
+      ).not.toContain(`${SITE}/about`);
+    });
+  });
 });
 
 describe("llmsTxt", () => {
@@ -108,6 +151,26 @@ describe("llmsTxt", () => {
 
   it("leaves out a section with nothing in it", () => {
     expect(llmsTxt([home, project], SITE)).not.toContain("## Writing");
+  });
+
+  it("links the About page's Markdown copy under Pages, ahead of the work", () => {
+    const withAbout = llmsTxt([home, about, project, essay], SITE);
+    expect(withAbout).toContain(
+      "## Pages\n\n- [About](https://kartik.to/about.md): I design interfaces.",
+    );
+    expect(withAbout.indexOf("## Pages")).toBeLessThan(
+      withAbout.indexOf("## Work"),
+    );
+  });
+
+  it("never lists the homepage's own record as a page", () => {
+    expect(text).not.toContain("## Pages");
+    expect(text).not.toContain("/home.md");
+  });
+
+  it("leaves out the About page while it is a draft", () => {
+    const draft = { ...about, publishedAt: null };
+    expect(llmsTxt([home, draft, project], SITE)).not.toContain("about.md");
   });
 
   it("links the profiles elsewhere", () => {

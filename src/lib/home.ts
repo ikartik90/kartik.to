@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { DocumentSchema, PostSchema, type Document, type Post } from "@/domain/post";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
-
-/** The slug the homepage's own record uses. Never appears in a reading URL. */
-export const HOME_SLUG = "home";
+import { HOME_SLUG } from "@/data/page-slugs";
 
 /**
  * The homepage's stored content, or null if it has never been edited.
