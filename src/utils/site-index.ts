@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import type { Post } from "@/domain/post";
 import { AUTHOR, SITE_DESCRIPTION, SITE_TITLE, SOCIAL_PROFILES } from "@/data/site";
+import { HOME_SLUG } from "@/data/page-slugs";
 import { sitePathLabel } from "@/data/site-paths";
 import { postCover } from "@/utils/post-cover";
 import { postSummary } from "@/utils/post-summary";
@@ -20,41 +21,54 @@ import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
 /** Pages that are not posts and are meant to be found. */
 const INDEXED_PATHS = ["/playground/shader"];
 
-/** Published projects and articles, newest first. Home is a PAGE and is not one. */
+/** Published projects and articles, newest first. */
 function listedPosts(posts: Post[]): Post[] {
   return posts
     .filter((post) => post.publishedAt && post.category !== "PAGE")
     .sort((a, b) => b.publishedAt!.getTime() - a.publishedAt!.getTime());
 }
 
+/**
+ * Published pages with an address of their own — the About page. The homepage
+ * is a PAGE too, but its record is not a page to list: it IS the site's entry.
+ */
+function listedPages(posts: Post[]): Post[] {
+  return posts.filter(
+    (post) =>
+      post.publishedAt && post.category === "PAGE" && post.slug !== HOME_SLUG,
+  );
+}
+
 export function sitemapEntries(
   posts: Post[],
   siteUrl: string,
 ): MetadataRoute.Sitemap {
-  const published = posts.filter((post) => post.publishedAt);
-  // The homepage shows every post's card, so any post's edit changes it.
-  const homeModified = published.reduce<Date | undefined>(
-    (latest, post) =>
-      !latest || post.updatedAt > latest ? post.updatedAt : latest,
-    undefined,
-  );
+  const pages = listedPages(posts);
+  // The homepage shows every post's card, so any post's edit changes it. A page
+  // like About has no card there, so its edits do not.
+  const homeModified = posts
+    .filter((post) => post.publishedAt && !pages.includes(post))
+    .reduce<Date | undefined>(
+      (latest, post) =>
+        !latest || post.updatedAt > latest ? post.updatedAt : latest,
+      undefined,
+    );
 
-  // Oldest first reads as the order the work happened; the order has no meaning
-  // to a crawler either way, so it follows publication.
-  const postEntries = listedPosts(posts)
-    .reverse()
-    .map((post) => {
-      const cover = postCover(post.content);
-      return {
-        url: `${siteUrl}${getPostReadUrl(post.category, post.slug)}`,
-        lastModified: post.updatedAt,
-        ...(cover?.kind === "image" ? { images: [cover.src] } : {}),
-      };
-    });
+  const entry = (post: Post) => {
+    const cover = postCover(post.content);
+    return {
+      url: `${siteUrl}${getPostReadUrl(post.category, post.slug)}`,
+      lastModified: post.updatedAt,
+      ...(cover?.kind === "image" ? { images: [cover.src] } : {}),
+    };
+  };
 
   return [
     { url: siteUrl, ...(homeModified ? { lastModified: homeModified } : {}) },
-    ...postEntries,
+    ...pages.map(entry),
+    // Oldest first reads as the order the work happened; the order has no
+    // meaning to a crawler either way, so it follows publication.
+    ...listedPosts(posts).reverse().map(entry),
     ...INDEXED_PATHS.map((path) => ({ url: `${siteUrl}${path}` })),
   ];
 }
@@ -70,14 +84,14 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
   const { locality, region, country } = AUTHOR.location;
   const listed = listedPosts(posts);
 
+  const postLink = (post: Post) => {
+    const summary = postSummary(post.content);
+    const link = `[${post.title ?? "Untitled"}](${siteUrl}${getPostMarkdownUrl(post.category, post.slug)})`;
+    return `- ${link}${summary ? `: ${summary}` : ""}`;
+  };
+
   const postLinks = (category: Post["category"]) =>
-    listed
-      .filter((post) => post.category === category)
-      .map((post) => {
-        const summary = postSummary(post.content);
-        const link = `[${post.title ?? "Untitled"}](${siteUrl}${getPostMarkdownUrl(post.category, post.slug)})`;
-        return `- ${link}${summary ? `: ${summary}` : ""}`;
-      });
+    listed.filter((post) => post.category === category).map(postLink);
 
   const section = (heading: string, lines: string[]) =>
     lines.length ? [`## ${heading}\n\n${lines.join("\n")}`] : [];
@@ -92,6 +106,7 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
       `- Based in: ${locality}, ${region}, ${country}`,
       `- Website: ${siteUrl}`,
     ].join("\n"),
+    ...section("Pages", listedPages(posts).map(postLink)),
     ...section("Work", postLinks("WORK")),
     ...section("Writing", postLinks("ARTICLE")),
     ...section(

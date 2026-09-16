@@ -5,12 +5,13 @@ import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { TestimonialWall } from "@/components/testimonial-wall";
 import { HomeGrid } from "@/components/home-grid";
-import { SocialLinks } from "@/components/social-links";
+import { IntroLinks } from "@/components/intro-links";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { getGridCards } from "@/lib/grid";
 import { getHomeDocument } from "@/lib/home";
+import { isAboutPublished } from "@/lib/about";
 import { SITE_URL } from "@/lib/site-url";
 import { SITE_TITLE } from "@/data/site";
 import { homeJsonLd } from "@/utils/structured-data";
@@ -21,10 +22,6 @@ import { homeJsonLd } from "@/utils/structured-data";
 // is an ordinary `PAGE` post whose content happens to include two pieces of
 // furniture (`project_grid`, `social_links`), and everything else on it is
 // text that can be edited like text anywhere else.
-
-// The icon row is centred by its own box: `text-align` cannot reach the items
-// of a flex container, so the centred paragraph above it does not carry here.
-const socialRowStyle = css({ display: "flex", justifyContent: "center" });
 
 // Canonical here rather than in the root layout, which every page inherits: a
 // layout-level canonical would name the homepage as the address of every page
@@ -37,10 +34,11 @@ export const metadata: Metadata = { alternates: { canonical: "/" } };
 const headingStyle = css({ srOnly: true });
 
 export default async function Home() {
-  const [document, cards, testimonials] = await Promise.all([
+  const [document, cards, testimonials, aboutPublished] = await Promise.all([
     getHomeDocument(),
     getGridCards(),
     getPublishedTestimonials(),
+    isAboutPublished(),
   ]);
 
   return (
@@ -61,11 +59,7 @@ export default async function Home() {
               project_grid: (
                 <HomeGrid cards={cards} demos={serverDemoSlots(cards)} />
               ),
-              social_links: (
-                <nav aria-label="Social links" className={socialRowStyle}>
-                  <SocialLinks />
-                </nav>
-              ),
+              social_links: <IntroLinks aboutPublished={aboutPublished} />,
             }}
           />
         </article>

@@ -46,6 +46,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/work/:slug.md", destination: "/work/:slug/md" },
       { source: "/writing/:slug.md", destination: "/writing/:slug/md" },
+      { source: "/about.md", destination: "/about/md" },
     ];
   },
 
