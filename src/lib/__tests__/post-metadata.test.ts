@@ -33,6 +33,27 @@ describe("postMetadata", () => {
     expect(metadata.twitter).toMatchObject({ creator: "@ikartik90" });
   });
 
+  it("titles the page with the post's own title by default", () => {
+    expect(metadata.title).toBe("Redesigning Shift Scheduling");
+    expect(metadata.openGraph).toMatchObject({
+      title: "Redesigning Shift Scheduling",
+    });
+  });
+
+  it("can title the page for search instead, in full, on the page and its card", () => {
+    const searchTitle = "About Kartik Iyer — Product Designer";
+    const about = postMetadata(
+      { ...PROJECT, category: "PAGE", slug: "about", title: "About Me" },
+      "/about",
+      "About",
+      { searchTitle },
+    );
+    // Absolute: the layout's `%s — Kartik Iyer` template would name him twice.
+    expect(about.title).toEqual({ absolute: searchTitle });
+    expect(about.openGraph).toMatchObject({ title: searchTitle });
+    expect(about.twitter).toMatchObject({ title: searchTitle });
+  });
+
   it("is a bare title for a post that does not exist", () => {
     expect(postMetadata(null, "/work/nope", "Project")).toEqual({
       title: "Project",

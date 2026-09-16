@@ -25,22 +25,27 @@ import type { Post } from "@/domain/post";
  * runs BEFORE the page: the page will `notFound()` a moment later and Next
  * will serve the 404, but this has to return something in the meantime, and
  * a throw here is a 500 where a 404 was the right answer.
+ *
+ * `searchTitle` replaces the post's title in the tab, the search result and the
+ * card, stated in full — the layout's `%s — Kartik Iyer` template is skipped,
+ * since a title written for search already says who it is about.
  */
 export function postMetadata(
   post: Post | null,
   path: string,
   fallbackTitle: string,
+  { searchTitle }: { searchTitle?: string } = {},
 ): Metadata {
   if (!post) return { title: fallbackTitle };
 
-  const title = post.title ?? fallbackTitle;
+  const title = searchTitle ?? post.title ?? fallbackTitle;
   // The post's own opening, or nothing — the site's description is inherited
   // from the root layout for a post with no prose in it, which is a better
   // thing to say than a sentence invented here.
   const description = postSummary(post.content) ?? undefined;
 
   return {
-    title,
+    title: searchTitle ? { absolute: searchTitle } : title,
     description,
     // Relative, and resolved against `metadataBase` in the root layout. It is
     // stated at all because a post is reachable at exactly one address and a
