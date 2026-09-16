@@ -173,6 +173,10 @@ describe("llmsTxt", () => {
     expect(llmsTxt([home, draft, project], SITE)).not.toContain("about.md");
   });
 
+  it("links an indexed playground by its public name", () => {
+    expect(text).toContain(`- [Waveform Studio](${SITE}/playground/shader)`);
+  });
+
   it("links the profiles elsewhere", () => {
     expect(text).toContain("- [GitHub](https://github.com/ikartik90)");
     expect(text).toContain("- [LinkedIn](https://linkedin.com/in/ikartik90)");

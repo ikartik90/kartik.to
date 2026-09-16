@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MediaNodeSchema } from "@/domain/nodes";
-import { sitePathLabel } from "@/data/site-paths";
+import { sitePathTitle } from "@/data/site-paths";
 
 // ---------------------------------------------------------------------------
 // The link card's CONFIGURATION — everything one publication of it carries.
@@ -185,6 +185,6 @@ export function linkCardTitle(config: LinkCardConfig): string | undefined {
   const link = config.link;
   if (!link?.href) return undefined;
   return link.kind === "internal"
-    ? sitePathLabel(link.href) ?? link.href
+    ? sitePathTitle(link.href) ?? link.href
     : link.href;
 }

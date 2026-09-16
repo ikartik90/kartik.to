@@ -895,7 +895,7 @@ describe("HomeGrid — link cards", () => {
         ]}
       />,
     );
-    expect(screen.getByRole("link", { name: "Shader Playground" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Waveform Studio" })).toBeTruthy();
   });
 
   it("offers its three sections in the panel, and no log control", async () => {

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { SITE_PAGES } from "@/data/site-paths";
 import { getShaderPreset } from "@/app/actions/shader-preset";
 import { ShaderPlayground } from "../shader-playground";
 
@@ -19,7 +20,7 @@ interface Props {
 }
 
 export const metadata: Metadata = {
-  title: "Shader Playground",
+  title: SITE_PAGES.shader.title,
 };
 
 export default async function EditShaderPresetPage({ params }: Props) {

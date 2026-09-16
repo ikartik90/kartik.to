@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SITE_PAGES } from "@/data/site-paths";
 import { listApprovedIconsWithSvg } from "@/lib/icons";
 import { IconsPlayground } from "./icons-playground";
 
@@ -34,7 +35,7 @@ import { IconsPlayground } from "./icons-playground";
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: "Icons Playground",
+  title: SITE_PAGES.icons.title,
   description: "Scale and re-weight the icon set, and take it away as SVG.",
   robots: { index: false, follow: false },
 };
