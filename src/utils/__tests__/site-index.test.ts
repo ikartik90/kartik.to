@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BlockNode } from "@/domain/nodes";
 import type { Post } from "@/domain/post";
+import { SITE_PAGES } from "@/data/site-paths";
 import { llmsTxt, sitemapEntries } from "../site-index";
 
 const SITE = "https://kartik.to";
@@ -61,12 +62,14 @@ describe("sitemapEntries", () => {
   const entries = sitemapEntries([home, project, essay], SITE);
   const urls = entries.map((entry) => entry.url);
 
-  it("lists the homepage, every published post and the indexed playground", () => {
+  it("lists the homepage, every published post and every playground", () => {
     expect(urls).toEqual([
       SITE,
       `${SITE}/work/scheduling-extensions`,
       `${SITE}/writing/on-craft`,
       `${SITE}/playground/shader`,
+      `${SITE}/playground/calchemy`,
+      `${SITE}/playground/icons`,
     ]);
   });
 
@@ -100,6 +103,8 @@ describe("sitemapEntries", () => {
         `${SITE}/work/scheduling-extensions`,
         `${SITE}/writing/on-craft`,
         `${SITE}/playground/shader`,
+        `${SITE}/playground/calchemy`,
+        `${SITE}/playground/icons`,
       ]);
     });
 
@@ -173,8 +178,16 @@ describe("llmsTxt", () => {
     expect(llmsTxt([home, draft, project], SITE)).not.toContain("about.md");
   });
 
-  it("links an indexed playground by its public name", () => {
-    expect(text).toContain(`- [Waveform Studio](${SITE}/playground/shader)`);
+  it("links every playground by its public name", () => {
+    expect(text).toContain(
+      [
+        "## Playgrounds",
+        "",
+        `- [${SITE_PAGES.shader.title}](${SITE}/playground/shader)`,
+        `- [${SITE_PAGES.calchemy.title}](${SITE}/playground/calchemy)`,
+        `- [${SITE_PAGES.icons.title}](${SITE}/playground/icons)`,
+      ].join("\n"),
+    );
   });
 
   it("links the profiles elsewhere", () => {

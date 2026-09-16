@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import type { Post } from "@/domain/post";
 import { AUTHOR, SITE_DESCRIPTION, SITE_TITLE, SOCIAL_PROFILES } from "@/data/site";
 import { HOME_SLUG } from "@/data/page-slugs";
-import { sitePathTitle } from "@/data/site-paths";
+import { SITE_PATHS } from "@/data/site-paths";
 import { postCover } from "@/utils/post-cover";
 import { postSummary } from "@/utils/post-summary";
 import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
@@ -13,13 +13,9 @@ import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
 //
 // Both are built from the published posts, so a post appears in each the
 // moment it is published and leaves the moment it is not. Drafts, `/edit`, and
-// the pages kept out of the index on purpose (`/vouch`, and the Calchemy and
-// Icons playgrounds, "a tool with a name rather than a page with a subject")
-// are never named — the admin surface must not be advertised to crawlers.
+// `/vouch` are never named — the admin surface must not be advertised to
+// crawlers, and `/vouch` is reached only by a link handed out by hand.
 // ---------------------------------------------------------------------------
-
-/** Pages that are not posts and are meant to be found. */
-const INDEXED_PATHS = ["/playground/shader"];
 
 /** Published projects and articles, newest first. */
 function listedPosts(posts: Post[]): Post[] {
@@ -69,7 +65,9 @@ export function sitemapEntries(
     // Oldest first reads as the order the work happened; the order has no
     // meaning to a crawler either way, so it follows publication.
     ...listedPosts(posts).reverse().map(entry),
-    ...INDEXED_PATHS.map((path) => ({ url: `${siteUrl}${path}` })),
+    // Every playground: the pages that are not posts, read off the one list
+    // that names them so a new one cannot be left out of the index.
+    ...SITE_PATHS.map(({ path }) => ({ url: `${siteUrl}${path}` })),
   ];
 }
 
@@ -111,9 +109,7 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
     ...section("Writing", postLinks("ARTICLE")),
     ...section(
       "Playgrounds",
-      INDEXED_PATHS.map(
-        (path) => `- [${sitePathTitle(path) ?? path}](${siteUrl}${path})`,
-      ),
+      SITE_PATHS.map(({ path, title }) => `- [${title}](${siteUrl}${path})`),
     ),
     ...section(
       "Profiles",

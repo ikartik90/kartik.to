@@ -13,9 +13,8 @@ import { IconsPlayground } from "./icons-playground";
 // are checked on the server. A playground nobody can walk into is a demo of a
 // demo.
 //
-// Kept out of the index, as Calchemy is: it is a tool with a name rather than
-// a page with a subject, and it has no business turning up in a search for
-// one.
+// Indexed like the other playgrounds: `site-index` lists it in `sitemap.xml`
+// and `llms.txt`, so its metadata must not refuse a crawler.
 //
 // The playground itself is a client component — a grid repainted at whatever
 // the sliders say, which is all local state. What it is repainting comes from
@@ -37,7 +36,6 @@ import { IconsPlayground } from "./icons-playground";
 export const metadata: Metadata = {
   title: SITE_PAGES.icons.title,
   description: "Scale and re-weight the icon set, and take it away as SVG.",
-  robots: { index: false, follow: false },
 };
 
 export default async function IconsPlaygroundPage() {
