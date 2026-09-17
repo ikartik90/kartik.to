@@ -6,6 +6,7 @@ import { useCommandPalette } from "../use-command-palette";
 import { useShaderPresetDraftStore } from "@/store/shader-preset-draft";
 import { useEditorStore } from "@/store/editor";
 import { useGridDraftStore } from "@/store/grid-draft";
+import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { autosaveKey } from "@/utils/editor-autosave";
 import { isGridDraftDirty } from "@/utils/grid-draft";
 
@@ -211,6 +212,18 @@ describe("useCommandPalette", () => {
   // page and still have nothing that could be written, so the route alone was
   // never enough to call it an editor.
   // -------------------------------------------------------------------------
+
+  // The testimonials board lives under `/edit` and holds nothing unsaved — a
+  // destination, like the playgrounds, and not a document being edited.
+  describe("editorKind on the testimonials board", () => {
+    it("is no editor", () => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      mockPathname.mockReturnValue("/edit/testimonials");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.editorKind).toBeNull();
+      expect(result.current.isEditMode).toBe(false);
+    });
+  });
 
   describe("editorKind on the playground", () => {
     beforeEach(() => {
@@ -1179,6 +1192,9 @@ describe("useCommandPalette", () => {
     it("throws the local snapshot away with a document's edits", () => {
       mockPathname.mockReturnValue("/edit/my-post");
       useEditorStore.getState().setDraftId("existing-id");
+      useEditorStore
+        .getState()
+        .setSavedAddress({ category: "ARTICLE", slug: "my-post" });
       useEditorStore.getState().setTitle("Changed");
       const key = autosaveKey("existing-id", "ARTICLE");
       window.localStorage.setItem(key, "snapshot");
@@ -1339,6 +1355,15 @@ describe("useCommandPalette", () => {
       expect(main.contentEditable).not.toBe("true");
     });
 
+    it("navigates to the prototype editor on a prototype's route", () => {
+      mockPathname.mockReturnValue("/prototype/a-toy");
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleEditPage());
+      expect(mockPush).toHaveBeenCalledWith(
+        "/edit/a-toy?category=PROTOTYPE",
+      );
+    });
+
     it("navigates to the project editor on a published work route", () => {
       mockPathname.mockReturnValue("/work/my-project");
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1419,41 +1444,30 @@ describe("useCommandPalette", () => {
   });
 
   // -------------------------------------------------------------------------
-  // handleNewBlogArticle
+  // handleNewPost — one command per category
   // -------------------------------------------------------------------------
 
-  describe("handleNewBlogArticle", () => {
-    it("closes the palette and opens the article editor in a new tab", () => {
-      const { result } = renderHook(() => useCommandPalette(close));
-      act(() => result.current.handleNewBlogArticle());
-      expect(close).toHaveBeenCalledOnce();
-      expect(mockOpenInNewTab).toHaveBeenCalledWith(
-        "/edit/new?category=ARTICLE",
-      );
-    });
+  describe("handleNewPost", () => {
+    it.each([
+      ["ARTICLE", "/edit/new?category=ARTICLE"],
+      ["WORK", "/edit/new?category=WORK"],
+      ["PROTOTYPE", "/edit/new?category=PROTOTYPE"],
+    ] as const)(
+      "closes the palette and opens a new %s's editor in a new tab",
+      (category, url) => {
+        const { result } = renderHook(() => useCommandPalette(close));
+        act(() => result.current.handleNewPost(category));
+        expect(close).toHaveBeenCalledOnce();
+        expect(mockOpenInNewTab).toHaveBeenCalledWith(url);
+      },
+    );
 
     // Regression: window.open is silently pop-up-blocked in some browsers, so
     // the command must route through the anchor-based helper instead.
     it("does not use window.open", () => {
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
       const { result } = renderHook(() => useCommandPalette(close));
-      act(() => result.current.handleNewBlogArticle());
-      expect(openSpy).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("handleNewWorkArticle", () => {
-    it("closes the palette and opens the work editor in a new tab", () => {
-      const { result } = renderHook(() => useCommandPalette(close));
-      act(() => result.current.handleNewWorkArticle());
-      expect(close).toHaveBeenCalledOnce();
-      expect(mockOpenInNewTab).toHaveBeenCalledWith("/edit/new?category=WORK");
-    });
-
-    it("does not use window.open", () => {
-      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
-      const { result } = renderHook(() => useCommandPalette(close));
-      act(() => result.current.handleNewWorkArticle());
+      act(() => result.current.handleNewPost("ARTICLE"));
       expect(openSpy).not.toHaveBeenCalled();
     });
   });
@@ -1524,6 +1538,21 @@ describe("useCommandPalette", () => {
       expect(useEditorStore.getState().draftId).toBe("new-id");
     });
 
+    // ⌘S pressed twice before the first write returns must not mint the draft
+    // twice: its id only reaches the store once the row exists.
+    it("does not start a second write while one is in flight", async () => {
+      const { createDraft } = await import("@/app/actions/post");
+      mockPathname.mockReturnValue("/edit/new");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(() =>
+        Promise.all([
+          result.current.handleSaveChanges(),
+          result.current.handleSaveChanges(),
+        ]),
+      );
+      expect(createDraft).toHaveBeenCalledOnce();
+    });
+
     it("updates one that has", async () => {
       mockPathname.mockReturnValue("/edit/my-post");
       useEditorStore.getState().setDraftId("existing-id");
@@ -1560,6 +1589,7 @@ describe("useCommandPalette", () => {
         title: "Existing",
         draftId: "existing-id",
         category: "ARTICLE",
+        savedAddress: { category: "ARTICLE", slug: "existing-draft" },
         document: { type: "doc", content: [] },
         isDirty: true,
       });
@@ -1682,6 +1712,17 @@ describe("useCommandPalette", () => {
       expect(result.current.currentDraft?.id).toBe("about-1");
     });
 
+    it("is a prototype's draft when reading it at its own address", async () => {
+      const { getDrafts } = await import("@/app/actions/post");
+      (getDrafts as Mock).mockResolvedValue([
+        { ...draftPost, id: "toy-1", slug: "a-toy", category: "PROTOTYPE" },
+      ]);
+      mockPathname.mockReturnValue("/prototype/a-toy");
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.currentDraft?.id).toBe("toy-1");
+    });
+
     it("is null when the viewed article is not a draft", async () => {
       mockPathname.mockReturnValue("/writing/some-published-post");
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1709,6 +1750,204 @@ describe("useCommandPalette", () => {
       expect(deleteDraft).toHaveBeenCalledWith("draft-1");
       expect(mockPush).toHaveBeenCalledWith("/");
       expect(mockNotifyContentUpdated).toHaveBeenCalledOnce();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The metadata sidebar
+  // -------------------------------------------------------------------------
+
+  describe("editing metadata", () => {
+    beforeEach(() => {
+      mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
+      useEditorStore.getState().reset();
+      useMetadataPanelStore.setState({ open: false });
+    });
+
+    // Only where the post is being edited: the sidebar's changes are buffered
+    // with the words, so a reading page has nowhere to hold them.
+    it.each([
+      ["/edit/my-post", true],
+      ["/edit/new", true],
+      ["/edit/home", true],
+      ["/edit/about", true],
+      ["/writing/my-article", false],
+      ["/work/my-project", false],
+      ["/prototype/a-toy", false],
+      ["/about", false],
+      ["/", false],
+      ["/playground/shader", false],
+      ["/playground/calchemy", false],
+      ["/edit/testimonials", false],
+      ["/vouch", false],
+    ])("is offered at %s: %s", (pathname, offered) => {
+      mockPathname.mockReturnValue(pathname);
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.canEditMetadata).toBe(offered);
+    });
+
+    it("is never offered to a visitor", () => {
+      mockUseSession.mockReturnValue({ data: null });
+      mockPathname.mockReturnValue("/edit/my-post");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.canEditMetadata).toBe(false);
+    });
+
+    it("opens the sidebar in place inside an editor", () => {
+      mockPathname.mockReturnValue("/edit/my-post");
+      const { result } = renderHook(() => useCommandPalette(close));
+      act(() => result.current.handleEditMetadata());
+      expect(close).toHaveBeenCalledOnce();
+      expect(useMetadataPanelStore.getState().open).toBe(true);
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    describe("saving it", () => {
+      beforeEach(async () => {
+        mockPathname.mockReturnValue("/edit/hello");
+        const post = await import("@/app/actions/post");
+        vi.mocked(post.createDraft).mockClear();
+        vi.mocked(post.saveDraft).mockClear();
+        vi.mocked(post.publishPost).mockClear();
+      });
+
+      const row = (overrides: Record<string, unknown>) => ({
+        id: "existing-id",
+        slug: "hello",
+        title: "Hello",
+        category: "ARTICLE",
+        content: { type: "doc", content: [] },
+        publishedAt: null,
+        untitledIndex: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      });
+
+      function seedSaved() {
+        useEditorStore.setState({
+          draftId: "existing-id",
+          category: "ARTICLE",
+          slug: "hello",
+          savedAddress: { category: "ARTICLE", slug: "hello" },
+        });
+      }
+
+      it("writes the sidebar's category, address and description with the words", async () => {
+        const { saveDraft } = await import("@/app/actions/post");
+        seedSaved();
+        useEditorStore.getState().setCategory("WORK");
+        useEditorStore.getState().setSlug("renamed");
+        useEditorStore.getState().setDescription("For search.");
+
+        const { result } = renderHook(() => useCommandPalette(close));
+        await act(() => result.current.handleSaveChanges());
+
+        expect(saveDraft).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "existing-id",
+            category: "WORK",
+            slug: "renamed",
+            description: "For search.",
+          }),
+        );
+      });
+
+      it("mints a draft at the address typed before its first save", async () => {
+        const { createDraft } = await import("@/app/actions/post");
+        mockPathname.mockReturnValue("/edit/new");
+        useEditorStore.getState().setCategory("PROTOTYPE");
+        useEditorStore.getState().setSlug("a-toy");
+        useEditorStore.getState().setDescription("A toy.");
+
+        const { result } = renderHook(() => useCommandPalette(close));
+        await act(() => result.current.handleSaveChanges());
+
+        expect(createDraft).toHaveBeenCalledWith(
+          expect.objectContaining({
+            category: "PROTOTYPE",
+            slug: "a-toy",
+            description: "A toy.",
+          }),
+        );
+      });
+
+      // A refresh of the old edit address would otherwise find nothing.
+      it("follows the post to the address the save moved it to", async () => {
+        const { saveDraft } = await import("@/app/actions/post");
+        vi.mocked(saveDraft).mockResolvedValueOnce(
+          row({ slug: "renamed", category: "WORK" }) as never,
+        );
+        seedSaved();
+        useEditorStore.getState().setSlug("renamed");
+
+        const { result } = renderHook(() => useCommandPalette(close));
+        await act(() => result.current.handleSaveChanges());
+
+        expect(mockReplace).toHaveBeenCalledWith(
+          "/edit/renamed?category=WORK",
+        );
+        expect(useEditorStore.getState().savedAddress).toEqual({
+          category: "WORK",
+          slug: "renamed",
+        });
+      });
+
+      it("stays where it is when the save moved nothing", async () => {
+        const { saveDraft } = await import("@/app/actions/post");
+        vi.mocked(saveDraft).mockResolvedValueOnce(row({}) as never);
+        seedSaved();
+        useEditorStore.getState().setTitle("Changed");
+
+        const { result } = renderHook(() => useCommandPalette(close));
+        await act(() => result.current.handleSaveChanges());
+
+        expect(mockReplace).not.toHaveBeenCalled();
+      });
+
+      // The editor records where the row reads in an effect of its own, which
+      // runs AFTER the palette has rendered for the new route — so the way out
+      // has to be read when it is taken, not when the palette last drew.
+      it("reads the way out when it is taken, not when the palette rendered", () => {
+        const { result } = renderHook(() => useCommandPalette(close));
+        seedSaved();
+        act(() => result.current.handleBack());
+        expect(mockPush).toHaveBeenCalledWith("/writing/hello");
+      });
+
+      // Discarding throws the sidebar's changes away with the words, so the
+      // way out is the address the row still has.
+      it("leaves for the saved address, not the one the sidebar holds", () => {
+        seedSaved();
+        useEditorStore.getState().setCategory("WORK");
+        useEditorStore.getState().setSlug("renamed");
+
+        const { result } = renderHook(() => useCommandPalette(close));
+        act(() => result.current.handleDiscardAndExit());
+
+        expect(mockPush).toHaveBeenCalledWith("/writing/hello");
+      });
+
+      it("publishes to the address the save moved it to", async () => {
+        const { saveDraft, publishPost } = await import("@/app/actions/post");
+        vi.mocked(saveDraft).mockResolvedValueOnce(
+          row({ slug: "renamed", category: "WORK" }) as never,
+        );
+        vi.mocked(publishPost).mockResolvedValueOnce(
+          row({
+            slug: "renamed",
+            category: "WORK",
+            publishedAt: new Date(),
+          }) as never,
+        );
+        seedSaved();
+        useEditorStore.getState().setSlug("renamed");
+
+        const { result } = renderHook(() => useCommandPalette(close));
+        await act(() => result.current.handlePublish());
+
+        expect(mockPush).toHaveBeenCalledWith("/work/renamed");
+      });
     });
   });
 });

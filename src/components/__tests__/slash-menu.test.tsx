@@ -47,6 +47,11 @@ vi.mock("@/assets/icons/bulleted-list.svg", () => ({
     <svg data-testid="icon-bulleted-list" {...props} />
   ),
 }));
+vi.mock("@/assets/icons/button.svg", () => ({
+  default: (props: React.SVGProps<SVGSVGElement>) => (
+    <svg data-testid="icon-button" {...props} />
+  ),
+}));
 vi.mock("@/assets/icons/component.svg", () => ({
   default: (props: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="icon-component" {...props} />
@@ -228,6 +233,20 @@ describe("SlashMenu", () => {
     renderMenu();
     fireEvent.click(screen.getByText("Code Block"));
     expect(onSelect).toHaveBeenCalledWith("code_block");
+  });
+
+  it("offers a Button Link, drawn with the button glyph, after Metric", () => {
+    renderMenu();
+    const labels = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(labels.indexOf("Button Link")).toBe(labels.indexOf("Metric") + 1);
+    const option = screen.getByRole("option", { name: "Button Link" });
+    expect(option.querySelector("[data-testid='icon-button']")).not.toBeNull();
+  });
+
+  it("calls onSelect with 'button_link' when Button Link is clicked", () => {
+    renderMenu();
+    fireEvent.click(screen.getByText("Button Link"));
+    expect(onSelect).toHaveBeenCalledWith("button_link");
   });
 
   it("calls onSelect with 'horizontal_rule' when Horizontal Rule is clicked", () => {

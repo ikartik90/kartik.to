@@ -3,6 +3,7 @@ import React, { type ReactNode } from "react";
 import {
   render,
   screen,
+  waitFor,
   fireEvent,
   createEvent,
   cleanup,
@@ -22,13 +23,13 @@ import {
   findLinkRangeAt,
   findSidenoteRangeAt,
   mergeAdjacentInlineNodes,
-  normalizeLinkHref,
 } from "../article-editor";
 import type { InlineNode, Mark, MediaNode } from "@/domain/nodes";
 import { DEFAULT_BACKGROUND_EFFECT } from "@/domain/nodes";
 import type { Document } from "@/domain/post";
 import { useEditorStore } from "@/store/editor";
-import { notifyContentUpdated } from "@/utils/content-sync";
+import { useMetadataPanelStore } from "@/store/metadata-panel";
+import { autosaveKey } from "@/utils/editor-autosave";
 import { createDraft, saveDraft } from "@/app/actions/post";
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,7 @@ vi.mock("@/components/slash-menu", () => ({
       <button onClick={() => onSelect("collection")}>collection</button>
       <button onClick={() => onSelect("list_item")}>list_item</button>
       <button onClick={() => onSelect("bullet_list_item")}>bullet_list_item</button>
+      <button onClick={() => onSelect("button_link")}>button_link</button>
       <button onClick={onDismiss}>dismiss</button>
     </div>
   ),
@@ -237,6 +239,7 @@ vi.mock("next/navigation", () => ({
 const postActions = vi.hoisted(() => ({
   createDraft: vi.fn(),
   saveDraft: vi.fn(),
+  isPostSlugAvailable: vi.fn(async () => true),
 }));
 vi.mock("@/app/actions/post", () => postActions);
 
@@ -2534,6 +2537,25 @@ describe("ArticleEditor", () => {
     };
   }
 
+  function buttonPost() {
+    return {
+      id: "b1",
+      slug: "b1",
+      title: "T",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "paragraph" as const, children: [{ type: "text" as const, text: "Intro" }] },
+          { type: "button_link" as const, text: "Book a call", href: "/about" },
+          { type: "paragraph" as const, children: [{ type: "text" as const, text: "After" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
   it("creates a bullet_list_item via the slash menu", () => {
     render(<ArticleEditor />);
     const block = document.querySelector("[data-block-index='0']") as HTMLElement;
@@ -2545,6 +2567,99 @@ describe("ArticleEditor", () => {
 
     const blocks = useEditorStore.getState().document.content;
     expect(blocks[0].type).toBe("bullet_list_item");
+  });
+
+  // A button: the trigger line becomes the button, with no link yet, and the
+  // caret lands in its label — where the link toolbar comes up.
+  it("creates a button link via the slash menu, with the caret in its label", async () => {
+    render(<ArticleEditor />);
+    const block = document.querySelector("[data-block-index='0']") as HTMLElement;
+    block.focus();
+    block.textContent = "/";
+    placeCaret(block, 1);
+    fireEvent.keyUp(block, { key: "/" });
+    fireEvent.click(screen.getByText("button_link"));
+
+    const blocks = useEditorStore.getState().document.content;
+    expect(blocks[0]).toEqual({ type: "button_link", text: "", href: "" });
+    // A paragraph follows, so there is somewhere to carry on writing.
+    expect(blocks[1].type).toBe("paragraph");
+
+    const label = await screen.findByRole("textbox", { name: "Button text" });
+    await waitFor(() => expect(document.activeElement).toBe(label));
+    expect(
+      screen.getByRole("toolbar", { name: "Link actions" }),
+    ).toBeDefined();
+  });
+
+  it("types a button's label into the document", () => {
+    render(<ArticleEditor initialPost={buttonPost()} />);
+    const label = screen.getByRole("textbox", { name: "Button text" });
+    label.textContent = "Book a demo";
+    fireEvent.input(label);
+    expect(useEditorStore.getState().document.content[1]).toEqual({
+      type: "button_link",
+      text: "Book a demo",
+      href: "/about",
+    });
+  });
+
+  // Reaching a button lands in its label, from either side.
+  it("walks through a button with the arrows", () => {
+    render(<ArticleEditor initialPost={buttonPost()} />);
+    const label = screen.getByRole("textbox", { name: "Button text" });
+    const first = document.querySelector("[data-block-index='0']") as HTMLElement;
+    const last = document.querySelector("[data-block-index='2']") as HTMLElement;
+
+    const lastFocus = vi.spyOn(last, "focus");
+    fireEvent.keyDown(label, { key: "ArrowDown" });
+    expect(lastFocus).toHaveBeenCalled();
+
+    const firstFocus = vi.spyOn(first, "focus");
+    fireEvent.keyDown(label, { key: "ArrowUp" });
+    expect(firstFocus).toHaveBeenCalled();
+
+    // Onto the button from outside: its block hands the caret to the label.
+    const block = document.querySelector("[data-button-link-block]") as HTMLElement;
+    act(() => block.focus());
+    expect(document.activeElement).toBe(label);
+  });
+
+  it("starts a paragraph after a button on Enter", async () => {
+    render(<ArticleEditor initialPost={buttonPost()} />);
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Button text" }), {
+      key: "Enter",
+    });
+    await waitFor(() =>
+      expect(
+        useEditorStore.getState().document.content.map((b) => b.type),
+      ).toEqual(["paragraph", "button_link", "paragraph", "paragraph"]),
+    );
+  });
+
+  it("deletes the button from its toolbar", () => {
+    render(<ArticleEditor initialPost={buttonPost()} />);
+    const label = screen.getByRole("textbox", { name: "Button text" });
+    fireEvent.pointerEnter(label, { pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete button link" }));
+    expect(
+      useEditorStore.getState().document.content.map((b) => b.type),
+    ).toEqual(["paragraph", "paragraph"]);
+  });
+
+  it("links a button from its toolbar", () => {
+    render(<ArticleEditor initialPost={buttonPost()} />);
+    const label = screen.getByRole("textbox", { name: "Button text" });
+    fireEvent.pointerEnter(label, { pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit link" }));
+    const input = screen.getByLabelText("Link URL");
+    fireEvent.change(input, { target: { value: "/work/shift" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useEditorStore.getState().document.content[1]).toEqual({
+      type: "button_link",
+      text: "Book a call",
+      href: "/work/shift",
+    });
   });
 
   it("Enter at the end of a bullet item appends a new bullet item (same type)", () => {
@@ -2834,43 +2949,6 @@ describe("transformMarksInRange", () => {
   });
 });
 
-describe("normalizeLinkHref", () => {
-  it("prepends https:// to a bare host", () => {
-    expect(normalizeLinkHref("google.com")).toBe("https://google.com");
-    expect(normalizeLinkHref("sub.example.co.uk/path")).toBe(
-      "https://sub.example.co.uk/path",
-    );
-  });
-
-  it("prepends https:// to a bare host:port (dotted prefix is not a scheme)", () => {
-    expect(normalizeLinkHref("google.com:8080")).toBe(
-      "https://google.com:8080",
-    );
-  });
-
-  it("leaves an explicit scheme untouched", () => {
-    for (const url of [
-      "http://google.com",
-      "https://google.com",
-      "mailto:a@b.com",
-      "tel:+15551234",
-      "ftp://host/file",
-    ]) {
-      expect(normalizeLinkHref(url)).toBe(url);
-    }
-  });
-
-  it("leaves relative paths, fragments, queries and protocol-relative URLs untouched", () => {
-    for (const url of ["/writing/x", "#section", "?q=1", "//cdn.example.com"]) {
-      expect(normalizeLinkHref(url)).toBe(url);
-    }
-  });
-
-  it("trims surrounding whitespace before normalising", () => {
-    expect(normalizeLinkHref("  google.com  ")).toBe("https://google.com");
-  });
-});
-
 describe("findLinkRangeAt", () => {
   const nodes: InlineNode[] = [
     { type: "text", text: "see " },
@@ -3123,10 +3201,10 @@ describe("ArticleEditor selection toolbar", () => {
 });
 
 // ---------------------------------------------------------------------------
-// ⌘S / Ctrl+S in-place save
+// ⌘S belongs to the palette, and the metadata sidebar to the store
 // ---------------------------------------------------------------------------
 
-describe("ArticleEditor ⌘S save", () => {
+describe("ArticleEditor — saving and metadata", () => {
   const DIRTY_DOC: Document = {
     type: "doc",
     content: [
@@ -3134,8 +3212,38 @@ describe("ArticleEditor ⌘S save", () => {
     ],
   };
 
-  function pressSave() {
-    return act(async () => {
+  const post = {
+    id: "post-1",
+    slug: "post-1",
+    title: "Existing",
+    category: "ARTICLE" as const,
+    description: "For search.",
+    content: { type: "doc" as const, content: [] },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useEditorStore.getState().reset();
+    useMetadataPanelStore.setState({ open: false });
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  // The palette's ⌘S saves whatever editor is open. This editor used to claim
+  // the key too, and both answered it — every save was written twice, and a
+  // first save minted two drafts.
+  it("leaves ⌘S to the palette", async () => {
+    vi.mocked(saveDraft).mockResolvedValue({ ...post, content: DIRTY_DOC });
+    render(<ArticleEditor initialPost={post} />);
+    act(() => useEditorStore.getState().setDocument(DIRTY_DOC));
+
+    await act(async () => {
       document.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "s",
@@ -3144,100 +3252,128 @@ describe("ArticleEditor ⌘S save", () => {
           cancelable: true,
         }),
       );
-      // Flush the async save (createDraft/saveDraft → setDirty → clearAutosave).
-      await Promise.resolve();
       await Promise.resolve();
     });
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    useEditorStore.getState().reset();
-  });
-
-  afterEach(() => {
-    cleanup();
-    useEditorStore.getState().reset();
-  });
-
-  it("saves an existing draft in place without navigating", async () => {
-    const post = {
-      id: "post-1",
-      slug: "post-1",
-      title: "Existing",
-      category: "ARTICLE" as const,
-      content: { type: "doc" as const, content: [] },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    vi.mocked(saveDraft).mockResolvedValue({ ...post, content: DIRTY_DOC });
-    render(<ArticleEditor initialPost={post} />);
-
-    // Make an unsaved edit.
-    act(() => useEditorStore.getState().setDocument(DIRTY_DOC));
-    expect(useEditorStore.getState().isDirty).toBe(true);
-
-    await pressSave();
-
-    expect(saveDraft).toHaveBeenCalledWith({
-      id: "post-1",
-      title: "Existing",
-      document: DIRTY_DOC,
-    });
-    expect(createDraft).not.toHaveBeenCalled();
-    // Stays in the editor — no route change for an already-persisted draft.
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-    expect(mockRouter.push).not.toHaveBeenCalled();
-    expect(useEditorStore.getState().isDirty).toBe(false);
-    expect(notifyContentUpdated).toHaveBeenCalled();
-  });
-
-  it("creates a first-time draft and swaps to its edit URL", async () => {
-    vi.mocked(createDraft).mockResolvedValue({
-      id: "new-id",
-      slug: "new-slug",
-      title: null,
-      category: "ARTICLE",
-      content: DIRTY_DOC,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    render(<ArticleEditor />);
-
-    act(() => useEditorStore.getState().setDocument(DIRTY_DOC));
-
-    await pressSave();
-
-    expect(createDraft).toHaveBeenCalledWith({
-      title: undefined,
-      document: DIRTY_DOC,
-      category: "ARTICLE",
-    });
-    expect(useEditorStore.getState().draftId).toBe("new-id");
-    expect(mockRouter.replace).toHaveBeenCalledWith(
-      "/edit/new-slug?category=ARTICLE",
-    );
-    expect(useEditorStore.getState().isDirty).toBe(false);
-  });
-
-  it("is a no-op when there are no unsaved changes", async () => {
-    const post = {
-      id: "post-2",
-      slug: "post-2",
-      title: "Clean",
-      category: "ARTICLE" as const,
-      content: { type: "doc" as const, content: [] },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    render(<ArticleEditor initialPost={post} />);
-    // initialPost load leaves isDirty false.
-    expect(useEditorStore.getState().isDirty).toBe(false);
-
-    await pressSave();
 
     expect(saveDraft).not.toHaveBeenCalled();
     expect(createDraft).not.toHaveBeenCalled();
+  });
+
+  it("reads the post's address, description and saved address into the buffer", () => {
+    render(<ArticleEditor initialPost={post} />);
+    expect(useEditorStore.getState()).toMatchObject({
+      category: "ARTICLE",
+      slug: "post-1",
+      description: "For search.",
+      savedAddress: { category: "ARTICLE", slug: "post-1" },
+      isDirty: false,
+    });
+  });
+
+  // A refresh must not quietly put a renamed post back at its old address.
+  it("restores the sidebar's unsaved changes with the rest of the snapshot", () => {
+    window.localStorage.setItem(
+      autosaveKey("post-1", "ARTICLE"),
+      JSON.stringify({
+        version: 1,
+        title: "Existing",
+        draftId: "post-1",
+        category: "WORK",
+        slug: "renamed",
+        description: null,
+        document: DIRTY_DOC,
+        savedAt: 1,
+      }),
+    );
+    render(<ArticleEditor initialPost={post} />);
+    expect(useEditorStore.getState()).toMatchObject({
+      category: "WORK",
+      slug: "renamed",
+      description: null,
+      // The row has not moved, whatever the buffer says.
+      savedAddress: { category: "ARTICLE", slug: "post-1" },
+    });
+  });
+
+  it("reads a snapshot from before the sidebar as the row's own metadata", () => {
+    window.localStorage.setItem(
+      autosaveKey("post-1", "ARTICLE"),
+      JSON.stringify({
+        version: 1,
+        title: "Existing",
+        draftId: "post-1",
+        category: "ARTICLE",
+        document: DIRTY_DOC,
+        savedAt: 1,
+      }),
+    );
+    render(<ArticleEditor initialPost={post} />);
+    expect(useEditorStore.getState()).toMatchObject({
+      slug: "post-1",
+      description: "For search.",
+    });
+  });
+
+  it("keeps the sidebar's changes in the snapshot it writes", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<ArticleEditor initialPost={post} />);
+      act(() => {
+        useEditorStore.getState().setCategory("WORK");
+        useEditorStore.getState().setSlug("renamed");
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+      const stored = JSON.parse(
+        window.localStorage.getItem(autosaveKey("post-1", "WORK"))!,
+      );
+      expect(stored).toMatchObject({ category: "WORK", slug: "renamed" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A new draft's snapshot is kept under its category, which the sidebar can
+  // change: moving it must not leave a copy under the old one to come back.
+  it("moves a new draft's snapshot when its category changes", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<ArticleEditor category="ARTICLE" />);
+      act(() => useEditorStore.getState().setDocument(DIRTY_DOC));
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(
+        window.localStorage.getItem(autosaveKey(null, "ARTICLE")),
+      ).not.toBeNull();
+
+      act(() => useEditorStore.getState().setCategory("PROTOTYPE"));
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+      expect(window.localStorage.getItem(autosaveKey(null, "ARTICLE"))).toBeNull();
+      expect(
+        window.localStorage.getItem(autosaveKey(null, "PROTOTYPE")),
+      ).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the metadata sidebar when the palette asks for it", () => {
+    render(<ArticleEditor initialPost={post} />);
+    expect(screen.queryByRole("dialog", { name: "Metadata" })).toBeNull();
+    act(() => useMetadataPanelStore.getState().setOpen(true));
+    expect(screen.getByRole("dialog", { name: "Metadata" })).toBeDefined();
+  });
+
+  // The sidebar is a view of this buffer; leaving the editor takes it away.
+  it("closes the sidebar when the editor goes", () => {
+    const { unmount } = render(<ArticleEditor initialPost={post} />);
+    act(() => useMetadataPanelStore.getState().setOpen(true));
+    unmount();
+    expect(useMetadataPanelStore.getState().open).toBe(false);
   });
 });
 

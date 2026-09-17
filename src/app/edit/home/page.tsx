@@ -6,7 +6,6 @@ import { IntroLinks } from "@/components/intro-links";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getGridCards } from "@/lib/grid";
 import { getOrCreateHomePost } from "@/lib/home";
-import { isAboutPublished } from "@/lib/about";
 
 // ---------------------------------------------------------------------------
 // The homepage, editable — the grid's `/edit/:slug`, and the whole page's.
@@ -33,10 +32,9 @@ export default async function EditHomePage() {
   // 404, not 401 — the admin routes do not admit to existing.
   if (!(await isAdmin())) notFound();
 
-  const [post, cards, aboutPublished] = await Promise.all([
+  const [post, cards] = await Promise.all([
     getOrCreateHomePost(),
     getGridCards(),
-    isAboutPublished(),
   ]);
 
   return (
@@ -54,7 +52,7 @@ export default async function EditHomePage() {
             project_grid: (
               <HomeGrid cards={cards} demos={serverDemoSlots(cards)} editable />
             ),
-            social_links: <IntroLinks aboutPublished={aboutPublished} />,
+            social_links: <IntroLinks />,
           }}
         />
       </article>

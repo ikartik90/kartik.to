@@ -11,9 +11,13 @@ datasource db {
   provider = "postgresql"
 }
 
+// What a post is filed under — its address prefix, its noun, its section.
+// Each value is described once in `src/data/post-categories.ts`; a new one
+// needs a reading route at the prefix named there.
 enum PostCategory {
   ARTICLE
   WORK
+  PROTOTYPE
   PAGE
 }
 
@@ -21,8 +25,25 @@ model Post {
   id             String       @id @default(cuid())
   title          String?
   slug           String       @unique
+  // Every address this post has been read at before its current one, so a link
+  // that was shared or indexed keeps arriving: the post's page answers an old
+  // slug with a permanent redirect (`findMovedPostPath`). Written by the save
+  // that renames it, never by hand. No index — it is read only on the way to a
+  // 404, which is the rare path, and a slug's CURRENT owner is always looked up
+  // first, so a new post may take an address somebody else once had.
+  //
+  // A category is not recorded here, because it does not need to be: slugs are
+  // unique across every category, so `/writing/x` finds `x` wherever it is now.
+  previousSlugs  String[]     @default([])
   category       PostCategory @default(ARTICLE)
   content        Json
+  // What the post says about itself to search engines and link previews, in
+  // place of the summary read off its opening paragraph. Null — the ordinary
+  // case — is that summary; see `postDescription`. Nullable rather than empty
+  // for the reason `Testimonial.excerpt` is: the fallback costs one `??`, and a
+  // copy of the derived line stored here would go stale the first time the
+  // opening was rewritten.
+  description    String?
   coverImageKey  String?
   // The shape this post's CARD is drawn at on the homepage, overriding the
   // 16:9 every project and article defaults to. A property of the post rather

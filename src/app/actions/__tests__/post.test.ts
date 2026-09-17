@@ -23,6 +23,7 @@ const mockPrismaDelete = vi.fn();
 const mockPrismaFindUnique = vi.fn();
 const mockPrismaAggregate = vi.fn();
 const mockPrismaFindMany = vi.fn();
+const mockPrismaFindFirst = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -33,6 +34,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: (...args: unknown[]) => mockPrismaFindUnique(...args),
       aggregate: (...args: unknown[]) => mockPrismaAggregate(...args),
       findMany: (...args: unknown[]) => mockPrismaFindMany(...args),
+      findFirst: (...args: unknown[]) => mockPrismaFindFirst(...args),
     },
   },
 }));
@@ -73,6 +75,7 @@ const RAW_POST = {
   id: "post-1",
   title: "Hello",
   slug: "hello",
+  previousSlugs: [] as string[],
   category: "ARTICLE",
   content: EMPTY_DOC,
   coverImageKey: null,
@@ -93,6 +96,7 @@ const {
   deleteDraft,
   getDrafts,
   getPublishedProjects,
+  isPostSlugAvailable,
 } = await import("../post");
 
 // ---------------------------------------------------------------------------
@@ -112,6 +116,7 @@ describe("post server actions", () => {
     mockPrismaFindUnique.mockResolvedValue(RAW_POST);
     mockPrismaAggregate.mockResolvedValue({ _max: { untitledIndex: null } });
     mockPrismaFindMany.mockResolvedValue([RAW_POST]);
+    mockPrismaFindFirst.mockResolvedValue(null);
   });
 
   // -------------------------------------------------------------------------
@@ -301,6 +306,210 @@ describe("post server actions", () => {
       mockGetSession.mockResolvedValue({ data: null });
       await expect(getPublishedProjects()).resolves.toHaveLength(1);
       expect(mockGetSession).not.toHaveBeenCalled();
+    });
+  });
+  // -------------------------------------------------------------------------
+  // The metadata sidebar's writes
+  // -------------------------------------------------------------------------
+
+  describe("createDraft — metadata", () => {
+    it("takes the address the author typed over the one the title mints", async () => {
+      await createDraft({
+        title: "Hello",
+        document: EMPTY_DOC,
+        slug: "custom-address",
+      });
+      expect(mockPrismaCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ slug: "custom-address" }),
+        }),
+      );
+    });
+
+    it("stores a written description", async () => {
+      await createDraft({
+        title: "Hello",
+        document: EMPTY_DOC,
+        description: "  A line for search.  ",
+      });
+      expect(mockPrismaCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ description: "A line for search." }),
+        }),
+      );
+    });
+
+    it("refuses an address the domain refuses", async () => {
+      await expect(
+        createDraft({ title: "Hello", document: EMPTY_DOC, slug: "Not OK" }),
+      ).rejects.toThrow();
+      expect(mockPrismaCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("saveDraft — metadata", () => {
+    const save = (metadata: Record<string, unknown>) =>
+      saveDraft({ id: "post-1", title: "Hello", document: EMPTY_DOC, ...metadata });
+
+    const written = () =>
+      (mockPrismaUpdate.mock.calls[0] as [{ data: Record<string, unknown> }])[0]
+        .data;
+
+    it("files the post under another category", async () => {
+      mockPrismaUpdate.mockResolvedValue({ ...RAW_POST, category: "WORK" });
+      await save({ category: "WORK" });
+      expect(written()).toMatchObject({ category: "WORK" });
+    });
+
+    it("moves the post to a new address and remembers the old one", async () => {
+      mockPrismaFindUnique.mockResolvedValue({
+        ...RAW_POST,
+        previousSlugs: ["older"],
+      });
+      mockPrismaUpdate.mockResolvedValue({ ...RAW_POST, slug: "renamed" });
+      await save({ slug: "renamed" });
+      expect(written()).toMatchObject({
+        slug: "renamed",
+        previousSlugs: ["older", "hello"],
+      });
+    });
+
+    // Renaming back must not leave the current address listed as a former one.
+    it("drops an address from the old ones when the post takes it back", async () => {
+      mockPrismaFindUnique.mockResolvedValue({
+        ...RAW_POST,
+        slug: "renamed",
+        previousSlugs: ["hello"],
+      });
+      await save({ slug: "hello" });
+      expect(written()).toMatchObject({
+        slug: "hello",
+        previousSlugs: ["renamed"],
+      });
+    });
+
+    it("leaves the old addresses alone when the address is unchanged", async () => {
+      await save({ slug: "hello", category: "ARTICLE" });
+      expect(written()).not.toHaveProperty("previousSlugs");
+    });
+
+    it("writes a description, and clears an emptied one", async () => {
+      await save({ description: "For search." });
+      expect(written()).toMatchObject({ description: "For search." });
+
+      mockPrismaUpdate.mockClear();
+      await save({ description: "" });
+      expect(written()).toMatchObject({ description: null });
+    });
+
+    it("leaves the description alone when none is sent", async () => {
+      await save({});
+      expect(written()).not.toHaveProperty("description");
+    });
+
+    it("refuses a bad address before touching the row", async () => {
+      await expect(save({ slug: "Bad Address" })).rejects.toThrow();
+      expect(mockPrismaUpdate).not.toHaveBeenCalled();
+    });
+
+    // A page is read at an address of its own route — `/about`, `/` — so
+    // neither of these has anywhere to move it.
+    it("refuses to move or refile a page", async () => {
+      mockPrismaFindUnique.mockResolvedValue({
+        ...RAW_POST,
+        slug: "about",
+        category: "PAGE",
+      });
+      await expect(save({ slug: "about-me" })).rejects.toThrow(
+        "A page's address is fixed.",
+      );
+      await expect(save({ category: "ARTICLE" })).rejects.toThrow(
+        "A page's address is fixed.",
+      );
+      expect(mockPrismaUpdate).not.toHaveBeenCalled();
+    });
+
+    it("accepts a page's own address and category back unchanged", async () => {
+      mockPrismaFindUnique.mockResolvedValue({
+        ...RAW_POST,
+        slug: "about",
+        category: "PAGE",
+      });
+      mockPrismaUpdate.mockResolvedValue({
+        ...RAW_POST,
+        slug: "about",
+        category: "PAGE",
+      });
+      await save({ slug: "about", category: "PAGE", description: "Me." });
+      expect(written()).toMatchObject({ description: "Me." });
+    });
+
+    it("refuses to file a post as a page", async () => {
+      await expect(save({ category: "PAGE" })).rejects.toThrow(
+        "A post can't be filed as a page.",
+      );
+    });
+
+    it("says so when another post already has the address", async () => {
+      mockPrismaUpdate.mockRejectedValue(
+        Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+      );
+      await expect(save({ slug: "taken" })).rejects.toThrow(
+        "Another post already uses that address.",
+      );
+    });
+
+    it("refreshes the page at the address it left as well as the new one", async () => {
+      mockPrismaUpdate.mockResolvedValue({
+        ...RAW_POST,
+        slug: "renamed",
+        category: "WORK",
+      });
+      await save({ slug: "renamed", category: "WORK" });
+      expect(mockRevalidatePath).toHaveBeenCalledWith("/writing/hello");
+      expect(mockRevalidatePath).toHaveBeenCalledWith("/work/renamed");
+    });
+
+    it("is the author's alone", async () => {
+      mockGetSession.mockResolvedValue({ data: null });
+      await expect(save({ slug: "renamed" })).rejects.toThrow();
+      expect(mockPrismaUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("isPostSlugAvailable", () => {
+    it("is true for an address nobody has", async () => {
+      await expect(isPostSlugAvailable("free", "post-1")).resolves.toBe(true);
+      expect(mockPrismaFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { slug: "free", NOT: { id: "post-1" } },
+        }),
+      );
+    });
+
+    it("is false for an address another post has", async () => {
+      mockPrismaFindFirst.mockResolvedValue({ id: "post-2" });
+      await expect(isPostSlugAvailable("taken", "post-1")).resolves.toBe(false);
+    });
+
+    it("asks about every post when the draft has no row yet", async () => {
+      await isPostSlugAvailable("free", null);
+      expect(mockPrismaFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { slug: "free" } }),
+      );
+    });
+
+    it("is false, without asking, for an address the domain refuses", async () => {
+      await expect(isPostSlugAvailable("new", null)).resolves.toBe(false);
+      await expect(isPostSlugAvailable("Bad", null)).resolves.toBe(false);
+      expect(mockPrismaFindFirst).not.toHaveBeenCalled();
+    });
+
+    // A visitor asking which addresses exist would be told about drafts.
+    it("is the author's alone", async () => {
+      mockGetSession.mockResolvedValue({ data: null });
+      await expect(isPostSlugAvailable("free", null)).rejects.toThrow();
+      expect(mockPrismaFindFirst).not.toHaveBeenCalled();
     });
   });
 });

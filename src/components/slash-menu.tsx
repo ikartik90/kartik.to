@@ -15,6 +15,7 @@ import BorderIcon from "@/assets/icons/border.svg";
 import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 import BulletedListIcon from "@/assets/icons/bulleted-list.svg";
 import MetricIcon from "@/assets/icons/metric.svg";
+import ButtonIcon from "@/assets/icons/button.svg";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,6 +36,7 @@ export type SlashMenuBlockType =
   | "list_item"
   | "bullet_list_item"
   | "metric"
+  | "button_link"
   | "code_block"
   | "horizontal_rule"
   | "project_grid"
@@ -75,6 +77,7 @@ const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "list_item", label: "Numbered List", Icon: NumberedListIcon },
   { type: "bullet_list_item", label: "Bulleted List", Icon: BulletedListIcon },
   { type: "metric", label: "Metric", Icon: MetricIcon },
+  { type: "button_link", label: "Button Link", Icon: ButtonIcon },
   { type: "code_block", label: "Code Block", Icon: CodeIcon },
   { type: "horizontal_rule", label: "Horizontal Rule", Icon: BorderIcon },
   // Furniture. Offered everywhere the menu is, because `allowedTypes` is what

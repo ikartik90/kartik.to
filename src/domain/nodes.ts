@@ -999,6 +999,41 @@ export const MetricNodeSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Button link — a standalone button that goes somewhere, drawn as the About me
+// button under the homepage's intro is drawn.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a button may send a reader.
+ *
+ * A page of this site (`/about`, `#section`, `?q`), a web address, or a mail or
+ * phone link — and nothing else. The value is written into an `href` on the
+ * public page, so a scheme that RUNS rather than goes (`javascript:`,
+ * `data:`) is refused here, at the one door a document comes in by, rather
+ * than trusted to every place that renders one.
+ *
+ * Empty is allowed: a button is written before it is linked, and the reader
+ * draws nothing for one that goes nowhere.
+ */
+export const ButtonLinkHrefSchema = z.union([
+  z.literal(""),
+  z.string().regex(/^[/#?]/),
+  z.url({ protocol: /^(https?|mailto|tel)$/ }),
+]);
+
+/**
+ * A button on its own line. Plain text, because a button's label is one run
+ * with no marks to carry; empty while it is being written.
+ */
+export const ButtonLinkNodeSchema = z.object({
+  type: z.literal("button_link"),
+  text: z.string(),
+  href: ButtonLinkHrefSchema,
+});
+
+export type ButtonLinkNode = z.infer<typeof ButtonLinkNodeSchema>;
+
+// ---------------------------------------------------------------------------
 // Furniture — blocks that render a fixed piece of the site rather than content
 // stored in the node.
 //
@@ -1041,6 +1076,7 @@ export type BlockNode =
   | z.infer<typeof CollectionNodeSchema>
   | z.infer<typeof ComponentNodeSchema>
   | z.infer<typeof MetricNodeSchema>
+  | ButtonLinkNode
   | z.infer<typeof ProjectGridNodeSchema>
   | z.infer<typeof SocialLinksNodeSchema>;
 
@@ -1056,6 +1092,7 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   CollectionNodeSchema,
   ComponentNodeSchema,
   MetricNodeSchema,
+  ButtonLinkNodeSchema,
   ProjectGridNodeSchema,
   SocialLinksNodeSchema,
 ]);

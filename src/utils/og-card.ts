@@ -1,4 +1,5 @@
 import { postCardMedia, type Post } from "@/domain/post";
+import { POST_CATEGORIES } from "@/data/post-categories";
 import { listingDate } from "@/utils/listing-date";
 import { postCover } from "@/utils/post-cover";
 import type { LinkCardTone } from "@/domain/link-card";
@@ -62,7 +63,7 @@ export function ogCard(post: Post): OgCard {
     // follows, and for the same reason: an article is filed by its date and the
     // rail offers no Meta row on one at all.
     meta:
-      (post.category === "ARTICLE" && post.publishedAt
+      (POST_CATEGORIES[post.category].dated && post.publishedAt
         ? listingDate(post.publishedAt)
         : card.meta) ?? null,
     tone,

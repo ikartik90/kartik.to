@@ -10,8 +10,8 @@ import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { getGridCards } from "@/lib/grid";
-import { getHomeDocument } from "@/lib/home";
-import { isAboutPublished } from "@/lib/about";
+import { getHomeDescription, getHomeDocument } from "@/lib/home";
+import { homeMetadata } from "@/lib/post-metadata";
 import { SITE_URL } from "@/lib/site-url";
 import { SITE_TITLE } from "@/data/site";
 import { homeJsonLd } from "@/utils/structured-data";
@@ -23,10 +23,9 @@ import { homeJsonLd } from "@/utils/structured-data";
 // furniture (`project_grid`, `social_links`), and everything else on it is
 // text that can be edited like text anywhere else.
 
-// Canonical here rather than in the root layout, which every page inherits: a
-// layout-level canonical would name the homepage as the address of every page
-// that does not state its own.
-export const metadata: Metadata = { alternates: { canonical: "/" } };
+export async function generateMetadata(): Promise<Metadata> {
+  return homeMetadata(await getHomeDescription());
+}
 
 // The page's one heading, for screen readers and search engines. The document
 // below is a grid of cards with no words of its own, so nothing on the page
@@ -34,11 +33,10 @@ export const metadata: Metadata = { alternates: { canonical: "/" } };
 const headingStyle = css({ srOnly: true });
 
 export default async function Home() {
-  const [document, cards, testimonials, aboutPublished] = await Promise.all([
+  const [document, cards, testimonials] = await Promise.all([
     getHomeDocument(),
     getGridCards(),
     getPublishedTestimonials(),
-    isAboutPublished(),
   ]);
 
   return (
@@ -59,7 +57,7 @@ export default async function Home() {
               project_grid: (
                 <HomeGrid cards={cards} demos={serverDemoSlots(cards)} />
               ),
-              social_links: <IntroLinks aboutPublished={aboutPublished} />,
+              social_links: <IntroLinks />,
             }}
           />
         </article>

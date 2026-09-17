@@ -448,6 +448,17 @@ body[data-properties-panel-instant] {
     margin-block-end: var(--spacing-5xl);
   }
 
+  /* ...and stands off a button above it — the intro's way on to the About
+     page — by a little more than the article's own gap, the space the two had
+     when the row drew the button itself. Only there: under the intro alone
+     the row keeps the article's gap. Both spellings of the button, the
+     reader's and the editor's, so the canvas measures as the page does. */
+  article
+    > :is([data-button-link], [data-button-link-block])
+    + [data-furniture="social_links"] {
+    margin-block-start: var(--spacing-xxl);
+  }
+
   /* Anchor the top of every article surface to the homepage header offset
      (5xl). The first child differs per surface — the renderer's intro, the
      editor's title, or (for a titleless draft) its first content block — so

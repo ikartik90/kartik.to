@@ -1,13 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUpsert = vi.fn();
-const mockCount = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     post: {
       upsert: (...args: unknown[]) => mockUpsert(...args),
-      count: (...args: unknown[]) => mockCount(...args),
     },
   },
 }));
@@ -28,38 +26,7 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const { getOrCreateAboutPost, isAboutPublished } = await import("../about");
-
-describe("isAboutPublished", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("asks only for a published About page", async () => {
-    mockCount.mockResolvedValue(1);
-    await isAboutPublished();
-
-    expect(mockCount).toHaveBeenCalledWith({
-      where: { slug: "about", category: "PAGE", publishedAt: { not: null } },
-    });
-  });
-
-  it("is true once the About page is published", async () => {
-    mockCount.mockResolvedValue(1);
-    expect(await isAboutPublished()).toBe(true);
-  });
-
-  it("is false while there is no published About page", async () => {
-    mockCount.mockResolvedValue(0);
-    expect(await isAboutPublished()).toBe(false);
-  });
-
-  // It is read by the homepage, which must not 500 over a button.
-  it("is false when the database cannot be reached", async () => {
-    mockCount.mockRejectedValue(new Error("unreachable"));
-    expect(await isAboutPublished()).toBe(false);
-  });
-});
+const { getOrCreateAboutPost } = await import("../about");
 
 describe("getOrCreateAboutPost", () => {
   beforeEach(() => {

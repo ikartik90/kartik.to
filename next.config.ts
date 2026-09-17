@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { LISTED_CATEGORIES, POST_CATEGORIES } from "./src/data/post-categories";
 
 const svgrOptions = {
   // SVGO normalises colour names to hex before replaceAttrValues runs, so
@@ -43,9 +44,12 @@ const nextConfig: NextConfig = {
     // `llms.txt` convention. A segment cannot be named `[slug].md`, so the
     // handler is an `md` route beside the page and this maps the address onto
     // it — before the dynamic `[slug]` page can claim `scheduling.md` as a slug.
+    // One per category, read off the list that names their prefixes.
     return [
-      { source: "/work/:slug.md", destination: "/work/:slug/md" },
-      { source: "/writing/:slug.md", destination: "/writing/:slug/md" },
+      ...LISTED_CATEGORIES.map((category) => {
+        const { path } = POST_CATEGORIES[category];
+        return { source: `${path}/:slug.md`, destination: `${path}/:slug/md` };
+      }),
       { source: "/about.md", destination: "/about/md" },
     ];
   },

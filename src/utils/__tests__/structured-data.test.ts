@@ -141,6 +141,14 @@ describe("postJsonLd", () => {
     expect(article.headline).toBe("Project");
   });
 
+  it("describes the post with the author's written description over its opening", () => {
+    const article = ofType(
+      postJsonLd(post({ description: "Written for search." }), SITE),
+      "Article",
+    )!;
+    expect(article.description).toBe("Written for search.");
+  });
+
   it("says nothing it does not know", () => {
     const article = ofType(
       postJsonLd(

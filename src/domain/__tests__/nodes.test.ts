@@ -1,6 +1,9 @@
 import { afterAll, afterEach, describe, it, expect, vi } from "vitest";
 import {
   BACKGROUND_EFFECT_MAX_COLORS,
+  BlockNodeSchema,
+  ButtonLinkHrefSchema,
+  ButtonLinkNodeSchema,
   BackgroundEffectSchema,
   CollectionItemSchema,
   CollectionNodeSchema,
@@ -917,5 +920,64 @@ describe("a clip's poster", () => {
       poster: "https://cdn.example.com/posters/a.jpg",
     });
     expect("poster" in picture).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Button link — a standalone button that goes somewhere
+// ---------------------------------------------------------------------------
+
+describe("ButtonLinkNodeSchema", () => {
+  it("is a label and a destination", () => {
+    const node = { type: "button_link", text: "Read more", href: "/about" };
+    expect(ButtonLinkNodeSchema.parse(node)).toEqual(node);
+    expect(BlockNodeSchema.parse(node)).toEqual(node);
+  });
+
+  // A button is written before it is linked, and typed before it is named.
+  it("may be saved with neither yet", () => {
+    expect(
+      BlockNodeSchema.safeParse({ type: "button_link", text: "", href: "" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("needs both fields to be present", () => {
+    expect(
+      BlockNodeSchema.safeParse({ type: "button_link", text: "Go" }).success,
+    ).toBe(false);
+    expect(
+      BlockNodeSchema.safeParse({ type: "button_link", href: "/" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("ButtonLinkHrefSchema", () => {
+  it.each([
+    "",
+    "/about",
+    "/work/shift#results",
+    "#section",
+    "?q=1",
+    "https://kartik.to",
+    "http://example.com/a?b=c",
+    "mailto:hi@kartik.to",
+    "tel:+14165550100",
+  ])("accepts %s", (href) => {
+    expect(ButtonLinkHrefSchema.safeParse(href).success).toBe(true);
+  });
+
+  // A button's destination is rendered into an `href` on the public page, so
+  // anything that runs rather than goes is refused at the door.
+  it.each([
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+    "ftp://example.com",
+    "example.com",
+    "about me",
+  ])("refuses %s", (href) => {
+    expect(ButtonLinkHrefSchema.safeParse(href).success).toBe(false);
   });
 });
