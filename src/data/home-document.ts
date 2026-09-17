@@ -5,9 +5,9 @@ import type { Document } from "@/domain/post";
 //
 // The page is an ordinary document — text, furniture, more text — so that it
 // can be written the way every other page is. This is only its starting state,
-// used until a `PAGE` post with the slug `home` exists to override it, and it
-// reproduces exactly what the page held when it was three hardcoded sections:
-// the intro lines, the row of social icons, and the grid.
+// used until a `PAGE` post with the slug `home` exists to override it: the
+// intro lines, the way on to the About page, the row of social icons, and the
+// grid.
 //
 // It lives as data rather than as JSX because the moment the page became a
 // document, its initial content became content — the thing an editor opens and
@@ -27,6 +27,7 @@ export const DEFAULT_HOME_DOCUMENT: Document = {
         },
       ],
     },
+    { type: "button_link", text: "About me", href: "/about" },
     { type: "social_links" },
     { type: "project_grid" },
   ],

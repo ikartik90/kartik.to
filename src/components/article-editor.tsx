@@ -7,7 +7,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import { css, cx } from "../../styled-system/css";
 import {
   horizontalRule,
@@ -45,15 +44,16 @@ import {
   menuIcon,
 } from "../../styled-system/recipes";
 import { useEditorStore } from "@/store/editor";
+import { normalizeLinkHref } from "@/utils/link-href";
+import { useMetadataPanelStore } from "@/store/metadata-panel";
+import { PostMetadataPanel } from "@/components/post-metadata-panel";
+import { EditableButtonLink } from "@/components/editable-button-link";
 import {
   autosaveKey,
   clearAutosave,
   readAutosave,
   writeAutosave,
 } from "@/utils/editor-autosave";
-import { createDraft, saveDraft } from "@/app/actions/post";
-import { getEditUrl } from "@/utils/post-urls";
-import { notifyContentUpdated } from "@/utils/content-sync";
 import {
   SlashMenu,
   slashMenuHasResults,
@@ -842,24 +842,6 @@ export function transformMarksInRange(
     }
   }
   return mergeAdjacentInlineNodes(result);
-}
-
-/**
- * Normalise a user-typed link target. A bare host ("google.com") gets an
- * implicit "https://" so it isn't treated as a page-relative path. An explicit
- * scheme ("http://", "https://", "mailto:", "tel:", any "scheme://…"), a
- * root-relative path ("/writing/x"), a fragment ("#foo"), a query ("?q"), or a
- * protocol-relative URL ("//host") is left untouched. A "host:port" like
- * "google.com:8080" still gets "https://" — its dotted prefix marks it as a
- * host, not a scheme.
- */
-export function normalizeLinkHref(raw: string): string {
-  const href = raw.trim();
-  if (!href) return href;
-  if (/^(\/|#|\?)/.test(href)) return href;
-  const scheme = href.match(/^([a-z][a-z0-9+.-]*):/i);
-  if (scheme && !scheme[1].includes(".")) return href;
-  return `https://${href}`;
 }
 
 /**
@@ -1686,6 +1668,7 @@ function EditableBlock({
       block.type === "media" ||
       block.type === "collection" ||
       block.type === "component" ||
+      block.type === "button_link" ||
       block.type === "project_grid" ||
       block.type === "social_links"
     )
@@ -2467,6 +2450,25 @@ function EditableBlock({
   // other non-text block, but with nothing inside to edit: what they render is
   // owned elsewhere and the document only says where it goes. The grid brings
   // its own controls when the page passes it an editable one.
+  // A button: its label is typed into the button itself, and the link it goes
+  // to is edited from the toolbar over it — see `EditableButtonLink`.
+  if (block.type === "button_link") {
+    return (
+      <EditableButtonLink
+        block={block}
+        blockIndex={blockIndex}
+        onChange={onChange}
+        onDelete={onDelete}
+        onArrowUp={() => onArrowUp?.()}
+        onArrowDown={() => onArrowDown?.()}
+        onArrowLeft={() => onArrowLeft?.()}
+        onArrowRight={() => onArrowRight?.()}
+        onInsertParagraphAfter={() => onInsertParagraphAfter?.()}
+        elRef={combinedRef}
+      />
+    );
+  }
+
   if (block.type === "project_grid" || block.type === "social_links") {
     return (
       <div
@@ -3051,8 +3053,9 @@ function EditableBlock({
  * always continue typing after them. This covers caret-less blocks
  * (horizontal_rule, media, component), lists — a list item last block would
  * otherwise trap the author in the list with no plain block to click into below
- * it — and code blocks, where Enter inserts a literal newline rather than a new
- * block, leaving no way to escape downward.
+ * it — code blocks, where Enter inserts a literal newline rather than a new
+ * block, leaving no way to escape downward, and buttons, whose label is one
+ * line with nowhere below it to click.
  */
 function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
   if (blocks.length === 0) {
@@ -3065,6 +3068,7 @@ function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
     last.type === "collection" ||
     last.type === "component" ||
     last.type === "code_block" ||
+    last.type === "button_link" ||
     isListItemType(last.type)
   ) {
     return [
@@ -3110,7 +3114,8 @@ function hasSyntheticTrailingParagraph(
   if (
     block.type !== "media" &&
     block.type !== "collection" &&
-    block.type !== "component"
+    block.type !== "component" &&
+    block.type !== "button_link"
   )
     return false;
   if (index !== blocks.length - 2) return false;
@@ -3136,6 +3141,7 @@ const NON_FURNITURE_TYPES: SlashMenuBlockType[] = [
   "list_item",
   "bullet_list_item",
   "metric",
+  "button_link",
   "code_block",
   "horizontal_rule",
 ];
@@ -3204,10 +3210,7 @@ export function ArticleEditor({
     setDocument,
     pushHistory,
   } = useEditorStore();
-
-  const router = useRouter();
-  // Guards against overlapping saves while a ⌘S request is in flight.
-  const savingRef = useRef(false);
+  const metadataOpen = useMetadataPanelStore((state) => state.open);
 
   // Populate store from initialPost on mount; reset on unmount.
   useEffect(() => {
@@ -3218,11 +3221,27 @@ export function ArticleEditor({
       autosaveKey(initialPost?.id ?? null, sessionCategory),
     );
 
+    // Where the row reads, whatever the buffer says — see `savedAddress`.
+    const savedAddress = initialPost
+      ? { category: initialPost.category, slug: initialPost.slug }
+      : null;
+
     if (restored) {
       useEditorStore.setState({
         title: restored.title,
         draftId: restored.draftId,
         category: restored.category,
+        // A snapshot from before the sidebar existed carries neither, and
+        // reads as the row's own.
+        slug:
+          restored.slug !== undefined
+            ? restored.slug
+            : (initialPost?.slug ?? null),
+        description:
+          restored.description !== undefined
+            ? restored.description
+            : (initialPost?.description ?? null),
+        savedAddress,
         isPublished: initialPost?.publishedAt != null,
         document: {
           ...restored.document,
@@ -3237,6 +3256,9 @@ export function ArticleEditor({
         title: initialPost.title ?? "",
         draftId: initialPost.id,
         category: initialPost.category,
+        slug: initialPost.slug,
+        description: initialPost.description ?? null,
+        savedAddress,
         isPublished: initialPost.publishedAt !== null,
         document: {
           ...initialPost.content,
@@ -3255,7 +3277,11 @@ export function ArticleEditor({
     // Seed history with the initial state so Cmd+Z can undo back to it.
     const s = useEditorStore.getState();
     s.pushHistory({ title: s.title, document: s.document });
-    return () => useEditorStore.getState().reset();
+    return () => {
+      useEditorStore.getState().reset();
+      // The sidebar is a view of this buffer, and goes with it.
+      useMetadataPanelStore.getState().setOpen(false);
+    };
     // Intentionally keyed on identity (id), not the whole `initialPost` object:
     // re-seeding on every new prop reference would wipe in-progress edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3266,6 +3292,10 @@ export function ArticleEditor({
   // save / publish / discard clears the entry (see use-command-palette.ts).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
+    // The key a new draft is kept under names its category, which the sidebar
+    // can change — so a snapshot is MOVED rather than copied, or the one left
+    // under the old category would come back the next time that editor opened.
+    let lastKey: string | null = null;
     const unsubscribe = useEditorStore.subscribe((state) => {
       if (!state.isDirty) return;
       if (timer) clearTimeout(timer);
@@ -3274,10 +3304,15 @@ export function ArticleEditor({
         // dirty flag, and this pending write must not resurrect the autosave.
         const s = useEditorStore.getState();
         if (!s.isDirty) return;
-        writeAutosave(autosaveKey(s.draftId, s.category), {
+        const key = autosaveKey(s.draftId, s.category);
+        if (lastKey && lastKey !== key) clearAutosave(lastKey);
+        lastKey = key;
+        writeAutosave(key, {
           title: s.title,
           draftId: s.draftId,
           category: s.category,
+          slug: s.slug,
+          description: s.description,
           document: s.document,
           savedAt: Date.now(),
         });
@@ -3289,58 +3324,11 @@ export function ArticleEditor({
     };
   }, []);
 
-  // ⌘S / Ctrl+S → persist the draft to the DB without leaving the editor.
-  // Creating a first-time draft swaps the URL to /edit/<slug> (via replace, so
-  // the editor stays mounted for existing drafts and only remounts for the
-  // brand-new case) so a later refresh reloads the saved draft, not a blank
-  // /edit/new. On success the local autosave is dropped and the dirty flag
-  // cleared; other tabs refresh via the content-sync broadcast.
-  useEffect(() => {
-    async function saveInPlace() {
-      if (savingRef.current) return;
-      const { draftId, title, document, category, isDirty } =
-        useEditorStore.getState();
-      // Nothing unsaved — every edit sets isDirty, so this is a true no-op.
-      if (!isDirty) return;
-
-      savingRef.current = true;
-      try {
-        if (!draftId) {
-          const created = await createDraft({
-            title: title || undefined,
-            document,
-            category,
-          });
-          useEditorStore.getState().setDraftId(created.id);
-          router.replace(getEditUrl(created.category, created.slug));
-        } else {
-          await saveDraft({ id: draftId, title: title || undefined, document });
-        }
-        useEditorStore.getState().setDirty(false);
-        // Clear both the pre-save "new:<category>" key and any post-createDraft
-        // id key so a refresh reloads the DB copy rather than a stale autosave.
-        clearAutosave(autosaveKey(draftId, category));
-        const after = useEditorStore.getState();
-        clearAutosave(autosaveKey(after.draftId, after.category));
-        notifyContentUpdated();
-      } catch (err) {
-        console.error("Failed to save draft:", err);
-      } finally {
-        savingRef.current = false;
-      }
-    }
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
-      if (e.key !== "s" && e.key !== "S") return;
-      e.preventDefault();
-      void saveInPlace();
-    }
-
-    document.addEventListener("keydown", onKeyDown, { capture: true });
-    return () =>
-      document.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [router]);
+  // ⌘S is the command palette's (`useCommandPalette`), which saves whatever
+  // editor is open. This editor used to claim it as well, from the capture
+  // phase — and since nothing stopped the key there, both answered it: every
+  // ⌘S wrote the post twice, and a draft saved for the first time was minted
+  // twice.
 
   const blocks = ensureBlocks(doc);
   // Distinct-note count before each block — offsets each block's own sidenote
@@ -3640,7 +3628,17 @@ export function ArticleEditor({
     return el.hasAttribute("data-showcase-block");
   }
 
+  /** A button block's label — where the caret goes when the block is reached. */
+  function buttonLabelOf(el: HTMLElement): HTMLElement | null {
+    return el.hasAttribute("data-button-link-block")
+      ? el.querySelector<HTMLElement>("[data-button-label]")
+      : null;
+  }
+
   function focusBlockAtEnd(el: HTMLElement) {
+    const buttonLabel = buttonLabelOf(el);
+    if (buttonLabel) el = buttonLabel;
+
     if (isShowcaseFigure(el)) {
       const caption = el.querySelector(
         "figcaption[contenteditable]",
@@ -3682,6 +3680,9 @@ export function ArticleEditor({
   }
 
   function focusBlockAtStart(el: HTMLElement) {
+    const buttonLabel = buttonLabelOf(el);
+    if (buttonLabel) el = buttonLabel;
+
     if (isShowcaseFigure(el)) {
       const host = el.querySelector(
         "[data-showcase-media]",
@@ -4346,6 +4347,7 @@ export function ArticleEditor({
     // Blocks with no text of their own — there is no DOM here to write into.
     if (
       blockType === "horizontal_rule" ||
+      blockType === "button_link" ||
       blockType === "project_grid" ||
       blockType === "social_links"
     )
@@ -4574,6 +4576,16 @@ export function ArticleEditor({
       newBlock = {
         type: "code_block",
         children: [{ type: "text", text: plainText }],
+      };
+    } else if (type === "button_link") {
+      // A button starts with whatever was on the trigger line as its label,
+      // flattened — a label carries no marks — and no link yet: the toolbar
+      // over it is where one is added, and it is up the moment the label has
+      // the caret.
+      newBlock = {
+        type: "button_link",
+        text: keptChildren.map((n) => n.text).join(""),
+        href: "",
       };
     } else if (type === "project_grid" || type === "social_links") {
       // Furniture carries no fields, so the type IS the block. Any text on the
@@ -5532,6 +5544,7 @@ export function ArticleEditor({
             block.type === "component" ||
             block.type === "metric" ||
             block.type === "blockquote" ||
+            block.type === "button_link" ||
             block.type === "project_grid" ||
             block.type === "social_links"
               ? () => insertParagraphAfter(i)
@@ -5594,6 +5607,14 @@ export function ArticleEditor({
           onEditSidenote={handleEditSidenote}
           onDeleteSidenote={handleDeleteSidenote}
           onDismiss={handleToolbarDismiss}
+        />
+      )}
+
+      {/* The post's category, address and search description — opened from
+          the palette, and a view of the same buffer as everything above. */}
+      {metadataOpen && (
+        <PostMetadataPanel
+          onDismiss={() => useMetadataPanelStore.getState().setOpen(false)}
         />
       )}
 

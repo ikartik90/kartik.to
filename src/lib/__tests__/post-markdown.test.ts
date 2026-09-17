@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Post } from "@/domain/post";
 
 const mockGetPublished = vi.fn();
+const mockFindMoved = vi.fn();
 
 vi.mock("@/lib/posts", () => ({
   getPublishedPostBySlug: (...args: unknown[]) => mockGetPublished(...args),
+  findMovedPostPath: (...args: unknown[]) => mockFindMoved(...args),
 }));
 
 vi.mock("@/lib/site-url", () => ({ SITE_URL: "https://kartik.to" }));
@@ -33,7 +35,10 @@ const PROJECT: Post = {
 };
 
 describe("postMarkdownResponse", () => {
-  beforeEach(() => mockGetPublished.mockReset());
+  beforeEach(() => {
+    mockGetPublished.mockReset();
+    mockFindMoved.mockReset().mockResolvedValue(null);
+  });
 
   it("serves a published post as Markdown", async () => {
     mockGetPublished.mockResolvedValue(PROJECT);
@@ -63,5 +68,22 @@ describe("postMarkdownResponse", () => {
     mockGetPublished.mockResolvedValue(null);
     const response = await postMarkdownResponse("draft", "ARTICLE");
     expect(response.status).toBe(404);
+  });
+
+  // The copy follows its page: a post refiled or renamed from the sidebar is
+  // sent on from the address it left, `.md` and all, and for published posts
+  // alone — nothing here reads a session.
+  it("sends an address a post has left to the copy at its new one", async () => {
+    mockGetPublished.mockResolvedValue(null);
+    mockFindMoved.mockResolvedValue("/work/renamed");
+    const response = await postMarkdownResponse("old-name", "ARTICLE");
+
+    expect(mockFindMoved).toHaveBeenCalledWith("old-name", "ARTICLE", {
+      allowDraft: false,
+    });
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe(
+      "https://kartik.to/work/renamed.md",
+    );
   });
 });

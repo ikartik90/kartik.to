@@ -4,24 +4,6 @@ import { parsePost } from "@/lib/posts";
 import type { Post } from "@/domain/post";
 
 /**
- * Whether `/about` is published — which is what the homepage's About button
- * waits on, so it never points at a 404.
- *
- * False on any failure, like `getHomeDocument`: the homepage is the last page
- * that should be able to 500, and certainly not over a button.
- */
-export async function isAboutPublished(): Promise<boolean> {
-  try {
-    const count = await prisma.post.count({
-      where: { slug: ABOUT_SLUG, category: "PAGE", publishedAt: { not: null } },
-    });
-    return count > 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * The About page's record, created as an empty draft if it has none yet.
  *
  * The homepage's pattern (`getOrCreateHomePost`): an upsert on the unique slug,

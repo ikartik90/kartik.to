@@ -38,6 +38,7 @@ import {
   horizontalRule,
 } from "../../styled-system/recipes";
 import { ArticleComponentBlock } from "@/components/article-component-block";
+import { ButtonLink, buttonLinkRowStyle } from "@/components/button-link";
 import { CollectionShowcase } from "@/components/collection-showcase";
 import { MediaShowcase } from "@/components/media-showcase";
 import {
@@ -332,6 +333,18 @@ function renderBlockNode(
           )}
         </figure>
       );
+
+    case "button_link": {
+      // An unfinished button — no words, or nowhere to go — is a draft left in
+      // the page, and a reader is better shown nothing than a dead control.
+      const label = node.text.trim();
+      if (!label || !node.href) return null;
+      return (
+        <div key={index} data-button-link="" className={buttonLinkRowStyle}>
+          <ButtonLink href={node.href}>{label}</ButtonLink>
+        </div>
+      );
+    }
 
     case "project_grid":
     case "social_links":

@@ -4,7 +4,8 @@ import { AUTHOR, SITE_DESCRIPTION, SITE_TITLE, SOCIAL_PROFILES } from "@/data/si
 import { HOME_SLUG } from "@/data/page-slugs";
 import { SITE_PATHS } from "@/data/site-paths";
 import { postCover } from "@/utils/post-cover";
-import { postSummary } from "@/utils/post-summary";
+import { LISTED_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
+import { postDescription } from "@/utils/post-summary";
 import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
 
 // ---------------------------------------------------------------------------
@@ -20,7 +21,7 @@ import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
 /** Published projects and articles, newest first. */
 function listedPosts(posts: Post[]): Post[] {
   return posts
-    .filter((post) => post.publishedAt && post.category !== "PAGE")
+    .filter((post) => post.publishedAt && POST_CATEGORIES[post.category].listed)
     .sort((a, b) => b.publishedAt!.getTime() - a.publishedAt!.getTime());
 }
 
@@ -83,7 +84,7 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
   const listed = listedPosts(posts);
 
   const postLink = (post: Post) => {
-    const summary = postSummary(post.content);
+    const summary = postDescription(post);
     const link = `[${post.title ?? "Untitled"}](${siteUrl}${getPostMarkdownUrl(post.category, post.slug)})`;
     return `- ${link}${summary ? `: ${summary}` : ""}`;
   };
@@ -104,9 +105,10 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
       `- Based in: ${locality}, ${region}, ${country}`,
       `- Website: ${siteUrl}`,
     ].join("\n"),
-    ...section("Pages", listedPages(posts).map(postLink)),
-    ...section("Work", postLinks("WORK")),
-    ...section("Writing", postLinks("ARTICLE")),
+    ...section(POST_CATEGORIES.PAGE.section, listedPages(posts).map(postLink)),
+    ...LISTED_CATEGORIES.flatMap((category) =>
+      section(POST_CATEGORIES[category].section, postLinks(category)),
+    ),
     ...section(
       "Playgrounds",
       SITE_PATHS.map(({ path, title }) => `- [${title}](${siteUrl}${path})`),

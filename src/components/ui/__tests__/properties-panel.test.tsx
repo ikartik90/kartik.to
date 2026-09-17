@@ -148,6 +148,36 @@ describe("PropertiesPanel", () => {
     expect(isLeaving()).toBe(true);
   });
 
+  // Every inspector docks to the same edge, so two open at once would be two
+  // rails on top of each other. The one opened last is the one asked for — a
+  // card's panel opened over the metadata sidebar, say — and the other leaves.
+  it("sends an earlier panel away when another docks", () => {
+    const first = vi.fn();
+    const { rerender } = render(
+      <>
+        <PropertiesPanel ariaLabel="First" onDismiss={first}>
+          <PropertiesPanel.Header>First</PropertiesPanel.Header>
+        </PropertiesPanel>
+      </>,
+    );
+    rerender(
+      <>
+        <PropertiesPanel ariaLabel="First" onDismiss={first}>
+          <PropertiesPanel.Header>First</PropertiesPanel.Header>
+        </PropertiesPanel>
+        <PropertiesPanel ariaLabel="Second" onDismiss={vi.fn()}>
+          <PropertiesPanel.Header>Second</PropertiesPanel.Header>
+        </PropertiesPanel>
+      </>,
+    );
+    const leaving = (name: string) =>
+      screen
+        .getByRole("dialog", { name })
+        .className.includes("properties-panel__exiting");
+    expect(leaving("First")).toBe(true);
+    expect(leaving("Second")).toBe(false);
+  });
+
   // Escape, the header and an outside press all reach the same close, so a
   // second one arriving mid-slide must not queue a second dismissal.
   it("only finishes leaving once", async () => {
@@ -376,8 +406,10 @@ describe("PropertiesPanel.Control", () => {
 describe("PropertiesPanel.Text", () => {
   function TextHarness({
     onValueChange,
+    maxLength,
   }: {
     onValueChange: (v: string) => void;
+    maxLength?: number;
   }) {
     const [value, setValue] = useState("");
     return (
@@ -387,6 +419,7 @@ describe("PropertiesPanel.Text", () => {
           <PropertiesPanel.ControlPanel>
             <PropertiesPanel.Text
               ariaLabel="Image caption"
+              maxLength={maxLength}
               value={value}
               onValueChange={(next) => {
                 setValue(next);
@@ -398,6 +431,15 @@ describe("PropertiesPanel.Text", () => {
       </PropertiesPanel>
     );
   }
+
+  it("stops at a length it is given", async () => {
+    const onValueChange = vi.fn();
+    render(<TextHarness onValueChange={onValueChange} maxLength={3} />);
+    await userEvent
+      .setup()
+      .type(screen.getByRole("textbox", { name: "Image caption" }), "Hello");
+    expect(onValueChange.mock.calls.at(-1)).toEqual(["Hel"]);
+  });
 
   it("reports every keystroke", async () => {
     const onValueChange = vi.fn();

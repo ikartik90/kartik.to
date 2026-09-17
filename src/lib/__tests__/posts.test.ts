@@ -29,9 +29,12 @@ const RAW_POST = {
   updatedAt: NOW,
 };
 
-const { parseCategory, getPublishedPostBySlug, resolvePost } = await import(
-  "../posts"
-);
+const {
+  parseCategory,
+  getPublishedPostBySlug,
+  resolvePost,
+  findMovedPostPath,
+} = await import("../posts");
 
 describe("parseCategory", () => {
   it("parses valid categories", () => {
@@ -94,5 +97,88 @@ describe("resolvePost", () => {
     mockFindFirst.mockResolvedValue(null);
     await resolvePost("static", "WORK", { allowDraft: false });
     expect(mockFindFirst).toHaveBeenCalledOnce();
+  });
+});
+
+describe("findMovedPostPath", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFindFirst.mockResolvedValue(null);
+  });
+
+  // Slugs are unique across categories, so an article refiled as a project is
+  // found by its slug alone.
+  it("sends a post's old category address to its new one", async () => {
+    mockFindFirst.mockResolvedValueOnce({ slug: "hello", category: "WORK" });
+    await expect(
+      findMovedPostPath("hello", "ARTICLE", { allowDraft: false }),
+    ).resolves.toBe("/work/hello");
+    expect(mockFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          slug: "hello",
+          category: { in: ["WORK", "PROTOTYPE"] },
+          publishedAt: { not: null },
+        },
+      }),
+    );
+  });
+
+  it("sends an address the post has since left to where it is now", async () => {
+    mockFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ slug: "renamed", category: "WORK" });
+    await expect(
+      findMovedPostPath("old-name", "WORK", { allowDraft: false }),
+    ).resolves.toBe("/work/renamed");
+    expect(mockFindFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: {
+          previousSlugs: { has: "old-name" },
+          category: { in: ["WORK", "ARTICLE", "PROTOTYPE"] },
+          publishedAt: { not: null },
+        },
+        orderBy: { updatedAt: "desc" },
+      }),
+    );
+  });
+
+  // The post that holds an address NOW wins over one that used to.
+  it("asks for the current holder before the former ones", async () => {
+    mockFindFirst.mockResolvedValueOnce({ slug: "x", category: "ARTICLE" });
+    await findMovedPostPath("x", "WORK", { allowDraft: false });
+    expect(mockFindFirst).toHaveBeenCalledOnce();
+  });
+
+  it("is null when nothing was ever there", async () => {
+    await expect(
+      findMovedPostPath("nothing", "ARTICLE", { allowDraft: false }),
+    ).resolves.toBeNull();
+  });
+
+  // A refusal is a 404: redirecting a visitor to a draft would confirm it.
+  it("follows drafts for the author alone", async () => {
+    await findMovedPostPath("hello", "ARTICLE", { allowDraft: true });
+    for (const [args] of mockFindFirst.mock.calls as [
+      { where: Record<string, unknown> },
+    ][]) {
+      expect(args.where).not.toHaveProperty("publishedAt");
+    }
+  });
+
+  it("never sends a reader to a page", async () => {
+    await findMovedPostPath("about", "ARTICLE", { allowDraft: false });
+    for (const [args] of mockFindFirst.mock.calls as [
+      { where: { category: { in: string[] } } },
+    ][]) {
+      expect(args.where.category.in).not.toContain("PAGE");
+    }
+  });
+
+  it("is null rather than a 500 when the database cannot be read", async () => {
+    mockFindFirst.mockRejectedValue(new Error("down"));
+    await expect(
+      findMovedPostPath("hello", "ARTICLE", { allowDraft: false }),
+    ).resolves.toBeNull();
   });
 });

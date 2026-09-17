@@ -8,6 +8,8 @@ import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import { LinkCardConfigSchema, type LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import type { Post, PostCardConfig } from "@/domain/post";
+import { LISTED_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
+import { getPostReadUrl } from "@/utils/post-urls";
 
 // ---------------------------------------------------------------------------
 // The homepage feed: every published thing, in the order the grid renders it.
@@ -102,7 +104,9 @@ export interface GridComponentCard extends GridCardBase {
 export type GridCard = GridPostCard | GridComponentCard;
 
 function postToCard(post: Post): GridPostCard {
-  const isArticle = post.category === "ARTICLE";
+  // Filed by the date it went out, if its category is (an article is; a
+  // project's line is whatever its author wrote there instead).
+  const dated = POST_CATEGORIES[post.category].dated;
   return {
     kind: "post",
     key: `post:${post.id}`,
@@ -110,8 +114,8 @@ function postToCard(post: Post): GridPostCard {
     // Nullable because a draft exists before it is called anything; what an
     // unnamed record is CALLED is a fact about posts, not about tiles.
     title: post.title ?? "Untitled",
-    href: `${isArticle ? "/writing" : "/work"}/${post.slug}`,
-    date: isArticle && post.publishedAt ? listingDate(post.publishedAt) : null,
+    href: getPostReadUrl(post.category, post.slug),
+    date: dated && post.publishedAt ? listingDate(post.publishedAt) : null,
     // Every post card, project and article alike. `LinkCard` is one card and
     // the grid is one grid: articles wearing pictures while projects kept a
     // flat plate would read as two card designs sharing a listing.
@@ -162,12 +166,12 @@ export async function getGridCards(): Promise<GridCard[]> {
     async () =>
       (
         await prisma.post.findMany({
-          // WORK and ARTICLE only. A PAGE is not a card: the homepage is itself
-          // a published `PAGE` post now, and without this it lists itself — an
-          // "Untitled" tile linking to the page you are already on.
+          // The listed categories only. A PAGE is not a card: the homepage is
+          // itself a published `PAGE` post now, and without this it lists
+          // itself — an "Untitled" tile linking to the page you are already on.
           where: {
             publishedAt: { not: null },
-            category: { in: ["WORK", "ARTICLE"] },
+            category: { in: LISTED_CATEGORIES },
           },
           orderBy: { publishedAt: "desc" },
         })

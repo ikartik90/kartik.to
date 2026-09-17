@@ -147,6 +147,12 @@ function block(
       return [
         `_Interactive demo on the page${node.caption ? `: ${node.caption}` : ""}_`,
       ];
+    case "button_link": {
+      const label = node.text.trim();
+      return label && node.href
+        ? [`[${label}](${absolute(node.href, origin)})`]
+        : [];
+    }
     // List items are grouped by the caller; the rest is page furniture.
     case "list_item":
     case "bullet_list_item":

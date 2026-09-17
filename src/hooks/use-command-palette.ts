@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useThemeStore } from "@/store/theme";
 import { useEditorStore } from "@/store/editor";
+import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { saveGridLayout } from "@/app/actions/grid";
 import { useGridDraftStore } from "@/store/grid-draft";
 import {
@@ -15,8 +16,12 @@ import {
   getDrafts,
   getPublishedProjects,
 } from "@/app/actions/post";
-import type { Post, PostLink } from "@/domain/post";
-import { getEditUrl, getPostReadUrl } from "@/utils/post-urls";
+import type { Post, PostCategory, PostLink } from "@/domain/post";
+import {
+  getEditUrl,
+  getPostReadUrl,
+  parsePostReadUrl,
+} from "@/utils/post-urls";
 import { getBackTarget, type BackTarget } from "@/utils/back-target";
 import { isGridDraftDirty } from "@/utils/grid-draft";
 import { pendingInsertFor } from "@/components/demo/registry";
@@ -132,8 +137,17 @@ export interface CommandPaletteHandlers {
   cancelExit: () => void;
 
   handleEditPage: () => void;
-  handleNewBlogArticle: () => void;
-  handleNewWorkArticle: () => void;
+  /**
+   * Whether the metadata sidebar can be opened here — inside a post's (or the
+   * homepage's) editor, and nowhere else. Its changes are buffered with the
+   * words and written by the editor's Save, so a page being read has nowhere
+   * to hold them.
+   */
+  canEditMetadata: boolean;
+  /** Show the metadata sidebar over the open editor. */
+  handleEditMetadata: () => void;
+  /** Start a new post filed under `category`, in a new tab. */
+  handleNewPost: (category: PostCategory) => void;
   handleOpenDraft: (draft: Post) => void;
   /** Go and read a published project. */
   handleOpenProject: (project: PostLink) => void;
@@ -172,12 +186,12 @@ export function useCommandPalette(
   const pathname = usePathname();
   const router = useRouter();
 
+  // The testimonials list lives under `/edit` too, and is not an editor — see
+  // `isTestimonials` below.
   const isEditMode =
-    pathname === "/edit/new" || /^\/edit\/[^/]+$/.test(pathname);
+    pathname === "/edit/new" ||
+    (/^\/edit\/[^/]+$/.test(pathname) && pathname !== "/edit/testimonials");
 
-  // The grid only exists on the homepage, so its controls are only offered
-  // there. Every other page would be advertising a mode it cannot enter.
-  const isHome = pathname === "/";
   // `/edit/home` matches the generic edit-mode test above, but it is editing a
   // GRID, not a document — no title, no draft, nothing buffered to save — so it
   // needs its own branch or it would be offered an article's exits.
@@ -306,28 +320,15 @@ export function useCommandPalette(
   // the viewed post is published.
   const currentDraft = useMemo(() => {
     if (isEditMode) return null;
-    const articleSlug = pathname.match(/^\/writing\/([^/]+)$/)?.[1];
-    if (articleSlug) {
-      return (
-        drafts.find(
-          (d) => d.category === "ARTICLE" && d.slug === articleSlug,
-        ) ?? null
-      );
-    }
-    const workSlug = pathname.match(/^\/work\/([^/]+)$/)?.[1];
-    if (workSlug) {
-      return (
-        drafts.find((d) => d.category === "WORK" && d.slug === workSlug) ?? null
-      );
-    }
-    // A PAGE is read at `/<slug>` (see `getPostReadUrl`) — the About page.
-    const pageSlug = pathname.match(/^\/([^/]+)$/)?.[1];
-    if (pageSlug) {
-      return (
-        drafts.find((d) => d.category === "PAGE" && d.slug === pageSlug) ?? null
-      );
-    }
-    return null;
+    // Any post's reading address, pages included — the About page is read at
+    // `/about` (see `parsePostReadUrl`).
+    const address = parsePostReadUrl(pathname);
+    if (!address) return null;
+    return (
+      drafts.find(
+        (d) => d.category === address.category && d.slug === address.slug,
+      ) ?? null
+    );
   }, [isEditMode, pathname, drafts]);
 
   // Where an exit was headed when it was stopped for unsaved work. One piece of
@@ -374,9 +375,10 @@ export function useCommandPalette(
   const exitHref = (): string => {
     if (editorKind === "document") {
       // The post as it stands SAVED — which for a draft never written is
-      // nowhere, so the index.
-      const slug = pathname.match(/^\/edit\/([^/?]+)/)?.[1];
-      if (slug && slug !== "new") return getPostReadUrl(editCategory, slug);
+      // nowhere, so the index. Not the sidebar's category and slug: leaving
+      // may be throwing those away, and they are nowhere until written.
+      const saved = useEditorStore.getState().savedAddress;
+      if (saved) return getPostReadUrl(saved.category, saved.slug);
     }
     return "/";
   };
@@ -405,17 +407,21 @@ export function useCommandPalette(
 
   const handleBack = () => {
     if (!backTarget) return;
+    // An editor's way out is read NOW rather than off the memo: the saved
+    // address it goes to is recorded by the editor's own mount effect, which
+    // runs after this palette has rendered for the route.
+    const href = editorKind ? exitHref() : backTarget.href;
     if (wouldLoseWork()) {
       // Asked, not withheld. The command used to be hidden while editing so a
       // bare "back" could not throw work away silently — but hiding it also
       // removes "save and go", which is usually what the author meant. The
       // question restores both answers.
       close();
-      setPendingExit(backTarget.href);
+      setPendingExit(href);
       return;
     }
     close();
-    router.push(backTarget.href);
+    router.push(href);
   };
 
   const confirmExitSave = async () => {
@@ -604,29 +610,13 @@ export function useCommandPalette(
   };
 
   const handleEditPage = () => {
-    // The homepage IS the grid, and it is edited the way everything else is:
-    // by going to its edit route.
-    if (isHome) {
-      close();
-      router.push("/edit/home");
-      return;
-    }
-    // Its own edit route too, which creates the About page's record the first
-    // time — the generic `/edit/:slug` needs a row to exist already.
-    if (pathname === "/about") {
-      close();
-      router.push("/edit/about");
-      return;
-    }
-    const articleSlug = pathname.match(/^\/writing\/([^/]+)$/)?.[1];
-    const workSlug = pathname.match(/^\/work\/([^/]+)$/)?.[1];
+    // Every post is edited by going to its editor — the homepage (whose post is
+    // the grid's page) and the About page included, whose static edit routes
+    // create their records the first time.
+    const address = parsePostReadUrl(pathname);
     close();
-    if (articleSlug) {
-      router.push(getEditUrl("ARTICLE", articleSlug));
-      return;
-    }
-    if (workSlug) {
-      router.push(getEditUrl("WORK", workSlug));
+    if (address) {
+      router.push(getEditUrl(address.category, address.slug));
       return;
     }
     requestAnimationFrame(() => {
@@ -660,14 +650,17 @@ export function useCommandPalette(
   // `window.open` — the latter is silently pop-up-blocked in some browsers even
   // from a user gesture, so the command would appear to do nothing. See
   // openInNewTab.
-  const handleNewBlogArticle = () => {
+  const handleNewPost = (category: PostCategory) => {
     close();
-    openInNewTab(getEditUrl("ARTICLE"));
+    openInNewTab(getEditUrl(category));
   };
 
-  const handleNewWorkArticle = () => {
+  const canEditMetadata =
+    isAdmin && (editorKind === "document" || editorKind === "grid");
+
+  const handleEditMetadata = () => {
     close();
-    openInNewTab(getEditUrl("WORK"));
+    useMetadataPanelStore.getState().setOpen(true);
   };
 
   const handleOpenDraft = (draft: Post) => {
@@ -704,26 +697,54 @@ export function useCommandPalette(
    * clean. Those are three different answers to "what happens next", and the
    * two callers give different ones — see each.
    */
-  const writeDocument = async (): Promise<Post | null> => {
-    const { draftId, title, document, category } = useEditorStore.getState();
+  const writing = useRef<Promise<Post | null> | null>(null);
+
+  const writeDocument = (): Promise<Post | null> => {
+    // One write at a time. A second ⌘S before the first returns would read a
+    // draft with no id yet and mint the post twice, so it waits on the write
+    // already going instead of starting its own.
+    writing.current ??= writeDocumentNow().finally(() => {
+      writing.current = null;
+    });
+    return writing.current;
+  };
+
+  const writeDocumentNow = async (): Promise<Post | null> => {
+    const { draftId, title, document, category, slug, description } =
+      useEditorStore.getState();
+    // The metadata sidebar's buffer goes with the words, in the same write —
+    // so an address and the page it serves cannot land apart.
+    const metadata = {
+      category,
+      ...(slug !== null ? { slug } : {}),
+      description,
+    };
     try {
-      if (!draftId) {
-        const created = await createDraft({
-          title: title || undefined,
-          document,
-          category,
-        });
-        useEditorStore.getState().setDraftId(created.id);
-        setDrafts((prev) => [...prev, created]);
-        return created;
-      }
-      const updated = await saveDraft({
-        id: draftId,
-        title: title || undefined,
-        document,
-      });
-      setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-      return updated;
+      const saved = draftId
+        ? await saveDraft({
+            id: draftId,
+            title: title || undefined,
+            document,
+            ...metadata,
+          })
+        : await createDraft({
+            title: title || undefined,
+            document,
+            ...metadata,
+          });
+      const store = useEditorStore.getState();
+      if (!draftId) store.setDraftId(saved.id);
+      // A draft that left its address to the title now has the one minted
+      // from it, and the sidebar shows it from here on. Written straight in
+      // rather than through `setSlug`: it is what was saved, not a change.
+      if (slug === null) useEditorStore.setState({ slug: saved.slug });
+      store.setSavedAddress({ category: saved.category, slug: saved.slug });
+      setDrafts((prev) =>
+        draftId
+          ? prev.map((d) => (d.id === saved.id ? saved : d))
+          : [...prev, saved],
+      );
+      return saved;
     } catch (err) {
       console.error("Failed to save draft:", err);
       return null;
@@ -783,13 +804,23 @@ export function useCommandPalette(
    * second empty draft rather than reopening this one.
    */
   const persistDocument = async (): Promise<boolean> => {
-    const { draftId, category } = useEditorStore.getState();
+    const { draftId, category, savedAddress: before } =
+      useEditorStore.getState();
     const keyBefore = autosaveKey(draftId, category);
 
     const saved = await writeDocument();
     if (!saved) return false;
 
-    if (!draftId) router.replace(getEditUrl(saved.category, saved.slug));
+    // Follow the post to wherever this write put it — a first save gives it an
+    // address, and the sidebar can move it to another. Left behind, a refresh
+    // would look for it where it no longer is.
+    if (
+      !before ||
+      before.slug !== saved.slug ||
+      before.category !== saved.category
+    ) {
+      router.replace(getEditUrl(saved.category, saved.slug));
+    }
     // Clean again — which is what stops the unsaved-work question asking
     // about edits that have just been written. After the write, never before:
     // the snapshot is the last copy of anything the server has not taken.
@@ -855,12 +886,20 @@ export function useCommandPalette(
    * one act.
    */
   const persistGrid = async (): Promise<boolean> => {
-    const { draftId, title, document, category } = useEditorStore.getState();
+    const { draftId, title, document, category, description } =
+      useEditorStore.getState();
     const { pins, spans, aspects, loggers, props, cards, inserts, removals } =
       useGridDraftStore.getState();
     try {
       if (draftId) {
-        await saveDraft({ id: draftId, title: title || undefined, document });
+        // The homepage's own description goes with its words — its address
+        // is fixed, so there is nothing else of the sidebar's to send.
+        await saveDraft({
+          id: draftId,
+          title: title || undefined,
+          document,
+          description,
+        });
       }
       await saveGridLayout({
         pins,
@@ -917,6 +956,8 @@ export function useCommandPalette(
    */
   const discardEditor = () => {
     const { draftId, category } = useEditorStore.getState();
+    // The sidebar is a view of the buffer being thrown away.
+    useMetadataPanelStore.getState().setOpen(false);
     switch (editorKind) {
       case "shaderPreset":
         useShaderPresetDraftStore.getState().reset();
@@ -1033,8 +1074,9 @@ export function useCommandPalette(
     confirmExitDiscard,
     cancelExit,
     handleEditPage,
-    handleNewBlogArticle,
-    handleNewWorkArticle,
+    canEditMetadata,
+    handleEditMetadata,
+    handleNewPost,
     handleOpenDraft,
     handleOpenProject,
     handlePublish,

@@ -1,11 +1,11 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
-import { inlineEditRow, menuIcon } from "../../styled-system/recipes";
+import { Fragment } from "react";
 import { selectionPopover, toolbar } from "../../styled-system/recipes";
 import { cx } from "../../styled-system/css";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { OptionList } from "@/components/ui/input/option-list";
+import { LinkActions, LinkEditRow } from "@/components/link-toolbar";
 import type { Mark } from "@/domain/nodes";
 import LinkIcon from "@/assets/icons/link.svg";
 import BoldIcon from "@/assets/icons/bold.svg";
@@ -16,7 +16,6 @@ import StrikethroughIcon from "@/assets/icons/strikethrough.svg";
 import HighlightIcon from "@/assets/icons/highlight.svg";
 import SidenoteIcon from "@/assets/icons/sidenote.svg";
 import EditIcon from "@/assets/icons/edit.svg";
-import GotoIcon from "@/assets/icons/goto.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
 // ---------------------------------------------------------------------------
@@ -79,16 +78,11 @@ const FORMAT_GROUPS: FormatButton[][] = [
 // Styles
 // ---------------------------------------------------------------------------
 
-const iconStyle = menuIcon();
 // The shared toolbar rail, floated: `toolbar` draws the box, `selectionPopover`
 // adds the anchor, the hairline and the elevation that floating costs.
 const toolbarClass = cx(toolbar(), selectionPopover());
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
-
-// The link editor's row is the shared inline-edit shell — the collection's
-// caption editor takes over its cell toolbar the same way.
-const editRow = inlineEditRow();
 
 // ---------------------------------------------------------------------------
 // Component
@@ -110,23 +104,6 @@ export function SelectionToolbar({
   onDeleteSidenote,
   onDismiss,
 }: SelectionToolbarProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [href, setHref] = useState(linkHref ?? "");
-
-  // Reset the draft href whenever we (re)enter link-edit for a different link.
-  const [prevMode, setPrevMode] = useState(mode);
-  if (mode !== prevMode) {
-    setPrevMode(mode);
-    if (mode === "link-edit") setHref(linkHref ?? "");
-  }
-
-  useEffect(() => {
-    if (mode === "link-edit") {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [mode]);
-
   if (mode === "link-edit") {
     return (
       <Popover
@@ -137,30 +114,9 @@ export function SelectionToolbar({
         ariaLabel="Edit link"
         onDismiss={onDismiss}
       >
-        <div className={editRow.root}>
-          <LinkIcon className={iconStyle} aria-hidden />
-          <input
-            ref={inputRef}
-            type="url"
-            inputMode="url"
-            placeholder="https://..."
-            aria-label="Link URL"
-            className={editRow.input}
-            value={href}
-            onChange={(e) => setHref(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const trimmed = href.trim();
-                if (trimmed) onApplyLink(trimmed);
-              }
-            }}
-          />
-          <div className={editRow.hint} aria-hidden>
-            <span className={editRow.hintKey}>Esc</span>
-            <span className={editRow.hintLabel}>to exit</span>
-          </div>
-        </div>
+        {/* Mounted on entering link-edit, so each edit starts from the
+            link's own address. */}
+        <LinkEditRow href={linkHref} onApply={onApplyLink} />
       </Popover>
     );
   }
@@ -173,19 +129,11 @@ export function SelectionToolbar({
         className={toolbarClass}
         onDismiss={onDismiss}
       >
-        <OptionList direction="inline">
-          <OptionList.Toolbar aria-label="Link actions">
-            <OptionList.Option aria-label="Edit link" onClick={onEditLink}>
-              <EditIcon aria-hidden />
-            </OptionList.Option>
-            <OptionList.Option aria-label="Open link" onClick={onGotoLink}>
-              <GotoIcon aria-hidden />
-            </OptionList.Option>
-            <OptionList.Option aria-label="Remove link" onClick={onRemoveLink}>
-              <TrashIcon aria-hidden />
-            </OptionList.Option>
-          </OptionList.Toolbar>
-        </OptionList>
+        <LinkActions
+          onEdit={onEditLink}
+          onOpen={onGotoLink}
+          onRemove={onRemoveLink}
+        />
       </Popover>
     );
   }

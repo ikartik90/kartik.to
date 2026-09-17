@@ -7,7 +7,8 @@ import {
   SOCIAL_PROFILES,
 } from "@/data/site";
 import { ABOUT_SLUG } from "@/data/page-slugs";
-import { postSummary } from "@/utils/post-summary";
+import { POST_CATEGORIES } from "@/data/post-categories";
+import { postDescription } from "@/utils/post-summary";
 import { getPostReadUrl } from "@/utils/post-urls";
 
 // ---------------------------------------------------------------------------
@@ -102,19 +103,16 @@ export function homeJsonLd(siteUrl: string): JsonLd {
   );
 }
 
-const POST_TYPES: Record<PostCategory, { type: string; fallbackTitle: string }> =
-  {
-    WORK: { type: "Article", fallbackTitle: "Project" },
-    ARTICLE: { type: "BlogPosting", fallbackTitle: "Article" },
-    PAGE: { type: "WebPage", fallbackTitle: SITE_TITLE },
-  };
+/** What an untitled post is called — a page is called by the site's name. */
+const fallbackTitle = (category: PostCategory) =>
+  category === "PAGE" ? SITE_TITLE : POST_CATEGORIES[category].label;
 
 /** One post, by the person, on the site. */
 export function postJsonLd(post: Post, siteUrl: string): JsonLd {
   const { person, website } = ids(siteUrl);
-  const { type, fallbackTitle } = POST_TYPES[post.category];
+  const type = POST_CATEGORIES[post.category].schemaType;
   const url = `${siteUrl}${getPostReadUrl(post.category, post.slug)}`;
-  const description = postSummary(post.content);
+  const description = postDescription(post);
   // schema.org has a type for exactly this page, and it is about the person.
   const isAbout = post.category === "PAGE" && post.slug === ABOUT_SLUG;
 
@@ -125,7 +123,7 @@ export function postJsonLd(post: Post, siteUrl: string): JsonLd {
       "@id": `${url}#article`,
       url,
       mainEntityOfPage: url,
-      headline: post.title ?? fallbackTitle,
+      headline: post.title ?? fallbackTitle(post.category),
       ...(description ? { description } : {}),
       ...(post.publishedAt
         ? { datePublished: post.publishedAt.toISOString() }

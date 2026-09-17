@@ -9,13 +9,8 @@ import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
-import {
-  AUTHOR,
-  SITE_DESCRIPTION,
-  SITE_LOCALE,
-  SITE_NAME,
-  SITE_TITLE,
-} from "@/data/site";
+import { AUTHOR, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/data/site";
+import { siteCard } from "@/lib/post-metadata";
 import { SITE_URL } from "@/lib/site-url";
 import { PALETTE_INTENT_SCRIPT } from "@/utils/palette-intent";
 
@@ -54,23 +49,7 @@ export const metadata: Metadata = {
   // title, description and card. The image is not named here: the file
   // convention supplies it — `app/opengraph-image.tsx` for anything with
   // nothing more specific, and a post's own route for a post.
-  openGraph: {
-    type: "website",
-    siteName: SITE_NAME,
-    locale: SITE_LOCALE,
-    url: SITE_URL,
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-  },
-  twitter: {
-    // The large card, because what is being shared is a PICTURE of the post's
-    // tile — at `summary` it is cropped to a square thumbnail beside the text,
-    // which throws away the half of the card that is the cover.
-    card: "summary_large_image",
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-    creator: AUTHOR.twitterHandle,
-  },
+  ...siteCard(SITE_DESCRIPTION),
 };
 
 // Runs synchronously before hydration to prevent flash of incorrect theme.

@@ -154,6 +154,13 @@ describe("llmsTxt", () => {
     );
   });
 
+  it("lists a post with its written description over its opening", () => {
+    const described = { ...project, description: "Written for search." };
+    expect(llmsTxt([home, described], SITE)).toContain(
+      "(https://kartik.to/work/scheduling-extensions.md): Written for search.",
+    );
+  });
+
   it("leaves out a section with nothing in it", () => {
     expect(llmsTxt([home, project], SITE)).not.toContain("## Writing");
   });

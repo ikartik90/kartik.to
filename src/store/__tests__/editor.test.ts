@@ -215,4 +215,67 @@ describe("useEditorStore", () => {
       expect(useEditorStore.getState().historyIndex).toBe(0);
     });
   });
+
+  // What the metadata sidebar edits. Buffered with the document, so Save and
+  // Publish write it and Discard throws it away with everything else.
+  describe("metadata", () => {
+    it("starts with no address and no written description", () => {
+      expect(useEditorStore.getState().slug).toBeNull();
+      expect(useEditorStore.getState().description).toBeNull();
+    });
+
+    it("files the post under a category, as an unsaved change", () => {
+      useEditorStore.getState().setCategory("WORK");
+      expect(useEditorStore.getState().category).toBe("WORK");
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it("takes an address, as an unsaved change", () => {
+      useEditorStore.getState().setSlug("renamed");
+      expect(useEditorStore.getState().slug).toBe("renamed");
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it("takes a description, and takes it away, as unsaved changes", () => {
+      useEditorStore.getState().setDescription("For search.");
+      expect(useEditorStore.getState().description).toBe("For search.");
+      expect(useEditorStore.getState().isDirty).toBe(true);
+
+      useEditorStore.getState().setDirty(false);
+      useEditorStore.getState().setDescription(null);
+      expect(useEditorStore.getState().description).toBeNull();
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+
+    // Where the post is read as the ROW has it, which the sidebar's buffer is
+    // not: an exit goes to the saved address, and a save that moves the post
+    // is how the editor knows to follow it.
+    it("remembers where the post was last saved, without it being a change", () => {
+      expect(useEditorStore.getState().savedAddress).toBeNull();
+      useEditorStore
+        .getState()
+        .setSavedAddress({ category: "WORK", slug: "renamed" });
+      expect(useEditorStore.getState().savedAddress).toEqual({
+        category: "WORK",
+        slug: "renamed",
+      });
+      expect(useEditorStore.getState().isDirty).toBe(false);
+    });
+
+    it("forgets all of it on reset", () => {
+      useEditorStore.getState().setCategory("WORK");
+      useEditorStore.getState().setSlug("renamed");
+      useEditorStore.getState().setDescription("For search.");
+      useEditorStore
+        .getState()
+        .setSavedAddress({ category: "WORK", slug: "renamed" });
+      useEditorStore.getState().reset();
+      expect(useEditorStore.getState()).toMatchObject({
+        category: "ARTICLE",
+        slug: null,
+        description: null,
+        savedAddress: null,
+      });
+    });
+  });
 });

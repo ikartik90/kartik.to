@@ -91,6 +91,9 @@ const TRIGGER_SELECTOR = "[data-properties-trigger]";
  */
 const EXIT_MS = 200;
 
+/** How each docked panel is asked to leave — see the one-at-a-time rule. */
+const openPanels = new Set<() => void>();
+
 type PanelStyles = ReturnType<typeof propertiesPanel>;
 
 type PanelContextValue = {
@@ -220,6 +223,19 @@ function PropertiesPanelRoot({
   // it all end up here — so the panel leaves the same way whichever of them
   // asked, and the timing lives in exactly one place.
   useImperativeHandle(ref, () => ({ dismiss: close }), [close]);
+
+  // One inspector at a time. Every panel docks to the same edge, so a second
+  // one opening is the reader turning to something else — the card they just
+  // pressed while the metadata sidebar was up, say — and the first one leaves
+  // the way it would for any other outside press. Asked on MOUNT, so the panel
+  // arriving is the one that stays.
+  useEffect(() => {
+    for (const other of openPanels) other();
+    openPanels.add(close);
+    return () => {
+      openPanels.delete(close);
+    };
+  }, [close]);
 
   // Read through a ref so the timer is started by the EXIT, not restarted by
   // a consumer that hands down a fresh arrow on every render.
@@ -627,6 +643,8 @@ export interface PropertiesPanelTextProps {
   placeholder?: string;
   /** Lines the box starts at where `field-sizing: content` is unsupported. */
   rows?: number;
+  /** The longest value the box takes — stated where the domain caps it. */
+  maxLength?: number;
   className?: string;
 }
 
@@ -642,6 +660,7 @@ function PropertiesPanelText({
   ariaLabel,
   placeholder,
   rows = 3,
+  maxLength,
   className,
 }: PropertiesPanelTextProps) {
   const { styles } = usePanel("PropertiesPanel.Text");
@@ -650,6 +669,7 @@ function PropertiesPanelText({
       aria-label={ariaLabel}
       placeholder={placeholder}
       rows={rows}
+      maxLength={maxLength}
       value={value}
       className={cx(styles.text, className)}
       onChange={(event) => onValueChange(event.target.value)}

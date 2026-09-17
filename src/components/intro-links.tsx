@@ -1,56 +1,25 @@
 import { css } from "../../styled-system/css";
 import { SocialLinks } from "./social-links";
-import { Link } from "./ui/link";
 
-// The `social_links` furniture on the homepage and on its editor: the way on to
-// the about page, then the row of icons, both hanging off the intro above.
+// The `social_links` furniture on the homepage and on its editor: the row of
+// icons hanging off the intro above.
 //
-// A column rather than two blocks, so the pair keeps the article's own 16px
-// between them and the extra space the row carries below (globals.css) still
-// lands under the icons, not under the button.
-const columnStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: "xl",
-});
+// The way on to the About page used to be drawn here too. It is a
+// `button_link` block in the homepage's document now, written and moved like
+// any other block; the extra space that stands this row off a button above it
+// lives in globals.css, beside the space the row carries below.
 
 // The icon row is centred by its own box: `text-align` cannot reach the items
 // of a flex container, so the centred paragraph above it does not carry here.
-//
-// The extra top margin stands the row off the BUTTON, so it is spent only when
-// there is a button above it; under the intro alone the row keeps the
-// article's own gap, which is what it had before the button existed.
 const socialRowStyle = css({
   display: "flex",
   justifyContent: "center",
-  "&[data-below-button]": { marginTop: "xxl" },
 });
 
-const pillStyle = css({ borderRadius: "full" });
-
-interface IntroLinksProps {
-  /** Whether `/about` is published. Until it is, the button would be a 404. */
-  aboutPublished: boolean;
-}
-
-export function IntroLinks({ aboutPublished }: IntroLinksProps) {
+export function IntroLinks() {
   return (
-    <div className={columnStyle}>
-      {/* A bare string, not `Link.Text`: this renders from Server Components,
-          and the compound sub-parts do not survive the client boundary. */}
-      {aboutPublished && (
-        <Link href="/about" className={pillStyle}>
-          About me
-        </Link>
-      )}
-      <nav
-        aria-label="Social links"
-        className={socialRowStyle}
-        data-below-button={aboutPublished ? "" : undefined}
-      >
-        <SocialLinks />
-      </nav>
-    </div>
+    <nav aria-label="Social links" className={socialRowStyle}>
+      <SocialLinks />
+    </nav>
   );
 }

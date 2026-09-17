@@ -1,5 +1,5 @@
 import type { PostCategory } from "@/domain/post";
-import { getPublishedPostBySlug } from "@/lib/posts";
+import { findMovedPostPath, getPublishedPostBySlug } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
 import { documentToMarkdown } from "@/utils/document-markdown";
 import { getPostReadUrl } from "@/utils/post-urls";
@@ -17,7 +17,16 @@ export async function postMarkdownResponse(
   category: PostCategory,
 ): Promise<Response> {
   const post = await getPublishedPostBySlug(slug, category);
-  if (!post) return new Response("Not found", { status: 404 });
+  if (!post) {
+    // The page's own rule, for the copy of it: an address the post has left
+    // sends the agent on to the copy at the new one.
+    const moved = await findMovedPostPath(slug, category, {
+      allowDraft: false,
+    });
+    return moved
+      ? Response.redirect(`${SITE_URL}${moved}.md`, 308)
+      : new Response("Not found", { status: 404 });
+  }
 
   const body = documentToMarkdown(post.content, {
     title: post.title,

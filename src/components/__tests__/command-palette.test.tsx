@@ -12,6 +12,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CommandPalette } from "../command-palette";
 import { HAS_CURSOR_QUERY } from "@/data/media-queries";
 import { useGridDraftStore } from "@/store/grid-draft";
+import { useEditorStore } from "@/store/editor";
+import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { saveGridLayout } from "@/app/actions/grid";
 
 // ---------------------------------------------------------------------------
@@ -384,25 +386,35 @@ describe("CommandPalette", () => {
     it("renders all admin items", () => {
       render(<CommandPalette />);
       expect(screen.getByText("Edit page")).toBeDefined();
-      expect(screen.getByText("Edit metadata")).toBeDefined();
       expect(screen.getByText("New blog article…")).toBeDefined();
       expect(screen.getByText("New work article…")).toBeDefined();
+      expect(screen.getByText("New prototype…")).toBeDefined();
     });
 
-    it("no longer offers 'New page…' (no utility for it yet)", () => {
+    it("lists a way to start each kind of post, in that order", () => {
       render(<CommandPalette />);
-      expect(screen.queryByText("New page…")).toBeNull();
+      const rows = list()
+        .getAllByText(/^New .+…$/)
+        .map((row) => row.textContent);
+      expect(rows).toEqual([
+        "New blog article…",
+        "New work article…",
+        "New prototype…",
+      ]);
     });
 
-    // It used to sit here, in Publish, and it should not: a widget goes onto
-    // the GRID, and the grid is a thing you are either editing or not. Offered
-    // from a page that is merely being read, it published straight to the live
-    // homepage with no draft to hold it and no discard to take it back.
-    it("does not offer a new widget from outside the homepage editor", () => {
-      render(<CommandPalette />);
-      expect(list().queryByText("New widget…")).toBeNull();
-      expect(list().queryByText("New component…")).toBeNull();
-    });
+    // Metadata is changed from inside the editor, where its changes are
+    // buffered with the words — so a page being read does not offer it, a
+    // post's or otherwise.
+    it.each(["/", "/about", "/writing/my-post", "/prototype/a-toy", "/vouch"])(
+      "offers no metadata while %s is being read",
+      (pathname) => {
+        mockPathname.mockReturnValue(pathname);
+        render(<CommandPalette />);
+        expect(list().getByText("Edit page")).toBeDefined();
+        expect(list().queryByText("Edit metadata")).toBeNull();
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -510,7 +522,26 @@ describe("CommandPalette", () => {
       expect(screen.queryByText("This Page")).toBeNull();
       expect(screen.queryByText("Publish")).toBeNull();
       expect(screen.queryByText("New blog article…")).toBeNull();
-      expect(screen.queryByText("Edit metadata")).toBeNull();
+      expect(list().queryByText("Edit page")).toBeNull();
+    });
+
+    // Inside the editor the sidebar opens in place, over the post it edits.
+    it("offers the metadata sidebar, and opens it without leaving", () => {
+      useMetadataPanelStore.setState({ open: false });
+      render(<CommandPalette />);
+      fireEvent.click(list().getByText("Edit metadata"));
+      expect(useMetadataPanelStore.getState().open).toBe(true);
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    // The editor's heading and its publish commands name what is being
+    // written, from the category list rather than a two-way guess.
+    it("names a prototype as a prototype", () => {
+      useEditorStore.setState({ category: "PROTOTYPE" });
+      render(<CommandPalette />);
+      expect(list().getByText("This Prototype")).toBeDefined();
+      expect(list().getByText("Publish prototype")).toBeDefined();
+      useEditorStore.getState().reset();
     });
 
     it("does not offer 'Discard draft' (delete) while editing", () => {

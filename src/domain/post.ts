@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BlockNodeSchema, type MediaNode } from "./nodes";
 import { LinkCardMediaSchema, LinkCardToneSchema } from "./link-card";
+import { SUMMARY_MAX_CHARS } from "@/utils/post-summary";
 // The pin and the span live in `component.ts` because the grid is the whole
 // reason that model exists, whereas a Post merely gains a position and a width
 // on it. Importing them rather than restating the bounds here is what keeps a
@@ -103,13 +104,91 @@ export function postCardMedia(
 // Post
 // ---------------------------------------------------------------------------
 
+// Keep in step with the Prisma enum, and describe each value in
+// `POST_CATEGORIES` (`src/data/post-categories.ts`) — the Record there fails to
+// compile until a new one is.
 export const PostCategorySchema = z.enum([
   "ARTICLE",
   "WORK",
+  "PROTOTYPE",
   "PAGE",
 ]);
 
 export type PostCategory = z.infer<typeof PostCategorySchema>;
+
+/**
+ * Slugs a post may not take, because the site already answers at them.
+ *
+ * Every post is edited at `/edit/<slug>`, and that folder also holds the admin
+ * surface's own pages: a post called `new` would be edited at the address that
+ * starts a draft. `home` and `about` are pages' records as well, which the
+ * unique index would refuse anyway — they are listed so the sidebar can say so
+ * before a save fails on them.
+ */
+export const RESERVED_POST_SLUGS = ["new", "home", "about", "testimonials"];
+
+/**
+ * A post's address, as the author types it into the metadata sidebar.
+ *
+ * Lowercase letters, digits and hyphens, beginning and ending on a letter or a
+ * digit — the same alphabet `generateSlug` mints from a title, including the
+ * doubled hyphen it leaves where a title had a dash between spaces, so an
+ * address that is already live stays saveable as it is. 80 characters is where
+ * `generateSlug` cuts.
+ */
+export const PostSlugSchema = z
+  .string()
+  .trim()
+  .min(1, "An address needs at least one character.")
+  .max(80, "Keep an address to 80 characters.")
+  .regex(
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
+    "Use lowercase letters, numbers and hyphens.",
+  )
+  .refine(
+    (slug) => !RESERVED_POST_SLUGS.includes(slug),
+    "The site already uses that address.",
+  );
+
+/**
+ * How long a written search description may run — the summary's own cap, so a
+ * description typed by hand is held to the length the one read off the opening
+ * paragraph is trimmed to. See `SUMMARY_MAX_CHARS` for why that is 200.
+ */
+export const POST_DESCRIPTION_MAX_LENGTH = SUMMARY_MAX_CHARS;
+
+/**
+ * What a post says about itself to search engines and link previews, in place
+ * of the summary read off its opening (`postSummary`).
+ *
+ * Empty is not a description. An emptied box is the author taking the override
+ * away, so it is stored as null — and null is what hands the page back to its
+ * opening paragraph.
+ */
+export const PostDescriptionSchema = z
+  .string()
+  .trim()
+  .max(
+    POST_DESCRIPTION_MAX_LENGTH,
+    `Keep a description to ${POST_DESCRIPTION_MAX_LENGTH} characters.`,
+  )
+  .nullable()
+  .transform((description) => description || null);
+
+/**
+ * What the metadata sidebar edits: which category a post is filed under, its
+ * address, and its search description. Each part is optional, so a save that
+ * does not touch one leaves it alone. Whether a CHANGE to the category or the
+ * address is allowed depends on the post being changed, which is the save's to
+ * decide (`saveDraft`) — a page's address is fixed by its route.
+ */
+export const PostMetadataSchema = z.object({
+  category: PostCategorySchema.optional(),
+  slug: PostSlugSchema.optional(),
+  description: PostDescriptionSchema.optional(),
+});
+
+export type PostMetadata = z.input<typeof PostMetadataSchema>;
 
 export const PostSchema = z.object({
   id: z.string(),
@@ -117,6 +196,10 @@ export const PostSchema = z.object({
   slug: z.string().min(1),
   category: PostCategorySchema.default("ARTICLE"),
   content: DocumentSchema,
+  // The written search description, or null for the summary read off the
+  // opening. Read as stored rather than through `PostDescriptionSchema`, which
+  // is the WRITE's rule — see `postDescription` for how the two are chosen.
+  description: z.string().nullable().optional(),
   coverImageKey: z.string().nullable().optional(),
   // The card's shape, overriding the listing default. Shares the component's
   // validator so one picker cannot mean two different things.

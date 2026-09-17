@@ -24,6 +24,38 @@ function doc(nodes: Document["content"]): Document {
 }
 
 describe("ArticleRenderer", () => {
+  describe("button links", () => {
+    it("draws a button that goes where it says, centred on its own line", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "button_link", text: "Book a call", href: "/about" },
+          ])}
+        />,
+      );
+      const link = screen.getByRole("link", { name: "Book a call" });
+      expect(link.getAttribute("href")).toBe("/about");
+      expect(container.querySelector("[data-button-link]")?.contains(link)).toBe(
+        true,
+      );
+    });
+
+    // A button with no words or nowhere to go is a draft left in the page,
+    // and the reader is shown nothing rather than a dead control.
+    it("draws nothing for a button that is not finished", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "button_link", text: "  ", href: "/about" },
+            { type: "button_link", text: "Go", href: "" },
+          ])}
+        />,
+      );
+      expect(within(container).queryByRole("link")).toBeNull();
+      expect(container.querySelector("[data-button-link]")).toBeNull();
+    });
+  });
+
   describe("block nodes", () => {
     it("renders a paragraph", () => {
       render(

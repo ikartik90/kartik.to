@@ -6,6 +6,8 @@ import {
   type Post,
   type PostCategory,
 } from "@/domain/post";
+import { LISTED_CATEGORIES } from "@/data/post-categories";
+import { getPostReadUrl } from "@/utils/post-urls";
 
 export function parsePost(raw: unknown): Post {
   const record = raw as Record<string, unknown>;
@@ -77,6 +79,59 @@ export async function resolvePost(
   }
 
   return null;
+}
+
+/**
+ * Where a post that is not at this address any more lives now, or null for the
+ * 404 — asked by a post's page only once `resolvePost` has found nothing.
+ *
+ * Two ways a post leaves an address, both made from the metadata sidebar. It
+ * can be REFILED, which changes the prefix and keeps the slug — and slugs are
+ * unique across categories, so `/writing/x` finds `x` wherever it went. Or it
+ * can be RENAMED, and the save remembers the slug it left
+ * (`Post.previousSlugs`). The current holder of a slug is asked for first, so a
+ * post that has since taken an address wins over one that used to have it.
+ *
+ * Checked at the page rather than as a config redirect, for the reason
+ * `/work/scheduling-extensions` always was: a redirect in `next.config.ts`
+ * fires before the database is read, and would point at a page that did not
+ * exist yet for as long as a deploy and a rename were apart.
+ *
+ * Drafts are followed for the author alone. A redirect is an answer, and
+ * sending a visitor on to an unpublished post would confirm it exists. Pages
+ * are never a destination: a page's address is its own route, so nothing is
+ * ever moved into one.
+ */
+export async function findMovedPostPath(
+  slug: string,
+  category: PostCategory,
+  options: { allowDraft: boolean },
+): Promise<string | null> {
+  const published = options.allowDraft ? {} : { publishedAt: { not: null } };
+  try {
+    const holder = await prisma.post.findFirst({
+      where: {
+        slug,
+        category: { in: LISTED_CATEGORIES.filter((c) => c !== category) },
+        ...published,
+      },
+      select: { slug: true, category: true },
+    });
+    const moved =
+      holder ??
+      (await prisma.post.findFirst({
+        where: {
+          previousSlugs: { has: slug },
+          category: { in: LISTED_CATEGORIES },
+          ...published,
+        },
+        orderBy: { updatedAt: "desc" },
+        select: { slug: true, category: true },
+      }));
+    return moved ? getPostReadUrl(moved.category, moved.slug) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getPublishedPostsByCategory(

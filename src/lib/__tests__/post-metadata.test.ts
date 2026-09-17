@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Post } from "@/domain/post";
-import { postMetadata } from "../post-metadata";
+import { SITE_TITLE } from "@/data/site";
+import { homeMetadata, postMetadata, siteCard } from "../post-metadata";
 
 const NOW = new Date("2026-09-10T00:00:00.000Z");
 
@@ -58,5 +59,65 @@ describe("postMetadata", () => {
     expect(postMetadata(null, "/work/nope", "Project")).toEqual({
       title: "Project",
     });
+  });
+
+  it("describes the page with the author's written description where there is one", () => {
+    const described = postMetadata(
+      {
+        ...PROJECT,
+        description: "Written for search.",
+        content: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              children: [{ type: "text", text: "The opening line." }],
+            },
+          ],
+        },
+      },
+      "/work/scheduling-extensions",
+      "Project",
+    );
+    expect(described.description).toBe("Written for search.");
+    expect(described.openGraph).toMatchObject({
+      description: "Written for search.",
+    });
+    expect(described.twitter).toMatchObject({
+      description: "Written for search.",
+    });
+  });
+});
+
+describe("siteCard", () => {
+  it("is the site's own card, described as asked", () => {
+    const card = siteCard("A line.");
+    expect(card.openGraph).toMatchObject({
+      type: "website",
+      siteName: "kartik.to",
+      title: SITE_TITLE,
+      description: "A line.",
+    });
+    expect(card.twitter).toMatchObject({
+      card: "summary_large_image",
+      title: SITE_TITLE,
+      description: "A line.",
+      creator: "@ikartik90",
+    });
+  });
+});
+
+describe("homeMetadata", () => {
+  it("names the homepage as its own address and inherits the rest", () => {
+    expect(homeMetadata(null)).toEqual({ alternates: { canonical: "/" } });
+  });
+
+  // Next replaces `openGraph` and `twitter` wholesale, so a description on the
+  // homepage restates the whole card rather than only the line that changed.
+  it("describes the homepage with a written description, on its card too", () => {
+    const metadata = homeMetadata("Written for search.");
+    expect(metadata.description).toBe("Written for search.");
+    expect(metadata).toMatchObject(siteCard("Written for search."));
+    expect(metadata.alternates).toEqual({ canonical: "/" });
   });
 });

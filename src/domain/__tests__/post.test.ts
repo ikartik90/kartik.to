@@ -1,4 +1,7 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { SUMMARY_MAX_CHARS } from "@/utils/post-summary";
 import {
   BlockNodeSchema,
   COLLECTION_MAX_ITEMS,
@@ -8,9 +11,14 @@ import {
 import {
   CreatePostInputSchema,
   DocumentSchema,
+  POST_DESCRIPTION_MAX_LENGTH,
   PostCategorySchema,
+  PostDescriptionSchema,
   PostLinkSchema,
+  PostMetadataSchema,
   PostSchema,
+  PostSlugSchema,
+  RESERVED_POST_SLUGS,
   postCardMedia,
 } from "../post";
 
@@ -683,5 +691,153 @@ describe("PostLinkSchema", () => {
       content: { type: "doc", content: [] },
     });
     expect(result.success && "content" in result.data).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The metadata sidebar — a post's address and its search description
+// ---------------------------------------------------------------------------
+
+describe("PostSchema — description", () => {
+  it("keeps a written description", () => {
+    const result = PostSchema.safeParse({
+      ...validPost,
+      description: "A study of shift scheduling.",
+    });
+    expect(result.success && result.data.description).toBe(
+      "A study of shift scheduling.",
+    );
+  });
+
+  it("accepts a post that has none", () => {
+    expect(
+      PostSchema.safeParse({ ...validPost, description: null }).success,
+    ).toBe(true);
+  });
+});
+
+describe("PostSlugSchema", () => {
+  it.each(["hello", "hello-world", "2026-review", "a", "x1-y2-z3"])(
+    "accepts %s",
+    (slug) => {
+      expect(PostSlugSchema.safeParse(slug).data).toBe(slug);
+    },
+  );
+
+  it("trims the edges before judging", () => {
+    expect(PostSlugSchema.safeParse("  hello  ").data).toBe("hello");
+  });
+
+  // Slugs minted from a title (`generateSlug`) can carry a doubled hyphen, and
+  // an address that is already live must stay saveable as it is.
+  it("accepts a doubled hyphen inside", () => {
+    expect(PostSlugSchema.safeParse("before--after").success).toBe(true);
+  });
+
+  it.each([
+    ["an empty address", ""],
+    ["capitals", "Hello"],
+    ["a space", "hello world"],
+    ["a slash", "hello/world"],
+    ["a leading hyphen", "-hello"],
+    ["a trailing hyphen", "hello-"],
+    ["an underscore", "hello_world"],
+    ["punctuation", "hello?"],
+    ["accents", "café"],
+  ])("refuses %s", (_, slug) => {
+    expect(PostSlugSchema.safeParse(slug).success).toBe(false);
+  });
+
+  it("refuses an address longer than the minted ones", () => {
+    expect(PostSlugSchema.safeParse("a".repeat(80)).success).toBe(true);
+    expect(PostSlugSchema.safeParse("a".repeat(81)).success).toBe(false);
+  });
+
+  // `/edit/<slug>` shares its folder with the admin surface's own pages, and
+  // a post called `new` would be edited at the address that starts a draft.
+  it.each(RESERVED_POST_SLUGS)("refuses %s, which the site uses", (slug) => {
+    expect(PostSlugSchema.safeParse(slug).success).toBe(false);
+  });
+
+  it("reserves every static page under /edit", () => {
+    const pages = readdirSync(join(process.cwd(), "src/app/edit"), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("["))
+      .map((entry) => entry.name);
+    for (const page of pages) expect(RESERVED_POST_SLUGS).toContain(page);
+  });
+
+  it("says what is wrong", () => {
+    expect(PostSlugSchema.safeParse("Hello").error?.issues[0].message).toBe(
+      "Use lowercase letters, numbers and hyphens.",
+    );
+    expect(PostSlugSchema.safeParse("").error?.issues[0].message).toBe(
+      "An address needs at least one character.",
+    );
+    expect(PostSlugSchema.safeParse("new").error?.issues[0].message).toBe(
+      "The site already uses that address.",
+    );
+  });
+});
+
+describe("PostDescriptionSchema", () => {
+  it("keeps a description, trimmed", () => {
+    expect(PostDescriptionSchema.parse("  Shift scheduling.  ")).toBe(
+      "Shift scheduling.",
+    );
+  });
+
+  // Empty is the author taking the override away, which hands the page back
+  // to the summary read off its opening paragraph.
+  it("reads an emptied box as no description", () => {
+    expect(PostDescriptionSchema.parse("")).toBeNull();
+    expect(PostDescriptionSchema.parse("   ")).toBeNull();
+    expect(PostDescriptionSchema.parse(null)).toBeNull();
+  });
+
+  it("holds a description to the summary's own length", () => {
+    expect(POST_DESCRIPTION_MAX_LENGTH).toBe(SUMMARY_MAX_CHARS);
+    expect(
+      PostDescriptionSchema.safeParse("a".repeat(POST_DESCRIPTION_MAX_LENGTH))
+        .success,
+    ).toBe(true);
+    expect(
+      PostDescriptionSchema.safeParse(
+        "a".repeat(POST_DESCRIPTION_MAX_LENGTH + 1),
+      ).success,
+    ).toBe(false);
+  });
+});
+
+describe("PostMetadataSchema", () => {
+  it("accepts a category, an address and a description", () => {
+    expect(
+      PostMetadataSchema.parse({
+        category: "WORK",
+        slug: "shift",
+        description: "Shift scheduling.",
+      }),
+    ).toEqual({
+      category: "WORK",
+      slug: "shift",
+      description: "Shift scheduling.",
+    });
+  });
+
+  it("takes each part on its own", () => {
+    expect(PostMetadataSchema.parse({})).toEqual({});
+    expect(PostMetadataSchema.parse({ description: "" })).toEqual({
+      description: null,
+    });
+  });
+
+  it("refuses a bad address or an unknown category", () => {
+    expect(PostMetadataSchema.safeParse({ slug: "Bad Slug" }).success).toBe(
+      false,
+    );
+    expect(PostMetadataSchema.safeParse({ category: "DRAFT" }).success).toBe(
+      false,
+    );
   });
 });

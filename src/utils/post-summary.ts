@@ -91,3 +91,20 @@ export function postSummary(document: Document): string | null {
   const summary = parts.join(" ").trim();
   return summary ? trim(summary) : null;
 }
+
+/**
+ * What a post says about itself: the description its author wrote in the
+ * metadata sidebar, or the summary of its opening where there is none.
+ *
+ * The one place the two are chosen between, so the meta tag, the structured
+ * data and `llms.txt` cannot describe one post three ways. The derived line is
+ * the rule and the written one the exception — for a post whose opening does
+ * not say what it is about, or says it at more length than a search result
+ * shows.
+ */
+export function postDescription(post: {
+  description?: string | null;
+  content: Document;
+}): string | null {
+  return post.description?.trim() || postSummary(post.content);
+}

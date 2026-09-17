@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { BlockNode } from "@/domain/nodes";
 import type { Document } from "@/domain/post";
-import { SUMMARY_MAX_CHARS, postSummary } from "../post-summary";
+import {
+  SUMMARY_MAX_CHARS,
+  postDescription,
+  postSummary,
+} from "../post-summary";
 
 const words = (text: string): BlockNode => ({
   type: "paragraph",
@@ -75,5 +79,36 @@ describe("postSummary", () => {
   it("has nothing to say about a post with no prose in it", () => {
     expect(postSummary(doc(picture))).toBeNull();
     expect(postSummary(doc())).toBeNull();
+  });
+});
+
+describe("postDescription", () => {
+  const opening = doc(words("The opening line of the post."));
+
+  it("is the written description where the author wrote one", () => {
+    expect(
+      postDescription({ description: "Written for search.", content: opening }),
+    ).toBe("Written for search.");
+  });
+
+  it("is the summary of the opening where there is none", () => {
+    expect(postDescription({ description: null, content: opening })).toBe(
+      "The opening line of the post.",
+    );
+    expect(postDescription({ content: opening })).toBe(
+      "The opening line of the post.",
+    );
+  });
+
+  // A row written before the domain trimmed its input must not describe a
+  // page as a blank.
+  it("reads a blank description as none", () => {
+    expect(postDescription({ description: "   ", content: opening })).toBe(
+      "The opening line of the post.",
+    );
+  });
+
+  it("is null for a post with neither", () => {
+    expect(postDescription({ description: null, content: doc() })).toBeNull();
   });
 });

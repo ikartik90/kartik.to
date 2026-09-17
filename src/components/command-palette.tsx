@@ -28,6 +28,8 @@ import { takePaletteIntent } from "@/utils/palette-intent";
 import { parseCommandLine } from "@/utils/palette-command";
 import { resolvePaletteCommand } from "@/data/palette-commands";
 import { SITE_PAGES } from "@/data/site-paths";
+import { POST_CATEGORIES } from "@/data/post-categories";
+import type { PostCategory } from "@/domain/post";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
 import SearchIcon from "@/assets/icons/search.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
@@ -37,6 +39,7 @@ import EditIcon from "@/assets/icons/edit.svg";
 import MetadataIcon from "@/assets/icons/metadata.svg";
 import WriteIcon from "@/assets/icons/write.svg";
 import WorkIcon from "@/assets/icons/work.svg";
+import PageIcon from "@/assets/icons/page.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -125,6 +128,39 @@ const itemHotkeyStyle = cx(
   hotkey({ surface: "menu" }),
   css({ marginInlineStart: "auto" }),
 );
+
+/**
+ * How the palette draws each kind of post: the glyph its rows wear, and the
+ * row that starts a new one. A Record over the categories, so a new category
+ * does not compile until it has been given both — `POST_CATEGORIES` says what
+ * it is called, this says how the palette offers it. A page is started by its
+ * own edit route, never from here, so it has no row.
+ */
+const CATEGORY_ROWS: Record<
+  PostCategory,
+  { Icon: React.FC<React.SVGProps<SVGSVGElement>>; create?: string }
+> = {
+  ARTICLE: { Icon: WriteIcon, create: "New blog article…" },
+  WORK: { Icon: WorkIcon, create: "New work article…" },
+  PROTOTYPE: { Icon: PageIcon, create: "New prototype…" },
+  PAGE: { Icon: WriteIcon },
+};
+
+/** The rows that start a post, in the order the Record above lists them. */
+const NEW_POST_ROWS = (
+  Object.entries(CATEGORY_ROWS) as [
+    PostCategory,
+    (typeof CATEGORY_ROWS)[PostCategory],
+  ][]
+).flatMap(([category, { Icon, create }]) =>
+  create ? [{ category, Icon, label: create }] : [],
+);
+
+/** The glyph a post's row wears, by what the post is filed under. */
+function CategoryIcon({ category }: { category: PostCategory }) {
+  const { Icon } = CATEGORY_ROWS[category];
+  return <Icon className={iconStyle} />;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -240,8 +276,9 @@ export function CommandPalette() {
     confirmExitDiscard,
     cancelExit,
     handleEditPage,
-    handleNewBlogArticle,
-    handleNewWorkArticle,
+    canEditMetadata,
+    handleEditMetadata,
+    handleNewPost,
     handleOpenDraft,
     handleOpenProject,
     handlePublish,
@@ -275,7 +312,13 @@ export function CommandPalette() {
    * are on rather than taking you off it.
    */
   /**
-   * The open editor's heading — one heading in three wordings, because "This
+   * What the open document is called — "Article", "Project", "Prototype", or
+   * "Page" for the About page — as the category list names it.
+   */
+  const noun = POST_CATEGORIES[editCategory].label;
+
+  /**
+   * The open editor's heading — one heading in several wordings, because "This
    * Preset" / "This Page" / "This Article" all name the same thing: whatever is
    * being edited right now.
    */
@@ -284,9 +327,7 @@ export function CommandPalette() {
       ? "This Preset"
       : editorKind === "grid"
         ? "This Page"
-        : editCategory === "WORK"
-          ? "This Project"
-          : "This Article";
+        : `This ${noun}`;
 
   const offersDestinations = editorKind === null;
 
@@ -477,9 +518,7 @@ export function CommandPalette() {
                             onSelect={handlePublish}
                           >
                             <PublishIcon className={iconStyle} />
-                            {editCategory === "WORK"
-                              ? "Publish project"
-                              : "Publish article"}
+                            Publish {noun.toLowerCase()}
                           </Command.Item>
                         )}
                         {/* A widget goes on the GRID, so it is offered where the
@@ -505,6 +544,19 @@ export function CommandPalette() {
                           >
                             <ComponentIcon className={iconStyle} />
                             New widget…
+                          </Command.Item>
+                        )}
+                        {/* The sidebar opens in place, over the post it edits —
+                            its changes are buffered with everything else here,
+                            so it sits among the commands that decide what
+                            becomes of them. */}
+                        {canEditMetadata && (
+                          <Command.Item
+                            className={itemStyle}
+                            onSelect={handleEditMetadata}
+                          >
+                            <MetadataIcon className={iconStyle} />
+                            Edit metadata
                           </Command.Item>
                         )}
                         {/* The chip sits on THIS one, because this is what the key
@@ -535,8 +587,6 @@ export function CommandPalette() {
                           <Command.Item
                             className={itemStyle}
                             onSelect={() => {
-                              const noun =
-                                editCategory === "WORK" ? "Project" : "Article";
                               setConfirm({
                                 title: `Unpublish ${noun}`,
                                 message: `You are about to unpublish this ${noun.toLowerCase()}. Do you want to proceed?`,
@@ -548,9 +598,7 @@ export function CommandPalette() {
                             }}
                           >
                             <UnpublishIcon className={iconStyle} />
-                            {editCategory === "WORK"
-                              ? "Unpublish project"
-                              : "Unpublish article"}
+                            Unpublish {noun.toLowerCase()}
                           </Command.Item>
                         )}
                       </Command.Group>
@@ -564,16 +612,6 @@ export function CommandPalette() {
                           >
                             <EditIcon className={iconStyle} />
                             Edit page
-                          </Command.Item>
-                          <Command.Item
-                            className={itemStyle}
-                            onSelect={() => {
-                              console.log("edit metadata");
-                              close();
-                            }}
-                          >
-                            <MetadataIcon className={iconStyle} />
-                            Edit metadata
                           </Command.Item>
                           {currentDraft && (
                             <Command.Item
@@ -599,20 +637,16 @@ export function CommandPalette() {
                         {/* Publish */}
                         <Command.Group className={groupStyle}>
                           <div className={groupHeadingStyle}>Publish</div>
-                          <Command.Item
-                            className={itemStyle}
-                            onSelect={handleNewBlogArticle}
-                          >
-                            <WriteIcon className={iconStyle} />
-                            New blog article…
-                          </Command.Item>
-                          <Command.Item
-                            className={itemStyle}
-                            onSelect={handleNewWorkArticle}
-                          >
-                            <WorkIcon className={iconStyle} />
-                            New work article…
-                          </Command.Item>
+                          {NEW_POST_ROWS.map(({ category, Icon, label }) => (
+                            <Command.Item
+                              key={category}
+                              className={itemStyle}
+                              onSelect={() => handleNewPost(category)}
+                            >
+                              <Icon className={iconStyle} />
+                              {label}
+                            </Command.Item>
+                          ))}
                         </Command.Group>
 
                         {/* Drafts — the draft being viewed is omitted so the
@@ -631,11 +665,7 @@ export function CommandPalette() {
                                   className={itemStyle}
                                   onSelect={() => handleOpenDraft(draft)}
                                 >
-                                  {draft.category === "WORK" ? (
-                                    <WorkIcon className={iconStyle} />
-                                  ) : (
-                                    <WriteIcon className={iconStyle} />
-                                  )}
+                                  <CategoryIcon category={draft.category} />
                                   {draft.title ??
                                     `Untitled ${draft.untitledIndex ?? ""}`}
                                 </Command.Item>

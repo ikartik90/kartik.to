@@ -216,6 +216,36 @@ describe("documentToMarkdown", () => {
     ).toBe("_Interactive demo on the page: Try the parser_\n");
   });
 
+  it("writes a button as the link it is", () => {
+    expect(
+      md(doc({ type: "button_link", text: "About me", href: "/about" })),
+    ).toBe("[About me](https://kartik.to/about)\n");
+    expect(
+      md(
+        doc({
+          type: "button_link",
+          text: "Book a call",
+          href: "https://cal.com/kartik",
+        }),
+      ),
+    ).toBe("[Book a call](https://cal.com/kartik)\n");
+  });
+
+  // The page draws nothing for a button that has no words or no destination,
+  // and the copy says as much as the page does.
+  it("leaves out a button that is not finished", () => {
+    expect(
+      md(
+        doc(
+          paragraph(text("One.")),
+          { type: "button_link", text: "", href: "/about" },
+          { type: "button_link", text: "Go", href: "" },
+          paragraph(text("Two.")),
+        ),
+      ),
+    ).toBe("One.\n\nTwo.\n");
+  });
+
   it("leaves out the homepage's furniture and empty paragraphs", () => {
     expect(
       md(

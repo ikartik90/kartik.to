@@ -18,6 +18,12 @@ export interface AutosaveSnapshot {
   title: string;
   draftId: string | null;
   category: PostCategory;
+  /**
+   * The metadata sidebar's buffer. Optional because snapshots written before
+   * the sidebar existed carry neither, and those read as "unchanged".
+   */
+  slug?: string | null;
+  description?: string | null;
   document: Document;
   /** Epoch millis the snapshot was written — for diagnostics / future conflict UX. */
   savedAt: number;

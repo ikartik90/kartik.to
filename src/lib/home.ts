@@ -25,6 +25,23 @@ export async function getHomeDocument(): Promise<Document | null> {
 }
 
 /**
+ * What the author wrote in the metadata sidebar for search engines to say about
+ * the homepage, or null — for no row, no description, or a database that cannot
+ * be reached, all of which leave the site's own description standing.
+ */
+export async function getHomeDescription(): Promise<string | null> {
+  try {
+    const row = await prisma.post.findFirst({
+      where: { slug: HOME_SLUG, category: "PAGE" },
+      select: { description: true },
+    });
+    return row?.description?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The homepage's record, created from the default document if it has none yet.
  *
  * An upsert on the slug, which is unique, so this is idempotent and safe to run
