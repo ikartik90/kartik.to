@@ -4,14 +4,16 @@ import { Intro } from "./intro";
 import { Landing } from "./landing";
 import { Walkthrough } from "./walkthrough";
 import { cashbyTheme, inter, interArrow } from "./theme";
+import { LAB_PAGES } from "@/data/lab-pages";
 
 // ---------------------------------------------------------------------------
 // A full-screen prototype: AI-assisted application review, with criteria
 // benchmarked against candidates whose outcome is already known.
 //
 // UNLISTED, on purpose. It is not in `SITE_PAGES`, so it is out of the
-// sitemap, `llms.txt`, the ⌘K palette and the link-card picker at once; the
-// only way in is its prototype article, which says what it is testing. No
+// sitemap, `llms.txt` and the link-card picker at once. For now the ⌘K palette
+// lists it among the projects (`LAB_PAGES`); otherwise the way in is its
+// prototype article, which says what it is testing. No
 // `robots: noindex` to go with that — a published post links here, and a page
 // a post links to has nothing to hide.
 //
@@ -22,7 +24,7 @@ import { cashbyTheme, inter, interArrow } from "./theme";
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: "AI application review criteria",
+  title: LAB_PAGES.reviewCriteria.title,
   description:
     "Benchmark AI application-review criteria against twelve candidates whose outcome is already known.",
 };

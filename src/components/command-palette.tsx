@@ -256,6 +256,7 @@ export function CommandPalette() {
     editCategory,
     drafts,
     projects,
+    labPages,
     currentDraft,
     backTarget,
     handleBack,
@@ -281,6 +282,7 @@ export function CommandPalette() {
     handleNewPost,
     handleOpenDraft,
     handleOpenProject,
+    handleOpenLabPage,
     handlePublish,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
@@ -687,21 +689,32 @@ export function CommandPalette() {
                     list is empty until the fetch lands, and on a site with no
                     published work — since a heading standing over an empty
                     group is a promise the rows never keep. */}
-                {offersDestinations && projects.length > 0 && (
-                  <Command.Group className={groupStyle}>
-                    <div className={groupHeadingStyle}>Projects</div>
-                    {projects.map((project) => (
-                      <Command.Item
-                        key={project.slug}
-                        className={itemStyle}
-                        onSelect={() => handleOpenProject(project)}
-                      >
-                        <WorkIcon className={iconStyle} />
-                        {project.title ?? "Untitled"}
-                      </Command.Item>
-                    ))}
-                  </Command.Group>
-                )}
+                {offersDestinations &&
+                  projects.length + labPages.length > 0 && (
+                    <Command.Group className={groupStyle}>
+                      <div className={groupHeadingStyle}>Projects</div>
+                      {projects.map((project) => (
+                        <Command.Item
+                          key={project.slug}
+                          className={itemStyle}
+                          onSelect={() => handleOpenProject(project)}
+                        >
+                          <WorkIcon className={iconStyle} />
+                          {project.title ?? "Untitled"}
+                        </Command.Item>
+                      ))}
+                      {labPages.map((page) => (
+                        <Command.Item
+                          key={page.path}
+                          className={itemStyle}
+                          onSelect={() => handleOpenLabPage(page)}
+                        >
+                          <WorkIcon className={iconStyle} />
+                          {page.title}
+                        </Command.Item>
+                      ))}
+                    </Command.Group>
+                  )}
 
                 {/* Playgrounds — down here with Settings for the reason Settings is:
                     it is not about the page you are on. Nothing in either one writes

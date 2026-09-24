@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { css, cx } from "../../../../styled-system/css";
 import LogoMark from "./icons/logo.svg";
 import HomeIcon from "./icons/home.svg";
@@ -13,10 +14,11 @@ import AccountChevron from "./icons/chevron-small-down-account.svg";
 // ---------------------------------------------------------------------------
 // The product's own top bar (Figma 94:4841).
 //
-// Scenery: the prototype is about the criteria panel, and nothing up here does
-// anything. So it is drawn in text and glyphs rather than as buttons and links
-// — a row of controls that answer nothing is a row a keyboard has to tab
-// through for nothing.
+// Scenery: the prototype is about the criteria panel, and nearly nothing up
+// here does anything. So it is drawn in text and glyphs rather than as buttons
+// and links — a row of controls that answer nothing is a row a keyboard has to
+// tab through for nothing. The one exception is the home glyph, which leaves
+// the prototype for the site's homepage.
 // ---------------------------------------------------------------------------
 
 /** The top-level sections, and which of them open a menu. */
@@ -91,6 +93,12 @@ const iconTileStyle = css({
   width: "28px",
   height: "28px",
   borderRadius: "4px",
+});
+
+const homeLinkStyle = css({
+  color: "inherit",
+  _hover: { backgroundColor: "var(--cashby-fill)" },
+  _focusVisible: { outline: "none", boxShadow: "var(--cashby-focus-ring)" },
 });
 
 // A zero-width box the rule's own half-pixel stroke hangs over, as drawn.
@@ -216,9 +224,13 @@ export function CashbyHeader() {
           <span className={logoTileStyle}>
             <LogoMark aria-hidden />
           </span>
-          <span className={iconTileStyle}>
+          <Link
+            href="/"
+            aria-label="Home"
+            className={cx(iconTileStyle, homeLinkStyle)}
+          >
             <HomeIcon aria-hidden />
-          </span>
+          </Link>
         </div>
         <span className={cx(separatorStyle, navSeparatorStyle)} aria-hidden>
           <NavSeparator className={separatorLineStyle} />
