@@ -1,4 +1,4 @@
-import { OG_SIZE, renderOgCard } from "@/lib/og/card";
+import { OG_SIZE, renderAvatarOgCard, renderOgCard } from "@/lib/og/card";
 import { resolvePost } from "@/lib/posts";
 import { ogCard } from "@/utils/og-card";
 import type { PostCategory } from "@/domain/post";
@@ -51,13 +51,7 @@ export async function postOgImage(slug: string, category: PostCategory) {
 
 /** The site's own card, for the homepage and for anything that would not draw. */
 export async function siteOgImage() {
-  return renderOgCard({
-    title: "kartik.to",
-    meta: "Design engineering",
-    tone: "dark",
-    scrim: false,
-    cover: null,
-  });
+  return renderAvatarOgCard();
 }
 
 export { OG_SIZE };

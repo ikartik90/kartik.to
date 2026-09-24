@@ -283,3 +283,47 @@ export async function renderOgCard(card: OgCard): Promise<Response> {
     },
   });
 }
+
+/**
+ * The avatar's own ground, sampled from the PNG's corners. The picture is
+ * opaque, so the card's ground has to be exactly this or its edge shows.
+ */
+const AVATAR_GROUND = "#CFDBE8";
+
+/**
+ * The site's card: the avatar, centred on its own ground — what a link to the
+ * homepage turns into, and what a post's card falls back to. Drawn at the PNG's
+ * native 350px so nothing is upscaled.
+ */
+export async function renderAvatarOgCard(): Promise<Response> {
+  const avatar = await readFile(
+    join(process.cwd(), "public/assets/kartik-iyer-logo.png"),
+  );
+  const src = `data:image/png;base64,${avatar.toString("base64")}`;
+
+  const image = new ImageResponse(
+    (
+      <div
+        style={{
+          width: OG_SIZE.width,
+          height: OG_SIZE.height,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: AVATAR_GROUND,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- Satori draws <img>, not next/image */}
+        <img src={src} width={350} height={350} alt="" />
+      </div>
+    ),
+    OG_SIZE,
+  );
+
+  return new Response(await image.arrayBuffer(), {
+    headers: {
+      "Content-Type": OG_CONTENT_TYPE,
+      "Cache-Control": OG_CACHE_CONTROL,
+    },
+  });
+}
