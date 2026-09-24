@@ -65,6 +65,40 @@ describe("SocialLinks", () => {
     );
   });
 
+  it("follows the email with a résumé link that opens the PDF in a new tab", () => {
+    render(<SocialLinks />);
+
+    const resume = screen.getByRole("link", { name: "Résumé" });
+    expect(resume.getAttribute("href")).toMatch(/\.pdf$/);
+    expect(resume.getAttribute("target")).toBe("_blank");
+
+    const items = Array.from(document.querySelectorAll("ul > li"));
+    const emailIndex = items.findIndex((li) =>
+      li.querySelector('[aria-label="Email address"]'),
+    );
+    expect(items[emailIndex + 1]?.contains(resume)).toBe(true);
+  });
+
+  it("orders the icons X, LinkedIn | GitHub, Email, Résumé", () => {
+    render(<SocialLinks />);
+
+    const row = Array.from(document.querySelectorAll("ul > li")).map((li) =>
+      li.querySelector("[data-social-trigger]")
+        ? li.querySelector("[data-social-trigger]")!.getAttribute("aria-label")
+        : li.hasAttribute("data-social-divider")
+          ? "|"
+          : null,
+    );
+    expect(row).toEqual([
+      "Follow me",
+      "LinkedIn",
+      "|",
+      "GitHub",
+      "Email address",
+      "Résumé",
+    ]);
+  });
+
   it("renders tooltip icons with viewBox so CSS scaling works at 14px", () => {
     render(<SocialLinks />);
 

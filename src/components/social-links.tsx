@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -15,6 +16,7 @@ import EmailIcon from "@/assets/icons/email.svg";
 import GotoIcon from "@/assets/icons/goto.svg";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import OctocatIcon from "@/assets/icons/octocat.svg";
+import ResumeIcon from "@/assets/icons/resume.svg";
 import TwitterIcon from "@/assets/icons/twitter.svg";
 import { SOCIAL_PROFILES } from "@/data/site";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
@@ -29,14 +31,6 @@ const EMAIL_COPY_TEXT = "ikartik90@gmail.com";
 const EMAIL_COPIED_LABEL = "Copied";
 
 const SOCIAL_ITEMS = [
-  {
-    id: "github",
-    label: "GitHub",
-    href: SOCIAL_PROFILES.github,
-    Icon: OctocatIcon,
-    maskSrc: "/social-shader-masks/octocat.svg",
-    action: "link",
-  },
   {
     id: "twitter",
     label: "Follow me",
@@ -54,15 +48,35 @@ const SOCIAL_ITEMS = [
     action: "link",
   },
   {
+    id: "github",
+    label: "GitHub",
+    href: SOCIAL_PROFILES.github,
+    Icon: OctocatIcon,
+    maskSrc: "/social-shader-masks/octocat.svg",
+    action: "link",
+  },
+  {
     id: "email",
     label: "Email address",
     Icon: EmailIcon,
     maskSrc: "/social-shader-masks/email.svg",
     action: "copy",
   },
+  {
+    id: "resume",
+    label: "Résumé",
+    href: "/resume/SKartikIyer-ProductDesign-2026.pdf",
+    Icon: ResumeIcon,
+    maskSrc: "/social-shader-masks/resume.svg",
+    action: "link",
+  },
 ] as const;
 
 type SocialItem = (typeof SOCIAL_ITEMS)[number];
+
+// The row reads as two sets: the social profiles, then the work — code, a way
+// to get in touch, the résumé. A rule stands before the first of the second.
+const DIVIDER_BEFORE: SocialItem["id"] = "github";
 
 const triggerIconStyle = menuIcon();
 const tooltipIconStyle = tooltipIcon();
@@ -189,7 +203,10 @@ function CopyActionIcon({ copied }: { copied: boolean }) {
   );
 }
 
-const tooltipDividerStyle = css({
+// One rule for the tooltip's label | action and for the row's two sets, where
+// it stands 16px against the 20px glyphs.
+const dividerStyle = css({
+  alignSelf: "center",
   flexShrink: 0,
   width: 0,
   height: "token(spacing.xl)",
@@ -261,7 +278,7 @@ function SocialTooltip({
       ) : (
         <span>{item.label}</span>
       )}
-      <span className={tooltipDividerStyle} aria-hidden />
+      <span className={dividerStyle} aria-hidden />
       {item.action === "copy" ? (
         <CopyActionIcon copied={copySuccess} />
       ) : (
@@ -361,19 +378,23 @@ export function SocialLinks() {
     <SocialShaderStage>
       <ul className={listStyle}>
         {SOCIAL_ITEMS.map((item) => (
-          <SocialLinkItem
-            key={item.id}
-            item={item}
-            copySuccess={item.id === "email" && emailCopySuccess}
-            tooltipDismissed={dismissed[item.id] ?? false}
-            onMouseEnter={() => handleItemMouseEnter(item.id)}
-            onMouseLeave={() => handleItemMouseLeave(item.id)}
-            onDismiss={() =>
-              setDismissed((current) => ({ ...current, [item.id]: true }))
-            }
-            onEmailTriggerClick={handleEmailTriggerClick}
-            onEmailCopy={handleEmailCopySuccess}
-          />
+          <Fragment key={item.id}>
+            {item.id === DIVIDER_BEFORE && (
+              <li className={dividerStyle} data-social-divider aria-hidden />
+            )}
+            <SocialLinkItem
+              item={item}
+              copySuccess={item.id === "email" && emailCopySuccess}
+              tooltipDismissed={dismissed[item.id] ?? false}
+              onMouseEnter={() => handleItemMouseEnter(item.id)}
+              onMouseLeave={() => handleItemMouseLeave(item.id)}
+              onDismiss={() =>
+                setDismissed((current) => ({ ...current, [item.id]: true }))
+              }
+              onEmailTriggerClick={handleEmailTriggerClick}
+              onEmailCopy={handleEmailCopySuccess}
+            />
+          </Fragment>
         ))}
       </ul>
     </SocialShaderStage>
@@ -436,7 +457,10 @@ function SocialLinkItem({
   // than navigates, and its tooltip morphs through a copied state.
   if (item.action === "link") {
     return (
-      <li>
+      // The same flex box as the email's item. A plain list item lays the icon
+      // on a line of text, whose descender space made the row 30.5px tall, and
+      // the email's centred button sat 1.25px below the links in it.
+      <li className={itemStyle}>
         <SocialIconLink
           href={item.href}
           label={item.label}
