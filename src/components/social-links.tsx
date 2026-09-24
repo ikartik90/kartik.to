@@ -64,7 +64,7 @@ const SOCIAL_ITEMS = [
   },
   {
     id: "resume",
-    label: "Résumé",
+    label: "Resume",
     href: "/resume/SKartikIyer-ProductDesign-2026.pdf",
     Icon: ResumeIcon,
     maskSrc: "/social-shader-masks/resume.svg",
@@ -75,7 +75,7 @@ const SOCIAL_ITEMS = [
 type SocialItem = (typeof SOCIAL_ITEMS)[number];
 
 // The row reads as two sets: the social profiles, then the work — code, a way
-// to get in touch, the résumé. A rule stands before the first of the second.
+// to get in touch, the resume. A rule stands before the first of the second.
 const DIVIDER_BEFORE: SocialItem["id"] = "github";
 
 const triggerIconStyle = menuIcon();

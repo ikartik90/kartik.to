@@ -65,10 +65,10 @@ describe("SocialLinks", () => {
     );
   });
 
-  it("follows the email with a résumé link that opens the PDF in a new tab", () => {
+  it("follows the email with a resume link that opens the PDF in a new tab", () => {
     render(<SocialLinks />);
 
-    const resume = screen.getByRole("link", { name: "Résumé" });
+    const resume = screen.getByRole("link", { name: "Resume" });
     expect(resume.getAttribute("href")).toMatch(/\.pdf$/);
     expect(resume.getAttribute("target")).toBe("_blank");
 
@@ -79,7 +79,7 @@ describe("SocialLinks", () => {
     expect(items[emailIndex + 1]?.contains(resume)).toBe(true);
   });
 
-  it("orders the icons X, LinkedIn | GitHub, Email, Résumé", () => {
+  it("orders the icons X, LinkedIn | GitHub, Email, Resume", () => {
     render(<SocialLinks />);
 
     const row = Array.from(document.querySelectorAll("ul > li")).map((li) =>
@@ -95,7 +95,7 @@ describe("SocialLinks", () => {
       "|",
       "GitHub",
       "Email address",
-      "Résumé",
+      "Resume",
     ]);
   });
 
