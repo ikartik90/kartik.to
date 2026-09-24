@@ -38,6 +38,7 @@ import {
   useShaderPresetDraftStore,
 } from "@/store/shader-preset-draft";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { LAB_PAGES, type LabPage } from "@/data/lab-pages";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,6 +78,8 @@ export interface CommandPaletteHandlers {
   drafts: Post[];
   /** The published projects, for everyone — minus the one being read. */
   projects: PostLink[];
+  /** The lab prototypes, listed with the projects — minus the one being read. */
+  labPages: LabPage[];
   /** The draft currently being viewed in renderer mode, or null. */
   currentDraft: Post | null;
   /**
@@ -151,6 +154,8 @@ export interface CommandPaletteHandlers {
   handleOpenDraft: (draft: Post) => void;
   /** Go and read a published project. */
   handleOpenProject: (project: PostLink) => void;
+  /** Go and try a lab prototype. */
+  handleOpenLabPage: (page: LabPage) => void;
   handlePublish: () => Promise<void>;
   /** Permanently delete the draft currently being viewed. */
   handleDiscardDraft: () => Promise<void>;
@@ -313,6 +318,10 @@ export function useCommandPalette(
         (project) => getPostReadUrl("WORK", project.slug) !== pathname,
       ),
     [projects, pathname],
+  );
+
+  const labPages = Object.values(LAB_PAGES).filter(
+    (page) => page.path !== pathname,
   );
 
   // The draft (unpublished post) currently being viewed in renderer mode, if
@@ -675,6 +684,11 @@ export function useCommandPalette(
     router.push(getPostReadUrl("WORK", project.slug));
   };
 
+  const handleOpenLabPage = (page: LabPage) => {
+    close();
+    router.push(page.path);
+  };
+
   /**
    * Put the document being edited into its row, minting the row if it has none.
    *
@@ -804,8 +818,11 @@ export function useCommandPalette(
    * second empty draft rather than reopening this one.
    */
   const persistDocument = async (): Promise<boolean> => {
-    const { draftId, category, savedAddress: before } =
-      useEditorStore.getState();
+    const {
+      draftId,
+      category,
+      savedAddress: before,
+    } = useEditorStore.getState();
     const keyBefore = autosaveKey(draftId, category);
 
     const saved = await writeDocument();
@@ -1054,6 +1071,7 @@ export function useCommandPalette(
     editCategory,
     drafts,
     projects: listableProjects,
+    labPages,
     currentDraft,
     backTarget,
     handleBack,
@@ -1079,6 +1097,7 @@ export function useCommandPalette(
     handleNewPost,
     handleOpenDraft,
     handleOpenProject,
+    handleOpenLabPage,
     handlePublish,
     handleDiscardDraft,
   };

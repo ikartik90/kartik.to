@@ -467,9 +467,7 @@ describe("CommandPalette", () => {
       // it — so this is the dialog's library, not the palette's list: pick the
       // demo, then confirm it.
       fireEvent.click(await screen.findByText("Calchemy Demo"));
-      fireEvent.click(
-        screen.getByRole("button", { name: "Insert Component" }),
-      );
+      fireEvent.click(screen.getByRole("button", { name: "Insert Component" }));
 
       expect(saveGridLayout).not.toHaveBeenCalled();
       expect(useGridDraftStore.getState().inserts).toEqual([
@@ -807,12 +805,35 @@ describe("CommandPalette", () => {
       ).toBeTruthy();
     });
 
-    it("draws no heading when there is nothing published", async () => {
+    // The lab prototype is not a post, so it is not in the fetch; it is
+    // listed beside the published work by hand.
+    it("lists the review-criteria prototype, even with nothing published", async () => {
       const { getPublishedProjects } = await import("@/app/actions/post");
       (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([]);
       render(<CommandPalette />);
       await act(async () => {});
-      expect(list().queryByText("Projects")).toBeNull();
+      expect(list().getByText("Projects")).toBeDefined();
+      expect(list().getByText("AI application review criteria")).toBeDefined();
+    });
+
+    it("goes to the prototype and closes the palette", async () => {
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      fireEvent.click(list().getByText("AI application review criteria"));
+
+      expect(mockPush).toHaveBeenCalledWith(
+        "/lab/ai-application-review-criteria",
+      );
+      expect(dialog.close).toHaveBeenCalledOnce();
+    });
+
+    it("leaves out the prototype while standing on it", async () => {
+      mockPathname.mockReturnValue("/lab/ai-application-review-criteria");
+      render(<CommandPalette />);
+      expect(await list().findByText("Shift Scheduling")).toBeDefined();
+      expect(list().queryByText("AI application review criteria")).toBeNull();
     });
 
     it("is withheld while editing, as every destination is", async () => {
@@ -824,6 +845,7 @@ describe("CommandPalette", () => {
       await act(async () => {});
       expect(list().queryByText("Projects")).toBeNull();
       expect(list().queryByText("Shift Scheduling")).toBeNull();
+      expect(list().queryByText("AI application review criteria")).toBeNull();
     });
   });
 
