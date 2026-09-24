@@ -118,13 +118,14 @@ describe("TestimonialWall", () => {
     /** Where every card is, by name: column, then place in the column. */
     const seats = () =>
       new Map(
-        lists().flatMap((list, column) =>
-          within(list)
-            .getAllByRole("listitem")
-            .map((card, place) => [
-              card.querySelector("figcaption")?.textContent ?? "",
-              `${column}:${place}`,
-            ]),
+        // Plain DOM reads rather than role queries: the trade tests read every
+        // seat on each of hundreds of presses, and role queries made them run
+        // past the time limit on a loaded runner.
+        [...document.querySelectorAll("ul")].flatMap((list, column) =>
+          [...list.querySelectorAll("li")].map((card, place) => [
+            card.querySelector("figcaption")?.textContent ?? "",
+            `${column}:${place}`,
+          ]),
         ),
       );
 
@@ -171,62 +172,163 @@ describe("TestimonialWall", () => {
       expect(moved(before)).toHaveLength(2);
     });
 
-    // THE CENTRE CARD WAS TRADED ON EVERY PRESS. Just past `md` the columns
-    // either side of it are cut by the window's edge, and a card had to be
-    // WHOLLY inside the window to count as shown — so the centre card was the
-    // only one that did, and every trade was made with it. A card the window
-    // clips is on screen all the same, and takes its turn like the rest.
-    it("gives a card clipped by the window's edge the same turns as the rest", () => {
-      // Five columns of 280px, laid out as they are just past `md` on a 1024px
-      // window: the middle one wholly inside, its neighbours cut by the edges,
-      // and the outer two past them entirely.
-      const LEFT = [-320, -20, 372, 764, 1064];
-      vi.spyOn(
-        HTMLElement.prototype,
-        "getBoundingClientRect",
-      ).mockImplementation(function (this: HTMLElement) {
-        const list = this.parentElement;
-        const column = [...(list?.parentElement?.children ?? [])].indexOf(
-          list as Element,
-        );
-        const card = this.matches("li");
-        return DOMRect.fromRect({
-          x: card ? LEFT[column] : 0,
-          width: card ? 280 : 0,
+    /** Lay the five columns out at these left edges, 280px wide each, in
+     *  jsdom's 1024px window. */
+    const layOut = (left: number[]) =>
+      vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          const list = this.parentElement;
+          const column = [...(list?.parentElement?.children ?? [])].indexOf(
+            list as Element,
+          );
+          const card = this.matches("li");
+          return DOMRect.fromRect({
+            x: card ? left[column] : 0,
+            width: card ? 280 : 0,
+          });
         });
-      });
-      render(<TestimonialWall testimonials={rows(8)} />);
 
-      // Every seat a reader can see any part of: the middle column's one card
-      // and the two in each of its neighbours.
-      const traded = new Map<string, number>();
-      for (let i = 0; i < 200; i++) {
+    /** Press `times` times and collect every trade as its two seats' columns,
+     *  and how often each seat was traded. */
+    const trades = (times: number) => {
+      const pairs: string[] = [];
+      const turns = new Map<string, number>();
+      for (let i = 0; i < times; i++) {
         const before = seats();
         press();
         settle();
-        for (const [name] of moved(before)) {
-          const seat = before.get(name) ?? "";
-          if (/^[123]:/.test(seat)) {
-            traded.set(seat, (traded.get(seat) ?? 0) + 1);
-          }
-        }
+        const traded = moved(before).map(([name]) => before.get(name) ?? "");
+        pairs.push(
+          traded
+            .map((seat) => seat.split(":")[0])
+            .sort()
+            .join(""),
+        );
+        for (const seat of traded) turns.set(seat, (turns.get(seat) ?? 0) + 1);
       }
+      return { pairs, turns };
+    };
 
-      // One seen card a press, over five seen seats: forty turns apiece in
-      // expectation. The bounds are five standard deviations wide, so a fair
-      // hand never fails this and a hand that always picks the centre (200
-      // against 0) always does.
-      expect([...traded.keys()].sort()).toEqual([
+    // THE EDGES TRADE WITH THE MIDDLE, NEVER WITH EACH OTHER. The outer two
+    // columns are the ones the window cuts off, and the whole point of a trade
+    // is to bring one of those cards forward. Swapping two of them — a hidden
+    // one for a half-cut one in the same column — moved a card from one place
+    // nobody could read it to another.
+    it("trades a cut-off edge card for one in the middle three columns", () => {
+      // Every column in view, the outer two cut by the window's edges.
+      layOut([-140, 160, 372, 584, 884]);
+      render(<TestimonialWall testimonials={rows(11)} />);
+
+      const { pairs } = trades(100);
+      for (const pair of pairs) expect(pair).toMatch(/^[0][123]$|^[123]4$/);
+    });
+
+    it("trades an edge card past the window for one in the middle", () => {
+      // Just past `md`: the middle column inside, its neighbours cut, the
+      // outer two past the edges entirely.
+      layOut([-320, -20, 372, 764, 1064]);
+      render(<TestimonialWall testimonials={rows(11)} />);
+
+      const { pairs } = trades(100);
+      for (const pair of pairs) expect(pair).toMatch(/^[0][123]$|^[123]4$/);
+    });
+
+    // EVERY MIDDLE CARD TAKES AN EQUAL TURN. The centre column's one card and
+    // the two in each of its neighbours: five seats, forty turns apiece over
+    // two hundred presses. The bounds are five standard deviations wide.
+    it("gives every card in the middle three columns the same turns", () => {
+      layOut([-320, -20, 372, 764, 1064]);
+      render(<TestimonialWall testimonials={rows(11)} />);
+
+      const { turns } = trades(200);
+      const middle = [...turns].filter(([seat]) => /^[123]:/.test(seat));
+      expect(middle.map(([seat]) => seat).sort()).toEqual([
         "1:0",
         "1:1",
         "2:0",
         "3:0",
         "3:1",
       ]);
-      for (const turns of traded.values()) {
-        expect(turns).toBeGreaterThan(10);
-        expect(turns).toBeLessThan(90);
+      for (const [, count] of middle) {
+        expect(count).toBeGreaterThan(10);
+        expect(count).toBeLessThan(90);
       }
+    });
+
+    // ELEVEN ON THE BAND, THE REST IN A QUEUE. A trade moves the cut-off edge
+    // card into the middle, sends the middle card to the back of the queue, and
+    // brings the card at the front of the queue in at the edge — so every card
+    // goes waiting → edge → middle → waiting, and all of them are read in turn.
+    describe("with more than eleven published", () => {
+      /** The names in each band column, left to right. */
+      const band = () =>
+        [...document.querySelectorAll("[data-testimonial-column]")].map(
+          (column) =>
+            [...column.querySelectorAll("figcaption")].map(
+              (caption) => caption.textContent ?? "",
+            ),
+        );
+      /** The names waiting off the band, in queue order. */
+      const queue = () =>
+        [
+          ...document.querySelectorAll(
+            "ul:not([data-testimonial-column]) figcaption",
+          ),
+        ].map((caption) => caption.textContent ?? "");
+
+      it("shows eleven at a time, dealt 3·2·1·2·3", () => {
+        render(<TestimonialWall testimonials={rows(13)} />);
+        expect(band().map((column) => column.length)).toEqual([3, 2, 1, 2, 3]);
+      });
+
+      // The phone's rail swipes through every card and never trades, so the
+      // two waiting there would otherwise be out of reach for good.
+      // (A caption reads the avatar's initial, then the name.)
+      it("keeps the rest in the document for the phone's rail", () => {
+        render(<TestimonialWall testimonials={rows(13)} />);
+        expect(queue()).toEqual(["PPerson 12", "PPerson 13"]);
+        expect(screen.getAllByRole("listitem")).toHaveLength(13);
+      });
+
+      it("moves the edge card to the middle and the queue's first to the edge", () => {
+        layOut([-320, -20, 372, 764, 1064]);
+        render(<TestimonialWall testimonials={rows(13)} />);
+        const before = band();
+        const waiting = queue();
+
+        press();
+        settle();
+
+        const after = band();
+        const edgeSeat = [0, 4]
+          .flatMap((c) => before[c].map((name, place) => [c, place] as const))
+          .find(([c, place]) => after[c][place] !== before[c][place]);
+        const middleSeat = [1, 2, 3]
+          .flatMap((c) => before[c].map((name, place) => [c, place] as const))
+          .find(([c, place]) => after[c][place] !== before[c][place]);
+        if (!edgeSeat || !middleSeat) throw new Error("nothing traded");
+
+        const [ec, ep] = edgeSeat;
+        const [mc, mp] = middleSeat;
+        expect(after[mc][mp]).toBe(before[ec][ep]);
+        expect(after[ec][ep]).toBe(waiting[0]);
+        expect(queue()).toEqual([waiting[1], before[mc][mp]]);
+      });
+
+      it("brings every card to the middle in time", () => {
+        layOut([-320, -20, 372, 764, 1064]);
+        render(<TestimonialWall testimonials={rows(13)} />);
+        const read = new Set(band().slice(1, 4).flat());
+
+        for (let i = 0; i < 200; i++) {
+          press();
+          settle();
+          for (const name of band().slice(1, 4).flat()) read.add(name);
+        }
+
+        expect(read.size).toBe(13);
+      });
     });
 
     // A press while two cards are still faded out would start a second trade
@@ -374,9 +476,9 @@ describe("TestimonialWall", () => {
   // sixteen that the rest of the page is sharing.
   it("holds no shader stage, now that no card has an icon", () => {
     const { container } = render(<TestimonialWall testimonials={rows(8)} />);
-    expect(container.querySelectorAll("[data-social-shader-stage]")).toHaveLength(
-      0,
-    );
+    expect(
+      container.querySelectorAll("[data-social-shader-stage]"),
+    ).toHaveLength(0);
   });
 });
 
@@ -411,9 +513,7 @@ describe("TestimonialQuote (through the wall)", () => {
   it("offers a stored profile as a link", () => {
     render(
       <TestimonialWall
-        testimonials={[
-          row({ linkedinUrl: "https://www.linkedin.com/in/ada" }),
-        ]}
+        testimonials={[row({ linkedinUrl: "https://www.linkedin.com/in/ada" })]}
       />,
     );
     const link = screen.getByRole("link", { name: "Ada Lovelace on LinkedIn" });
@@ -521,7 +621,9 @@ describe("TestimonialQuote (through the wall)", () => {
   // Asked of the domain, so the board, this wall and any link preview cannot
   // disagree about which words a testimonial shows.
   it("shows the chosen excerpt rather than the whole quote", () => {
-    render(<TestimonialWall testimonials={[row({ excerpt: "vague brief" })]} />);
+    render(
+      <TestimonialWall testimonials={[row({ excerpt: "vague brief" })]} />,
+    );
     expect(screen.getByText("vague brief")).toBeTruthy();
     expect(screen.queryByText(/actually ship/)).toBeNull();
   });
@@ -531,7 +633,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(screen.getByText("Countess")).toBeTruthy();
   });
 });
-
 
 // ---------------------------------------------------------------------------
 // The deal. The only real logic in the band, and the reason it matters is the
@@ -547,9 +648,11 @@ describe("dealIntoColumns", () => {
     );
 
   it("keeps every card, once", () => {
-    expect(deal(8).flat().sort((a, b) => a - b)).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7,
-    ]);
+    expect(
+      deal(8)
+        .flat()
+        .sort((a, b) => a - b),
+    ).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
   });
 
   // THE RULE THE TOWER DEPENDS ON. A second card in the middle column would
@@ -581,38 +684,41 @@ describe("dealIntoColumns", () => {
     expect(deal(9).map((column) => column.length)).toEqual([2, 2, 1, 2, 2]);
   });
 
-  // THE THIRD ROW GOES TO THE EDGES. Two rows fill from the middle out; past
-  // that the outermost columns take their third card first, because they are
-  // the ones with room for it — the stagger starts them at the top of the band
-  // and steps every column inwards further down, so depth is cheapest at the
-  // edges and most expensive over the tower.
+  // THE SHAPE PAST NINE IS 3·2·1·2·3. Two rows fill from the middle out; every
+  // card after that goes to the outermost columns, because they are the ones
+  // with room for it — the stagger starts them at the top of the band and steps
+  // every column inwards further down. The columns either side of the tower
+  // stop at two, and the tower's own at one, however many are published.
   it.each([
     [10, [3, 2, 1, 2, 2]],
     [11, [3, 2, 1, 2, 3]],
-    [12, [3, 3, 1, 2, 3]],
-    [13, [3, 3, 1, 3, 3]],
-  ])("gives the edges the third card, with %i published", (count, shape) => {
-    expect(deal(count).map((column) => column.length)).toEqual(shape);
-  });
+    [12, [4, 2, 1, 2, 3]],
+    [13, [4, 2, 1, 2, 4]],
+  ])(
+    "gives the edges every card past nine, with %i published",
+    (count, shape) => {
+      expect(deal(count).map((column) => column.length)).toEqual(shape);
+    },
+  );
 
-  // ...and holds them there. Anything past a third row goes back to filling
-  // from the middle out, so the edges stop at three while there is a band's
-  // worth of cards to deal.
-  it("keeps the outermost columns to three", () => {
-    for (let count = 10; count <= 13; count++) {
+  it("keeps the columns beside the tower to two", () => {
+    for (let count = 9; count <= 40; count++) {
       const dealt = deal(count);
-      expect(dealt[0].length).toBeLessThanOrEqual(3);
-      expect(dealt[4].length).toBeLessThanOrEqual(3);
+      expect(dealt[1]).toHaveLength(2);
+      expect(dealt[3]).toHaveLength(2);
     }
   });
 
-  it.each([10, 11, 12, 13])("still deals every card once, with %i", (count) => {
-    expect(
-      deal(count)
-        .flat()
-        .sort((a, b) => a - b),
-    ).toEqual(Array.from({ length: count }, (_, i) => i));
-  });
+  it.each([10, 11, 12, 13, 40])(
+    "still deals every card once, with %i",
+    (count) => {
+      expect(
+        deal(count)
+          .flat()
+          .sort((a, b) => a - b),
+      ).toEqual(Array.from({ length: count }, (_, i) => i));
+    },
+  );
 
   it("has a column for every column, even with nothing to put in them", () => {
     expect(deal(0)).toEqual([[], [], [], [], []]);

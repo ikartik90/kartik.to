@@ -79,6 +79,34 @@ const ROTATION_MS = 8000;
  *  missing from the band for long. */
 const FADE_MS = 350;
 
+/** How many cards the band shows at once: 3·2·1·2·3. The rest wait off the
+ *  band and are brought on by the trade — see `rotate`. */
+const BAND_SIZE = 11;
+
+/**
+ * One trade applied to the band's order: the card at `edge` moves into the
+ * `middle` seat.
+ *
+ * With nobody waiting that is a plain swap. With a queue past `BAND_SIZE`, the
+ * middle card goes to the BACK of the queue and the card at the front of it
+ * takes the edge seat — so every card goes waiting → edge → middle → waiting,
+ * and each one is read in turn however many are published.
+ */
+function rotate<T>(order: T[], edge: number, middle: number): T[] {
+  const next = [...order];
+  if (order.length <= BAND_SIZE) {
+    [next[edge], next[middle]] = [order[middle], order[edge]];
+    return next;
+  }
+  next[middle] = order[edge];
+  next[edge] = order[BAND_SIZE];
+  return [
+    ...next.slice(0, BAND_SIZE),
+    ...order.slice(BAND_SIZE + 1),
+    order[middle],
+  ];
+}
+
 /**
  * Deal testimonials into the band's columns.
  *
@@ -88,21 +116,18 @@ const FADE_MS = 350;
  * short list clusters where the eye already is instead of stranding cards at
  * the far edges where they are half off-screen anyway.
  *
- * ...AND A THIRD, ONCE THERE ARE MORE THAN NINE. Nine is the last hand that
- * fills the band two rows deep (2·2·1·2·2). The tenth card starts a third row,
- * and that row is dealt to the EDGES first — the reverse of the other two.
+ * ...AND EVERY CARD PAST NINE GOES TO THE EDGES. Nine is the last hand that
+ * fills the band two rows deep (2·2·1·2·2). From the tenth card on, the
+ * outermost columns take every card, left then right, so the band reads
+ * 3·2·1·2·3 at eleven; the columns beside the tower never hold more than two,
+ * and the tower's own never more than one.
  *
  * Which is the same fact about the stagger read from the other end. The
  * outermost columns start at the top of the band and every step inwards starts
  * lower, so the room between a column's last card and the drawing beneath it is
  * greatest at the edges and least over the tower: depth is cheap there and
- * expensive in the middle. Two rows go where they can be READ; a third goes
- * where it FITS. It also keeps the band's silhouette — a third row in an inner
- * column would deepen the part of the shape that is already lowest.
- *
- * Past a third row it is the middle-out order again, so the edges hold three
- * for every hand between ten and thirteen, which is every hand this page is
- * realistically dealt.
+ * expensive in the middle. Two rows go where they can be READ; the rest go
+ * where they FIT, and the trade (`pickTrade`) brings them forward in turn.
  *
  * Deterministic, so the server and the client deal the same hand from the same
  * order — the shuffle moves cards by reordering the list, never by dealing it
@@ -123,21 +148,14 @@ export function dealIntoColumns<T>(items: T[], columns = COLUMNS): T[][] {
   const outwards = Array.from({ length: columns }, (_, i) => i)
     .filter((i) => i !== centre)
     .sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre) || a - b);
-  // ...and the same columns from the outside in, which is the order the third
-  // row is dealt in. Sorted rather than reversed: reversing would turn the
-  // left-before-right tie-break into right-before-left, and hand the tenth card
-  // to the fifth column instead of the first.
-  const edgesFirst = Array.from({ length: columns }, (_, i) => i)
-    .filter((i) => i !== centre)
-    .sort((a, b) => Math.abs(b - centre) - Math.abs(a - centre) || a - b);
-
-  // Two rows outwards, a third to the edges, and the middle-out order again for
-  // anything past that — written as the sequence of columns rather than as a
-  // rule per card, because the sequence IS the rule and reads as one line.
-  const seats = [...outwards, ...outwards, ...edgesFirst];
+  const edges = [0, columns - 1];
 
   items.slice(1).forEach((item, i) => {
-    dealt[seats[i] ?? outwards[(i - seats.length) % outwards.length]].push(item);
+    const seat =
+      i < 2 * outwards.length
+        ? outwards[i % outwards.length]
+        : edges[(i - 2 * outwards.length) % edges.length];
+    dealt[seat].push(item);
   });
 
   return dealt;
@@ -426,6 +444,10 @@ const columnStyle = css({
   },
 });
 
+/** The cards waiting off the band: the rail's tail on a phone, and not drawn
+ *  from `md` up, where they come on only by `rotate`. */
+const waitingStyle = css({ md: { display: "none" } });
+
 /**
  * How far each column hangs below the one outside it.
  *
@@ -487,6 +509,8 @@ const cardStyle = css({
 
 /** Where a card sits in the band's order — what the shuffle trades. */
 const SLOT_ATTR = "data-testimonial-slot";
+/** Which of the band's columns a `<ul>` is, counted with the empty ones. */
+const COLUMN_ATTR = "data-testimonial-column";
 
 /**
  * Where every card is, keyed by the slot it is in.
@@ -667,51 +691,62 @@ function useSkylineClearance(
 }
 
 /**
- * The two slots one trade swaps — the timer's or a press's alike: one card
- * wholly past the edge of the window, and one a reader can see part of.
+ * The two slots one trade swaps — the timer's or a press's alike: one card in
+ * an OUTER column that the window cuts off or hides, and one card in the MIDDLE
+ * three.
  *
- * EVERY SEEN CARD TAKES AN EQUAL TURN. The seen one is picked uniformly from
- * all of them, clipped or not, so no card in view is traded more often than
- * its neighbours.
+ * The band is deliberately wider than the window, so the outer two columns are
+ * always partly past its edges. Without this their cards would be decoration —
+ * words somebody wrote that nobody can read. With it, every one of them is
+ * brought forward in turn, for a reader who waits or presses.
  *
- * The band is deliberately wider than the window, so at any moment two or three
- * testimonials are past the edge. Without this they would be decoration — words
- * somebody wrote that nobody can read. With it, every card comes into view for
- * a reader who waits, or presses.
+ * NEVER TWO OUTER CARDS. It used to trade any hidden card for any card in
+ * view, and a half-cut card in the first column counted as in view — so it
+ * swapped places with the hidden card below it, from one spot nobody could
+ * read to another. Only the middle three columns are where a card is read.
+ *
+ * EVERY MIDDLE CARD TAKES AN EQUAL TURN. The one it trades with is picked
+ * uniformly from all of them, so none is sent to the edge more often than its
+ * neighbours.
  *
  * ONE CARD AT A TIME, which is the whole reason this is a swap rather than a
  * reshuffle: moving one card changes one column's height, and the eye follows
  * it. Re-dealing the whole band on a press would leave the reader looking for
  * the card they had just been reading.
  *
- * MEASURED, NOT ASSUMED. Which cards are off-screen depends on the window, the
- * column widths and how tall the cards happen to be, so it is read off
- * `getBoundingClientRect` rather than derived from a column index — the band
- * does not need to know its own layout in order to know what is hidden.
+ * MEASURED, NOT ASSUMED. Which outer cards the window cuts depends on its width,
+ * the column widths and how tall the cards are, so it is read off
+ * `getBoundingClientRect` rather than assumed from the column.
  *
- * ...AND NEVER A DEAD BUTTON. Where nothing is wholly past the edge (a display
- * wide enough to show some of every column) or nothing is in view, any two
- * cards trade instead — every card again with the same chance — because a press
- * that visibly does nothing reads as broken.
+ * ...AND NEVER A DEAD BUTTON. On a display wide enough to show every outer card
+ * whole, any outer card trades instead, and failing that any two, because a
+ * press that visibly does nothing reads as broken.
  */
 function pickTrade(wall: HTMLElement): [number, number] | null {
-  const hidden: number[] = [];
-  const shown: number[] = [];
+  const cut: number[] = [];
+  const outer: number[] = [];
+  const middle: number[] = [];
   for (const element of wall.querySelectorAll(`[${SLOT_ATTR}]`)) {
     const slot = Number(element.getAttribute(SLOT_ATTR));
+    // Waiting off the band: brought on by `rotate`, never picked.
+    const seat = element.parentElement?.getAttribute(COLUMN_ATTR);
+    if (seat == null) continue;
+    const column = Number(seat);
+    if (column !== 0 && column !== COLUMNS - 1) {
+      middle.push(slot);
+      continue;
+    }
+    outer.push(slot);
     const box = element.getBoundingClientRect();
-    // ANY PART inside the window counts as shown, and a card the edge clips is
-    // no exception. It used to be: only a card WHOLLY inside counted, and just
-    // past `md` the columns either side of the centre are cut by the edges — so
-    // the centre card was the only one shown, and every press traded it.
-    (box.right > 0 && box.left < window.innerWidth ? shown : hidden).push(slot);
+    if (box.left < 0 || box.right > window.innerWidth) cut.push(slot);
   }
 
   const pick = (from: number[]) =>
     from[Math.floor(Math.random() * from.length)];
-  if (hidden.length > 0 && shown.length > 0) return [pick(hidden), pick(shown)];
+  const from = cut.length > 0 ? cut : outer;
+  if (from.length > 0 && middle.length > 0) return [pick(from), pick(middle)];
 
-  const all = [...hidden, ...shown];
+  const all = [...outer, ...middle];
   if (all.length < 2) return null;
   const first = pick(all);
   return [first, pick(all.filter((slot) => slot !== first))];
@@ -852,6 +887,11 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
    * So the positions are read here, a frame before the change, and the effect
    * below puts each card back where it was and lets it glide to where it now
    * belongs.
+   *
+   * With cards waiting off the band, the two marked slots are the edge seat and
+   * the middle one, and `rotate` puts the edge card in the middle and the first
+   * waiting card at the edge: both still arrive in a marked slot, and the card
+   * leaving the middle goes to the queue, where nothing at this width draws it.
    */
   const swap = useCallback((a: number, b: number) => {
     if (a === b) return;
@@ -870,9 +910,7 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
         if (a >= current.order.length || b >= current.order.length) {
           return current;
         }
-        const next = [...current.order];
-        [next[a], next[b]] = [next[b], next[a]];
-        return { ...current, order: next };
+        return { ...current, order: rotate(current.order, a, b) };
       });
       // TWO frames, not one: the first is the one React paints the reordered
       // cards in, still transparent. Dropping the mark in the same frame would
@@ -972,9 +1010,24 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
   // failed to load. It is a real state — every row starts unpublished.
   if (order.length === 0) return null;
 
-  const columns = dealIntoColumns(order);
+  const columns = dealIntoColumns(order.slice(0, BAND_SIZE));
+  const waiting = order.slice(BAND_SIZE);
   // Where each testimonial sits in `order`, which is what a swap moves.
   const slotOf = new Map(order.map((row, index) => [row.id, index]));
+
+  const card = (testimonial: Testimonial) => {
+    const slot = slotOf.get(testimonial.id) ?? 0;
+    return (
+      <li
+        key={testimonial.id}
+        className={cardStyle}
+        {...{ [SLOT_ATTR]: slot }}
+        data-swapping={swapping.includes(slot) ? "" : undefined}
+      >
+        <TestimonialQuote testimonial={testimonial} />
+      </li>
+    );
+  };
 
   return (
     // Named by its own heading, so the landmark and what a reader sees over it
@@ -1014,22 +1067,20 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
           // anyone listening with nothing in it. Happens whenever fewer
           // testimonials are published than the band has columns.
           column.length === 0 ? null : (
-            <ul key={index} className={cx(columnStyle, COLUMN_STAGGER[index])}>
-              {column.map((testimonial) => {
-                const slot = slotOf.get(testimonial.id) ?? 0;
-                return (
-                  <li
-                    key={testimonial.id}
-                    className={cardStyle}
-                    {...{ [SLOT_ATTR]: slot }}
-                    data-swapping={swapping.includes(slot) ? "" : undefined}
-                  >
-                    <TestimonialQuote testimonial={testimonial} />
-                  </li>
-                );
-              })}
+            <ul
+              key={index}
+              className={cx(columnStyle, COLUMN_STAGGER[index])}
+              {...{ [COLUMN_ATTR]: index }}
+            >
+              {column.map(card)}
             </ul>
           ),
+        )}
+        {/* The queue. On the band it is not drawn at all; on the phone's rail,
+            which never trades, it is the rail's tail, so every card can still
+            be swiped to. */}
+        {waiting.length > 0 && (
+          <ul className={cx(columnStyle, waitingStyle)}>{waiting.map(card)}</ul>
         )}
       </div>
     </section>

@@ -55,6 +55,9 @@ describe("PackageCard", () => {
     await user.click(
       screen.getByRole("button", { name: "Copy install command" }),
     );
+    // The copy lands a microtask after the click; on a slow runner the timer
+    // below would otherwise run out before the one it is meant to expire.
+    await screen.findByRole("button", { name: "Copied install command" });
     act(() => vi.advanceTimersByTime(2000));
     expect(
       screen.getByRole("button", { name: "Copy install command" }),
