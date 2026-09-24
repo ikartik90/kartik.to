@@ -680,6 +680,20 @@ function PropertiesPanelText({
   );
 }
 
+export interface PropertiesPanelFooterProps {
+  children: ReactNode;
+}
+
+/**
+ * What stands at the foot of the panel, under every section — pinned to the
+ * bottom edge while the sections leave room, and last in the scroll once they
+ * do not.
+ */
+function PropertiesPanelFooter({ children }: PropertiesPanelFooterProps) {
+  const { styles } = usePanel("PropertiesPanel.Footer");
+  return <div className={styles.footer}>{children}</div>;
+}
+
 export const PropertiesPanel = Object.assign(PropertiesPanelRoot, {
   Header: PropertiesPanelHeader,
   DockIcon: PropertiesPanelDockIcon,
@@ -690,4 +704,5 @@ export const PropertiesPanel = Object.assign(PropertiesPanelRoot, {
   Control: PropertiesPanelControl,
   Tie: PropertiesPanelTie,
   Text: PropertiesPanelText,
+  Footer: PropertiesPanelFooter,
 });
