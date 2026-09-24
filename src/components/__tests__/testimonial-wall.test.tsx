@@ -118,13 +118,14 @@ describe("TestimonialWall", () => {
     /** Where every card is, by name: column, then place in the column. */
     const seats = () =>
       new Map(
-        lists().flatMap((list, column) =>
-          within(list)
-            .getAllByRole("listitem")
-            .map((card, place) => [
-              card.querySelector("figcaption")?.textContent ?? "",
-              `${column}:${place}`,
-            ]),
+        // Plain DOM reads rather than role queries: the trade tests read every
+        // seat on each of hundreds of presses, and role queries made them run
+        // past the time limit on a loaded runner.
+        [...document.querySelectorAll("ul")].flatMap((list, column) =>
+          [...list.querySelectorAll("li")].map((card, place) => [
+            card.querySelector("figcaption")?.textContent ?? "",
+            `${column}:${place}`,
+          ]),
         ),
       );
 
