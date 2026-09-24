@@ -6495,6 +6495,7 @@ export default defineConfig({
             "sectionTitle",
             "controlPanel",
             "text",
+            "footer",
             // Last, so its `animation` overrides `root`'s: the two are both
             // single classes on the same element, and the tie is broken by the
             // order Panda emits the slots in — which is this order.
@@ -6687,6 +6688,15 @@ export default defineConfig({
               // below it another half pixel down, so by the fourth section the
               // rows were a pixel and a half off the grid. See `root`.
               boxShadow: "inset 0 -0.5px 0 var(--colors-border-divider)",
+            },
+            // What stands under every section, on the panel's bottom edge: the
+            // auto margin takes whatever height the sections leave in the
+            // column, and once they fill it the footer simply comes last in
+            // the scroll. Inset by the 12px the section strips are drawn on.
+            footer: {
+              flexShrink: 0,
+              marginBlockStart: "auto",
+              padding: "lg",
             },
             sectionHeader: {
               flexShrink: 0,

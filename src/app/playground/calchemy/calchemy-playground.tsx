@@ -52,6 +52,7 @@ import EditIcon from "@/assets/icons/edit.svg";
 import { MenuButton } from "@/components/menu-button";
 import { ScrimBlur } from "@/components/scrim-blur";
 import { ThemeToggleButton } from "@/components/theme-toggle";
+import { PackageCard } from "./package-card";
 
 // ---------------------------------------------------------------------------
 // Calchemy Playground — a year of calendar, and one line to talk to it.
@@ -2096,6 +2097,11 @@ export function CalchemyPlayground() {
               </PropertiesPanel.ControlPanel>
             )}
           </PropertiesPanel.Section>
+          {/* The package this page runs on, at the foot of the rail however
+              few settings stand above it. */}
+          <PropertiesPanel.Footer>
+            <PackageCard />
+          </PropertiesPanel.Footer>
         </PropertiesPanel>
       )}
     </main>

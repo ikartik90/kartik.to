@@ -576,3 +576,36 @@ describe("PropertiesPanel.Tie", () => {
     spy.mockRestore();
   });
 });
+
+// The FOOTER is what stands under every section — pushed to the panel's
+// bottom edge by the recipe, which jsdom cannot lay out, so what is tested
+// here is that it is part of the panel and follows the sections.
+describe("PropertiesPanel.Footer", () => {
+  it("renders its content inside the panel, after the sections", () => {
+    render(
+      <PropertiesPanel ariaLabel="Parser settings" onDismiss={vi.fn()}>
+        <PropertiesPanel.Section enabled>
+          <p>Preferences</p>
+        </PropertiesPanel.Section>
+        <PropertiesPanel.Footer>
+          <p>Package card</p>
+        </PropertiesPanel.Footer>
+      </PropertiesPanel>,
+    );
+    const panel = screen.getByRole("dialog", { name: "Parser settings" });
+    const footer = screen.getByText("Package card");
+    expect(panel.contains(footer)).toBe(true);
+    expect(
+      screen.getByText("Preferences").compareDocumentPosition(footer) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("says it was misplaced outside a panel", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() =>
+      render(<PropertiesPanel.Footer>Orphan</PropertiesPanel.Footer>),
+    ).toThrow(/PropertiesPanel.Footer must be used within <PropertiesPanel>/);
+    spy.mockRestore();
+  });
+});
