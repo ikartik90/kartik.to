@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const comboboxPopover = defineRecipe({
   className: "combobox-popover",
   description:
-    "Covering option-list popover for the Combobox input: anchored over the trigger frame (top/left) with an opaque brand-tinted surface + brand inset border, ≥ the option-list width and ≥ the trigger width. The Select sibling of datePopover.",
+    "The popover a Select opens: an option list laid over its field, at least as wide as the field.",
   base: {
     // Absolute, not fixed: a fixed anchored popover lags its trigger on scroll.
     position: "absolute",

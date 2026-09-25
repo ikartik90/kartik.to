@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const optionList = defineSlotRecipe({
   className: "option-list",
   description:
-    "Option list: an optional search/filter row above a scrollable listbox of option buttons on a 28px row pitch. Options carry their state as attributes (aria-selected / data-active / :disabled), so the look is fully re-skinnable off selectors. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand selected chip; `onBrand` drops into the Combobox popover (which owns the surface) and inverts — options brand, selected chip neutral.",
+    "A list of options with an optional search row. `tone` sets its colours, `fit` whether it scrolls, `size` the row height and `direction` block or inline.",
   slots: ["root", "search", "list", "option", "empty", "divider"],
   base: {
     root: {

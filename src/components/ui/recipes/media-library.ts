@@ -2,7 +2,7 @@ import { defineRecipe } from "@pandacss/dev";
 
 export const libraryBody = defineRecipe({
   className: "library-body",
-  description: "Two-column library layout between header and footer.",
+  description: "The two-column body of a media library dialog.",
   base: {
     display: "flex",
     flex: "1 1 auto",
@@ -14,8 +14,7 @@ export const libraryBody = defineRecipe({
 
 export const mediaLibrarySidebar = defineRecipe({
   className: "media-library-sidebar",
-  description:
-    "Library sidebar column in the insert dialogs — the frame around an OptionList.Listbox (component list / image list). Owns the width, divider and inset; the listbox inside owns the scrolling, since it keeps its own active row in view by nudging its scrollTop.",
+  description: "The list column of a media library dialog.",
   base: {
     width: "token(sizes.librarySidebar)",
     flexShrink: 0,
@@ -35,8 +34,7 @@ export const mediaLibrarySidebar = defineRecipe({
 
 export const mediaPreviewPane = defineRecipe({
   className: "media-preview-pane",
-  description:
-    "Right column of library view with preview and metadata.",
+  description: "The preview column of a media library dialog.",
   base: {
     flex: "1 1 auto",
     alignSelf: "stretch",

@@ -4,8 +4,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 // as longhands: `flex` would collide with the option's own `flex-shrink: 0`.
 export const segmentedControl = defineSlotRecipe({
   className: "segmented-control",
-  description:
-    "Equal-width segments for a short horizontal choice — the stretch an `OptionList` behavior container needs to become a segmented control inside a `toolbar({ size: 'sm', tone: 'field' })` rail (Figma 885:1963). `list` fills the rail; `option` takes an equal share of it and centres its label. Everything else — the 28px height, the squared abutting items, the active chip — already comes from those two recipes. It serves the single-select `Listbox` (SegmentedControl) and the multi-toggle `Toolbar` (ToggleBar) alike; which of the two a row is, is a question about semantics rather than about the box. The one thing it adds beyond layout is the SEAM between adjacent segments — a hairline between two that agree (the active border where both are on, the resting one where both are off) and nothing between two that differ, where the chip's own fill already divides them.",
+  description: "Equal-width segments for a short choice, inside a toolbar.",
   slots: ["list", "option"],
   base: {
     // `alignSelf: stretch` too: the rail centres its children, so the segments need a real box.

@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const toolbar = defineRecipe({
   className: "toolbar",
   description:
-    "The app's shared toolbar chrome — the horizontal rail a row of controls sits in, with a corner concentric to the buttons inside it. Owns the box only (layout, height, inset, gap, radius, surface); positioning and whether the rail is bordered, elevated or clipped stay with the consumer, since the surfaces that draw it differ on exactly those. `size=md` is the default 40px rail (6px inset, 4px gap, 8px radius) whose buttons keep their own 4px corners; `size=sm` shrink-wraps it onto the buttons at 28px with no inset and no gap, squares the items, and keeps a single 4px corner on the rail itself — which it clips the row to. `tone` picks the ground: `surface` for free-standing chrome, `field` for a rail that is one row of a form (the segmented control). `fit` picks hug-your-contents or fill-your-slot.",
+    "A horizontal rail of controls. `tone` sets its fill, `fit` whether it hugs its content or fills the row, `size` its height.",
   base: {
     display: "flex",
     alignItems: "center",

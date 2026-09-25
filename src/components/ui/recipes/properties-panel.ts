@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const propertiesPanel = defineSlotRecipe({
   className: "properties-panel",
   description:
-    "Docked properties inspector — full viewport height at the right edge, sliding in from it. A fixed header over a scrolling column of sections, each a header strip whose add/remove button mounts and unmounts its control panel (Figma 845:7223).",
+    "The properties panel docked at the right edge: a header, sections that add or remove their controls, and a footer.",
   slots: [
     "root",
     "header",

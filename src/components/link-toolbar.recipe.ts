@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const toolbarSwatch = defineRecipe({
   className: "toolbar-swatch",
   description:
-    "A colour choice in a toolbar, drawn as the colour itself: a 16px tile inside an option chip (Figma 425:940/425:905, the button link's neutral ∣ accent). Its 1px edge is the toolbar's own surface, so the tile reads as set into the rail; the chosen one wears a 1.25px ring in its own colour outside that edge. The chip marks the choice with `aria-checked` (a radio), not `aria-pressed`, so the option list's brand chip stays off — the ring is the selection.",
+    "A colour option in a toolbar: a tile of the colour inside an option chip, ringed when chosen; `tone` is neutral or accent.",
   base: {
     display: "block",
     width: "token(spacing.xl)",

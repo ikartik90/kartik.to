@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const tooltip = defineRecipe({
   className: "tooltip",
   description:
-    "Cursor-following hover tooltip shared by the social links, Button and Link — Figma node 389:318 (20px tall, 4px padding/gap, a leading label ∣ hairline ∣ trailing 14px glyph). Positioned imperatively (fixed + a ref that tracks the pointer), so it carries no anchor of its own.",
+    "A tooltip that follows the pointer: a label, optionally with a divider and an icon; `tone: brand` tints it with the brand colour.",
   base: {
     position: "fixed",
     zIndex: 50,
@@ -83,8 +83,7 @@ export const tooltip = defineRecipe({
 
 export const tooltipIcon = defineRecipe({
   className: "tooltip-icon",
-  description:
-    "Icons inside tooltips — fixed 14px size, never shrinks. For icons that need an explicit class (the social copy/check crossfade layers); a bare tooltip glyph is already sized by the `tooltip` recipe's `& svg`.",
+  description: "A 14px icon inside a tooltip.",
   base: {
     flexShrink: 0,
     width: "token(sizes.tooltipIcon)",

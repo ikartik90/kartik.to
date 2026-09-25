@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const demoLoggerPanel = defineRecipe({
   className: "demo-logger-panel",
   description:
-    "Logger shell; height transitions drive expand/collapse layout.",
+    "The demo log's panel, animating its height between collapsed and `expanded`.",
   base: {
     width: "token(spacing.full)",
     borderRadius: "md",
@@ -36,8 +36,7 @@ export const demoLoggerPanel = defineRecipe({
 
 export const demoLoggerHeader = defineRecipe({
   className: "demo-logger-header",
-  description:
-    "Output log panel header with title and collapse toggle.",
+  description: "The demo log's header row: its title and the collapse toggle.",
   base: {
     flexShrink: 0,
     display: "flex",
@@ -66,7 +65,7 @@ export const demoLoggerHeader = defineRecipe({
 export const demoLoggerBody = defineRecipe({
   className: "demo-logger-body",
   description:
-    "Scrollable logger output; fades inside the transitioning panel.",
+    "The demo log's scrolling list of lines, fading with `expanded`.",
   base: {
     flex: "1 1 auto",
     flexDirection: "column",
@@ -105,7 +104,7 @@ export const demoLoggerBody = defineRecipe({
 
 export const demoLoggerLine = defineRecipe({
   className: "demo-logger-line",
-  description: "Single logger output line with level-based color.",
+  description: "One line of demo log output, coloured by `level`.",
   base: {
     textStyle: "code",
     margin: 0,

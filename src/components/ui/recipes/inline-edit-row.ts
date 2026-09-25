@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const inlineEditRow = defineSlotRecipe({
   className: "inline-edit-row",
   description:
-    "Inline single-field editor that replaces a floating toolbar's buttons — leading icon, bare input, and an Esc hint. Shared by the link editor and the collection caption editor.",
+    "An inline editor that replaces a toolbar's buttons: an icon, a text input and an Esc hint.",
   slots: ["root", "input", "options", "hint", "hintKey", "hintLabel"],
   base: {
     root: {

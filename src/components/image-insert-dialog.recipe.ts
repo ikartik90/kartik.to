@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const uploadBody = defineRecipe({
   className: "upload-body",
   description:
-    "Upload / uploading content block (Figma Frame 25: 280×160).",
+    "The upload area of the image dialog; `dragOver` highlights it while a file is dragged over it.",
   base: {
     display: "flex",
     flexDirection: "column",

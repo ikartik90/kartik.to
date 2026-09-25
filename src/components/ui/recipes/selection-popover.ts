@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const selectionPopover = defineRecipe({
   className: "selection-popover",
   description:
-    "Shared floating popover for the text-selection / link / numbering / bullet menus — anchored above the target via CSS anchor() and flipped below when there's no room (Figma 422:833 selection, 474:74 numbering, 475:204 bullet). Composes with `toolbar` for the rail itself and adds only what floating costs: the anchor, the hairline, the elevation, and a clip. `align=center` centres on the target (text selection / link); `align=start` left-aligns to it (list-marker menus).",
+    "The floating toolbar over selected text, a link or a list marker; `align` centres it or aligns it to the start.",
   base: {
     position: "fixed",
     zIndex: 50,
