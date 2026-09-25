@@ -116,6 +116,33 @@ describe("useDismiss", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  // A surface opened from another — the colour picker from a field on a
+  // properties rail — is portalled beside it, so a press in it lands outside
+  // the rail by every measure but this one. It must not take the rail away
+  // (and the picker with it); the bug this locks out.
+  it("ignores a press in a surface opened after it", () => {
+    const panel = vi.fn();
+    const picker = vi.fn();
+    const { rerender } = render(<Harness onDismiss={panel} />);
+    rerender(
+      <>
+        <Harness onDismiss={panel} />
+        <Harness onDismiss={picker} />
+      </>,
+    );
+    const [inPanel, inPicker] = screen.getAllByText("in");
+
+    fireEvent.pointerDown(inPicker);
+    expect(panel).not.toHaveBeenCalled();
+    expect(picker).not.toHaveBeenCalled();
+
+    // The other way round is still a press outside: back on the panel, the
+    // picker goes and the panel stays.
+    fireEvent.pointerDown(inPanel);
+    expect(picker).toHaveBeenCalledTimes(1);
+    expect(panel).not.toHaveBeenCalled();
+  });
+
   it("dismisses on scroll/resize only when dismissOnReflow is set", () => {
     const onDismiss = vi.fn();
     const { rerender } = render(<Harness onDismiss={onDismiss} />);

@@ -12,7 +12,13 @@ import { useEffect, useId, type RefObject } from "react";
 // Opening order, not DOM nesting, because a portalled popover is a sibling of
 // everything else under <body> — there is no containment left to read. The two
 // agree wherever it matters: a surface opened FROM another one mounts second.
-const layers: string[] = [];
+//
+// Each entry carries its container too, for the pointer: a press inside a
+// surface stacked ABOVE this one is not a press outside it. The colour picker a
+// rail's field opens is portalled beside the rail, so by containment every
+// press in it is outside the rail — and picking a colour closed the rail and,
+// with it, the picker.
+const layers: { id: string; ref: RefObject<HTMLElement | null> }[] = [];
 
 // The <dialog> the press was made in, or null. A modal dialog stands over every
 // surface on this page and is not in the stack above — it is opened by a
@@ -95,12 +101,12 @@ export function useDismiss({
   const layer = useId();
   useEffect(() => {
     if (!enabled) return;
-    layers.push(layer);
+    layers.push({ id: layer, ref });
     return () => {
-      const at = layers.indexOf(layer);
+      const at = layers.findIndex((entry) => entry.id === layer);
       if (at !== -1) layers.splice(at, 1);
     };
-  }, [enabled, layer]);
+  }, [enabled, layer, ref]);
 
   // Escape closes the TOPMOST surface. Capture + stopPropagation so it
   // dismisses the popover rather than reaching an editor-level Escape handler
@@ -112,7 +118,7 @@ export function useDismiss({
     if (!enabled) return;
     watchPresses();
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape" || layers[layers.length - 1] !== layer) return;
+      if (e.key !== "Escape" || layers.at(-1)?.id !== layer) return;
       // A dialog over this surface has the press — unless this surface is one
       // standing on the dialog itself, which is the ordinary case again.
       if (dialogAtPress && !dialogAtPress.contains(ref.current)) return;
@@ -135,11 +141,16 @@ export function useDismiss({
       // the popover still open — see `ignoreSelector`.
       const target = e.target as Element | null;
       if (ignoreSelector && target?.closest?.(ignoreSelector)) return;
+      // In a surface opened after this one — see `layers`.
+      const above = layers.slice(
+        layers.findIndex((entry) => entry.id === layer) + 1,
+      );
+      if (above.some((entry) => entry.ref.current?.contains(target))) return;
       onDismiss();
     }
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [enabled, dismissOnOutsidePointer, onDismiss, ref, ignoreSelector]);
+  }, [enabled, dismissOnOutsidePointer, onDismiss, ref, ignoreSelector, layer]);
 
   // A click-captured anchor rect goes stale on scroll/resize — dismiss rather
   // than let the popover drift from its target.
