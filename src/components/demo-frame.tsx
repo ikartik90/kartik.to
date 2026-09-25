@@ -10,11 +10,10 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { cx } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
 import {
   demoFrame,
   demoFrameDemoArea,
-  demoFrameDemoMeasure,
   type DemoFrameDemoAreaVariantProps,
 } from "../../styled-system/recipes";
 import {
@@ -69,6 +68,13 @@ function resolveLoggerConfig(
 
   return { enabled: true, config: logger };
 }
+
+// Intrinsic-size wrapper used to measure demo content without flex stretch.
+const demoFrameDemoMeasureStyle = css({
+  width: "fit-content",
+  maxWidth: "token(spacing.full)",
+  flexShrink: 0,
+});
 
 export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
   function DemoFrame(
@@ -174,7 +180,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
           {loggerEnabled || fill ? (
             children
           ) : (
-            <div ref={measureRef} className={demoFrameDemoMeasure()}>
+            <div ref={measureRef} className={demoFrameDemoMeasureStyle}>
               {children}
             </div>
           )}

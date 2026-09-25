@@ -16,18 +16,17 @@ describe("DemoFrame", () => {
         <p>demo</p>
       </DemoFrame>,
     );
-    expect(container.querySelector(".demo-frame__demo-measure")).toBeTruthy();
+    const area = () => container.querySelector(".demo-frame__demo-area");
+    // Measured: the area holds the measure wrapper, and the wrapper the demo.
+    expect(area()?.firstElementChild?.tagName).toBe("DIV");
+    expect(area()?.firstElementChild?.firstElementChild?.tagName).toBe("P");
 
     rerender(
       <DemoFrame fill>
         <p>demo</p>
       </DemoFrame>,
     );
-    expect(container.querySelector(".demo-frame__demo-measure")).toBeNull();
-    expect(
-      container.querySelector(".demo-frame__demo-area")?.firstElementChild
-        ?.tagName,
-    ).toBe("P");
+    expect(area()?.firstElementChild?.tagName).toBe("P");
   });
 
   // And it must not be MEASURED either. The area's floor is normally raised to
@@ -88,7 +87,6 @@ describe("DemoFrame", () => {
     );
 
     expect(container.querySelector(".demo-frame--logger_true")).not.toBeNull();
-    expect(container.querySelector(".demo-logger-section")).not.toBeNull();
     expect(container.querySelector(".demo-logger-header")).not.toBeNull();
     expect(container.querySelector(".demo-frame")?.children).toHaveLength(2);
   });
@@ -110,10 +108,8 @@ describe("DemoFrame", () => {
       </DemoFrame>,
     );
 
-    const inertLogger = container.querySelector(
-      ".demo-logger-section",
-    )?.parentElement;
-    expect(inertLogger?.hasAttribute("inert")).toBe(true);
+    const header = container.querySelector(".demo-logger-header");
+    expect(header?.closest("[inert]")).not.toBeNull();
   });
 
   it("starts with logger collapsed and toggles expand state", () => {

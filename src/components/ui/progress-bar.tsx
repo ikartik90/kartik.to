@@ -1,4 +1,4 @@
-import { uploadProgress, progressBarFill } from "../../../styled-system/recipes";
+import { css } from "../../../styled-system/css";
 
 /**
  * How long to hold the bar once a load completes, before the loader is
@@ -16,6 +16,28 @@ export interface ProgressBarProps {
   label?: string;
 }
 
+// Shared progress-bar track (upload dialog + demo preloader).
+const uploadProgressStyle = css({
+  position: "relative",
+  width: "token(sizes.imagePreviewMax)",
+  maxWidth: "token(spacing.full)",
+  height: "token(spacing.xxs)",
+  borderRadius: "xs",
+  backgroundColor: "border.divider",
+  overflow: "hidden",
+});
+
+// Animated fill inside the shared progress-bar track.
+const progressBarFillStyle = css({
+  position: "absolute",
+  top: 0,
+  left: 0,
+  height: "token(spacing.full)",
+  borderRadius: "xs",
+  transition: "width linear 100ms",
+  backgroundColor: { base: "brand.pink", _dark: "brand.orange" },
+});
+
 /**
  * The shared determinate progress bar used by the upload-media dialog and the
  * component-demo preloader. Track = `uploadProgress`, fill = `progressBarFill`.
@@ -25,14 +47,14 @@ export function ProgressBar({ value, label }: ProgressBarProps) {
 
   return (
     <div
-      className={uploadProgress()}
+      className={uploadProgressStyle}
       role="progressbar"
       aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
     >
-      <div className={progressBarFill()} style={{ width: `${clamped}%` }} />
+      <div className={progressBarFillStyle} style={{ width: `${clamped}%` }} />
     </div>
   );
 }

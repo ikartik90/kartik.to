@@ -8,59 +8,29 @@
 // moved out of it; changing it changes which rule wins wherever two recipes
 // meet on one element.
 
-import { articleList } from "../../article-renderer.recipe";
-import { collectionEmptyCell } from "../../collection-grid.recipe";
-import { demoPreloader } from "../../demo-component.recipe";
+import { demoFrame, demoFrameDemoArea } from "../../demo-frame.recipe";
 import {
-  demoFrame,
-  demoFrameDemoArea,
-  demoFrameDemoMeasure,
-} from "../../demo-frame.recipe";
-import {
-  demoLoggerSection,
   demoLoggerPanel,
   demoLoggerHeader,
   demoLoggerBody,
   demoLoggerLine,
 } from "../../demo-logger.recipe";
-import { demoFrameControls } from "../../demo/demo-controls.recipe";
-import { masonryGrid } from "../../home-grid.recipe";
-import {
-  dialogFooterGroup,
-  uploadBodySlot,
-  uploadBody,
-  mediaPreview,
-  mediaMetadataRow,
-  mediaAltRow,
-  mediaDeleteRow,
-  mediaThumbnail,
-} from "../../image-insert-dialog.recipe";
+import { uploadBody } from "../../image-insert-dialog.recipe";
 import { linkCard } from "../../link-card.recipe";
 import { toolbarSwatch } from "../../link-toolbar.recipe";
-import { mediaLightbox } from "../../media-lightbox.recipe";
 import { mediaTransport } from "../../media-transport.recipe";
-import {
-  sidenoteCard,
-  sidenoteCardContent,
-  sidenoteCardMarker,
-  sidenoteCardBody,
-} from "../../sidenote-layer.recipe";
-import { slashMenuPopover } from "../../slash-menu.recipe";
+import { sidenoteCard } from "../../sidenote-layer.recipe";
 import { weatherGraphic } from "../../weather-graphic.recipe";
 import { weatherWidget } from "../../weather-widget.recipe";
 import { calendar } from "../input/calendar.recipe";
 import { checkboxField } from "../input/checkbox.recipe";
 import { colorField } from "../input/color-input.recipe";
 import { colorPicker } from "../input/color-picker.recipe";
-import { colorSwatchGrid } from "../input/color-swatch-grid.recipe";
-import { datePopover } from "../input/datepicker.recipe";
 import { imageField } from "../input/image-input.recipe";
 import { optionList } from "../input/option-list.recipe";
 import { sliderField } from "../input/slider.recipe";
 import { switchField } from "../input/switch.recipe";
-import { timePopover, timePicker } from "../input/time-picker.recipe";
 import { notice } from "../notice.recipe";
-import { uploadProgress, progressBarFill } from "../progress-bar.recipe";
 import { wireframe, skeleton } from "../wireframe.recipe";
 import { action } from "./action";
 import {
@@ -119,7 +89,6 @@ import { toolbar } from "./toolbar";
 import { tooltip, tooltipIcon } from "./tooltip";
 
 export const recipes = {
-  masonryGrid,
   wireframe,
   action,
   inlineCode,
@@ -131,40 +100,23 @@ export const recipes = {
   articleSidenoteText,
   articleSidenoteRef,
   sidenoteCard,
-  sidenoteCardContent,
-  sidenoteCardMarker,
-  sidenoteCardBody,
   codeBlock,
   articleShowcase,
   demoFrame,
   demoFrameDemoArea,
-  demoFrameDemoMeasure,
-  demoFrameControls,
-  demoLoggerSection,
   demoLoggerPanel,
   demoLoggerHeader,
   demoLoggerBody,
   demoLoggerLine,
   mediaTransport,
-  collectionEmptyCell,
   dialogPanel,
   dialogHeader,
   dialogTitle,
   libraryBody,
   dialogFooter,
-  dialogFooterGroup,
-  uploadBodySlot,
   uploadBody,
-  uploadProgress,
-  progressBarFill,
-  demoPreloader,
   mediaLibrarySidebar,
-  mediaPreview,
   mediaPreviewPane,
-  mediaMetadataRow,
-  mediaAltRow,
-  mediaDeleteRow,
-  mediaThumbnail,
   articleBlockquoteShell,
   articleBlockquoteMark,
   articleBlockquote,
@@ -172,7 +124,6 @@ export const recipes = {
   articleSubheadingCaption,
   articleBlockquoteBody,
   articleBlockquoteCite,
-  articleList,
   articleListItemShell,
   listMarkerBox,
   listMarker,
@@ -185,10 +136,7 @@ export const recipes = {
   articleMetricValue,
   articleMetricLabel,
   horizontalRule,
-  slashMenuPopover,
-  datePopover,
   comboboxPopover,
-  timePopover,
   colorPickerPopover,
   toolbar,
   toolbarSwatch,
@@ -216,12 +164,9 @@ export const slotRecipes = {
   collectionGrid,
   colorField,
   imageField,
-  colorSwatchGrid,
   colorPicker,
   propertiesPanel,
-  mediaLightbox,
   optionList,
-  timePicker,
   segmentedControl,
   notice,
   linkCard,

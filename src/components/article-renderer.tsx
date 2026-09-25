@@ -21,7 +21,6 @@ import {
   articleBlockquoteShell,
   articleHeadingShell,
   articleSubheadingCaption,
-  articleList,
   articleListItemShell,
   listMarkerBox,
   listMarker,
@@ -37,7 +36,7 @@ import {
   articleShowcase,
   horizontalRule,
 } from "../../styled-system/recipes";
-import { cx } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
 import { ArticleComponentBlock } from "@/components/article-component-block";
 import {
   ButtonLink,
@@ -424,6 +423,19 @@ function renderBlockNode(
 type ListItemNode = Extract<BlockNode, { type: "list_item" }>;
 type BulletListItemNode = Extract<BlockNode, { type: "bullet_list_item" }>;
 
+// Ordered-list wrapper for read-only article prose — resets native list styling
+// and stacks items with the same rhythm as sibling blocks. No width: inherits
+// the `article > *` content-column width so the list aligns with prose, not
+// showcase blocks.
+const articleListStyle = css({
+  listStyle: "none",
+  margin: "none",
+  padding: "none",
+  display: "flex",
+  flexDirection: "column",
+  gap: "xl",
+});
+
 function renderNumberedList(
   items: ListItemNode[],
   numbering: ListItemNumbering[],
@@ -433,7 +445,7 @@ function renderNumberedList(
   return (
     <ol
       key={key}
-      className={articleList()}
+      className={articleListStyle}
       start={numbering[0]?.ordinal ?? 1}
     >
       {items.map((item, i) => (
@@ -471,7 +483,7 @@ function renderBulletList(
   numberOf: Map<string, number>,
 ): React.ReactNode {
   return (
-    <ul key={key} className={articleList()}>
+    <ul key={key} className={articleListStyle}>
       {items.map((item, i) => (
         <li key={i} className={articleListItemShell()}>
           {item.marker ? (

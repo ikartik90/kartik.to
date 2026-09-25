@@ -9,7 +9,6 @@ import {
   demoLoggerHeader,
   demoLoggerLine,
   demoLoggerPanel,
-  demoLoggerSection,
   menuIcon,
 } from "../../styled-system/recipes";
 import { Button } from "@/components/ui/button";
@@ -112,6 +111,16 @@ const emptyHintStyle = css({
   textAlign: "center",
 });
 
+// Footer region for demo logger with inset padding.
+const demoLoggerSectionStyle = css({
+  width: "token(spacing.full)",
+  flexShrink: 0,
+  padding: "md",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+});
+
 export function DemoLogger({
   expanded,
   onExpandedChange,
@@ -137,7 +146,7 @@ export function DemoLogger({
   }, [entries, expanded]);
 
   return (
-    <div className={demoLoggerSection()}>
+    <div className={demoLoggerSectionStyle}>
       <div className={demoLoggerPanel({ expanded })}>
         <div className={demoLoggerHeader({ expanded })}>
           <ConsoleIcon className={consoleIconStyle} aria-hidden />

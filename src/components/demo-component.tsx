@@ -7,7 +7,20 @@ import {
 } from "@/components/ui/progress-bar";
 import { useDemoLoader, useTrickleProgress } from "@/hooks/use-demo-loader";
 import type { DemoComponentEntry, DemoProps } from "@/components/demo/registry";
-import { demoPreloader } from "../../styled-system/recipes";
+import { css } from "../../styled-system/css";
+
+// Centers the shared progress bar while a component demo loads.
+const demoPreloaderStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "md",
+  width: "token(sizes.imagePreviewMax)",
+  maxWidth: "token(spacing.full)",
+  minHeight: "token(spacing.5xl)",
+  paddingInline: "lg",
+});
 
 /**
  * The component-demo preloader — the same progress bar the upload-media dialog
@@ -19,7 +32,7 @@ export function DemoPreloader({ value }: { value?: number }) {
   const shown = value ?? Math.min(99, trickle * 100);
 
   return (
-    <div className={demoPreloader()}>
+    <div className={demoPreloaderStyle}>
       <ProgressBar value={shown} label="Loading component demo" />
     </div>
   );
