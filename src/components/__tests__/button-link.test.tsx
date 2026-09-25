@@ -31,4 +31,15 @@ describe("ButtonLink", () => {
     expect(link.getAttribute("href")).toBe("https://cal.com/kartik");
     expect(link.getAttribute("target")).toBeNull();
   });
+
+  it("opens in a new tab when asked to, safely", () => {
+    render(
+      <ButtonLink href="https://cal.com/kartik" newTab>
+        Book a call
+      </ButtonLink>,
+    );
+    const link = screen.getByRole("link", { name: "Book a call" });
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
 });

@@ -37,8 +37,13 @@ import {
   articleShowcase,
   horizontalRule,
 } from "../../styled-system/recipes";
+import { cx } from "../../styled-system/css";
 import { ArticleComponentBlock } from "@/components/article-component-block";
-import { ButtonLink, buttonLinkRowStyle } from "@/components/button-link";
+import {
+  ButtonLink,
+  buttonLinkRowStyle,
+  buttonLinkStickyRowStyle,
+} from "@/components/button-link";
 import { CollectionShowcase } from "@/components/collection-showcase";
 import { MediaShowcase } from "@/components/media-showcase";
 import {
@@ -102,7 +107,14 @@ function renderStyledNode(node: InlineNode, index: number): React.ReactNode {
         break;
       case "link":
         content = (
-          <a href={mark.href} className={articleLink()}>
+          <a
+            href={mark.href}
+            className={articleLink()}
+            {...(mark.newTab && {
+              target: "_blank",
+              rel: "noopener noreferrer",
+            })}
+          >
             {content}
           </a>
         );
@@ -340,8 +352,18 @@ function renderBlockNode(
       const label = node.text.trim();
       if (!label || !node.href) return null;
       return (
-        <div key={index} data-button-link="" className={buttonLinkRowStyle}>
-          <ButtonLink href={node.href}>{label}</ButtonLink>
+        <div
+          key={index}
+          data-button-link=""
+          data-sticky={node.sticky ? "" : undefined}
+          className={cx(
+            buttonLinkRowStyle,
+            node.sticky && buttonLinkStickyRowStyle,
+          )}
+        >
+          <ButtonLink href={node.href} newTab={node.newTab}>
+            {label}
+          </ButtonLink>
         </div>
       );
     }

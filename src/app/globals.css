@@ -344,6 +344,16 @@ body[data-properties-panel-instant] {
     width: min(100%, var(--sizes-article-content));
   }
 
+  /* A sticky button's chip — the reader's link, the editor's label. Its fill
+     is translucent, so pinned over prose the words beneath would read through
+     its label; the app's one blur strength (the glass chip's) holds it
+     legible, and over the bare page it changes nothing. Here rather than in
+     `buttonLinkStickyRowStyle` because `css()` cannot write backdrop-filter. */
+  [data-sticky] :is(a, [data-button-label]) {
+    -webkit-backdrop-filter: blur(var(--spacing-md));
+    backdrop-filter: blur(var(--spacing-md));
+  }
+
   article > [data-article-intro] {
     width: min(100%, var(--sizes-article-showcase));
   }

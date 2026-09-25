@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { PropertiesPanel } from "../properties-panel";
 import { Field } from "../input/field";
+import { ColorInput } from "../input/color-input";
 
 afterEach(() => cleanup());
 
@@ -93,6 +94,28 @@ describe("PropertiesPanel", () => {
       .setup()
       .click(screen.getByRole("button", { name: "Close properties panel" }));
     await waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
+  });
+
+  // The colour picker opens from a field on the rail and is portalled beside
+  // it — so a press in it (picking a colour) used to count as a press outside
+  // the rail, which closed the rail and took the picker down with it.
+  it("stays up while a surface opened from one of its fields is used", async () => {
+    const onDismiss = vi.fn();
+    render(
+      <PropertiesPanel ariaLabel="Media properties" onDismiss={onDismiss}>
+        <PropertiesPanel.Control label="Colour">
+          <ColorInput value="#FF0000FF" onValueChange={vi.fn()} />
+        </PropertiesPanel.Control>
+      </PropertiesPanel>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit colour" }));
+    const picker = screen.getByRole("dialog", { name: "Color picker" });
+
+    fireEvent.pointerDown(picker);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Color picker" })).toBe(picker);
   });
 
   it("dismisses on Escape", async () => {

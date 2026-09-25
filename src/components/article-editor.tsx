@@ -164,7 +164,7 @@ function styledTextToHtml(node: InlineNode): string {
         html = `<s class="${strikethroughClass}">${html}</s>`;
         break;
       case "link":
-        html = `<a href="${mark.href}" class="${linkClass}">${html}</a>`;
+        html = `<a href="${mark.href}"${mark.newTab ? ' target="_blank"' : ""} class="${linkClass}">${html}</a>`;
         break;
     }
   }
@@ -293,8 +293,14 @@ export function domToInlineNodes(el: Node): InlineNode[] {
         // page URL, so a bare "google.com" would come back as
         // "http://localhost:3000/edit/google.com". Links are normalised to an
         // absolute URL on apply (see normalizeLinkHref), so this round-trips.
+        // `target="_blank"` carries the new-tab flag through the DOM.
         const href = el.getAttribute("href");
-        if (href) nextMarks.push({ type: "link", href });
+        if (href)
+          nextMarks.push(
+            el.getAttribute("target") === "_blank"
+              ? { type: "link", href, newTab: true }
+              : { type: "link", href },
+          );
       } else if (el.tagName === "SPAN" && el.hasAttribute("data-sidenote-id")) {
         nextMarks.push({
           type: "sidenote",
@@ -852,20 +858,21 @@ export function transformMarksInRange(
 export function findLinkRangeAt(
   nodes: InlineNode[],
   offset: number,
-): { start: number; end: number; href: string } | null {
+): { start: number; end: number; href: string; newTab: boolean } | null {
   // Precompute each node's [start, end) bounds and link href (if any).
   const spans = nodes.map((node) => {
     const link = (node.marks ?? []).find((m) => m.type === "link");
     return {
       len: node.text.length,
       href: link?.type === "link" ? link.href : null,
+      newTab: link?.type === "link" && link.newTab === true,
     };
   });
   let pos = 0;
   const bounds = spans.map((s) => {
     const start = pos;
     pos += s.len;
-    return { start, end: pos, href: s.href };
+    return { start, end: pos, href: s.href, newTab: s.newTab };
   });
 
   // Locate the link-bearing node the caret sits in (endpoints count as inside).
@@ -887,7 +894,7 @@ export function findLinkRangeAt(
   ) {
     end = bounds[i].end;
   }
-  return { start, end, href };
+  return { start, end, href, newTab: bounds[hitIndex].newTab };
 }
 
 /**
@@ -3180,6 +3187,8 @@ interface ToolbarState {
   range: { start: number; end: number };
   /** Existing link href (link-view / link-edit). */
   href?: string;
+  /** Whether the existing link opens in a new tab (link-view / link-edit). */
+  newTab?: boolean;
   /** Target sidenote id (sidenote-view). */
   sidenoteId?: string;
   /** Mark types the selection fully carries (drives active button state). */
@@ -4876,6 +4885,7 @@ export function ArticleEditor({
         rect: selectionAnchorRect(el, range, offsets),
         range: { start: link.start, end: link.end },
         href: link.href,
+        newTab: link.newTab,
         activeMarks: new Set(),
       });
       return;
@@ -4972,11 +4982,12 @@ export function ArticleEditor({
       rect: linkRange ? rectFromRange(linkRange) : toolbar.rect,
       range: off,
       href: existing?.href,
+      newTab: existing?.newTab,
       activeMarks: new Set(),
     });
   }
 
-  function handleApplyLink(href: string) {
+  function handleApplyLink(href: string, newTab: boolean) {
     if (!toolbar) return;
     const { index, range } = toolbar;
     const el = blockRefs.current[index];
@@ -4993,7 +5004,9 @@ export function ArticleEditor({
       range.end,
       (marks) => [
         ...marks.filter((m) => m.type !== "link"),
-        { type: "link", href: normalized } as Mark,
+        (newTab
+          ? { type: "link", href: normalized, newTab: true }
+          : { type: "link", href: normalized }) as Mark,
       ],
     );
     el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
@@ -5597,6 +5610,7 @@ export function ArticleEditor({
           rect={toolbar.rect}
           activeMarks={toolbar.activeMarks}
           linkHref={toolbar.href}
+          linkNewTab={toolbar.newTab}
           onToggleMark={handleToggleMark}
           onStartLink={handleStartLink}
           onApplyLink={handleApplyLink}

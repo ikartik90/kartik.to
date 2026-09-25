@@ -40,6 +40,38 @@ describe("ArticleRenderer", () => {
       );
     });
 
+    it("opens a new-tab button in a new tab", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "button_link",
+              text: "Book a call",
+              href: "https://cal.com/kartik",
+              newTab: true,
+            },
+          ])}
+        />,
+      );
+      const link = within(container).getByRole("link", { name: "Book a call" });
+      expect(link.getAttribute("target")).toBe("_blank");
+    });
+
+    // A sticky button's row pins it in view within the article.
+    it("marks a sticky button's row, and only a sticky one", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            { type: "button_link", text: "Stay", href: "/a", sticky: true },
+            { type: "button_link", text: "Go", href: "/b" },
+          ])}
+        />,
+      );
+      const rows = container.querySelectorAll("[data-button-link]");
+      expect(rows[0].hasAttribute("data-sticky")).toBe(true);
+      expect(rows[1].hasAttribute("data-sticky")).toBe(false);
+    });
+
     // A button with no words or nowhere to go is a draft left in the page,
     // and the reader is shown nothing rather than a dead control.
     it("draws nothing for a button that is not finished", () => {
@@ -789,6 +821,32 @@ describe("ArticleRenderer", () => {
       );
       const link = screen.getByRole("link", { name: "click here" });
       expect(link.getAttribute("href")).toBe("https://example.com");
+      expect(link.getAttribute("target")).toBeNull();
+    });
+
+    it("opens a new-tab link in a new tab", () => {
+      // Scoped to this render's container — the file renders without cleanup.
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "paragraph",
+              children: [
+                {
+                  type: "text",
+                  text: "click here",
+                  marks: [
+                    { type: "link", href: "https://example.com", newTab: true },
+                  ],
+                },
+              ],
+            },
+          ])}
+        />,
+      );
+      const link = within(container).getByRole("link", { name: "click here" });
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     });
 
     it("renders combined bold and italic marks", () => {

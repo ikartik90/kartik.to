@@ -2962,7 +2962,12 @@ describe("findLinkRangeAt", () => {
 
   it("returns the link's bounds and href when the caret is inside it", () => {
     const link = findLinkRangeAt(nodes, 7);
-    expect(link).toEqual({ start: 4, end: 13, href: "https://example.com" });
+    expect(link).toEqual({
+      start: 4,
+      end: 13,
+      href: "https://example.com",
+      newTab: false,
+    });
   });
 
   it("returns null when the caret is outside any link", () => {
@@ -2982,7 +2987,44 @@ describe("findLinkRangeAt", () => {
       start: 0,
       end: 4,
       href: "https://x.io",
+      newTab: false,
     });
+  });
+
+  it("reports whether the link opens in a new tab", () => {
+    const tabbed: InlineNode[] = [
+      {
+        type: "text",
+        text: "ab",
+        marks: [{ type: "link", href: "https://x.io", newTab: true }],
+      },
+    ];
+    expect(findLinkRangeAt(tabbed, 1)?.newTab).toBe(true);
+  });
+});
+
+describe("a new-tab link through the editor's DOM", () => {
+  it("round-trips its flag", () => {
+    const nodes: InlineNode[] = [
+      {
+        type: "text",
+        text: "go",
+        marks: [{ type: "link", href: "https://x.io", newTab: true }],
+      },
+      { type: "text", text: " ", marks: [] },
+      {
+        type: "text",
+        text: "stay",
+        marks: [{ type: "link", href: "https://y.io" }],
+      },
+    ];
+    const el = document.createElement("div");
+    el.innerHTML = inlineNodesToHtml(nodes);
+    const marks = domToInlineNodes(el).map((n) => n.marks ?? []);
+    expect(marks[0]).toEqual([
+      { type: "link", href: "https://x.io", newTab: true },
+    ]);
+    expect(marks[2]).toEqual([{ type: "link", href: "https://y.io" }]);
   });
 });
 
@@ -3108,6 +3150,32 @@ describe("ArticleEditor selection toolbar", () => {
       (n.marks ?? []).some((m: Mark) => m.type === "bold"),
     );
     expect(bolded?.text).toBe("hello");
+  });
+
+  it("applies a new-tab link through the link editor", () => {
+    const block = seedParagraph("click me");
+    block.focus();
+    selectRange(block, 0, 5);
+
+    fireEvent.click(screen.getByLabelText("Add link"));
+    fireEvent.click(screen.getByLabelText("Open in new tab"));
+    const input = screen.getByLabelText("Link URL") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "https://example.com" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const nodes = (
+      useEditorStore.getState().document.content[0] as {
+        children: InlineNode[];
+      }
+    ).children;
+    const linkMark = nodes
+      .flatMap((n) => n.marks ?? [])
+      .find((m: Mark) => m.type === "link");
+    expect(linkMark).toEqual({
+      type: "link",
+      href: "https://example.com",
+      newTab: true,
+    });
   });
 
   it("applies a link through the link editor", () => {
