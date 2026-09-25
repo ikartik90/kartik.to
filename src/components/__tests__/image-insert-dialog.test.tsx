@@ -20,16 +20,7 @@ const asset = (name: string) => ({
   size: 100,
 });
 
-/**
- * A clip under a BARE key — no extension anywhere in the url.
- *
- * Deliberately unnameable, because that is the case this dialog exists to get
- * right. It is the one surface holding an upload rather than a document node,
- * so its only word on the matter is `contentType`; a preview that went back to
- * reading the filename would answer "picture" here and hand a `<video>` source
- * to an `<img>`. The filename keeps its `.mp4` so the row label still looks
- * like a real upload — it must not be what decides.
- */
+// Deliberately extensionless: the dialog must go by `contentType`, not the filename.
 const videoAsset = (name: string) => ({
   key: `media/8f2c-${name}`,
   url: `https://cdn/8f2c-${name}`,
@@ -38,9 +29,7 @@ const videoAsset = (name: string) => ({
   size: 4_000,
 });
 
-/** Per-test overrides merged over the default hook shape. */
 let hookState: Record<string, unknown> = {};
-/** What the dialog asked the hook for — how the selection mode is threaded. */
 let hookOptions: { selectionMode?: string; maxSelection?: number } | undefined;
 
 function defaultHook() {
@@ -103,8 +92,6 @@ describe("ImageInsertDialog", () => {
     render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
 
     expect(screen.getByRole("dialog", { name: "Insert Media" })).toBeDefined();
-    // "Media" throughout, matching the dialog's own noun — the library holds
-    // clips as well as stills, and documents in its other half.
     await user.click(screen.getByRole("button", { name: "Delete media" }));
     expect(mockDeleteSelectedAsset).toHaveBeenCalledOnce();
   });
@@ -114,22 +101,13 @@ describe("ImageInsertDialog", () => {
     render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
 
     const field = screen.getByRole("textbox", { name: "File name" });
-    // The original upload name, not the uuid-stamped storage key.
     expect((field as HTMLInputElement).value).toBe("favicon.png");
 
-    // Clicking straight into the name lets you edit it, like the alt field.
-    // (The hook is mocked, so the controlled value stays put — what matters is
-    // that the edit is reported.)
+    // The hook is mocked, so the value stays put; only the reported edit matters.
     await user.type(field, "X");
     expect(mockUpdateFilename).toHaveBeenCalledWith("favicon.pngX");
   });
 
-  // The dialog holds an ASSET, not a media node, so it has no `kind` field to
-  // read — it derives one from the content type the upload was validated
-  // against (`mediaKindOf`). Asserted on the ELEMENT rather than on that
-  // derivation, because a preview is only correct if a clip is playable: an
-  // `<img>` pointed at an mp4 is a broken picture, and it is broken in exactly
-  // the library where you go to check what you are about to insert.
   it("previews a clip as a <video>, from its content type and not its url", () => {
     hookState = {
       assets: [videoAsset("demo")],
@@ -141,8 +119,6 @@ describe("ImageInsertDialog", () => {
     const clip = document.querySelector("video");
     expect(clip).not.toBeNull();
     expect(clip?.getAttribute("src")).toBe("https://cdn/8f2c-demo");
-    // Both surfaces fork, and the thumbnail is the one a caller is likeliest to
-    // leave behind — it is decorative, so nothing about it reads as wrong.
     expect(document.querySelectorAll("video")).toHaveLength(2);
     expect(document.querySelector("img")).toBeNull();
   });
@@ -233,8 +209,6 @@ describe("ImageInsertDialog (multi-select)", () => {
     expect(screen.getByRole("button", { name: "Insert 2 Media" })).toBeDefined();
   });
 
-  // "Media" is a mass noun, so the count rides along without inflecting the way
-  // "1 Image / 2 Images" did.
   it("leaves the noun alone for one file", () => {
     hookState = { selectedKeys: ["media/a.png"] };
     renderMultiple();
@@ -263,9 +237,6 @@ describe("ImageInsertDialog (multi-select)", () => {
     ]);
   });
 });
-// ---------------------------------------------------------------------------
-// A drop is a batch — the picker and the drop zone both take several files
-// ---------------------------------------------------------------------------
 
 describe("ImageInsertDialog (uploading)", () => {
   const file = (name: string) => new File(["x"], name, { type: "image/png" });
@@ -275,12 +246,9 @@ describe("ImageInsertDialog (uploading)", () => {
     render(<ImageInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
   };
 
-  /** The drop zone — a div with a button role, named by its own hint. */
   const dropZone = () =>
     screen.getByText(/Drag and drop/).closest('[role="button"]')!;
 
-  // Picking five and inserting one is an ordinary thing to want: the library
-  // is where files live, not a queue of exactly what this block needs.
   it("lets the file picker take more than one file", () => {
     renderUploading();
     const input = document.querySelector('input[type="file"]');
@@ -303,7 +271,6 @@ describe("ImageInsertDialog (uploading)", () => {
     expect(screen.getByText("Uploading 2 of 3")).toBeDefined();
   });
 
-  // One file is the shortest batch, and counting it would be noise.
   it("counts nothing when there is only one file", () => {
     renderUploading({ phase: "uploading", uploadIndex: 1, uploadTotal: 1 });
     expect(screen.queryByText(/Uploading 1 of/)).toBeNull();

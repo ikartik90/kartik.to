@@ -1,9 +1,6 @@
 import { expect, test } from "./fixtures";
 
-// `ControlOrMeta` rather than `Meta`: the palette answers to ⌘ on Apple
-// hardware and to Ctrl everywhere else, so a spec pressing one of them is only
-// true on half the machines this suite runs on — a developer's Mac locally, a
-// Linux runner in CI. Playwright's modifier resolves the same way the app does.
+// `ControlOrMeta`, not `Meta`: the palette opens on ⌘ on Apple hardware and Ctrl elsewhere.
 test.describe("command palette", () => {
   test("opens on the platform's shortcut and closes on Escape", async ({
     page,
@@ -14,11 +11,6 @@ test.describe("command palette", () => {
     const palette = page.getByRole("dialog", { name: "Command palette" });
     await expect(palette).toBeHidden();
 
-    // The chip and the listener are one fact — whichever key opens the palette
-    // is the key the header offers — so the browser's platform has to be
-    // readable from both ends. `process.platform` is what `ControlOrMeta`
-    // resolves against, and (with the descriptor's UA override dropped in the
-    // config) what the page reads too.
     await expect(page.locator("[data-site-menu-shortcut]")).toHaveText(
       process.platform === "darwin" ? "⌘K" : "Ctrl K",
     );
@@ -37,8 +29,7 @@ test.describe("command palette", () => {
     await page.goto("/");
     await page.keyboard.press("ControlOrMeta+k");
 
-    // Scoped to the dialog: the gutter's theme control offers the same act in
-    // the same words, so its resting tooltip answers to this text too.
+    // Scoped to the dialog: the gutter's theme tooltip has the same text.
     const palette = page.getByRole("dialog", { name: "Command palette" });
 
     await page.getByPlaceholder("Search…").fill("theme");
@@ -55,9 +46,6 @@ test.describe("command palette", () => {
     await page.keyboard.press("ControlOrMeta+k");
 
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
-    // Admin-only groups are gated on a client-side session; a logged-out
-    // visitor must never see them, which is the same invariant the 404 mask
-    // enforces server-side.
     await expect(page.getByText("New Blog Article")).toBeHidden();
     await expect(page.getByText("Publish")).toBeHidden();
   });
@@ -70,8 +58,6 @@ test.describe("theme", () => {
   }) => {
     await page.goto("/");
 
-    // `colorScheme: light` is pinned in the config, so `system` resolves light
-    // and the offered command is deterministic.
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
     await page.keyboard.press("ControlOrMeta+k");
@@ -82,8 +68,6 @@ test.describe("theme", () => {
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-    // The inline <head> script re-applies the persisted mode before first
-    // paint; if it regresses the page reloads light and flashes.
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
@@ -96,8 +80,7 @@ test.describe("theme", () => {
   }) => {
     await page.goto("/");
 
-    // Scoped to the banner because the palette offers the same act in the same
-    // words — this is the control in the header's right-hand gutter.
+    // Scoped to the banner: the palette offers the same command text.
     const gutter = page.getByRole("banner");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
@@ -106,8 +89,6 @@ test.describe("theme", () => {
       .click();
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    // It names the theme it OFFERS, so flipping the page has to rename it —
-    // a control still offering dark on a dark page is the regression here.
     await expect(
       gutter.getByRole("button", { name: "Light theme" }),
     ).toBeVisible();

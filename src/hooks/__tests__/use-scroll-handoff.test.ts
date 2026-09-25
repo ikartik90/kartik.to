@@ -4,21 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SCROLL_BOUNDARY_ATTR, useScrollHandoff } from "../use-scroll-handoff";
 
 interface BoxOptions {
-  /** Visible height. */
   height?: number;
-  /** Scrollable content height. */
   content?: number;
-  /** Where it is parked. */
   top?: number;
-  /** `overscroll-behavior-y: contain` — a popover or a dialog. */
+  /** `overscroll-behavior-y: contain`, as a popover or dialog has. */
   sealed?: boolean;
 }
 
-/**
- * A scroll box jsdom will answer questions about. There is no layout here, so
- * the metrics are stated rather than measured; `scrollTop` is a plain writable
- * property so the hook's assignment lands the way it would in a browser.
- */
+/** jsdom has no layout, so metrics are stated; `scrollTop` is writable so the hook's writes land. */
 function scroller({
   height = 100,
   content = 300,
@@ -108,8 +101,6 @@ describe("useScrollHandoff", () => {
   });
 
   it("keeps the page still under a sealed surface", () => {
-    // A popover: its own scroller is spent, the popover is spent, and the page
-    // behind must not start moving.
     const [page, popover, list] = nest(
       scroller(),
       scroller({ top: 200, sealed: true }),
@@ -152,8 +143,6 @@ describe("useScrollHandoff", () => {
   });
 
   it("stops at a clipping shell that declares itself a boundary", () => {
-    // A popover: it clips rather than scrolls, so `overscroll-behavior` has
-    // nothing to apply to and the shell marks the edge with an attribute.
     const shell = document.createElement("div");
     shell.setAttribute(SCROLL_BOUNDARY_ATTR, "");
     const [page, , list] = nest(scroller(), shell, scroller({ top: 200 }));

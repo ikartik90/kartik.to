@@ -171,9 +171,6 @@ describe("iconLabelFor", () => {
   });
 
   it("leaves the rest of the name exactly as it was stored", () => {
-    // Not prettified: the label names the FILE, and a tooltip reading
-    // "chevron down" over a file called `chevron-down.svg` is a small lie
-    // about what a download will be called.
     expect(iconLabelFor("arrow-up-right.svg")).toBe("arrow-up-right");
   });
 
@@ -218,8 +215,6 @@ describe("matchesIconName", () => {
   });
 
   it("ignores the extension, which every icon shares", () => {
-    // Every name ends `.svg`, so a query of "svg" that matched everything
-    // would be a search box that never narrows anything.
     expect(matchesIconName("check.svg", "svg")).toBe(false);
   });
 
@@ -238,24 +233,14 @@ describe("the settings the grid opens on", () => {
   it("opens on the middle of each scale — the set's own size and weight", () => {
     expect(DEFAULT_ICON_SETTINGS.size).toBe(20);
     expect(DEFAULT_ICON_SETTINGS.stroke).toBe(1.25);
-    // True size, which is what the grid is for; the zoom is opt-in.
     expect(DEFAULT_ICON_SETTINGS.zoom).toBe(1);
   });
 
   it("gives size and stroke the same NUMBER of steps, so they can be tied", () => {
-    // The lock is index parity — step 7 of one scale against step 7 of the
-    // other — so the two scales having the same length is not a coincidence
-    // to be enjoyed but the invariant the tie rests on. Shorten either and
-    // `iconSettingsLockedTo` starts handing back the value it was given.
     expect(ICON_STROKES).toHaveLength(ICON_SIZES.length);
   });
 
   it("steps evenly, so all three scales can be sliders", () => {
-    // Even steps are what lets each be a real scale rather than a segmented
-    // control dressed as one: 4px, 0.25px and half a multiple of true size,
-    // the whole way along. The house pairings still fall on stops (16 at 1,
-    // 20 at 1.25, 24 at 1.5), they are simply no longer the only ones — and
-    // on the same STEP of each scale, which is what the lock ties together.
     expect(ICON_SIZES).toEqual([
       16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64,
     ]);
@@ -281,8 +266,6 @@ describe("an icon's name and the words it answers to", () => {
   });
 
   it("leaves a word's own spelling alone past its first letter", () => {
-    // Only the first letter is decided here. A file that arrived camelCased
-    // knows its own shape better than a rule about hyphens does.
     expect(iconTitleFrom("myIcon.svg")).toBe("MyIcon");
     expect(iconTitleFrom("QR-code.svg")).toBe("QR Code");
   });
@@ -302,19 +285,13 @@ describe("an icon's name and the words it answers to", () => {
     expect(matchesIcon(icon, "chevron")).toBe(true);
     expect(matchesIcon(icon, "Chevron Down")).toBe(true);
     expect(matchesIcon(icon, "caret")).toBe(true);
-    // Part of an alias, as with a name: the box filters while you type.
     expect(matchesIcon(icon, "exp")).toBe(true);
-    // Terms may come from different aliases — they are one bag of words.
     expect(matchesIcon(icon, "arrow caret")).toBe(true);
     expect(matchesIcon(icon, "sparkle")).toBe(false);
-    // An empty box means the set, not nothing.
     expect(matchesIcon(icon, "  ")).toBe(true);
   });
 
   it("keeps an alias list to one of each, in the spelling first given", () => {
-    // The same word twice on ONE icon says nothing the first one did not.
-    // Two different icons sharing an alias is the whole point of aliases,
-    // and nothing here touches that.
     expect(cleanIconAliases([" Arrow ", "arrow", "ARROW", "Caret"])).toEqual([
       "Arrow",
       "Caret",
@@ -329,12 +306,6 @@ describe("an icon's name and the words it answers to", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Aliases across a SELECTION. A tag is worth having because it names a family,
-// and naming a family one icon at a time is how you end up with eleven marks
-// under `arrow` and a twelfth under `arrows`.
-// ---------------------------------------------------------------------------
-
 describe("aliases over several icons at once", () => {
   it("shows only the words every one of them answers to", () => {
     expect(
@@ -347,8 +318,6 @@ describe("aliases over several icons at once", () => {
   });
 
   it("keeps the first icon's spelling and order, not the others'", () => {
-    // They are the same tag however it was typed, and the list has to be shown
-    // in ONE spelling — the first is as good as any and is stable.
     expect(commonIconAliases([["Arrow"], ["ARROW"]])).toEqual(["Arrow"]);
   });
 
@@ -363,10 +332,6 @@ describe("aliases over several icons at once", () => {
 });
 
 describe("applyAliasEdit", () => {
-  // `base` is what was on screen when the editing began — the common list —
-  // and `draft` is what it says now. An icon's OWN words are the ones that
-  // were never shown, and nothing done to the common list may disturb them.
-
   it("adds a word to every icon, keeping what each already had", () => {
     expect(applyAliasEdit(["Arrow", "Private"], ["Arrow"], ["Arrow", "Caret"]))
       .toEqual(["Arrow", "Private", "Caret"]);
@@ -379,9 +344,6 @@ describe("applyAliasEdit", () => {
   });
 
   it("renames a common word on every icon that had it", () => {
-    // A rename is a remove and an add, and the result cannot tell them apart:
-    // the new word lands at the end rather than in the old one's place. The
-    // icon's own words keep their order, which is the part worth keeping.
     expect(applyAliasEdit(["Arrow", "Private"], ["Arrow"], ["Caret"])).toEqual([
       "Private",
       "Caret",
@@ -389,8 +351,6 @@ describe("applyAliasEdit", () => {
   });
 
   it("is the draft itself when the icon is the only one selected", () => {
-    // One icon: its own list IS the common list, so nothing is hidden and the
-    // draft is the whole answer — which is what the single-icon panel does.
     expect(applyAliasEdit(["A", "B"], ["A", "B"], ["A", "C"])).toEqual(["A", "C"]);
   });
 
@@ -410,9 +370,6 @@ describe("size and stroke, tied together", () => {
   const at = (size: number, stroke: number) => ({ size, stroke, zoom: 1 });
 
   it("takes the stroke standing at the same step as the size", () => {
-    // 16 is the first size and 1 the first stroke; 64 is the thirteenth and
-    // 4 the thirteenth. The pairing the set is authored to — 20 at 1.25 — is
-    // step two of both, which is why the grid opens already tied.
     expect(iconSettingsLockedTo(at(16, 3), "size")).toMatchObject({ size: 16, stroke: 1 });
     expect(iconSettingsLockedTo(at(20, 3), "size")).toMatchObject({ size: 20, stroke: 1.25 });
     expect(iconSettingsLockedTo(at(64, 1), "size")).toMatchObject({ size: 64, stroke: 4 });
@@ -424,7 +381,6 @@ describe("size and stroke, tied together", () => {
   });
 
   it("carries the rest of the settings through untouched", () => {
-    // The zoom is a magnifying glass and no part of the tie.
     expect(iconSettingsLockedTo({ size: 64, stroke: 1, zoom: 2.5 }, "size")).toEqual({
       size: 64,
       stroke: 4,
@@ -433,10 +389,6 @@ describe("size and stroke, tied together", () => {
   });
 
   it("hands back a pair it cannot place rather than guessing at one", () => {
-    // Nothing on the page produces an off-scale value — both sliders are
-    // stepped — so a value that is not a stop arrived from somewhere that
-    // was not asked, and snapping it would be this function inventing a
-    // setting the reader never chose.
     const odd = at(21, 1.3);
     expect(iconSettingsLockedTo(odd, "size")).toBe(odd);
     expect(iconSettingsLockedTo(odd, "stroke")).toBe(odd);

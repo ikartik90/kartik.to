@@ -10,23 +10,7 @@ import { useWalkthrough, WalkthroughTip } from "./walkthrough";
 import EditIcon from "./icons/edit.svg";
 import CloseIcon from "./icons/close.svg";
 
-// ---------------------------------------------------------------------------
-// Edit, and the drawer it slides in from the right edge of the window.
-//
-// A native modal <dialog> (see `useModal`). Local rather than the site's
-// `Dialog`: that one scales in over a blurred backdrop in the site's own
-// colours, and this is the product's drawer — no scrim, only its shadow.
-//
-// It edits the criteria running, and closes on saving them. Pressing Edit is
-// the walkthrough's first step, and its tip points here; closing the drawer
-// before the walkthrough is through with it goes back to that step.
-//
-// It slides in from `@starting-style`, and out while `data-closing`. Reduced
-// motion needs nothing here: globals.css cuts every transition to a hair for
-// it, so the drawer appears in place and closes a frame after it is asked to.
-// ---------------------------------------------------------------------------
-
-// Slides far enough to take the close tab and the shadow off-screen with it.
+// Past the close tab (40px) and its shadow (10px).
 const OFFSCREEN = "translateX(calc(100% + 40px + 10px))";
 
 const drawerStyle = css({
@@ -53,18 +37,14 @@ const drawerStyle = css({
   transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
   "&[open]": { display: "flex", transform: "none" },
   _starting: { "&[open]": { transform: OFFSCREEN } },
-  // Out faster than in, and accelerating away rather than settling.
   "&[open][data-closing]": {
     transform: OFFSCREEN,
     transition: "transform 200ms cubic-bezier(0.64, 0, 0.78, 0)",
   },
-  // No scrim: the product lays the drawer over the page with its shadow alone.
-  // The site blurs every dialog's backdrop (globals.css), so that is undone.
+  // No scrim, and the site-wide backdrop blur (globals.css) undone.
   "&::backdrop": {
     backgroundColor: "transparent",
-    // `backdropFilter` reaches the page as the prefixed property alone, which
-    // Chromium ignores. The raw key — the one the config's recipes use — comes
-    // out as both. The types reject it; the extractor does not.
+    // Raw key: `backdropFilter` emits only the prefixed property, which Chromium ignores.
     // @ts-expect-error -- raw CSS property, see above
     "backdrop-filter": "none",
   },
@@ -97,9 +77,7 @@ export function EditCriteria({
   running,
   onSave,
 }: {
-  /** The criteria running, which the drawer opens on. */
   running: DraftCriterion[];
-  /** Run these from now on. */
   onSave: (criteria: DraftCriterion[]) => void;
 }) {
   const walkthrough = useWalkthrough();
@@ -140,8 +118,6 @@ export function EditCriteria({
         >
           <CloseIcon aria-hidden />
         </button>
-        {/* Remounted on every opening with a fresh draft — so however it was
-            last closed, nothing typed survives. */}
         {drawer.session > 0 && (
           <CriteriaDrawer
             key={drawer.session}

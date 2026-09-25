@@ -30,34 +30,14 @@ import CriterionIcon from "./icons/document-check.svg";
 import AddIcon from "./icons/add.svg";
 import MenuChevron from "./icons/chevron-down-accent.svg";
 
-// ---------------------------------------------------------------------------
-// The intro's pictures, as Figma draws them: on the title page, every benchmark
-// candidate's ring (147:8677); then pieces of the product laid over a
-// lilac-to-rose wash and cut off by its bottom edge, each showing what its page
-// says — the review card with the new criterion flagged, its prompts sketched
-// as bars, and a candidate it turns away (133:6248); the results table
-// (134:6311); the drawer's resume criteria with the rewrite that fixes New Logo
-// Acquisition (134:6823). The product's own parts wherever it has them, and
-// benchmarked as the drawer tests the criteria — new one on top, so every ring
-// reads in the list's order. Pictures only: out of the accessibility tree, and
-// inert.
-// ---------------------------------------------------------------------------
-
 const nothing = () => {};
 
-// Too narrow for the pieces side by side, in a dialog on a phone: they step
-// down instead, below the dialog's close button.
 const NARROW = "@container (max-width: 520px)";
 
-/**
- * The four criteria as the drawer tests them once the custom one is added — on
- * top — and their benchmark, whose rings follow that order.
- */
 const TESTED = [CUSTOM_CRITERION, ...STARTING_CRITERIA];
 const ROWS = benchmark(TESTED.map(({ id, prompt }) => ({ id, prompt })));
 const DANA = ROWS.find((row) => row.id === "dana")!;
 
-// The text under it draws the rule between them.
 const coverStyle = css({
   position: "relative",
   containerType: "inline-size",
@@ -68,10 +48,6 @@ const coverStyle = css({
     "linear-gradient(108.43deg, var(--cashby-cover-lilac) 0%, var(--cashby-cover-rose) 94.444%)",
 });
 
-// A piece of the product, lifted off the wash, white under whatever it draws.
-// A card is rounded small and outlined, the outline drawn over what it holds as
-// the product draws its own (Figma 133:6248); the results table is rounded as
-// the results' panel is, and edged by its shadow alone (Figma 134:6311).
 const panel = cva({
   base: {
     position: "absolute",
@@ -93,20 +69,17 @@ const panel = cva({
         },
       },
       table: { borderRadius: "12px" },
-      // The drawer's card draws its own band and outline (Figma 134:6823).
       drawerCard: { borderRadius: "16px" },
     },
   },
   defaultVariants: { shape: "card" },
 });
 
-// A titled one: the band is the product's translucent grey, over the white.
 const bandedStyle = css({
   backgroundImage: "linear-gradient(var(--cashby-fill), var(--cashby-fill))",
 });
 
-// The product's own parts, drawn: a rewrite's Apply here is not the one the
-// walkthrough points at.
+// NoWalkthrough, so no tip anchors to a pictured control.
 function Cover({ children }: { children: ReactNode }) {
   return (
     <div data-cover="" aria-hidden inert className={coverStyle}>
@@ -115,15 +88,12 @@ function Cover({ children }: { children: ReactNode }) {
   );
 }
 
-// --- Benchmarking AI review criteria ----------------------------------------
-
 const OUTCOME_GROUP: Record<KnownOutcome, string> = {
   hired: "Past hires",
   "archived-interview": "Archived after interview",
   "archived-application-review": "Archived at application review",
 };
 
-// Over the title page's own wash, which runs on under its text.
 const titleCoverStyle = css({
   display: "flex",
   alignItems: "center",
@@ -139,7 +109,6 @@ const outcomesStyle = css({
   paddingBlockStart: "20px",
 });
 
-// Its label over it, clear of the rings.
 const outcomeGroupStyle = css({
   position: "relative",
   display: "flex",
@@ -157,7 +126,6 @@ const outcomeGroupLabelStyle = css({
   whiteSpace: "nowrap",
 });
 
-// Drawn over the gap, taking none of it, as Figma's zero-width rule does.
 const outcomeRuleStyle = css({
   flexShrink: 0,
   width: "var(--cashby-rule)",
@@ -172,13 +140,9 @@ const outcomeCandidateStyle = css({
   alignItems: "center",
 });
 
-// A box of its own, so the ring (an inline span) takes its size.
+// A flex box, so the ring (an inline span) takes its size.
 const outcomeRingStyle = css({ display: "flex", padding: "8px" });
 
-/**
- * The benchmark at a glance: each candidate's ring, grouped by how they are
- * known to have ended, and marked under it where the criteria get them wrong.
- */
 export function TitleCover() {
   return (
     <div data-cover="" aria-hidden inert className={titleCoverStyle}>
@@ -208,9 +172,7 @@ export function TitleCover() {
   );
 }
 
-// --- AI criteria can silently exclude strong candidates ---------------------
-
-/** Each criterion's prompt, sketched on the review card as two bars this wide. */
+/** Widths (px) of the two bars sketching each prompt. */
 const PROMPT_BARS: Record<string, readonly number[]> = {
   [CUSTOM_CRITERION.id]: [321, 73.8],
   "full-cycle": [278, 125],
@@ -237,7 +199,6 @@ const candidatePanelStyle = css({
   },
 });
 
-// The review card's band: its title set 12px in, with no box of its own.
 const reviewHeaderStyle = css({
   display: "flex",
   alignItems: "center",
@@ -248,9 +209,6 @@ const reviewHeaderStyle = css({
   borderBlockEndColor: "var(--cashby-border)",
 });
 
-// A row of the card: white, or washed and ruled in the caution colour where it
-// is flagged; a glyph in its margin, or the wider margin of a ring. The last
-// row goes unruled: the card's outline closes it.
 const row = cva({
   base: {
     position: "relative",
@@ -297,7 +255,7 @@ const rowGlyphStyle = css({
   insetInlineStart: "8px",
 });
 
-// A box of its own, so the ring (an inline span) takes its size.
+// A flex box, so the ring (an inline span) takes its size.
 const rowRingStyle = css({
   position: "absolute",
   display: "flex",
@@ -305,7 +263,6 @@ const rowRingStyle = css({
   insetInlineStart: "8px",
 });
 
-// A prompt's line, sketched: a rounded bar in the middle of a line's height.
 const barLineStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -367,7 +324,6 @@ const verdictNoteStyle = css({
   color: "var(--cashby-caution-ink)",
 });
 
-/** The review card with the new criterion flagged, and a strong fit it turns away. */
 export function BlindCover() {
   return (
     <Cover>
@@ -429,11 +385,6 @@ export function BlindCover() {
   );
 }
 
-// --- Test your criteria against talent with known outcomes ------------------
-
-// The results as the product shows them (Figma 139:7502): two hires, one the
-// criteria exclude, then two archived, one they let through. It runs off the
-// right edge, as the table runs on past the window in the product.
 const KNOWN_OUTCOME_ROWS = ["renee", "dana", "sam", "tomas"].map(
   (id) => ROWS.find((row) => row.id === id)!,
 );
@@ -445,7 +396,6 @@ const tablePanelStyle = css({
   [NARROW]: { insetBlockStart: "52px", insetInlineStart: "24px" },
 });
 
-/** How the first four candidates came out, against what really happened. */
 export function KnownOutcomesCover() {
   const tableId = useId();
   return (
@@ -479,11 +429,6 @@ export function KnownOutcomesCover() {
   );
 }
 
-// --- Walk through an example ------------------------------------------------
-
-// The drawer's resume criteria once the test has found what to fix (Figma
-// 134:6823): up to date, New Logo Acquisition on top with its rewrite, and the
-// rest of the list running on under the edge.
 const drawerPanelStyle = css({
   insetBlockStart: "42px",
   insetInlineStart: "59px",
@@ -493,7 +438,6 @@ const drawerPanelStyle = css({
 
 const drawerActionsStyle = css({ gap: "8px" });
 
-/** The criterion found at fault, and the rewrite that fixes it. */
 export function ExampleCover() {
   const fieldId = useId();
   const [rewrite] = suggestedRewrites(ROWS);

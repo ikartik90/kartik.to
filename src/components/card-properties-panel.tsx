@@ -25,164 +25,65 @@ import LinkIcon from "@/assets/icons/link.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import TitleIcon from "@/assets/icons/title.svg";
 
-// ---------------------------------------------------------------------------
-// CardPropertiesPanel — everything about one card of the homepage grid that
-// its toolbar cannot say in icons, in the docked inspector the collection
-// editor already uses for a picture (Figma 845:7223).
-//
-// The same panel for every card, and deliberately so: a post, a project and a
-// published demo are all cards, and giving each its own inspector would be
-// three surfaces to open from one button. What differs is WHICH sections are
-// on it, which is decided by what the card can actually carry — the log
-// control is here only for a card that has log output to show, the three
-// link-card sections only for the card they author, and a post gets the parts
-// of those it cannot derive from itself — its picture, its scrim, and the one
-// line of caption it does not already write.
-//
-// A live editor, not a form. Every control commits on change and the parent
-// owns the value, exactly as `MediaPropertiesPanel` does, so the card behind
-// the panel is always showing what the panel says. Nothing is written to the
-// database on the way through: the grid is edited as a draft and the palette's
-// two exits either commit it or throw it away.
-//
-// Most cards will grow properties of their own here. Until they do, a card
-// whose sections are all absent gets a note saying so rather than a blank
-// panel, which reads as one that failed to load.
-// ---------------------------------------------------------------------------
-
-/** The two states, in the drawn order — the affirmative first, as `FITS` is. */
 const LOG_VISIBILITY = [
   { value: "show", label: "Show" },
   { value: "hide", label: "Hide" },
 ];
 
-/**
- * The band's tone, with the reader's own theme first.
- *
- * "Auto" is a real choice rather than the absence of one, which is why it is a
- * segment and not the empty state of a two-segment control: a post's tile
- * follows the reader and a link card is allowed to as well — an illustration
- * authored for both themes wants exactly that. The other two PIN the band, for
- * a cover that is a screenshot of one appearance and does not change when the
- * page does. See the `linkCard` recipe's `tone` variant.
- */
+/** "Auto" follows the reader's theme; the other two pin the band. */
 const TONES = [
   { value: "auto", label: "Auto" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ];
 
-/** The three sorts of destination, in the order the rail lists them. */
 const LINK_KINDS: { value: LinkTargetKind; label: string }[] = [
   { value: "internal", label: "Internal" },
   { value: "external", label: "External" },
   { value: "document", label: "Document" },
 ];
 
-/** What a card's log output can be told to do, when it has any. */
 export interface CardLoggerProperty {
-  /** Whether the card is currently drawn with its log panel. */
   shown: boolean;
   onShownChange: (shown: boolean) => void;
 }
 
-/** Which of the two theme slots a picture is being chosen for. */
 export type CardMediaSlot = "light" | "dark";
 
-/** The link card this panel authors — see the section comments below. */
 export interface CardLinkCardProperty {
-  /** The card as it currently stands, drafts and all. */
   config: LinkCardConfig;
-  /**
-   * The WHOLE configuration, replacing what was there.
-   *
-   * Not a patch, and that is what makes removing a section possible: a section
-   * the author closed has to arrive as an absent key, and a merge would fall
-   * through to the stored value forever. See `GridDraft.props`.
-   */
+  /** The whole configuration, not a patch: a closed section must arrive as an absent key. */
   onChange: (config: LinkCardConfig) => void;
-  /**
-   * Asks for the media library, for one of the two theme slots.
-   *
-   * The rail emits the INTENT and the grid owns the dialog. It has to: this
-   * panel is a portalled, fixed surface with its own outside-press dismiss, and
-   * a modal opened from inside it would be a second surface fighting the first
-   * for every press. Same division the collection editor makes.
-   */
+  /** The grid owns the dialog: a modal opened inside this portalled panel would fight it for presses. */
   onPickMedia: (slot: CardMediaSlot) => void;
-  /** Asks for the document library — the same division as `onPickMedia`. */
   onPickDocument: () => void;
 }
 
-/**
- * A post's card — what this panel authors about a tile the post otherwise
- * draws for itself. See `PostCardConfigSchema` for what that is and is not.
- */
 export interface CardPostCardProperty {
-  /** The card as it currently stands, drafts and all. */
   config: PostCardConfig;
-  /**
-   * The picture the document gives the card — what the Media section starts
-   * from when it is opened, so taking the picture over begins from the picture
-   * the card is already wearing rather than from a blank.
-   */
+  /** The document's picture, which the Media section starts from when opened. */
   cover: MediaNode | null;
-  /**
-   * The meta line the POST gives the card — an article's publication date —
-   * and null for one it files under nothing.
-   *
-   * It decides whether the Meta row is offered at all, rather than what the
-   * row starts from. The post's own line wins on the card (see `PostCard`), so
-   * a row over a dated tile would be a field you could type into and never see
-   * the result of — and a row this rail offers is a row that changes the card.
-   */
+  /** The post's own meta line; when set, no Meta row is offered, since the post's line wins on the card. */
   meta: string | null;
-  /** The WHOLE configuration, replacing what was there — as the link card's. */
+  /** The whole configuration, not a patch. */
   onChange: (config: PostCardConfig) => void;
-  /** Asks for the media library, for one of the two theme slots. */
   onPickMedia: (slot: CardMediaSlot) => void;
 }
 
 export interface CardPropertiesPanelProps {
-  /**
-   * The card's log output — absent when it has none.
-   *
-   * One optional object rather than a `supportsLogger` boolean beside a value
-   * and a handler: the three are meaningless apart, and this way a card that
-   * cannot log has no state to be half-specified with.
-   */
   logger?: CardLoggerProperty;
-  /** The card's own content — absent for every card that is not a link card. */
   linkCard?: CardLinkCardProperty;
-  /** A post's picture, line and scrim — absent for a card that is not a post. */
   postCard?: CardPostCardProperty;
-  /** Fired once the panel has finished sliding out — see PropertiesPanel. */
+  /** Fired once the panel has finished sliding out. */
   onDismiss: () => void;
-  /** Handle for closing the panel from the control that opened it. */
   ref?: Ref<PropertiesPanelHandle>;
 }
 
-// Padded to the control panel's own inset, so the note sits where a first row
-// of controls would — it is standing in for them.
 const emptyNoteStyle = css({
   padding: "lg",
   color: "text.body",
 });
 
-/**
- * The picker row's two controls on one line: the button that opens the library,
- * and — once something is in the slot — the one that empties it.
- *
- * The name button takes the slack and truncates, so a long filename cannot push
- * the clear button off the end of a 280px rail.
- */
-/**
- * What a slot's media node hands the {@link ImageInput} — the file, and the two
- * facts about it the thumbnail cannot recover on its own.
- *
- * `poster` is read only off the arm that HAS one: a clip's still is on the
- * video arm of `MediaNodeSchema`, and a picture has no such key to read.
- */
 function slotFile(node: MediaNode | undefined) {
   if (!node) return {};
   return {
@@ -192,7 +93,6 @@ function slotFile(node: MediaNode | undefined) {
   };
 }
 
-/** The site's own pages, listed inline — see `SiteDestination`. */
 const destinationListStyle = css({
   maxHeight: "none",
   width: "token(spacing.full)",
@@ -209,23 +109,12 @@ export function CardPropertiesPanel({
     <PropertiesPanel
       ref={ref}
       ariaLabel="Card properties"
-      // A modal `<dialog>` is not a press OUTSIDE this panel — it is a surface
-      // standing over it, and one this panel's own controls opened. Without the
-      // exemption, choosing a picture for a link card would dismiss the rail
-      // you chose it from, and you would come back to a closed panel every
-      // time. Matched with `closest`, so it covers everything inside the
-      // dialog however deeply nested.
+      // A modal the panel opened is not an outside press, or picking a picture would close the rail.
       ignoreSelector="dialog"
       onDismiss={onDismiss}
     >
       <PropertiesPanel.Header>Card Properties</PropertiesPanel.Header>
 
-      {/* Always on, and headerless with it: a demo that logs HAS log output
-          whether or not it is on show, so there is nothing here for a section
-          header's add/remove pair to mean — `enabled` is held true and the
-          header left off, the way the media panel's layout section is (Figma
-          885:1963). Showing and hiding it is a VALUE, and a value belongs in a
-          labelled row rather than in a section that appears and disappears. */}
       {logger && (
         <PropertiesPanel.Section enabled>
           <PropertiesPanel.ControlPanel ariaLabel="Log output">
@@ -255,16 +144,6 @@ export function CardPropertiesPanel({
   );
 }
 
-/**
- * The three sections that ARE the link card: what it shows, what it says, and
- * where it goes.
- *
- * In that order because it is the order you build one in — you pick the picture
- * first and decide what to write over it second. Every one of them is a
- * `Section`, so the add/remove pair means what it means everywhere else in this
- * inspector: a closed section is a property the card does not have, and closing
- * one takes that property away rather than hiding it.
- */
 function LinkCardSections({
   config,
   onChange,
@@ -273,10 +152,8 @@ function LinkCardSections({
 }: CardLinkCardProperty) {
   const { media, content, link } = config;
 
-  /** Rewrite one section, leaving the other two exactly as they were. */
   const set = (patch: Partial<LinkCardConfig>) => onChange({ ...config, ...patch });
 
-  /** Drop one section — an absent key, which is what a closed section is. */
   const clear = (key: keyof LinkCardConfig) => {
     const next = { ...config };
     delete next[key];
@@ -287,8 +164,6 @@ function LinkCardSections({
     <>
       <MediaSection
         media={media}
-        // From nothing: a link card with no picture is a plate with words on
-        // it, and there is nothing for the section to start from.
         onEnabledChange={(enabled) =>
           enabled ? set({ media: {} }) : clear("media")
         }
@@ -307,7 +182,6 @@ function LinkCardSections({
         <PropertiesPanel.ControlPanel>
           <ContentControls
             content={content ?? {}}
-            // What the scrim's default is read off — see `GroundControls`.
             pictured={Boolean(media?.light || media?.dark)}
             onChange={(next) => set({ content: next })}
           />
@@ -317,10 +191,6 @@ function LinkCardSections({
       <PropertiesPanel.Section
         defaultEnabled={link !== undefined}
         onEnabledChange={(enabled) =>
-          // Internal is where a link starts, because that is what this card was
-          // added for: the pages with no card of their own. The destination
-          // itself stays unset — you choose the SORT of link first and then go
-          // and find it (see `LinkCardLinkSchema`).
           enabled ? set({ link: { kind: "internal" } }) : clear("link")
         }
       >
@@ -339,21 +209,18 @@ function LinkCardSections({
   );
 }
 
-/** The words on the card, and the band they stand on. */
 function ContentControls({
   content,
   pictured,
   onChange,
 }: {
   content: NonNullable<LinkCardConfig["content"]>;
-  /** Whether the card has a picture in either slot — the scrim's default. */
   pictured: boolean;
   onChange: (content: NonNullable<LinkCardConfig["content"]>) => void;
 }) {
   const write = (patch: Partial<typeof content>) => {
     const next = { ...content, ...patch };
-    // An emptied field is an ABSENT field, not an empty string: absent is what
-    // `LinkCard` reads to decide there is no caption to draw at all.
+    // Emptied fields are removed: `LinkCard` reads an absent key as no caption.
     for (const key of ["title", "meta"] as const) {
       if (!next[key]) delete next[key];
     }
@@ -362,9 +229,6 @@ function ContentControls({
 
   return (
     <>
-      {/* Above the title in the panel because it is above the title on the
-          card — a rail whose rows ran the other way round from the tile behind
-          it would be describing a different card. */}
       <TextControl
         label="Meta"
         placeholder="Playground"
@@ -379,27 +243,12 @@ function ContentControls({
         onChange={(title) => write({ title })}
       />
 
-      {/* The ground under the words. Values rather than a section of their
-          own, because a card can legitimately want words with no scrim — over
-          a picture that is already flat where the caption sits — and "no
-          scrim" and "no words" are different cards. */}
       <GroundControls value={content} pictured={pictured} onChange={write} />
     </>
   );
 }
 
-/**
- * One line of a card's caption, as a row that commits on every keystroke.
- *
- * It keeps a DRAFT of what is typed, for the reason the media panel's caption
- * does: what is stored is not what is in the field. The value is trimmed on the
- * way out and an emptied one is dropped entirely, so a field reading back the
- * stored value would swallow the space between two words and refuse to hold a
- * title you were halfway through clearing.
- *
- * `undefined` out for an empty field, never `""` — absent is what a card reads
- * to decide there is no line to draw at all, and the caller deletes the key.
- */
+/** Keeps a draft, since the stored value is trimmed; an emptied field reports `undefined`, never "". */
 function TextControl({
   label,
   placeholder,
@@ -408,7 +257,6 @@ function TextControl({
 }: {
   label: string;
   placeholder: string;
-  /** What is stored — the field's starting point, not its state. */
   value: string | undefined;
   onChange: (value: string | undefined) => void;
 }) {
@@ -416,11 +264,7 @@ function TextControl({
 
   return (
     <PropertiesPanel.Control label={label}>
-      {/* A bare `Field.Frame` and not a `TextInput`, which is the whole reason
-          the compound primitives exist: `Control` IS the field, and a TextInput
-          would open a second one inside it — its own label id, its own control
-          id — leaving the row's visible label pointing at nothing. Every other
-          control in this inspector composes the same way. */}
+      {/* A bare `Field.Frame`, not `TextInput`, which would nest a second field and orphan the row's label. */}
       <Field.Frame>
         <Field.Control
           value={draft}
@@ -435,36 +279,18 @@ function TextControl({
   );
 }
 
-/** The ground the caption stands on, and the tone it is pinned to. */
 interface Ground {
   scrim?: boolean;
   tone?: LinkCardTone;
 }
 
-/**
- * The scrim and its tone — the two rows a link card's Content section and a
- * post's card share, because they describe the same band on the same
- * component.
- *
- * The switch reports what the CARD is doing, not what is stored. `LinkCard`
- * draws the band wherever there is a picture unless told otherwise, so an
- * absent value over a picture is a band that is on, and the switch has to say
- * so — reading `?? false` here left it saying "off" over a band that was
- * plainly drawn. What a press writes is DEFINITE, `true` or `false`, never
- * "back to the default": off over a picture is a choice, and an absent key
- * would hand the card straight back to drawing the band.
- */
+/** Shows what the card draws, not what is stored; a press always writes true or false, never absent. */
 function GroundControls({
   value,
   pictured,
   onChange,
 }: {
   value: Ground;
-  /**
-   * Whether the card is showing a picture — the default the switch reads when
-   * nothing is stored. The CALLER answers, because the two cards answer
-   * differently: a link card from its own slots, a post from `postCardMedia`.
-   */
   pictured: boolean;
   onChange: (patch: Ground) => void;
 }) {
@@ -478,9 +304,6 @@ function GroundControls({
         />
       </PropertiesPanel.Control>
 
-      {/* Applies whether or not the scrim is drawn: it pins the caption's INK
-          as well as the wash's colour, and the words are the half that has to
-          stay legible over a picture with a fixed appearance. */}
       <PropertiesPanel.Control label="Mode">
         <SegmentedControl
           options={TONES}
@@ -496,30 +319,13 @@ function GroundControls({
   );
 }
 
-/**
- * The Media section: a picture per theme, in a section that IS the property.
- *
- * Two slots rather than one picture and a filter, because the case this exists
- * for is a SCREENSHOT: the card is a window onto something that has its own
- * light and dark appearance, and no amount of inversion turns one into the
- * other. One of them on its own is a complete card — see `LinkCardMediaSchema`.
- *
- * Shared by the link card and the post, which differ only in what opening the
- * section STARTS from — nothing, and the document's picture — so that is the
- * one thing left to the caller.
- */
 function MediaSection({
   media,
   onEnabledChange,
   onPickMedia,
 }: {
   media: LinkCardMedia | undefined;
-  /**
-   * The section opened or closed — the caller seeds or drops the key. It is
-   * also how a picture is REMOVED: the slots themselves only ever swap one
-   * file for another (see {@link ImageInput}), so closing the section is what
-   * empties them.
-   */
+  /** Closing the section is also what removes a picture; the slots only swap files. */
   onEnabledChange: (enabled: boolean) => void;
   onPickMedia: (slot: CardMediaSlot) => void;
 }) {
@@ -549,26 +355,6 @@ function MediaSection({
   );
 }
 
-/**
- * The things about a post's card that the post does not decide: its picture,
- * the line above its name, and the ground its caption stands on.
- *
- * The Media section is the link card's, seeded differently: a post's card is
- * already wearing the document's picture, so taking the picture over starts
- * from that picture — the slot names it, the tile does not change, and
- * clearing the slot means what "Remove" means everywhere else. Closing the
- * section hands the picture back to the document.
- *
- * The rest is headerless and always on, the way the log control is: a post
- * always has words and always stands on something, so there is nothing for a
- * section's add/remove pair to mean, and a value belongs in a labelled row.
- *
- * The Meta row is the one part of it that comes and goes, and it is offered
- * only where the post writes no such line — a project. An article's card is
- * filed by its date and the date wins (see `PostCard`), so a row there would
- * take typing and show nothing for it. What the rail offers is what the rail
- * can change.
- */
 function PostCardSections({
   config,
   cover,
@@ -579,20 +365,12 @@ function PostCardSections({
   const set = (patch: Partial<PostCardConfig>) =>
     onChange({ ...config, ...patch });
 
-  /**
-   * Write one value, and drop the key entirely when it is emptied.
-   *
-   * An emptied line is an ABSENT line, not an empty string — the same rule the
-   * link card's content follows, and what keeps `{}` the honest shape of a
-   * card nobody has touched.
-   */
   const write = (patch: Partial<PostCardConfig>) => {
     const next = { ...config, ...patch };
     if (!next.meta) delete next.meta;
     onChange(next);
   };
 
-  // What the card is actually showing — the default the scrim switch reads.
   const shown = postCardMedia(config, cover);
 
   return (
@@ -633,7 +411,6 @@ function PostCardSections({
   );
 }
 
-/** Where the card goes, and how it opens. */
 function LinkControls({
   link,
   onChange,
@@ -655,10 +432,7 @@ function LinkControls({
           value={link.kind}
           onValueChange={(value) => {
             setUrlDraft("");
-            // The destination goes with the kind. A URL is not a path, and
-            // carrying one across would leave the card pointing somewhere the
-            // control now on screen cannot even display. `newTab` survives: it
-            // is a fact about the CARD, not about the destination.
+            // The destination resets with the kind; `newTab` belongs to the card and survives.
             onChange({ kind: value as LinkTargetKind, newTab: link.newTab });
           }}
         />
@@ -716,22 +490,7 @@ function LinkControls({
   );
 }
 
-/**
- * The site's own pages, listed INLINE rather than behind a select.
- *
- * A Combobox is the control this would otherwise be, and it cannot go here: its
- * popover is portalled to escape the rail's `overflow: auto`, and CSS anchor
- * positioning refuses an anchor whose containing-block chain does not reach the
- * portal's — which a `position: fixed` rail's does not. Left un-portalled it is
- * cropped at the rail's edge instead. Both failure modes are documented on
- * `ComboboxProps.portal`; between them there is no configuration that works
- * inside this panel.
- *
- * An inline list is the honest alternative and costs nothing here, because the
- * list is SHORT by construction: `SITE_PATHS` holds the pages that have no card
- * of their own, and every article and project is excluded precisely because it
- * already has one.
- */
+/** Listed inline: a Combobox cannot work inside this fixed rail (see `ComboboxProps.portal`). */
 function SiteDestination({
   href,
   onChange,
@@ -758,4 +517,3 @@ function SiteDestination({
     </PropertiesPanel.Control>
   );
 }
-

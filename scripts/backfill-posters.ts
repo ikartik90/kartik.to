@@ -1,24 +1,4 @@
-/**
- * Give every published clip the still it would have been given at upload.
- *
- * `capture-poster.ts` takes a clip's still in the browser, at the one moment
- * the file is local and a decoder is holding it. That moment is gone for every
- * clip already in the bucket, and no amount of server code brings it back:
- * there is no decoder in a serverless function. This is the one-off that stands
- * in for it, using the ffmpeg on the machine it is run from.
- *
- * It picks the frame by the SAME rule the browser does — `pickPosterFrame`, the
- * module both import — so a clip backfilled here and a clip uploaded tomorrow
- * are shown at the same kind of moment rather than by two different notions of
- * which frame matters.
- *
- * Run it with the environment, from the repo root:
- *
- *   node --env-file=.env scripts/backfill-posters.ts
- *
- * Idempotent: a clip that already has a still is skipped, so it is safe to run
- * again after adding a post.
- */
+// One-off: gives every clip without a still the poster it would get at upload, using local ffmpeg.
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -31,9 +11,8 @@ import { pickPosterFrame, posterSampleTimes } from "../src/utils/poster-frame.ts
 
 const run = promisify(execFile);
 
-/** Matches `capture-poster.ts` — the width frames are scored at. */
+// Both must match `capture-poster.ts`.
 const SAMPLE_WIDTH = 64;
-/** Matches `capture-poster.ts` — the width the still is stored at. */
 const POSTER_MAX_WIDTH = 1280;
 
 const {
@@ -69,7 +48,6 @@ const r2 = new S3Client({
   },
 });
 
-/** The bucket key a stored src points at, or null for anything not ours. */
 function keyFromSrc(src: string): string | null {
   const base = `${R2_PUBLIC_BASE_URL!.replace(/\/+$/, "")}/`;
   return src.startsWith(base) ? src.slice(base.length) : null;
@@ -99,7 +77,6 @@ async function probe(file: string) {
   };
 }
 
-/** One frame as raw RGBA, scored exactly as the browser scores it. */
 async function sampleFrame(file: string, time: number): Promise<Uint8ClampedArray> {
   const { stdout } = await run(
     "ffmpeg",
@@ -130,7 +107,7 @@ async function stillAt(file: string, time: number, out: string) {
   ]);
 }
 
-/** Stamp the still's URL onto the clip, the way `finalizeMediaUpload` does. */
+/** Mirrors `finalizeMediaUpload`'s metadata stamp. */
 async function stampPoster(key: string, posterUrl: string) {
   const head = await r2.send(
     new HeadObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key }),
@@ -150,7 +127,6 @@ async function stampPoster(key: string, posterUrl: string) {
 
 type Node = Record<string, unknown>;
 
-/** Every media node in a document, standalone blocks and collection items alike. */
 function mediaNodes(content: Node): Node[] {
   const blocks = (content?.content ?? []) as Node[];
   return blocks.flatMap((block) =>
@@ -193,7 +169,7 @@ try {
         try {
           samples.push({ time, pixels: await sampleFrame(local, time) });
         } catch {
-          /* a frame that would not decode is dropped, as in the browser */
+          /* dropped, as in the browser */
         }
       }
 
@@ -223,9 +199,6 @@ try {
       await stampPoster(key, posterUrl);
 
       node.poster = posterUrl;
-      // The clip's own shape, while the file is in hand — the same measurement
-      // `measureMediaFile` takes at upload, and absent for anything stored
-      // before that existed. It is what holds the box before the bytes arrive.
       if (width && height && !node.width && !node.height) {
         node.width = width;
         node.height = height;

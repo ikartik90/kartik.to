@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Module mocks — declared before the dynamic import of the module under test.
-//
-// The subject here is the handshake, not the session: nobody is signed in yet,
-// which is the whole reason this action exists. So the only thing worth
-// standing in for is Neon Auth's answer to "where do I send this browser".
-// ---------------------------------------------------------------------------
-
 const { mockSignInSocial } = vi.hoisted(() => ({ mockSignInSocial: vi.fn() }));
 
 vi.mock("@/lib/auth/server", () => ({

@@ -18,28 +18,21 @@ import SidenoteIcon from "@/assets/icons/sidenote.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export type SelectionToolbarMode =
   | "format"
   | "link-edit"
   | "link-view"
   | "sidenote-view";
 
-/** The togglable (non-link) marks exposed as formatting buttons. */
 export type ToggleableMark = Exclude<Mark["type"], "link">;
 
 interface SelectionToolbarProps {
   mode: SelectionToolbarMode;
   /** Viewport-relative rect the toolbar anchors to. */
   rect: PopoverRect;
-  /** Mark types the current selection fully carries — drives the active state. */
+  /** Marks the whole selection carries. */
   activeMarks: ReadonlySet<Mark["type"]>;
-  /** Existing link href — prefilled in link-edit, opened by goto in link-view. */
   linkHref?: string;
-  /** Whether the existing link opens in a new tab — prefills link-edit's toggle. */
   linkNewTab?: boolean;
   onToggleMark: (type: ToggleableMark) => void;
   onStartLink: () => void;
@@ -52,10 +45,6 @@ interface SelectionToolbarProps {
   onDeleteSidenote: () => void;
   onDismiss: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Format-mode button groups (Figma 422:833)
-// ---------------------------------------------------------------------------
 
 interface FormatButton {
   mark: ToggleableMark;
@@ -76,19 +65,9 @@ const FORMAT_GROUPS: FormatButton[][] = [
   ],
 ];
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-// The shared toolbar rail, floated: `toolbar` draws the box, `selectionPopover`
-// adds the anchor, the hairline and the elevation that floating costs.
 const toolbarClass = cx(toolbar(), selectionPopover());
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function SelectionToolbar({
   mode,
@@ -117,8 +96,6 @@ export function SelectionToolbar({
         ariaLabel="Edit link"
         onDismiss={onDismiss}
       >
-        {/* Mounted on entering link-edit, so each edit starts from the
-            link's own address. */}
         <LinkEditRow
           href={linkHref}
           newTab={linkNewTab}

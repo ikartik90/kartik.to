@@ -43,7 +43,6 @@ describe("field composition", () => {
 
   it("associates the field label with the trigger", () => {
     renderDatePicker({ defaultValue: TODAY });
-    // Field.Label's htmlFor targets the trigger's controlId.
     const label = screen.getByText("Trip date") as HTMLLabelElement;
     expect(label.htmlFor).toBe(trigger().id);
   });
@@ -57,9 +56,6 @@ describe("collapsed trigger", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  // See Button: WebKit's default tab order skips a bare <button>, so the
-  // trigger states its own place — a field the keyboard cannot reach is not a
-  // field.
   it("states its own place in the tab order", () => {
     renderDatePicker({});
     expect(trigger().getAttribute("tabindex")).toBe("0");
@@ -85,8 +81,6 @@ describe("opening", () => {
 
   it("opens from the calendar icon / frame padding, not only the value text", () => {
     renderDatePicker({ defaultValue: TODAY });
-    // The decorative calendar icon is pointer-events:none; the whole frame must
-    // be the open target, else the icon does nothing.
     const icon = trigger().parentElement!.querySelector("[aria-hidden]");
     fireEvent.click(icon!);
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -113,7 +107,6 @@ describe("selecting a date", () => {
     fireEvent.click(trigger());
     fireEvent.click(screen.getByRole("gridcell", { name: "December 5, 2026" }));
     expect(onValueChange).toHaveBeenCalledOnce();
-    // Parent didn't update `value`, so the trigger still shows the old date.
     expect(trigger().textContent).toBe("11/12/2026");
   });
 });
@@ -188,11 +181,6 @@ describe("search", () => {
 });
 
 describe("anchoring", () => {
-  // The popover is positioned by CSS anchor positioning against the trigger
-  // frame, and an anchor only resolves when the two share a containing-block
-  // chain. Portalled to <body> that holds for the ordinary page; inside a
-  // `position: fixed` surface it does not, because a fixed ancestor ends the
-  // chain at the viewport. Hence the escape hatch — the same one Combobox has.
   it("portals the popover to the body by default", () => {
     const { container } = renderDatePicker({ defaultValue: TODAY });
     fireEvent.click(trigger());

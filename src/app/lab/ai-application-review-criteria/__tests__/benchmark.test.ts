@@ -11,10 +11,8 @@ import { CRITERIA } from "../harness-data";
 
 const NEW_LOGO = CRITERIA.find((c) => c.id === "new-logo")!;
 
-/** All four criteria, New Logo Acquisition as first written — the retest Figma 73:2989 draws. */
 const WITH_NEW_LOGO = CRITERIA.map(({ id, prompt }) => ({ id, prompt }));
 
-/** The same, with New Logo Acquisition's suggested rewrite applied. */
 const WITH_REWRITE = WITH_NEW_LOGO.map((c) =>
   c.id === "new-logo" ? { ...c, prompt: NEW_LOGO.suggestedRewrite.prompt } : c,
 );
@@ -25,9 +23,9 @@ const retest = byId(benchmark(WITH_NEW_LOGO));
 
 describe("a retest with New Logo Acquisition added", () => {
   it("counts only the criteria that were met", () => {
-    expect(retest.renee.met).toBe(3); // three met, one undecided
+    expect(retest.renee.met).toBe(3);
     expect(retest.marco.met).toBe(4);
-    expect(retest.aisha.met).toBe(1); // one met, one undecided, two not met
+    expect(retest.aisha.met).toBe(1);
     expect(retest.grace.met).toBe(0);
   });
 
@@ -42,7 +40,6 @@ describe("a retest with New Logo Acquisition added", () => {
     const mismatched = benchmark(WITH_NEW_LOGO)
       .filter((row) => row.mismatch)
       .map((row) => row.id);
-    // Two hires excluded, and one archived at Application Review included.
     expect(mismatched).toEqual(["dana", "priya", "tomas"]);
   });
 
@@ -64,7 +61,6 @@ describe("a retest with New Logo Acquisition added", () => {
   });
 
   it("evaluates the criteria in the order they were tested in: the list's, and so the ring's", () => {
-    // Added at the top of the list, as the drawer adds it.
     const onTop = [
       WITH_NEW_LOGO[2],
       ...WITH_NEW_LOGO.filter((c) => c.id !== "new-logo"),
@@ -133,7 +129,7 @@ describe("the previous benchmark", () => {
       "undecided",
     ]);
     expect(previous.tomas.result).toBe("excluded");
-    expect(previous.kevin.result).toBe("included"); // two of three
+    expect(previous.kevin.result).toBe("included");
   });
 
   it("agrees with every known outcome, so it finds nothing", () => {
@@ -157,7 +153,6 @@ describe("the previous benchmark", () => {
       const { prompt } = CRITERIA.find((c) => c.id === id)!;
       return { id, prompt };
     });
-    // CRM & Sales Ops first: Tomas was undecided on it in that run.
     expect(byId(benchmark(reordered)).tomas.evaluations).toEqual([
       "undecided",
       "met",

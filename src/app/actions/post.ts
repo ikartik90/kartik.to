@@ -18,17 +18,8 @@ import { parsePost } from "@/lib/posts";
 import { revalidatePostPaths } from "@/lib/revalidate-post";
 import { generateSlug } from "@/utils/slug";
 
-// ---------------------------------------------------------------------------
-// Actions
-// ---------------------------------------------------------------------------
+// Deliberately public: `getPublishedProjects`, which returns only published titles and slugs.
 
-/**
- * The unique index on `slug` refusing a write, said in words.
- *
- * The sidebar asks `isPostSlugAvailable` before it offers an address, so this
- * is the race that check cannot close — another tab taking the address between
- * the question and the save. Anything else is rethrown as it came.
- */
 function explainSlugConflict(error: unknown): unknown {
   return (error as { code?: unknown } | null)?.code === "P2002"
     ? new Error("Another post already uses that address.")
@@ -45,7 +36,6 @@ export async function createDraft({
   title?: string;
   document: Document;
   category?: PostCategory;
-  /** An address typed before the first save; minted from the title if absent. */
   slug?: string;
   description?: string | null;
 }): Promise<Post> {
@@ -84,15 +74,6 @@ export async function createDraft({
   return post;
 }
 
-/**
- * Write the document being edited, and whatever the metadata sidebar changed
- * with it — one save, so the address and the words it serves cannot land apart.
- *
- * A metadata field left out is left alone. Moving a post (a new category or a
- * new address) is refused for a page, whose address is its own route rather
- * than a prefix and a slug; and the address it leaves is remembered, so a link
- * to it still arrives (`findMovedPostPath`).
- */
 export async function saveDraft({
   id,
   title,
@@ -115,9 +96,7 @@ export async function saveDraft({
 
   const movesCategory =
     category !== undefined && category !== existing.category;
-  // The address is judged only when it CHANGES. A page's own slug is on the
-  // reserved list precisely because it is taken — by this post — and saving it
-  // back unchanged is not taking it.
+  // Only a CHANGED slug is validated: a page's own slug is on the reserved list.
   const movesSlug =
     typedSlug !== undefined && typedSlug.trim() !== existing.slug;
 
@@ -139,8 +118,6 @@ export async function saveDraft({
         ...(movesSlug
           ? {
               slug,
-              // The address being left goes last, and the one being taken is
-              // dropped — a post renamed back must not list where it now is.
               previousSlugs: [
                 ...existing.previousSlugs.filter((old) => old !== slug),
                 existing.slug,
@@ -155,22 +132,12 @@ export async function saveDraft({
     });
 
   const post = parsePost(raw);
-  // The page at the address it left is a redirect now, and the listings that
-  // linked there have to be rebuilt as well as the ones at the new address.
   if (movesCategory || movesSlug) revalidatePostPaths(existing);
   revalidatePostPaths(post);
   return post;
 }
 
-/**
- * Whether a post other than `id` already has this address — asked by the
- * metadata sidebar while the author types, so a taken address is said under
- * the box rather than discovered by a save that fails.
- *
- * The author's alone: answered for a visitor it would confirm which drafts
- * exist. An address the domain refuses is not available, and is refused
- * without a query.
- */
+/** Admin-only: answering a visitor would confirm which drafts exist. */
 export async function isPostSlugAvailable(
   slug: string,
   id: string | null,
@@ -200,14 +167,6 @@ export async function publishPost(id: string): Promise<Post> {
   return post;
 }
 
-/**
- * Take a published post off the site without destroying it.
- *
- * Clearing `publishedAt` rather than deleting: unlike a published component —
- * which is only ever a row saying "show this demo" — an article is the writing
- * itself, and the reversible half of "remove this" is the one that should be a
- * click away. Deleting it outright is `deleteDraft`, and it asks first.
- */
 export async function unpublishPost(id: string): Promise<Post> {
   await requireAdmin();
 
@@ -243,13 +202,6 @@ export async function getDrafts(): Promise<Post[]> {
   return raws.map(parsePost);
 }
 
-/**
- * The published projects, as the palette lists them — for everyone, which is
- * why this is the one read here that asks nobody who they are. It hands out
- * only what a row needs (see `PostLinkSchema`): the title and the address a
- * visitor already gets from the homepage card, and none of the document.
- * Newest first, as the homepage files them.
- */
 export async function getPublishedProjects(): Promise<PostLink[]> {
   const rows = await prisma.post.findMany({
     where: { category: "WORK", publishedAt: { not: null } },

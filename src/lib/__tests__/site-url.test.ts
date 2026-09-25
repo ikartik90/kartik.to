@@ -3,8 +3,6 @@ import { DEV_SITE_URL, resolveSiteUrl } from "../site-url";
 
 describe("resolveSiteUrl", () => {
   it("takes the site's own domain over anything the host says", () => {
-    // A link shared from a preview deployment still points at the real site,
-    // because the preview URL is a build artefact and the canonical URL is not.
     expect(
       resolveSiteUrl({
         NEXT_PUBLIC_SITE_URL: "https://kartik.to",
@@ -15,7 +13,6 @@ describe("resolveSiteUrl", () => {
   });
 
   it("falls back to the project's production domain, scheme and all", () => {
-    // Vercel reports a bare host; a `metadataBase` must be a URL.
     expect(
       resolveSiteUrl({ VERCEL_PROJECT_PRODUCTION_URL: "kartik-to.vercel.app" }),
     ).toBe("https://kartik-to.vercel.app");

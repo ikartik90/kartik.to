@@ -5,7 +5,6 @@ import { ColorPicker } from "../color-picker";
 
 afterEach(cleanup);
 
-/** The picker is controlled; a host that echoes the value back is the real case. */
 function Host({
   initial = "#FF0000FF",
   onValueChange,
@@ -36,9 +35,7 @@ function pickFormat(label: string) {
 describe("opening", () => {
   it("never emits a value just for being opened", () => {
     const onValueChange = vi.fn();
-    // FFAB6F is deliberately a colour integer HSB cannot name exactly: a
-    // picker that seeded its state by round-tripping through HSB and pushed
-    // the result back would shift it by a digit before anything was touched.
+    // FFAB6F has no exact HSB form, so an HSB round-trip on open would shift it.
     render(<Host initial="#FFAB6FFF" onValueChange={onValueChange} />);
     expect(onValueChange).not.toHaveBeenCalled();
     expect(channel("Hex").value).toBe("FFAB6F");
@@ -117,10 +114,6 @@ describe("typing a channel", () => {
 });
 
 describe("holding the hue", () => {
-  // The whole reason the picker keeps its own HSB rather than deriving it from
-  // the colour each render: a grey has no hue to read back, so a picker that
-  // re-derived would drop the author at 0° the moment they reached black — and
-  // dragging back out of the corner would come back RED, whatever they were on.
   it("keeps the hue through a colour that has none", () => {
     render(<Host initial="#00FF00FF" />);
     pickFormat("HSB");
@@ -154,8 +147,6 @@ describe("holding the hue", () => {
 
 describe("the ramps", () => {
   it("moves the hue while holding saturation and brightness", () => {
-    // Half-bright, half-saturated red — a colour whose S and B are obvious if
-    // the hue ramp tramples them on its way past.
     render(<Host initial="#804040FF" />);
     pickFormat("HSB");
     expect(channel("Saturation, percent").value).toBe("50");
@@ -185,13 +176,11 @@ describe("the map", () => {
     const onValueChange = vi.fn();
     render(<Host initial="#FF0000FF" onValueChange={onValueChange} />);
     const map = screen.getByRole("slider", { name: /saturation and brightness/i });
-    // jsdom lays nothing out, so the plane has to be given a size.
     map.getBoundingClientRect = () =>
       ({ left: 0, top: 0, width: 200, height: 200 }) as DOMRect;
     map.setPointerCapture = vi.fn();
     map.hasPointerCapture = vi.fn(() => true);
 
-    // Halfway across, a quarter down: saturation 50, brightness 75.
     fireEvent.pointerDown(map, { button: 0, clientX: 100, clientY: 50 });
     expect(onValueChange).toHaveBeenLastCalledWith("#BF6060FF");
   });
@@ -200,7 +189,6 @@ describe("the map", () => {
     const onValueChange = vi.fn();
     render(<Host initial="#FF0000FF" onValueChange={onValueChange} />);
     const map = screen.getByRole("slider", { name: /saturation and brightness/i });
-    // Full saturation already, so left is the only axis with anywhere to go.
     fireEvent.keyDown(map, { key: "ArrowLeft" });
     expect(onValueChange).toHaveBeenLastCalledWith("#FF0303FF");
   });

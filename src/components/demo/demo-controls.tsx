@@ -7,140 +7,39 @@ import PlayIcon from "@/assets/icons/play.svg";
 import StopIcon from "@/assets/icons/stop.svg";
 import ResetIcon from "@/assets/icons/reset.svg";
 
-// ---------------------------------------------------------------------------
-// The two controls a self-playing demo owes its visitor: work the performance,
-// or put the prototype back the way it started. Shared by the Shift Scheduling
-// demos that perform themselves, because the pair is the same offer every time
-// — only what "reset" means differs, and that is the consumer's.
-//
-// The first of the two is ONE control with two faces, not two controls: a demo
-// standing still offers the way in (play, from the top), and a demo mid-
-// performance offers the way out (stop, where it stands). They share the corner
-// because they are never both true, so whatever is under the pointer is always
-// the thing the moment calls for — and a visitor who wants out no longer has to
-// know that touching the prototype is what stands the show down.
-//
-// It renders into the FRAME's corner (`demoFrameControls` is absolute against
-// the DemoFrame, which is why the recipe lives there rather than here), so it
-// must be placed outside the demo's own stage: a press on one of these is the
-// visitor operating the demo, not reaching into it mid-performance.
-//
-// The row IS the toolbar — the recipe already lays the pair out as one
-// horizontal row in the corner, so the semantics go on the element that is
-// there rather than on a wrapper around it. That element is now a bare flex row
-// and nothing else: the shared `toolbar` chrome it used to compose drew a
-// second bordered box inside a frame that is already one, so the surface, the
-// hairline and the 8px inset are gone and only the buttons are left. The role
-// stays regardless — a toolbar is a grouping of controls, not a box drawn
-// around them.
-//
-// `OptionList.Toolbar` is the house primitive for this and was the first thing
-// considered, but it is bound to an `OptionList` root for its context and
-// layout, and its contract is to flip `OptionList.Option` children into
-// toggles — these are icon `Button`s with hover tooltips, which an Option
-// cannot carry. Borrowing it would mean an empty OptionList root, a layout to
-// fight, and no tooltips.
-//
-// Semantics only, no roving cursor, matching that primitive's own call: two
-// controls do not need a keyboard mode, and folding them into a single tab stop
-// would take one of them out of reach to buy nothing.
-// ---------------------------------------------------------------------------
-
 export interface DemoControlsProps {
-  /**
-   * Play the walkthrough from the top, cancelling any run in flight. In
-   * practice always a REPLAY — the demo performs itself the moment it comes on
-   * screen, so by the time this is pressed it has usually been through once.
-   */
+  /** Replays from the top, cancelling any run in flight. */
   onPlay: () => void;
-  /**
-   * Call the run off where it stands. Whatever it has already committed stays
-   * committed: the visitor is stopping a performance, not undoing it, and reset
-   * is the control that means the other thing.
-   */
+  /** Stops where it stands; whatever the run committed stays. */
   onStop: () => void;
-  /** Call off anything in flight and return the demo to its opening state. */
   onReset: () => void;
-  /**
-   * Is a run in flight right now — from the opening beat to the hand-over? It
-   * decides which face the corner control wears, so it must be the tour's own
-   * `running` rather than anything narrower: the cursor is off stage for the
-   * opening beat and the whole withdrawal, and a stop button that blinked out
-   * in those gaps would be offering to play a demo that is still performing.
-   */
+  /** The tour's own `running`, opening beat to hand-over, not the cursor's visibility. */
   running: boolean;
-  /**
-   * Is there anything for reset to undo, right now? Two conditions, and the
-   * consumer owns both: the prototype carries work, and nothing is performing.
-   *
-   * A control that cannot change anything is worse than absent — it invites a
-   * press and answers with nothing, and the visitor is left wondering what they
-   * missed. So an untouched demo offers the transport alone, and a demo mid-
-   * performance does too: the run is committing work by the second, "back to
-   * how it started" is a moving target while it does, and the visitor has two
-   * ways to break in — stopping the run outright, or touching the prototype —
-   * either of which hands reset back on the spot.
-   */
+  /** The demo carries work and nothing is performing. */
   resettable: boolean;
 }
 
-// The frame's controls for a demo that performs itself (replay / reset) — the
-// bare pair of icon buttons in its bottom-right corner, with no rail under
-// them. Deliberately NOT the shared `toolbar` chrome it used to compose: these
-// sit on the frame's own surface, which is already a bounded box, and a second
-// bordered box inside it was one frame too many. What is left is the row
-// itself, and each button draws its own chip on hover. It belongs to the frame
-// rather than to the demo's own layout, which is why it is placed here: the
-// demo is centred inside the area's 20px padding band and so never reaches this
-// corner. Out of flow, so it costs the frame's content measurement nothing.
 const demoFrameControlsStyle = css({
   position: "absolute",
-  // 12px in, because it is now the BUTTON that sits in the corner
-  // rather than a rail around it: the frame's own corner is
-  // `radii.xl` and the icon chip's is `radii.sm`, and 16 − 12 = 4
-  // makes those two curves concentric. The rail this replaces was
-  // inset 8px on exactly the same arithmetic against its own 8px
-  // corner.
+  // 16 − 12 = 4 keeps the chip's corner concentric with the frame's.
   right: "lg",
   bottom: "lg",
-  // The demo below can carry stacking contexts of its own (any
-  // element with opacity < 1 makes one at level 0), so `auto` would
-  // leave the row's order to the DOM.
+  // The demo can carry stacking contexts of its own.
   zIndex: 1,
-  // The row, which is all the chrome there is now. 4px apart, the
-  // spacing the rail used to hold them at — at zero the two hover
-  // chips would meet and read as one lozenge, which is the frame
-  // coming back in by the side door.
   display: "flex",
   alignItems: "center",
   gap: "sm",
-  // The `icon` action is `color: inherit` — its SURFACE owns the
-  // glyph hue — so a row that sets nothing inherits `text.default`
-  // off the body. That is prose colour, and prose runs to the far end
-  // of the ramp in dark (neutral.200) while merely sitting heavy in
-  // light (neutral.700): the same omission reads as fine in one theme
-  // and as two glaring white glyphs in the other. It matters more
-  // now that there is no surface behind the glyphs to hold them
-  // down. This is the pair the calendar's own chevrons take, so the
-  // frame's controls and the demo's read as one class of control in
-  // both themes.
+  // `icon` buttons inherit colour; this is the calendar chevrons' pair, right in both themes.
   color: "field.text.default",
-  // Down until the visitor is actually in the frame. The demo plays
-  // itself the moment it comes on screen, so for most of an article
-  // these are controls nobody is reaching for, sitting in the corner
-  // of a picture — the same call the clip's transport makes, and the
-  // same terms: a fade, and up for as long as focus is inside, so a
-  // keyboard can reach them at all.
   opacity: 0,
   transition: "opacity 150ms ease",
   "[data-demo-frame]:hover &, [data-demo-frame]:focus-within &": {
     opacity: 1,
   },
-  // No pointer to hover with, so no reveal to wait for.
   "@media (hover: none)": { opacity: 1 },
 });
 
-/** Play-or-Stop / Reset, tucked into the demo frame's bottom-right corner. */
+/** Play-or-Stop and Reset in the frame's corner; render it outside the demo's stage. */
 export function DemoControls({
   onPlay,
   onStop,
@@ -151,22 +50,10 @@ export function DemoControls({
   return (
     <div
       role="toolbar"
-      // Named because there is nothing visible to name it — every other toolbar
-      // in the app is labelled the same way, and an unnamed one announces as a
-      // bare group.
       aria-label="Demo controls"
       className={demoFrameControlsStyle}
     >
-      {/* The transport sits in the corner itself, with Reset inboard of it:
-          working the performance is the offer the demo is always making, and
-          reset only means anything once there is something to clear. DOM order
-          is the visual order, so the tab order runs the same way.
-
-          That ordering is also what lets Reset come and go without disturbing
-          anything: the row is pinned by its right edge, so the one control
-          that is always here keeps its corner and it is the row's far side
-          that moves. Reset arrives beside the transport rather than under the
-          pointer that was reaching for it. */}
+      {/* Reset sits inboard: the row is pinned by its right edge, so Reset comes and goes without moving the transport. */}
       {resettable ? (
         <Button variant="icon" aria-label="Reset Demo" onClick={onReset}>
           <ResetIcon />

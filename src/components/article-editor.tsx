@@ -119,13 +119,6 @@ import {
 } from "@/utils/collection-items";
 import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
 
-// ---------------------------------------------------------------------------
-// DOM ↔ AST serialisation helpers
-// ---------------------------------------------------------------------------
-
-// Pre-compute recipe classNames once so inlineNodesToHtml can embed them in
-// the HTML strings it builds. This keeps edit-mode and read-only visually
-// identical without re-invoking the CVA on every keystroke.
 const inlineCodeClass = inlineCode();
 const linkClass = articleLink();
 const underlineClass = articleUnderline();
@@ -171,12 +164,6 @@ function styledTextToHtml(node: InlineNode): string {
   return html;
 }
 
-/**
- * Serialise an inline-nodes array to an HTML string for contentEditable.
- * Consecutive highlighted nodes coalesce into one <mark> so the gradient stays
- * continuous across a run (see self-improvement.md).
- */
-/** The sidenote id a node carries, or null. Groups a note's contiguous runs. */
 function sidenoteIdOf(node: InlineNode): string | null {
   const mark = (node.marks ?? []).find((m) => m.type === "sidenote");
   return mark?.type === "sidenote" ? mark.id : null;
@@ -187,7 +174,6 @@ function sidenoteTextOf(node: InlineNode): string {
   return mark?.type === "sidenote" ? mark.text : "";
 }
 
-/** HTML-escape a string for use inside a double-quoted attribute value. */
 function escapeAttr(text: string): string {
   return escapeHtml(text).replace(/"/g, "&quot;");
 }
@@ -212,14 +198,7 @@ function inlineRunToHtml(nodes: InlineNode[]): string {
   return out;
 }
 
-/**
- * Serialise inline nodes to editor HTML. `base` is the count of distinct notes
- * appearing before this block (see sidenoteBases): each note's `<sup>` gets its
- * global ordinal in `data-sidenote-number` (rendered via `content: attr(...)`),
- * so numbering survives the block-content-sync re-serialisation and stays live
- * on add/remove — a CSS counter can't (Chromium doesn't re-resolve `counter()`
- * when a preceding counter element is removed).
- */
+/** `base` offsets note ordinals, written as `data-sidenote-number` since Chromium won't re-resolve a CSS counter on removal. */
 export function inlineNodesToHtml(nodes: InlineNode[], base = 0): string {
   let out = "";
   let i = 0;
@@ -228,11 +207,7 @@ export function inlineNodesToHtml(nodes: InlineNode[], base = 0): string {
   while (i < nodes.length) {
     const id = sidenoteIdOf(nodes[i]);
     if (id !== null) {
-      // Wrap a note's contiguous runs in one span carrying the note id/text (for
-      // round-tripping) and a per-note anchor-name (for the aside card). Inside
-      // it, the annotated prose gets its own dotted-underline span so the
-      // trailing <sup> — which shows the ordinal via data-sidenote-number — sits
-      // outside the underline and stays on the last word's line.
+      // One span per note (id, text, anchor); the <sup> sits outside the underline span, on the last word's line.
       const start = i;
       while (i < nodes.length && sidenoteIdOf(nodes[i]) === id) i++;
       const group = nodes.slice(start, i);
@@ -254,7 +229,6 @@ export function inlineNodesToHtml(nodes: InlineNode[], base = 0): string {
   return out;
 }
 
-/** Walk a contentEditable DOM node and extract inline nodes. */
 export function domToInlineNodes(el: Node): InlineNode[] {
   const nodes: InlineNode[] = [];
 
@@ -289,11 +263,7 @@ export function domToInlineNodes(el: Node): InlineNode[] {
         nextMarks.push({ type: "strikethrough" });
       else if (el.tagName === "MARK") nextMarks.push({ type: "highlight" });
       else if (el.tagName === "A") {
-        // The raw attribute, NOT `.href` — the latter is resolved against the
-        // page URL, so a bare "google.com" would come back as
-        // "http://localhost:3000/edit/google.com". Links are normalised to an
-        // absolute URL on apply (see normalizeLinkHref), so this round-trips.
-        // `target="_blank"` carries the new-tab flag through the DOM.
+        // The raw attribute, not `.href`, which resolves against the page URL.
         const href = el.getAttribute("href");
         if (href)
           nextMarks.push(
@@ -308,10 +278,8 @@ export function domToInlineNodes(el: Node): InlineNode[] {
           text: el.getAttribute("data-sidenote-text") ?? "",
         });
       }
-      // The decorative ordinal superscript holds no text — skip it entirely so
-      // its (CSS-generated) digit never leaks into the AST.
+      // The ordinal <sup> is decorative; its digit must not leak into the AST.
       else if (el.tagName === "SUP") return;
-      // BR tags produce a zero-width space we skip
       else if (el.tagName === "BR") return;
 
       el.childNodes.forEach((child) => walk(child, nextMarks));
@@ -322,13 +290,7 @@ export function domToInlineNodes(el: Node): InlineNode[] {
   return nodes;
 }
 
-/**
- * Remove sidenote wrappers left empty by deleting their annotated text. The
- * orphaned `<sup>` inside keeps incrementing the `sidenote` CSS counter, so the
- * ordinals never decrement until the wrapper is gone. Returns whether any were
- * removed. Empty wrappers hold no characters, so callers can restore the caret
- * by re-applying the pre-strip selection offsets.
- */
+/** Removes sidenote wrappers left empty; they hold no characters, so pre-strip caret offsets stay valid. */
 export function stripEmptySidenoteWrappers(el: HTMLElement): boolean {
   const orphans = Array.from(
     el.querySelectorAll<HTMLElement>("[data-sidenote-id]"),
@@ -337,13 +299,7 @@ export function stripEmptySidenoteWrappers(el: HTMLElement): boolean {
   return orphans.length > 0;
 }
 
-/**
- * Renumber a block's sidenote superscripts in place from `base` (distinct notes
- * before the block). Used for the FOCUSED block, whose content-sync effect is
- * skipped to protect the caret — so add/remove within it can't rely on a
- * re-serialise to refresh `data-sidenote-number`. Setting the attribute alone
- * doesn't touch the editable text, so the caret is undisturbed.
- */
+/** Renumbers a focused block's sups in place, since its content sync is skipped to protect the caret. */
 export function renumberSidenoteSups(el: HTMLElement, base = 0): void {
   const numberById = new Map<string, number>();
   let n = base;
@@ -357,11 +313,6 @@ export function renumberSidenoteSups(el: HTMLElement, base = 0): void {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Shared DOM utilities (module-level — no component state)
-// ---------------------------------------------------------------------------
-
-/** HTML-escape a plain string so it is safe to inject into innerHTML. */
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -369,7 +320,6 @@ function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
-/** Walk depth-first and return the first leaf Text node in `root`. */
 function firstTextNode(root: Node): Text | null {
   if (root.nodeType === Node.TEXT_NODE) return root as Text;
   for (let i = 0; i < root.childNodes.length; i++) {
@@ -379,11 +329,6 @@ function firstTextNode(root: Node): Text | null {
   return null;
 }
 
-/**
- * Returns the text content between the beginning of `el` and the current
- * cursor position. Used to detect a "/" typed at position 0 regardless of
- * how much text follows the caret.
- */
 function getTextBeforeCursor(el: HTMLElement): string {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return "";
@@ -392,7 +337,6 @@ function getTextBeforeCursor(el: HTMLElement): string {
   return range.toString();
 }
 
-/** Walk depth-first and return the last leaf Text node in `root`. */
 function lastTextNode(root: Node): Text | null {
   if (root.nodeType === Node.TEXT_NODE) return root as Text;
   for (let i = root.childNodes.length - 1; i >= 0; i--) {
@@ -402,12 +346,7 @@ function lastTextNode(root: Node): Text | null {
   return null;
 }
 
-/**
- * Return the innerHTML of `el` split at the current selection boundary.
- * `before` = everything up to (but not including) the selection start.
- * `after`  = everything from the selection end to the element end.
- * Any selected text is intentionally omitted (equivalent to Delete).
- */
+/** Splits `el`'s HTML at the selection; selected text is dropped, as Delete would. */
 function getCaretSplitHtml(el: HTMLElement): { before: string; after: string } {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return { before: el.innerHTML, after: "" };
@@ -429,17 +368,7 @@ function getCaretSplitHtml(el: HTMLElement): { before: string; after: string } {
   return { before: beforeDiv.innerHTML, after: afterDiv.innerHTML };
 }
 
-// ---------------------------------------------------------------------------
-// Clipboard sanitisation
-// ---------------------------------------------------------------------------
-
-/**
- * Parse clipboard HTML and return a sanitised HTML string suitable for
- * insertion into a contentEditable block. Only semantic inline marks
- * (<strong>, <em>, <code>) are preserved; all style/class attributes,
- * presentational elements, and wrapper tags are stripped. Block-level
- * elements are collapsed to <br> line-breaks.
- */
+/** Keeps only semantic inline marks; strips attributes and wrappers, and collapses blocks to <br>. */
 function sanitiseClipboardHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
 
@@ -459,8 +388,6 @@ function sanitiseClipboardHtml(html: string): string {
     switch (tag) {
       case "br":
         return "<br>";
-      // Block elements — append a <br> after their content so paragraphs
-      // and divs become line-separated instead of run together.
       case "p":
       case "div":
       case "li":
@@ -471,8 +398,6 @@ function sanitiseClipboardHtml(html: string): string {
       case "h5":
       case "h6":
         return inner ? inner + "<br>" : "";
-      // Semantic inline marks — keep the tag, drop all attributes except the
-      // design-system class so pasted content is immediately styled correctly.
       case "strong":
       case "b":
         return `<strong>${inner}</strong>`;
@@ -489,46 +414,28 @@ function sanitiseClipboardHtml(html: string): string {
         return `<mark class="${highlightClass}">${inner}</mark>`;
       case "code":
         return `<code class="${inlineCodeClass}">${inner}</code>`;
-      // Links — strip the anchor entirely, keep only the visible text.
       case "a":
         return inner;
-      // Everything else (span, font, table, …) — unwrap, keep content.
       default:
         return inner;
     }
   }
 
   const result = Array.from(doc.body.childNodes).map(walk).join("");
-  // Trim a trailing <br> added by the outermost block element.
   return result.replace(/<br>$/, "");
 }
 
-// ---------------------------------------------------------------------------
-// Caret-position helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Top of an element's content box (border-box top plus top padding). Line
- * detection must measure against this, not getBoundingClientRect().top: blocks
- * with vertical padding larger than a line height (e.g. code blocks, padded
- * 3xl) would otherwise never register their first/last line as a boundary,
- * trapping the caret inside the block during ArrowUp/ArrowDown navigation.
- */
+/** Content-box top: line detection must use this, or padded blocks trap the caret on ArrowUp/Down. */
 function contentBoxTop(el: HTMLElement): number {
   const paddingTop = parseFloat(getComputedStyle(el).paddingTop) || 0;
   return el.getBoundingClientRect().top + paddingTop;
 }
 
-/** Bottom of an element's content box (border-box bottom minus bottom padding). */
 function contentBoxBottom(el: HTMLElement): number {
   const paddingBottom = parseFloat(getComputedStyle(el).paddingBottom) || 0;
   return el.getBoundingClientRect().bottom - paddingBottom;
 }
 
-/**
- * Returns true when the caret is on (or above) the first visual line of a
- * contentEditable element — i.e. pressing ArrowUp should leave the block.
- */
 function isCaretAtFirstLine(el: HTMLElement): boolean {
   if (!el.textContent) return true;
   const sel = window.getSelection();
@@ -538,27 +445,17 @@ function isCaretAtFirstLine(el: HTMLElement): boolean {
   return caretRect.top < contentBoxTop(el) + caretRect.height;
 }
 
-/**
- * Returns true when the caret is on (or below) the last visual line of a
- * contentEditable element — i.e. pressing ArrowDown should leave the block.
- */
 function isCaretAtLastLine(el: HTMLElement): boolean {
   if (!el.textContent) return true;
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return true;
   const caretRect = sel.getRangeAt(0).getBoundingClientRect();
-  // A zero-height rect means the caret is at an element boundary, not a text
-  // node — don't treat this as the last line; let the browser handle it.
+  // A zero-height rect is an element boundary, not the last line; leave it to the browser.
   if (!caretRect.height) return false;
   return caretRect.bottom > contentBoxBottom(el) - caretRect.height;
 }
 
-/**
- * Like isCaretAtFirstLine but inspects the selection FOCUS rather than the
- * full selected range. Required for cross-block Shift+Arrow navigation because
- * getRangeAt(0).getBoundingClientRect() returns the bounding rect of the
- * entire multi-block selection, not just the focus line.
- */
+/** Checks the selection's focus, not its range: a multi-block range's rect spans every block. */
 function isFocusAtFirstLine(el: HTMLElement): boolean {
   if (!el.textContent) return true;
   const sel = window.getSelection();
@@ -571,7 +468,6 @@ function isFocusAtFirstLine(el: HTMLElement): boolean {
   return rect.top < contentBoxTop(el) + rect.height;
 }
 
-/** Like isCaretAtLastLine but inspects the selection FOCUS position. */
 function isFocusAtLastLine(el: HTMLElement): boolean {
   if (!el.textContent) return true;
   const sel = window.getSelection();
@@ -590,17 +486,7 @@ function isFocusAtLastLine(el: HTMLElement): boolean {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Caret boundary helpers (used by Backspace/Delete merge logic)
-// ---------------------------------------------------------------------------
-
-/**
- * True when the caret is collapsed and sitting at the very start of `el`
- * (before the first character). Returns false if there is an active selection
- * so the browser handles deletion of selected text normally.
- */
+/** Collapsed caret at the very start; false with a selection, so the browser deletes it. */
 function isCaretAtStart(el: HTMLElement): boolean {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
@@ -613,10 +499,6 @@ function isCaretAtStart(el: HTMLElement): boolean {
   );
 }
 
-/**
- * True when the caret is collapsed and sitting at the very end of `el`
- * (after the last character).
- */
 function isCaretAtEnd(el: HTMLElement): boolean {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
@@ -632,11 +514,6 @@ function isCaretAtEnd(el: HTMLElement): boolean {
   );
 }
 
-/**
- * Focus `el` and place the caret at the given character offset, measured
- * by walking Text nodes in DOM order. Used to restore the cursor to the
- * exact merge junction after two blocks are joined.
- */
 function setCursorAtTextOffset(el: HTMLElement, offset: number) {
   el.focus();
   let remaining = offset;
@@ -670,11 +547,6 @@ function setCursorAtTextOffset(el: HTMLElement, offset: number) {
   sel.addRange(range);
 }
 
-// ---------------------------------------------------------------------------
-// Selection ↔ character-offset helpers (used by the selection toolbar)
-// ---------------------------------------------------------------------------
-
-/** Walk Text nodes in DOM order and resolve a character offset to a DOM position. */
 function findTextPositionAtOffset(
   root: Node,
   offset: number,
@@ -696,10 +568,6 @@ function findTextPositionAtOffset(
   return find(root);
 }
 
-/**
- * Return the current selection as character offsets within `el`, or null when
- * there is no selection anchored inside `el`.
- */
 function getSelectionOffsets(
   el: HTMLElement,
 ): { start: number; end: number } | null {
@@ -722,7 +590,6 @@ function getSelectionOffsets(
   }
 }
 
-/** Focus `el` and set the DOM selection to the given character-offset range. */
 function setSelectionRange(el: HTMLElement, start: number, end: number) {
   el.focus();
   const sel = window.getSelection();
@@ -745,11 +612,7 @@ function setSelectionRange(el: HTMLElement, start: number, end: number) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Mark manipulation over an inline-node array (pure — exported for tests)
-// ---------------------------------------------------------------------------
-
-/** Order-independent structural equality for two mark arrays. */
+/** Order-independent equality of two mark arrays. */
 function marksEqual(a: Mark[] | undefined, b: Mark[] | undefined): boolean {
   const aa = a ?? [];
   const bb = b ?? [];
@@ -760,7 +623,6 @@ function marksEqual(a: Mark[] | undefined, b: Mark[] | undefined): boolean {
   return sa.every((v, i) => v === sb[i]);
 }
 
-/** Merge consecutive text nodes that carry identical marks. */
 export function mergeAdjacentInlineNodes(nodes: InlineNode[]): InlineNode[] {
   const out: InlineNode[] = [];
   for (const node of nodes) {
@@ -775,10 +637,7 @@ export function mergeAdjacentInlineNodes(nodes: InlineNode[]): InlineNode[] {
   return out;
 }
 
-/**
- * True when every character in [start, end) already carries a mark of `type`.
- * Returns false for an empty range or when no covered text exists.
- */
+/** Every character in [start, end) carries a mark of `type`; false for an empty range. */
 export function rangeHasMark(
   nodes: InlineNode[],
   start: number,
@@ -800,10 +659,7 @@ export function rangeHasMark(
   return sawCovered;
 }
 
-/**
- * Apply `transform` to the marks of every character in [start, end), splitting
- * nodes at the range boundaries. Returns a normalised inline-node array.
- */
+/** Applies `transform` to the marks in [start, end), splitting nodes at the bounds. */
 export function transformMarksInRange(
   nodes: InlineNode[],
   start: number,
@@ -850,16 +706,11 @@ export function transformMarksInRange(
   return mergeAdjacentInlineNodes(result);
 }
 
-/**
- * Locate the contiguous run of link-marked text surrounding character `offset`.
- * Returns the run's [start, end) bounds and href, or null when `offset` is not
- * inside a link.
- */
+/** The link run around `offset` (endpoints count as inside), or null. */
 export function findLinkRangeAt(
   nodes: InlineNode[],
   offset: number,
 ): { start: number; end: number; href: string; newTab: boolean } | null {
-  // Precompute each node's [start, end) bounds and link href (if any).
   const spans = nodes.map((node) => {
     const link = (node.marks ?? []).find((m) => m.type === "link");
     return {
@@ -875,7 +726,6 @@ export function findLinkRangeAt(
     return { start, end: pos, href: s.href, newTab: s.newTab };
   });
 
-  // Locate the link-bearing node the caret sits in (endpoints count as inside).
   const hitIndex = bounds.findIndex(
     (b) => b.href !== null && offset >= b.start && offset <= b.end,
   );
@@ -897,11 +747,7 @@ export function findLinkRangeAt(
   return { start, end, href, newTab: bounds[hitIndex].newTab };
 }
 
-/**
- * Locate the contiguous run of one sidenote surrounding character `offset`.
- * Returns the note's [start, end) bounds and id, or null when `offset` is not
- * inside a sidenote. Mirrors findLinkRangeAt (endpoints count as inside).
- */
+/** The sidenote run around `offset`, as `findLinkRangeAt`. */
 export function findSidenoteRangeAt(
   nodes: InlineNode[],
   offset: number,
@@ -937,39 +783,19 @@ export function findSidenoteRangeAt(
   return { start, end, id };
 }
 
-// ---------------------------------------------------------------------------
-
-/**
- * The dialog's answer, as the document records it.
- *
- * The payload is deliberately not a media node already — it is what the media
- * LIBRARY knows about a file (a url, a description, the kind its content type
- * declares), while a node is that plus everything an author does to it in a
- * frame. Spelling the conversion out here is what keeps the dialog from having
- * to know the document's shape, and it is one function rather than two because
- * a slot in a collection and a block in the article take the identical node —
- * which is the point of an item carrying the redundant `type: "media"`.
- *
- * `alt` is dropped rather than stored empty: it is optional in the schema and
- * an empty string would serialize noise into every document that never got one.
- */
+/** A library payload as a media node; an empty `alt` is dropped, not stored. */
 function mediaNodeFrom(payload: ImageInsertPayload): MediaNode {
   return {
     type: "media",
     kind: payload.kind,
     src: payload.src,
     ...(payload.alt ? { alt: payload.alt } : {}),
-    // Both or neither, and dropped entirely when the library has no
-    // measurement — a node carrying one dimension is a record of something
-    // that went wrong, and the reserved box falls back to the house ratio for
-    // it anyway (`mediaReservedAspect`).
     ...(payload.width && payload.height
       ? { width: payload.width, height: payload.height }
       : {}),
   };
 }
 
-/** Return true if a block carries no text content. */
 function isBlockEmpty(block: BlockNode): boolean {
   if (block.type === "horizontal_rule") return false;
   if (block.type === "media") return false;
@@ -983,14 +809,7 @@ function isBlockEmpty(block: BlockNode): boolean {
   return "children" in block && block.children.every((c) => !c.text.trim());
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-// Editor-specific base — contentEditable mechanics only.
-// Typography styles (size, color, weight) come from typographyStyles() below.
-// Empty blocks keep their natural single-line height (via the :empty::before
-// line box) so they stay clickable to focus; only reserve caret room on focus.
+// Empty blocks keep a line box so they stay clickable; caret room is reserved only on focus.
 const editableBaseStyle = css({
   focusVisibleRing: "none",
   minHeight: 0,
@@ -1074,24 +893,11 @@ const editorDemoPreviewStyle = css({
   userSelect: "none",
 });
 
-// The boxes a standalone media block is composed of — the SAME recipe the
-// reader's block uses, so the canvas is a preview of the article rather than a
-// second opinion about it. See `mediaBlock`.
 const mediaBlockStyles = mediaBlock();
 
-// The rail a demo block wears, in the chrome a picture's rail is made of:
-// `toolbar` for the box and `mediaObjectToolbar` for the float — centred on the
-// frame's top edge, up on hover or focus, down otherwise. A demo is the third
-// object to stand on the editor's canvas and the second to carry controls over
-// one; a second treatment for the same job would read as a second material.
-//
-// It sits in `mediaBlockStyles.root`, which is the box that does NOT clip, so
-// the half of the rail that hangs above the frame survives.
+// Lives in `mediaBlockStyles.root`, which doesn't clip, so the rail can hang above the frame.
 const editorObjectToolbarStyle = cx(toolbar(), mediaObjectToolbar());
 
-// The reader's picture plus what an editable one needs: it is the block's tab
-// stop, so it must not draw the focus ring a text field does, and the caret
-// that would otherwise appear over it is not a caret this block has.
 const editorImgStyle = cx(mediaBlockStyles.image, editorShowcaseMediaStyle);
 
 const editorImagePlaceholderStyle = cx(
@@ -1137,9 +943,6 @@ const editorCaptionStyle = cx(
   editableBaseStyle,
   typographyStyles({ type: "caption" }),
   css({
-    // Only what an EDITABLE caption needs: a full-width hit area to click
-    // into and a line of height to hold the placeholder. The measure and the
-    // centring come from `articleShowcase`, the same figure the reader uses.
     width: "token(spacing.full)",
     minHeight: "1.5em",
     "&:empty::before, &[data-empty]::before": {
@@ -1150,8 +953,6 @@ const editorCaptionStyle = cx(
   }),
 );
 
-// Blockquote citation — left-aligned beneath the quote text (unlike the
-// centered media/component captions).
 const editorBlockquoteCaptionStyle = cx(
   editableBaseStyle,
   articleBlockquoteCite(),
@@ -1165,8 +966,6 @@ const editorBlockquoteCaptionStyle = cx(
   }),
 );
 
-// Subheading eyebrow — above the heading. The recipe reveals the brand gradient
-// once populated; while empty it falls back to the placeholder colour.
 const editorSubheadingCaptionStyle = cx(
   editableBaseStyle,
   articleSubheadingCaption(),
@@ -1180,22 +979,16 @@ const editorSubheadingCaptionStyle = cx(
   }),
 );
 
-// Metric value — the gradient display line. The recipe clips the brand gradient
-// into the glyphs once populated; while empty it shows the placeholder colour.
 const editorMetricValueStyle = cx(
   editableBaseStyle,
   articleMetricValue(),
   css({
     minHeight: "1.5em",
-    // The value hugs its text (width: fit-content) so the gradient clips
-    // tightly — but an empty value would then collapse to 0 width, leaving
-    // the caret no room to render. Reserve a caret's width while empty.
+    // Reserve a caret's width, or an empty fit-content value collapses to 0.
     minWidth: "token(spacing.xxs)",
   }),
 );
 
-// Metric caption — the optional eyebrow above the value (image-caption style,
-// left-aligned).
 const editorMetricCaptionStyle = cx(
   editableBaseStyle,
   articleMetricCaption(),
@@ -1209,7 +1002,6 @@ const editorMetricCaptionStyle = cx(
   }),
 );
 
-// Metric label — the descriptive subtext line beneath the value.
 const editorMetricLabelStyle = cx(
   editableBaseStyle,
   articleMetricLabel(),
@@ -1223,10 +1015,6 @@ const editorMetricLabelStyle = cx(
   }),
 );
 
-// Wrapper for <hr> so it can receive keyboard focus (void elements can't).
-// A furniture block's shell: focusable so it can be selected and deleted like
-// any other non-text block, with a focus ring that reads as "this block is
-// selected" rather than as a form field.
 const editorFurnitureWrapperStyle = css({
   position: "relative",
   outline: "none",
@@ -1244,16 +1032,11 @@ const editorHrWrapperStyle = css({
   cursor: "default",
 });
 
-// List item content — contentEditable mechanics + shared prose recipe.
 const editorListItemContentStyle = cx(
   editableBaseStyle,
   articleListItemContent(),
 );
-// Every marker is a real button in the editor so it can open its popover —
-// reset the native chrome and re-enable pointer events (the read-only recipes
-// disable them). The button is always the 24px alignment BOX; the gradient ink
-// lives on the inner `listMarker` pill / `listBulletCircle` disc, never on the
-// button itself. The dot is the exception: `listBullet` draws its own ink.
+// Markers are buttons here; re-enable the pointer events the read-only recipes disable.
 const bulletButtonReset = css({
   appearance: "none",
   border: "none",
@@ -1266,52 +1049,32 @@ const editorListMarkerButtonStyle = cx(listMarkerBox(), bulletButtonReset);
 const editorListMarkerPillStyle = listMarker();
 const editorListBulletButtonStyle = cx(listBullet(), bulletButtonReset);
 const editorListBulletIconButtonStyle = cx(listBulletIcon(), bulletButtonReset);
-// Resolved STATICALLY, per variant — see the note in article-renderer.tsx:
-// Panda's extractor only reads literal call sites, so passing the marker
-// through as a variable emits no CSS for either glyph in a production build.
+// Resolved statically: Panda only extracts literal call sites.
 const editorBulletCircleClass = {
   check: listBulletCircle({ glyph: "check" }),
   cross: listBulletCircle({ glyph: "cross" }),
 } as const;
 const editorListItemShellStyle = articleListItemShell();
 
-/** Numbered (`list_item`) and bulleted (`bullet_list_item`) list entries share
- *  identical editing behaviour — only their marker differs. */
 type ListItemType = "list_item" | "bullet_list_item";
 function isListItemType(type: BlockNode["type"]): type is ListItemType {
   return type === "list_item" || type === "bullet_list_item";
 }
 
-// ---------------------------------------------------------------------------
-// EditableBlock
-// ---------------------------------------------------------------------------
-
 interface EditableBlockProps {
   block: BlockNode;
-  /**
-   * What to draw for a furniture block. The editor cannot build these itself —
-   * the grid is assembled from two database tables — so the page supplies them,
-   * exactly as it does for the reader.
-   */
   slots?: FurnitureSlots;
   blockIndex: number;
-  /** Count of distinct sidenotes before this block — offsets the block's own
-   *  note ordinals to their global values (see inlineNodesToHtml / sidenoteBases). */
+  /** Distinct sidenotes before this block, offsetting its note ordinals. */
   sidenoteBase: number;
   isFirst: boolean;
   isOnly: boolean;
   onChange: (block: BlockNode) => void;
-  /** Called on Enter; receives the HTML for before and after the caret so the
-   *  parent can split the current block at the cursor position. */
+  /** Receives the HTML before and after the caret, to split the block. */
   onEnter: (beforeHtml: string, afterHtml: string) => void;
   onDelete: () => void;
   onSlash: (el: HTMLElement) => void;
-  /**
-   * Called on every input event while the slash menu is open for this block.
-   * Receives the raw innerText so the parent can update the query or dismiss.
-   */
   onSlashInput?: (text: string) => void;
-  /** True while the slash menu is open for this block. */
   isSlashActive?: boolean;
   /** Called when ArrowUp is pressed on the first visual line. */
   onArrowUp?: () => void;
@@ -1321,19 +1084,13 @@ interface EditableBlockProps {
   onArrowLeft?: () => void;
   /** Called when ArrowRight is pressed at the very end of the block. */
   onArrowRight?: () => void;
-  /**
-   * Called when pasted content contains hard returns. Receives the HTML for
-   * the current block (before-caret content + first pasted line) and an array
-   * of HTML strings for the new blocks to insert after it (remaining lines
-   * merged with after-caret content on the last entry).
-   */
+  /** For a paste with hard returns: the current block's new HTML, and the blocks to insert after it. */
   onPasteBlocks?: (firstBlockHtml: string, newBlocksHtml: string[]) => void;
   /** Backspace at the start of a non-empty block — merge into the previous block. */
   onMergeWithPrev?: (currentHtml: string) => void;
   /** Delete at the end of a non-empty block — absorb the next block. */
   onMergeWithNext?: (currentHtml: string) => void;
-  /** Called after a non-paragraph block is downgraded to paragraph so the
-   *  parent can restore caret focus once the new element is mounted. */
+  /** After a downgrade to paragraph, so the parent can refocus the new element. */
   onConvertedToParagraph?: () => void;
   /** Toggle an inline mark over the current selection (⌘B / ⌘I / ⌘U). */
   onToggleMark?: (type: ToggleableMark) => void;
@@ -1341,31 +1098,22 @@ interface EditableBlockProps {
   onShiftArrowUp?: () => void;
   /** Shift+ArrowDown when the selection focus is on the last visual line. */
   onShiftArrowDown?: () => void;
-  /** Open the image library to replace the current image. */
   onChangeImage?: () => void;
-  /** Open the image library to add images to this collection. */
   onCollectionAdd?: () => void;
-  /** Open the image library to swap out one collection slot. */
   onCollectionReplace?: (itemIndex: number) => void;
   /** Move a collection item to the front, making it the featured image. */
   onCollectionFeature?: (itemIndex: number) => void;
-  /** Drop one image from the collection, freeing its slot. */
   onCollectionRemove?: (itemIndex: number) => void;
-  /** Exchange two collection slots — a tile dragged onto another. */
+  /** Swaps two collection slots. */
   onCollectionReorder?: (from: number, to: number) => void;
-  /** Open the component library to swap the demo this block holds. */
   onChangeComponent?: () => void;
-  /** Insert an empty paragraph immediately before this block. */
   onInsertParagraphBefore?: () => void;
   /** Insert an empty paragraph after this block, or focus the trailing one. */
   onInsertParagraphAfter?: () => void;
-  /** Insert an empty numbered-list item immediately before this list item. */
   onInsertListItemBefore?: () => void;
-  /** Insert an empty numbered-list item immediately after this list item. */
   onInsertListItemAfter?: () => void;
   /** Precomputed marker text for this numbered-list item (zero-padded or a→z). */
   listLabel?: string;
-  /** Open the numbering popover anchored to this item's marker badge. */
   onMarkerClick?: (rect: DOMRect) => void;
   elRef: (el: HTMLElement | null) => void;
 }
@@ -1416,18 +1164,12 @@ function EditableBlock({
 
   const slashAnchorProps = isSlashActive ? { "data-slash-anchor": "" } : {};
 
-  // Local ref to the DOM element — needed for the imperative innerHTML update.
   const contentRef = useRef<HTMLElement | null>(null);
   const captionRef = useRef<HTMLElement | null>(null);
-  // Metric-only: the subtext line below the value (the value uses contentRef and
-  // the eyebrow caption above reuses captionRef).
   const subtextRef = useRef<HTMLElement | null>(null);
   const showcaseMediaRef = useRef<HTMLElement | null>(null);
 
-  // Stable combined ref: forwards to both contentRef and the parent's elRef
-  // callback without recreating on every render. elRef is mirrored into a ref,
-  // synced after commit (writing a ref during render is unsafe), so combinedRef
-  // can stay identity-stable while always calling the latest elRef.
+  // elRef is mirrored into a ref after commit, so combinedRef stays identity-stable.
   const elRefRef = useRef(elRef);
   useEffect(() => {
     elRefRef.current = elRef;
@@ -1440,52 +1182,21 @@ function EditableBlock({
     showcaseMediaRef.current = el;
   }, []);
 
-  // Whether this non-text block currently has keyboard focus (drives overlay).
   const [isFocused, setIsFocused] = useState(false);
 
-  // A media block is a collection of ONE — the same object in another
-  // position, so the same docked inspector edits it through the same item
-  // algebra. A list rather than the node itself is what makes that literally
-  // true rather than merely analogous; every other block type hands in an
-  // empty list, which is a controller with nothing open.
-  //
-  // Called unconditionally, above the block-type branches below, because it is
-  // a hook. It costs a non-media block one `useState` and one `useRef`.
+  // A media block is a collection of one. A hook, so it runs for every block type; the rest pass [].
   const mediaItems = useMemo(
     () => (block.type === "media" ? [block] : []),
     [block],
   );
   const mediaProperties = useMediaProperties(mediaItems, ([next]) => {
-    // Rides `onChange`'s history debounce like every caption in the editor —
-    // and it has to: a slider drag emits a value per frame, and one undo step
-    // per frame would bury every other edit in the article's history.
+    // Debounced via onChange: a slider emits a value per frame.
     if (next) onChange(next);
   });
 
-  // Keyboard handler for the horizontal rule block (no caret): arrow keys
-  // navigate between blocks, Backspace/Delete removes the rule, and Enter
-  // inserts an empty paragraph above it (matching showcase media).
   const handleNonTextKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
-      // Only the keystrokes aimed at the BLOCK, never the ones aimed at
-      // something inside it.
-      //
-      // A non-text block is focusable (`tabIndex={0}`) and deletes itself on
-      // Backspace, which is right while the block is what has focus. But a
-      // furniture block hosts a SLOT — the homepage grid, the icon row — and
-      // that slot is somebody else's component, with its own buttons, its own
-      // fields and its own dialogs. React's handler fires for every keystroke
-      // that bubbles out of it, so without this the alt-text box in the media
-      // dialog the link card's rail opens — which lives inside the grid, and so
-      // inside this wrapper — deleted the entire grid on the first Backspace,
-      // mid-word. Enter inserted a paragraph above it, and the arrows threw
-      // focus out of the field being typed in.
-      //
-      // A target check rather than `stopPropagation` in each of those places:
-      // the wrapper is the one that knows the rule, and the alternative is
-      // every current and future slot having to remember it. It costs the
-      // block nothing — its own keys arrive with the wrapper as the target,
-      // since there is nothing else in it to focus.
+      // Only keys aimed at the block itself: a furniture slot's own fields must not delete the block.
       if (e.target !== e.currentTarget) return;
 
       switch (e.key) {
@@ -1520,7 +1231,6 @@ function EditableBlock({
           }
           break;
         case "Tab":
-          // Tab has no navigation role in the editor — swallow it.
           e.preventDefault();
           break;
         case "Backspace":
@@ -1560,8 +1270,6 @@ function EditableBlock({
     sel.addRange(range);
   }, []);
 
-  // Metric-only: move the caret into the subtext line below the value (mirrors
-  // focusCaption, which targets the eyebrow caption above).
   const focusSubtext = useCallback((position: "start" | "end") => {
     const subtext = subtextRef.current;
     if (!subtext) return;
@@ -1582,8 +1290,6 @@ function EditableBlock({
     sel.addRange(range);
   }, []);
 
-  // From a caption, move focus back to the element it captions: the showcase
-  // media (image/component) when present, otherwise the blockquote text.
   const focusCaptionOrigin = useCallback(() => {
     const media = showcaseMediaRef.current;
     if (media) {
@@ -1610,12 +1316,7 @@ function EditableBlock({
 
   const handleShowcaseMediaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
-      // These keys mean "navigate away from this figure", which only makes
-      // sense when the figure ITSELF has focus. A collection's grid root also
-      // contains the per-cell toolbars, and their Enter/Backspace must not
-      // bubble up and be read as "insert a paragraph above" or "delete the
-      // whole block". (A no-op for the image block, whose <img> has no
-      // children to bubble from.)
+      // Only when the figure itself has focus: a collection's cell toolbars bubble Enter/Backspace here.
       if (e.target !== e.currentTarget) return;
       switch (e.key) {
         case "ArrowUp":
@@ -1649,8 +1350,6 @@ function EditableBlock({
           }
           break;
         case "Tab":
-          // Tab never navigates in the editor — swallow it (ArrowDown/Right
-          // still move into the caption).
           e.preventDefault();
           break;
         case "Backspace":
@@ -1663,12 +1362,7 @@ function EditableBlock({
     [onArrowUp, onArrowLeft, onDelete, focusCaption, onInsertParagraphBefore],
   );
 
-  // Update innerHTML when block content changes externally (e.g. initial load
-  // after store init, or a slash-menu type conversion that causes remount).
-  // While the user is actively typing the element has focus — skip the update
-  // so we never reset the cursor position.
-  // Non-editable blocks (horizontal_rule, media) have no editable children —
-  // skip innerHTML sync to avoid wiping their rendered content.
+  // Syncs external content changes; skipped while focused (it would reset the caret) and for non-editable blocks.
   useEffect(() => {
     if (
       block.type === "horizontal_rule" ||
@@ -1689,8 +1383,7 @@ function EditableBlock({
           ? inlineNodesToHtml(block.children as InlineNode[], sidenoteBase)
           : "";
     el.innerHTML = html;
-    // `sidenoteBase` is a dep so a note added/removed in an EARLIER block
-    // re-serialises this (non-focused) block with its new ordinals.
+    // `sidenoteBase`: a note added or removed in an earlier block renumbers this one.
   }, [block, sidenoteBase]);
 
   useEffect(() => {
@@ -1708,8 +1401,6 @@ function EditableBlock({
     el.innerText = block.caption ?? "";
   }, [block]);
 
-  // Metric-only: keep the subtext line in sync (mirrors the caption effect
-  // above; the eyebrow caption uses captionRef, the subtext uses subtextRef).
   useEffect(() => {
     if (block.type !== "metric") return;
     const el = subtextRef.current;
@@ -1717,22 +1408,12 @@ function EditableBlock({
     el.innerText = block.subtext ?? "";
   }, [block]);
 
-  // ---------------------------------------------------------------------------
-  // Keyboard handling
-  // ---------------------------------------------------------------------------
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
-      // The cross-block delete handler runs in the document capture phase and
-      // calls e.preventDefault() when it processes a multi-block deletion.
-      // The React synthetic event still fires afterwards on the focused block.
-      // Without this guard the merge-with-prev / merge-with-next checks below
-      // would see a collapsed caret at position 0 and fire spuriously.
+      // The cross-block delete handler already prevented this; the merge checks below would misfire.
       if (e.nativeEvent.defaultPrevented) return;
 
-      // While the slash menu is open, hand off Enter and arrow keys to the
-      // menu's capture-phase listener — just preventDefault here so the browser
-      // doesn't move the caret or insert a newline.
+      // The slash menu's capture listener handles these; just stop the caret moving.
       if (isSlashActive) {
         if (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp") {
           e.preventDefault();
@@ -1740,10 +1421,7 @@ function EditableBlock({
         }
       }
 
-      // Tab never navigates between blocks in the editor — its only role is
-      // one-step indentation. For indentable blocks it toggles the indent
-      // (anywhere in the block); for every other block type it's a deliberate
-      // no-op. Either way preventDefault so the caret never jumps.
+      // Tab only toggles indentation and never moves the caret.
       if (e.key === "Tab") {
         e.preventDefault();
         if (
@@ -1762,7 +1440,6 @@ function EditableBlock({
         return;
       }
 
-      // Shift+ArrowUp: extend selection upward across blocks.
       if (e.key === "ArrowUp" && e.shiftKey) {
         const _sel = window.getSelection();
         const _focusInBlock = e.currentTarget.contains(_sel?.focusNode ?? null);
@@ -1770,16 +1447,13 @@ function EditableBlock({
           ? isFocusAtFirstLine(e.currentTarget)
           : false;
         if (!_focusInBlock && _sel?.focusNode) {
-          // Focus is in a different block. Use caretRangeFromPoint to compute the
-          // position one visual line above the current focus — this is independent
-          // of which contenteditable has DOM focus.
+          // Focus is in another block: find the position one line up with caretRangeFromPoint.
           e.preventDefault();
           const _r = document.createRange();
           _r.setStart(_sel.focusNode, _sel.focusOffset);
           _r.collapse(true);
           const _rect = _r.getBoundingClientRect();
-          // Jump a full line-height upward (never just 1px — that stays in the
-          // same line's hit-area and caretRangeFromPoint returns the same position).
+          // A full line up: 1px stays in the same line's hit area.
           const _lineH = Math.max(_rect.height, 20);
           const _target = document.caretRangeFromPoint(
             _rect.left,
@@ -1803,7 +1477,6 @@ function EditableBlock({
         }
       }
 
-      // Shift+ArrowDown: extend selection downward across blocks.
       if (e.key === "ArrowDown" && e.shiftKey) {
         const _sel = window.getSelection();
         const _focusInBlock = e.currentTarget.contains(_sel?.focusNode ?? null);
@@ -1839,7 +1512,6 @@ function EditableBlock({
         }
       }
 
-      // ArrowUp from a subheading's / metric's first line → its eyebrow caption.
       if (
         e.key === "ArrowUp" &&
         !e.shiftKey &&
@@ -1851,7 +1523,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowUp at the first visual line → move to previous block.
       if (
         e.key === "ArrowUp" &&
         !e.shiftKey &&
@@ -1863,8 +1534,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowDown from a blockquote's last line → its citation; from a metric's
-      // last line → its subtext line below the value.
       if (
         e.key === "ArrowDown" &&
         !e.shiftKey &&
@@ -1877,7 +1546,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowDown at the last visual line → move to next block.
       if (
         e.key === "ArrowDown" &&
         !e.shiftKey &&
@@ -1889,7 +1557,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowLeft at the start of a subheading / metric value → its eyebrow caption.
       if (
         e.key === "ArrowLeft" &&
         !e.shiftKey &&
@@ -1901,7 +1568,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowLeft at the very start of a block → move to end of previous block.
       if (
         e.key === "ArrowLeft" &&
         !e.shiftKey &&
@@ -1913,8 +1579,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowRight at the end of a blockquote value → its citation; at the end
-      // of a metric value → its subtext line below.
       if (
         e.key === "ArrowRight" &&
         !e.shiftKey &&
@@ -1927,7 +1591,6 @@ function EditableBlock({
         return;
       }
 
-      // ArrowRight at the very end of a block → move to start of next block.
       if (
         e.key === "ArrowRight" &&
         !e.shiftKey &&
@@ -1939,10 +1602,8 @@ function EditableBlock({
         return;
       }
 
-      // List Enter behaviour (numbered + bulleted; caret-position dependent).
       if (e.key === "Enter" && !e.shiftKey && isListItemType(block.type)) {
         e.preventDefault();
-        // Empty item → exit the list, converting to a paragraph.
         if (isBlockEmpty(block)) {
           onChange({
             type: "paragraph",
@@ -1951,49 +1612,37 @@ function EditableBlock({
           onConvertedToParagraph?.();
           return;
         }
-        // Caret at start → add an empty item before; keep editing this one.
         if (isCaretAtStart(e.currentTarget) && onInsertListItemBefore) {
-          // This element is reused (index-based key) as the new empty item;
-          // its text lives on in the store on the block that shifts down, so
-          // clear the DOM now — the focus guard would otherwise skip the sync.
+          // The index-based key reuses this element as the new empty item; clear it, since the focus guard skips the sync.
           e.currentTarget.innerHTML = "";
           onInsertListItemBefore();
           return;
         }
-        // Caret at end → add a fresh empty item after.
         if (isCaretAtEnd(e.currentTarget) && onInsertListItemAfter) {
           onInsertListItemAfter();
           return;
         }
-        // Caret in the middle → split into two items at the caret.
         const { before, after } = getCaretSplitHtml(e.currentTarget);
         e.currentTarget.innerHTML = before;
         onEnter(before, after);
         return;
       }
 
-      // Enter → insert paragraph above at caret start; otherwise split at caret.
-      // Code blocks keep Enter as a literal newline.
       if (e.key === "Enter" && !e.shiftKey && block.type !== "code_block") {
         e.preventDefault();
         if (isCaretAtStart(e.currentTarget) && onInsertParagraphBefore) {
-          // For a same-type block (paragraph) the index-based key reuses this
-          // element as the new empty block; its content survives in the store
-          // on the block that shifts down. Clear the DOM now so the reused
-          // element doesn't keep stale text the focus-guarded sync won't wipe.
+          // The index-based key reuses this element as the new empty block; clear its stale text now.
           e.currentTarget.innerHTML = "";
           onInsertParagraphBefore();
           return;
         }
         const { before, after } = getCaretSplitHtml(e.currentTarget);
-        // Trim the current block's DOM to the "before" portion immediately so
-        // the useEffect won't fight us while the element still has focus.
+        // Trim the DOM now, since the focus-guarded sync won't.
         e.currentTarget.innerHTML = before;
         onEnter(before, after);
         return;
       }
 
-      // Backspace/Delete on empty block → delete block
       if (
         (e.key === "Backspace" || e.key === "Delete") &&
         isBlockEmpty(block)
@@ -2003,7 +1652,6 @@ function EditableBlock({
         return;
       }
 
-      // Backspace at the start of a non-empty, non-paragraph block → downgrade to paragraph
       if (
         e.key === "Backspace" &&
         isCaretAtStart(e.currentTarget) &&
@@ -2023,7 +1671,6 @@ function EditableBlock({
         return;
       }
 
-      // Backspace at the start of a non-empty block → merge into previous block
       if (
         e.key === "Backspace" &&
         onMergeWithPrev &&
@@ -2034,7 +1681,6 @@ function EditableBlock({
         return;
       }
 
-      // Delete at the end of a non-empty block → absorb the next block
       if (
         e.key === "Delete" &&
         onMergeWithNext &&
@@ -2045,9 +1691,7 @@ function EditableBlock({
         return;
       }
 
-      // ⌘B / ⌘I / ⌘U → toggle bold / italic / underline over the selection.
-      // Routed through the AST-based toggle (same path as the selection toolbar)
-      // so a second press reliably removes the mark, unlike execCommand.
+      // Through the AST toggle, not execCommand, so a second press reliably removes the mark.
       if (
         e.metaKey &&
         !e.shiftKey &&
@@ -2089,21 +1733,15 @@ function EditableBlock({
     ],
   );
 
-  // ---------------------------------------------------------------------------
-  // Input / change handling
-  // ---------------------------------------------------------------------------
-
   const handleInput = useCallback(
     (e: React.InputEvent<HTMLElement>) => {
       const el = e.currentTarget;
 
-      // Detect backtick wrapping for inline code: `text`
       if (block.type !== "code_block") {
         const text = el.innerText ?? "";
         const match = text.match(/`([^`]+)`/);
         if (match) {
           const nodes = domToInlineNodes(el);
-          // Replace backtick-wrapped text with a code mark
           const replaced: InlineNode[] = nodes.flatMap((n) => {
             if (!n.marks || n.marks.length === 0) {
               const parts: InlineNode[] = [];
@@ -2138,9 +1776,7 @@ function EditableBlock({
               ...(block as Extract<BlockNode, { children: InlineNode[] }>),
               children: replaced,
             } as BlockNode);
-            // Rebuild HTML with code spans
             el.innerHTML = inlineNodesToHtml(replaced, sidenoteBase);
-            // Move caret to end
             const range = document.createRange();
             range.selectNodeContents(el);
             range.collapse(false);
@@ -2162,19 +1798,12 @@ function EditableBlock({
 
       if ("children" in block) {
         const nodes = domToInlineNodes(el);
-        // Deleting an annotation's text leaves its empty `.article-sidenote`
-        // wrapper (and the contenteditable=false <sup> inside it) orphaned in the
-        // DOM. domToInlineNodes already drops it from the AST, but the orphaned
-        // <sup> keeps incrementing the `sidenote` CSS counter, so the visible
-        // ordinals never decrement. Strip empty sidenote wrappers here; they hold
-        // no characters, so removing them leaves selection offsets unchanged.
+        // Deleting an annotation's text orphans its wrapper; stripping it leaves the offsets unchanged.
         const off = getSelectionOffsets(el);
         if (stripEmptySidenoteWrappers(el) && off) {
           setSelectionRange(el, off.start, off.end);
         }
-        // This block is focused, so its content-sync effect won't re-serialise
-        // it — refresh its own superscripts directly (e.g. after deleting an
-        // annotation, the ones after it decrement).
+        // Focused, so the content sync won't renumber it; refresh its superscripts here.
         renumberSidenoteSups(el, sidenoteBase);
         onChange({
           ...(block as Extract<BlockNode, { children: InlineNode[] }>),
@@ -2182,8 +1811,6 @@ function EditableBlock({
         } as BlockNode);
       }
 
-      // Notify parent about text changes while the slash menu is active so it
-      // can update the filter query or dismiss the menu.
       onSlashInput?.(el.innerText ?? "");
     },
     [block, sidenoteBase, onChange, onSlashInput],
@@ -2213,8 +1840,6 @@ function EditableBlock({
     [block, onChange],
   );
 
-  // Metric-only: persist the subtext line (mirrors handleCaptionInput, which
-  // writes the eyebrow caption).
   const handleSubtextInput = useCallback(
     (e: React.FormEvent<HTMLElement>) => {
       if (block.type !== "metric") return;
@@ -2237,8 +1862,6 @@ function EditableBlock({
         e.stopPropagation();
         return;
       }
-      // Tab has no navigation role in the editor — swallow it so the caret
-      // never jumps out of the caption.
       if (e.key === "Tab") {
         e.preventDefault();
         return;
@@ -2293,8 +1916,6 @@ function EditableBlock({
     [onArrowDown, onArrowRight, onInsertParagraphAfter, focusCaptionOrigin],
   );
 
-  // Move the caret to the start of the block's own editable content (used by
-  // the subheading eyebrow, which sits *above* the heading text).
   const focusContentStart = useCallback(() => {
     const content = contentRef.current;
     if (!content) return;
@@ -2314,16 +1935,12 @@ function EditableBlock({
     sel.addRange(range);
   }, []);
 
-  // Keydown handler for a caption that sits *above* its block (the subheading
-  // eyebrow). Down/Right/Enter descend into the heading; Up/Left at the start
-  // leave for the previous block.
   const handleHeadingCaptionKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
       if (e.key === "Backspace" || e.key === "Delete") {
         e.stopPropagation();
         return;
       }
-      // Tab has no navigation role in the editor — swallow it.
       if (e.key === "Tab") {
         e.preventDefault();
         return;
@@ -2373,7 +1990,6 @@ function EditableBlock({
     (e: React.ClipboardEvent<HTMLElement>) => {
       e.preventDefault();
 
-      // Code blocks are plain text — no markup, no splitting.
       if (block.type === "code_block") {
         const text = e.clipboardData.getData("text/plain");
         if (text) document.execCommand("insertText", false, text);
@@ -2383,14 +1999,12 @@ function EditableBlock({
       const htmlData = e.clipboardData.getData("text/html");
       const textData = e.clipboardData.getData("text/plain") ?? "";
 
-      // Build a normalised array of per-line HTML strings.
       const lines: string[] = htmlData
         ? sanitiseClipboardHtml(htmlData).split("<br>").filter(Boolean)
         : textData.split("\n").filter(Boolean).map(escapeHtml);
 
       if (lines.length === 0) return;
 
-      // Single line (or no multi-block callback) — standard inline insert.
       if (lines.length === 1 || !onPasteBlocks) {
         document.execCommand(
           htmlData ? "insertHTML" : "insertText",
@@ -2400,34 +2014,26 @@ function EditableBlock({
         return;
       }
 
-      // Multi-line: split the current block at the caret and distribute lines.
       const el = contentRef.current;
       if (!el) return;
 
       const { before, after } = getCaretSplitHtml(el);
 
-      // Current block gets: before-caret content + first pasted line.
       const firstBlockHtml = before + lines[0];
-      // New blocks: middle lines as-is, last line merged with after-caret content.
       const newBlocksHtml = [
         ...lines.slice(1, -1),
         lines[lines.length - 1] + after,
       ];
 
-      // Update the current block's DOM directly. The useEffect that normally
-      // syncs innerHTML skips while the element has focus, so this persists.
+      // Written directly: the content sync skips a focused block.
       el.innerHTML = firstBlockHtml;
 
-      // Single store update: rewrites current block + inserts all new ones.
       onPasteBlocks(firstBlockHtml, newBlocksHtml);
     },
     [block.type, onPasteBlocks],
   );
 
-  // ---------------------------------------------------------------------------
-  // Slash menu detection — fires on keyup so the "/" is already in the DOM
-  // ---------------------------------------------------------------------------
-
+  // On keyup, so the "/" is already in the DOM.
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
       const isTextBlock =
@@ -2438,9 +2044,6 @@ function EditableBlock({
         isListItemType(block.type) ||
         block.type === "code_block";
       if (e.key === "/" && isTextBlock) {
-        // Open the slash menu whenever "/" is the first character typed —
-        // i.e. the text from the element start up to the cursor is exactly "/".
-        // This works for both empty blocks and blocks with existing content.
         if (getTextBeforeCursor(e.currentTarget) === "/") {
           onSlash(e.currentTarget);
         }
@@ -2449,16 +2052,6 @@ function EditableBlock({
     [block, onSlash],
   );
 
-  // ---------------------------------------------------------------------------
-  // Horizontal rule (non-editable)
-  // ---------------------------------------------------------------------------
-
-  // Furniture — the grid and the icon row. Focusable and deletable like any
-  // other non-text block, but with nothing inside to edit: what they render is
-  // owned elsewhere and the document only says where it goes. The grid brings
-  // its own controls when the page passes it an editable one.
-  // A button: its label is typed into the button itself, and the link it goes
-  // to is edited from the toolbar over it — see `EditableButtonLink`.
   if (block.type === "button_link") {
     return (
       <EditableButtonLink
@@ -2531,10 +2124,6 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Code block
-  // ---------------------------------------------------------------------------
-
   if (block.type === "code_block") {
     return (
       <div className={cx(editorCodeBlockWrapperStyle, "code-block-wrapper")}>
@@ -2580,10 +2169,6 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Heading
-  // ---------------------------------------------------------------------------
-
   if (block.type === "heading") {
     return (
       <div
@@ -2620,10 +2205,6 @@ function EditableBlock({
       </div>
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Blockquote
-  // ---------------------------------------------------------------------------
 
   if (block.type === "blockquote") {
     return (
@@ -2663,19 +2244,8 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Media block — the picture with an editable caption
-  // ---------------------------------------------------------------------------
-
   if (block.type === "media") {
-    // Split in two here, and nowhere else, because this branch has two kinds of
-    // consumer. The placeholder is an element the editor renders itself and
-    // takes a plain DOM `ref`; the filled block is `Media`, which decides for
-    // itself whether the element is an <img> or a <video> and therefore names
-    // that hook `elementRef` — a callback, so a caller can hold what arrived in
-    // state. `showcaseMediaCallbackRef` already satisfies both: it is the right
-    // signature and it is a `useCallback`, which is what keeps a clip from
-    // being torn down and losing its playhead on every render.
+    // `showcaseMediaCallbackRef` must stay a stable callback, or a clip remounts and loses its playhead.
     const showcaseMediaContract = {
       tabIndex: 0 as const,
       "data-showcase-media": "",
@@ -2689,14 +2259,6 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        {/* The same object a collection slot holds, drawn by the same
-            component — see `MediaObject`. It used to be a picture under a
-            tinted overlay carrying "Change Image…" and a trash can, which meant
-            a picture in a collection could be given a caption, a shader ground,
-            a fit, an inset and a corner, and the identical picture standing
-            alone could be given none of them. The rail is the same rail, less
-            the star: featuring is a move-to-front, and a block has no other
-            slot to move in front of. */}
         <MediaObject
           item={block}
           classes={{
@@ -2710,20 +2272,10 @@ function EditableBlock({
           onToggleProperties={() => mediaProperties.toggle(0)}
           onReplace={() => onChangeImage?.()}
           onRemove={() => onDelete?.()}
-          // The trash empties a collection SLOT and leaves the block standing;
-          // here there is no block left over, so it says what it does.
           removeLabel="Delete image"
           mediaProps={{
-            // Held, not played. A loop running beside the prose someone is
-            // writing is a distraction, and holding costs nothing to look at:
-            // `Media` seeks a hair past the start so a paused clip shows its
-            // opening frame rather than an empty box. The house transport is
-            // left off for the same reason — this canvas is for arranging
-            // blocks rather than watching them run.
             autoPlay: false,
-            // The block's tab stop. Its figure holds no caret, so the media
-            // element itself is what the caret keys are read from and what
-            // `focusBlockAtStart` reaches by querying `[data-showcase-media]`.
+            // The media element is the block's tab stop; `focusBlockAtStart` finds it via `[data-showcase-media]`.
             elementRef: showcaseMediaCallbackRef,
             ...showcaseMediaContract,
           }}
@@ -2739,11 +2291,7 @@ function EditableBlock({
           }
         />
         {mediaProperties.panel && (
-          // A SIBLING of the block, not a child of it. This figure carries the
-          // editor's showcase-media contract, and a panel full of inputs inside
-          // it would put every keystroke through that handler. It docks to the
-          // viewport (and portals to the body to get there), so it takes no
-          // space here and needs none.
+          // Outside the figure, whose showcase-media key handler would otherwise take the panel's keystrokes.
           <MediaPropertiesPanel
             key={mediaProperties.panel.key}
             {...mediaProperties.panel.props}
@@ -2764,15 +2312,7 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Collection block — a grid of images with an editable block caption
-  //
-  // The grid ROOT takes the showcase-media contract, so a collection navigates
-  // exactly like a single image: ArrowUp escapes upward, ArrowDown drops into
-  // the caption, Enter inserts a paragraph above, Backspace deletes the block.
-  // The per-cell toolbars come after it in DOM order, so Tab still reaches them.
-  // ---------------------------------------------------------------------------
-
+  // The grid root takes the showcase-media contract, so a collection navigates like a single image.
   if (block.type === "collection") {
     const showcaseMediaProps = {
       tabIndex: 0 as const,
@@ -2796,11 +2336,6 @@ function EditableBlock({
           onRemove={(i) => onCollectionRemove?.(i)}
           onReorder={(from, to) => onCollectionReorder?.(from, to)}
           onAddImage={() => onCollectionAdd?.()}
-          // Everything the properties panel writes, in one edit. It rides
-          // `onChange`'s history debounce like every other caption in the
-          // editor — and it has to: a slider drag emits a value per frame, and
-          // one undo step per frame would bury every other edit in the
-          // article's history.
           onItemsChange={(items) => onChange({ ...block, items })}
         />
         <figcaption
@@ -2818,10 +2353,6 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Component block
-  // ---------------------------------------------------------------------------
-
   if (block.type === "component") {
     const demo = getDemoComponent(block.componentId);
     const showcaseMediaProps = {
@@ -2838,13 +2369,6 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        {/* The same three boxes a picture stands in — the non-clipping root,
-            the frame, and the rail straddling its top edge — because a demo is
-            the same KIND of thing on this canvas as a picture: an object the
-            article holds a position for, with a caption under it. It used to
-            wear a tinted scrim with a lone trash can in the middle of it, which
-            defocused the very demo the control was about and offered no way to
-            change WHICH demo it was short of deleting the block. */}
         <div className={mediaBlockStyles.root}>
           <DemoFrame
             aspectRatio={demo?.aspectRatio}
@@ -2852,9 +2376,7 @@ function EditableBlock({
             fill={demo?.fill}
             interactive={false}
             className={editorShowcaseMediaStyle}
-            // The hook the rail reveals itself off — the same one a picture's
-            // frame is stamped with, so the two rails share a rule rather than
-            // each carrying a near-copy of it. See `mediaObjectToolbar`.
+            // The hook the rail reveals itself off, shared with a picture's frame.
             data-media-cell=""
             {...showcaseMediaProps}
           >
@@ -2875,9 +2397,6 @@ function EditableBlock({
                 >
                   <ReplaceIcon aria-hidden />
                 </OptionList.Option>
-                {/* Nothing is left over when a demo block goes — unlike a
-                    collection slot, which empties and stands — so the trash
-                    says what it does. */}
                 <OptionList.Option
                   aria-label="Delete component"
                   onClick={onDelete}
@@ -2903,13 +2422,7 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // List item (numbered or bulleted)
-  // ---------------------------------------------------------------------------
-
   if (isListItemType(block.type)) {
-    // The marker text is precomputed by computeListNumbering (zero-padded
-    // decimal or a→z), so continue/reset/alpha all resolve in one place.
     const markerLabel = listLabel ?? "1";
 
     return (
@@ -2965,11 +2478,6 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Metric — an optional eyebrow caption above a gradient value, with an
-  // optional descriptive subtext line beneath it.
-  // ---------------------------------------------------------------------------
-
   if (block.type === "metric") {
     return (
       <div
@@ -3014,10 +2522,6 @@ function EditableBlock({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Paragraph (default)
-  // ---------------------------------------------------------------------------
-
   const align = (block as { align?: "center" }).align;
 
   return (
@@ -3025,11 +2529,7 @@ function EditableBlock({
       ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
       className={cx(
         editableBaseStyle,
-        // `wrap` has to come through the recipe, not the `data-align` rule in
-        // globals.css: the base `text-wrap: pretty` is an atomic utility, and a
-        // rule in the base layer loses to it. As a variant the two are merged
-        // into one class before anything is emitted. Same reasoning the reader
-        // follows — see the note on the `wrap` variant in `typography.tsx`.
+        // `wrap` must come through the recipe: a base-layer `data-align` rule loses to the atomic `text-wrap`.
         typographyStyles({
           type: "bodyLarge",
           wrap: align === "center" ? "balance" : undefined,
@@ -3051,19 +2551,7 @@ function EditableBlock({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Ensure document always has at least one block and a trailing editable block
-// ---------------------------------------------------------------------------
-
-/**
- * Ensure an editable paragraph trails certain terminal blocks so the author can
- * always continue typing after them. This covers caret-less blocks
- * (horizontal_rule, media, component), lists — a list item last block would
- * otherwise trap the author in the list with no plain block to click into below
- * it — code blocks, where Enter inserts a literal newline rather than a new
- * block, leaving no way to escape downward, and buttons, whose label is one
- * line with nowhere below it to click.
- */
+/** Adds a trailing paragraph after blocks with nowhere below to type: caret-less blocks, lists, code, buttons. */
 function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
   if (blocks.length === 0) {
     return [{ type: "paragraph", children: [{ type: "text", text: "" }] }];
@@ -3095,10 +2583,7 @@ function emptyParagraphBlock(): BlockNode {
   return { type: "paragraph", children: [{ type: "text", text: "" }] };
 }
 
-/**
- * The layout a paragraph made off `source` keeps: its indent and its centring.
- * Only the fields that are set, so a plain block yields a plain paragraph.
- */
+/** The indent and centring a paragraph made off `source` keeps; only the fields that are set. */
 function inheritedLayout(
   source: BlockNode | undefined,
 ): { indent?: true; align?: "center" } {
@@ -3129,15 +2614,7 @@ function hasSyntheticTrailingParagraph(
   return isBlockEmpty(blocks[index + 1]);
 }
 
-// ---------------------------------------------------------------------------
-// ArticleEditor
-// ---------------------------------------------------------------------------
-
-/**
- * Everything except the furniture blocks — what the slash menu offers on a page
- * that supplies no slots. Listed rather than filtered so that adding a block
- * type is a compile error here if it needs a decision, not a silent omission.
- */
+/** What the slash menu offers on a page with no slots: everything but furniture. */
 const NON_FURNITURE_TYPES: SlashMenuBlockType[] = [
   "heading",
   "paragraph",
@@ -3156,20 +2633,11 @@ const NON_FURNITURE_TYPES: SlashMenuBlockType[] = [
 interface ArticleEditorProps {
   initialPost?: Post;
   category?: PostCategory;
-  /** Renders the furniture blocks — see {@link FurnitureSlots}. */
   slots?: FurnitureSlots;
-  /**
-   * Whether the page has a title to edit.
-   *
-   * False for the homepage, which has none and never will: it is reached at
-   * `/`, nothing links to it by name, and an empty "Title" placeholder sitting
-   * above the intro is an invitation to fill in a field that would then have
-   * nowhere to appear.
-   */
+  /** False for the homepage, which has no title. */
   showTitle?: boolean;
 }
 
-/** Viewport-relative rect used to anchor the floating selection toolbar. */
 interface ToolbarRect {
   left: number;
   top: number;
@@ -3179,19 +2647,13 @@ interface ToolbarRect {
 
 interface ToolbarState {
   mode: SelectionToolbarMode;
-  /** Index of the block the toolbar operates on. */
   index: number;
-  /** Anchor rect in viewport coordinates. */
   rect: ToolbarRect;
-  /** Character range within the block the toolbar targets. */
   range: { start: number; end: number };
-  /** Existing link href (link-view / link-edit). */
   href?: string;
-  /** Whether the existing link opens in a new tab (link-view / link-edit). */
   newTab?: boolean;
-  /** Target sidenote id (sidenote-view). */
   sidenoteId?: string;
-  /** Mark types the selection fully carries (drives active button state). */
+  /** Marks the whole selection carries. */
   activeMarks: Set<Mark["type"]>;
 }
 
@@ -3221,16 +2683,13 @@ export function ArticleEditor({
   } = useEditorStore();
   const metadataOpen = useMetadataPanelStore((state) => state.open);
 
-  // Populate store from initialPost on mount; reset on unmount.
   useEffect(() => {
     const sessionCategory = category ?? initialPost?.category ?? "ARTICLE";
-    // Prefer a local autosave over the DB copy — it holds edits made after the
-    // last save that a refresh / tab-close would otherwise have lost.
+    // A local autosave wins over the DB copy: it holds edits made since the last save.
     const restored = readAutosave(
       autosaveKey(initialPost?.id ?? null, sessionCategory),
     );
 
-    // Where the row reads, whatever the buffer says — see `savedAddress`.
     const savedAddress = initialPost
       ? { category: initialPost.category, slug: initialPost.slug }
       : null;
@@ -3240,8 +2699,6 @@ export function ArticleEditor({
         title: restored.title,
         draftId: restored.draftId,
         category: restored.category,
-        // A snapshot from before the sidebar existed carries neither, and
-        // reads as the row's own.
         slug:
           restored.slug !== undefined
             ? restored.slug
@@ -3288,29 +2745,22 @@ export function ArticleEditor({
     s.pushHistory({ title: s.title, document: s.document });
     return () => {
       useEditorStore.getState().reset();
-      // The sidebar is a view of this buffer, and goes with it.
       useMetadataPanelStore.getState().setOpen(false);
     };
-    // Intentionally keyed on identity (id), not the whole `initialPost` object:
-    // re-seeding on every new prop reference would wipe in-progress edits.
+    // Keyed on the id: re-seeding on every new prop reference would wipe in-progress edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPost?.id, category]);
 
-  // Autosave to localStorage (debounced) so an accidental refresh or tab close
-  // never loses unsaved edits. Only dirty state is persisted; an explicit
-  // save / publish / discard clears the entry (see use-command-palette.ts).
+  // Debounced autosave of dirty state; saving, publishing or discarding clears it (use-command-palette.ts).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    // The key a new draft is kept under names its category, which the sidebar
-    // can change — so a snapshot is MOVED rather than copied, or the one left
-    // under the old category would come back the next time that editor opened.
+    // The key names the category, which can change, so a snapshot is moved, not copied.
     let lastKey: string | null = null;
     const unsubscribe = useEditorStore.subscribe((state) => {
       if (!state.isDirty) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        // Re-read at fire time: a save between scheduling and firing clears the
-        // dirty flag, and this pending write must not resurrect the autosave.
+        // Re-read at fire time: a save in between must not resurrect the autosave.
         const s = useEditorStore.getState();
         if (!s.isDirty) return;
         const key = autosaveKey(s.draftId, s.category);
@@ -3333,40 +2783,27 @@ export function ArticleEditor({
     };
   }, []);
 
-  // ⌘S is the command palette's (`useCommandPalette`), which saves whatever
-  // editor is open. This editor used to claim it as well, from the capture
-  // phase — and since nothing stopped the key there, both answered it: every
-  // ⌘S wrote the post twice, and a draft saved for the first time was minted
-  // twice.
-
+  // ⌘S belongs to the command palette; handling it here too would save twice.
   const blocks = ensureBlocks(doc);
-  // Distinct-note count before each block — offsets each block's own sidenote
-  // ordinals to their global values when serialising it independently.
   const sidenoteBaseList = sidenoteBases(blocks);
   const blockRefs = useRef<(HTMLElement | null)[]>([]);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  // Index of the editing host where the current pointer-drag started.
-  // -1 = title, 0+ = block index, null = no active drag.
+  // The editing host where a drag started: -1 title, 0+ block, null none.
   const dragAnchorIdx = useRef<number | null>(null);
-  // Holds the latest cross-block keyboard handler so the document listener
-  // registered once (empty dep array) always calls current logic.
   const crossBlockDeleteRef = useRef<(e: KeyboardEvent) => void>(() => {});
-  // Timer for batching rapid text-input changes into a single history entry.
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** Push the current store state as a new history snapshot immediately. */
   function pushHistoryNow() {
     const s = useEditorStore.getState();
     pushHistory({ title: s.title, document: s.document });
   }
 
-  /** Push a history snapshot after a brief pause (batches consecutive keystrokes). */
   function pushHistoryDebounced() {
     if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
     historyTimerRef.current = setTimeout(pushHistoryNow, 500);
   }
 
-  /** Cancel any pending debounced push (call before a structural operation). */
+  /** Call before a structural operation. */
   function cancelHistoryDebounce() {
     if (historyTimerRef.current) {
       clearTimeout(historyTimerRef.current);
@@ -3374,13 +2811,7 @@ export function ArticleEditor({
     }
   }
 
-  // Cross-block mouse-drag selection.
-  //
-  // Chrome treats each `contentEditable` element as its own editing host and
-  // clips a drag-selection at the host boundary. We intercept `pointermove`
-  // while the left button is held and, whenever the pointer has crossed into a
-  // different editing host, call `sel.extend(caretRangeFromPoint)` — the same
-  // technique used for Shift+Arrow.
+  // Chrome clips a drag selection at each contentEditable host, so extend it across hosts by hand.
   useEffect(() => {
     function blockIdxForNode(node: Node | null): number | null {
       if (!node) return null;
@@ -3406,7 +2837,6 @@ export function ArticleEditor({
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const currentIdx = blockIdxForNode(el);
 
-      // Only intervene when the pointer has crossed into a different editing host.
       if (currentIdx === null || currentIdx === dragAnchorIdx.current) return;
 
       const sel = window.getSelection();
@@ -3438,10 +2868,7 @@ export function ArticleEditor({
     };
   }, []);
 
-  // Cmd+A while any editor element is focused → select from title start to
-  // last-block end. Implemented directly in the closure (not via a ref) so
-  // there is no indirection — only titleRef / blockRefs are needed and both
-  // are stable MutableRefObjects.
+  // ⌘A selects from the title to the last block.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!(e.metaKey && e.key === "a")) return;
@@ -3457,7 +2884,7 @@ export function ArticleEditor({
       e.preventDefault();
 
       const firstEl = titleRef.current;
-      // Use findLast to skip stale null entries left behind after block deletions.
+      // findLast skips null entries left by deleted blocks.
       const lastEl =
         blockRefs.current.findLast((el) => el != null) ?? titleRef.current;
       if (!firstEl || !lastEl) return;
@@ -3477,8 +2904,6 @@ export function ArticleEditor({
       document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, []);
 
-  // Delete / Backspace across editing hosts — dispatches to crossBlockDeleteRef
-  // so the once-registered listener always calls the latest closure.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       crossBlockDeleteRef.current(e);
@@ -3488,12 +2913,7 @@ export function ArticleEditor({
       document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, []);
 
-  // Cmd+Z (undo) and Cmd+Shift+Z (redo) while focus is in the editor.
-  //
-  // Blurs the focused element before calling undo/redo so that
-  // EditableBlock's DOM-sync useEffect isn't blocked by the "skip if focused"
-  // guard. After React re-renders with the restored snapshot, focus lands at
-  // the same block index (capped to the new block count).
+  // Undo/redo blur first, so the blocks' focus-guarded sync applies the snapshot, then refocus by index.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!e.metaKey || (e.key !== "z" && e.key !== "Z")) return;
@@ -3518,11 +2938,9 @@ export function ArticleEditor({
         if (store.historyIndex <= 0) return;
       }
 
-      // Cancel any pending text-input debounce — we're about to restore a
-      // snapshot, so the in-flight debounce would overwrite it on next fire.
+      // A pending debounce would overwrite the restored snapshot.
       cancelHistoryDebounce();
 
-      // Blur so EditableBlock's innerHTML sync useEffect isn't skipped.
       focused?.blur();
 
       if (isRedo) {
@@ -3531,14 +2949,12 @@ export function ArticleEditor({
         store.undo();
       }
 
-      // Re-focus after React re-renders (setTimeout puts us after the flush).
       const targetIdx = inTitle ? -1 : focusedBlockIdx;
       setTimeout(() => {
         if (targetIdx === -1) {
           titleRef.current?.focus();
           return;
         }
-        // Use the same block index, capped to whatever blocks still exist.
         const currentBlocks = blockRefs.current.filter(Boolean);
         const idx = Math.min(targetIdx, Math.max(0, currentBlocks.length - 1));
         const el =
@@ -3562,20 +2978,17 @@ export function ArticleEditor({
       document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, []);
 
-  // Update the title DOM imperatively when the store title changes, but skip
-  // while the user has focus there (typing) so we never reset their cursor.
+  // Skipped while the title has focus, so typing never loses the caret.
   useEffect(() => {
     if (titleRef.current && document.activeElement !== titleRef.current) {
       titleRef.current.innerHTML = title;
     }
   }, [title]);
 
-  // Slash menu state
   const [slashAnchor, setSlashAnchor] = useState<{
     el: HTMLElement;
     index: number;
-    /** True when the menu was opened on a block that already had text content
-     *  beyond the triggering "/". Suppresses content-as-query behaviour. */
+    /** The block had text beyond the "/", so its content isn't the query. */
     hasExistingContent: boolean;
   } | null>(null);
   const [slashQuery, setSlashQuery] = useState("");
@@ -3595,43 +3008,28 @@ export function ArticleEditor({
   const [collectionDialogBlockIndex, setCollectionDialogBlockIndex] = useState<
     number | null
   >(null);
-  // Which slot the picker is filling: `null` means "add to the end" (a fresh
-  // collection, or the Add Media CTA), a number means "swap this one out".
+  // null adds to the end; a number replaces that slot.
   const [collectionDialogTarget, setCollectionDialogTarget] = useState<
     number | null
   >(null);
 
-  // Floating selection toolbar (formatting / link editing / link actions).
   const [toolbar, setToolbar] = useState<ToolbarState | null>(null);
-  // Id of a just-added sidenote whose aside card should grab focus so the note
-  // can be typed straight away; cleared once the card focuses.
   const [pendingSidenoteFocusId, setPendingSidenoteFocusId] = useState<
     string | null
   >(null);
-  // Id of the sidenote whose card is open for editing (set from the sidenote
-  // popover's Edit action / on add). The caret merely surfaces the popover; the
-  // card only appears once you choose Edit.
+  // The card opens only on Edit; the caret merely surfaces the popover.
   const [editingSidenoteId, setEditingSidenoteId] = useState<string | null>(
     null,
   );
-  // Numbered-list marker popover (continue / reset / swap style). Anchored to
-  // the clicked marker's rect.
   const [numbering, setNumbering] = useState<{
     index: number;
     rect: ToolbarRect;
   } | null>(null);
-  // Bulleted-list marker popover (dot / check / cross), anchored the same way.
   const [bullet, setBullet] = useState<{
     index: number;
     rect: ToolbarRect;
   } | null>(null);
-  // Latest selection tracker — assigned every render so the once-registered
-  // document listener always calls the current closure (needs live blocks).
   const trackSelectionRef = useRef<(force?: boolean) => void>(() => {});
-
-  // -------------------------------------------------------------------------
-  // Focus helpers
-  // -------------------------------------------------------------------------
 
   function isShowcaseFigure(el: HTMLElement): boolean {
     return el.hasAttribute("data-showcase-block");
@@ -3671,8 +3069,7 @@ export function ArticleEditor({
     }
 
     el.focus();
-    // Non-text blocks (HR wrapper, image figure) are not contentEditable —
-    // just calling focus() is enough; no caret range is needed.
+    // Non-text blocks aren't contentEditable; focus() is enough.
     if (!el.isContentEditable) return;
     const sel = window.getSelection();
     if (!sel) return;
@@ -3701,8 +3098,7 @@ export function ArticleEditor({
     }
 
     el.focus();
-    // Non-text blocks (HR wrapper, image figure) are not contentEditable —
-    // just calling focus() is enough; no caret range is needed.
+    // Non-text blocks aren't contentEditable; focus() is enough.
     if (!el.isContentEditable) return;
     const sel = window.getSelection();
     if (!sel) return;
@@ -3718,11 +3114,6 @@ export function ArticleEditor({
     sel.addRange(range);
   }
 
-  /**
-   * Shift+ArrowUp at the first line of block[index]:
-   * extend the selection from the current anchor into the previous block,
-   * placing the focus at the end of that block.
-   */
   function shiftArrowUp(blockIndex: number) {
     const sel = window.getSelection();
     if (!sel) return;
@@ -3733,8 +3124,7 @@ export function ArticleEditor({
       const focus = lastTextNode(el) ?? el;
       const offset =
         focus.nodeType === Node.TEXT_NODE ? (focus as Text).length : 0;
-      // Use extend() — does NOT change document.activeElement, avoids Chrome's
-      // "refocus to anchor element" behaviour that setBaseAndExtent triggers.
+      // extend(), not setBaseAndExtent, which makes Chrome refocus the anchor element.
       sel.extend(focus, offset);
       return;
     }
@@ -3747,11 +3137,6 @@ export function ArticleEditor({
     sel.extend(focus, offset);
   }
 
-  /**
-   * Shift+ArrowDown at the last line of block[index]:
-   * extend the selection from the current anchor into the next block,
-   * placing the focus at the start of that block.
-   */
   function shiftArrowDown(blockIndex: number) {
     const sel = window.getSelection();
     if (!sel) return;
@@ -3759,13 +3144,8 @@ export function ArticleEditor({
     const nextEl = blockRefs.current[blockIndex + 1];
     if (!nextEl) return;
     const focus = firstTextNode(nextEl) ?? nextEl;
-    // Use extend() — does NOT change document.activeElement.
     sel.extend(focus, 0);
   }
-
-  // -------------------------------------------------------------------------
-  // Block mutations
-  // -------------------------------------------------------------------------
 
   function updateBlocks(next: BlockNode[]) {
     setDocument({ ...doc, content: withTrailingParagraph(next) });
@@ -3780,22 +3160,16 @@ export function ArticleEditor({
 
   function splitBlock(index: number, beforeHtml: string, afterHtml: string) {
     const current = blocks[index];
-    // Update the current block to contain only the before-caret content.
     const updatedCurrent: BlockNode =
       "children" in current && current.type !== "code_block"
         ? ({ ...current, children: htmlToNodes(beforeHtml) } as BlockNode)
         : current;
 
-    // The new block inherits the current block's type for list items only, so
-    // pressing Enter continues the list. Every other block type (headings,
-    // blockquotes, metrics, …) splits into a default paragraph — which carries
-    // the indent and centring forward so both halves keep the same layout.
+    // Only list items continue their type; anything else splits into a paragraph keeping indent and centring.
     const newBlock: BlockNode = (() => {
       const afterNodes = htmlToNodes(afterHtml);
       if (isListItemType(current.type)) {
-        // Carry the item's bullet glyph forward so splitting keeps the style.
-        // (On numbered items `marker` is a run-head field the numbering algo
-        // ignores off-head, so copying it here is harmless.)
+        // Carry the bullet glyph forward; a numbered item ignores `marker` off-head.
         const marker = (current as { marker?: string }).marker;
         return {
           type: current.type,
@@ -3825,9 +3199,6 @@ export function ArticleEditor({
     }, 0);
   }
 
-  // A fresh empty paragraph that inherits `indent` and `align` from `source` —
-  // so a new node created off an indented or centred block (Enter at its
-  // start/end) keeps that layout.
   function emptyParagraphInheriting(source: BlockNode | undefined): BlockNode {
     return { ...emptyParagraphBlock(), ...inheritedLayout(source) } as BlockNode;
   }
@@ -3874,9 +3245,6 @@ export function ArticleEditor({
     return { type, children: [{ type: "text", text: "" }] };
   }
 
-  /** A fresh empty item that inherits `source`'s bullet glyph, so adding an
-   *  item to a checked/crossed list keeps that style. Numbered items carry no
-   *  per-item glyph, so they fall through to a plain empty item. */
   function emptyListItemInheriting(source: BlockNode): BlockNode {
     if (source.type === "bullet_list_item" && source.marker) {
       return {
@@ -3888,15 +3256,10 @@ export function ArticleEditor({
     return emptyListItemBlock(source.type as ListItemType);
   }
 
-  /** Enter at the start of a list item: prepend an empty item of the same list
-   *  type (numbered or bulleted), keeping the caret on the current item. */
   function insertListItemBefore(index: number) {
     const source = blocks[index];
     const type = source.type as ListItemType;
-    // Prepending before a numbered run's first item makes the new item the run
-    // head — carry the run-level marker/continue settings so the list keeps its
-    // style. (These fields are ignored on non-head items, so leaving copies on
-    // the old head is harmless.)
+    // A new item before the run's head becomes the head, so it takes the run-level marker and continue settings.
     const atRunStart =
       type === "list_item" &&
       (index === 0 || blocks[index - 1].type !== "list_item");
@@ -3914,24 +3277,17 @@ export function ArticleEditor({
     pushHistoryNow();
 
     setTimeout(() => {
-      // The original (content) item shifted down to index + 1.
       const el = blockRefs.current[index + 1];
       if (el) focusBlockAtStart(el);
     }, 0);
   }
 
-  // -------------------------------------------------------------------------
-  // Numbered-list numbering controls (the marker popover)
-  // -------------------------------------------------------------------------
-
-  /** First index of the contiguous list_item run containing `index`. */
   function listRunStart(index: number): number {
     let start = index;
     while (start > 0 && blocks[start - 1].type === "list_item") start--;
     return start;
   }
 
-  /** True when a numbered-list run exists before the run containing `index`. */
   function hasPrecedingList(index: number): boolean {
     const start = listRunStart(index);
     for (let k = 0; k < start; k++) {
@@ -3945,7 +3301,6 @@ export function ArticleEditor({
     return first?.type === "list_item" && first.continued === true;
   }
 
-  /** Toggle "continue numbering" on the run head. No-op with no preceding list. */
   function toggleContinueNumbering(index: number) {
     const start = listRunStart(index);
     const first = blocks[start];
@@ -3959,7 +3314,7 @@ export function ArticleEditor({
     pushHistoryNow();
   }
 
-  /** Restart the counter at the clicked item (toggle an explicit start of 1). */
+  /** Restarts the count at the clicked item by toggling an explicit start of 1. */
   function resetNumbering(index: number) {
     const item = blocks[index];
     if (item.type !== "list_item") return;
@@ -3970,7 +3325,6 @@ export function ArticleEditor({
     pushHistoryNow();
   }
 
-  /** Swap the whole run between decimal (1,2,3…) and alpha (a,b,c…) markers. */
   function swapListStyle(index: number) {
     const start = listRunStart(index);
     const first = blocks[start];
@@ -3984,18 +3338,12 @@ export function ArticleEditor({
     pushHistoryNow();
   }
 
-  // -------------------------------------------------------------------------
-  // Bulleted-list marker controls (the bullet popover)
-  // -------------------------------------------------------------------------
-
-  /** The clicked bullet item's current style ("dot" when unset). */
   function bulletStyleOf(index: number): BulletStyle {
     const item = blocks[index];
     if (item?.type !== "bullet_list_item") return "dot";
     return item.marker ?? "dot";
   }
 
-  /** Set (or clear, for "dot") the clicked bullet item's glyph. */
   function setBulletStyle(index: number, style: BulletStyle) {
     const item = blocks[index];
     if (item?.type !== "bullet_list_item") return;
@@ -4009,7 +3357,6 @@ export function ArticleEditor({
     pushHistoryNow();
   }
 
-  /** Bounds [start, end) of the contiguous bullet run containing `index`. */
   function bulletRunBounds(index: number): { start: number; end: number } {
     let start = index;
     while (start > 0 && blocks[start - 1].type === "bullet_list_item") start--;
@@ -4019,9 +3366,7 @@ export function ArticleEditor({
     return { start, end };
   }
 
-  /** The representative glyph of the nearest bulleted list ending before
-   *  `runStart` (its head item's style), or null when none precedes it.
-   *  Mirrors how "continue numbering" reaches back across intervening blocks. */
+  /** The glyph of the nearest bulleted list before `runStart`, or null; mirrors "continue numbering". */
   function prevBulletRunStyle(runStart: number): BulletStyle | null {
     let last = runStart - 1;
     while (last >= 0 && blocks[last].type !== "bullet_list_item") last--;
@@ -4032,7 +3377,6 @@ export function ArticleEditor({
     return item.type === "bullet_list_item" ? item.marker ?? "dot" : null;
   }
 
-  /** Apply `style` to every item in the bullet run containing `index`. */
   function setBulletRunStyle(index: number, style: BulletStyle) {
     const { start, end } = bulletRunBounds(index);
     const marker = style === "dot" ? undefined : style;
@@ -4046,8 +3390,6 @@ export function ArticleEditor({
     pushHistoryNow();
   }
 
-  /** Carry the previous bulleted list's style onto this run. No-op when no
-   *  bulleted list precedes it — mirrors "continue numbering". */
   function continueBulleting(index: number) {
     const { start } = bulletRunBounds(index);
     const style = prevBulletRunStyle(start);
@@ -4055,23 +3397,18 @@ export function ArticleEditor({
     setBulletRunStyle(index, style);
   }
 
-  /** Reset this run back to the default dot bullet — mirrors "reset numbering". */
   function resetBulleting(index: number) {
     setBulletRunStyle(index, "dot");
   }
 
-  /** Open the numbering or bullet popover for the clicked list marker. */
   function handleMarkerClick(index: number, rect: DOMRect) {
     const b = blocks[index];
-    // <article>-relative so the popover anchor rides the scrolling article (see
-    // Popover / toArticleRect).
+    // Article-relative, so the anchor rides the scrolling article (see toArticleRect).
     const rel = toArticleRect(rect, blockRefs.current[index]);
     if (b?.type === "list_item") setNumbering({ index, rect: rel });
     else if (b?.type === "bullet_list_item") setBullet({ index, rect: rel });
   }
 
-  /** Enter at the end of a list item: append a fresh empty item of the same
-   *  list type and focus it. */
   function insertListItemAfter(index: number) {
     updateBlocks([
       ...blocks.slice(0, index + 1),
@@ -4087,7 +3424,7 @@ export function ArticleEditor({
     }, 0);
   }
 
-  /** Shared: parse an HTML string into InlineNode[], with a non-empty fallback. */
+  /** Parses HTML into InlineNode[], with a non-empty fallback. */
   function htmlToNodes(html: string): InlineNode[] {
     const div = document.createElement("div");
     div.innerHTML = html;
@@ -4095,31 +3432,18 @@ export function ArticleEditor({
     return nodes.length > 0 ? nodes : [{ type: "text", text: "" }];
   }
 
-  /**
-   * Backspace at the start of block[index]: append its content to block[index-1],
-   * then remove block[index]. Cursor lands at the original end of block[index-1].
-   */
   function mergeWithPrev(index: number, currentHtml: string) {
     if (index === 0) {
-      // First block — back up to the title instead
       const el = titleRef.current;
       if (el) focusBlockAtEnd(el);
       return;
     }
 
-    // The current (focused) block merges away. With index+type keys React
-    // reuses its DOM node for whatever block now occupies this slot — the
-    // shifted-up successor, or the synthetic trailing paragraph appended when
-    // the merge target is a list item / code block. EditableBlock's innerHTML
-    // sync skips focused nodes, so without blurring the old text lingers in
-    // that reused node (duplicated) until an unrelated re-render. Blur first so
-    // the sync runs; focus is restored to the merge join below. (Mirrors
-    // deleteBlock.)
+    // Blur first: React reuses this focused node for the next block, and the focus-guarded sync would leave stale text.
     (document.activeElement as HTMLElement | null)?.blur();
 
     const prevBlock = blocks[index - 1];
 
-    // Non-text predecessor (HR, media) — just delete it, keep current block
     if (
       prevBlock.type === "horizontal_rule" ||
       prevBlock.type === "media" ||
@@ -4153,23 +3477,17 @@ export function ArticleEditor({
     cancelHistoryDebounce();
     pushHistoryNow();
 
-    // Place cursor at the original end of the previous block (the join point)
     setTimeout(() => {
       const el = blockRefs.current[index - 1];
       if (el) setCursorAtTextOffset(el, prevTextLength);
     }, 0);
   }
 
-  /**
-   * Delete at the end of block[index]: absorb block[index+1]'s content,
-   * then remove block[index+1]. Cursor stays at the join point.
-   */
   function mergeWithNext(index: number, currentHtml: string) {
     if (index >= blocks.length - 1) return;
 
     const nextBlock = blocks[index + 1];
 
-    // Non-text successor (HR, media) — just delete it, keep current block
     if (
       nextBlock.type === "horizontal_rule" ||
       nextBlock.type === "media" ||
@@ -4194,7 +3512,7 @@ export function ArticleEditor({
       children: htmlToNodes(mergedHtml),
     } as BlockNode;
 
-    // Update DOM directly — current block stays focused so useEffect would skip it
+    // Written directly: the focused block's sync would skip it.
     if (currentEl) currentEl.innerHTML = mergedHtml;
 
     updateBlocks([
@@ -4216,10 +3534,7 @@ export function ArticleEditor({
       titleRef.current?.focus();
       return;
     }
-    // The block being deleted is focused. With index-based keys React reuses its
-    // DOM node for the block that shifts up into this slot, and EditableBlock's
-    // innerHTML-sync useEffect skips focused nodes — leaving the following block
-    // visually empty. Blur first so that sync runs (mirrors the undo/redo path).
+    // Blur first, so the focus-guarded sync refreshes the node React reuses for the next block.
     (document.activeElement as HTMLElement | null)?.blur();
     const next = [...blocks.slice(0, index), ...blocks.slice(index + 1)];
     updateBlocks(next);
@@ -4241,14 +3556,6 @@ export function ArticleEditor({
     }, 0);
   }
 
-  /**
-   * Called by a block's paste handler when the pasted content contains hard
-   * returns. `firstBlockHtml` is the HTML that should replace the current
-   * block (before-caret content merged with the first pasted line).
-   * `newBlocksHtml` is an array of HTML strings for the paragraph blocks to
-   * insert after it; the last entry already has the after-caret content
-   * appended. All store mutations are batched into one `updateBlocks` call.
-   */
   function pasteBlocks(
     blockIndex: number,
     firstBlockHtml: string,
@@ -4274,7 +3581,6 @@ export function ArticleEditor({
     cancelHistoryDebounce();
     pushHistoryNow();
 
-    // Move the caret to the end of the last pasted block.
     const lastIndex = blockIndex + newBlocksHtml.length;
     setTimeout(() => {
       const el = blockRefs.current[lastIndex];
@@ -4282,26 +3588,13 @@ export function ArticleEditor({
     }, 0);
   }
 
-  // -------------------------------------------------------------------------
-  // Slash menu
-  // -------------------------------------------------------------------------
-
   function handleSlash(el: HTMLElement, index: number) {
-    // innerText after the "/" is already in the DOM at this point.
     const hasExistingContent = (el.innerText ?? "").trim().length > 1;
     setSlashAnchor({ el, index, hasExistingContent });
     setSlashQuery("");
   }
 
-  /**
-   * Called by the active block on every input event while the slash menu is
-   * open. Derives the query (text after the leading "/") or dismisses the menu
-   * if the slash has been deleted, replaced, or the query matches nothing.
-   *
-   * The empty-results check lives here (in the event handler) rather than in
-   * a SlashMenu Effect so dismissal happens synchronously in response to the
-   * user's keystroke, avoiding an extra render pass with a stale open menu.
-   */
+  /** Derives the slash query or dismisses the menu, in the handler rather than an Effect so dismissal is synchronous. */
   function handleSlashInput(text: string) {
     const trimmed = text.trim();
     if (!trimmed.startsWith("/")) {
@@ -4309,15 +3602,12 @@ export function ArticleEditor({
       setSlashQuery("");
       return;
     }
-    // When the menu was opened on a block with pre-existing content, that
-    // content sits after the "/" and must not be treated as a filter query.
+    // Pre-existing content sits after the "/" and is not a query.
     if (slashAnchor?.hasExistingContent) {
       setSlashQuery("");
       return;
     }
     const newQuery = trimmed.slice(1);
-    // Dismiss immediately when the query matches no items — checked here in
-    // the event handler so no Effect is needed inside SlashMenu.
     const excludeType = slashAnchor
       ? (blocks[slashAnchor.index]?.type as SlashMenuBlockType | undefined)
       : undefined;
@@ -4328,7 +3618,6 @@ export function ArticleEditor({
     setSlashQuery(newQuery);
   }
 
-  /** Remove the slash-menu trigger "/" from inline children. */
   function stripSlashTrigger(children: InlineNode[]): InlineNode[] {
     const stripped: InlineNode[] =
       children.length > 0 &&
@@ -4343,17 +3632,13 @@ export function ArticleEditor({
     return hasContent ? stripped : [{ type: "text" as const, text: "" }];
   }
 
-  /**
-   * Write stripped inline content back into a focused block. EditableBlock's
-   * innerHTML sync useEffect skips updates while the element has focus.
-   */
+  /** Writes content into a focused block, whose own sync skips while focused. */
   function syncFocusedBlockDom(
     el: HTMLElement,
     children: InlineNode[],
     blockType: SlashMenuBlockType,
     base = 0,
   ) {
-    // Blocks with no text of their own — there is no DOM here to write into.
     if (
       blockType === "horizontal_rule" ||
       blockType === "button_link" ||
@@ -4377,8 +3662,7 @@ export function ArticleEditor({
     next[index] = {
       type: "component",
       componentId,
-      // The caption belongs to the block's POSITION in the article rather than
-      // to the demo standing in it — the same rule a replaced picture follows.
+      // The caption belongs to the block's position, not the demo in it.
       ...(existing?.type === "component" && existing.caption
         ? { caption: existing.caption }
         : {}),
@@ -4393,8 +3677,6 @@ export function ArticleEditor({
     setComponentDialogMode("insert");
 
     setTimeout(() => {
-      // A replacement puts you back on the block you were working on; an
-      // insertion carries you past it, to the paragraph after.
       if (wasChange) {
         const figure = blockRefs.current[index];
         const frame = figure?.querySelector(
@@ -4408,7 +3690,6 @@ export function ArticleEditor({
     }, 0);
   }
 
-  /** The demo standing in the block the picker is open over, if any. */
   function componentDialogCurrentId(): string | null {
     if (componentDialogBlockIndex === null) return null;
     const block = blocks[componentDialogBlockIndex];
@@ -4427,15 +3708,7 @@ export function ArticleEditor({
     setComponentDialogMode("insert");
   }
 
-  // --- Collection ---------------------------------------------------------
-  //
-  // Feature / remove / replace go through the editor rather than riding the
-  // block's own `onChange`, because `updateBlock` DEBOUNCES history: a reorder
-  // or a deletion that coalesced with adjacent caption typing would make undo
-  // land somewhere the author never was. Each is committed as one clean step.
-  // Per-item captions stay on the debounce, like every other caption here.
-
-  /** How many more images the block at `index` can still take. */
+  // Feature, remove and replace bypass the debounced `updateBlock`, so each is one clean undo step.
   function collectionCapacity(index: number | null): number {
     if (index === null) return COLLECTION_MAX_ITEMS;
     const block = blocks[index];
@@ -4474,8 +3747,6 @@ export function ArticleEditor({
     const next = [...blocks];
 
     if (existing?.type !== "collection") {
-      // The slash-menu path: the trigger block is still the paragraph
-      // placeholder, so this is where the collection actually comes into being.
       next[blockIndex] = {
         type: "collection",
         items: payloads.slice(0, COLLECTION_MAX_ITEMS).map(mediaNodeFrom),
@@ -4505,8 +3776,6 @@ export function ArticleEditor({
 
     setTimeout(() => {
       if (wasNew) {
-        // A fresh block can't take a caret — land in the trailing paragraph
-        // withTrailingParagraph guarantees below it.
         const el = blockRefs.current[blockIndex + 1];
         if (el) focusBlockAtStart(el);
         return;
@@ -4529,10 +3798,7 @@ export function ArticleEditor({
     const keptChildren = stripSlashTrigger(domToInlineNodes(el));
     syncFocusedBlockDom(el, keptChildren, type, sidenoteBaseList[index]);
 
-    // Media, Collection and Component are deferred insertions: replace the
-    // trigger block with a paragraph placeholder, then hand off to a dialog
-    // that fills the remaining field (src / items / componentId) before the
-    // real block is written.
+    // Media, collection and component are deferred: a placeholder paragraph holds the spot until a dialog fills it.
     if (type === "media") {
       const next = [...blocks];
       next[index] = { type: "paragraph", children: keptChildren };
@@ -4580,25 +3846,18 @@ export function ArticleEditor({
     } else if (type === "metric") {
       newBlock = { type: "metric", children: keptChildren };
     } else if (type === "code_block") {
-      // Code blocks store plain text only — flatten marks away.
       const plainText = keptChildren.map((n) => n.text).join("");
       newBlock = {
         type: "code_block",
         children: [{ type: "text", text: plainText }],
       };
     } else if (type === "button_link") {
-      // A button starts with whatever was on the trigger line as its label,
-      // flattened — a label carries no marks — and no link yet: the toolbar
-      // over it is where one is added, and it is up the moment the label has
-      // the caret.
       newBlock = {
         type: "button_link",
         text: keptChildren.map((n) => n.text).join(""),
         href: "",
       };
     } else if (type === "project_grid" || type === "social_links") {
-      // Furniture carries no fields, so the type IS the block. Any text on the
-      // trigger line is dropped, exactly as it is for a horizontal rule.
       newBlock = { type };
     } else {
       newBlock = { type: "horizontal_rule" };
@@ -4610,8 +3869,7 @@ export function ArticleEditor({
     cancelHistoryDebounce();
     pushHistoryNow();
 
-    // Non-editable blocks can't receive a caret — focus the paragraph that
-    // withTrailingParagraph guarantees exists immediately after them.
+    // A rule can't take a caret, so focus the trailing paragraph after it.
     const isNonEditable = type === "horizontal_rule";
     setTimeout(() => {
       if (isNonEditable) {
@@ -4629,21 +3887,6 @@ export function ArticleEditor({
     setImageDialogOpen(true);
   }
 
-  // The payload's `kind` goes straight into the block, and this is the one
-  // place in the app where the answer is known first-hand: it came off the
-  // upload's own `contentType` (see `ImageInsertPayload`), never off a
-  // filename.
-  //
-  // Nothing else here has to be taught which kind it is holding. Every
-  // predicate in this file asks `block.type === "media"` — captions, arrow
-  // traversal, toolbars, selection — and every one of them is a question about
-  // a FIGURE rather than about a file, so a clip is as editable as a
-  // photograph without a single extra branch. That is precisely what a block
-  // identity held CONSTANT across the two buys. While the format lived in
-  // `type`, authoring a clip would have meant teaching a dozen predicates a
-  // second literal and would have left an inserted clip unreachable in the
-  // editor until every one of them had learned it — which is why it was not
-  // done.
   function handleImageInsert(payload: ImageInsertPayload) {
     if (imageDialogBlockIndex === null) return;
 
@@ -4651,9 +3894,7 @@ export function ArticleEditor({
     const next = [...blocks];
     next[imageDialogBlockIndex] = {
       ...mediaNodeFrom(payload),
-      // The caption belongs to the block's POSITION in the article rather than
-      // to the file standing in it — the same rule `replaceItem` applies to a
-      // collection slot.
+      // The caption belongs to the block's position, not the file in it.
       ...(existing.type === "media" && existing.caption
         ? { caption: existing.caption }
         : {}),
@@ -4693,11 +3934,6 @@ export function ArticleEditor({
     setSlashQuery("");
   }
 
-  // -------------------------------------------------------------------------
-  // Selection toolbar
-  // -------------------------------------------------------------------------
-
-  /** Resolve the block index (>= 0) whose element contains `node`, else null. */
   function toolbarBlockIndex(node: Node | null): number | null {
     if (!node) return null;
     const el =
@@ -4711,10 +3947,7 @@ export function ArticleEditor({
     return null;
   }
 
-  // Viewport-space → <article>-relative. The toolbar's anchor is an absolute
-  // child of the `position: relative` <article>, so article-relative coordinates
-  // (which don't change as the page scrolls) let it ride the article content and
-  // the browser tracks / auto-hides the popover natively — no per-scroll JS.
+  // Article-relative coordinates, so the absolute anchor rides the content and needs no scroll handling.
   function toArticleRect(
     r: { left: number; top: number; width: number; height: number },
     within: Node | null,
@@ -4735,22 +3968,13 @@ export function ArticleEditor({
   }
 
   function rectFromRange(range: Range): ToolbarRect {
-    // Anchor to the FIRST line's rect, not the whole-range bounding box. A run
-    // that wraps across lines (common for sidenote annotations, rarer for links
-    // or a short text selection) has a bounding box spanning the full column —
-    // line 1 ends at the right edge, line 2 starts at the left — so its centre
-    // falls between the fragments rather than over the text, and the centred
-    // popover drifts to the column middle. The first client rect keeps the
-    // popover above the start of the run for every mode alike.
-    // jsdom's Range has neither getClientRects nor getBoundingClientRect.
+    // The first line's rect, not the bounding box, which spans the column for a wrapped run.
+    // jsdom's Range has neither method.
     const rects =
       typeof range.getClientRects === "function"
         ? Array.from(range.getClientRects())
         : [];
-    // …but skip an EMPTY leading fragment: a range that begins exactly at a
-    // soft-wrap boundary reports a zero-width rect hanging at the end of the
-    // previous line, which would anchor the popover a column-width away from
-    // the text. Collapsed ranges (a caret) are all zero-width — keep those.
+    // Skip an empty leading fragment at a soft wrap; a collapsed caret is zero-width anyway.
     const r =
       rects.find((rect) => rect.width > 0) ??
       rects[0] ??
@@ -4760,17 +3984,7 @@ export function ArticleEditor({
     return toArticleRect(r, range.startContainer);
   }
 
-  /**
-   * Anchor rect for a selection, measured from its first VISIBLE glyph.
-   *
-   * Selecting the first character of a wrapped line usually swallows the space
-   * that ends the line ABOVE (the caret at a soft-wrap boundary sits after it),
-   * and that space's client rect hangs at the far right of the previous line —
-   * so the toolbar lands a column away from the highlighted text, or off-screen
-   * entirely when the previous line is scrolled just out of view. Trimming the
-   * leading whitespace before measuring anchors it where the user sees their
-   * selection start.
-   */
+  /** Measured from the first visible glyph: leading whitespace can sit on the line above. */
   function selectionAnchorRect(
     el: HTMLElement,
     range: Range,
@@ -4799,21 +4013,13 @@ export function ArticleEditor({
     return range;
   }
 
-  // Recomputes the toolbar from the live selection. Called on selectionchange
-  // and resize (scroll needs no JS — the <article>-relative anchor rides the
-  // content and the browser tracks it). Skipped while the slash menu or the
-  // link editor is open.
-  // `forceRect` re-measures the anchor even when the selection is unchanged
-  // (resize/reflow); otherwise a same-selection update keeps the existing rect
-  // so toggling a mark — which fires selectionchange after rewriting the run —
-  // doesn't shift the toolbar as the glyphs change width.
+  // `forceRect` re-measures an unchanged selection; otherwise the rect is kept, so a mark toggle doesn't shift the toolbar.
   function trackSelection(forceRect = false) {
     if (slashAnchor) {
       setToolbar(null);
       return;
     }
-    // Keep the link editor open — its input holds focus, so the editor
-    // selection is momentarily gone.
+    // The link editor's input holds focus, so the editor selection is momentarily gone.
     if (toolbar?.mode === "link-edit") return;
 
     const sel = window.getSelection();
@@ -4846,13 +4052,7 @@ export function ArticleEditor({
     }
     const nodes = domToInlineNodes(el);
 
-    // Caret on — or a selection wholly within — an annotated run shows the
-    // sidenote actions (Edit / Delete), taking priority over the format toolbar
-    // and link view. Suppressed while that note's card is already being edited.
-    // Anchored to the live selection (`range`), not the whole annotation: a
-    // collapsed caret centres the toolbar on the caret; a multi-char selection
-    // positions it exactly like the format toolbar. The `range` field stays the
-    // full annotation bounds — that's what Edit / Delete act on.
+    // Sidenote actions win over format and link; anchored to the live selection, acting on the whole annotation.
     const sidenote = findSidenoteRangeAt(nodes, offsets.start);
     if (
       sidenote &&
@@ -4871,12 +4071,7 @@ export function ArticleEditor({
       return;
     }
 
-    // A caret on — or a selection wholly within — a link shows the link actions
-    // (Edit / Open / Remove), taking priority over the format toolbar (mirrors
-    // the sidenote branch above). Anchored to the live selection (`range`): a
-    // collapsed caret centres on the caret, a multi-char selection positions
-    // like the format toolbar. The `range` field stays the full link bounds —
-    // that's what Edit / Remove act on.
+    // Link actions win over format; anchored to the live selection, acting on the whole link.
     const link = findLinkRangeAt(nodes, offsets.start);
     if (link && offsets.start >= link.start && offsets.end <= link.end) {
       setToolbar({
@@ -4897,10 +4092,6 @@ export function ArticleEditor({
           rangeHasMark(nodes, offsets.start, offsets.end, m),
         ),
       );
-      // Keep the anchor fixed for the lifetime of a selection: only re-measure
-      // when the selection itself moves (or a reflow forces it). A mark toggle
-      // leaves start/end untouched, so it reuses the original rect and the
-      // toolbar stays put instead of re-centering on the now-wider run.
       const sameSelection =
         !forceRect &&
         toolbar?.mode === "format" &&
@@ -4921,8 +4112,6 @@ export function ArticleEditor({
     setToolbar(null);
   }
 
-  // Toggle an inline mark over a character range within block `index`. Shared
-  // by the selection toolbar and the ⌘B/⌘I/⌘U keyboard shortcuts.
   function toggleMarkInRange(
     index: number,
     type: ToggleableMark,
@@ -4957,7 +4146,6 @@ export function ArticleEditor({
     toggleMarkInRange(index, type, off);
   }
 
-  // ⌘B / ⌘I / ⌘U from within a block: toggle the mark over the live selection.
   function toggleMarkFromKeyboard(index: number, type: ToggleableMark) {
     const el = blockRefs.current[index];
     if (!el) return;
@@ -5039,9 +4227,7 @@ export function ArticleEditor({
     window.open(toolbar.href, "_blank", "noopener,noreferrer");
   }
 
-  // Toggle a sidenote annotation over the current selection. Adds an empty note
-  // (whose text is typed into the aside card) or removes it if the range already
-  // carries one. The ordinal is derived at render, so no numbering happens here.
+  // Adds an empty note or removes the one the range carries; ordinals are derived at render.
   function handleAddSidenote() {
     if (!toolbar) return;
     const { index, range } = toolbar;
@@ -5068,16 +4254,13 @@ export function ArticleEditor({
     el.innerHTML = inlineNodesToHtml(next, sidenoteBaseList[index]);
     updateBlock(index, { ...block, children: next });
     setSelectionRange(el, range.start, range.end);
-    // A freshly added note opens straight into its card for editing.
     if (id) {
       setEditingSidenoteId(id);
       setPendingSidenoteFocusId(id);
     }
   }
 
-  // Sidenote popover (Edit): reveal this note's card and focus it. The caret is
-  // still on the annotation; suppressing the popover for the edited id (see
-  // trackSelection) keeps it from reappearing before the card takes focus.
+  // Suppressing the popover for the edited id (see trackSelection) stops it reappearing before the card focuses.
   function handleEditSidenote() {
     if (!toolbar?.sidenoteId) return;
     setEditingSidenoteId(toolbar.sidenoteId);
@@ -5085,8 +4268,6 @@ export function ArticleEditor({
     setToolbar(null);
   }
 
-  // Sidenote popover (Delete): strip the note's mark over its run (removing the
-  // annotation, its superscript, and its aside card).
   function handleDeleteSidenote() {
     if (!toolbar?.sidenoteId) return;
     const { index, range, sidenoteId } = toolbar;
@@ -5107,9 +4288,7 @@ export function ArticleEditor({
     setToolbar(null);
   }
 
-  // Persist an aside-card edit back into every run of that note: update the AST
-  // and keep the prose DOM's data-sidenote-text in sync so a later re-serialise
-  // of the block (domToInlineNodes) preserves the note text.
+  // Also syncs the prose DOM's `data-sidenote-text`, so a re-serialise keeps the note.
   function handleSidenoteTextChange(entry: SidenoteEntry, text: string) {
     const block = blocks[entry.blockIndex];
     if (!block || !("children" in block)) return;
@@ -5131,9 +4310,7 @@ export function ArticleEditor({
       .forEach((el) => el.setAttribute("data-sidenote-text", text));
   }
 
-  // Sidenote card (Esc): close the card and return the caret to the annotated
-  // text. Moving focus into the prose block blurs the card, which fires its
-  // onStopEditing (clearing editingSidenoteId) via onBlurCapture.
+  // Focusing the prose blurs the card, whose onStopEditing clears editingSidenoteId.
   function handleExitSidenoteEdit(entry: SidenoteEntry) {
     const el = blockRefs.current[entry.blockIndex];
     if (!el) {
@@ -5164,17 +4341,11 @@ export function ArticleEditor({
   }
 
   function handleToolbarDismiss() {
-    // Escape fires no selectionchange, so simply clearing keeps it hidden;
-    // an outside pointerdown moves the caret and the tracker recomputes.
+    // Escape fires no selectionchange, so clearing keeps it hidden.
     setToolbar(null);
   }
 
-  // Register selection tracking once — the ref always holds the latest closure.
-  // No scroll listener: the toolbar's <article>-relative anchor rides the
-  // scrolling article and the browser tracks/auto-hides the popover natively
-  // (like the slash menu and sidenote cards), so re-measuring on scroll — which
-  // lagged a frame behind and made the toolbar flutter — is gone. Resize forces
-  // a re-measure since the text column can reflow under a stable selection.
+  // No scroll listener: the article-relative anchor rides the content. Resize re-measures, since text reflows.
   useEffect(() => {
     function onSelectionChange() {
       trackSelectionRef.current(false);
@@ -5190,13 +4361,9 @@ export function ArticleEditor({
     };
   }, []);
 
-  // ── Cross-block Delete / Backspace handler (assigned every render via ref) ──
-  //
-  // Handles Delete / Backspace when the selection spans multiple editing hosts.
-  // The once-registered document listener always calls the latest closure
-  // (needs current blocks) via crossBlockDeleteRef, synced after commit below.
+  // Delete/Backspace across editing hosts, reached through crossBlockDeleteRef.
   function crossBlockDelete(e: KeyboardEvent) {
-    // Resolve the block index (-1 = title) for any DOM node.
+    // -1 is the title.
     function resolveBlockIdx(node: Node | null): number | null {
       if (!node) return null;
       const el =
@@ -5212,7 +4379,6 @@ export function ArticleEditor({
       return null;
     }
 
-    // ── Delete / Backspace on a cross-block selection ─────────────────────────
     if (e.key !== "Backspace" && e.key !== "Delete") return;
 
     const sel = window.getSelection();
@@ -5233,12 +4399,10 @@ export function ArticleEditor({
     const endEl =
       endIdx === -1 ? titleRef.current! : blockRefs.current[endIdx]!;
 
-    // Fragment before the selection start (inside the start element).
     const beforeRange = document.createRange();
     beforeRange.setStart(startEl, 0);
     beforeRange.setEnd(range.startContainer, range.startOffset);
 
-    // Fragment after the selection end (inside the end element).
     const afterRange = document.createRange();
     afterRange.setStart(range.endContainer, range.endOffset);
     afterRange.setEnd(endEl, endEl.childNodes.length);
@@ -5246,10 +4410,8 @@ export function ArticleEditor({
     const tempDiv = document.createElement("div");
 
     if (startIdx === -1) {
-      // ── Selection starts inside the title ────────────────────────────────────
       const newTitleText = beforeRange.toString();
 
-      // Update end block to contain only the content after the selection.
       tempDiv.appendChild(afterRange.cloneContents());
       const afterHtml = tempDiv.innerHTML;
       const endBlock = blocks[endIdx];
@@ -5258,10 +4420,8 @@ export function ArticleEditor({
           ? ({ ...endBlock, children: htmlToNodes(afterHtml) } as BlockNode)
           : { type: "paragraph", children: [{ type: "text", text: "" }] };
 
-      // Remove all blocks before and including endIdx; prepend merged block.
       updateBlocks([mergedBlock, ...blocks.slice(endIdx + 1)]);
 
-      // Commit title change imperatively so the store and DOM stay in sync.
       setTitle(newTitleText);
       titleRef.current!.innerText = newTitleText;
       cancelHistoryDebounce();
@@ -5272,14 +4432,7 @@ export function ArticleEditor({
         if (el) focusBlockAtStart(el);
       }, 0);
     } else {
-      // ── Selection starts inside a block ──────────────────────────────────────
-
-      // A non-text start block (horizontal_rule / image / component) has no
-      // editable host — the selection boundary merely landed on it. Preserve it
-      // untouched and rebuild only the trailing (after-selection) content.
-      // Writing to startEl.innerHTML here would wipe the rendered <hr>/figure,
-      // which never re-syncs (its useEffect skips non-text blocks), so the block
-      // would visually vanish even though it stays in the model.
+      // A non-text start block has no editable host; writing its innerHTML would wipe it for good.
       if (!("children" in blocks[startIdx])) {
         tempDiv.appendChild(afterRange.cloneContents());
         const afterNodes = htmlToNodes(tempDiv.innerHTML);
@@ -5327,18 +4480,13 @@ export function ArticleEditor({
         ...blocks.slice(endIdx + 1),
       ];
 
-      // Measure caret offset BEFORE mutating innerHTML.
-      // startEl.innerHTML destroys the child nodes that beforeRange references;
-      // calling beforeRange.toString() after that returns "" (orphaned node).
+      // Measure before writing innerHTML, which orphans the nodes beforeRange points at.
       const targetCaretLength = beforeRange.toString().length;
 
-      // Write the merged HTML directly into the DOM before React re-renders.
-      // EditableBlock's sync useEffect skips updates while the element has
-      // focus, so this persists across the state-driven re-render.
+      // Written directly: the focused block's sync skips it.
       startEl.innerHTML = mergedHtml;
       startEl.focus();
 
-      // Place caret at the junction between before and after content.
       let charCount = 0;
       function findCaretPos(node: Node): { node: Node; offset: number } | null {
         if (node.nodeType === Node.TEXT_NODE) {
@@ -5363,7 +4511,7 @@ export function ArticleEditor({
         r.setStart(startEl, startEl.childNodes.length);
       }
       r.collapse(true);
-      // focus() may have set an implicit range at position 0; clear it first.
+      // focus() may have set a range at position 0.
       sel.removeAllRanges();
       sel.addRange(r);
 
@@ -5373,20 +4521,12 @@ export function ArticleEditor({
     }
   }
 
-  // Keep the latest closures reachable from the once-registered document
-  // listeners without re-subscribing. Synced after commit — writing refs
-  // during render is unsafe (react-hooks/refs).
+  // Synced after commit: writing refs during render is unsafe.
   useEffect(() => {
     trackSelectionRef.current = trackSelection;
     crossBlockDeleteRef.current = crossBlockDelete;
   });
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
-
-  // Resolved marker text + style for every numbered-list item. Honours
-  // continue/reset/alpha via the same helper the read-only renderer uses.
   const listNumbering = computeListNumbering(blocks);
 
   return (
@@ -5410,8 +4550,6 @@ export function ArticleEditor({
             if (text) document.execCommand("insertText", false, text);
           }}
           onKeyDown={(e) => {
-            // Tab has no navigation role in the editor — swallow it so the caret
-            // never jumps from the title into the body.
             if (e.key === "Tab") {
               e.preventDefault();
               return;
@@ -5576,11 +4714,7 @@ export function ArticleEditor({
       {slashAnchor && (
         <SlashMenu
           query={slashQuery}
-          // On a line that already has text the menu CONVERTS it, so only the
-          // types that can hold that text are offered. Otherwise everything is
-          // available — minus the furniture on any page that has nowhere to
-          // put it: `slots` is what actually renders a grid or an icon row, so
-          // a page given none would insert a block that draws nothing.
+          // Text on the line limits the menu to types that can hold it; furniture needs `slots` to render.
           allowedTypes={
             slashAnchor.hasExistingContent
               ? [
@@ -5624,8 +4758,6 @@ export function ArticleEditor({
         />
       )}
 
-      {/* The post's category, address and search description — opened from
-          the palette, and a view of the same buffer as everything above. */}
       {metadataOpen && (
         <PostMetadataPanel
           onDismiss={() => useMetadataPanelStore.getState().setOpen(false)}
@@ -5693,11 +4825,7 @@ export function ArticleEditor({
         onInsert={handleImageInsert}
       />
 
-      {/* A second instance rather than a shared one: the two dialogs differ in
-          selection mode and payload shape, and `useImageInsert` early-returns
-          on `!open`, so the closed one costs nothing and never double-fetches
-          the library. Replacing a single slot is `maxSelection: 1` rather than
-          single-select, so the payload stays one shape either way. */}
+      {/* A second instance: selection mode and payload differ, and a closed one never fetches. */}
       <ImageInsertDialog
         open={collectionDialogOpen}
         mode={collectionDialogTarget === null ? "insert" : "change"}

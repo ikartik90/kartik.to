@@ -59,14 +59,12 @@ describe("ComponentInsertDialog", () => {
     expect(
       screen.getByRole("option", { name: "Alpha Demo" }).getAttribute("aria-selected"),
     ).toBe("true");
-    // A non-interactive preview is rendered for the selection.
     expect(screen.getByTestId("demo-frame")).toBeDefined();
   });
 
   it("exposes the sidebar as a labelled listbox owning the options", () => {
     render(<ComponentInsertDialog open onClose={vi.fn()} onInsert={vi.fn()} />);
     const listbox = screen.getByRole("listbox", { name: "Component library" });
-    // The options must be OWNED by the listbox, not orphaned siblings.
     expect(
       listbox.contains(screen.getByRole("option", { name: "Alpha Demo" })),
     ).toBe(true);
@@ -80,7 +78,6 @@ describe("ComponentInsertDialog", () => {
     first.focus();
     await user.keyboard("{ArrowDown}");
 
-    // Arrowing roves focus onto the next option, which Enter/click then commits.
     const second = screen.getByRole("option", { name: "Beta Demo" });
     expect(document.activeElement).toBe(second);
   });
@@ -121,14 +118,6 @@ describe("ComponentInsertDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  // -------------------------------------------------------------------------
-  // Change mode — the same library, reached from a block that already holds a
-  // demo. It says what it is about to do, and it opens on the demo standing
-  // there rather than on the top of the list, so the block's current choice is
-  // visible next to the alternatives instead of being the one thing the picker
-  // does not show.
-  // -------------------------------------------------------------------------
-
   it("names itself for the replacement when it opens on a filled block", () => {
     render(
       <ComponentInsertDialog
@@ -162,8 +151,6 @@ describe("ComponentInsertDialog", () => {
     ).toBe("true");
   });
 
-  // A demo that has since left the registry must not leave the picker empty —
-  // the list falls back to its first entry, exactly as an insert does.
   it("falls back to the first demo when the block holds an unknown one", () => {
     render(
       <ComponentInsertDialog

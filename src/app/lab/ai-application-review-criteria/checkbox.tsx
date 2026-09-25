@@ -4,17 +4,6 @@ import { useLayoutEffect, useRef } from "react";
 import { css } from "../../../../styled-system/css";
 import CheckIcon from "./icons/check-small.svg";
 
-// ---------------------------------------------------------------------------
-// The candidate tables' checkbox (the source's Checkbox, Figma 73:3044): a
-// 16px box of white veil ruled in the border, 2px inside a 20px square.
-// Checked, it shows the ink check the source's component keeps hidden in the
-// box (its `check-small`); mixed — the header's, with some rows selected but
-// not all — a dash.
-//
-// A native checkbox lies unseen over the whole square, so it is clicked,
-// focused and read as a checkbox; its keyboard focus rings the box.
-// ---------------------------------------------------------------------------
-
 const boxStyle = css({
   position: "relative",
   display: "block",
@@ -40,7 +29,6 @@ const inputStyle = css({
   opacity: 0,
 });
 
-// The check's own 20px square, on the box's centre.
 const checkStyle = css({
   position: "absolute",
   inset: "-2px",
@@ -58,10 +46,8 @@ const dashStyle = css({
 });
 
 export interface CheckboxProps {
-  /** What checking it selects, as a screen reader reads it. */
   label: string;
   checked: boolean;
-  /** Some of what it stands for is selected, but not all. */
   mixed?: boolean;
   onChange: () => void;
   id?: string;
@@ -76,7 +62,7 @@ export function Checkbox({
 }: CheckboxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Only the DOM can say mixed.
+  // `indeterminate` is DOM-only; there is no attribute for it.
   useLayoutEffect(() => {
     if (inputRef.current) inputRef.current.indeterminate = mixed;
   }, [mixed]);

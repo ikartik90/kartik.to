@@ -28,37 +28,7 @@ import {
 import EditIcon from "@/assets/icons/edit.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
 
-// ---------------------------------------------------------------------------
-// MediaPropertiesPanel — everything about one picture that its five-button
-// toolbar cannot say, in the docked inspector (Figma 845:7223).
-//
-// Caption and background used to be two separate editors reached from two
-// separate toolbar buttons — a card standing where the toolbar stood, and a
-// panel floating beside the cell. They are both answers to "what are the
-// properties of this image?", so they are now two SECTIONS of one panel, and
-// the toolbar asks that question once.
-//
-// A live editor, not a form: every control commits on change, so what is
-// behind the picture is always exactly what the panel says. There is no apply
-// step and no draft of the effect — the parent owns it and hands back a new
-// one, which is what lets the same object drive the editor cell, the reader
-// and the lightbox with nothing to keep in sync.
-//
-// A SECTION is the property. Adding one applies it, removing one takes it
-// away — so there is no third state where a section is open over a property
-// that isn't there, and no "remove" action buried at the foot of a list of
-// fifteen controls.
-// ---------------------------------------------------------------------------
-
-/**
- * The sliders, in the order the panel lists them, each with the shader's own
- * documented uniform range. A table rather than fifteen hand-written rows: the
- * rows differ ONLY in these four values, and spelling them out would invite the
- * ranges to drift from the shader they describe.
- *
- * `step` is what sets the readout's precision (see `formatSliderValue`), so a
- * 0–1 parameter reads `0.05` and an integer one reads `4`.
- */
+/** Each slider with the shader's documented range; `step` also sets the readout's precision. */
 const SLIDERS: {
   key: keyof Omit<BackgroundEffect, "colors">;
   label: string;
@@ -66,8 +36,7 @@ const SLIDERS: {
   max: number;
   step: number;
 }[] = [
-  // A placement SEED, not a position — nudging it re-rolls the whole field
-  // rather than sliding it, which is why it steps by whole numbers.
+  // A placement seed, not a position, so it steps by whole numbers.
   { key: "positions", label: "Positions", min: 0, max: 100, step: 1 },
   { key: "waveX", label: "Wave X", min: 0, max: 1, step: 0.01 },
   { key: "waveXShift", label: "Wave X Shift", min: 0, max: 1, step: 0.01 },
@@ -77,44 +46,29 @@ const SLIDERS: {
   { key: "grainMixer", label: "Grain Mixer", min: 0, max: 1, step: 0.01 },
   { key: "grainOverlay", label: "Grain Overlay", min: 0, max: 1, step: 0.01 },
   { key: "scale", label: "Scale", min: 0.01, max: 4, step: 0.01 },
-  // The app's ONE rotation control, not a copy of its numbers — this panel
-  // edits the same turn the shader playground's Framing group does, and a panel
-  // offering different stops would make a preset unreachable in the surface it
-  // was built for. See `@/utils/rotation`.
   { key: "rotation", label: "Rotation", min: ROTATION_MIN, max: ROTATION_MAX, step: ROTATION_STEP },
   { key: "offsetX", label: "Offset X", min: -1, max: 1, step: 0.01 },
   { key: "offsetY", label: "Offset Y", min: -1, max: 1, step: 0.01 },
 ];
 
-/**
- * The two fits the control offers, in the drawn order (Figma 885:1963).
- * `cover` first because it is the default and the one most pictures want; a
- * screenshot with its own margins is the case for `contain`.
- */
 const FITS: { value: MediaFit; label: string }[] = [
   { value: "cover", label: "Cover" },
   { value: "contain", label: "Contain" },
 ];
 
 export interface MediaPropertiesPanelProps {
-  /** Absent means the default fill — see `mediaLayoutStyle`. */
   objectFit: MediaFit | undefined;
   onObjectFitChange: (fit: MediaFit) => void;
-  /** Absent means no padding. */
   padding: number | undefined;
   onPaddingChange: (padding: number) => void;
-  /** Absent means square, as it does for the inset. See `DEFAULT_MEDIA_RADIUS`. */
   borderRadius: number | undefined;
   onBorderRadiusChange: (radius: number) => void;
   caption: string | undefined;
-  /** `undefined` clears the caption — what removing the section does. */
   onCaptionChange: (caption: string | undefined) => void;
   effect: BackgroundEffect | undefined;
-  /** `undefined` clears the effect — what removing the section does. */
   onEffectChange: (effect: BackgroundEffect | undefined) => void;
-  /** Fired once the panel has finished sliding out — see PropertiesPanel. */
+  /** Fired once the panel has finished sliding out. */
   onDismiss: () => void;
-  /** Handle for closing the panel from the control that opened it. */
   ref?: Ref<PropertiesPanelHandle>;
 }
 
@@ -132,29 +86,13 @@ export function MediaPropertiesPanel({
   onDismiss,
   ref,
 }: MediaPropertiesPanelProps) {
-  // A draft, because what is STORED is not what is typed: the caption is
-  // trimmed on the way out and an empty one is dropped entirely, so a field
-  // derived from the stored value would swallow the space between two words
-  // and refuse to hold a caption you were halfway through clearing.
+  // A draft: the stored caption is trimmed, so a field derived from it would eat spaces as you type.
   const [draft, setDraft] = useState(caption ?? "");
 
-  // Falls back to the defaults rather than waiting for the effect to come back
-  // from the parent. Enabling the section already emitted them upwards, but
-  // that is a ROUND TRIP, and gating the controls on it would make the first
-  // click appear to do nothing whenever the parent was slow to echo — or, for
-  // a consumer that only observes, forever.
+  // Defaults rather than the parent's echo, so the first click never appears to do nothing.
   const current = effect ?? DEFAULT_BACKGROUND_EFFECT;
 
-  /**
-   * Resizes the colour list. Growing copies the LAST colour rather than
-   * inserting a default: a new stop the same as its neighbour is invisible
-   * until you edit it, whereas a black one would drop a hole into the gradient
-   * you were in the middle of tuning.
-   *
-   * Shrinking truncates, so growing back restores nothing — the colours you
-   * removed are gone. That is the honest reading of a count control, and
-   * remembering them would make the slider's two directions asymmetric.
-   */
+  /** Growing copies the last colour; shrinking truncates. */
   function setColorCount(count: number) {
     const colors = current.colors.slice(0, count);
     while (colors.length < count) {
@@ -178,14 +116,6 @@ export function MediaPropertiesPanel({
     >
       <PropertiesPanel.Header>Media Properties</PropertiesPanel.Header>
 
-      {/* First, and headerless: how the picture sits in its frame is not a
-          property you ADD to it — every picture has a fit and an inset whether
-          or not anyone has chosen one, so there is nothing here for an
-          add/remove button to mean. `enabled` is held true rather than
-          defaulted, so the section can never be closed (Figma 885:1963).
-
-          Above Caption because it is about the picture itself; the sections
-          below describe things laid over or behind it. */}
       <PropertiesPanel.Section enabled>
         <PropertiesPanel.ControlPanel ariaLabel="Media layout">
           <PropertiesPanel.Control label="Object Fit">
@@ -196,11 +126,6 @@ export function MediaPropertiesPanel({
             />
           </PropertiesPanel.Control>
 
-          {/* What the picture leaves clear around itself — and therefore how
-              much of whatever stands BEHIND it shows: a background effect
-              fills the box while the picture shrinks inside it, so padding is
-              how you let the gradient out from under a photo that would
-              otherwise cover it entirely. */}
           <PropertiesPanel.Control label="Padding">
             <Slider
               min={0}
@@ -211,12 +136,6 @@ export function MediaPropertiesPanel({
             />
           </PropertiesPanel.Control>
 
-          {/* The OBJECT's corner, and the corner of the ground behind it — no
-              surface adds one of its own, so this number IS the shape on
-              screen. It reads 0 for a picture nobody has rounded because that
-              picture is square; it used to read 0 over a tile drawn with a 20px
-              corner, which is the discrepancy `DEFAULT_MEDIA_RADIUS` exists to
-              close. */}
           <PropertiesPanel.Control label="Radius">
             <Slider
               min={0}
@@ -274,9 +193,7 @@ export function MediaPropertiesPanel({
           </PropertiesPanel.Control>
 
           {current.colors.map((color, index) => (
-            // Keyed by SLOT. The colours are positional stops, and keying on
-            // the value would make two identical stops collide — which is the
-            // normal state right after Color Count grows one.
+            // Keyed by slot: identical stops would collide on value.
             <PropertiesPanel.Control key={index} label={`Color ${index + 1}`}>
               <ColorInput
                 value={color}

@@ -38,34 +38,6 @@ import {
 import { timeZoneLabel } from "@/utils/time-zone-label";
 import InfoIcon from "@/assets/icons/info.svg";
 
-// ---------------------------------------------------------------------------
-// Shift Scheduling v1 — the showcase for the Notice primitive, in the context
-// the design gives it: a "Post a Shift" scheduling form (Figma 684:1012 dark /
-// 704:1605 light). A registry demo, so it renders bare content — the DemoFrame
-// supplies the outer 960×640 bordered canvas surface, and `ShiftFormShell` the
-// wireframe dialog chrome it shares with Shift Scheduling v2. Every part but
-// the Notice is an existing library component — DatePicker, Switch, and
-// OptionList.Toolbar (the weekday selector, used AS a field). The Notice at the
-// foot of the form recomposes live from the current selections — its emphasized
-// dates/weekdays are the `<strong>` runs the recipe steps up to full accent.
-//
-// The form reads top-down in two blocks: the shift's DATE, then a card holding
-// everything about REPEATING it. The repeat switch is that card's header, and
-// the controls it governs sit under a rule inside the same box — so the switch
-// visibly owns them, and turning it off collapses the box's contents rather
-// than a loose run of fields floating below it.
-//
-// It opens CLOSED, and once it is properly on screen it opens itself: a
-// stand-in cursor walks in, throws the repeat switch, picks out every other
-// weekday and dates the last shift far enough ahead to book 25 shifts — then
-// clears the run and hands the form over with the card left OPEN, which is the
-// state the design is arguing for. Every click is the real control's (see
-// `planDemoRecurrence` below), and it plays once, standing down for a visitor
-// who asked for less motion, one who has already opened the card, and one who
-// touches the form mid-performance. The frame's corner keeps the two controls
-// that follow: replay it, or clear it.
-// ---------------------------------------------------------------------------
-
 const WEEKDAYS: { key: WeekdayKey; letter: string; name: string }[] = [
   { key: "sun", letter: "S", name: "Sunday" },
   { key: "mon", letter: "M", name: "Monday" },
@@ -86,12 +58,10 @@ const WEEKDAY_NAMES = [
   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 ]; // prettier-ignore
 
-/** "Tuesday, 11 August, 2026" — weekday, day, month, year (Figma order). */
 function formatFull(date: Temporal.PlainDate): string {
   return `${WEEKDAY_NAMES[date.dayOfWeek - 1]}, ${date.day} ${MONTHS[date.month - 1]}, ${date.year}`;
 }
 
-/** Emphasized weekday names joined with commas and a trailing "and". */
 function joinDays(names: string[]): ReactNode {
   return names.map((name, i) => (
     <Fragment key={name}>
@@ -101,22 +71,9 @@ function joinDays(names: string[]): ReactNode {
   ));
 }
 
-// The form surface holds two blocks — the shift's date, then the repeating-shift
-// card that owns everything about the repeat (Figma 704:1618, gap 12). The
-// shell's own padding is the only outer inset.
 const formStyle = css({ display: "flex", flexDirection: "column", gap: "lg" });
 
-// The one remaining side-by-side row: the weekday toolbar beside Until. Top-
-// aligned, so their labels line up even though only Until carries a hint under
-// it.
-//
-// It WRAPS, because neither half can give: the toolbar is seven fixed 28px
-// chips and the date field is a fixed 140px, so a card too narrow for both just
-// clips Until against its edge. Wrapping is content-driven — no breakpoint to
-// keep in step with the chip count — and the two gaps differ on purpose: 16px
-// side by side is the design's (Figma 704:1625), while a wrapped Until drops
-// onto the form's own 12px vertical rhythm, the same step that separates this
-// row from the Notice under it.
+// Wraps because neither half can shrink: seven fixed chips beside a fixed-width date field.
 const rowStyle = css({
   display: "flex",
   flexWrap: "wrap",
@@ -129,80 +86,41 @@ const dateFieldStyle = css({
   flexShrink: 0,
 });
 
-// The shift's WHEN, on one line: the date, then the hours it runs for.
-//
-// Aligned on `flex-end` rather than the top, because the two columns are the
-// same shape only from the FEET up: three labelled frames on one line, but a
-// hint under each end of the row and none under the middle of the time range,
-// which carries one hint for its pair. Aligning their feet puts the frames on
-// one line without anyone having to write down how tall a label is — move to a
-// `lg` field, or let a hint wrap, and it still holds.
+// `flex-end`: the columns match only from their feet up, so aligning feet puts the frames on one line.
 const dateTimeRowStyle = css({
   display: "flex",
   flexWrap: "wrap",
-  // The design's 20px between the date and the hours it opens.
   columnGap: "xxl",
   rowGap: "lg",
   alignItems: "flex-end",
 });
 
-// The range as one field: two triggers with a rule between them, over a single
-// hint.
-//
-// Each trigger gets its OWN `<Field>`, because a field context mints ONE
-// `controlId` and two triggers wearing it would be two elements with the same
-// id. The group around them is a plain div rather than a third, outer Field,
-// and that is not a shortcut — a `[data-field]` ancestor is exactly what the
-// recipe's active state watches (`[data-field]:has([data-control][aria-expanded='true'])`),
-// so an outer Field would see the OPEN trigger through its own `:has` and light
-// up every frame beneath it: opening the end time lit the start field too.
-// Nesting the archetype breaks it; standing beside it does not.
+// A plain div, not an outer Field: a `[data-field]` ancestor's `:has` would light both
+// triggers. Each trigger has its own Field, since one field context mints one `controlId`.
 const timeRangeStyle = css({
   display: "flex",
   flexDirection: "column",
-  // Hugs its two triggers where there is room for them, and no wider than the
-  // line it has landed on where there is not — on a phone the pair is ~300px
-  // against a form surface nearer 270, and a group that kept hugging would run
-  // End Time straight off the card's torn edge.
   width: "fit-content",
   maxWidth: "token(spacing.full)",
   minWidth: 0,
 });
 
-// The shared hint, wearing the field recipe's own `hint` slot — the same
-// muted 12/20 on the same 4px step as "dd/mm/yyyy" beside it, rather than three
-// declarations restating it here and drifting the next time the field's rhythm
-// moves. Its Field.Hint counterpart needs a field context this group
-// deliberately does not have.
+// The field recipe's own `hint` slot; `Field.Hint` needs a field context this group lacks.
 const zoneHintStyle = field({ size: "md" }).hint;
 
 const timeRowStyle = css({
   display: "flex",
-  // The frames line up along the row's foot; the rule between them sits in a
-  // box of its own height (see `hyphenStyle`) to land on their centre line.
   alignItems: "flex-end",
   gap: "sm",
 });
 
-// The design's 140px, as a STARTING width rather than a floor: unlike the date
-// field beside them — one of these, and narrow enough to fit any card that can
-// hold the form at all — the hours are a PAIR, so they ask for twice that plus
-// the rule and its gaps. Given a line too short for it the two give way
-// together and stay a matched pair, which is the one thing about this row that
-// must not break; the frame already clips its own value, so a shrunk trigger
-// reads short rather than spilling. `minWidth: 0` is what actually permits it —
-// a flex item's automatic minimum is its content, and the trigger's own text
-// would otherwise hold both fields at full width.
+// `minWidth: 0` lets the pair shrink together; a flex item's minimum is otherwise its content.
 const timeFieldStyle = css({
   width: "token(sizes.dateField)",
   minWidth: 0,
 });
 
-// Centred on the FRAMES, which is not the same as centred on the row: each time
-// field is a label stacked on a frame, so centring in the row would float the
-// rule up into the labels' band. Instead it stands in a box exactly one frame
-// tall, sat on the row's foot with them — `spacing.4xl` being the same token the
-// `md` field draws its frame at, so the two cannot drift apart.
+// One frame tall (`spacing.4xl`, the `md` frame) on the row's foot, so it centres on the frames.
 const hyphenStyle = css({
   display: "flex",
   alignItems: "center",
@@ -213,32 +131,13 @@ const hyphenStyle = css({
   userSelect: "none",
 });
 
-/**
- * The zone the shift is quoted in. Named rather than read from the visitor's
- * browser: the form is a rota for one place of work, and the hours on it mean
- * that place's clock whoever happens to be looking at them.
- */
+/** The workplace's zone, not the visitor's. */
 const SHIFT_TIME_ZONE = "America/New_York";
 
-/** A nine-to-five, so the range opens on something worth reading. */
 const OPENING_START = Temporal.PlainTime.from("09:00");
 const OPENING_END = Temporal.PlainTime.from("17:00");
 
-// The repeating-shift card (Figma 901:2365). The switch is its header and the
-// controls it governs sit under a rule in the SAME box, so the grouping is
-// drawn rather than left to be inferred from proximity — which is what the old
-// arrangement (switch parked beside the date field, controls loose beneath it)
-// asked of the reader.
-//
-// Its block padding is a balanced 8px: that is the inset the card RESTS at once
-// the recurrence folds away. The design's deeper 12px foot is the Notice's
-// breathing room rather than the card's, so the extra 4px lives INSIDE the
-// collapsing region below and leaves with it.
-//
-// And deliberately NO gap: the region carries its own top spacing, so that
-// spacing folds away WITH it. A card gap would instead survive the whole
-// collapse — it only stops applying once `display: none` lands, at the very end
-// — and snap the last 8px shut in a single frame.
+// No gap: the region carries its own top spacing, so that spacing folds away with it.
 const repeatCardStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -249,55 +148,10 @@ const repeatCardStyle = css({
   borderColor: "field.border.default",
 });
 
-/** The card's header row — the switch, on the same 12px inset as its body. */
 const switchRowStyle = css({ paddingInline: "lg" });
 
-// The recurrence block — the card's rule, the weekday toolbar, Until, and
-// the Notice — folds away as ONE region when the repeat switch is off, so the
-// card resizes instead of snapping. The card's height is content-driven, so it
-// simply tracks the region. (The DIALOG's height is held steady by the footer
-// counterweight above, which is the one thing here that measures.)
-//
-// The RULE is inside the region, not above it. A divider that outlived the
-// collapse would be a line hanging under a switch with nothing beneath it to
-// divide.
-//
-// Three nested elements, each owning one job:
-//
-//   • WRAPPER animates the height. `grid-template-rows: 1fr → 0fr` is the only
-//     cross-browser way to transition to/from an intrinsic size (`height: auto`
-//     needs `interpolate-size`, which is Chromium-only). `display` rides the
-//     same transition under `allow-discrete`, so `none` lands at the very END of
-//     the collapse and `grid` is restored at the START of the expand.
-//   • CLIP supplies the `overflow: hidden` + `min-height: 0` the 0fr row needs to
-//     actually crop its content. Safe for the DatePicker: its calendar portals
-//     to document.body, so no ancestor clips it.
-//   • CONTENT fades and rises 20px, and holds the block's own block spacing.
-//
-// The halves are deliberately offset so neither direction reads as a jump: on
-// exit the content fades first (0→160ms) and the height follows (60→240ms); on
-// entry the height opens first (0→180ms) and the content fades in behind it
-// (80→240ms). Both directions land together at 240ms. The exit-side timings live
-// in the `[data-collapsed='true']` blocks; the base values ARE the entry side.
-//
-// `@starting-style` is what makes the ENTRY animate at all: an element sitting
-// at `display: none` was not rendered on the previous style change, so it has no
-// before-change style and the browser starts NO transitions — the expand snaps
-// back in a single frame. `_starting` supplies that missing origin (collapsed
-// height + faded/raised content). It also fires the first time an element is
-// rendered, i.e. on page load, which would play a spurious open animation on
-// mount — hence the `[data-armed='true']` gate, false until the switch is first
-// touched.
-//
-// `display: none` is gated on the SAME flag, because the form now opens with the
-// card shut and something has to measure the block it is holding space for: an
-// element at `display: none` reports nothing at all, so the counterweight's
-// reserve would be zero exactly when it is first needed. Before the switch has
-// been touched the region is a rendered `grid` at `0fr` instead — which crops
-// its content to no height rather than removing it, so it measures true while
-// showing nothing. `inert` is what keeps it out of reach either way, so nothing
-// is lost by leaving it in the box. From the first interaction onwards
-// `display: none` applies as before, and `@starting-style` with it.
+// 1fr↔0fr rows animate to intrinsic height cross-browser; `display` rides along via `allow-discrete`.
+// `@starting-style` and `display: none` wait for `data-armed`, so load neither animates nor unmeasures it.
 const recurrenceStyle = css({
   display: "grid",
   gridTemplateRows: "1fr",
@@ -318,9 +172,6 @@ const recurrenceStyle = css({
 
 const recurrenceClipStyle = css({ minHeight: 0, overflow: "hidden" });
 
-// `paddingBlockStart` is the rule's clearance from the switch row above it;
-// `paddingBlockEnd` tops the card's resting 8px up to the 12px the Figma gives
-// the Notice. Both are the region's own, so both leave when it does.
 const recurrenceContentStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -346,19 +197,12 @@ const recurrenceContentStyle = css({
   },
 });
 
-// Full-bleed: the card carries no inline padding of its own, so the rule runs
-// edge to edge while its siblings hold their 12px inset (Figma 901:2370). Drawn
-// at the card's own 0.5px hairline rather than the 1px the option list's
-// divider uses — inside a 0.5px box, a 1px rule outweighs the edge containing
-// it.
 const dividerStyle = css({
   flexShrink: 0,
   height: "token(spacing.3xs)",
   backgroundColor: "border.divider",
 });
 
-// The card's body: everything under the rule, on the same 12px inset as the
-// switch row above it.
 const recurrenceBodyStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -366,34 +210,8 @@ const recurrenceBodyStyle = css({
   paddingInline: "lg",
 });
 
-// No gap: the label's line box sits directly above the frame, matching how the
-// Field stacks its label over the input — so the weekday toolbar frame lines up
-// with the sibling Until input frame (Figma 684:1032 — label y=0, frame y=24).
-// The COUNTERWEIGHT — the wireframe block in the footer that takes back exactly
-// the space the recurrence gives up (Figma 902:2390). Without it the dialog
-// shrinks by the height of the folded block, and since the DemoFrame CENTRES
-// the dialog, half of that shrink lands above the switch: the control you just
-// clicked slides out from under the pointer.
-//
-// "Exactly" is the whole trick, and it is why this one block is measured while
-// nothing else here is. Hand-fitting a stack of placeholder fields to the
-// recurrence's height only holds for one particular sentence — the Notice
-// re-wraps from one line to three as weekdays go on and off, moving the target
-// 20px at a time. So the reserve is read off the recurrence's own content box
-// and handed to this block as `--counterweight`.
-//
-// The two then cancel FRAME BY FRAME, not just at the ends: `grid-template-rows`
-// interpolates a fraction of the same content height, so the region's height is
-// linear in that fraction, and mirroring the duration/easing/delay here makes
-// this block's height the exact complement at every moment of the transition.
-// The delays are the mirror image of the region's — the block opens on the
-// region's collapse timings and closes on its expand ones.
-//
-// Nothing here animates until the switch has been touched, for the same reason
-// `@starting-style` is gated on it: the reserve arrives from a layout effect,
-// so the FIRST height this block is ever given is a change from zero — and a
-// transition on that plays a spurious 180ms open on page load, before anyone
-// has asked for anything.
+// Takes back exactly the height the recurrence folds away, on mirrored timing, so the dialog never resizes.
+// Unanimated until armed: the reserve arrives from a layout effect, so the first change would play on load.
 const counterweightStyle = css({
   height: "token(spacing.none)",
   opacity: 0,
@@ -410,36 +228,7 @@ const counterweightStyle = css({
   },
 });
 
-// Padding lives INSIDE the clipped box, so it travels with the block instead of
-// outliving it (Figma 902:2466 — 16px sides, 12 over, 4 under).
-//
-// The two groups stack from the TOP and whatever the reserve has left over
-// falls to the foot, because the space this block has to fill is not a
-// constant: the Figma fitted these fields to a card 615px wide, and a form
-// surface narrower than that re-wraps the recurrence it is counterweighting —
-// the weekday toolbar drops off Until's line, the Notice runs to four lines —
-// so on a phone the reserve is ~270px against ~185px of fields. Spreading that
-// slack (`space-between`) put all 85px of it in the ONE gap between the note
-// field and the checkboxes: a field-shaped hole in the middle of the block,
-// which reads as a placeholder input that has gone missing rather than as a
-// form the card is cropping. At the foot the same slack is simply the empty
-// half of a short form, and invisible — these rows carry no fill.
-//
-// The gap stays 0, not `lg`: it would be added on top of the content, and the
-// content is what the block can least afford when the reserve runs the other
-// way (a wide card's recurrence is SHORTER than these fields, and the overflow
-// crops the last checkbox). The two line boxes already hold ~12px of air
-// between their bars without one.
-//
-// It is sized to the RESERVE, not to `100%` of its parent — and that difference
-// is the whole reason the block opens quietly. `space-between` distributes
-// whatever is left over after the content, so a percentage height re-runs that
-// distribution at every frame of the parent's own height transition: the box
-// spends most of the animation shorter than its content (no free space, groups
-// packed) and only in the last fifth does slack appear, dropping the two
-// checkbox rows 24px in a single step right as the block finishes fading in.
-// Pinning the height to the reserve lays the fields out ONCE, at the size they
-// will rest at, so the growing box uncovers them instead of re-flowing them.
+// Sized to the reserve, not `100%`, so the fields lay out once instead of re-flowing through the transition.
 const counterweightFieldsStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -450,8 +239,6 @@ const counterweightFieldsStyle = css({
   paddingBlockEnd: "sm",
 });
 
-// No gap — two checkbox rows stacked on their own 28px line boxes, the rhythm
-// the Figma draws them at (902:2506).
 const counterweightChecksStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -486,50 +273,21 @@ const dayChipStyle = css({
   textAlign: "center",
 });
 
-// The stage the walkthrough's cursor is placed against. It wraps the whole
-// dialog rather than the form surface, for one hard reason: the surface
-// `clip-path`s its torn edges, and a clip-path makes a stacking context — a
-// cursor inside it could never paint over the date popover it has to point at.
+// Wraps the whole dialog: the form's `clip-path` is a stacking context the cursor must paint above.
 const stageStyle = css({ position: "relative" });
 
-// ---------------------------------------------------------------------------
-// The walkthrough.
-//
-// v1's argument is that recurrence belongs in a SENTENCE, and a sentence only
-// makes that case once it is saying something worth reading. So the demo builds
-// one: it turns the repeat switch on, picks out every other weekday, and dates
-// the last shift far enough out that the run it has just described comes to 25
-// shifts — a month and a half of roster, from four chips and two dates. Doing
-// that by hand is the work v1 exists to remove, which is why the demo does it
-// FOR you and then puts everything back.
-// ---------------------------------------------------------------------------
-
-/** Shifts the walkthrough builds up to — a roster, not a token pair. */
 const TOUR_SHIFTS = 25;
-/** Every OTHER chip in the S M T W T F S row; four is as many as seven allows. */
 const TOUR_WEEKDAYS = 4;
-/** A beat on the finished sentence before the cursor leaves and it is undone. */
 const TOUR_FINALE_MS = 1800;
 
 export interface DemoRecurrencePlan {
-  /** Weekdays the run repeats on — the first shift's own weekday leads. */
+  /** The first shift's own weekday leads. */
   weekdays: WeekdayKey[];
-  /** The Last Shift date that closes the run on exactly `shifts` shifts. */
+  /** Closes the run on exactly `shifts` shifts. */
   lastShift: Temporal.PlainDate;
 }
 
-/**
- * What the walkthrough is going to build, given the date the run opens on.
- *
- * The weekdays alternate ROUND the row from the first shift's own weekday, so
- * the toolbar ends up reading as a pattern rather than as four arbitrary
- * presses — and starting on that weekday means the opening date is already
- * shift one, so the sentence is coherent from the first chip onwards.
- *
- * The end date is then found by counting, not by arithmetic on weeks: whatever
- * `shifts` is asked for and however many weekdays the pattern lands on, the
- * range closes on the day the count is reached.
- */
+/** Every other weekday from the first shift's own, closing on the day the count reaches `shifts`. */
 export function planDemoRecurrence(
   firstShift: Temporal.PlainDate,
   shifts = TOUR_SHIFTS,
@@ -558,73 +316,33 @@ export function monthsBetween(
   return (to.year - from.year) * 12 + (to.month - from.month);
 }
 
-/** The open date popover — portalled to the body, so scoped on the document. */
+/** Portalled to the body, so queried on the document. */
 const DATE_POPOVER = '[role="dialog"][aria-label="Choose date"]';
 
 const WEEKDAY_NAMES_BY_KEY = new Map(
   WEEKDAYS.map((day) => [day.key, day.name]),
 );
 
-/**
- * The anchor the server renders from — a constant, and that is the whole point.
- *
- * The clock cannot be read while rendering. Every surface this demo appears on
- * is PRERENDERED (a static dev route, and an embed in a cached article), so a
- * `useState(() => Temporal.Now…)` seed is written into HTML on the build machine
- * and hydrated by a visitor on some later day: the first client render computes
- * a different date, React finds markup it did not send, and it throws the
- * subtree away with error #418. Integration caught it 41 seconds into a day the
- * build had never heard of.
- *
- * The real date arrives in `useLayoutEffect` instead — after hydration has
- * matched, and before paint, so nobody reads this placeholder. Its own value is
- * arbitrary: it only has to be the SAME on both sides of the handshake.
- */
+/** A constant render anchor: reading the clock while rendering breaks hydration (#418) on prerendered pages. */
 const SEED_TODAY = Temporal.PlainDate.from("2026-01-01");
 
-/**
- * The opening state for an anchor: tomorrow through a week later, and the
- * weekday that first shift falls on. Shared by the seeds, by the settle below,
- * and by every reset — which is defined as "put it back to this".
- */
+/** Tomorrow through a week later, on the first shift's weekday; what every reset restores. */
 function openingFrom(today: Temporal.PlainDate) {
   const firstShift = today.add({ days: 1 });
   return {
     firstShift,
     lastShift: today.add({ days: 8 }),
-    // The weekday the first shift itself falls on — the one repeat a shift on
-    // that date implies, so the form is already describing something true
-    // rather than an arbitrary pair. A SEED only: re-dating the first shift
-    // later leaves the toolbar alone, because by then the weekdays are the
-    // user's answer and not ours to overwrite.
     days: [weekdayOf(firstShift)] as WeekdayKey[],
   };
 }
 
-/**
- * The clock, read once and then held. `useSyncExternalStore` re-renders on any
- * snapshot that is not referentially equal to the last, and a fresh
- * `Temporal.PlainDate` never is — so the read is cached. Holding it is also the
- * behaviour you want: a form left open across midnight must not re-date itself
- * under whoever is filling it in.
- */
+/** Read once and cached: `useSyncExternalStore` needs a stable snapshot. */
 let clientToday: Temporal.PlainDate | null = null;
 const readToday = () => (clientToday ??= Temporal.Now.plainDateISO());
 
-/** Nothing to subscribe to — the anchor settles once, at hydration. */
 const holdStill = () => () => {};
 
-/**
- * The anchor, and the handshake around it. The server has no day it can render
- * (see `SEED_TODAY`), so it renders the constant, the first client render
- * matches it, and React swaps in the real date immediately afterwards — the
- * same shape as the theme read in `social-icon-shader.tsx`.
- *
- * `key` is what makes the swap land: the form seeds three `useState` fields
- * from the anchor, and an initialiser does not re-run for a changed prop. Keyed
- * on the date, the form is rebuilt from the real one instead of adjusting
- * itself afterwards — and at hydration there is nothing in it to lose.
- */
+/** Renders from `SEED_TODAY`, then the real date; keyed so the form's state re-seeds from it. */
 export function ShiftSchedulingV1() {
   const today = useSyncExternalStore(holdStill, readToday, () => SEED_TODAY);
   return <ShiftSchedulingForm key={today.toString()} today={today} />;
@@ -639,37 +357,21 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
   const [lastShift, setLastShift] = useState<Temporal.PlainDate | null>(
     opening.lastShift,
   );
-  // The hours the shift runs. Plain constants, not derived from `today` — a
-  // nine-to-five is the same nine-to-five on every day the form is rendered, so
-  // unlike the dates these carry no hydration handshake.
   const [startTime, setStartTime] = useState<Temporal.PlainTime | null>(
     OPENING_START,
   );
   const [endTime, setEndTime] = useState<Temporal.PlainTime | null>(
     OPENING_END,
   );
-  // Closed at rest, because the walkthrough's opening move is to OPEN it — and
-  // a card that folds itself shut the moment the demo starts would read as a
-  // glitch rather than as the first step.
+  // Closed at rest: the walkthrough's first move opens it.
   const [repeat, setRepeat] = useState(false);
   const [days, setDays] = useState<Set<WeekdayKey>>(
     () => new Set(opening.days),
   );
-  // Arms the recurrence block's @starting-style once the switch is first
-  // touched, so the entry animation can't fire on the initial render.
+  // Arms the entry animation once the switch is first touched, so it cannot fire on load.
   const [armed, setArmed] = useState(false);
 
-  // How much height the recurrence block takes with it when it folds, for the
-  // footer counterweight to take back. Measured on the CONTENT box, which the
-  // 0fr row crops rather than squashes, so it reads its natural height for the
-  // whole of the collapse — the counterweight is sized correctly at every frame
-  // of the transition, not just at the ends.
-  //
-  // Zero readings are DISCARDED. At rest the region is `display: none`, which
-  // reports nothing at all; taking that literally would shrink the
-  // counterweight to nothing the instant it was needed, which is the exact
-  // layout shift this exists to prevent. The last non-zero reading is by
-  // definition the height the block folded away from, so it is the one to keep.
+  // The recurrence's natural height, for the counterweight; zero readings (`display: none`) are discarded.
   const recurrenceContentRef = useRef<HTMLDivElement>(null);
   const [reserve, setReserve] = useState(0);
   useLayoutEffect(() => {
@@ -696,15 +398,9 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
   const selectedNames = WEEKDAYS.filter((d) => days.has(d.key)).map(
     (d) => d.name,
   );
-  // Deliberately NOT gated on `repeat`: the Notice now collapses along with the
-  // rest of the recurrence block, so folding the clause out on `repeat: false`
-  // would only re-flow the sentence under the reader mid-fade. The clause still
-  // drops when the block is VISIBLE but no weekday is selected.
+  // Not gated on `repeat`: the Notice fades with the region and must not re-flow mid-fade.
   const repeating = selectedNames.length > 0;
 
-  // What the walkthrough is going to build. Planned at mount off the same
-  // opening date the form seeds from, so the tour and the form can never
-  // disagree about which day the run starts on.
   const tour = useMemo(
     () => planDemoRecurrence(opening.firstShift),
     [opening.firstShift],
@@ -713,21 +409,7 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const onScreen = useInView(stageRef);
 
-  /**
-   * Clear the run the walkthrough built and put the dates back.
-   *
-   * `repeating` is the one thing that is NOT simply "as we found it". Resetting
-   * leaves the card OPEN, because open is the state v1 is arguing for — it is
-   * what the Figma draws, and it is the only state in which there is anything
-   * to play with. A reset that shut the card would hand back a form with one
-   * switch in it and make the visitor's first act the same click the
-   * walkthrough just demonstrated.
-   *
-   * Shut is therefore the walkthrough's STARTING position rather than the
-   * demo's resting one, which is why replay is the only caller that asks for
-   * it: the tour's opening move is to throw that switch, and it needs the
-   * switch to have somewhere to go.
-   */
+  /** Puts the run back; `repeating` is false only for replay, whose first click opens the card. */
   const restore = useCallback(
     (repeating: boolean) => {
       setRepeat(repeating);
@@ -737,13 +419,7 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
       setStartTime(OPENING_START);
       setEndTime(OPENING_END);
 
-      // Focus is part of what has to be handed back. The date picker returns
-      // it to its trigger as it closes — right for whoever opened the thing,
-      // wrong here, because the walkthrough opened it and the form is left
-      // with the Until field wearing its focused frame as though the
-      // visitor had tabbed in. Only ever gives up focus that is INSIDE the
-      // form: a visitor who pressed Reset is focused on the button, out here,
-      // and that focus is theirs to keep.
+      // Drops focus the tour left inside the form; a visitor's focus outside it stays.
       const focused = document.activeElement;
       if (focused instanceof HTMLElement && stageRef.current?.contains(focused))
         focused.blur();
@@ -751,17 +427,7 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
     [opening],
   );
 
-  // "Eastern Daylight Time (UTC-4)" — and "Standard" for half the year, which
-  // is why it is computed. Anchored to the form's `today` rather than to the
-  // live clock, and that is the same handshake the dates make (see
-  // `SEED_TODAY`): read here, a prerendered build would bake January's answer
-  // into HTML a July visitor would then disagree with. Keyed on `today`, the
-  // server and the first client render both compute it from the seed, and the
-  // real one arrives with the remount.
-  //
-  // Noon in the zone ITSELF, so the day is unambiguously on one side of a
-  // changeover — the switch happens at 2am local, and a UTC-midnight instant
-  // would answer for the previous day.
+  // From `today`, not the live clock (hydration); noon in the zone keeps the day off a DST changeover.
   const timeZoneNote = useMemo(
     () =>
       timeZoneLabel(
@@ -784,9 +450,6 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
     finaleMs: TOUR_FINALE_MS,
     stops: () => {
       const stage = stageRef.current;
-      // The visitor has already opened the recurrence, or edited its weekdays.
-      // The tour's whole opening move would be undoing that, so it declines —
-      // the same call v0 makes over a calendar that already has dates on it.
       if (!stage || repeat || days.size !== 1) return [];
 
       const inStage = (selector: string) => () =>
@@ -794,15 +457,12 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
       const inPopover = (selector: string) => () =>
         document.querySelector<HTMLElement>(`${DATE_POPOVER} ${selector}`);
 
-      // The calendar opens on whatever Until currently reads, so the
-      // chevron presses are counted from there rather than from a fixed month.
       const shown = lastShift ?? opening.lastShift;
       const turns = Math.max(0, monthsBetween(shown, tour.lastShift));
 
       return [
-        // Open the recurrence…
         inStage('[role="switch"]'),
-        // …fill in the pattern (its first weekday is already the seeded one)…
+        // The first weekday is already the seeded one.
         ...tour.weekdays
           .slice(1)
           .map((key) =>
@@ -810,7 +470,6 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
               `[aria-label="Repeat on weekdays"] [aria-label="${WEEKDAY_NAMES_BY_KEY.get(key)}"]`,
             ),
           ),
-        // …then date the end of the run, the long way, through the real picker.
         inStage('[data-testid="recurrence"] button[aria-haspopup="dialog"]'),
         ...Array.from({ length: turns }, () =>
           inPopover('button[aria-label="Next month"]'),
@@ -818,49 +477,27 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
         inPopover(`[data-date="${tour.lastShift}"]:not([data-outside])`),
       ];
     },
-    // A walkthrough that left 25 shifts booked would make the visitor's first
-    // act undoing someone else's roster. The card stays open behind it: the
-    // demo hands over a form you can use, not the blank it started from — and
-    // with the page's invitation, if this is the first run on it to finish and
-    // there is a cursor on screen to put the words beside.
     onComplete: () => {
       restore(true);
       invitation.offer();
     },
-    // The frame scrolled away mid-run, so nobody is being handed anything —
-    // and the two states genuinely differ here. Rewind to the card SHUT, which
-    // is what the fresh run on the way back needs in order to open it.
     onRewind: () => restore(false),
   });
 
-  // Replay rewinds to the walkthrough's own starting position — card SHUT, so
-  // its first click has something to open — and every one of its clicks
-  // TOGGLES, so running it over finished work would only take it apart again.
+  // Rewinds to the card shut first: the tour's clicks toggle, so replaying over its work would undo it.
   const { replay: replayTour, stop: stopTour } = cursor;
   const replay = useCallback(() => {
     restore(false);
     replayTour();
   }, [restore, replayTour]);
 
-  // Reset calls off a performance in flight as well as clearing the run —
-  // otherwise the tour's remaining clicks would put it straight back.
+  // Stops the tour too, or its remaining clicks would put the run back.
   const reset = useCallback(() => {
     stopTour();
     restore(true);
   }, [stopTour, restore]);
 
-  // Is there a run on the form for reset to clear? The DATES and the weekday
-  // pattern answer that, measured against the seed the form opened on.
-  //
-  // The repeat switch is deliberately not part of it, and that is the one thing
-  // worth spelling out: reset does not put the switch back either — it always
-  // hands the card over OPEN, because open is the state v1 is arguing for. So a
-  // switch that had a say here would make the demo dirty in both directions and
-  // for nothing. On load, with the card shut by design, it would offer a reset
-  // whose only effect was opening a card nobody had touched; after a finished
-  // run, with the card left open, it would offer one that changed nothing at
-  // all. What the visitor can actually pile up is chips and dates, and that is
-  // exactly what this reads.
+  // Chips and dates only: reset always leaves the card open, so the switch never makes it dirty.
   const dirty =
     !firstShift?.equals(opening.firstShift) ||
     !lastShift?.equals(opening.lastShift) ||
@@ -881,11 +518,6 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
               data-armed={armed}
               style={{ "--counterweight": `${reserve}px` } as CSSProperties}
             >
-              {/* The rest of the "Post a Shift" form, as a shape — the same
-              treatment v0 gives its field column, and for the same reason: the
-              point is that the dialog is still the same size, not what these
-              particular fields say. `Wireframe` makes the whole block inert and
-              aria-hidden, so it is scenery in every sense. */}
               <Wireframe className={counterweightFieldsStyle} opacity={25}>
                 <TextInput
                   label="Additional Notes"
@@ -910,22 +542,14 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
             </div>
           }
         >
-          {/* Interactive scheduling section — the real components + the Notice. */}
           <div className={formStyle}>
             <div className={dateTimeRowStyle}>
               <Field className={dateFieldStyle}>
-                {/* One name, switch or no switch. Turning the repeat on adds a
-                    SECOND date to the form; it does not turn this one into
-                    something else, and relabelling it under the pointer made the
-                    field the visitor had just filled in look like it had. */}
                 <Field.Label>Shift Date</Field.Label>
                 <DatePicker value={firstShift} onValueChange={setFirstShift} />
                 <Field.Hint>dd/mm/yyyy</Field.Hint>
               </Field>
 
-              {/* The hours: two named fields either side of a rule, sharing
-                  one hint that names the clock they are BOTH quoted in. Title
-                  case, to sit level with "Shift Date" beside them. */}
               <div
                 className={timeRangeStyle}
                 role="group"
@@ -947,11 +571,6 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
                     <TimePicker
                       value={endTime}
                       onValueChange={setEndTime}
-                      // The end of a shift is most usefully read as its
-                      // LENGTH, so this list carries "+8 hours" beside each
-                      // hour and runs forward from the start rather than from
-                      // midnight. The start field, having nothing to be
-                      // measured from, takes the plain day list.
                       differenceFrom={startTime}
                     />
                   </Field>
@@ -1028,7 +647,6 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
                         </Field>
                       </div>
 
-                      {/* The star of the showcase — a live, self-describing Notice. */}
                       <Notice role="status" aria-live="polite">
                         <Notice.Icon>
                           <InfoIcon />
@@ -1062,19 +680,14 @@ function ShiftSchedulingForm({ today }: { today: Temporal.PlainDate }) {
           </div>
         </ShiftFormShell>
 
-        {/* A sibling of the dialog, not a child of the clipped form surface —
-          see `stageStyle`. Last, so it paints over what it is pointing at. */}
+        {/* A sibling of the clipped form (see `stageStyle`), last so it paints on top. */}
         <DemoCursor {...cursor} />
         <DemoInvitation {...invitation} />
       </div>
 
-      {/* Outside the shell, so it pins to the FRAME's corner rather than the
-          dialog's — and outside the stage, so pressing one is not mistaken for
-          the visitor reaching into the form mid-performance. */}
+      {/* Outside the stage, so a press is not taken for touching the form. */}
       <DemoControls
         onPlay={replay}
-        // Stops the run where it stands and keeps its work — the same break-in
-        // touching the form already performs, offered as a control.
         onStop={stopTour}
         running={cursor.running}
         onReset={reset}

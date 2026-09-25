@@ -96,13 +96,6 @@ describe("parseColor", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Colour spaces — the three the picker's format menu offers. Hex and RGB are
-// the same numbers written differently; HSB is the one with real geometry
-// behind it, and the one the saturation/brightness map and the hue slider are
-// coordinates in.
-// ---------------------------------------------------------------------------
-
 describe("hexToRgb", () => {
   it("reads each pair of digits as a channel", () => {
     expect(hexToRgb("FFAB6F")).toEqual({ r: 255, g: 171, b: 111 });
@@ -162,11 +155,7 @@ describe("hsbToRgb", () => {
   });
 
   it("returns every other colour to within one channel step, which is all integer HSB can promise", () => {
-    // 360 x 101 x 101 nameable triples against 256^3 colours: the round trip
-    // CANNOT be exact everywhere, and a picker that emitted on open would
-    // shift the colour by a digit just for being looked at. Hence the rule
-    // this tolerance stands in for — the picker holds its own HSB and emits
-    // only on an edit (see `color-picker.tsx`).
+    // HSB has fewer nameable triples than RGB has colours, so the round trip needs a tolerance.
     for (const rgb of [
       { r: 255, g: 171, b: 111 },
       { r: 12, g: 200, b: 90 },

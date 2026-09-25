@@ -1,20 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---------------------------------------------------------------------------
-// `saveGridLayout` — the one write the grid editor makes.
-//
-// Everything the toolbar does is buffered until "Publish and exit", so this is
-// where a session's worth of pinning, widening, inserting and retiring either
-// all lands or none of it does. The tests below are about what reaches each
-// table, which is the part a type checker cannot hold on its own: a width and a
-// seat are two columns on the same row, and sending them as two updates or
-// against the wrong table is a mistake that compiles.
-// ---------------------------------------------------------------------------
-
-// The guard now lives in `@/lib/auth/server` and is shared by every action
-// module. Stubbed at its SESSION source rather than by replacing the module, so
-// these tests still run the real comparison — a mock of `requireAdmin` would
-// make every "Unauthorized" case below assert its own stub.
+// Mocked at the session source, not `requireAdmin`, so the real admin check runs.
 vi.mock("@neondatabase/auth/next/server", () => ({
   createNeonAuth: () => ({
     getSession: () =>
@@ -28,10 +14,7 @@ vi.mock("@/lib/env", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-// `updateMany` is spied alongside `update` purely so the static-card tests can
-// assert that NEITHER ran — "no write was attempted" is the specification, and
-// checking only `update` would pass a version that quietly no-opped through
-// `updateMany` instead.
+// `updateMany` is spied too, so "no write attempted" can't pass through it silently.
 const postUpdate = vi.fn();
 const postUpdateMany = vi.fn();
 const componentUpdate = vi.fn();
@@ -93,8 +76,6 @@ describe("saveGridLayout — widths", () => {
     expect(postUpdate).not.toHaveBeenCalled();
   });
 
-  // A seat and a width are two columns of one row. Two updates would be two
-  // round trips and, worse, two chances for the second to lose to the first.
   it("sends a seat and a width as one update", async () => {
     await saveGridLayout(
       draft({ pins: { "post:abc": 4 }, spans: { "post:abc": 2 } }),
@@ -106,8 +87,6 @@ describe("saveGridLayout — widths", () => {
     });
   });
 
-  // Releasing a pin writes null. It has to survive being merged with a width,
-  // which is exactly where a `??`-style merge would drop it.
   it("keeps a released pin when the same card was widened", async () => {
     await saveGridLayout(
       draft({ pins: { "post:abc": null }, spans: { "post:abc": 2 } }),
@@ -126,8 +105,6 @@ describe("saveGridLayout — widths", () => {
     });
   });
 
-  // A card widened before it was ever saved has no row to update — its width
-  // belongs to the row the insert is about to create.
   it("creates an inserted component at the width it was drafted", async () => {
     await saveGridLayout(
       draft({
@@ -149,9 +126,6 @@ describe("saveGridLayout — widths", () => {
     );
   });
 
-  // The palette's "New widget…" picks a demo off a list with no seat in mind,
-  // so the row is created unpinned and the grid seats it by date — which puts
-  // it first, being the newest thing there.
   it("creates a seatless insert unpinned", async () => {
     await saveGridLayout(
       draft({
@@ -170,8 +144,6 @@ describe("saveGridLayout — widths", () => {
     );
   });
 
-  // ...and a seat given to it afterwards is still its seat: the card is dragged
-  // with the same handle a saved one is, before the row it will land in exists.
   it("takes a pin made against a seatless insert", async () => {
     await saveGridLayout(
       draft({
@@ -201,8 +173,6 @@ describe("saveGridLayout — widths", () => {
     );
   });
 
-  // The CSS clamps anything wider than the grid, so a value that got past the
-  // UI would be stored as a width the page never draws.
   it("refuses a width the grid cannot draw", async () => {
     await expect(
       saveGridLayout(draft({ spans: { "post:abc": 9 } })),
@@ -216,9 +186,6 @@ describe("saveGridLayout — widths", () => {
     ).rejects.toThrow();
   });
 
-  // A pending card is the only keyed card left with no row of its own, and it
-  // must not be able to roll back the rest of the draft: its edits belong to
-  // the `inserts` list, which creates the row rather than updating one.
   it("saves the rest of the layout alongside a pending card", async () => {
     await saveGridLayout(
       draft({
@@ -233,14 +200,6 @@ describe("saveGridLayout — widths", () => {
       data: { gridSpan: 3 },
     });
   });
-
-  // --- Shape ---------------------------------------------------------------
-  //
-  // A width is a fact about the GRID; a shape is a fact about the CARD, and the
-  // two end up in different columns even though one rail sets both. For a
-  // component the column is the row's existing `aspect` override — per
-  // PUBLICATION, since the same demo can be published more than once and only
-  // this showing of it was reshaped.
 
   it("writes a component's shape to its own aspect column", async () => {
     await saveGridLayout(draft({ aspects: { "component:xyz": "9/16" } }));
@@ -273,8 +232,6 @@ describe("saveGridLayout — widths", () => {
     });
   });
 
-  // Reshaping a card that has not been published yet belongs to the row the
-  // insert is about to create, overriding the registry default it came with.
   it("creates an inserted component at the shape it was reshaped to", async () => {
     await saveGridLayout(
       draft({
@@ -308,14 +265,6 @@ describe("saveGridLayout — widths", () => {
   });
 });
 
-// --- Log output ------------------------------------------------------------
-//
-// Whether a card shows its log panel is an override on the component row, the
-// same shape of column as `aspect`: null means "whatever the registry says",
-// and a boolean means this publication has been told otherwise. It is the one
-// property in the draft that only HALF the cards can carry — a post has no log
-// output and no column to record one in.
-
 describe("saveGridLayout — log output", () => {
   beforeEach(() => {
     [
@@ -336,8 +285,6 @@ describe("saveGridLayout — log output", () => {
     });
   });
 
-  // Hiding a panel the registry turns on is the whole point of the override,
-  // so `false` has to reach the column rather than being read as "unset".
   it("writes a hidden log panel as false, not as nothing", async () => {
     await saveGridLayout(draft({ loggers: { "component:xyz": false } }));
     expect(componentUpdate).toHaveBeenCalledWith({
@@ -361,9 +308,6 @@ describe("saveGridLayout — log output", () => {
     });
   });
 
-  // A post row has no `logger` column at all, so a key naming one is dropped
-  // before any write is built — reaching Prisma with it would throw and take
-  // the whole transaction, and the rest of the layout, down with it.
   it("attempts no write for a post", async () => {
     await saveGridLayout(draft({ loggers: { "post:abc": true } }));
     expect(postUpdate).not.toHaveBeenCalled();
@@ -405,10 +349,6 @@ describe("saveGridLayout — log output", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The card a publication CARRIES — the link card's picture, words and
-// destination, which for that one entry are the whole component.
-// ---------------------------------------------------------------------------
 describe("saveGridLayout — configuration", () => {
   beforeEach(() => {
     [
@@ -434,8 +374,6 @@ describe("saveGridLayout — configuration", () => {
     });
   });
 
-  // The blob replaces what is stored, so a section the author removed arrives
-  // as an absent key and lands as one. A merge could never clear anything.
   it("writes an emptied configuration as empty", async () => {
     await saveGridLayout(draft({ props: { "component:xyz": {} } }));
     expect(componentUpdate).toHaveBeenCalledWith({
@@ -459,18 +397,12 @@ describe("saveGridLayout — configuration", () => {
     });
   });
 
-  // A post row has no `props` column, so a key naming one is dropped before any
-  // write is built — reaching Prisma with it would throw and take the rest of
-  // the layout down with it.
   it("attempts no write for a post", async () => {
     await saveGridLayout(draft({ props: { "post:abc": config } }));
     expect(postUpdate).not.toHaveBeenCalled();
     expect(postUpdateMany).not.toHaveBeenCalled();
   });
 
-  // A link card is PLACED and then filled in, so the whole of authoring one
-  // happens before the row exists. All of it has to reach the row the save
-  // creates.
   it("carries an unsaved card's configuration into the row it creates", async () => {
     await saveGridLayout(
       draft({
@@ -490,8 +422,6 @@ describe("saveGridLayout — configuration", () => {
     );
   });
 
-  // A demo's content is its own code, so a publication of one has nothing to
-  // put here — and null is the honest record of that rather than `{}`.
   it("creates an ordinary demo with no configuration at all", async () => {
     await saveGridLayout(
       draft({
@@ -507,9 +437,6 @@ describe("saveGridLayout — configuration", () => {
     );
   });
 
-  // Typed by hand rather than chosen from a control, so it is the one field on
-  // this table that can arrive malformed from a tampered client. "example.com"
-  // as an external href would render as a relative link INTO this site.
   it("refuses a destination of the wrong shape", async () => {
     await expect(
       saveGridLayout(
@@ -526,10 +453,6 @@ describe("saveGridLayout — configuration", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A post's card — the one thing about a post's tile the post itself does not
-// decide, kept on the post's own row.
-// ---------------------------------------------------------------------------
 describe("saveGridLayout — a post's card", () => {
   beforeEach(() => {
     [
@@ -562,8 +485,6 @@ describe("saveGridLayout — a post's card", () => {
     });
   });
 
-  // The blob replaces what is stored — the same rule as `props`, so a section
-  // the author removed lands as an absent key.
   it("writes an emptied card as empty", async () => {
     await saveGridLayout(draft({ cards: { "post:abc": {} } }));
     expect(postUpdate).toHaveBeenCalledWith({
@@ -583,17 +504,12 @@ describe("saveGridLayout — a post's card", () => {
     });
   });
 
-  // A component row has no `card` column — its configuration is `props` — so
-  // a key naming one is dropped before any write is built, the mirror of the
-  // post guard on `props`.
   it("attempts no write for a component", async () => {
     await saveGridLayout(draft({ cards: { "component:xyz": card } }));
     expect(componentUpdate).not.toHaveBeenCalled();
     expect(componentUpdateMany).not.toHaveBeenCalled();
   });
 
-  // Validated at the door like `props`: the tone is chosen from a control, but
-  // a tampered client can send anything, and what is stored is what renders.
   it("refuses a tone that is not one of the two", async () => {
     await expect(
       saveGridLayout(

@@ -60,7 +60,7 @@ describe("Checkbox", () => {
 
     fireEvent.click(box);
     expect(onCheckedChange).toHaveBeenCalledWith(true);
-    expect(box.getAttribute("aria-checked")).toBe("false"); // parent still owns state
+    expect(box.getAttribute("aria-checked")).toBe("false");
 
     rerender(
       <Field>

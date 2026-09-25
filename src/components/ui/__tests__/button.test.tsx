@@ -13,14 +13,9 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
   });
 
-  // WebKit's default tab order reaches form fields and anything carrying an
-  // explicit tabindex — NOT a bare <button>. Safari users would tab straight
-  // past every button on the page, so each one states its own place.
   it("states its own place in the tab order", () => {
     render(<Button aria-label="Save" />);
-    // The ATTRIBUTE, not the property: `el.tabIndex` reports a button's
-    // default of 0 whether or not it is written down, and what WebKit reads is
-    // the attribute.
+    // The attribute, not `el.tabIndex`, which reads 0 either way.
     expect(
       screen.getByRole("button", { name: "Save" }).getAttribute("tabindex"),
     ).toBe("0");
@@ -154,7 +149,6 @@ describe("Button", () => {
 
     it("renders the tooltip decoratively, hidden until hover", () => {
       render(iconButton());
-      // Accessible name comes from the button, not the aria-hidden tooltip.
       expect(screen.getByRole("button", { name: "Delete" })).toBeDefined();
       const tip = screen.getByText("Delete").parentElement as HTMLElement;
       expect(tip.getAttribute("aria-hidden")).toBe("true");
@@ -177,9 +171,6 @@ describe("Button", () => {
       expect(tip.hasAttribute("data-visible")).toBe(false);
     });
 
-    // A tap fires `pointerenter` before `pointerdown`, and the mouse events the
-    // engine synthesises afterwards fire another — so a hover-triggered label
-    // opens ON the tap and stays up until something else is touched.
     it("stays down for a finger, which has no cursor to label", () => {
       render(iconButton());
       const btn = screen.getByRole("button", { name: "Delete" });
@@ -190,7 +181,7 @@ describe("Button", () => {
         clientX: 10,
         clientY: 10,
       });
-      // The mouse compatibility events the engine fires after the tap.
+      // The mouse compatibility events a tap fires.
       fireEvent.mouseEnter(btn, { clientX: 10, clientY: 10 });
       fireEvent.click(btn);
       expect(tip.hasAttribute("data-visible")).toBe(false);

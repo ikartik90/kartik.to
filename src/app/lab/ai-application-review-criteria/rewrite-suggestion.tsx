@@ -5,15 +5,6 @@ import { accentButton, accentButtonLabelStyle } from "./parts";
 import { useWalkthrough, WalkthroughTip } from "./walkthrough";
 import SuggestionIcon from "./icons/suggestion.svg";
 
-// ---------------------------------------------------------------------------
-// A suggested rewrite, under the prompt it would replace (Figma 86:3757): the
-// whole rewritten prompt, with what it adds marked, and the two answers to it.
-//
-// Offered, not applied — the prompt above is still the one that was tested —
-// until Apply puts it there (Figma 93:4095). Ignore dismisses it. Applying it
-// is the walkthrough's fifth step, and its tip points at Apply.
-// ---------------------------------------------------------------------------
-
 const boxStyle = css({
   position: "relative",
   display: "flex",
@@ -101,7 +92,7 @@ export function RewriteSuggestion({
         {rewrite.prompt.slice(at + rewrite.addedClause.length)}
       </p>
       <div className={actionsStyle}>
-        {/* Where focus lands on the way back from the benchmark. */}
+        {/* Focus target on return from the benchmark. */}
         <button
           ref={applyRef}
           type="button"
@@ -114,7 +105,6 @@ export function RewriteSuggestion({
             Apply suggested rewrite
           </span>
         </button>
-        {/* Under it: over it is the rewrite it would apply. */}
         <WalkthroughTip step="apply-rewrite" anchor={applyRef} />
         <button type="button" className={ignoreStyle} onClick={onIgnore}>
           Ignore

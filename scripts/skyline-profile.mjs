@@ -21,8 +21,7 @@ function walk(d, onPoint) {
   }
 }
 
-// A segment covers every bin between its endpoints, so the roofline of a wide
-// building is recorded across its whole width rather than only at its corners.
+// A segment fills every bin it spans, so a wide roof is recorded across its width.
 for (const m of svg.matchAll(/\sd="([^"]+)"/g)) {
   let prev = null;
   walk(m[1], (x, y) => {
@@ -40,7 +39,6 @@ for (const m of svg.matchAll(/\sd="([^"]+)"/g)) {
 
 const rounded = top.map((v) => Math.round(Math.min(Math.max(v, 0), VB_H)));
 console.log("bins:", BINS, "min y overall:", Math.min(...rounded));
-// Where the tower is, for a sanity check.
 const tb = Math.floor((2000 / VB_W) * BINS);
 console.log("around the tower:", rounded.slice(tb - 3, tb + 4));
 console.log("at the edges:", rounded.slice(0, 4), "...", rounded.slice(-4));

@@ -15,18 +15,6 @@ import {
 } from "./cosmic-track-uniforms";
 import { useShaderPolicy } from "./use-shader-policy";
 
-// ---------------------------------------------------------------------------
-// CosmicTrack — a fan of ribbons radiating from a point, on a flat ground.
-//
-// Shaped exactly like one of the library's own components (see `GodRays`):
-// friendly props in, a `uniforms` object out, straight into `ShaderMount`. No
-// layer of our own in between — the library's components call the mount
-// directly, and an extra wrapper here would only be a passthrough to drift.
-//
-// Consumers write `<CosmicTrack colors={…} phaseDegrees={…} />` and never see a
-// uniform or a mount, which is the whole point of the shape.
-// ---------------------------------------------------------------------------
-
 export interface CosmicTrackProps
   extends ShaderComponentProps,
     Partial<CosmicTrackParams>,
@@ -133,14 +121,7 @@ function CosmicTrackImpl({
   );
 }
 
-/**
- * Memoised with a comparator that looks INSIDE `colors`.
- *
- * The library memoises its own shaders the same way, and the reason is easy to
- * miss: `colors` is an array, so a caller passing a literal hands over a new
- * identity on every render and defeats a default `memo` completely — the
- * uniforms would be rebuilt and re-uploaded for every parent update.
- */
+/** Compares `colors` by value: a literal array would otherwise defeat memo on every render. */
 export const CosmicTrack = memo(CosmicTrackImpl, (prev, next) => {
   const { colors: prevColors, ...prevRest } = prev;
   const { colors: nextColors, ...nextRest } = next;

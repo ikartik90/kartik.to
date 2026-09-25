@@ -4,22 +4,14 @@ import { SITE_URL } from "@/lib/site-url";
 import { documentToMarkdown } from "@/utils/document-markdown";
 import { getPostReadUrl } from "@/utils/post-urls";
 
-/**
- * A published post as Markdown — the body of `/work/<slug>.md` and
- * `/writing/<slug>.md`, one handler for both the way `postOgImage` is one card
- * for both.
- *
- * The `Link` header names the HTML page as canonical, so a search engine that
- * finds this copy files it under the page rather than beside it.
- */
+/** A published post as Markdown for `/work|writing/<slug>.md`; `Link` names the HTML page as canonical. */
 export async function postMarkdownResponse(
   slug: string,
   category: PostCategory,
 ): Promise<Response> {
   const post = await getPublishedPostBySlug(slug, category);
   if (!post) {
-    // The page's own rule, for the copy of it: an address the post has left
-    // sends the agent on to the copy at the new one.
+    // A moved post redirects to its copy at the new address.
     const moved = await findMovedPostPath(slug, category, {
       allowDraft: false,
     });

@@ -38,7 +38,6 @@ const toolbar = () => screen.queryByRole("toolbar", { name: "Link actions" });
 const hover = (el: Element, pointerType = "mouse") =>
   fireEvent.pointerEnter(el, { pointerType });
 
-/** Put the caret at `offset` inside the label. */
 function caretAt(offset: number) {
   const node = label().firstChild ?? label();
   const range = document.createRange();
@@ -77,8 +76,6 @@ describe("EditableButtonLink", () => {
       });
     });
 
-    // Undo writes the label from outside, and the box must follow — but never
-    // under a caret, where rewriting the text would throw the caret away.
     it("follows a label changed from outside while it is not being typed in", () => {
       const view = setup();
       view.rerender(
@@ -119,15 +116,12 @@ describe("EditableButtonLink", () => {
       expect(toolbar()).not.toBeNull();
     });
 
-    // A finger has no hover: the toolbar arrives with the focus a tap gives.
     it("does not come up for a touch passing over", () => {
       setup();
       hover(label(), "touch");
       expect(toolbar()).toBeNull();
     });
 
-    // The gap between the button and its toolbar is crossed on the way to a
-    // control, so leaving the button does not take the toolbar straight away.
     it("waits a moment after the pointer leaves, and stays if it arrives on the toolbar", () => {
       vi.useFakeTimers();
       setup();
@@ -198,7 +192,6 @@ describe("EditableButtonLink", () => {
         });
       });
 
-      // The canvas is the page: a sticky button pins while it is edited too.
       it("pins its row only while sticky", () => {
         const { container, rerender, block, ...props } = setup();
         const row = () => container.querySelector("[data-button-link-block]")!;
@@ -260,7 +253,6 @@ describe("EditableButtonLink", () => {
         });
       });
 
-      // The canvas is the page: the button is drawn in its chosen colour.
       it("draws the label in the chosen colour", () => {
         setup({ color: "accent" });
         for (const name of buttonLinkClass("accent").split(" ")) {
@@ -293,7 +285,6 @@ describe("EditableButtonLink", () => {
           text: "Book a call",
           href: "https://cal.com/kartik",
         });
-        // Back to the actions, with the caret back in the label.
         expect(screen.queryByLabelText("Link URL")).toBeNull();
         expect(document.activeElement).toBe(label());
       });
@@ -327,7 +318,6 @@ describe("EditableButtonLink", () => {
         });
       });
 
-      // The address is written into the public page's `href`.
       it("refuses an address that runs rather than goes", () => {
         const { onChange } = setup();
         const input = startEditing();
@@ -350,7 +340,6 @@ describe("EditableButtonLink", () => {
         expect(document.activeElement).toBe(label());
       });
 
-      // The pointer wandering off must not take a half-typed address with it.
       it("stays open while the address is being typed, wherever the pointer is", () => {
         vi.useFakeTimers();
         setup();

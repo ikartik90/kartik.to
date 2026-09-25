@@ -10,10 +10,6 @@ import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { autosaveKey } from "@/utils/editor-autosave";
 import { isGridDraftDirty } from "@/utils/grid-draft";
 
-// ---------------------------------------------------------------------------
-// Module mocks
-// ---------------------------------------------------------------------------
-
 const mockUseSession = vi.fn().mockReturnValue({ data: null });
 vi.mock("@/lib/auth/client", () => ({
   authClient: { useSession: () => mockUseSession() },
@@ -47,9 +43,7 @@ vi.mock("@/utils/open-in-new-tab", () => ({
   openInNewTab: (url: string) => mockOpenInNewTab(url),
 }));
 
-// Every action module is stubbed, not just for isolation: they are
-// `"use server"` files that import `@/lib/env`, which validates DATABASE_URL and
-// friends at import time and throws in a test run that has no `.env`.
+// Stubbed: action modules import @/lib/env, which throws at import time without a .env.
 vi.mock("@/app/actions/shader-preset", () => ({
   getShaderPresets: vi.fn().mockResolvedValue([]),
   getShaderPreset: vi.fn(),
@@ -104,10 +98,6 @@ vi.mock("@/app/actions/post", () => ({
   deleteDraft: vi.fn().mockResolvedValue(undefined),
 }));
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("useCommandPalette", () => {
   let close: Mock<() => void>;
 
@@ -133,10 +123,6 @@ describe("useCommandPalette", () => {
     vi.restoreAllMocks();
   });
 
-  // -------------------------------------------------------------------------
-  // isAdmin
-  // -------------------------------------------------------------------------
-
   describe("isAdmin", () => {
     it("is false when there is no session", () => {
       const { result } = renderHook(() => useCommandPalette(close));
@@ -149,10 +135,6 @@ describe("useCommandPalette", () => {
       expect(result.current.isAdmin).toBe(true);
     });
   });
-
-  // -------------------------------------------------------------------------
-  // isEditMode
-  // -------------------------------------------------------------------------
 
   describe("isEditMode", () => {
     it("is false on the home route", () => {
@@ -180,10 +162,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // The shader playground
-  // -------------------------------------------------------------------------
-
   describe("isShaderPlayground", () => {
     it("is true on the bare playground route", () => {
       mockPathname.mockReturnValue("/playground/shader");
@@ -204,17 +182,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Whose playground it is
-  //
-  // Being on the playground and EDITING one are two different facts, and only
-  // the author can hold the second. A visitor can move every slider on the
-  // page and still have nothing that could be written, so the route alone was
-  // never enough to call it an editor.
-  // -------------------------------------------------------------------------
-
-  // The testimonials board lives under `/edit` and holds nothing unsaved — a
-  // destination, like the playgrounds, and not a document being edited.
   describe("editorKind on the testimonials board", () => {
     it("is no editor", () => {
       mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
@@ -230,9 +197,7 @@ describe("useCommandPalette", () => {
       mockPathname.mockReturnValue("/playground/shader");
     });
 
-    // This file does not unmount between tests, and a hook left mounted on the
-    // playground keeps the ⌘S listener it binds there — which the save-shortcut
-    // cases below would then answer twice.
+    // Nothing unmounts between tests here, and a mounted hook keeps its ⌘S listener.
     afterEach(cleanup);
 
     it("is no editor at all for a visitor, who has nowhere to save to", () => {
@@ -255,8 +220,6 @@ describe("useCommandPalette", () => {
       expect(result.current.editorKind).toBeNull();
     });
 
-    // The wording follows from it: a visitor is walking home, not finishing
-    // with an editor, and one label cannot be honest about both.
     it("names the visitor's way out as navigation", () => {
       const { result } = renderHook(() => useCommandPalette(close));
 
@@ -271,27 +234,15 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // ⌘S
-  //
-  // The palette's Save row carries a ⌘S chip. For a while nothing listened for
-  // the key, so the browser answered it with Save Page — a chip advertising a
-  // shortcut that opened a download dialog.
-  // ---------------------------------------------------------------------------
   describe("the save shortcut", () => {
-    // The gesture is ⌘S on Apple hardware and Ctrl S everywhere else, so a test
-    // that presses it has to say which keyboard it is pressing it on — the
-    // listener refuses the other platform's modifier deliberately (see
-    // `keyboard-shortcut.ts`).
+    // The listener only answers the platform's own modifier, so tests pin macOS.
     const stubApple = () =>
       Object.defineProperty(navigator, "userAgentData", {
         value: { platform: "macOS" },
         configurable: true,
       });
 
-    // This file does not unmount between tests, and a hook that stays mounted
-    // keeps its window listener — so without this the first press is answered
-    // by every render that came before it as well.
+    // Nothing unmounts between tests here, and a mounted hook keeps its window listener.
     afterEach(() => {
       cleanup();
       delete (navigator as { userAgentData?: unknown }).userAgentData;
@@ -334,12 +285,9 @@ describe("useCommandPalette", () => {
       });
 
       expect(createShaderPreset).toHaveBeenCalledOnce();
-      // Unclaimed, this is the browser's Save Page dialog.
       expect(event.defaultPrevented).toBe(true);
     });
 
-    // Claiming a key and then doing nothing with it is worse than leaving it
-    // alone: the browser's own behaviour is at least a behaviour.
     it("leaves the key alone away from an editor", async () => {
       mockPathname.mockReturnValue("/");
       const { createShaderPreset } = await import(
@@ -372,8 +320,6 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
-    // ⌘⇧S is a different gesture, and the browser reports the shifted key as
-    // an uppercase "S".
     it("does not answer the shifted key", async () => {
       const { createShaderPreset } = await import(
         "@/app/actions/shader-preset"
@@ -395,15 +341,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // ⌘/
-  //
-  // This was ⌘[ — the gesture the browser itself reads as "back", claimed so it
-  // would land on the page above THIS one. Safari never allowed that: ⌘[ is the
-  // key equivalent of its History ▸ Back menu item, and macOS runs menu key
-  // equivalents before the event reaches the page at all, so the listener was
-  // never called and the chip advertised a shortcut that could not fire.
-  // ---------------------------------------------------------------------------
   describe("the back shortcut", () => {
     const stubApple = () =>
       Object.defineProperty(navigator, "userAgentData", {
@@ -428,8 +365,6 @@ describe("useCommandPalette", () => {
     };
 
     beforeEach(() => {
-      // An ancestor exists here, and it is the index — so a press has somewhere
-      // to go, and `mockPush` says where.
       mockPathname.mockReturnValue("/writing/my-post");
       stubApple();
     });
@@ -446,10 +381,6 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(true);
     });
 
-    // The old binding, left to the browser deliberately: in Safari it is Back
-    // and the page cannot have it, and everywhere else Back is still a sane
-    // answer to it. Claiming it in one browser and not another is worse than
-    // claiming it nowhere.
     it("leaves ⌘[ alone", () => {
       renderHook(() => useCommandPalette(close));
 
@@ -462,8 +393,6 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
-    // ⌘⇧/ is ⌘?, which macOS gives to the Help menu — a different gesture, and
-    // one no page gets a say in. Browsers report the shifted key as "?".
     it("does not answer the shifted key", () => {
       renderHook(() => useCommandPalette(close));
 
@@ -476,8 +405,6 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
-    // Claiming a key and then doing nothing with it is worse than leaving it
-    // alone — the same rule ⌘S follows off an editor.
     it("leaves the key alone at the index, which has nothing behind it", () => {
       mockPathname.mockReturnValue("/");
       renderHook(() => useCommandPalette(close));
@@ -491,7 +418,6 @@ describe("useCommandPalette", () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
-    // The platform's own modifier only: Ctrl / on a Mac is not this gesture.
     it("refuses the other platform's modifier", () => {
       renderHook(() => useCommandPalette(close));
 
@@ -505,14 +431,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Leaving the document entirely
-  //
-  // The palette's own exits all ask before dropping buffered work, but they are
-  // not the only way out: a reload, a closed tab, a typed URL. Those unload the
-  // document, and every editor here buffers in a store — so without a word from
-  // `beforeunload` the work goes with it, unasked.
-  // ---------------------------------------------------------------------------
   describe("the unload guard", () => {
     const fireUnload = () => {
       const event = new Event("beforeunload", { cancelable: true });
@@ -539,8 +457,6 @@ describe("useCommandPalette", () => {
       expect(fireUnload().defaultPrevented).toBe(true);
     });
 
-    // The dialog is the browser's, unstyled and unskippable, so it has to earn
-    // its place: raised over a saved document it is pure obstruction.
     it("lets a clean document go", () => {
       renderHook(() => useCommandPalette(close));
 
@@ -555,9 +471,6 @@ describe("useCommandPalette", () => {
       expect(fireUnload().defaultPrevented).toBe(false);
     });
 
-    // The same reasoning `wouldLoseWork` gives: a visitor has nowhere to save
-    // to, so stopping them asks a question whose best answer cannot be carried
-    // out. Their buffer is ephemeral by definition.
     it("lets a visitor go, having nowhere to save to", () => {
       mockUseSession.mockReturnValue({ data: null });
       useEditorStore.setState({ isDirty: true });
@@ -566,8 +479,6 @@ describe("useCommandPalette", () => {
       expect(fireUnload().defaultPrevented).toBe(false);
     });
 
-    // Every preset holding something, not just the one on screen — the strip
-    // sets each draft aside as you move between them.
     it("stops an unload that would drop tuned presets", () => {
       mockPathname.mockReturnValue("/playground/shader");
       useShaderPresetDraftStore.setState({ isDirty: true });
@@ -581,9 +492,6 @@ describe("useCommandPalette", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/playground/shader");
       window.history.replaceState(null, "", "/playground/shader");
-      // Signed in, because that is the only state in which the command
-      // exists: the palette's Save row is admin-only and so is the ⌘S that
-      // runs it. The playground is an editor for whoever can write to it.
       mockUseSession.mockReturnValue({
         data: { user: { id: "admin-id", email: "admin@example.com" } },
       });
@@ -593,8 +501,6 @@ describe("useCommandPalette", () => {
       (preset.saveShaderPreset as Mock).mockReset();
     });
 
-    // Create or update is decided by the DRAFT, not the route — after a create
-    // the two disagree until the navigation lands, and the store is what knows.
     it("creates when the draft has never been saved", async () => {
       const { createShaderPreset, saveShaderPreset } = await import(
         "@/app/actions/shader-preset"
@@ -611,8 +517,6 @@ describe("useCommandPalette", () => {
 
       expect(createShaderPreset).toHaveBeenCalledOnce();
       expect(saveShaderPreset).not.toHaveBeenCalled();
-      // The saved row's id comes back into the draft, so a second ⌘S updates
-      // the preset just written rather than creating a duplicate of it.
       expect(useShaderPresetDraftStore.getState().shaderPresetId).toBe(
         "preset-1",
       );
@@ -645,11 +549,6 @@ describe("useCommandPalette", () => {
       expect(createShaderPreset).not.toHaveBeenCalled();
     });
 
-    // A failed write must not look like a successful one. The palette closes
-    // either way (the press was received), but the draft keeps its work and the
-    // page does not navigate away from it.
-    // ⌘S is a SAVE, not an exit. The whole point of the shortcut is to keep
-    // working, so the one thing it must never do is navigate.
     it("stays on the page", async () => {
       const { createShaderPreset } = await import(
         "@/app/actions/shader-preset"
@@ -667,9 +566,6 @@ describe("useCommandPalette", () => {
       expect(mockPush).not.toHaveBeenCalled();
     });
 
-    // Saving a never-saved preset gives it an id, and the URL has to catch up or
-    // a refresh would land back on the blank route and lose the connection.
-    // `replace`, not `push`: the blank route is not a place to go back to.
     it("takes on the new preset's URL without adding a history entry", async () => {
       const { createShaderPreset } = await import(
         "@/app/actions/shader-preset"
@@ -684,9 +580,6 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(() => result.current.handleSaveChanges());
 
-      // Corrected in PLACE, not navigated to: the draft already holds the preset
-      // that was just written, and asking the router for its route would fetch
-      // that same preset back and remount the playground around it.
       expect(window.location.pathname).toBe("/playground/shader/preset-1");
       expect(mockReplace).not.toHaveBeenCalled();
       expect(mockPush).not.toHaveBeenCalled();
@@ -773,12 +666,6 @@ describe("useCommandPalette", () => {
       expect(result.current.pendingExit).toBeNull();
     });
 
-    // The whole point: unsaved work must not leave silently. #94 solved this by
-    // withholding the command; asking is the better answer, because "I want to
-    // go and I want to keep it" is a thing the author can now say.
-    // A visitor has nowhere to save TO, so their tuning is ephemeral by
-    // definition and stopping them on the way out would offer an answer
-    // ("Save changes and exit") that cannot be carried out.
     it("does not stop a visitor who has no way to save", () => {
       mockUseSession.mockReturnValue({ data: null });
       useShaderPresetDraftStore.getState().setParam("scale", 2);
@@ -836,7 +723,6 @@ describe("useCommandPalette", () => {
       expect(useShaderPresetDraftStore.getState().isDirty).toBe(false);
     });
 
-    // Cancel is not a quieter discard — the tuning has to survive it intact.
     it("keeps the work and stays put when cancelled", () => {
       useShaderPresetDraftStore.getState().setParam("scale", 2);
 
@@ -852,7 +738,6 @@ describe("useCommandPalette", () => {
       expect(useShaderPresetDraftStore.getState().isDirty).toBe(true);
     });
 
-    // A preset just written is clean, so the same press now simply goes.
     it("stops asking once the work has been saved", async () => {
       const { createShaderPreset } = await import(
         "@/app/actions/shader-preset"
@@ -877,9 +762,6 @@ describe("useCommandPalette", () => {
   describe("handleDiscardAndExit — the preset", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/playground/shader");
-      // Signed in, because that is the only state in which the command
-      // exists: the palette's Save row is admin-only and so is the ⌘S that
-      // runs it. The playground is an editor for whoever can write to it.
       mockUseSession.mockReturnValue({
         data: { user: { id: "admin-id", email: "admin@example.com" } },
       });
@@ -889,8 +771,6 @@ describe("useCommandPalette", () => {
       (preset.saveShaderPreset as Mock).mockReset();
     });
 
-    // Nothing was ever written, so this is a no-op plus a navigation — the same
-    // shape as the grid's "Discard and exit".
     it("drops the draft and leaves without writing", async () => {
       const { saveShaderPreset, createShaderPreset } = await import(
         "@/app/actions/shader-preset"
@@ -907,8 +787,6 @@ describe("useCommandPalette", () => {
       expect(mockPush).toHaveBeenCalledWith("/");
     });
 
-    // It IS the answer to the unsaved-work question, said up front — so it must
-    // not turn round and ask the question again.
     it("does not stop to confirm what was just chosen", () => {
       mockUseSession.mockReturnValue({
         data: { user: { id: "admin-id", email: "admin@example.com" } },
@@ -923,14 +801,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // One rule across every editor
-  // -------------------------------------------------------------------------
-
-  // -------------------------------------------------------------------------
-  // Publish
-  // -------------------------------------------------------------------------
-
   describe("handlePublish — the document goes with the switch", () => {
     beforeEach(async () => {
       mockUseSession.mockReturnValue({
@@ -939,21 +809,13 @@ describe("useCommandPalette", () => {
       useEditorStore.getState().reset();
       mockPathname.mockReturnValue("/edit/my-post");
       window.localStorage.clear();
-      // Call counts, not implementations: these tests assert which writes a
-      // publish makes, so a neighbour's calls must not be visible here.
+      // mockClear, not mockReset: the module mocks' implementations must survive.
       const actions = await import("@/app/actions/post");
       vi.mocked(actions.createDraft).mockClear();
       vi.mocked(actions.saveDraft).mockClear();
       vi.mocked(actions.publishPost).mockClear();
     });
 
-    // The bug this describes: Publish wrote the document only on the branch
-    // that MINTED the post, so re-publishing an existing one flipped
-    // `publishedAt` over whatever content the last save happened to leave
-    // behind. Every edit made since — a replaced video, in the case that found
-    // it — stayed in the buffer and never reached the row the reader is served
-    // from. The editor was right and the page was stale, which is the shape of
-    // failure that takes longest to disbelieve.
     it("writes the buffer before flipping the switch on an existing post", async () => {
       const { saveDraft, publishPost } = await import("@/app/actions/post");
       useEditorStore.getState().setDraftId("existing-id");
@@ -980,8 +842,6 @@ describe("useCommandPalette", () => {
       expect(publishPost).toHaveBeenCalledWith("existing-id");
     });
 
-    // A post that has never been written is minted by the same act, and the
-    // mint already carries the document — so this path must not write twice.
     it("mints a post that has none, and does not write it twice", async () => {
       const { createDraft, saveDraft, publishPost } = await import(
         "@/app/actions/post"
@@ -996,10 +856,6 @@ describe("useCommandPalette", () => {
       expect(publishPost).toHaveBeenCalledWith("new-id");
     });
 
-    // Publishing is a write, so the buffer that was written is no longer
-    // unsaved. Left dirty, the exit question would ask about work that is on
-    // disk — the same "asks about edits just written" fault `persistDocument`
-    // clears the flag to avoid.
     it("leaves the buffer clean once the row holds it", async () => {
       useEditorStore.getState().setDraftId("existing-id");
       useEditorStore.getState().setTitle("Changed");
@@ -1010,9 +866,6 @@ describe("useCommandPalette", () => {
       expect(useEditorStore.getState().isDirty).toBe(false);
     });
 
-    // The local snapshot is the LAST copy of work the server has not taken.
-    // Dropping it before the write meant a failed publish destroyed the
-    // recovery copy and the buffer's only other home in one go.
     it("keeps the local snapshot when the write fails", async () => {
       const { saveDraft } = await import("@/app/actions/post");
       vi.mocked(saveDraft).mockRejectedValueOnce(new Error("offline"));
@@ -1028,7 +881,6 @@ describe("useCommandPalette", () => {
       expect(window.localStorage.getItem(key)).toBe("snapshot");
     });
 
-    // And on the way out it does go, because the row now holds what it held.
     it("drops the local snapshot once the row holds the document", async () => {
       useEditorStore.getState().setDraftId("existing-id");
       useEditorStore.getState().setDocument({ type: "doc", content: [] });
@@ -1041,9 +893,6 @@ describe("useCommandPalette", () => {
       expect(window.localStorage.getItem(key)).toBeNull();
     });
 
-    // Failing to write and then navigating to the read page is the worst of
-    // both: the author is shown a stale article AND taken away from the only
-    // place their edits still exist.
     it("stays put, and publishes nothing, when the write fails", async () => {
       const { saveDraft, publishPost } = await import("@/app/actions/post");
       vi.mocked(saveDraft).mockRejectedValueOnce(new Error("offline"));
@@ -1070,9 +919,6 @@ describe("useCommandPalette", () => {
       useShaderPresetDraftStore.getState().reset();
     });
 
-    // The point of the whole change: ⌘S commits and leaves you where you were,
-    // in every editor. An article editor that navigated to the read page was
-    // the same "thrown out mid-session" bug the preset had.
     it("keeps you in the document editor", async () => {
       mockPathname.mockReturnValue("/edit/my-post");
       useEditorStore.getState().setDraftId("existing-id");
@@ -1085,8 +931,6 @@ describe("useCommandPalette", () => {
       expect(mockPush).not.toHaveBeenCalled();
     });
 
-    // A brand-new draft has no id until it is written, so the URL has to catch
-    // up — replace, not push, exactly as a first-saved preset does.
     it("takes on the new draft's edit URL without a history entry", async () => {
       mockPathname.mockReturnValue("/edit/new");
 
@@ -1132,9 +976,6 @@ describe("useCommandPalette", () => {
       useShaderPresetDraftStore.getState().reset();
     });
 
-    // #94 withheld Back in edit mode so a bare "back" could not discard
-    // silently. Asking is the better answer: it keeps "save and go", which is
-    // usually what was meant.
     it("offers the way back from a document editor now", () => {
       mockPathname.mockReturnValue("/edit/my-post");
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1186,9 +1027,6 @@ describe("useCommandPalette", () => {
       expect(mockPush).toHaveBeenCalled();
     });
 
-    // The editor restores a local snapshot over the saved copy when it opens —
-    // so a discard that left the snapshot behind was undone the next time the
-    // page was edited: the thrown-away work came straight back.
     it("throws the local snapshot away with a document's edits", () => {
       mockPathname.mockReturnValue("/edit/my-post");
       useEditorStore.getState().setDraftId("existing-id");
@@ -1224,19 +1062,9 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // handleNewWidget
-  //
-  // A widget is an EDIT to the homepage, not a publication of its own. It used
-  // to be the latter — a row written the moment the picker closed — which made
-  // it the one change to the grid that "Discard changes and exit" could not
-  // take back. It goes into the same buffer as the placements now, so the same
-  // two answers decide its fate.
-  // -------------------------------------------------------------------------
   describe("handleNewWidget", () => {
     beforeEach(async () => {
       mockPathname.mockReturnValue("/edit/home");
-      // The exit question is the author's alone — see `wouldLoseWork`.
       mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
       useEditorStore.getState().reset();
       useGridDraftStore.getState().reset();
@@ -1253,8 +1081,6 @@ describe("useCommandPalette", () => {
       expect(useGridDraftStore.getState().inserts).toHaveLength(1);
     });
 
-    // Unsaved work, so leaving asks — the widget is as much at stake as a
-    // placement is.
     it("makes the editor dirty", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleNewWidget("calchemy-demo"));
@@ -1281,8 +1107,6 @@ describe("useCommandPalette", () => {
       );
     });
 
-    // The requirement in one sentence: throw the session away and the widget
-    // goes with it, having never been published.
     it("is thrown away with the rest when the changes are discarded", async () => {
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleNewWidget("calchemy-demo"));
@@ -1293,10 +1117,6 @@ describe("useCommandPalette", () => {
       expect(saveGridLayout).not.toHaveBeenCalled();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // handleThemeToggle
-  // -------------------------------------------------------------------------
 
   describe("handleThemeToggle", () => {
     it("calls setMode('dark') when currently in light mode", () => {
@@ -1311,10 +1131,6 @@ describe("useCommandPalette", () => {
       expect(close).toHaveBeenCalledOnce();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // handleEditPage
-  // -------------------------------------------------------------------------
 
   describe("handleEditPage", () => {
     let main: HTMLElement;
@@ -1371,10 +1187,6 @@ describe("useCommandPalette", () => {
       expect(mockPush).toHaveBeenCalledWith("/edit/my-project?category=WORK");
     });
 
-    // The homepage is edited the way everything else is — by going to its edit
-    // route — not by flipping a mode in place. It must NOT fall through to the
-    // contentEditable branch, which would make the cards' text directly
-    // editable.
     it("opens the grid's edit route from the homepage", () => {
       mockPathname.mockReturnValue("/");
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1384,8 +1196,6 @@ describe("useCommandPalette", () => {
       expect(main.contentEditable).not.toBe("true");
     });
 
-    // Its own route for the homepage's reason: `/edit/about` is what creates
-    // the record the first time, which the generic `/edit/:slug` cannot.
     it("opens the About page's editor from the About page", () => {
       mockPathname.mockReturnValue("/about");
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1404,8 +1214,6 @@ describe("useCommandPalette", () => {
     });
 
     it("sets contentEditable on <main>", () => {
-      // A page that is neither the grid nor a post: the homepage and the About
-      // page have real editing of their own and never reach this branch.
       mockPathname.mockReturnValue("/vouch");
       const { result } = renderHook(() => useCommandPalette(close));
       act(() => result.current.handleEditPage());
@@ -1413,8 +1221,6 @@ describe("useCommandPalette", () => {
     });
 
     it("falls back to document.body when no <main> exists", () => {
-      // A page that is neither the grid nor a post: the homepage and the About
-      // page have real editing of their own and never reach this branch.
       mockPathname.mockReturnValue("/vouch");
       main.parentNode?.removeChild(main);
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1424,8 +1230,6 @@ describe("useCommandPalette", () => {
     });
 
     it("places the caret at position 0 of the first text node", () => {
-      // A page that is neither the grid nor a post: the homepage and the About
-      // page have real editing of their own and never reach this branch.
       mockPathname.mockReturnValue("/vouch");
       const addRange = vi.fn<(range: Range) => void>();
       vi.spyOn(window, "getSelection").mockReturnValue({
@@ -1443,10 +1247,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // handleNewPost — one command per category
-  // -------------------------------------------------------------------------
-
   describe("handleNewPost", () => {
     it.each([
       ["ARTICLE", "/edit/new?category=ARTICLE"],
@@ -1462,8 +1262,6 @@ describe("useCommandPalette", () => {
       },
     );
 
-    // Regression: window.open is silently pop-up-blocked in some browsers, so
-    // the command must route through the anchor-based helper instead.
     it("does not use window.open", () => {
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
       const { result } = renderHook(() => useCommandPalette(close));
@@ -1471,10 +1269,6 @@ describe("useCommandPalette", () => {
       expect(openSpy).not.toHaveBeenCalled();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // handleOpenDraft
-  // -------------------------------------------------------------------------
 
   describe("handleOpenDraft", () => {
     it("calls close and navigates to the draft preview", () => {
@@ -1513,10 +1307,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // A document, through the same two commands every editor uses
-  // -------------------------------------------------------------------------
-
   describe("handleSaveChanges — a document", () => {
     beforeEach(async () => {
       mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
@@ -1533,13 +1323,9 @@ describe("useCommandPalette", () => {
 
       const { createDraft } = await import("@/app/actions/post");
       expect(createDraft).toHaveBeenCalled();
-      // The new id goes into the store, so a second ⌘S updates rather than
-      // creating a second draft of the same work.
       expect(useEditorStore.getState().draftId).toBe("new-id");
     });
 
-    // ⌘S pressed twice before the first write returns must not mint the draft
-    // twice: its id only reaches the store once the row exists.
     it("does not start a second write while one is in flight", async () => {
       const { createDraft } = await import("@/app/actions/post");
       mockPathname.mockReturnValue("/edit/new");
@@ -1582,8 +1368,6 @@ describe("useCommandPalette", () => {
       useEditorStore.getState().reset();
     });
 
-    // Nothing was persisted, so the last SAVED version is still in the
-    // database — and the read page is where you see it.
     it("returns to the post as it stands saved", async () => {
       useEditorStore.setState({
         title: "Existing",
@@ -1604,7 +1388,6 @@ describe("useCommandPalette", () => {
       expect(useEditorStore.getState().isDirty).toBe(false);
     });
 
-    // A draft never written has no read page to return to.
     it("goes home from an unsaved new draft, deleting nothing", async () => {
       const { deleteDraft } = await import("@/app/actions/post");
       mockPathname.mockReturnValue("/edit/new");
@@ -1616,10 +1399,6 @@ describe("useCommandPalette", () => {
       expect(deleteDraft).not.toHaveBeenCalled();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // projects — the published work, listed for everyone
-  // -------------------------------------------------------------------------
 
   describe("projects", () => {
     const projects = [
@@ -1670,10 +1449,6 @@ describe("useCommandPalette", () => {
       expect(close).toHaveBeenCalledOnce();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // currentDraft + handleDiscardDraft (renderer mode: delete)
-  // -------------------------------------------------------------------------
 
   describe("currentDraft", () => {
     const draftPost = {
@@ -1753,10 +1528,6 @@ describe("useCommandPalette", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // The metadata sidebar
-  // -------------------------------------------------------------------------
-
   describe("editing metadata", () => {
     beforeEach(() => {
       mockUseSession.mockReturnValue({ data: { user: { id: "admin-id" } } });
@@ -1764,8 +1535,6 @@ describe("useCommandPalette", () => {
       useMetadataPanelStore.setState({ open: false });
     });
 
-    // Only where the post is being edited: the sidebar's changes are buffered
-    // with the words, so a reading page has nowhere to hold them.
     it.each([
       ["/edit/my-post", true],
       ["/edit/new", true],
@@ -1872,7 +1641,6 @@ describe("useCommandPalette", () => {
         );
       });
 
-      // A refresh of the old edit address would otherwise find nothing.
       it("follows the post to the address the save moved it to", async () => {
         const { saveDraft } = await import("@/app/actions/post");
         vi.mocked(saveDraft).mockResolvedValueOnce(
@@ -1905,9 +1673,6 @@ describe("useCommandPalette", () => {
         expect(mockReplace).not.toHaveBeenCalled();
       });
 
-      // The editor records where the row reads in an effect of its own, which
-      // runs AFTER the palette has rendered for the new route — so the way out
-      // has to be read when it is taken, not when the palette last drew.
       it("reads the way out when it is taken, not when the palette rendered", () => {
         const { result } = renderHook(() => useCommandPalette(close));
         seedSaved();
@@ -1915,8 +1680,6 @@ describe("useCommandPalette", () => {
         expect(mockPush).toHaveBeenCalledWith("/writing/hello");
       });
 
-      // Discarding throws the sidebar's changes away with the words, so the
-      // way out is the address the row still has.
       it("leaves for the saved address, not the one the sidebar holds", () => {
         seedSaved();
         useEditorStore.getState().setCategory("WORK");

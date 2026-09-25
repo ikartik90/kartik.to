@@ -61,11 +61,7 @@ export const textStyles = defineTextStyles({
       lineHeight: "1.72",
     },
   },
-  // The smallest step in the scale — 10/16, below `caption`/`sidenote`.
-  // Reserved for the subordinate line that must not compete with the
-  // value it annotates: the small field's hint. Carries the same 0.5%
-  // tracking the rest of the sub-14px family does, since tight glyphs
-  // need the extra air to stay legible at this size.
+  // 10/16, for the small field's hint.
   fineprint: {
     value: {
       fontFamily: "{fonts.switzer}",

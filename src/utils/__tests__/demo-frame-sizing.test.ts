@@ -83,19 +83,9 @@ describe("demo-frame-sizing", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Orientation
-//
-// The grid's aspect picker shows one orientation at a time and flips between
-// them, so every shape in the set has to have somewhere to flip TO.
-// ---------------------------------------------------------------------------
-
 const RATIOS = Object.keys(ASPECT_RATIOS) as DemoFrameAspectRatio[];
 
 describe("aspectCounterpart", () => {
-  // The invariant that makes the picker's orientation toggle possible at all:
-  // an unpaired ratio added to the map would give the toggle a dead end, and
-  // this is the test that stops it landing quietly.
   it("gives every ratio a counterpart that is itself a real ratio", () => {
     for (const ratio of RATIOS) {
       expect(ASPECT_RATIOS).toHaveProperty(aspectCounterpart(ratio));
@@ -109,8 +99,6 @@ describe("aspectCounterpart", () => {
     expect(aspectCounterpart("2/1")).toBe("1/2");
   });
 
-  // The square is its own counterpart, which is what lets the orientation
-  // toggle stay pressable on a 1:1 card: the list flips, the shape does not.
   it("leaves the square alone", () => {
     expect(aspectCounterpart("1/1")).toBe("1/1");
   });
@@ -134,8 +122,6 @@ describe("isPortraitAspect", () => {
     expect(isPortraitAspect("4/3")).toBe(false);
   });
 
-  // The square is neither, and the picker has to open on SOME orientation, so
-  // it counts as landscape rather than forcing every caller to special-case it.
   it("does not call the square portrait", () => {
     expect(isPortraitAspect("1/1")).toBe(false);
   });

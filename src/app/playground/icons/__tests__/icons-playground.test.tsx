@@ -11,9 +11,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { iconTitleFrom, type IconAsset } from "@/domain/icon";
 
-// The set's server side, which reaches a bucket. What is under test is the
-// page over it: what it draws, what it lets you choose, and what it hands
-// back.
 const mockListIcons = vi.fn();
 const mockCreateIconUploadUrl = vi.fn();
 const mockFinalizeIconUpload = vi.fn();
@@ -79,9 +76,7 @@ function asset(
 const signedIn = () =>
   mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
 
-// jsdom implements neither, and the delete question is a native <dialog>.
-// The stubs mirror the platform: `close()` fires the `close` event `Dialog`
-// maps `onClose` to, and `showModal()` throws on an already-open dialog.
+// jsdom lacks `showModal`/`close`; the stubs mirror the platform, `close` event included.
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -115,19 +110,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/**
- * Render, and wait for the listing AND the files behind it to land — however
- * many the listing was mocked to hand back, since a test that set up three
- * icons would otherwise race the third one's fetch.
- */
+/** Renders and waits for the listing and every file, so no test races a fetch. */
 async function open() {
   render(<IconsPlayground />);
   await waitFor(() => expect(screen.getAllByRole("button", { pressed: false }).length)
     .toBeGreaterThan(0));
-  // Every tile carrying its drawing — however many the listing held. The
-  // sheet is behind the preloader until the last file lands, so tiles at all
-  // means files, and counting them beats hard-coding a number each fixture
-  // would have to keep in step with.
   await waitFor(() => {
     const tiles = document.querySelectorAll("[data-icon-tile]").length;
     expect(tiles).toBeGreaterThan(0);
@@ -135,7 +122,6 @@ async function open() {
   });
 }
 
-/** The drawing inside one tile, by the icon's name. */
 function drawing(name: string): SVGSVGElement {
   const tile = screen.getByRole("button", { name: new RegExp(`^${name}`) });
   const svg = tile.querySelector("[data-icon-drawing]");
@@ -152,9 +138,6 @@ describe("the grid", () => {
 
   it("is a sheet of marks, not a list of files — no name is printed", async () => {
     await open();
-    // The name is on the tile for anyone who cannot see the drawing, and
-    // nowhere on screen: a caption under each icon spaced the grid by the
-    // longest filename in it.
     expect(screen.queryByText("check.svg")).toBeNull();
     expect(screen.getByRole("button", { name: "check.svg, 20 grid" })).toBeTruthy();
   });
@@ -169,9 +152,7 @@ describe("the grid", () => {
   it("shows both halves of the set in one box, at one weight", async () => {
     await open();
 
-    // The default is 20 at 1.25. A 20-grid icon carries that in its own
-    // units; a 16-grid icon carries 1, which is the SAME line once its
-    // smaller box is drawn at 20.
+    // 1.25px at 20 is 1 unit on a 16 grid.
     expect(drawing("check.svg").getAttribute("width")).toBe("20");
     expect(drawing("close.svg").getAttribute("width")).toBe("20");
     expect(drawing("check.svg").getAttribute("viewBox")).toBe("0 0 20 20");
@@ -207,8 +188,7 @@ describe("the size and weight controls", () => {
 
   it("re-weights the line without touching the box, once untied", async () => {
     await open();
-    // The two are locked together on arrival, so weighing the line ALONE is
-    // now something you ask for. See the lock's own tests below.
+    // Size and stroke start locked together.
     await userEvent.click(screen.getByRole("button", { name: "Unlink size and stroke" }));
 
     const stroke = screen.getByRole("slider", { name: "Stroke" });
@@ -234,8 +214,6 @@ describe("the size and weight controls", () => {
     expect(stroke.getAttribute("aria-valuemin")).toBe("1");
     expect(stroke.getAttribute("aria-valuemax")).toBe("4");
 
-    // The step, asked of the control rather than read off an attribute it
-    // does not carry: from the bottom of the scale, one press is a quarter.
     stroke.focus();
     await userEvent.keyboard("{Home}");
     await waitFor(() => expect(stroke.getAttribute("aria-valuenow")).toBe("1"));
@@ -250,8 +228,6 @@ describe("the size and weight controls", () => {
     zoom.focus();
     await userEvent.keyboard("{ArrowRight}");
 
-    // Half a multiple up, and the same units — which at 1.5x is a line half
-    // again as thick. A magnifying glass, not a bigger icon.
     await waitFor(() => expect(drawing("check.svg").getAttribute("width")).toBe("30"));
     expect(
       drawing("check.svg").querySelector("path")?.getAttribute("stroke-width"),
@@ -259,9 +235,6 @@ describe("the size and weight controls", () => {
   });
 
   it("keeps the zoom apart from the icon's own two properties", async () => {
-    // The zoom is a magnifying glass: it multiplies what is drawn and changes
-    // nothing a download would contain. Standing it among size and stroke
-    // said the opposite, so it has a section that names what it acts on.
     await open();
 
     const preview = screen.getByRole("group", { name: "Preview" });
@@ -291,8 +264,6 @@ describe("the selection", () => {
   });
 
   it("lets an icon go again, with the modifier that adds one", async () => {
-    // A plain press means "this one", so pressing a taken icon leaves it
-    // taken. Shift is the one that works both ways.
     await open();
     const tile = screen.getByRole("button", { name: /^check\.svg/ });
 
@@ -304,10 +275,6 @@ describe("the selection", () => {
   });
 
   it("is emptied by pressing a taken icon again, with no Clear button to do it", async () => {
-    // Pressing a mark to unmark it is what a hand tries first, so the panel
-    // carries no Clear: a control that spends most of its life disabled is a
-    // row of nothing. A plain press toggles the icon it lands on and lets go
-    // of the rest, which empties the selection whatever it held.
     await open();
     await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
     fireEvent.click(screen.getByRole("button", { name: /^close\.svg/ }), {
@@ -325,11 +292,6 @@ describe("the selection", () => {
     expect(screen.getByText("2 icons")).toBeTruthy();
   });
 });
-
-// ---------------------------------------------------------------------------
-// A PHONE. The panel is a sheet there, rising over the very grid it configures
-// — so it starts down, and the way back up is put where the thumb already is.
-// ---------------------------------------------------------------------------
 
 describe("on a phone", () => {
   /** Answer the sheet's own query truthfully, and every other query no. */
@@ -350,12 +312,8 @@ describe("on a phone", () => {
     asPhone();
     await open();
 
-    // The sheet would otherwise land on top of the set the moment the page
-    // did, hiding what it was opened to look at.
     expect(panel()).toBeNull();
 
-    // And the press that raises it sits in the bar the thumb is already on,
-    // rather than floating over the grid.
     const box = screen.getByRole("searchbox", { name: "Search icons by name" });
     const row = box.parentElement as HTMLElement;
     expect(within(row).getByRole("button", { name: "Icon properties" })).toBeTruthy();
@@ -368,7 +326,6 @@ describe("on a phone", () => {
     await userEvent.click(dock() as HTMLElement);
 
     expect(panel()).toBeTruthy();
-    // Nothing offers to open what is already open.
     expect(dock()).toBeNull();
   });
 
@@ -392,9 +349,6 @@ describe("the search bar", () => {
   const search = () => screen.getByRole("searchbox", { name: "Search icons by name" });
 
   it("finds an icon by a word that is nowhere in its filename", async () => {
-    // What an alias is FOR: nothing is called `caret`, and typing it should
-    // still find the chevron. Two icons may answer to one word — that is the
-    // whole point of a tag — so both come back.
     mockListIcons.mockResolvedValue([
       asset("check.svg", 20, "approved", ["Tick"]),
       asset("close.svg", 16, "approved", ["Dismiss", "Cross"]),
@@ -438,7 +392,6 @@ describe("the search bar", () => {
     );
 
     await userEvent.type(search(), "ch");
-    // check.svg and chevron-down.svg, not close.svg.
     await waitFor(() => expect(screen.getByText("2 of 3")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Download 2" })).toBeTruthy();
   });
@@ -452,20 +405,13 @@ describe("the search bar", () => {
     await userEvent.type(search(), "sprocket");
 
     expect(await screen.findByText(/Nothing matches .sprocket./)).toBeTruthy();
-    // And the box survives, or there would be no way to undo the query.
     expect(search()).toBeTruthy();
   });
 
   it("says how to take more than one icon, above the box", async () => {
-    // The two gestures are invisible until you know them, and a sheet of two
-    // hundred marks is exactly where you want them. Standing in the bar's
-    // own second row rather than floating over the grid, so it is part of
-    // the instrument rather than something to dismiss.
     render(<IconsPlayground />);
     const key = await screen.findByText("Shift");
 
-    // Drawn as the key itself — the chip the palette's `Esc` wears — rather
-    // than as the word "Shift" in the middle of a sentence.
     expect(key.tagName).toBe("KBD");
     expect(key.parentElement?.textContent).toBe(
       "Hold Shift or drag to select multiple icons",
@@ -487,7 +433,6 @@ describe("the search bar", () => {
       shiftKey: true,
     });
 
-    // Both, though neither search had the other in it.
     expect(screen.getByRole("button", { name: "Download 2" })).toBeTruthy();
   });
 });
@@ -499,8 +444,6 @@ describe("what a visitor is shown", () => {
     expect(screen.queryByRole("button", { name: /^Publish/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Delete/ })).toBeNull();
 
-    // Taking a copy is not writing, so that one stays — with or without a
-    // selection, which is the only thing a visitor's presses change.
     expect(screen.getByRole("button", { name: "Download all" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
     expect(screen.getByRole("button", { name: "Download 1" })).toBeTruthy();
@@ -508,9 +451,6 @@ describe("what a visitor is shown", () => {
   });
 
   it("is not told which icons the author is still reviewing", async () => {
-    // The server does not send a visitor a held icon at all; nothing on the
-    // page marks one either, so a held icon that slipped through would still
-    // not be advertised as held.
     mockListIcons.mockResolvedValue([asset("check.svg", 20), asset("solid.svg", 20, "held")]);
     await open();
 
@@ -538,10 +478,6 @@ describe("what the author is shown", () => {
   });
 
   it("shows only the actions that would do something", async () => {
-    // No chip is ever drawn inert. Adding acts on the set, so it stands on
-    // the heading strip whatever is selected; the rest act on the selection
-    // and stand against the line that names it, appearing as that line comes
-    // to mean something they could be pressed for.
     await open();
 
     const actions = screen
@@ -550,21 +486,18 @@ describe("what the author is shown", () => {
     const chip = (name: string) =>
       within(actions).queryByRole("button", { name });
 
-    // Nothing taken: the count of the set, and the one press that acts on it.
     expect(within(actions).getByText("2 icons · 1 held")).toBeTruthy();
     expect(chip("Add icons")).toBeTruthy();
     expect(chip("Download all")).toBeTruthy();
     expect(chip("Publish 1")).toBeNull();
     expect(chip("Delete 1")).toBeNull();
 
-    // An approved icon: nothing to publish, something to delete.
     await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
     expect(within(actions).getByText("1 icon selected")).toBeTruthy();
     expect(chip("Download 1")).toBeTruthy();
     expect(chip("Delete 1")).toBeTruthy();
     expect(chip("Publish 1")).toBeNull();
 
-    // A held one: publishing now has something to move.
     fireEvent.click(screen.getByRole("button", { name: /^solid\.svg/ }), {
       shiftKey: true,
     });
@@ -574,16 +507,11 @@ describe("what the author is shown", () => {
   });
 
   it("offers a name for one icon only, though the aliases go on working", async () => {
-    // A NAME is one icon's — two cannot share one — so that field is there
-    // only when exactly one is taken. The aliases are tags and are not: the
-    // section stays for a selection, showing what they have in common.
     await open();
     expect(screen.queryByRole("textbox", { name: "Icon name" })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
     const name = screen.getByRole("textbox", { name: "Icon name" });
-    // Filled from the filename until somebody types otherwise: no extension,
-    // no hyphens, capitalised.
     expect((name as HTMLInputElement).value).toBe("Check");
 
     fireEvent.click(screen.getByRole("button", { name: /^solid\.svg/ }), {
@@ -596,8 +524,6 @@ describe("what the author is shown", () => {
     await open();
     await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
 
-    // Nothing is stored while it is being typed — a write a keystroke would
-    // be two hundred writes for a word.
     await userEvent.click(screen.getByRole("button", { name: "Add alias" }));
     const alias = screen.getByRole("textbox", { name: "Alias 1" });
     await userEvent.type(alias, "Tick");
@@ -612,7 +538,6 @@ describe("what the author is shown", () => {
       }),
     );
 
-    // And a second press opens a second row, empty, beside the first.
     await userEvent.click(screen.getByRole("button", { name: "Add alias" }));
     expect(
       (screen.getByRole("textbox", { name: "Alias 1" }) as HTMLInputElement).value,
@@ -634,8 +559,6 @@ describe("what the author is shown", () => {
       shiftKey: true,
     });
 
-    // Two icons cannot share one name, so that field goes; the tags stay,
-    // narrowed to the ones both of them answer to — in the first's spelling.
     expect(screen.queryByRole("textbox", { name: "Icon name" })).toBeNull();
     expect(
       screen.getAllByRole("textbox", { name: /^Alias / }).map((el) => (el as HTMLInputElement).value),
@@ -654,9 +577,6 @@ describe("what the author is shown", () => {
       shiftKey: true,
     });
 
-    // The section stays — a word can be given to both of them from here — but
-    // there is nothing to list, and an empty control panel is a band of inset
-    // under the heading reading as a row that lost its contents.
     expect(screen.getByRole("button", { name: "Add alias" })).toBeTruthy();
     expect(screen.queryAllByRole("textbox", { name: /^Alias / })).toEqual([]);
     expect(screen.queryByRole("group", { name: "Aliases" })).toBeNull();
@@ -679,8 +599,6 @@ describe("what the author is shown", () => {
     await userEvent.type(added, "Confirm");
     fireEvent.blur(added);
 
-    // Both icons get the new word, and NEITHER loses the word the other never
-    // had — `Done` and `Filled` were not on screen to be edited.
     await waitFor(() =>
       expect(mockSetIconLabels).toHaveBeenCalledWith({
         key: "icons/check.svg",
@@ -762,8 +680,6 @@ describe("what the author is shown", () => {
   it("publishes only the held ones in the selection", async () => {
     await open();
 
-    // There is no Publish to press until something held is chosen — an
-    // approved icon on its own leaves the chip away rather than greyed.
     expect(screen.queryByRole("button", { name: /^Publish/ })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /^check\.svg/ }));
@@ -824,8 +740,6 @@ describe("what the author is shown", () => {
       new File([SOLID], "solid-mark.svg", { type: "image/svg+xml" }),
     );
 
-    // The signature carries the name and the size, because that is all a
-    // presigned PUT can carry — R2 discards metadata hoisted into its query.
     await waitFor(() =>
       expect(mockCreateIconUploadUrl).toHaveBeenCalledWith({
         filename: "solid-mark.svg",
@@ -833,8 +747,6 @@ describe("what the author is shown", () => {
       }),
     );
 
-    // The measurements follow the bytes. Flattened, and so held — which the
-    // server decides, but the client has to report honestly for it to decide.
     await waitFor(() =>
       expect(mockFinalizeIconUpload).toHaveBeenCalledWith({
         key: "icons/new.svg",
@@ -845,18 +757,7 @@ describe("what the author is shown", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The label that names whichever icon you are pointing at.
-//
-// One tooltip for the whole grid, in two places: at the cursor for an icon you
-// are merely looking at, and hung under an icon you have TAKEN — where the
-// brand wash has already said which tile is meant, so a label chasing the
-// pointer would be answering that question a second time and in the wrong
-// place.
-// ---------------------------------------------------------------------------
-
 describe("the icon's label", () => {
-  /** The tooltip box, found through the text it carries. */
   const box = (label: string) =>
     screen.getByText(label).parentElement as HTMLElement;
 
@@ -886,8 +787,6 @@ describe("the icon's label", () => {
       clientY: 200,
     });
 
-    // The icon's name, which until somebody types another one is its filename
-    // read as words: no extension, no hyphens, capitalised.
     expect(box("Check").hasAttribute("data-visible")).toBe(true);
     expect(screen.queryByText("check.svg")).toBeNull();
   });
@@ -918,8 +817,6 @@ describe("the icon's label", () => {
     });
     fireEvent.pointerLeave(target, { pointerType: "mouse" });
 
-    // The text stays while it fades — cleared, the box would empty and
-    // collapse in front of you rather than dissolve.
     expect(box("Check").hasAttribute("data-visible")).toBe(false);
   });
 
@@ -944,19 +841,12 @@ describe("the icon's label", () => {
 
     await userEvent.click(target);
 
-    // Centred on the tile, and clear of it by ANCHORED_TOOLTIP_GAP — nowhere
-    // near the cursor's own 217px.
+    // Centred on the tile, ANCHORED_TOOLTIP_GAP below it.
     await waitFor(() => expect(box("Check").style.top).toBe("302px"));
     expect(box("Check").style.left).toBe("130px");
   });
 
   it("keeps naming a taken icon once the pointer has gone", async () => {
-    // THE point of the anchored placement, and what it was missing: a taken
-    // icon is named for as long as it is TAKEN, not for as long as it is
-    // pointed at. The label needed a hover to exist at all, so a selection of
-    // six icons could only be read one at a time by going back and pointing
-    // at each of them — which is the comparison the page exists for, made
-    // impossible by its own label.
     await open();
     const target = tile("check.svg");
     standAt(target, { left: 100, width: 60, bottom: 300 });
@@ -977,11 +867,8 @@ describe("the icon's label", () => {
     fireEvent.click(tile("close.svg"), { shiftKey: true });
     fireEvent.pointerLeave(tile("close.svg"), { pointerType: "mouse" });
 
-    // Both named, with nothing pointed at — which is what a comparison looks
-    // like: you take the four you are deciding between and read them.
     await waitFor(() => expect(box("Check").hasAttribute("data-visible")).toBe(true));
     expect(box("Close").hasAttribute("data-visible")).toBe(true);
-    // Each under its OWN tile, which is the whole reason there are two.
     expect(box("Check").style.left).toBe("130px");
     expect(box("Close").style.left).toBe("230px");
   });
@@ -998,8 +885,6 @@ describe("the icon's label", () => {
     fireEvent.click(target);
     fireEvent.pointerLeave(target, { pointerType: "mouse" });
 
-    // Gone outright, box and all: there is no taken icon left for it to name,
-    // and nothing is pointed at either.
     await waitFor(() => expect(screen.queryByText("Check")).toBeNull());
   });
 
@@ -1017,8 +902,6 @@ describe("the icon's label", () => {
 
     await userEvent.click(target);
 
-    // The cursor label lets go of the name as the anchored one takes it, so
-    // the page never says it twice.
     await waitFor(() => expect(box("Check").style.top).toBe("302px"));
   });
 
@@ -1034,8 +917,6 @@ describe("the icon's label", () => {
       clientY: 200,
     });
 
-    // One label, and it is the anchored one — pointing at a tile that is
-    // already marked and already named has nothing left to say.
     await waitFor(() => expect(screen.getAllByText("Check")).toHaveLength(1));
     expect(box("Check").style.top).toBe("302px");
   });
@@ -1050,31 +931,21 @@ describe("the icon's label", () => {
       clientX: 100,
       clientY: 200,
     });
-    // `fireEvent`, not `userEvent`: a simulated click carries a pointer move
-    // of its own to (0, 0), and where the cursor label lands is the subject
-    // of this test.
+    // `fireEvent`, not `userEvent`: a simulated click moves the pointer to (0, 0).
     fireEvent.click(target);
     await waitFor(() => expect(box("Check").style.top).toBe("302px"));
 
     fireEvent.click(target);
 
-    // Still pointed at, so it is still named — at the cursor again, since
-    // there is no longer a marked tile to hang it under.
     await waitFor(() => expect(box("Check").style.top).toBe("217px"));
   });
 
-  // A browser draws its OWN hint from `aria-label` on a control with no
-  // visible text, which lands next to ours saying the same thing twice — and
-  // there is no way to turn that off from CSS or from an attribute. So the
-  // name is hidden TEXT instead: same accessible name, read from content
-  // rather than an attribute, and nothing for the browser to volunteer.
   it("names itself in hidden text, not an attribute a browser will draw", async () => {
     await open();
     const target = tile("check.svg");
 
     expect(target.hasAttribute("aria-label")).toBe(false);
     expect(target.hasAttribute("title")).toBe(false);
-    // Still the same name, which is what the queries above are matching on.
     expect(target.textContent).toBe("check.svg, 20 grid");
   });
 
@@ -1091,23 +962,11 @@ describe("the icon's label", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Taking icons.
-//
-// A press takes ONE and lets go of the rest — the sheet runs to a couple of
-// hundred marks and the common thing is looking at a single one, so a
-// selection that only ever grew meant emptying it by hand before every
-// comparison. Shift adds, and a drag sweeps a band across as many as it
-// touches.
-// ---------------------------------------------------------------------------
-
 describe("taking icons", () => {
   const tile = (name: string) =>
     screen.getByRole("button", { name: new RegExp(`^${name}`) });
 
-  // Scoped to the TILES. `aria-pressed` is the right state for any toggle,
-  // and the panel has one of its own now (the size/stroke lock), so "every
-  // pressed button on the page" stopped meaning "every icon taken".
+  // Scoped to the tiles: the panel's lock is `aria-pressed` too.
   const taken = () =>
     Array.from(
       document.querySelectorAll('[data-icon-tile][aria-pressed="true"]'),
@@ -1116,10 +975,7 @@ describe("taking icons", () => {
   const sheet = () =>
     document.querySelector("[data-icon-sheet]") as HTMLElement;
 
-  /**
-   * Lay the two tiles out side by side, since jsdom measures everything as
-   * zero and a band cannot touch a box with no size.
-   */
+  /** Lays the two tiles side by side: jsdom measures every box as zero. */
   function layOut() {
     const boxes: Record<string, [number, number, number, number]> = {
       "check.svg": [0, 0, 100, 100],
@@ -1192,11 +1048,6 @@ describe("taking icons", () => {
   });
 
   it("takes its sweep from the whole canvas, not the grid's column", async () => {
-    // The band is drawn on the page's own canvas — everything under `main`
-    // but the docked panel — rather than on the 960px column the icons lay
-    // out in. A sweep therefore starts in the margin beside the grid, or in
-    // the room above and below it, which is where a hand reaches to select
-    // a set of marks it can see the edge of.
     await open();
 
     expect(sheet().parentElement?.tagName).toBe("MAIN");
@@ -1222,8 +1073,6 @@ describe("taking icons", () => {
   });
 
   it("does not let the press that ended a sweep undo it", async () => {
-    // The pointer comes up over a tile, and a click follows — which, being a
-    // plain press, would take that one icon and drop the rest of the sweep.
     await open();
     layOut();
 
@@ -1238,7 +1087,6 @@ describe("taking icons", () => {
     layOut();
 
     await userEvent.click(tile("close.svg"));
-    // A band over the first icon alone.
     sweep([0, 40], [50, 50]);
     expect(taken()).toEqual(["check.svg"]);
 
@@ -1251,8 +1099,6 @@ describe("taking icons", () => {
     await open();
     layOut();
 
-    // Down and up on the sheet with a pixel of wobble: still a click, so the
-    // tile's own handler decides and the band never appears.
     sweep([5, 40], [7, 41]);
 
     expect(document.querySelector("[data-icon-marquee]")).toBeNull();
@@ -1276,49 +1122,29 @@ describe("taking icons", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Waiting.
-//
-// Three states, and the middle one used to be drawn as the last: an icon whose
-// file has not ARRIVED yet is not an icon whose file will not parse. Two
-// hundred objects come down one request each, so for a couple of seconds the
-// whole sheet was a wall of dashed "broken" boxes.
-// ---------------------------------------------------------------------------
-
 describe("while the set is still coming", () => {
   it("waits behind the site's own progress bar", async () => {
-    // Held open: the listing never lands, which is the state under test.
     mockListIcons.mockReturnValue(new Promise(() => {}));
     render(<IconsPlayground />);
 
-    // The bar the upload dialog fills and the demos wait behind — not a
-    // sentence, and not the wireframe treatment, which is for a shape being
-    // presented rather than a thing being fetched.
     const bar = await screen.findByRole("progressbar", { name: "Loading icons" });
     expect(bar).toBeTruthy();
     expect(screen.queryByRole("button", { pressed: false })).toBeNull();
   });
 
   it("never counts backwards when the listing hands over to the files", async () => {
-    // The load is two phases — a listing of unknown length, then a counted
-    // set of files — and the bar is ONE scale across both. Read off two, it
-    // trickled up while the listing was in flight and then dropped to nothing
-    // the moment the counting began, because the first count is zero of two
-    // hundred. A progress bar is a promise about direction.
     let land: (icons: IconAsset[]) => void = () => {};
     mockListIcons.mockReturnValue(
       new Promise<IconAsset[]>((resolve) => {
         land = resolve;
       }),
     );
-    // No file ever arrives, so the counting phase begins and stays at zero.
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
 
     render(<IconsPlayground />);
     const bar = await screen.findByRole("progressbar", { name: "Loading icons" });
     const value = () => Number(bar.getAttribute("aria-valuenow"));
 
-    // Let the listing's trickle get somewhere worth falling from.
     await waitFor(() => expect(value()).toBeGreaterThan(5), { timeout: 3000 });
     const trickled = value();
 
@@ -1328,7 +1154,6 @@ describe("while the set is still coming", () => {
   });
 
   it("counts the files in, rather than guessing at the wait", async () => {
-    // The listing answers with two; only one file ever arrives.
     let landed: (value: unknown) => void = () => {};
     const held = new Promise((resolve) => {
       landed = resolve;
@@ -1344,8 +1169,7 @@ describe("while the set is still coming", () => {
     render(<IconsPlayground />);
 
     const bar = await screen.findByRole("progressbar", { name: "Loading icons" });
-    // Half the set in hand, on the files' own slice of the bar: the listing
-    // has spent its 30, and half of what is left is 35 more.
+    // The listing's 30, plus half of the remaining 70.
     await waitFor(() => expect(bar.getAttribute("aria-valuenow")).toBe("65"));
 
     landed({ ok: true, text: () => Promise.resolve(CLOSE) });
@@ -1371,11 +1195,9 @@ describe("while the set is still coming", () => {
 });
 
 describe("dropping icons onto the set", () => {
-  /** The canvas — the whole room under the chrome, which is the target. */
   const canvas = () =>
     document.querySelector("[data-icon-sheet]") as HTMLElement;
 
-  /** A drag carrying files, as the platform hands one over. */
   const withFiles = (files: File[]) => ({
     dataTransfer: { files, items: files, types: ["Files"] },
   });
@@ -1420,10 +1242,6 @@ describe("dropping icons onto the set", () => {
   });
 
   it("keeps saying so as the hand crosses the icons under it", async () => {
-    // The fix this test exists for: `dragenter` and `dragleave` fire on every
-    // element the pointer passes over, so a sheet of two hundred tiles beat
-    // the offer on and off like a strobe. The surface counts what it is
-    // inside rather than believing one leave.
     signedIn();
     await open();
 
@@ -1431,12 +1249,10 @@ describe("dropping icons onto the set", () => {
     fireEvent.dragEnter(canvas(), held);
     const tile = document.querySelector("[data-icon-tile]") as HTMLElement;
 
-    // Onto a tile, and off it again — which is one crossing, not an exit.
     fireEvent.dragEnter(tile, held);
     fireEvent.dragLeave(tile, held);
     expect(screen.getByText("Drop SVGs to add")).toBeTruthy();
 
-    // Out of the canvas itself, which is.
     fireEvent.dragLeave(canvas(), held);
     expect(screen.queryByText("Drop SVGs to add")).toBeNull();
   });
@@ -1452,8 +1268,6 @@ describe("dropping icons onto the set", () => {
   });
 
   it("ignores a drag that is not carrying files", async () => {
-    // Text dragged out of the search box crosses the grid on its way to
-    // nowhere. Offering to add it as an icon would be a lie.
     signedIn();
     await open();
 
@@ -1484,9 +1298,6 @@ describe("dropping icons onto the set", () => {
   });
 
   it("offers a visitor nothing, and uploads nothing they drop", async () => {
-    // The gesture does not exist for anyone who is not the author — no
-    // overlay to reveal that the page takes uploads at all, and the browser's
-    // own handling of a dropped file left alone.
     await open();
 
     const held = withFiles([svg("chevron-down.svg")]);
@@ -1500,10 +1311,7 @@ describe("dropping icons onto the set", () => {
 });
 
 describe("size and stroke, locked together", () => {
-  // Read off the two controls rather than off a drawing: what an icon's own
-  // `stroke-width` says is the weight RE-EXPRESSED in that icon's grid units
-  // (1.25px in a 64px box is 0.39 units on a 20 grid), which is the subject of
-  // the tests above and would make every assertion here arithmetic.
+  // Read off the controls: a drawing's `stroke-width` is in its own grid's units.
   const value = (name: string) =>
     screen.getByRole("slider", { name }).getAttribute("aria-valuenow");
   const box = () => value("Size");
@@ -1512,11 +1320,6 @@ describe("size and stroke, locked together", () => {
   const lock = () => screen.getByRole("button", { name: /link size and stroke/i });
 
   it("arrives locked, and says so", async () => {
-    // Pressed at rest, because the state is worth seeing without touching it:
-    // the tie is the reason moving one slider moves the other, and a reader
-    // who cannot see it is left with a page that seems to have a mind of its
-    // own. The NAME says what pressing would do, which is the house pattern
-    // for a toggle whose glyph and label both flip.
     await open();
 
     const button = screen.getByRole("button", { name: "Unlink size and stroke" });
@@ -1524,10 +1327,6 @@ describe("size and stroke, locked together", () => {
   });
 
   it("stands between the two rows, in neither of them", async () => {
-    // It is about BOTH scales, so it is not a chip in the stroke row's action
-    // column — which would read as the stroke's, the way every other chip in
-    // the panel belongs to the row it sits in. It takes that column once, for
-    // the pair, bracketed to both (Figma 1274:3765).
     await open();
 
     const rows = ["Size", "Stroke"].map(
@@ -1553,8 +1352,6 @@ describe("size and stroke, locked together", () => {
     screen.getByRole("slider", { name: "Size" }).focus();
     await userEvent.keyboard("{ArrowRight}");
 
-    // One step of each scale: 20 → 24, and the stroke standing at the same
-    // step goes 1.25 → 1.5.
     await waitFor(() => expect(box()).toBe("24"));
     expect(weight()).toBe("1.5");
   });
@@ -1584,8 +1381,6 @@ describe("size and stroke, locked together", () => {
     await open();
     await userEvent.click(lock());
 
-    // Untying changes NOTHING on screen — it is a statement about what the
-    // next drag will do, not an edit.
     expect(box()).toBe("20");
     expect(weight()).toBe("1.25");
 
@@ -1597,9 +1392,6 @@ describe("size and stroke, locked together", () => {
   });
 
   it("snaps the line back onto the box when it is tied again", async () => {
-    // The deliberate half of the answer: a pair pulled apart and re-tied
-    // comes back together on the SIZE's step, because the box is what you
-    // were looking at while you pulled them apart.
     await open();
     await userEvent.click(screen.getByRole("button", { name: "Unlink size and stroke" }));
 
@@ -1616,8 +1408,6 @@ describe("size and stroke, locked together", () => {
   });
 
   it("is the author's page and the visitor's alike", async () => {
-    // Nothing about the tie writes to the set — it is how the grid is being
-    // LOOKED at, like the sliders it stands among.
     await open();
     expect(screen.getByRole("button", { name: /link size and stroke/i })).toBeTruthy();
   });

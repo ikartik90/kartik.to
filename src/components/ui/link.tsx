@@ -18,22 +18,6 @@ import {
 import { Tooltip } from "./tooltip";
 import { WireframeContent } from "./wireframe";
 
-// ---------------------------------------------------------------------------
-// Link — an <a>/next-link that NAVIGATES, the sibling of Button (button.tsx).
-// Same composition (bare icon, `Link.Text` label, `Link.Tooltip`) and the same
-// shared `action` recipe, so a link and a button are visually identical; only
-// their semantics differ — which is exactly why they're kept as two components.
-//
-//   <Link href="/" aria-label="Home">
-//     <ReturnIcon />
-//     <Link.Text>Home</Link.Text>
-//   </Link>
-//
-// Internal hrefs route through next/link (client-side nav); external ones (an
-// absolute/protocol-relative URL, mailto:, tel:, or an explicit `target`) render
-// a plain <a> with a safe `rel` defaulted for `target="_blank"`.
-// ---------------------------------------------------------------------------
-
 const EXTERNAL_HREF = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 
 function isExternalHref(href: string) {
@@ -46,22 +30,11 @@ function isExternalHref(href: string) {
 
 export interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   href: string;
-  /**
-   * Override the look. Left unset it's inferred from the children: a `Link.Text`
-   * (or bare string) label ⇒ `text`, an icon alone ⇒ `icon`. Set it for `link`.
-   */
+  /** Inferred when unset: a text label ⇒ `text`, an icon alone ⇒ `icon`. */
   variant?: ActionVariant;
-  /**
-   * Fill prominence, independent of `variant` (the shape). `secondary` is the
-   * filled chip; `tertiary` has no resting fill and a subtler hover wash. Left
-   * unset it defaults to `secondary` for text links and `tertiary` for icon
-   * links.
-   */
+  /** Defaults to `secondary` for text links, `tertiary` for icon links. */
   emphasis?: ActionEmphasis;
-  /**
-   * Force a plain <a> instead of next/link. Auto-detected for absolute /
-   * mailto: / tel: hrefs and whenever a `target` is set.
-   */
+  /** Force a plain <a>; automatic for absolute, mailto: and tel: hrefs, or any `target`. */
   external?: boolean;
 }
 

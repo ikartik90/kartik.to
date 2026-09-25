@@ -26,25 +26,7 @@ import {
 } from "@/domain/nodes";
 import { normalizeLinkHref } from "@/utils/link-href";
 
-// ---------------------------------------------------------------------------
-// The `button_link` block, in the article editor: the page's own button, with
-// its label typed straight into it and the link toolbar over it.
-//
-// The button is drawn with the reader's classes (`buttonLinkClass`), so the
-// canvas is the page — but as a field rather than a link, because pressing a
-// button you are editing must put the caret in it, not leave the editor.
-//
-// The toolbar is the one a link inside prose gets (`LinkActions`,
-// `LinkEditRow`), on the same floating surface, anchored to the button rather
-// than to a selection. It is up while the pointer is on the button or while the
-// label has the focus; and for as long as an address is being typed, whatever
-// the pointer does, since a half-typed address is work.
-// ---------------------------------------------------------------------------
-
-/**
- * How long the toolbar outlives the pointer leaving the button — long enough
- * to cross the gap between the two, which is on the way to every control.
- */
+/** Long enough to cross the gap from the button to its toolbar. */
 const HOVER_GRACE_MS = 150;
 
 const toolbarClass = cx(toolbar(), selectionPopover());
@@ -52,7 +34,6 @@ const toolbarClass = cx(toolbar(), selectionPopover());
 const anchorStyle = css({ display: "inline-flex" });
 
 const labelEditStyle = css({
-  // A field, not a control: the caret, not the hand, and no press-in.
   cursor: "text",
   _active: { transform: "none" },
   whiteSpace: "pre",
@@ -69,22 +50,16 @@ export interface EditableButtonLinkProps {
   block: ButtonLinkNode;
   blockIndex: number;
   onChange: (block: ButtonLinkNode) => void;
-  /** Take the whole button out of the document. */
   onDelete: () => void;
   onArrowUp: () => void;
   onArrowDown: () => void;
   onArrowLeft: () => void;
   onArrowRight: () => void;
-  /** Enter: the line after a button is where writing carries on. */
   onInsertParagraphAfter: () => void;
-  /** The block's element, which the editor navigates to. */
   elRef: (el: HTMLElement | null) => void;
 }
 
-/**
- * `block` with a yes/no setting turned on or off. Off is no field at all, so a
- * button that never used a setting is saved exactly as before it existed.
- */
+/** Off removes the field, so an untouched button saves exactly as before. */
 function withFlag(
   block: ButtonLinkNode,
   flag: "newTab" | "sticky",
@@ -94,7 +69,7 @@ function withFlag(
   return on ? { ...rest, [flag]: true } : rest;
 }
 
-/** `block` in `color`. Neutral is no field, as an off flag is. */
+/** Neutral removes the field, as an off flag does. */
 function withColor(
   block: ButtonLinkNode,
   color: ButtonLinkColor,
@@ -103,7 +78,6 @@ function withColor(
   return color === "neutral" ? rest : { ...rest, color };
 }
 
-/** Where the caret sits in `el`, in characters, or null if it is not there. */
 function caretOffset(el: HTMLElement): number | null {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
@@ -117,7 +91,6 @@ function caretOffset(el: HTMLElement): number | null {
   return before.toString().length;
 }
 
-/** Focus the label with the caret at its end. */
 function focusAtEnd(el: HTMLElement) {
   el.focus();
   const selection = window.getSelection();
@@ -148,19 +121,14 @@ export function EditableButtonLink({
   const [focused, setFocused] = useState(false);
   const [editing, setEditing] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  // Escape puts the toolbar away until the button is next pointed at or
-  // focused — a toolbar that came straight back would not have been dismissed.
   const [dismissed, setDismissed] = useState(false);
 
-  // The toolbar floats on the page, so it finds the button by name. One name
-  // per button: two buttons sharing an anchor would put both toolbars on one.
+  // Unique per button, or two toolbars would share one anchor.
   const anchorName = `--button-link-${useId().replace(/[^\w-]/g, "")}`;
 
   const open = editing || (!dismissed && (hovered || focused));
 
-  // The label is the DOM's while it is being typed in; outside of that it
-  // follows the document — an undo, a restored snapshot. Before paint, so a
-  // button never shows a frame without its words.
+  // Follows the document except while being typed in; before paint so the button never shows empty.
   useLayoutEffect(() => {
     const label = labelRef.current;
     if (!label || document.activeElement === label) return;
@@ -181,7 +149,6 @@ export function EditableButtonLink({
   };
 
   const handlePointerEnter = (event: PointerEvent) => {
-    // A finger has no hover; its tap focuses the label, which is enough.
     if (event.pointerType === "touch") return;
     cancelGrace();
     setDismissed(false);
@@ -253,7 +220,6 @@ export function EditableButtonLink({
         }
         return;
       case "Tab":
-        // Tab has no navigation role in the editor — swallow it.
         event.preventDefault();
         return;
     }
@@ -271,7 +237,6 @@ export function EditableButtonLink({
       data-button-link-block=""
       data-sticky={block.sticky ? "" : undefined}
       onFocus={(event) => {
-        // The block is navigated TO as a whole; the label is where that lands.
         if (event.target === event.currentTarget && labelRef.current) {
           focusAtEnd(labelRef.current);
         }
@@ -286,7 +251,6 @@ export function EditableButtonLink({
           setFocused(true);
         }}
         onBlur={(event) => {
-          // Into the toolbar is still here.
           if (
             event.currentTarget.contains(event.relatedTarget as Node | null)
           ) {

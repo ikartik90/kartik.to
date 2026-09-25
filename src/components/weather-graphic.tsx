@@ -29,62 +29,18 @@ import {
   type WeatherCondition,
 } from "@/domain/weather";
 
-// ---------------------------------------------------------------------------
-// WeatherGraphic — the eleven variants of Figma 1995:24 as one drawing that
-// changes its mind.
-//
-// The component's whole job is to make sure NOTHING is ever conditionally
-// rendered. Every shape in the kit — sun, moon, corona, halo, both clouds,
-// three drops, three flakes, the bolt — is in the tree in every condition, and
-// the `weatherGraphic` recipe moves, tints, blurs and fades them from one
-// arrangement into the next. That is what buys the transitions: clear → cloudy
-// is a cloud that was already parked off-frame sliding in as it fades up, and
-// cloudy → fog is that same cloud walking to the centre, growing to full size
-// and dissolving from the bottom. Swapping eleven flattened SVGs — which is
-// what Figma's export hands you — can only ever cross-fade.
-//
-// It is a STACK OF ROOT <svg> ELEMENTS rather than one SVG scene, and that is
-// forced rather than chosen: WebKit does not apply CSS `filter` functions to
-// SVG child elements, so a `blur()` on a <g> or a <path> renders in Chrome and
-// Firefox and is silently absent in Safari — every blur, glow and the whole
-// progressive dissolve came out as hard-edged shapes there. An <svg> root is a
-// CSS box and does take them. One layer per box, therefore, and shapes that
-// share a blur share a box.
-//
-// Read the arrangement in panda.config.ts (`weatherGraphic`); read the shapes
-// in src/data/weather-geometry.ts. What is left here is assembly and the one
-// thing neither of those can own: id namespacing.
-//
-// EVERY id is per-instance, because a page that shows more than one of these
-// (the demo grid shows eleven) would otherwise have all of them resolving
-// `url(#...)` to the FIRST instance's defs — and those defs are what the whole
-// drawing is coloured with.
-// ---------------------------------------------------------------------------
+// Nothing is conditionally rendered: the recipe moves every shape between arrangements.
+// Each layer is a root <svg> because WebKit ignores CSS filters on SVG children.
 
 export interface WeatherGraphicProps {
   condition: WeatherCondition;
-  /**
-   * Day or night. Ignored by the drawing under an overcast sky, but still
-   * honoured underneath it, so the body revealed when the weather clears is
-   * the right one. See src/domain/weather.ts.
-   */
+  /** Hidden under overcast skies but still honoured, so clearing reveals the right body. */
   time?: TimeOfDay;
-  /**
-   * The accessible name. Defaults to the condition; pass `null` where the
-   * graphic sits beside text that already says what the weather is, and it
-   * goes decorative rather than repeating it.
-   */
+  /** Defaults to the condition; `null` makes the graphic decorative. */
   label?: string | null;
   className?: string;
 }
 
-/**
- * One layer of the drawing: a root `<svg>` filling the whole frame.
- *
- * A root, not a `<g>`, and that is the load-bearing detail — see the note at
- * the top. Everything each layer needs from the recipe arrives as a class, so
- * the box itself knows nothing about the weather.
- */
 function Layer({
   base,
   className,
@@ -97,7 +53,7 @@ function Layer({
   className: string;
   style?: CSSProperties;
   layer?: string;
-  /** Marks a root whose own animation is ambient, for the reduced-motion rest. */
+  /** Ambient animation, stilled for reduced motion. */
   ambient?: boolean;
   children: ReactNode;
 }) {
@@ -125,19 +81,14 @@ export function WeatherGraphic({
 }: WeatherGraphicProps) {
   const slot = weatherGraphic({ weather: condition, time });
 
-  // React's own id, stripped to what an SVG fragment identifier may hold —
-  // `useId` returns delimiters (`:r0:` / `«r0»`) that a `url(#…)` reference
-  // cannot carry.
+  // Per instance, or every `url(#…)` hits the first instance's defs; stripped of `useId`'s delimiters.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const id = (name: string) => `wx-${uid}-${name}`;
   const ref = (name: string) => `url(#${id(name)})`;
 
   const decorative = label === null;
 
-  // The sun and the moon are the same circle under two fills, and they are now
-  // drawn as two SEPARATE stacks rather than as two circles cross-fading
-  // inside one. Nothing inside a filtered layer may change — see the `orbBody`
-  // slot — so the cross-fade happens a level up, on `--wx-body`.
+  // Two stacks cross-faded via `--wx-body`: nothing inside a filtered layer may change.
   const BODIES = [
     { key: "sun", fade: "var(--wx-day)" },
     { key: "moon", fade: "var(--wx-night)" },
@@ -160,15 +111,9 @@ export function WeatherGraphic({
         ? { "aria-hidden": true }
         : { role: "img", "aria-label": label ?? weatherLabel(condition) })}
     >
-      {/* The gradients every layer paints with, declared once per instance
-          rather than once per layer — a `url(#…)` reference resolves
-          document-wide, so each layer can reach them from its own root. */}
       <svg aria-hidden width="0" height="0" style={{ position: "absolute" }}>
         <defs>
-          {/* Presentation attributes cannot hold a `var()`; an inline style
-              can, and is a CSS declaration wherever it appears. That is what
-              lets these stops read design tokens — and lets the cloud's top
-              stop TRANSITION when the weather turns. */}
+          {/* Inline styles, not attributes, so the stops can read tokens and transition. */}
           <linearGradient id={id("sun")} x1="0" y1="0" x2="0.5" y2="1">
             <stop style={{ stopColor: "var(--colors-brand-pink)" }} />
             <stop
@@ -176,9 +121,6 @@ export function WeatherGraphic({
               style={{ stopColor: "var(--colors-brand-orange)" }}
             />
           </linearGradient>
-          {/* The moon is radial and off-centre: cream through most of the
-              disc, turning periwinkle only at the far rim, which is what stops
-              it reading as a flat yellow circle. */}
           <radialGradient
             id={id("moon")}
             cx="0"
@@ -195,10 +137,7 @@ export function WeatherGraphic({
               style={{ stopColor: "var(--colors-sky-moon-rim)" }}
             />
           </radialGradient>
-          {/* The corona is the site's own gradient, put in the sky. Stated
-              across the whole FRAME (Figma's 50,50 → 125,200 over a 250 box)
-              rather than across the star, because it paints a full-frame rect
-              that the star is masked out of — see the `plasma` slot. */}
+          {/* Across the whole frame: it paints a full-frame rect the star is masked out of. */}
           <linearGradient id={id("plasma")} x1="0.2" y1="0.2" x2="0.5" y2="0.8">
             <stop style={{ stopColor: "var(--colors-brand-pink)" }} />
             <stop
@@ -253,13 +192,7 @@ export function WeatherGraphic({
         </defs>
       </svg>
 
-      {/* --- Sky ---------------------------------------------------------- */}
-      {/* The star is a MASK over a gradient-filled rect, not a gradient-filled
-          path. Turning a path turns its paint with it, and the corona's pink
-          would walk away from the sun's; here the mask turns and the colours
-          stay where the sun's are. It also keeps the filter looking at a
-          rectangle whose box never changes — see the `plasma` slot for what a
-          rotating box does to the repaint. */}
+      {/* A mask over a fixed rect, so the colours hold still and the filtered box never changes as the star turns. */}
       <Layer base={slot.layer} className={slot.plasma} layer="plasma">
         <defs>
           <mask
@@ -286,13 +219,10 @@ export function WeatherGraphic({
         />
       </Layer>
 
-      {/* The halo breathes on its LAYER rather than on the disc inside it,
-          for the repaint reason in the `plasma` slot: a scale animating inside
-          a filtered element re-rasterizes the blur every frame. */}
+      {/* Breathes on the layer: animating inside a filtered element re-rasterizes the blur every frame. */}
       <div className={slot.haloGate} data-layer="halo">
         <Layer base={slot.layer} className={slot.halo} ambient>
-          {/* 90, not Figma's 100 — see the `halo` slot: at Figma's radius the
-              blur's tail runs past the artboard on every side. */}
+          {/* 90, not 100: at 100 the blur's tail runs past the artboard. */}
           <circle
             className={slot.haloDisc}
             cx={ORB_CENTRE}
@@ -302,11 +232,7 @@ export function WeatherGraphic({
         </Layer>
       </div>
 
-      {/* Four copies of each body at four blur depths, masked into bands that
-          add up — the same construction as the cloud's underside, turned on
-          the sun so haze can dissolve it from below instead of smearing the
-          whole disc. Every other condition sets the ramp to zero, and the four
-          rungs collapse to one uniform blur. */}
+      {/* Four blur depths masked into additive bands, so haze can dissolve the body from below. */}
       <div className={slot.orb} data-layer="orb">
         {BODIES.map((body) => (
           <div
@@ -334,27 +260,7 @@ export function WeatherGraphic({
         ))}
       </div>
 
-      {/* There is no frosting layer, and Figma's background blur on the
-          cloudy clouds is deliberately not reproduced. It was here, as a
-          second more-blurred copy of the body masked to the clouds, and it is
-          the wrong construction: a backdrop blur REPLACES what is behind the
-          cloud, this painted OVER it. Inside the silhouette you therefore got
-          the body twice, which is invisible once the two blurs are far apart
-          and glaring while they are not — a cloud-shaped patch of doubled sun,
-          drifting across the disc for the length of every transition into or
-          out of cloudy.
-          
-          Making it correct means punching the body OUT where the cloud is and
-          filling the hole, and a punch-out cannot fade — so it would have to
-          apply in conditions whose cloud is parked over the sun but invisible.
-          The cloud is half translucent and the sun shows through it either
-          way; this only softened what shows. */}
-
-      {/* --- Precipitation, behind the deck it falls from ------------------ */}
-      {/* A flake per layer, not per path: the fall carries a blur that clears
-          as the flake drops out of the cloud, and a blur only exists on a root
-          <svg> in Safari. The turn rides a second node inside it, so the two
-          never contend for `transform`. */}
+      {/* A layer per flake: the blur needs a root <svg> in Safari; the turn rides a separate node. */}
       <div className={slot.snow} data-layer="snow">
         {SNOWFLAKES.map((flake, i) => (
           <Layer
@@ -389,10 +295,7 @@ export function WeatherGraphic({
             ambient
             style={{ animationDelay: drop.delay }}
           >
-            {/* The instance offset is an ATTRIBUTE and the fall is CSS, on two
-                different elements: a CSS `transform` on this node would
-                replace the attribute outright and stack all three drops on the
-                first one's peg. */}
+            {/* The offset is an attribute and the fall is CSS, on separate nodes; a CSS transform would replace it. */}
             <g transform={`translate(${drop.x} ${drop.y})`}>
               <path d={RAINDROP_PATH} fill={ref("drop")} />
             </g>
@@ -400,7 +303,6 @@ export function WeatherGraphic({
         ))}
       </div>
 
-      {/* --- The deck ----------------------------------------------------- */}
       <div
         className={slot.drift}
         data-wx-ambient=""
@@ -421,10 +323,7 @@ export function WeatherGraphic({
             <path d={CLOUD_BIG_PATH} fill="var(--colors-sky-cloud-shade)" />
           </Layer>
           <div className={slot.cloudBigStack}>
-            {/* Four copies of one cloud at four blur depths, each masked to
-                its own band and ADDED to the others. The bands partition the
-                height, so what lands is a continuous ramp from the crown's
-                blur to the underside's. */}
+            {/* Four blur depths masked into bands that add up to one continuous ramp. */}
             {CLOUD_BLUR_BANDS.map((band, i) => (
               <Layer
                 key={i}
@@ -444,7 +343,6 @@ export function WeatherGraphic({
         </div>
       </div>
 
-      {/* --- The strike --------------------------------------------------- */}
       <div className={slot.litGate} data-wx-ambient="lit">
         <Layer
           base={slot.layer}
@@ -456,16 +354,8 @@ export function WeatherGraphic({
         </Layer>
       </div>
 
-      {/* The bloom is the light the strike throws and stays soft the whole way
-          down; the core is the bolt itself and is blurred only at the crown,
-          where it is still inside the deck. Below that it is as hard-edged as
-          the raindrops beside it — a bolt blurred along its free end reads as
-          a smear of light rather than as a strike, and the free end is the
-          part a viewer actually reads. */}
       <div className={slot.bolt} data-layer="bolt">
-        {/* Marked "lit" like the cloud's glow: with the animation dropped for
-            reduced motion both rest at full strength, so a still of a
-            thunderstorm has a bolt in it. */}
+        {/* Marked "lit", so a reduced-motion still of a thunderstorm keeps its bolt. */}
         <div className={slot.boltFlash} data-wx-ambient="lit">
           <Layer base={slot.layer} className={slot.boltBloom}>
             <path d={LIGHTNING_PATH} fill={ref("bolt")} />

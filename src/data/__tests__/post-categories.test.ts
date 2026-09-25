@@ -15,9 +15,6 @@ describe("POST_CATEGORIES", () => {
     expect(LISTED_CATEGORIES).toEqual(["WORK", "ARTICLE", "PROTOTYPE"]);
   });
 
-  // The registry names an address prefix, and the router is what serves it. A
-  // category added here without its folder would be offered in the sidebar and
-  // then 404 every post filed under it.
   it.each(LISTED_CATEGORIES)(
     "has a reading route for %s at its prefix",
     (category) => {
@@ -39,8 +36,6 @@ describe("POST_CATEGORIES", () => {
     for (const path of paths) expect(path).toMatch(/^\/[a-z-]+$/);
   });
 
-  // A post's Markdown copy is `<address>.md`, which only reaches its handler
-  // through a rewrite — one per category, or the copy is a 404.
   it.each(LISTED_CATEGORIES)(
     "rewrites the Markdown copy of a %s to its handler",
     async (category) => {

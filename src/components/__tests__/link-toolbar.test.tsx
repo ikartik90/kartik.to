@@ -30,7 +30,6 @@ describe("LinkActions", () => {
     ).toBeDefined();
   });
 
-  // Only a button can stay in view; a link inside prose has no toggle.
   it("offers the sticky toggle only to a host that takes it", () => {
     render(<LinkActions {...handlers()} />);
     expect(screen.queryByRole("button", { name: "Sticky" })).toBeNull();
@@ -47,7 +46,6 @@ describe("LinkActions", () => {
     expect(onToggleSticky).toHaveBeenCalledOnce();
   });
 
-  // A button not linked yet has nowhere to open.
   it("will not open a link that goes nowhere", () => {
     const h = handlers();
     render(<LinkActions {...h} canOpen={false} />);

@@ -9,22 +9,8 @@ import {
   type KnownOutcome,
 } from "./harness-data";
 
-// ---------------------------------------------------------------------------
-// A benchmark's results, read off the fixture: which candidates the criteria
-// would let through, and which of those calls disagree with what really
-// happened to the candidate. The fixture records only the evaluations;
-// everything a results row says beyond them is worked out here.
-//
-// Two kinds of run: a RETEST of the criteria as drafted — evaluated as the
-// fixture has them, and a rewritten prompt as its rewrite re-evaluates — and
-// the PREVIOUS run, the three criteria that were running before, as recorded.
-// Retesting exactly those three, unchanged, gives the previous run again: the
-// same prompts give the same answers.
-// ---------------------------------------------------------------------------
-
 export type Result = "included" | "excluded";
 
-/** A criterion as it was tested: which one, and with what prompt. */
 export interface TestedCriterion {
   id: string;
   prompt: string;
@@ -32,7 +18,7 @@ export interface TestedCriterion {
 
 export interface BenchmarkFinding {
   criterionId: string;
-  /** The criterion the call was decided on, by its title. */
+  /** The criterion's title. */
   criterion: string;
   why: string;
   resumeQuote: string;
@@ -43,13 +29,12 @@ export interface BenchmarkRow {
   name: string;
   knownOutcome: KnownOutcome;
   avgScore: number | null;
-  /** One for each criterion tested, in the order tested — the list's, and so the ring's. */
+  /** One per tested criterion, in test order. */
   evaluations: readonly Evaluation[];
   met: number;
   result: Result;
-  /** The result disagrees with the known outcome. */
+  /** Result disagrees with the known outcome. */
   mismatch: boolean;
-  /** Why, where the result disagrees. */
   finding: BenchmarkFinding | null;
 }
 
@@ -101,14 +86,12 @@ function rows(
   });
 }
 
-/** How a candidate's resume evaluates against a criterion as first written. */
 function asWritten(candidate: Candidate, criterionId: string): Evaluation {
   return candidate.evaluations[
     CRITERIA.findIndex((criterion) => criterion.id === criterionId)
   ];
 }
 
-/** A retest of `tested` against the benchmark candidates — all of them, or those named. */
 export function benchmark(
   tested: readonly TestedCriterion[],
   candidates: readonly string[] = ALL_CANDIDATES,
@@ -134,14 +117,12 @@ export function benchmark(
   );
 }
 
-/** The benchmark run before this draft: the criteria that were running, as that run recorded them. */
 export function previousBenchmark(
   candidates: readonly string[] = ALL_CANDIDATES,
 ): BenchmarkRow[] {
   return rows(PREVIOUS_BENCHMARK.criteria, asPreviously, candidates);
 }
 
-/** How the previous run evaluated a candidate against one of its criteria. */
 function asPreviously(candidate: Candidate, criterionId: string): Evaluation {
   const differences: Partial<
     Record<string, Partial<Record<string, Evaluation>>>
@@ -152,7 +133,6 @@ function asPreviously(candidate: Candidate, criterionId: string): Evaluation {
   );
 }
 
-/** Whether `tested` is what the previous run tested: its criteria, each as first written. */
 function isPreviousRun(tested: readonly TestedCriterion[]) {
   const ran: readonly string[] = PREVIOUS_BENCHMARK.criteria;
   return (
@@ -165,14 +145,13 @@ function isPreviousRun(tested: readonly TestedCriterion[]) {
   );
 }
 
-/** The known outcomes, in the order the summary's bar and legend take them. */
+/** Order matters: the summary's bar and legend follow it. */
 export const KNOWN_OUTCOMES: readonly KnownOutcome[] = [
   "hired",
   "archived-interview",
   "archived-application-review",
 ];
 
-/** How many of `candidates` came to each known outcome. */
 export function outcomeCounts(
   candidates: readonly { knownOutcome: KnownOutcome }[],
 ): Record<KnownOutcome, number> {
@@ -199,11 +178,6 @@ export type CandidateSetStatus =
   | { kind: "missing"; outcomes: KnownOutcome[] }
   | { kind: "too-few" };
 
-/**
- * Whether a candidate set is fit to benchmark against: every known outcome
- * among them, and enough of them. An outcome with no one is named first, even
- * below the minimum (Figma 115:5909); then too few (Figma 110:5881).
- */
 export function candidateSetStatus(
   outcomes: Record<KnownOutcome, number>,
 ): CandidateSetStatus {
@@ -217,11 +191,9 @@ export function candidateSetStatus(
 export interface SuggestedRewrite {
   criterionId: string;
   prompt: string;
-  /** The part of `prompt` the rewrite adds. */
   addedClause: string;
 }
 
-/** A rewrite for each criterion a mismatch was decided on, where it has one. */
 export function suggestedRewrites(rows: BenchmarkRow[]): SuggestedRewrite[] {
   const atFault = new Set(
     rows.filter((row) => row.mismatch).map((row) => row.finding?.criterionId),
@@ -239,7 +211,6 @@ export function suggestedRewrites(rows: BenchmarkRow[]): SuggestedRewrite[] {
   );
 }
 
-/** As the source colours an average score: 3 and up, below it, or none at all. */
 export function scoreTone(score: number | null): "good" | "low" | "none" {
   if (score === null) return "none";
   return score >= 3 ? "good" : "low";

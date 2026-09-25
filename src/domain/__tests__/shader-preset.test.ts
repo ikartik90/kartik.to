@@ -10,8 +10,6 @@ import {
 } from "../shader-preset";
 
 describe("ShaderPresetContentSchema", () => {
-  // The playground's own starting point has to be storable, or the first thing
-  // anyone saves is a validation error.
   it("accepts every shader's defaults as authored", () => {
     for (const shaderId of SHADER_IDS) {
       const parsed = ShaderPresetContentSchema.safeParse({
@@ -22,33 +20,22 @@ describe("ShaderPresetContentSchema", () => {
     }
   });
 
-  // A control that gets RENAMED is the one case the two compatibility rules
-  // handle badly on their own: the old key is unknown so it is stripped, the
-  // new one is missing so it defaults, and a stored value is quietly replaced
-  // by the control's default. A preset saved before the rename would open
-  // looking wrong with nothing to say why.
   it("carries a stored value across a renamed control", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const { phaseDegrees: _dropped, ...withoutPhase } = settings.params;
 
     const result = ShaderPresetContentSchema.safeParse({
       shaderId: "cosmicTrack",
-      // Exactly what a preset saved before `angle` became `phase` holds.
       settings: { ...settings, params: { ...withoutPhase, angle: -7 } },
     });
 
     expect(result.success).toBe(true);
-    // Two migrations in a chain: `angle` became `phase`, and `phase` is now
-    // dialled in degrees — so a value from the very first naming still lands.
     expect(result.success && result.data.settings.params.phaseDegrees).toBe(-90);
-    // The retired keys do not survive alongside the one that replaced them.
     expect(result.success && "angle" in result.data.settings.params).toBe(false);
     expect(result.success && "phase" in result.data.settings.params).toBe(false);
   });
 
   it("carries a stored value across every renamed control", () => {
-    // One table, so a second rename is a row rather than a code path — but the
-    // row still has to be exercised, or the next one is added untested.
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const { phaseDegrees: _p, rampDither: _d, ...rest } = settings.params;
 
@@ -62,10 +49,6 @@ describe("ShaderPresetContentSchema", () => {
     expect(result.success && result.data.settings.params.rampDither).toBe(0.8);
   });
 
-  // `ease`/`easeSkew` were renamed to say what they are rather than what they do
-  // to a curve. The VALUES carry over unchanged on purpose: 1 was the fully
-  // eased swing under the old 0..2 range and still is under -1..1, and 0 was a
-  // linear one either way — so the rename is a rename, not a re-tuning.
   it("carries the easing controls across their rename", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const { easing: _e, easingBias: _b, ...rest } = settings.params;
@@ -80,9 +63,6 @@ describe("ShaderPresetContentSchema", () => {
     expect(result.success && result.data.settings.params.easingBias).toBe(-0.7);
   });
 
-  // `edgeThickness` became `edgeWidth` — the same measurement, said the way the
-  // rest of the panel says it. Range and meaning are untouched, so the stored
-  // value carries straight over.
   it("carries the rails' width across its rename", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const { edgeWidth: _w, ...rest } = settings.params;
@@ -101,8 +81,6 @@ describe("ShaderPresetContentSchema", () => {
     const { phaseDegrees: _dropped, ...withoutPhase } = settings.params;
     const result = ShaderPresetContentSchema.safeParse({
       shaderId: "cosmicTrack",
-      // Both namings of the same control, from two different eras. The later
-      // one is what the author last wrote; the earlier is residue.
       settings: {
         ...settings,
         params: { ...withoutPhase, phase: 7, angle: -2.4 },
@@ -121,8 +99,6 @@ describe("ShaderPresetContentSchema", () => {
     ).toBe(false);
   });
 
-  // A value the GPU would silently clamp is a slider that lies about what it
-  // is doing — the same call `BackgroundEffectSchema` makes.
   it("rejects a param outside the control's own range", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const result = ShaderPresetContentSchema.safeParse({
@@ -132,9 +108,6 @@ describe("ShaderPresetContentSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  // Forward compatibility, both directions. A preset written before a control
-  // existed must still open, and one written before a control was REMOVED must
-  // not fail on the leftover key.
   it("fills in a param the stored preset predates", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const { rampLength: _dropped, ...withoutRampLength } = settings.params;
@@ -142,24 +115,16 @@ describe("ShaderPresetContentSchema", () => {
       shaderId: "cosmicTrack",
       settings: { ...settings, params: withoutRampLength },
     });
-    // The CONTROL's own default, which is what a missing key falls back to —
-    // not the shader's `defaults.params` override, which is where the preset
-    // started rather than where the schema puts it back.
+    // The control's own default, not the shader's `defaults.params` override.
     const control = SHADER_SPECS.cosmicTrack.controls.find(
       (spec) => spec.key === "rampLength",
     );
     expect(parsed.settings.params.rampLength).toBe(control?.value);
   });
 
-  // A toggle row is the one control whose value is a LIST, and the one that can
-  // be stored in a state its own panel cannot produce.
   it("refuses a toggle row stored with nothing pressed", () => {
     const settings = defaultState(SHADER_SPECS.pixelComets);
 
-    // Rejected rather than defaulted, exactly as a slider's range is enforced
-    // rather than clamped: no direction is not a still field, it is a blank
-    // card, and a preset that opens blank with nothing to say why is worse
-    // than a save that fails.
     expect(() =>
       ShaderPresetContentSchema.parse({
         shaderId: "pixelComets",
@@ -208,18 +173,12 @@ describe("ShaderPresetContentSchema", () => {
     ).toBe(false);
   });
 
-  // A hand-written six-digit colour is legitimate INPUT — `parseColor` says so
-  // ("a colour written by hand doesn't have to spell out FF"), and the spec
-  // table takes it at its word. What is STORED is canonical, though: eight
-  // digits always, so nothing downstream has to ask which form it is holding.
   it("normalises a six-digit colour to eight rather than rejecting it", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const parsed = ShaderPresetContentSchema.parse({
       shaderId: "cosmicTrack",
       settings: { ...settings, colors: ["#2E6BFF"] },
     });
-    // Both halves of the pair the bare string became — normalising happens
-    // after the split, so neither half can be the short form.
     expect(parsed.settings.colors).toEqual([
       { light: "#2E6BFFFF", dark: "#2E6BFFFF" },
     ]);
@@ -250,25 +209,9 @@ describe("ShaderPresetContentSchema", () => {
     ).toBe(false);
   });
 
-  // A shader that is an opaque fill has no ground behind it, so a stored
-  // `colorBack` is meaningless there rather than merely unused, and the schema
-  // drops it on the way in.
-  //
-  // UNREACHABLE while every shader in `SHADER_SPECS` has a ground — the branch
-  // is keyed on the table's `hasColorBack`, and the one shader that answered
-  // false (StaticMeshGradient) left with the other built-ins. Kept as a todo
-  // because the rule is still in the schema and the next groundless shader
-  // needs it proved.
+  // A todo: unreachable while every shader in `SHADER_SPECS` has a ground.
   it.todo("drops colorBack for a shader that has no background");
 
-  // The one thing a preset records about SHAPE, and it records it as a note
-  // rather than as a size: the aspect the picture was designed against, so
-  // reopening it a month later reopens the frame it was judged in. Nothing
-  // reading a preset is obliged to honour it — see the module comment.
-  // A preset no longer records the shape it was judged in: it is framed for
-  // every shape, so the note said nothing the `framing` keys do not. Any value
-  // still in the column is dropped on the way in, the way every retired key is
-  // — the playground opens square whatever a stored preset used to say.
   it("drops the shape a preset used to record", () => {
     const parsed = ShaderPresetContentSchema.parse({
       shaderId: "cosmicTrack",
@@ -276,20 +219,8 @@ describe("ShaderPresetContentSchema", () => {
     });
     expect("aspect" in parsed.settings).toBe(false);
   });
-
-  // A ratio the app cannot draw is now only reachable as a `framing` key, and
-  // it is stripped there rather than refused — see "rejects a shape the app
-  // cannot draw" below.
 });
 
-// ---------------------------------------------------------------------------
-// Framing, per shape.
-//
-// The four placement controls are the only ones whose right value depends on
-// the SHAPE the preset is being looked at in — a fan tuned until it reads on a
-// 9:16 poster is not framed the same way on a 2:1 banner — so a preset keeps one
-// set per aspect ratio rather than one set full stop.
-// ---------------------------------------------------------------------------
 describe("framing", () => {
   const content = (settings: unknown) =>
     ShaderPresetContentSchema.parse({ shaderId: "cosmicTrack", settings });
@@ -302,11 +233,6 @@ describe("framing", () => {
     }
   });
 
-  // The forward-compatibility promise, for a preset written before framing was
-  // per-shape: its one set of placement values was tuned against the shape it
-  // was saved in, so that is the shape they belong to. Stripping them as
-  // unknown keys — which is what the params object would do on its own — would
-  // silently unframe every saved preset.
   it("moves a stored preset's placement onto the shape it was saved in", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const parsed = content({
@@ -333,8 +259,6 @@ describe("framing", () => {
     expect(parsed.settings.framing["9/16"]).toBeUndefined();
   });
 
-  // A preset written since the split is the authority on itself — the params
-  // beside it are residue and must not overwrite what it says.
   it("does not overwrite a shape that is already framed", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const parsed = content({
@@ -347,8 +271,6 @@ describe("framing", () => {
     expect(parsed.settings.framing["2/1"]?.scale).toBe(4);
   });
 
-  // The same range enforcement the params get, for the same reason: a value the
-  // GPU would silently clamp is a slider lying about what it is doing.
   it("rejects a placement outside the control's own range", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     expect(
@@ -370,8 +292,6 @@ describe("framing", () => {
   });
 });
 
-// Rotation reads -180..180 with zero in the middle, so that a turn either way
-// from square-on is a move away from zero rather than a wrap through 360.
 describe("rotation", () => {
   const content = (framing: unknown) =>
     ShaderPresetContentSchema.parse({
@@ -387,12 +307,6 @@ describe("rotation", () => {
     }
   });
 
-  // An angle is MODULAR, unlike every other control here — so a rotation past
-  // the end of the range is wrapped rather than refused. 400° names the same
-  // picture as 40°, so a slider showing 40 is telling the truth, which is the
-  // whole reason the other controls enforce their ranges instead of clamping.
-  // (Scale has no such reading: 99 is not another way of writing a scale the
-  // shader can draw, and `framing` above pins that it is still rejected.)
   it("wraps a rotation past the end of the range rather than refusing it", () => {
     expect(content({ "1/1": { rotation: 400 } }).settings.framing["1/1"]?.rotation).toBe(40);
     expect(content({ "1/1": { rotation: -400 } }).settings.framing["1/1"]?.rotation).toBe(-40);
@@ -408,19 +322,12 @@ describe("rotation", () => {
     ).toBe(false);
   });
 
-  // Every preset saved while the control ran 0..360 holds a rotation this range
-  // has no room for, and the schema ENFORCES its ranges rather than clamping —
-  // so without this a preset tuned to 270° would stop opening at all. The
-  // wrapped value is the same angle, so the picture is untouched; clamping to
-  // 180 would have quietly re-tuned it.
   it("carries a rotation saved under the old 0-360 range across", () => {
     expect(content({ "1/1": { rotation: 270 } }).settings.framing["1/1"]?.rotation).toBe(-90);
     expect(content({ "1/1": { rotation: 360 } }).settings.framing["1/1"]?.rotation).toBe(0);
     expect(content({ "1/1": { rotation: 181 } }).settings.framing["1/1"]?.rotation).toBe(-179);
   });
 
-  // The same wrap has to reach the placement lifted out of `params`, which is
-  // where every preset saved before framing was per-shape keeps its rotation.
   it("wraps a rotation lifted out of a legacy preset's params", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
     const parsed = ShaderPresetContentSchema.parse({
@@ -435,75 +342,45 @@ describe("rotation", () => {
     expect(parsed.settings.framing["2/1"]?.rotation).toBe(-90);
   });
 
-  // A value already inside the range is left exactly as it is — 180 must not
-  // become -180 just because the two name the same angle. The slider would jump
-  // from one end of the track to the other for no reason the author can see.
   it("leaves a rotation already in range untouched", () => {
     expect(content({ "1/1": { rotation: 180 } }).settings.framing["1/1"]?.rotation).toBe(180);
   });
 });
 
-// Phase became a degree dial, reading and stepping like the Rotation beside it.
-// Its stored numbers had to be re-expressed, which is the one migration in this
-// file that changes a value rather than moving it.
 describe("phase", () => {
-  /**
-   * A stored blob holding ONLY these params — every other control fills in from
-   * its own default. Sparse on purpose: a preset saved before the degree dial
-   * has no `phaseDegrees` key at all, and merging today's defaults in would
-   * hand it one and hide the migration under the new-key-wins rule.
-   */
+  // Sparse on purpose: a preset saved before the degree dial has no `phaseDegrees` key.
   const parse = (params: Record<string, unknown>) =>
     ShaderPresetContentSchema.parse({
       shaderId: "cosmicTrack",
       settings: { ...defaultState(SHADER_SPECS.cosmicTrack), params },
     }).settings.params;
 
-  // A preset saved under the old -7..7 track-unit scale holds a number the new
-  // dial would read as a few degrees. Carried across by the SCALE the two share
-  // — a QUARTER turn is the seven units the old control ran to — so the picture
-  // is the one that was saved.
   it("carries a phase saved under the old track-unit scale across", () => {
     expect(parse({ phase: 7 }).phaseDegrees).toBe(90);
     expect(parse({ phase: -7 }).phaseDegrees).toBe(-90);
     expect(parse({ phase: 3.5 }).phaseDegrees).toBe(45);
   });
 
-  // Rounded onto the dial's own stops, because a value between them is one the
-  // control cannot express: the slider would show the nearest stop while the
-  // shader drew something else, and the moment you touched it the original
-  // would be gone for good. Off by at most half a step, and only for a preset
-  // saved before the dial existed.
   it("rounds a converted phase onto the dial's stops", () => {
     // 1.0 track units is 12.9° — a stop and a bit under a stop away.
     expect(parse({ phase: 1 }).phaseDegrees).toBe(15);
     expect(parse({ phase: 0.1 }).phaseDegrees).toBe(0);
   });
 
-  // Square-on is the one value that means the same in either scale, so it must
-  // not be converted a second time when the preset is read again.
   it("leaves a phase already dialled in degrees alone", () => {
     expect(parse({ phaseDegrees: 90 }).phaseDegrees).toBe(90);
     expect(parse({ phaseDegrees: 0 }).phaseDegrees).toBe(0);
   });
 
-  // The old key wins nothing where the new one is present: a preset written
-  // since the dial is the authority on itself.
   it("prefers the degree dial when a stale track-unit key sits beside it", () => {
     expect(parse({ phase: 7, phaseDegrees: 45 }).phaseDegrees).toBe(45);
   });
 
-  // The rename chain from the reference's original word still lands: `angle`
-  // became `phase`, and `phase` is now dialled in degrees.
   it("carries the reference's original `angle` all the way through", () => {
     expect(parse({ angle: 3.5 }).phaseDegrees).toBe(45);
   });
 });
 
-// Travel stopped being a number of cells and became a share of the FRAME, so
-// that the top of the slider carries a comet out the far side whatever the
-// pixel size. A count of cells and a count of half-frames are different
-// quantities, so the stored numbers had to be re-expressed.
 describe("travel", () => {
   const parse = (params: Record<string, unknown>) =>
     ShaderPresetContentSchema.parse({
@@ -511,26 +388,15 @@ describe("travel", () => {
       settings: { ...defaultState(SHADER_SPECS.pixelComets), params },
     }).settings.params;
 
-  // There is no exact conversion — how many cells a half-frame is worth
-  // depends on the card and the pixel size, neither of which a stored preset
-  // records. So it is carried by the scale the two DEFAULTS share: a preset
-  // left at the old default opens on the new one, and everything else keeps
-  // its proportion to it.
   it("carries a travel saved in cells across on the defaults' own scale", () => {
     expect(parse({ travel: 40 }).travelSpans).toBe(1.5);
     expect(parse({ travel: 80 }).travelSpans).toBe(3);
   });
 
-  // A run of one cell was a legal saving and converts to a twenty-sixth of a
-  // stop, which the slider cannot show and the shader would read as a comet
-  // that never leaves. Held on the first stop instead — the shortest run the
-  // control can express.
   it("holds a run too short to express on the slider's first stop", () => {
     expect(parse({ travel: 1 }).travelSpans).toBe(0.1);
   });
 
-  // Onto the slider's own stops, for the reason phase is: a value between them
-  // is one the control cannot show, so the first touch would lose it.
   it("rounds a converted travel onto the slider's stops", () => {
     expect(parse({ travel: 41 }).travelSpans).toBe(1.5);
     expect(parse({ travel: 55 }).travelSpans).toBe(2.1);
@@ -544,11 +410,6 @@ describe("travel", () => {
     expect(parse({ travel: 40, travelSpans: 3 }).travelSpans).toBe(3);
   });
 
-  // Cosmic Track has a `travel` of its OWN, in units that did not change — a
-  // migration keyed on the param name alone would rename it out from under
-  // every preset saved on that shader, and the value would come back as
-  // whatever today's default happens to be. A param name is only unique within
-  // a shader, so a conversion has to name the shader it belongs to.
   it("leaves the other shader's own travel where it is", () => {
     const params = ShaderPresetContentSchema.parse({
       shaderId: "cosmicTrack",
@@ -559,10 +420,6 @@ describe("travel", () => {
     expect("travelSpans" in params).toBe(false);
   });
 
-  // Seed is RETIRED rather than renamed: it hashed the lanes, and the two
-  // controls that took its place are distances. Nothing about a stored seed
-  // says anything about where a comet should be born, so it is dropped the way
-  // any unknown key is — see the schema's own note.
   it("drops a stored seed rather than reading it as a distance", () => {
     expect("seed" in parse({ seed: 42 })).toBe(false);
   });
@@ -578,10 +435,6 @@ describe("framingFor", () => {
     expect(framingFor(settings, "4/3").scale).toBe(2);
   });
 
-  // A shape nobody framed follows the CLOSEST shape somebody did. A preset is
-  // authored for every ratio, so what a container gets is the placement from
-  // the nearest shape the preset was actually judged in — not a starting point
-  // no eye ever approved.
   it("follows the closest framed shape for one nobody has framed", () => {
     const settings = {
       ...shaderPresetContentFor("cosmicTrack").settings,
@@ -591,15 +444,10 @@ describe("framingFor", () => {
       },
     };
 
-    // 6:5 is a hair off square, and a long way off a poster.
     expect(framingFor(settings, "6/5").scale).toBe(2);
-    // 1:2 is the other way about.
     expect(framingFor(settings, "1/2").scale).toBe(4);
   });
 
-  // Closeness is measured on the RATIO rather than on the key, so the nearest
-  // shape is the one that crops the picture most like this one — which lands on
-  // the same orientation whenever the preset has been framed in it.
   it("prefers a framed shape of the same orientation to a nearer-named one", () => {
     const settings = {
       ...shaderPresetContentFor("cosmicTrack").settings,
@@ -612,9 +460,6 @@ describe("framingFor", () => {
     expect(framingFor(settings, "3/4").scale).toBe(4);
   });
 
-  // Two framed shapes equally far off resolve by the app's own table order, so
-  // a preset draws the same way twice — 4:3 and 3:4 are the same distance from
-  // square, and the answer must not depend on which key was written first.
   it("settles a tie the same way every time", () => {
     const framing = {
       "3/4": { ...FRAMING_DEFAULTS, scale: 3 },
@@ -631,9 +476,6 @@ describe("framingFor", () => {
     ).toBe(2);
   });
 
-  // An unframed shape in a preset nobody has framed AT ALL is not a broken one:
-  // it reads as the table's own starting point, which is where every control
-  // opens before anybody moves it.
   it("falls back to the defaults where nothing has been framed", () => {
     const settings = {
       ...shaderPresetContentFor("cosmicTrack").settings,
@@ -645,10 +487,6 @@ describe("framingFor", () => {
 });
 
 describe("shaderParamsFor", () => {
-  // The canvas takes ONE object. The split is about where a value is kept, not
-  // about what the shader is given, so this is the seam that puts them back
-  // together — and the framing wins, because a stale placement key surviving in
-  // params would otherwise outrank the frame you are looking at.
   it("hands the shader its uniforms with the current frame's placement over them", () => {
     const settings = {
       ...shaderPresetContentFor("cosmicTrack").settings,
@@ -664,9 +502,6 @@ describe("shaderParamsFor", () => {
 });
 
 describe("shaderPresetContentFor", () => {
-  // What the playground opens on for a shader it has just switched to — the
-  // same starting point, but round-tripped through the validator so a defaults
-  // table that drifted out of its own ranges fails here rather than on save.
   it("returns a valid content for every shader", () => {
     for (const shaderId of SHADER_IDS) {
       expect(
@@ -676,17 +511,12 @@ describe("shaderPresetContentFor", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Per-theme colours. Every colour a preset holds is a light/dark PAIR, so the
-// same preset can read on either ground without a second preset existing.
-// ---------------------------------------------------------------------------
 describe("themed colours", () => {
   it("splits a preset written with one colour per stop into a matching pair", () => {
     const settings = defaultState(SHADER_SPECS.cosmicTrack);
 
     const result = ShaderPresetContentSchema.safeParse({
       shaderId: "cosmicTrack",
-      // Exactly what every preset saved before the split holds: bare strings.
       settings: { ...settings, colors: ["#FFAB6F", "#FF4D97FF"] },
     });
 
@@ -773,10 +603,6 @@ describe("paletteFor", () => {
     });
   });
 
-  // ABSENT rather than undefined, so the palette can be spread onto a component
-  // whose prop is optional without handing it a key it has no meaning for. The
-  // settings are what this reads — a preset with no ground carries no
-  // `colorBack`, whichever shader left it that way.
   it("leaves colorBack absent where the settings carry none", () => {
     const { colorBack: _none, ...settings } = shaderPresetContentFor(
       "cosmicTrack",

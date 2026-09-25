@@ -11,24 +11,6 @@ import {
 } from "@/utils/collection-items";
 import CollectionIcon from "@/assets/icons/collection.svg";
 
-// ---------------------------------------------------------------------------
-// CollectionShowcase — the published collection.
-//
-// The whole grid is a client component rather than a server grid with a
-// hydrating click layer: every tile is interactive, so splitting it would buy
-// nothing and cost a second element tree. There is no SSR penalty — a client
-// component is still server-rendered, so the <img> tags are in the initial HTML
-// exactly as a plain figure's would be; only the handlers hydrate.
-//
-// The reader shows at most THREE tiles. Anything beyond that lives in the
-// surplus badge and, from there, in the lightbox.
-//
-// What a tile IS — the ground behind it, the picture, the press that enlarges
-// it, the clip's transport — is `MediaTile`, shared with the standalone media
-// block (`MediaShowcase`). All this file adds is the arithmetic of a SET: how
-// many tiles fit, which one is featured, and what the badge stands for.
-// ---------------------------------------------------------------------------
-
 const VISIBLE_TILES = 3;
 
 export interface CollectionShowcaseProps {
@@ -49,9 +31,7 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
     <>
       <div className={styles.root}>
         {visible.map((item, index) => {
-          // The badge rides the LAST visible tile, and the two are siblings:
-          // they open different images, and nesting one button in another is
-          // not a thing the platform allows.
+          // Siblings, not nested: a button cannot hold another button.
           const carriesSurplus = surplus > 0 && index === VISIBLE_TILES - 1;
           return (
             <MediaTile
@@ -64,9 +44,6 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
                 backgroundEffect: styles.backgroundEffect,
               }}
               fallbackLabel={`Image ${index + 1}`}
-              // Slot 0 IS the featured position (see `featureItem`), and it is
-              // the only clip in the grid that performs — three loops running
-              // against each other is three things competing for one reader.
               autoPlay={index === 0}
               onOpen={() => setOpenIndex(index)}
               surfaceProps={{
@@ -78,8 +55,6 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
                   type="button"
                   className={styles.surplus}
                   aria-label={`Show ${surplus} more image${surplus === 1 ? "" : "s"}`}
-                  // The badge stands for items VISIBLE_TILES..n, so it opens
-                  // the first one it is hiding.
                   onClick={() => setOpenIndex(VISIBLE_TILES)}
                 >
                   <CollectionIcon aria-hidden />
@@ -94,8 +69,7 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
         })}
       </div>
 
-      {/* Always mounted, opened by state — see the effect in MediaLightbox for
-          why it cannot be conditionally rendered. */}
+      {/* Must stay mounted; see the effect in MediaLightbox. */}
       <MediaLightbox
         items={items}
         index={openIndex}

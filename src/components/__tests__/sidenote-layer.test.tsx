@@ -39,8 +39,6 @@ describe("SidenoteLayer — editor card", () => {
   it("autofocuses the note body when its id becomes the autoFocusId", () => {
     vi.useFakeTimers();
     const onAutoFocused = vi.fn();
-    // Start inactive (no autoFocusId), then flip it on — mirrors clicking Edit
-    // on an existing note whose card was hidden until now.
     const { rerender } = render(
       <SidenoteLayer
         entries={[entry()]}
@@ -88,8 +86,7 @@ describe("SidenoteLayer — editor card", () => {
   });
 });
 
-// Collapse the caret inside `el` at absolute text offset `at` (paragraph breaks
-// count as one character), mirroring where the user would be typing.
+// `at` is an absolute text offset; a paragraph break counts as one character.
 function placeCaret(el: HTMLElement, at: number) {
   const paragraphs = Array.from(el.children);
   let index = 0;

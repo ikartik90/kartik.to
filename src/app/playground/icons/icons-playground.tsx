@@ -38,38 +38,6 @@ import { useIconDrop } from "./use-icon-drop";
 import { useIconLibrary } from "./use-icon-library";
 import { useIconMarquee } from "./use-icon-marquee";
 
-// ---------------------------------------------------------------------------
-// Icons Playground — the set, drawn at whatever size and weight you want to
-// see it at, and taken away at the same.
-//
-// The problem it exists for: the set is authored on two grids. A 16 drawn at
-// 1px and a 20 drawn at 1.25px are the SAME optical weight, so they belong in
-// one set — but they are not the same file, and until they are side by side at
-// one size nobody can tell whether they are the same drawing. So every icon
-// here is scaled to the chosen box and re-weighted to the chosen line, and
-// what leaves in a download is exactly what is on screen (`icon-download`).
-//
-// Public, on the same grounds as the two playgrounds beside it: the sliders
-// write nothing, and the grid is a set of icons anybody may look at. Uploading
-// to it, publishing a held icon and deleting one are the author's, and are
-// gated on the server rather than here — see `actions/icon-set`.
-//
-// Layout is the shader playground's, because it is the same kind of page: the
-// main area is the thing being judged, the sidebar is every control that acts
-// on it, and the page's own two chrome buttons sit in the band across the top.
-// The panel is the real `PropertiesPanel` rather than the hand-rolled rail the
-// shader page needs for its drag-to-dismiss sheet.
-// ---------------------------------------------------------------------------
-
-// The search bar's box, and the room it takes at the foot of the page. The
-// calchemy playground's numbers, because it is that playground's bar: 32px off
-// the bottom edge, a 40px row, and another 32 of frosting fading out above it.
-//
-// The hint is a 28px LEDGE standing on top of the pill rather than a row
-// inside it (Figma 1222:1901), tucked a pixel under so its own bottom corners
-// disappear behind the box. All three numbers meet here because the frosted
-// band and the sheet's foot padding are both derived from this one: get it
-// wrong and the last row of icons comes to rest behind the bar.
 const BAR_INSET = "token(spacing.3xl)";
 const BAR_ROW = "token(spacing.4xl)";
 const BAR_LEDGE = "token(sizes.toolbarButton)";
@@ -80,90 +48,36 @@ const BAR_WIDTH = "min(480px, calc(100dvw - 2 * token(spacing.3xl)))";
 const SCRIM_CLEARANCE = "token(spacing.3xl)";
 const BAR_SPACE = `calc(${BAR_INSET} + ${BAR_HEIGHT} + ${SCRIM_CLEARANCE})`;
 
-// The air under the last row, which has to do two things rather than one.
-//
-// `BAR_SPACE` only gets the row to the TOP EDGE of the frosted band — level
-// with where the fade begins, which is not the same as clear of it: a
-// progressive blur samples from beyond its own box, so a row resting exactly
-// on that line is drawn with its bottom smeared into the band. The extra
-// clearance is what puts the last row somewhere it can actually be read, and
-// it is the same `SCRIM_CLEARANCE` the first row gets under the chrome.
-//
-// Which makes the foot the deeper of the two ends — 163px against the head's
-// 112px — and deliberately: the head's band holds two chrome buttons, the
-// foot's holds a floating search bar, so equal PADDING would not be equal air.
+// Past the band's top edge too: the blur samples beyond its box and would smear the last row.
 const CANVAS_FOOT = `calc(${BAR_SPACE} + ${SCRIM_CLEARANCE})`;
 
-// The viewport, with the grid in the middle of what the docked panel leaves of
-// it: `usePropertiesPanelInset` insets the body while the panel is open, so
-// nothing here reserves the panel's width a second time.
-//
-// `padding: none` is stated rather than omitted because `main` carries the
-// site's own (globals.css), which would inset the scroller from the edges it
-// is meant to reach.
+// `padding: none` overrides the site's own padding on `main` (globals.css).
 const pageStyle = css({
   minHeight: "100dvh",
   backgroundColor: "bg.canvas",
   padding: "none",
   position: "relative",
-  // How tall the gutter controls' box is — `PlaygroundChrome` draws it and the
-  // sheet below reserves it, so the number is the PAGE's to say or the two
-  // would disagree. The site's 80px band on a desktop; on a phone the menu's
-  // own 40px row plus the 8px standoff, which is what the other playgrounds
-  // use and for their reason: 80 fills a gap an article already opens above
-  // its first row, and there is no such gap here.
   "--chrome-band": "token(spacing.5xl)",
   _bottomSheet: {
     "--chrome-band": "calc(token(spacing.md) + token(spacing.4xl))",
   },
-  // A band pinned over the top of the page is a band anything scrolled to by
-  // anchor has to clear.
   scrollPaddingTop: `calc(var(--chrome-band) + ${SCRIM_CLEARANCE})`,
 });
 
-// The CANVAS: everything under the chrome band that is not the docked panel,
-// and the surface a sweep is drawn on.
-//
-// Edge to edge on purpose. The icons themselves keep to a 960px column (see
-// `columnStyle` in `icon-grid`), but the band is a gesture of the page: a
-// hand that starts in the room beside the set is still reaching for the set,
-// and a surface stopping at the column's edge would answer that with nothing.
-// The panel needs no exclusion of its own — the body is padded by the rail's
-// width, so this box already ends where the rail begins.
-//
-// `relative` so the band can be placed in its coordinates, and unselectable
-// because a drag across it would otherwise highlight the tiles' hidden names.
+// Unselectable: a drag would otherwise highlight the tiles' hidden names.
 const canvasStyle = css({
   position: "relative",
   userSelect: "none",
-  // The surface reaches the foot of the VIEWPORT, not the foot of the grid.
-  // A set of three icons leaves the page taller than its own content, and a
-  // sweep begun in that dead space catches nothing — where a file dropped
-  // there is worse than nothing, since an unclaimed drop is the browser
-  // navigating away from the page to open the file.
-  //
-  // GROW, never a `min-height` floor. `main` is a column flex container, so a
-  // `min-height: 100dvh` item is one the flexbox is free to shrink back TO
-  // 100dvh: with two hundred icons in it the box stayed a viewport tall while
-  // its content ran on past the bottom, which quietly took the foot padding
-  // below out of the flow with it and left the last row hard against the
-  // bottom of the screen. Growing has neither problem — it fills what is left
-  // when the grid is short, and keeps its whole content height when it is not.
+  // Grow, not `min-height`: `main` is a flex column and would shrink a floor back to 100dvh.
   flexGrow: 1,
   flexShrink: 0,
-  // Clear of the frosted band pinned over the top — its height plus the same
-  // clearance the foot keeps, so the first row of icons is never under it.
   paddingBlockStart: `calc(var(--chrome-band) + ${SCRIM_CLEARANCE})`,
-  // Room at the foot for the bar that floats over it, so the last row never
-  // comes to rest behind the frosting.
   paddingBlockEnd: CANVAS_FOOT,
   display: "flex",
   flexDirection: "column",
   gap: "xl",
 });
 
-// Nothing to draw yet, or nothing to draw at all. One box for both, because
-// the difference is only which sentence is in it.
 const emptyStyle = css({
   display: "flex",
   alignItems: "center",
@@ -173,13 +87,6 @@ const emptyStyle = css({
   textAlign: "center",
 });
 
-// The band the bar floats in, frosted so the bar is not sitting crisply on a
-// field of marks. Fixed, and inset from the right by whatever the docked panel
-// is holding: a fixed element is measured against the viewport rather than the
-// padded body, so without `--page-inset-end` (which globals.css publishes for
-// exactly this, and which is 0 with no panel docked) the band would run on
-// underneath the rail. Transitioned to match the 200ms the page slides by,
-// since a custom property flips instantly and the band would otherwise jump.
 const barScrimStyle = css({
   position: "fixed",
   insetInlineStart: 0,
@@ -193,10 +100,6 @@ const barScrimStyle = css({
   transition: "right 200ms ease-out",
 });
 
-// Where the bar stands. Centred in what is LEFT of the page once the panel is
-// docked — see the scrim above, including why this is transitioned. It paints
-// nothing itself: the ledge and the pill under it are two surfaces, and the
-// page shows between them either side of the ledge.
 const barStyle = css({
   position: "fixed",
   insetBlockEnd: BAR_INSET,
@@ -209,7 +112,6 @@ const barStyle = css({
   transition: "left 200ms ease-out",
 });
 
-// The pill the phrase is typed into.
 const barFieldStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -219,29 +121,15 @@ const barFieldStyle = css({
   borderColor: "field.border.default",
   backgroundColor: "bg.surface",
   "--colors-field-bg-default": "var(--colors-field-bg-default-on-surface)",
-  // The elevation every other floating surface here carries. Not in the
-  // design's own frame, which is the component on its own rather than a bar
-  // floating over a scrolling sheet.
   boxShadow:
     "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
-  // The glyph is `currentColor`, so the pill owns its hue.
   color: "field.text.default",
 });
 
-// The ledge the hint stands on, and the slot it stands in.
-//
-// The two gestures are invisible until you know them, and a sheet of two
-// hundred marks is where that matters most. It is a TAB on top of the pill
-// rather than a row inside it (Figma 1222:1901): inset from the pill's ends,
-// a step lighter than it, and tucked a pixel under so its own square bottom
-// corners vanish behind the box. Read once and stop seeing — where a row
-// inside the pill was one more thing the field had to be looked past.
 const barLedgeSlotStyle = css({
   display: "flex",
   justifyContent: "center",
   paddingInline: "lg",
-  // Under the pill, which paints over it: later siblings in normal flow paint
-  // their backgrounds last, so the tuck needs no z-index of its own.
   marginBlockEnd: `calc(-1 * ${BAR_LEDGE_OVERLAP})`,
 });
 
@@ -254,35 +142,20 @@ const barLedgeStyle = css({
   minWidth: 0,
   height: BAR_LEDGE,
   paddingInline: "md",
-  // The one corner in the box, on the two ends that show.
   borderTopRadius: "sm",
-  // OPAQUE, and that is the whole reason this token is flattened: the ledge
-  // stands beside the pill rather than on it, so it has nothing to take the
-  // surface half of the colour from and the grid would read through it.
+  // Opaque: the ledge has no surface under it, and the grid would show through.
   backgroundColor: "bg.surfaceRaised",
-  // An inset ring rather than a border, exactly as a field frame draws its
-  // own edge — a real border would eat into the 28px.
+  // An inset ring, not a border, which would eat into the 28px.
   boxShadow:
     "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
-  // Its square bottom is behind the pill; the corners above it are its own.
   overflow: "hidden",
-  // Quiet: it is an aside about the grid, not a label for the box under it.
-  // The value at HALF, which is what a field's hint is — as an alpha rather
-  // than `field.text.muted`, whose 50% is pre-mixed into `bg.surface` and
-  // would be mixing against the wrong ground on a ledge a step lighter.
+  // An alpha, not `field.text.muted`, which is pre-mixed against `bg.surface`.
   color: "field.text.default/50",
   textStyle: "caption",
   whiteSpace: "nowrap",
 });
 
-// The sentence, laid out as a ROW so the key chip can sit in it upright. A
-// `hotkey` is a 20px flex box, which inline text has no good way to hold — as
-// a flex item it simply centres against the words either side of it.
-//
-// The spaces stay in the strings even though the gap is what you see: a flex
-// item drops its own leading and trailing whitespace, so the gap does the
-// spacing while `textContent` still reads as one sentence for anything that
-// hears the row rather than looks at it.
+// A flex row so the key chip sits upright; keep the spaces in the strings for `textContent`.
 const barHintTextStyle = css({
   display: "flex",
   alignItems: "center",
@@ -292,14 +165,8 @@ const barHintTextStyle = css({
 
 const barLedgeIconStyle = menuIcon();
 
-// The key drawn as the key — the same chip the palette's `Esc` wears and the
-// calchemy bar's `⏎`, on the `menu` fill because this stands among field
-// furniture rather than out on the page.
 const barHintKeyStyle = hotkey({ surface: "menu" });
 
-// The preloader's box — the shared progress bar centred in the sheet, at the
-// width the media dialog gives it. The bar itself is the one the upload dialog
-// fills and the component demos wait behind; this is only where it stands.
 const preloaderStyle = css({
   display: "flex",
   alignItems: "center",
@@ -308,16 +175,7 @@ const preloaderStyle = css({
   marginInline: "auto",
 });
 
-// The offer, while files are held over the set. FIXED rather than laid over
-// the canvas box, because the canvas is as tall as however many icons are in
-// the set and a label centred in that is a label nobody can see. Its edges are
-// the ones the frosted band uses — clear of the chrome at the top, and inset
-// from the right by whatever the docked panel is holding, since a fixed box is
-// measured against the viewport rather than the padded body.
-//
-// Nothing in it is a drop target: the canvas underneath takes the drop, and an
-// overlay that appeared under the cursor would fire an enter/leave pair of its
-// own on the way in — see the depth counting in `use-icon-drop`.
+// Fixed, and never a drop target: it would fire its own enter/leave (see `use-icon-drop`).
 const dropOverlayStyle = css({
   position: "fixed",
   insetBlockStart: "var(--chrome-band)",
@@ -330,23 +188,10 @@ const dropOverlayStyle = css({
   justifyContent: "center",
   padding: "3xl",
   pointerEvents: "none",
-  // Enough of the page to read the words against, and no more: you are
-  // dropping onto the SET, and a veil that took it away would be answering the
-  // gesture by hiding its target. The blur does most of the work — it kills
-  // the detail while keeping the shape of what is under it — so the tint over
-  // it is light. It is in `globals.css` keyed off the attribute below, because
-  // `css()` rejects both spellings of `backdrop-filter` and Panda's own
-  // utility emits only the `-webkit-` one, which Chromium ignores.
+  // The blur is in globals.css: Panda emits only `-webkit-backdrop-filter`, which Chromium ignores.
   backgroundColor: "bg.canvas/40",
 });
 
-// The frame the offer is written in, and what says the whole room is the
-// target rather than the words in the middle of it.
-//
-// Its line is a WHOLE pixel off the label's own colour, not the half-pixel
-// quarter-alpha a field's edge is drawn in: that is a hairline meant to be
-// found at the boundary of two filled surfaces, and run around the edge of a
-// veiled page at 25% it was not visible at all.
 const dropFrameStyle = css({
   display: "flex",
   alignItems: "center",
@@ -369,11 +214,6 @@ const triggerStyle = css({
 });
 
 export interface IconsPlaygroundProps {
-  /**
-   * The approved set, drawn by the server and already parsed — see the route.
-   * Defaulted so the component can still be mounted on its own, which is what
-   * an empty bucket and every unit test do.
-   */
   prerendered?: readonly PrerenderedIcon[];
 }
 
@@ -384,41 +224,21 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
   const [settings, setSettings] = useState<IconViewSettings>(DEFAULT_ICON_SETTINGS);
   const [open, setOpen] = useState(true);
 
-  // WHERE the panel docks, and therefore how it opens. A rail stands beside
-  // the grid and costs it nothing; a sheet rises over the very set it
-  // configures, so on a phone it starts down and the grid is what the page
-  // opens on.
-  //
-  // Asked once, on mount, because the server has no viewport to ask — the same
-  // one-commit-later correction `useHasCursor` makes. `open` stays true for
-  // the first render so the desktop's inset is reserved in the server's HTML
-  // (see `PANEL_RESERVED_ATTR`), and `sheet` gates both docks so neither is
-  // hydrated onto the wrong device: until this has run there is no panel
-  // trigger at all, which is exactly right — the panel is up.
+  // Set after mount (no viewport on the server); `open` starts true so the rail's inset is in the server HTML.
   const [sheet, setSheet] = useState(false);
   useEffect(() => {
     if (!isBottomSheetLayout()) return;
-    // Syncing to the DEVICE, which is not a render-derived value — the same
-    // one-commit-later correction `useHasCursor` makes, and what the shader
-    // playground's own sheet does on arrival.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSheet(true);
     setOpen(false);
   }, []);
-  // Whether the two icon scales move together. On by default: the pairing is
-  // what the set is authored to, and a page that opened with them loose would
-  // be opening on the special case. Held HERE rather than in the panel, which
-  // is unmounted every time it is dismissed.
+  // Held here: the panel unmounts on dismiss.
   const [locked, setLocked] = useState(true);
   const [selection, setSelection] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [query, setQuery] = useState("");
 
-  // The sweep is the canvas's, not the grid's — see `use-icon-marquee`. The
-  // ref is made HERE and handed down rather than taken off the hook's result:
-  // anything off a hook result that reaches a `ref` attribute makes the React
-  // Compiler read the whole object as a ref, and every other property of it
-  // read during render then fails.
+  // Made here, not taken off the hook: the React Compiler reads a hook result reaching `ref` as a ref.
   const canvasRef = useRef<HTMLDivElement>(null);
   const marquee = useIconMarquee({
     surfaceRef: canvasRef,
@@ -426,12 +246,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
     onSelectionChange: setSelection,
   });
 
-  // Files dropped on the same surface the sweep is drawn on, since both are
-  // gestures of the page rather than of the grid. Only the author's: `enabled`
-  // attaches the handlers at all, so a visitor's drop stays the browser's — it
-  // is what to DRAW, and the upload behind it is gated on the server like
-  // every other write here. The batch goes to the library whole; which of the
-  // files are icons is `svgFilesFrom`'s to say.
   const drop = useIconDrop({
     enabled: isAdmin,
     onFiles: (files) => void library.upload(files),
@@ -439,11 +253,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
 
   const { entries } = library;
 
-  // The bar's value, over a load that happens in two acts: a listing nobody
-  // can count, then the files, counted. Each act gets its own slice of the
-  // one scale — see `icon-progress`. Read off two scales (a trickle to 40%,
-  // then a real fraction starting at zero of two hundred) the bar climbed,
-  // fell back to nothing, and climbed again.
   const trickle = useTrickleProgress(library.loading);
   const loadingPercent = preloaderPercent({
     loading: library.loading,
@@ -451,23 +260,12 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
     progress: library.progress,
   });
 
-  // What the search leaves on screen. The SELECTION is not filtered with it —
-  // see `chosen` below: searching narrows what you are looking at, and an icon
-  // you have already taken does not stop being taken because you went looking
-  // for another one.
   const shown = useMemo(
     () => entries.filter((entry) => matchesIcon(entry.icon, query)),
     [entries, query],
   );
 
-  // The selection as the set sees it: keys that are still in the listing, in
-  // the listing's own order. Filtering here rather than pruning on every
-  // refresh is what keeps a deleted icon from lingering in the count — the
-  // listing is the truth about what exists, and this reads it.
-  //
-  // Read against the WHOLE listing rather than what the search leaves, which
-  // is what lets a selection be gathered across several searches: type
-  // "chevron", take four, type "arrow", take three, download seven.
+  // Against the whole listing, not the search, so a selection can span searches.
   const chosen = useMemo(
     () => entries.filter((entry) => selection.includes(entry.icon.key)),
     [entries, selection],
@@ -478,11 +276,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
     (entry) => entry.icon.review === "held",
   ).length;
 
-  // Nothing chosen means everything ON SCREEN, which with an empty box is the
-  // whole set — the one place the selection model decides something other
-  // than "these". Filtered, it is the matches: a button that said "all" over
-  // a searched grid and then handed back the icons you had just filtered out
-  // would be answering a question nobody asked.
   const download = () => {
     const taking = chosen.length > 0 ? chosen : shown;
     const plan = downloadPlanFor(
@@ -510,10 +303,7 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
   return (
     <main
       className={pageStyle}
-      // The page opens WITH its panel up, so the width it takes is reserved
-      // here — in the server's HTML — rather than waiting on the effect that
-      // marks the body, which cannot run until React has hydrated and so lands
-      // a whole paint too late. See `PANEL_RESERVED_ATTR`.
+      // Reserved in the server HTML; the body's effect lands a paint too late.
       {...{ [PANEL_RESERVED_ATTR]: open || undefined }}
     >
       <PlaygroundChrome />
@@ -527,12 +317,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
       >
         {library.preloading ? (
           <div className={emptyStyle}>
-            {/* The site's own preloader — the bar the upload dialog fills and
-                the component demos wait behind — rather than anything this
-                page invents. Determinate as soon as there is a total to count
-                against, which is the moment the listing lands; before that
-                there is nothing to be honest about and it trickles through the
-                listing's own slice, so the handover is a step forwards. */}
             <div className={preloaderStyle}>
               <ProgressBar value={loadingPercent} label="Loading icons" />
             </div>
@@ -540,9 +324,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
         ) : shown.length === 0 ? (
           <div className={emptyStyle}>
             <Typography tag="p" type="bodyLarge">
-              {/* Two nothings, and they are different: the set is empty, or
-                  the search found none of it. "No icons" over a set of two
-                  hundred is a bug report waiting to be filed. */}
               {entries.length > 0
                 ? `Nothing matches “${query.trim()}”.`
                 : isAdmin
@@ -575,14 +356,7 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
         )}
       </div>
 
-      {/* The band the bar floats in, and the bar. The calchemy playground's
-          arrangement, because it is the same instrument doing the same job:
-          the thing being looked at fills the page, and what you talk to it
-          through floats at the foot rather than taking a strip off the top.
-
-          Mounted whatever the set holds — including while it is empty, since
-          a search box that vanished when its query matched nothing would take
-          away the only control that could undo the query. */}
+      {/* Mounted even when nothing matches: the search box is the only way to undo the query. */}
       <div className={barScrimStyle} aria-hidden>
         <ScrimBlur towards="top" />
       </div>
@@ -603,10 +377,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
             onValueChange={setQuery}
             placeholder="Search icons…"
             ariaLabel="Search icons by name"
-            // The sheet's way back up, at the end of the row the thumb is
-            // already on rather than floating over the grid — and only while
-            // it is down. `DockIcon` draws the sheet's own glyph here, since
-            // that is the panel this press is about to produce.
             action={
               !open && sheet ? (
                 <Button
@@ -622,10 +392,6 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
         </div>
       </div>
 
-      {/* The panel's way back, mounted only while it is away — a button
-          offering to open what is already open would be inert half the time.
-          Floating over the page for a RAIL; for a sheet it is in the bar
-          instead (see the search row above), where the thumb already is. */}
       {!open && !sheet && (
         <Button
           variant="icon"
@@ -655,17 +421,12 @@ export function IconsPlayground({ prerendered = [] }: IconsPlaygroundProps) {
           problem={library.problem}
           onUpload={(files) => void library.upload(files)}
           locked={locked}
-          // Tying them again SNAPS, and leads from the size: the box is what
-          // you were looking at while you pulled the two apart, so the line
-          // comes back onto it rather than the other way about.
           onLockedChange={(next) => {
             setLocked(next);
             if (next) setSettings(iconSettingsLockedTo(settings, "size"));
           }}
           onPublish={publish}
           onDelete={() => setPendingDelete(true)}
-          // Whatever is taken, and mine to name. One icon gets a name field
-          // too; several share only their aliases — see `IconLabelsGroup`.
           named={isAdmin ? chosen.map((entry) => entry.icon) : []}
           onRename={(edits) => void library.rename(edits)}
           onDismiss={() => setOpen(false)}

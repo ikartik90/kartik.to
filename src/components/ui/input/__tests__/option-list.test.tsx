@@ -24,7 +24,6 @@ const OPTIONS: OptionItem[] = [
 
 type ListProps = Partial<Omit<OptionListProps, "children">>;
 
-// Options are authored as children now — one <OptionList.Option> per item.
 function optionEls() {
   return OPTIONS.map((o) => (
     <OptionList.Option key={o.value} value={o.value} disabled={o.disabled}>
@@ -33,7 +32,6 @@ function optionEls() {
   ));
 }
 
-// A bare list (no Field.Search) — selection/keyboard without the filter row.
 function bareTree(props: ListProps = {}) {
   return (
     <OptionList {...props}>
@@ -42,7 +40,6 @@ function bareTree(props: ListProps = {}) {
   );
 }
 
-// The full list — filter row on top, like the combobox popover.
 function searchTree(props: ListProps = {}) {
   return (
     <OptionList {...props}>
@@ -60,8 +57,7 @@ const renderSearch = (props?: ListProps) =>
 const type = (value: string) =>
   fireEvent.input(screen.getByRole("combobox"), { target: { value } });
 
-// Input modality is module-level (it tracks the real device), so a keypress in
-// one test would otherwise leak into the next one's hover expectations.
+// Input modality is module-level; reset it or a keypress leaks into the next test.
 afterEach(() => {
   cleanup();
   resetInputModality();
@@ -69,8 +65,6 @@ afterEach(() => {
 
 describe("field wiring", () => {
   it("renders standalone with no <Field> (toolbar / slash-menu case)", () => {
-    // The Field read is optional now: no Field → no throw, and the listbox
-    // simply carries no aria-labelledby/-describedby (nothing to label).
     render(bareTree());
     const listbox = screen.getByRole("listbox");
     expect(listbox.getAttribute("aria-labelledby")).toBeNull();
@@ -126,15 +120,12 @@ describe("toolbar", () => {
         </OptionList.Toolbar>
       </OptionList>,
     );
-    // The toggle advertises its pressed state…
     expect(
       screen.getByRole("button", { name: "Bold", pressed: true }),
     ).toBeTruthy();
-    // …the plain action carries no aria-pressed…
     expect(
       screen.getByRole("button", { name: "Edit link" }).getAttribute("aria-pressed"),
     ).toBeNull();
-    // …and toolbar buttons are not listbox options.
     expect(screen.queryByRole("option")).toBeNull();
   });
 
@@ -152,8 +143,6 @@ describe("toolbar", () => {
     const bold = screen.getByRole("button", { name: "Bold" });
     fireEvent.click(bold);
     expect(onClick).toHaveBeenCalledOnce();
-    // mousedown is prevented so the press can't collapse the editor selection —
-    // fireEvent returns false when a handler called preventDefault.
     expect(fireEvent.mouseDown(bold)).toBe(false);
   });
 });
@@ -210,8 +199,6 @@ describe("selection", () => {
     expect(onValueChange.mock.calls[0][0]).toBe("banana");
   });
 
-  // Multi-select consumers decide their own policy (toggle vs replace) from the
-  // modifier keys, so the originating event has to reach them.
   it("hands onValueChange the originating event, modifiers intact", () => {
     const onValueChange = vi.fn();
     renderBare({ onValueChange });
@@ -275,8 +262,6 @@ describe("multi-selection (selectedValues)", () => {
     ).toBe("true");
   });
 
-  // `value` keeps working — it degrades from "the selection" to "the anchor",
-  // the row the highlight and any single-target side panel follow.
   it("leaves the anchor out of the painted selection when it is not a member", () => {
     renderBare({ value: "grapes", selectedValues: ["apple"] });
     expect(
@@ -301,8 +286,6 @@ describe("multi-selection (selectedValues)", () => {
 describe("search filter", () => {
   it("narrows the list to the matching options as you type", () => {
     renderSearch();
-    // "a" hits every label but Lychee — disabled Jackfruit still renders, it's
-    // just unselectable.
     type("a");
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
       "Apple",
@@ -363,9 +346,7 @@ describe("search filter", () => {
       </Field>,
     );
     type("man");
-    // The consumer's handler ran…
     expect(onValueChange).toHaveBeenCalledWith("man");
-    // …and the built-in filtering still narrowed the list alongside it.
     expect(screen.getAllByRole("option")).toHaveLength(1);
   });
 });
@@ -379,7 +360,6 @@ describe("keyboard from the search", () => {
 
   it("moves the highlight with the arrow keys, skipping disabled options", () => {
     renderSearch();
-    // Default highlight is the first option.
     expect(active()).toBe("Apple");
     arrow("ArrowDown");
     expect(active()).toBe("Avocado");
@@ -387,7 +367,6 @@ describe("keyboard from the search", () => {
     expect(active()).toBe("Banana");
     arrow("ArrowDown");
     expect(active()).toBe("Grapes");
-    // Jackfruit is disabled — the highlight skips over it.
     arrow("ArrowDown");
     expect(active()).toBe("Lychee");
   });
@@ -410,7 +389,7 @@ describe("keyboard from the search", () => {
   it("commits the highlighted option on Enter", () => {
     const onValueChange = vi.fn();
     renderSearch({ onValueChange });
-    arrow("ArrowDown"); // Avocado
+    arrow("ArrowDown");
     enter();
     expect(onValueChange).toHaveBeenCalledOnce();
     expect(onValueChange.mock.calls[0][0]).toBe("avocado");
@@ -440,8 +419,6 @@ describe("roving tabstop", () => {
     renderBare();
     const listbox = screen.getByRole("listbox");
     fireEvent.keyDown(listbox, { key: "ArrowDown" });
-    // First option was the highlight; ArrowDown moves it to the second and
-    // focuses that button.
     const avocado = screen.getByRole("option", { name: "Avocado" });
     expect(document.activeElement).toBe(avocado);
     expect(within(listbox).getByRole("option", { name: "Avocado" })).toBe(avocado);
@@ -469,16 +446,16 @@ describe("externalKeys (slash-menu — focus stays outside the list)", () => {
 
   it("moves the highlight via a document keydown, focus never entering the list", () => {
     renderExternal();
-    expect(activeValue()).toBe("apple"); // defaults to the first enabled option
+    expect(activeValue()).toBe("apple");
     pressDoc("ArrowDown");
     pressDoc("ArrowDown");
     expect(activeValue()).toBe("banana");
-    expect(document.activeElement).toBe(document.body); // focus stayed put
+    expect(document.activeElement).toBe(document.body);
   });
 
   it("commits the highlighted option on Enter", () => {
     const onValueChange = renderExternal();
-    pressDoc("ArrowDown"); // apple -> avocado
+    pressDoc("ArrowDown");
     pressDoc("Enter");
     expect(onValueChange.mock.calls[0][0]).toBe("avocado");
   });
@@ -487,7 +464,7 @@ describe("externalKeys (slash-menu — focus stays outside the list)", () => {
     renderExternal();
     expect(activeValue()).toBe("apple");
     pressDoc("ArrowUp");
-    expect(activeValue()).toBe("mango"); // jackfruit is disabled, so last enabled is mango
+    expect(activeValue()).toBe("mango");
   });
 });
 
@@ -507,8 +484,6 @@ describe("pointer highlight", () => {
     fireEvent.pointerEnter(banana);
     expect(activeText()).toBe("Banana");
 
-    // Pointer moves off the row into the list's empty area (relatedTarget is
-    // the list, not another option) — the row must not stay lit.
     fireEvent.pointerLeave(banana, { relatedTarget: banana.parentElement });
     expect(activeText()).not.toBe("Banana");
   });
@@ -528,8 +503,6 @@ describe("pointer highlight", () => {
     const banana = option("Banana");
     const grapes = option("Grapes");
     fireEvent.pointerEnter(banana);
-    // Leaving straight onto another option: that option's enter takes over, so
-    // the highlight must never blank out in between.
     fireEvent.pointerLeave(banana, { relatedTarget: grapes });
     fireEvent.pointerEnter(grapes);
     expect(activeText()).toBe("Grapes");
@@ -553,8 +526,6 @@ describe("pointer highlight", () => {
     fireEvent.pointerEnter(banana);
     expect(banana.hasAttribute("data-active")).toBe(true);
 
-    // A row in a DIFFERENT list carries data-value too, but it cannot take over
-    // this list's highlight — so this row must still release.
     fireEvent.pointerLeave(banana, { relatedTarget: edit });
     expect(banana.hasAttribute("data-active")).toBe(false);
   });
@@ -564,20 +535,11 @@ describe("pointer highlight", () => {
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
     expect(activeText()).toBe("Avocado");
 
-    // The pointer was resting elsewhere; leaving that row must not steal the
-    // keyboard's highlight (it's what Enter would commit).
     const banana = option("Banana");
     fireEvent.pointerLeave(banana, { relatedTarget: banana.parentElement });
     expect(activeText()).toBe("Avocado");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Input modality — whichever device the user last actually used owns the
-// highlight. A menu opened by typing `/` belongs to the keyboard until the
-// pointer genuinely moves, so a cursor that merely happens to be parked over
-// the menu cannot trap the selection under it.
-// ---------------------------------------------------------------------------
 
 describe("input modality", () => {
   const activeText = () => document.querySelector("[data-active]")?.textContent;
@@ -603,9 +565,6 @@ describe("input modality", () => {
     expect(activeText()).toBe("Banana");
   });
 
-  // Arrowing a row into view scrolls the list under a pointer that never moved,
-  // and the engine fires a pointer-leave for the row it dragged out from under
-  // the cursor. Acting on it would blank the highlight the keyboard just set.
   it("does not let a stationary pointer release a keyboard highlight", () => {
     renderSearch();
     movePointer(30, 30);
@@ -633,12 +592,7 @@ describe("externalKeys — opening under the cursor", () => {
     );
   }
 
-  /**
-   * The menu opens over `label`'s row — what `elementFromPoint` would find.
-   * jsdom has no `elementFromPoint` (it needs layout), and the preselect bails
-   * when it is missing, so this has to be installed BEFORE the list renders.
-   * The lookup is deferred to call time, when the rows exist.
-   */
+  /** jsdom has no `elementFromPoint`; install this before rendering, or the preselect bails. */
   function pointerRestingOn(label: string) {
     document.elementFromPoint = vi.fn(() =>
       screen.queryByRole("option", { name: label }),
@@ -666,9 +620,6 @@ describe("externalKeys — opening under the cursor", () => {
     expect(activeText()).toBe("Apple");
   });
 
-  // The reported bug: arrowing moved the highlight, the re-render re-ran the
-  // preselect, and the next frame snapped it straight back under the cursor —
-  // so the menu felt stuck wherever the mouse happened to be.
   it("does not snap back under the cursor on the next arrow key", async () => {
     fireEvent.keyDown(document, { key: "/" });
     pointerRestingOn("Grapes");
@@ -681,11 +632,6 @@ describe("externalKeys — opening under the cursor", () => {
   });
 });
 
-// The dense variant (Figma 1027:2276). Asserted on the CLASSES rather than on
-// computed pixels: the recipe holds the geometry and jsdom applies no
-// stylesheet, so the only thing a test can honestly check here is that the
-// prop reaches every slot the variant restyles — which is the part that breaks
-// when a slot is threaded through the context and forgotten at the root.
 describe("size", () => {
   it("leaves the slots at the default pitch when unset", () => {
     renderSearch();

@@ -17,149 +17,42 @@ import {
 import ClockIcon from "@/assets/icons/clock.svg";
 import { WireframeText } from "../wireframe";
 
-// ---------------------------------------------------------------------------
-// TimePicker — the Time field's control, composed INTO a <Field> exactly like
-// DatePicker and Combobox (label + hint are the consumer's Field.Label /
-// Field.Hint siblings, not props):
-//
-//   <Field>
-//     <Field.Label>Shift start</Field.Label>
-//     <TimePicker value={start} onValueChange={setStart} />
-//     <Field.Hint>Local time</Field.Hint>
-//   </Field>
-//
-// Collapsed, it renders the shared `field` frame (a button trigger + a
-// decorative clock icon); the whole frame is the open target. Activated, it
-// opens a popover that COVERS the frame (the `timePopover` anchor recipe, the
-// clock sibling of datePopover / comboboxPopover) holding a type-ahead search
-// over the day's slots.
-//
-// The list itself is an ordinary `OptionList` at `onBrand` — the design's rows
-// ARE option rows, down to the 208px measure, the 32px pitch, the brand text
-// and the neutral selected chip, so there is nothing here re-drawing them. What
-// this file adds is the two things a list of TIMES has that a list of options
-// does not: the rule where it crosses midnight, and the elapsed span beside
-// each clock. The list is walked the way every other list in the app is —
-// wheel, drag, arrows — rather than through chevrons of its own.
-//
-// ── The time difference ────────────────────────────────────────────────────
-// `differenceFrom` is one knob doing one thing: ANCHOR the list. Given a start
-// time, the list runs forward from it (across midnight, ruled where it crosses)
-// and every row says how far it is from that start — which is what turns the
-// same control into an END-time field. Omit it and the same component is a
-// plain 12:00 AM → 11:30 PM day list with no durations and no day rule. So the
-// two deployments the design asks for are the prop's two states, rather than a
-// separate flag that can disagree with the list it annotates.
-//
-//   <TimePicker value={end} onValueChange={setEnd} differenceFrom={start} />
-//
-// ── Filtering ──────────────────────────────────────────────────────────────
-// Unusually for an OptionList consumer, the QUERY is held here rather than in
-// the list: the day rule is a child of the listbox, so whether to draw it is a
-// question about which rows survived, and only the holder of the query can
-// answer it. OptionList's own filter is handed a pass-through and the rows it
-// receives are already the survivors — one filter, run once, in the one place
-// that can act on the result.
-//
-// The field is sized by its consumer, like every other field in the library.
-// The design draws it at `sizes.dateField` (140px) — the same width a date
-// field takes, and for the same reason: room for the value and its trailing
-// glyph, and no more.
-// ---------------------------------------------------------------------------
-
 const triggerClass = css({
   textAlign: "left",
   cursor: "pointer",
-  // Placeholder colour (resting + active) is owned by the shared `field`
-  // recipe's control slot, keyed off the `[data-placeholder]` sentinel.
 });
 
-// The list settles on WHOLE rows. It opens scrolled to its selection (see
-// `OptionList.Listbox`), and centring lands on a fractional offset — so without
-// this the popover's first row is cut through its own x-height, hard against
-// the search strip above it, which reads as a rendering fault rather than as
-// the half-row peek the recipe means at the foot. `proximity` rather than
-// `mandatory`, so it tidies where a scroll comes to rest without dragging one
-// that is still in flight.
-//
-// A `css()` override lands in the UTILITIES layer and so outranks the
-// `optionList` recipe it narrows — the same trick `Field`'s text-style
-// overrides use.
+// Snaps to whole rows: centring on the selection lands on a fractional offset, cutting the top row.
+// `proximity` leaves a scroll still in flight alone.
 const listClass = css({ scrollSnapType: "y proximity" });
 
-// The design's row gap (Figma 1204:10216), against the 8px an option spends on
-// separating a leading icon from its label. A clock and its duration are one
-// reading, not two things.
 const optionClass = css({ gap: "sm", scrollSnapAlign: "start" });
 
-/** OptionList filters nothing: the rows it is handed are already the survivors. */
+/** The query is filtered here: only its holder knows whether the day rule survives. */
 const passThrough = (options: OptionItem[]) => options;
 
 export interface TimePickerProps {
-  /** Controlled selection. */
   value?: Temporal.PlainTime | null;
-  /** Initial selection when uncontrolled. */
   defaultValue?: Temporal.PlainTime | null;
-  /** Fired with the picked time. */
   onValueChange?: (time: Temporal.PlainTime) => void;
-  /**
-   * Anchor the list to a start time — an END-time field, listing what can
-   * follow it. The list then begins one `step` after this time, runs a full day
-   * forward (wrapping past midnight, ruled where it crosses), and every row
-   * carries how far it is from the anchor ("+8 hours").
-   *
-   * Leave it off and the same control is a plain day list — midnight to
-   * midnight, no durations, no day rule. That is the whole switch: the anchor
-   * and the annotation are one decision, so a field can never show a duration
-   * measured from a time its list is not actually running from.
-   */
+  /** Anchors the list to a start time: it runs a day forward from it, each row showing the elapsed span. */
   differenceFrom?: Temporal.PlainTime | null;
-  /** The grid the day is cut into, in minutes. Defaults to the design's 30. */
+  /** In minutes. */
   step?: number;
-  /**
-   * Clock pattern driving the trigger's display, the popover rows, and the
-   * type-ahead they are matched against — `h`/`hh` (12-hour), `H`/`HH`
-   * (24-hour), `mm`, `A`/`a`, with whatever separators you like (see
-   * `formatClockTime`). One pattern for all three, so the field can never list
-   * one clock and read another.
-   */
+  /** One clock pattern (`h`/`HH`, `mm`, `A`) for the trigger, the rows and the type-ahead. */
   format?: string;
-  /** Shown in the trigger when nothing is selected. */
   placeholder?: string;
-  /** Placeholder for the popover's type-ahead. */
   searchPlaceholder?: string;
   /** The rule drawn where an anchored list crosses midnight. */
   nextDayLabel?: string;
-  /** Row shown when the type-ahead leaves nothing. */
   emptyLabel?: string;
-  /**
-   * Whether the popover renders in a `document.body` portal. On by default, so
-   * it escapes an ancestor that clips or contains it (a DemoFrame).
-   *
-   * Turn it OFF inside a `position: fixed` surface, for the reason DatePicker
-   * and Combobox carry the same escape hatch: CSS anchor positioning will not
-   * accept an anchor whose containing-block chain does not pass through the
-   * portalled popover's own containing block, and a fixed ancestor ends that
-   * chain at the viewport. The surface must then not clip its overflow.
-   */
+  /** Set false inside a `position: fixed` surface, where a portalled popover cannot anchor. */
   portal?: boolean;
 }
 
-// The third of the covering popovers, and the one whose body is the
-// same OptionList the Combobox opens — so it takes `comboboxPopover`'s
-// geometry exactly, and differs only in the anchor it answers to. That
-// difference is the whole reason it exists rather than being reused: a
-// form with a date, a select and a time on it would otherwise have
-// three fields publishing one anchor name, and whichever opened last
-// would drag the others' popovers onto itself.
-//
-// Covering time-list popover for the Time input: anchored over the trigger
-// frame (top/left) with an opaque brand-tinted surface + brand inset border, at
-// the option-list width and ≥ the trigger width. The clock sibling of
-// datePopover and comboboxPopover.
+// Its own anchor name: date, select and time fields in one form would otherwise share one.
 const timePopoverStyle = css({
-  // Absolute for the same reason as its two siblings — same shell,
-  // same covering geometry, same scroll flutter if it were fixed.
+  // Absolute, not fixed: a fixed anchored popover lags its trigger on scroll.
   position: "absolute",
   zIndex: 50,
   positionAnchor: "--time-popover",
@@ -176,23 +69,6 @@ const timePopoverStyle = css({
     "inset 0 0 0 0.5px var(--colors-field-border-active), 0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
 });
 
-// The parts a list of TIMES needs that a list of options does not
-// (Figma 1204:9848 dark / 1204:9954 light). Everything else in the time
-// popover is already `optionList` at `onBrand` — the search strip, the
-// 32px rows, the brand text, the neutral selected chip — so this recipe
-// is deliberately only the difference: the rule that names the day the
-// list crosses into, and the two halves of a row that carries a
-// duration beside its clock.
-//
-// The time list's own parts, over an `optionList` at `onBrand`: the 'Next Day'
-// rule at the midnight crossing, and a row split into its time and the elapsed
-// span beside it. Both annotations are the ROW's colour at half strength rather
-// than a colour of their own, so they follow brand text on an ordinary row and
-// neutral on the selected one without a second rule.
-//
-// The rule between two days, on the row pitch the calendar gives a
-// month label — it is the same sentence ("what you are now looking
-// at"), one unit down.
 const timePickerHeadingStyle = css({
   display: "flex",
   alignItems: "center",
@@ -206,7 +82,6 @@ const timePickerHeadingStyle = css({
   userSelect: "none",
 });
 
-// The clock takes the slack and truncates; the duration never does.
 const timePickerLabelStyle = css({
   flex: "1 1 0",
   minWidth: 0,
@@ -218,18 +93,10 @@ const timePickerLabelStyle = css({
 const timePickerElapsedStyle = css({
   flexShrink: 0,
   textStyle: "sidenote",
-  // Half of whatever the row is, rather than a colour of its own —
-  // brand on an ordinary row, neutral on the selected chip, and it
-  // can never drift from the value it annotates.
   opacity: 0.5,
   whiteSpace: "nowrap",
 });
 
-/**
- * The Time control. Reads the field wiring (controlId to be the labelable
- * control, registerControl for the frame's focus-forward, focusControl to
- * restore focus on close) — so it must live inside a `<Field>`, like DatePicker.
- */
 export function TimePicker({
   value,
   defaultValue,
@@ -269,8 +136,7 @@ export function TimePicker({
     close();
   };
 
-  // The day's rows, in list order — `PlainTime.toString()` is the stable
-  // identity selection compares on, and it round-trips through `from()`.
+  // Keyed by `PlainTime.toString()`, which round-trips through `from()` in handleSelect.
   const rows = useMemo(
     () =>
       timeSlots({ step, from: differenceFrom }).map((slot) => ({
@@ -281,23 +147,16 @@ export function TimePicker({
     [step, differenceFrom, formatTime],
   );
 
-  // The survivors of the type-ahead — on CLOCK rules rather than the option
-  // list's default substring ones, which would let "2:30" match "12:30 AM" and
-  // hand Enter a time ten hours from the one that was typed (see
-  // `matchesClockQuery`).
+  // Clock rules, not substring ones, which would let "2:30" match "12:30 AM".
   const visible = useMemo(
     () => rows.filter((row) => matchesClockQuery(row.label, query)),
     [rows, query],
   );
 
-  // Flat, not nested: the day rule is a SIBLING of the rows it precedes, so
-  // that `collectOptions` and the listbox's own child walk both see the options
-  // exactly where they are.
+  // Flat: the day rule is a sibling, so `collectOptions` sees every option where it is.
   const options = useMemo(() => {
     const out: ReactNode[] = [];
     visible.forEach((row, i) => {
-      // Once, at the crossing — and only if a row on the far side survived the
-      // filter, which is why the query lives up here.
       if (row.nextDay && !visible[i - 1]?.nextDay) {
         out.push(
           <div key="next-day" role="presentation" className={timePickerHeadingStyle}>
@@ -312,9 +171,6 @@ export function TimePicker({
           value={row.key}
           label={row.label}
           className={optionClass}
-          // The visible row says "12:00 AM" and leans on the rule above it and
-          // the column beside it for the rest; a row read ALOUD has neither, so
-          // it carries them itself.
           aria-label={
             [row.label, row.nextDay ? nextDayLabel : null, elapsed]
               .filter(Boolean)
@@ -332,9 +188,6 @@ export function TimePicker({
   return (
     <>
       <Field.Frame
-        // The whole frame is the open target — the decorative clock and the
-        // frame's dead padding are non-interactive, so without this only a
-        // direct hit on the value text would open it.
         onClick={() => setOpen(true)}
         className={css({ cursor: "pointer" })}
         style={{ anchorName: open ? "--time-popover" : undefined }}
@@ -347,9 +200,7 @@ export function TimePicker({
           data-placeholder={display ? undefined : ""}
           aria-haspopup="dialog"
           aria-expanded={open}
-          // In the tab order explicitly, because WebKit's default one skips a
-          // bare <button> — see `Button`. A field the keyboard cannot reach is
-          // not a field.
+          // WebKit's default Tab order skips a bare <button>.
           tabIndex={0}
           className={cx(styles.control, triggerClass)}
         >
@@ -369,21 +220,15 @@ export function TimePicker({
           <OptionList
             value={selected ? selected.toString() : null}
             onValueChange={handleSelect}
-            // Already filtered above — see the header note.
             filter={passThrough}
             emptyLabel={emptyLabel}
             tone="onBrand"
-            // The list is scaled by the FIELD, like every other part of it (see
-            // Combobox): a 28px trigger opening a menu on the 32px row pitch
-            // would be the one place in the family where a size stopped at the
-            // frame.
+            // Scaled by the field; the list has two sizes, so `lg` takes `md`.
             size={size === "sm" ? "sm" : "md"}
           >
             <Field.Search
               autoFocus
-              // Seeded for READING, not for filtering: the query starts empty,
-              // so the popover opens showing the current time over the whole
-              // day, and only becomes a filter once you actually type over it.
+              // Seeded for reading: the query starts empty, so the whole day shows until you type.
               defaultValue={display}
               placeholder={searchPlaceholder}
               onValueChange={setQuery}

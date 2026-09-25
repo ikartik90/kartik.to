@@ -8,9 +8,6 @@ import { GridInsertRail } from "../grid-insert-rail";
 describe("GridInsertRail", () => {
   afterEach(cleanup);
 
-  // The name has to say WHERE, not just "add": a grid in edit mode puts one of
-  // these on both sides of every card, so a screen reader hearing "Add" a dozen
-  // times over has been told nothing.
   it("names the insertion point it opens", () => {
     render(
       <GridInsertRail side="before" label="Add before Palette" onInsert={vi.fn()} />,
@@ -36,8 +33,6 @@ describe("GridInsertRail", () => {
     expect(onInsert).toHaveBeenCalledOnce();
   });
 
-  // The lines are decoration either side of the button. A screen reader that
-  // announced them would be reading out the gap between two cards.
   it("keeps its rules out of the accessibility tree", () => {
     const { container } = render(
       <GridInsertRail side="before" label="a" onInsert={vi.fn()} />,

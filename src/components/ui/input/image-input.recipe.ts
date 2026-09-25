@@ -1,33 +1,6 @@
 import { defineSlotRecipe } from "@pandacss/dev";
 
-// The same field, one part along: a FILE as the thing being edited
-// (Figma 1233:2639). The layer names in that frame are the colour
-// field's, unchanged, and deliberately so — a 16px cell, a hairline,
-// and the value beside it is one shape, and a picture slot in the rail
-// has no business being a different one.
-//
-// What differs is what each part holds. The cell draws the file itself
-// rather than a colour, so it carries no checkerboard: a picture is
-// opaque, and the thing a thumbnail must not be confused with is the
-// EMPTY slot, which shows a glyph instead. The value is static text
-// rather than an input, because a file's name is not editable here —
-// it is edited in the library, where the file is (`updateMediaFilename`).
-//
-// THE FRAME IS A FIELD AND NOTHING MORE. The design draws the replace
-// button OUTSIDE it — field, 8px, a 28px chip — which is the properties
-// row the panel already lays out: `propertyRowField` then the reserved
-// `propertyRowAction` column, the one kept empty "the day a row needs a
-// reset or an overflow button". So the control hands the panel two
-// children and the row places them; it holds no grid of its own. Its
-// first two attempts both did, and both cost the field width: a
-// sub-grid inside the field column squeezed the frame 36px narrower
-// than every other field in the rail, and folding the button into the
-// frame only hid that by making the field a different shape from the
-// one the design draws.
-//
-// One act, two targets: the whole frame is the trigger, which is the
-// big and obvious one, and the chip beside it is the one that says out
-// loud what pressing does.
+// No grid of its own: the replace chip is a sibling that the properties row places.
 export const imageField = defineSlotRecipe({
   className: "image-field",
   description:
@@ -41,13 +14,8 @@ export const imageField = defineSlotRecipe({
     "name",
   ],
   base: {
-    // The frame keeps its inset, its 28px height and its column's width
-    // from `field`; all it is told here is that it is pressed rather
-    // than typed in.
     frame: { cursor: "pointer" },
-    // One child filling the frame, so the hairline can run the frame's
-    // full height — `alignSelf: stretch` has nothing to stretch to
-    // inside a button that is only as tall as its text.
+    // Fills the frame, so the separator can stretch to its full height.
     trigger: {
       appearance: "none",
       margin: "none",
@@ -66,10 +34,6 @@ export const imageField = defineSlotRecipe({
       textAlign: "start",
       _disabled: { cursor: "not-allowed" },
     },
-    // The colour field's swatch at the same size and corner, holding a
-    // picture instead of a colour. The hairline is the swatch's, for
-    // the swatch's reason: a pale screenshot on a pale field would
-    // otherwise have no edge at all.
     thumbnail: {
       position: "relative",
       flexShrink: 0,
@@ -82,23 +46,17 @@ export const imageField = defineSlotRecipe({
       overflow: "hidden",
       backgroundColor: "field.bg.default",
       boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
-      // The glyph an empty slot (or a document, which nothing draws)
-      // shows instead of a picture.
       "& svg": {
         width: "token(spacing.lg)",
         height: "token(spacing.lg)",
         color: "field.text.muted",
       },
     },
-    // The file itself, filling the cell. `cover` because the cell is
-    // square and almost nothing in the library is.
     media: {
       width: "token(spacing.full)",
       height: "token(spacing.full)",
       objectFit: "cover",
     },
-    // The colour field's hairline, to the letter — the two fields stack
-    // in one rail and must divide themselves identically.
     separator: {
       alignSelf: "stretch",
       flexShrink: 0,
@@ -109,13 +67,7 @@ export const imageField = defineSlotRecipe({
         backgroundColor: "field.border.active",
       },
     },
-    // One line, ellipsised: a library name is as long as it is, and the
-    // field column is 212px. Everything about how it is SET — size,
-    // face, weight, and the placeholder tone an empty slot asks in —
-    // comes from the field's own `control` slot, which the component
-    // wears alongside this one. Setting type here is how it ended up
-    // 16px in a row of 14px values: the slot had no typography, so it
-    // took the page's.
+    // Typography comes from the field's `control` slot, worn alongside; don't set it here.
     name: {
       flex: "1 1 auto",
       minWidth: 0,

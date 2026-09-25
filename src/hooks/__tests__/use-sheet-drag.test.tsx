@@ -6,17 +6,12 @@ import { useSheetDrag } from "../use-sheet-drag";
 
 const SHEET_HEIGHT = 400;
 
-/**
- * A clock the gesture is timed against, so "slow drag" and "flick" are stated
- * by the test rather than left to how fast the events happen to be dispatched.
- * jsdom stamps them microseconds apart, which reads as a flick every time.
- */
+/** The gesture's clock: jsdom stamps events microseconds apart, which would read as a flick every time. */
 let clock = 0;
 const elapse = (ms: number) => {
   clock += ms;
 };
 
-/** A sheet with a grabbable header, reporting how far it has been dragged. */
 function Sheet({
   onDismiss,
   enabled = () => true,
@@ -55,8 +50,7 @@ function Sheet({
 const grip = () => screen.getByTestId("grip");
 const offset = () => screen.getByTestId("sheet").getAttribute("data-offset");
 
-// `pointerId` on every one of them, as a real pointer carries: the hook follows
-// ONE finger, and a second landing mid-drag must not steer the sheet.
+// A pointerId on each, as a real pointer carries: the hook follows one finger.
 const grab = (y: number) =>
   fireEvent.pointerDown(grip(), { clientY: y, pointerId: 1 });
 const dragTo = (y: number) =>
@@ -106,8 +100,6 @@ describe("useSheetDrag", () => {
     release(100 + SHEET_HEIGHT / 2);
 
     expect(onDismiss).toHaveBeenCalledOnce();
-    // The sheet stops carrying an offset of its own: where it goes now is the
-    // dismissed state's business, and a stale inline transform would outrank it.
     expect(offset()).toBe("none");
   });
 
@@ -128,7 +120,6 @@ describe("useSheetDrag", () => {
     const onDismiss = vi.fn();
     render(<Sheet onDismiss={onDismiss} />);
 
-    // 40px in 10ms — a thumb throwing the sheet away rather than placing it.
     grab(100);
     elapse(10);
     dragTo(140);
@@ -150,8 +141,6 @@ describe("useSheetDrag", () => {
   });
 
   it("does not start where the sheet is not a sheet", () => {
-    // Landscape, or a desktop: the panel is docked to the side and dragging its
-    // header must do nothing at all.
     const onDismiss = vi.fn();
     render(<Sheet onDismiss={onDismiss} enabled={() => false} />);
 
@@ -174,8 +163,6 @@ describe("useSheetDrag — text selection during the gesture", () => {
   afterEach(cleanup);
 
   it("suspends selection for the length of the drag", () => {
-    // The grip IS the header, and the header is a line of text: without this a
-    // downward pull anchors an iOS selection on the panel's own title.
     render(<Sheet onDismiss={vi.fn()} />);
     expect(dragging()).toBe(false);
     grab(100);
@@ -195,8 +182,6 @@ describe("useSheetDrag — text selection during the gesture", () => {
   });
 
   it("hands it back when the sheet unmounts mid-drag", () => {
-    // A drag past the threshold dismisses the panel, which is exactly the
-    // gesture that unmounts the grip before any release arrives.
     const { unmount } = render(<Sheet onDismiss={vi.fn()} />);
     grab(100);
     expect(dragging()).toBe(true);
@@ -205,8 +190,6 @@ describe("useSheetDrag — text selection during the gesture", () => {
   });
 
   it("takes nothing where the sheet is not a sheet", () => {
-    // A docked rail's header is dragged by nobody, and must leave the page's
-    // selection exactly as it found it.
     render(<Sheet onDismiss={vi.fn()} enabled={() => false} />);
     grab(100);
     expect(dragging()).toBe(false);

@@ -1,12 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---------------------------------------------------------------------------
-// A post's editor, which is the guard and the read. The post is found by its
-// slug alone — slugs are unique across categories — so an editor left open
-// at the category the post was filed under before is sent to the one it has
-// now, rather than to a 404.
-// ---------------------------------------------------------------------------
-
 const { mockIsAdmin, mockFindUnique } = vi.hoisted(() => ({
   mockIsAdmin: vi.fn(),
   mockFindUnique: vi.fn(),
@@ -26,8 +19,6 @@ vi.mock("@/lib/auth/server", () => ({ isAdmin: () => mockIsAdmin() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: { post: { findUnique: (...a: unknown[]) => mockFindUnique(...a) } },
 }));
-// The editor is a client component with a server-action import behind it;
-// what this page hands it is the question, not what it draws.
 vi.mock("@/components/article-editor", () => ({
   ArticleEditor: (props: unknown) => props,
 }));

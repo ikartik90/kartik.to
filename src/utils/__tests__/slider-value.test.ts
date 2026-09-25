@@ -123,8 +123,7 @@ describe("tickRatios", () => {
     );
 
   it("draws one mark per value when the scale holds 11 or fewer", () => {
-    // The God Rays colour count: 1–5 can only ever be five numbers, so eleven
-    // marks would promise six stops the thumb cannot visit.
+    // 1–5 has only five stops, so only five marks.
     expect(tickRatios({ min: 1, max: 5, step: 1 })).toEqual([
       0, 0.25, 0.5, 0.75, 1,
     ]);
@@ -142,9 +141,7 @@ describe("tickRatios", () => {
   });
 
   it("spaces a capped ruler a whole number of steps apart", () => {
-    // −180…180 by 15° is 25 stops. Eleven marks spread evenly would sit at
-    // −144, −108, −72 … values the thumb can never hold; every third step can
-    // be held, and nine of them fit under the cap.
+    // 25 stops: every third step can be held, and nine fit under the cap.
     expect(tickRatios({ min: -180, max: 180, step: 15 })).toEqual([
       0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1,
     ]);
@@ -158,16 +155,14 @@ describe("tickRatios", () => {
   });
 
   it("closes the ruler on the last stop when the stride falls short of it", () => {
-    // 19 steps divide by nothing useful: every second one runs out at 19, so a
-    // final mark at 20 says where the rule ends. The last gap is a short one.
+    // 19 steps divide by nothing useful, so a final mark at 20 closes the rule.
     expect(tickValues({ min: 1, max: 20, step: 1 })).toEqual([
       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 20,
     ]);
   });
 
   it("closes it on the last STOP, not on a max that is off the grid", () => {
-    // Grid is 0, 3 … 99 — the closing mark goes at 99, where the thumb stops,
-    // and the ruler still ends a hair short of the 100 end of the track.
+    // Grid is 0, 3 … 99: the closing mark goes at 99, where the thumb stops.
     expect(tickValues({ min: 0, max: 100, step: 3 })).toEqual([
       0, 12, 24, 36, 48, 60, 72, 84, 96, 99,
     ]);
@@ -187,8 +182,7 @@ describe("tickRatios", () => {
       { min: 0, max: 15, step: 1 },
       { min: 0, max: 120, step: 1 },
       { min: -1.5, max: 1.5, step: 0.1 },
-      // The counts that put the closing mark under the most pressure: one step
-      // past a whole number of strides (91), and one past the cap's own reach.
+      // Worst cases for the closing mark: one past whole strides (91), one past the cap's reach.
       { min: 0, max: 91, step: 1 },
       { min: 0, max: 101, step: 1 },
       { min: 0, max: 111, step: 1 },

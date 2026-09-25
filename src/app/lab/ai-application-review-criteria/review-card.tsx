@@ -14,13 +14,6 @@ import {
 } from "./parts";
 import CriterionIcon from "./icons/document-check.svg";
 
-// ---------------------------------------------------------------------------
-// The AI features page's review card (Figma 94:4840): the criteria RUNNING,
-// each a title over its prompt. At first those already running when the
-// recruiter arrives (see `STARTING_CRITERIA`); saved from the edit drawer,
-// whatever was saved, in the drawer's order.
-// ---------------------------------------------------------------------------
-
 const REVIEW_TITLE_ID = "ai-review-title";
 
 const reviewActionsStyle = css({ gap: "12px" });
@@ -43,7 +36,6 @@ const criterionStyle = css({
   borderBlockEndWidth: "var(--cashby-rule)",
   borderBlockEndStyle: "solid",
   borderBlockEndColor: "var(--cashby-border)",
-  // The card's outline closes the list.
   _last: { borderBlockEndWidth: 0 },
 });
 

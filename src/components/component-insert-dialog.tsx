@@ -21,34 +21,18 @@ import { LinkCard } from "@/components/link-card";
 import { demoComponents } from "@/components/demo/registry";
 import CloseIcon from "@/assets/icons/cross.svg";
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-// The preview renders the demo at its full showcase layout width (960px, the
-// `articleShowcase` token) so its container queries resolve to the desktop
-// layout the reader sees — then scales the whole thing down with `transform`
-// (which, unlike `zoom`, leaves the layout box at 960px so those queries are
-// unaffected) to fit the library preview column.
-//
-// HEIGHT is the only fixed constraint (280px, matching the image dialog's
-// preview); the width follows the demo's own aspect ratio and stretches at most
-// to the pane's CONTENT box. So the scale is whichever of the two limits binds
-// first — see `previewScale`.
+// Rendered at the 960px showcase width so container queries match the reader, then scaled with
+// `transform` (not `zoom`, which would change the layout box) to fit the preview.
 const SHOWCASE_WIDTH_PX = 960; // token(sizes.articleShowcase)
 const PREVIEW_MAX_HEIGHT_PX = 280; // token(sizes.imagePreviewMax)
 
-/** Clips the scaled stage; both its dimensions are set inline from the scale. */
 const previewViewportStyle = css({
   maxWidth: "token(spacing.full)",
   flexShrink: 0,
   overflow: "hidden",
 });
 
-/**
- * The pane's CONTENT width — `clientWidth` includes padding, so subtract it to
- * match what a percentage max-width (and ResizeObserver's `contentRect`) sees.
- */
+/** `clientWidth` minus padding, to match a percentage max-width and ResizeObserver's `contentRect`. */
 function contentWidth(el: HTMLElement) {
   const { paddingLeft, paddingRight } = getComputedStyle(el);
   return (
@@ -56,7 +40,6 @@ function contentWidth(el: HTMLElement) {
   );
 }
 
-/** Full-width showcase stage; scaled down via an inline transform. */
 const showcaseStageStyle = css({
   width: "token(sizes.articleShowcase)",
   transformOrigin: "top left",
@@ -71,10 +54,6 @@ const demoPreviewStyle = css({
   userSelect: "none",
 });
 
-// The sidebar column (`mediaLibrarySidebar`) owns the frame, padding and scroll,
-// so neutralize the OptionList `list` slot's self-contained popover framing —
-// its 4px inset and 7-row max-height cap — and let the list fill the column.
-// Atomic `css()` reliably outranks the recipe slot (utilities cascade layer).
 const libraryListStyle = css({
   flex: "1 1 auto",
   minHeight: 0,
@@ -84,25 +63,12 @@ const libraryListStyle = css({
 
 const iconStyle = menuIcon();
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export type ComponentDialogMode = "insert" | "change";
 
 export interface ComponentInsertDialogProps {
   open: boolean;
-  /**
-   * Whether this is filling an empty block or swapping the demo in a filled
-   * one. The library is the same either way — only what the dialog calls
-   * itself, and where it opens the selection, differ.
-   */
   mode?: ComponentDialogMode;
-  /**
-   * The demo the block already holds. Only consulted in `change` mode, and only
-   * while it is still in the registry: a retired id falls back to the first
-   * entry rather than opening the picker on nothing.
-   */
+  /** Only read in `change` mode; a retired id falls back to the first entry. */
   currentComponentId?: string | null;
   onClose: () => void;
   onInsert: (componentId: string) => void;
@@ -120,10 +86,6 @@ export function ComponentInsertDialog({
   const paneRef = useRef<HTMLDivElement>(null);
   const [stageHeight, setStageHeight] = useState(0);
   const [paneWidth, setPaneWidth] = useState(0);
-  // Where the picker opens: on the demo the block already holds when there is
-  // one, and otherwise on the top of the list. Read as a function rather than a
-  // value so the open transition below and the first render answer it the same
-  // way, from whatever the props say at that moment.
   const openingSelection = () =>
     (mode === "change" &&
     currentComponentId &&
@@ -136,17 +98,13 @@ export function ComponentInsertDialog({
   const selected =
     demoComponents.find((demo) => demo.id === selectedId) ?? null;
 
-  // Re-seat the selection each time the dialog (re)opens. Adjusted during
-  // render — the sanctioned pattern for resetting on a prop transition.
+  // Re-seat the selection on each open, adjusted during render (React's pattern for prop transitions).
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) setSelectedId(openingSelection());
   }
 
-  // The dialog says what it is about to do, in the heading and on the button
-  // alike — the same word in both places, so the commit is named by what the
-  // title promised rather than by a generic "Insert".
   const title = mode === "change" ? "Replace Component" : "Insert Component";
 
   useEffect(() => {
@@ -159,9 +117,7 @@ export function ComponentInsertDialog({
     }
   }, [open]);
 
-  // Track the stage's natural (un-transformed) height so the clipping viewport
-  // can collapse to the scaled height. offsetHeight ignores the transform, and
-  // the observer catches the demo settling its own aspect-ratio height.
+  // The stage's untransformed height (offsetHeight ignores the transform), for the clipping viewport.
   useLayoutEffect(() => {
     const stage = stageRef.current;
     if (!stage) {
@@ -175,9 +131,6 @@ export function ComponentInsertDialog({
     return () => observer.disconnect();
   }, [open, selectedId]);
 
-  // Track the preview pane's content width — the other half of the scale. The
-  // pane's own width is set by the dialog layout (it fills what the sidebar
-  // leaves), so measuring it can't feed back into the scaled stage inside it.
   useLayoutEffect(() => {
     const pane = paneRef.current;
     if (!pane) {
@@ -191,9 +144,6 @@ export function ComponentInsertDialog({
     return () => observer.disconnect();
   }, [open]);
 
-  // Fit the 960px stage into the pane: shrink to the 280px height cap, or to the
-  // pane's width, whichever binds first. Both measurements start at 0 (and stay
-  // there in jsdom), so the preview is simply collapsed until they land.
   const previewScale = Math.min(
     stageHeight > 0 ? PREVIEW_MAX_HEIGHT_PX / stageHeight : Infinity,
     paneWidth > 0 ? paneWidth / SHOWCASE_WIDTH_PX : 0,
@@ -227,7 +177,6 @@ export function ComponentInsertDialog({
       </header>
 
       <div className={libraryBody()}>
-        {/* Only mount the (dynamically imported) previews while open. */}
         {open && (
         <>
         <div className={mediaLibrarySidebar()}>
@@ -264,14 +213,6 @@ export function ComponentInsertDialog({
                 style={{ transform: `scale(${previewScale})` }}
               >
                 {selected.card ? (
-                  // A card entry has no demo to frame and nothing to load — it
-                  // draws itself from a publication that does not exist yet. So
-                  // the preview is a SPECIMEN of the card rather than a picture
-                  // of what you are about to get: named after the entry, on the
-                  // plate a coverless card draws, at the shape the registry
-                  // says. What it actually shows is authored in the rail once
-                  // it is on the grid, and there is nothing honest to preview
-                  // before that has happened.
                   <div inert className={demoPreviewStyle}>
                     <LinkCard
                       title={selected.label}
@@ -305,8 +246,6 @@ export function ComponentInsertDialog({
         )}
       </div>
 
-      {/* Two buttons, so the footer's own space-between does the placing — no
-          grouping wrapper (that's for the image dialog, which has a cluster). */}
       <footer className={dialogFooter()}>
         <Button type="button" emphasis="tertiary" size="sm" onClick={onClose}>
           Cancel

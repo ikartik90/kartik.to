@@ -16,23 +16,10 @@ import NewTabIcon from "@/assets/icons/new-tab.svg";
 import StickyIcon from "@/assets/icons/sticky.svg";
 import type { ButtonLinkColor } from "@/domain/nodes";
 
-// ---------------------------------------------------------------------------
-// The link toolbar's two faces — what a link can have done to it, and the row
-// its address is typed into — as parts rather than a surface, because two
-// things wear them: a link inside a line of prose (`SelectionToolbar`, anchored
-// to the selection) and a button standing on its own (`EditableButtonLink`,
-// anchored to the button). The surface each floats on is the host's; what is
-// on it is one toolbar, so the two cannot drift apart.
-// ---------------------------------------------------------------------------
-
 const iconStyle = menuIcon();
 
-// The shared inline-edit shell — the collection's caption editor takes over its
-// cell toolbar the same way.
 const editRow = inlineEditRow();
 
-// The swatches' group is only a name for the pair; the tiles are the toolbar's
-// own items, spaced by its gap.
 const swatchGroupStyle = css({ display: "contents" });
 
 const COLORS: { value: ButtonLinkColor; label: string }[] = [
@@ -44,24 +31,16 @@ export interface LinkActionsProps {
   onEdit: () => void;
   onOpen: () => void;
   onRemove: () => void;
-  /** What removing takes away — the link from a run of text, or a whole button. */
   removeLabel?: string;
-  /** False while there is nowhere to open — a button not linked yet. */
   canOpen?: boolean;
-  /** Whether the link stays in view. Only a button can (Figma 425:905). */
+  /** Whether the link stays in view; only a button can. */
   sticky?: boolean;
-  /** Offers the sticky toggle; a host without it shows no toggle. */
   onToggleSticky?: () => void;
-  /** The button's colour. Only a button has one (Figma 425:940/425:905). */
   color?: ButtonLinkColor;
-  /** Offers the colour swatches; a host without it shows none. */
   onColorChange?: (color: ButtonLinkColor) => void;
 }
 
-/**
- * Edit ∣ Open ∣ Remove — what can be done to a link that exists — and, for a
- * button, Sticky ∣ its colour.
- */
+/** Edit, Open, Remove, and for a button, Sticky and its colour. */
 export function LinkActions({
   onEdit,
   onOpen,
@@ -129,22 +108,14 @@ export function LinkActions({
 }
 
 export interface LinkEditRowProps {
-  /** The address the box opens on. */
   href?: string;
-  /** Whether the link opens in a new tab, as the toggle opens on. */
   newTab?: boolean;
-  /** Enter, with something in the box. The host decides what it accepts. */
   onApply: (href: string, newTab: boolean) => void;
-  /** The host refused the last address it was given. */
   invalid?: boolean;
-  /** The box changed — a refused address is being corrected. */
   onInput?: () => void;
 }
 
-/**
- * The address, being typed. Seeded when it mounts and focused with its text
- * selected, so a host shows a fresh one each time editing starts.
- */
+/** Seeded on mount, so a host remounts it each time editing starts. */
 export function LinkEditRow({
   href: initial,
   newTab: initialNewTab = false,
@@ -185,8 +156,6 @@ export function LinkEditRow({
           }
         }}
       />
-      {/* The dividers sit outside the toolbar group so the slot's gap spaces
-          them on both sides, as in Figma (424:857). */}
       <div className={editRow.options}>
         <OptionList direction="inline">
           <OptionList.Divider />

@@ -49,7 +49,6 @@ describe("postMetadata", () => {
       "About",
       { searchTitle },
     );
-    // Absolute: the layout's `%s — Kartik Iyer` template would name him twice.
     expect(about.title).toEqual({ absolute: searchTitle });
     expect(about.openGraph).toMatchObject({ title: searchTitle });
     expect(about.twitter).toMatchObject({ title: searchTitle });
@@ -112,8 +111,6 @@ describe("homeMetadata", () => {
     expect(homeMetadata(null)).toEqual({ alternates: { canonical: "/" } });
   });
 
-  // Next replaces `openGraph` and `twitter` wholesale, so a description on the
-  // homepage restates the whole card rather than only the line that changed.
   it("describes the homepage with a written description, on its card too", () => {
     const metadata = homeMetadata("Written for search.");
     expect(metadata.description).toBe("Written for search.");

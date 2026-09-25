@@ -21,7 +21,6 @@ describe("keystroke delays", () => {
 
   it("hesitates after punctuation more than between letters", () => {
     const delays = keystrokeDelays("ab, cd");
-    // The keystroke after the comma waits longer than any mid-word one.
     expect(delays[3]).toBeGreaterThan(Math.max(delays[1], delays[5]));
   });
 

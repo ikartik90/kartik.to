@@ -7,10 +7,7 @@ type IntentWindow = Window & {
   __paletteIntent?: number;
 };
 
-/**
- * Run the head script the way the browser would, before anything else loads —
- * on the keyboard named. The script reads the platform once, at install.
- */
+/** Runs the head script as the browser would, on the given platform, before anything else. */
 function installScript(platform = "MacIntel") {
   Object.defineProperty(window.navigator, "platform", {
     value: platform,
@@ -53,8 +50,6 @@ describe("palette intent", () => {
   it("stops listening once the palette has taken over", () => {
     installScript();
     takePaletteIntent();
-    // From here the palette's own listener answers; a second recorder would
-    // mean the next ⌘K opens the palette twice over.
     press("k", { metaKey: true });
     expect(takePaletteIntent()).toBe(false);
   });

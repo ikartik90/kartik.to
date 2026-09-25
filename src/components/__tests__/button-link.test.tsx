@@ -3,8 +3,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { ButtonLink, buttonLinkClass } from "../button-link";
 
-// The About me button under the homepage's intro, as a component of its own —
-// so an article's button and the homepage's are one look, not two copies.
 describe("ButtonLink", () => {
   afterEach(() => cleanup());
 
@@ -23,8 +21,6 @@ describe("ButtonLink", () => {
     }
   });
 
-  // The same tab, as every link on this site opens — a reader is sent on, not
-  // split in two.
   it("opens a web address in the same tab, safely", () => {
     render(<ButtonLink href="https://cal.com/kartik">Book a call</ButtonLink>);
     const link = screen.getByRole("link", { name: "Book a call" });
@@ -43,7 +39,6 @@ describe("ButtonLink", () => {
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });
 
-  // Neutral unless told otherwise; the accent is a look of its own.
   it("wears the accent look when asked to", () => {
     render(
       <ButtonLink href="/about" color="accent">

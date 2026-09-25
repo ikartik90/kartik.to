@@ -12,18 +12,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Testimonial } from "@/domain/testimonial";
 import { TestimonialWall, dealIntoColumns } from "../testimonial-wall";
 
-// ---------------------------------------------------------------------------
-// The band is mostly CSS — the stagger, the bleed past the screen, the overlap
-// and the phone's rail are all media queries, and none of them has a failing
-// state a jsdom test could see. What IS logic is the part that decides WHICH
-// cards go WHERE, because the tower's clearance depends on it: the middle
-// column must hold exactly one card however many are published.
-//
-// The geometry is verified in the browser instead, against the drawing itself:
-// the tower's span is known from the viewBox, so "no card overlaps the tower"
-// is a measurement rather than an opinion.
-// ---------------------------------------------------------------------------
-
 afterEach(() => cleanup());
 
 function row(overrides: Partial<Testimonial> = {}): Testimonial {
@@ -41,7 +29,6 @@ function row(overrides: Partial<Testimonial> = {}): Testimonial {
   };
 }
 
-/** `n` rows, each with a name and quote of its own so cards can be told apart. */
 function rows(n: number): Testimonial[] {
   return Array.from({ length: n }, (_, i) =>
     row({ id: `t${i + 1}`, name: `Person ${i + 1}`, quote: `Quote ${i + 1}.` }),
@@ -51,8 +38,6 @@ function rows(n: number): Testimonial[] {
 const lists = () => screen.getAllByRole("list");
 
 describe("TestimonialWall", () => {
-  // The real state of a brand new site, and of any site whose author has not
-  // published anything yet — every row starts unpublished.
   it("draws nothing at all when nothing is published", () => {
     const { container } = render(<TestimonialWall testimonials={[]} />);
     expect(container.innerHTML).toBe("");
@@ -93,9 +78,6 @@ describe("TestimonialWall", () => {
     expect(counted).toBe(8);
   });
 
-  // An empty `<ul>` is a list announced to anyone listening with nothing in it,
-  // and a column drawn around no cards. With fewer testimonials than columns,
-  // most of the columns are empty.
   it("draws no empty columns", () => {
     render(<TestimonialWall testimonials={rows(2)} />);
     for (const list of lists()) {
@@ -115,12 +97,9 @@ describe("TestimonialWall", () => {
       vi.restoreAllMocks();
     });
 
-    /** Where every card is, by name: column, then place in the column. */
     const seats = () =>
       new Map(
-        // Plain DOM reads rather than role queries: the trade tests read every
-        // seat on each of hundreds of presses, and role queries made them run
-        // past the time limit on a loaded runner.
+        // Plain DOM reads, not role queries: role queries pushed the trade tests past the time limit.
         [...document.querySelectorAll("ul")].flatMap((list, column) =>
           [...list.querySelectorAll("li")].map((card, place) => [
             card.querySelector("figcaption")?.textContent ?? "",
@@ -129,14 +108,12 @@ describe("TestimonialWall", () => {
         ),
       );
 
-    /** The cards sitting somewhere other than where they were. */
     const moved = (before: Map<string, string>) =>
       [...seats()].filter(([name, seat]) => before.get(name) !== seat);
 
     const press = () =>
       fireEvent.click(screen.getByRole("button", { name: "Shuffle" }));
 
-    // The fade out, the trade and the fade back in, with room to spare.
     const settle = () => act(() => vi.advanceTimersByTime(2000));
 
     it("offers a shuffle button", () => {
@@ -144,8 +121,6 @@ describe("TestimonialWall", () => {
       expect(screen.getByRole("button", { name: "Shuffle" })).toBeTruthy();
     });
 
-    // ONE TRADE A PRESS, the same exchange the band has always made: two cards
-    // swap seats and nothing else moves.
     it("trades two cards on each press", () => {
       render(<TestimonialWall testimonials={rows(8)} />);
       const before = seats();
@@ -189,8 +164,6 @@ describe("TestimonialWall", () => {
           });
         });
 
-    /** Press `times` times and collect every trade as its two seats' columns,
-     *  and how often each seat was traded. */
     const trades = (times: number) => {
       const pairs: string[] = [];
       const turns = new Map<string, number>();
@@ -210,11 +183,6 @@ describe("TestimonialWall", () => {
       return { pairs, turns };
     };
 
-    // THE EDGES TRADE WITH THE MIDDLE, NEVER WITH EACH OTHER. The outer two
-    // columns are the ones the window cuts off, and the whole point of a trade
-    // is to bring one of those cards forward. Swapping two of them — a hidden
-    // one for a half-cut one in the same column — moved a card from one place
-    // nobody could read it to another.
     it("trades a cut-off edge card for one in the middle three columns", () => {
       // Every column in view, the outer two cut by the window's edges.
       layOut([-140, 160, 372, 584, 884]);
@@ -225,8 +193,7 @@ describe("TestimonialWall", () => {
     });
 
     it("trades an edge card past the window for one in the middle", () => {
-      // Just past `md`: the middle column inside, its neighbours cut, the
-      // outer two past the edges entirely.
+      // Just past `md`: the middle column inside, its neighbours cut, the outer two off-screen.
       layOut([-320, -20, 372, 764, 1064]);
       render(<TestimonialWall testimonials={rows(11)} />);
 
@@ -234,9 +201,7 @@ describe("TestimonialWall", () => {
       for (const pair of pairs) expect(pair).toMatch(/^[0][123]$|^[123]4$/);
     });
 
-    // EVERY MIDDLE CARD TAKES AN EQUAL TURN. The centre column's one card and
-    // the two in each of its neighbours: five seats, forty turns apiece over
-    // two hundred presses. The bounds are five standard deviations wide.
+    // Forty turns apiece over 200 presses; the bounds are five standard deviations wide.
     it("gives every card in the middle three columns the same turns", () => {
       layOut([-320, -20, 372, 764, 1064]);
       render(<TestimonialWall testimonials={rows(11)} />);
@@ -256,12 +221,7 @@ describe("TestimonialWall", () => {
       }
     });
 
-    // ELEVEN ON THE BAND, THE REST IN A QUEUE. A trade moves the cut-off edge
-    // card into the middle, sends the middle card to the back of the queue, and
-    // brings the card at the front of the queue in at the edge — so every card
-    // goes waiting → edge → middle → waiting, and all of them are read in turn.
     describe("with more than eleven published", () => {
-      /** The names in each band column, left to right. */
       const band = () =>
         [...document.querySelectorAll("[data-testimonial-column]")].map(
           (column) =>
@@ -269,7 +229,6 @@ describe("TestimonialWall", () => {
               (caption) => caption.textContent ?? "",
             ),
         );
-      /** The names waiting off the band, in queue order. */
       const queue = () =>
         [
           ...document.querySelectorAll(
@@ -282,9 +241,7 @@ describe("TestimonialWall", () => {
         expect(band().map((column) => column.length)).toEqual([3, 2, 1, 2, 3]);
       });
 
-      // The phone's rail swipes through every card and never trades, so the
-      // two waiting there would otherwise be out of reach for good.
-      // (A caption reads the avatar's initial, then the name.)
+      // A caption reads the avatar's initial, then the name.
       it("keeps the rest in the document for the phone's rail", () => {
         render(<TestimonialWall testimonials={rows(13)} />);
         expect(queue()).toEqual(["PPerson 12", "PPerson 13"]);
@@ -331,9 +288,6 @@ describe("TestimonialWall", () => {
       });
     });
 
-    // A press while two cards are still faded out would start a second trade
-    // over the first, and the band would move four cards — or put the first two
-    // straight back.
     it("ignores a press while a trade is still under way", () => {
       render(<TestimonialWall testimonials={rows(8)} />);
       const before = seats();
@@ -345,13 +299,8 @@ describe("TestimonialWall", () => {
       expect(moved(before)).toHaveLength(2);
     });
 
-    // THE BUTTON IS AS WELL AS THE TIMER, NOT INSTEAD OF IT. Left alone the
-    // band still trades a card every eight seconds; the button only lets a
-    // reader ask for one sooner.
     describe("on its own", () => {
-      /** Whether the reader has asked for reduced motion. */
       let reduced = false;
-      /** What the stylesheet has made of the wall: the band, or the rail. */
       let layout = "grid";
 
       beforeEach(() => {
@@ -363,8 +312,7 @@ describe("TestimonialWall", () => {
             matches: query.includes("reduced-motion") && reduced,
           })),
         );
-        // The band, not the phone's rail: the stylesheet decides which, and
-        // jsdom has no stylesheet to ask.
+        // jsdom has no stylesheet to decide band or rail, so this answers for it.
         const real = window.getComputedStyle.bind(window);
         vi.spyOn(window, "getComputedStyle").mockImplementation(
           (element, pseudo) => {
@@ -405,7 +353,6 @@ describe("TestimonialWall", () => {
         expect(moved(before)).toHaveLength(2);
       });
 
-      // A reader in the middle of a card must not have it taken away.
       it("holds still while the pointer rests on the cards", () => {
         render(<TestimonialWall testimonials={rows(8)} />);
         const before = seats();
@@ -443,8 +390,6 @@ describe("TestimonialWall", () => {
         expect(moved(before)).toHaveLength(0);
       });
 
-      // The phone's rail is swiped by the reader, who can reach every card that
-      // way — and a card swapped out from under a thumb is worse than none.
       it("leaves the phone's rail alone", () => {
         layout = "flex";
         render(<TestimonialWall testimonials={rows(8)} />);
@@ -455,8 +400,6 @@ describe("TestimonialWall", () => {
         expect(moved(before)).toHaveLength(0);
       });
 
-      // A press starts the countdown again, so the band never trades a card on
-      // its own a moment after the reader asked for one.
       it("waits a full eight seconds after a press", () => {
         render(<TestimonialWall testimonials={rows(8)} />);
         wait(6000);
@@ -470,10 +413,6 @@ describe("TestimonialWall", () => {
     });
   });
 
-  // The wall used to carry one — a single WebGL context moved between the
-  // LinkedIn icons on the cards. The icons are gone (the whole card is the link
-  // now), and a context kept for nothing is a context off a budget of about
-  // sixteen that the rest of the page is sharing.
   it("holds no shader stage, now that no card has an icon", () => {
     const { container } = render(<TestimonialWall testimonials={rows(8)} />);
     expect(
@@ -483,9 +422,6 @@ describe("TestimonialWall", () => {
 });
 
 describe("TestimonialQuote (through the wall)", () => {
-  // A quote attributed to somebody, in the markup HTML has for exactly that.
-  // The admin board's card cannot do this — it is a button — so this is the
-  // one thing the public card genuinely does differently.
   it("marks the words up as a quotation with its attribution", () => {
     const { container } = render(
       <TestimonialWall testimonials={[row({ name: "Ada Lovelace" })]} />,
@@ -499,8 +435,6 @@ describe("TestimonialQuote (through the wall)", () => {
     );
   });
 
-  // Nothing on this card is pressable except a profile, so a card without one
-  // contributes no controls at all. The band's own shuffle is not the card's.
   it("is not a control, unlike the card on the board", () => {
     render(<TestimonialWall testimonials={[row()]} />);
     expect(
@@ -508,8 +442,6 @@ describe("TestimonialQuote (through the wall)", () => {
     ).toHaveLength(0);
   });
 
-  // ...and where there IS a profile it is a real link, which the board's card
-  // could not manage: a link inside a button is not keyboard-operable.
   it("offers a stored profile as a link", () => {
     render(
       <TestimonialWall
@@ -520,8 +452,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(link.getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
   });
 
-  // THE WHOLE CARD, not an icon in the corner of it. There is exactly one way
-  // into a profile from a card, and it is the card.
   it("makes the card itself the only way to the profile", () => {
     render(
       <TestimonialWall
@@ -531,9 +461,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
-  // Which is a fact the card has to carry, because it is what decides whether
-  // the edge lights up under the pointer — a card with nothing behind it must
-  // not offer.
   it("marks a card that can be followed, and only that one", () => {
     const { container } = render(
       <TestimonialWall
@@ -543,8 +470,7 @@ describe("TestimonialQuote (through the wall)", () => {
         ]}
       />,
     );
-    // By the words on the card rather than by position: the deal puts the
-    // first testimonial in the MIDDLE column, so source order is not DOM order.
+    // By the words, not position: the deal seats the first testimonial in the middle column.
     const marked = [...container.querySelectorAll("figure")]
       .filter((figure) => figure.hasAttribute("data-linked"))
       .map((figure) => figure.querySelector("figcaption")?.textContent);
@@ -552,11 +478,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(marked[0]).toContain("Ada Lovelace");
   });
 
-  // `LinkedIn ∣ ↗` — the row under the homepage's intro says exactly this over
-  // its LinkedIn icon, and a reader meets one tooltip for one destination
-  // rather than two spellings of it. NOT the handle: the name is already the
-  // largest thing on the card, and `ada` under "Ada Lovelace" is the same fact
-  // spelled worse. What the tooltip adds is WHERE pressing goes.
   it("names its destination exactly as the social row does", () => {
     render(
       <TestimonialWall
@@ -577,15 +498,12 @@ describe("TestimonialQuote (through the wall)", () => {
 
     const label = screen.getByText("LinkedIn");
     const tooltip = label.parentElement!;
-    // Label, hairline, goto — in that order, and nothing else in it.
     expect(tooltip.children).toHaveLength(3);
     expect(tooltip.firstElementChild).toBe(label);
     expect(label.querySelector("svg")).toBeNull();
     expect(tooltip.lastElementChild?.tagName.toLowerCase()).toBe("svg");
   });
 
-  // The goto says the card opens elsewhere; it is not a second way of getting
-  // there. A tooltip trailing the cursor cannot be aimed at anyway.
   it("draws the goto as a glyph, not a control", () => {
     render(
       <TestimonialWall
@@ -605,8 +523,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(screen.getByText("G")).toBeTruthy();
   });
 
-  // The picture is DECORATIVE — the name is written beside it, so describing it
-  // would say the same thing twice to anyone listening rather than looking.
   it("draws a stored picture, undescribed", () => {
     const { container } = render(
       <TestimonialWall
@@ -618,8 +534,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(img?.getAttribute("alt")).toBe("");
   });
 
-  // Asked of the domain, so the board, this wall and any link preview cannot
-  // disagree about which words a testimonial shows.
   it("shows the chosen excerpt rather than the whole quote", () => {
     render(
       <TestimonialWall testimonials={[row({ excerpt: "vague brief" })]} />,
@@ -633,12 +547,6 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(screen.getByText("Countess")).toBeTruthy();
   });
 });
-
-// ---------------------------------------------------------------------------
-// The deal. The only real logic in the band, and the reason it matters is the
-// tower: everything below the middle column has to stay clear of the antenna,
-// which is only true while that column holds ONE card.
-// ---------------------------------------------------------------------------
 
 describe("dealIntoColumns", () => {
   const deal = (n: number, columns = 5) =>
@@ -655,9 +563,6 @@ describe("dealIntoColumns", () => {
     ).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
   });
 
-  // THE RULE THE TOWER DEPENDS ON. A second card in the middle column would
-  // stack below the first and reach straight into the antenna, whatever the
-  // band reserves above it.
   it.each([1, 2, 5, 8, 40])(
     "gives the middle column exactly one card, with %i published",
     (count) => {
@@ -669,8 +574,6 @@ describe("dealIntoColumns", () => {
     expect(deal(8)[2]).toEqual([0]);
   });
 
-  // Nearest the middle first, so a short list clusters where it can be read
-  // rather than stranding cards at the edges, which are half off-screen.
   it("fills outwards from the middle", () => {
     const dealt = deal(3);
     expect(dealt[2]).toHaveLength(1);
@@ -684,11 +587,6 @@ describe("dealIntoColumns", () => {
     expect(deal(9).map((column) => column.length)).toEqual([2, 2, 1, 2, 2]);
   });
 
-  // THE SHAPE PAST NINE IS 3·2·1·2·3. Two rows fill from the middle out; every
-  // card after that goes to the outermost columns, because they are the ones
-  // with room for it — the stagger starts them at the top of the band and steps
-  // every column inwards further down. The columns either side of the tower
-  // stop at two, and the tower's own at one, however many are published.
   it.each([
     [10, [3, 2, 1, 2, 2]],
     [11, [3, 2, 1, 2, 3]],
@@ -724,9 +622,6 @@ describe("dealIntoColumns", () => {
     expect(deal(0)).toEqual([[], [], [], [], []]);
   });
 
-  // Deterministic: the server and the client deal the same hand from the same
-  // order, so hydration matches and the shuffle moves cards by reordering the
-  // list rather than by dealing it differently.
   it("deals the same hand from the same order", () => {
     expect(deal(8)).toEqual(deal(8));
   });

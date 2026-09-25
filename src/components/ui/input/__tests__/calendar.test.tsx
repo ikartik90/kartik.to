@@ -8,9 +8,6 @@ import { parseCalendarDate } from "@/utils/calendar-date";
 
 const TODAY = Temporal.PlainDate.from("2026-12-11");
 
-// Date navigation now needs an explicit parser on the Calendar (a bare
-// Field.Search just emits raw strings). The tree wires DD/MM/YYYY by default;
-// pass `null` for the parser-less (dumb) case, or a different parser to vary it.
 function calendarTree(
   props: Partial<React.ComponentProps<typeof Calendar>> = {},
   queryParser:
@@ -44,12 +41,7 @@ function renderCalendar(
   return render(<Field>{calendarTree(props, queryParser)}</Field>);
 }
 
-/**
- * The months on the LIVE page, in order. A chevron leaves the page it turned
- * away from on screen for the length of the slide, but that copy is aria-hidden
- * — so a role query answers for the range that just ARRIVED, which is what
- * "what is on screen now" means.
- */
+/** Live page only: the outgoing copy is aria-hidden, so role queries skip it. */
 function monthsOnScreen(): (string | null)[] {
   return screen.getAllByRole("grid").map((g) => g.getAttribute("aria-label"));
 }
@@ -58,7 +50,6 @@ afterEach(cleanup);
 
 describe("field wiring", () => {
   it("throws when used outside <Field>", () => {
-    // Silence React's error-boundary logging for the expected throw.
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => render(calendarTree())).toThrow(/must be used within <Field>/);
     spy.mockRestore();
@@ -102,12 +93,6 @@ describe("Calendar composition", () => {
     expect(screen.getAllByRole("gridcell")).toHaveLength(42);
   });
 
-  // The calendar's width is its PERIODS — 208px a month. The root hugs its
-  // content, so an `<input>` left at the HTML default of `size=20` claims an
-  // intrinsic width of its own and can outvote them: WebKit sizes that at
-  // 219px, which widened every date popover in the app by 11px of empty
-  // surface beside the month. Chromium's is narrower and the bug was invisible
-  // there. The search takes its width from the row, never the other way round.
   it("stops the search claiming an intrinsic width of its own", () => {
     renderCalendar();
     expect(screen.getByRole("searchbox").getAttribute("size")).toBe("1");
@@ -129,9 +114,9 @@ describe("weekday / weekend attributes", () => {
   it("marks weekend header columns", () => {
     renderCalendar();
     const headers = screen.getAllByRole("columnheader");
-    expect(headers[0].hasAttribute("data-weekend")).toBe(true); // sun
-    expect(headers[6].hasAttribute("data-weekend")).toBe(true); // sat
-    expect(headers[1].hasAttribute("data-weekend")).toBe(false); // mon
+    expect(headers[0].hasAttribute("data-weekend")).toBe(true);
+    expect(headers[6].hasAttribute("data-weekend")).toBe(true);
+    expect(headers[1].hasAttribute("data-weekend")).toBe(false);
   });
 
   it("tags every day cell with its weekday, weekends flagged", () => {
@@ -167,7 +152,6 @@ describe("today / selection state", () => {
 
   it("flags spill-over days from adjacent months", () => {
     renderCalendar();
-    // Nov 29 backfills the Sunday-started grid → outside the current month.
     expect(
       screen
         .getByRole("gridcell", { name: "November 29, 2026" })
@@ -221,16 +205,9 @@ describe("month navigation", () => {
   });
 });
 
-// A chevron replaces every month on screen at once. Cut between the two and the
-// range simply BLINKS — nothing on screen says which way it moved, or that the
-// months either side of the press are neighbours at all. So the page that is
-// leaving is held beside the one arriving and the pair is pushed along
-// together, as one strip.
 describe("page turn", () => {
-  /** The list — the frame both pages slide through (grid ▸ period ▸ list). */
   const list = () =>
     screen.getAllByRole("grid")[0].parentElement!.parentElement!;
-  /** The page being pushed off, while one is still on screen. */
   const outgoing = () => list().querySelector<HTMLElement>("[data-outgoing]");
   const nav = (name: string) => screen.getByRole("button", { name });
 
@@ -239,10 +216,9 @@ describe("page turn", () => {
     try {
       renderCalendar();
       fireEvent.click(nav("Next month"));
-      // January has arrived; December is still on screen, on its way out.
       expect(monthsOnScreen()).toEqual(["January 2027"]);
       expect(within(outgoing()!).getByText("December 2026")).toBeTruthy();
-      // The slide's own length — `PUSH_MS`, in step with the recipe.
+      // 200ms is PUSH_MS.
       act(() => vi.advanceTimersByTime(199));
       expect(outgoing()).toBeTruthy();
       act(() => vi.advanceTimersByTime(1));
@@ -252,9 +228,6 @@ describe("page turn", () => {
     }
   });
 
-  // The distance carries the direction in its sign, so one variable drives both
-  // halves of the turn: the arriving page enters from `--calendar-push` and the
-  // leaving one exits by its negation.
   it("pushes from the side the range is travelling toward", () => {
     renderCalendar();
     fireEvent.click(nav("Next month"));
@@ -263,8 +236,6 @@ describe("page turn", () => {
     expect(list().style.getPropertyValue("--calendar-push")).toBe("-100%");
   });
 
-  // In columns, not screenfuls: a range that WALKS (step < months) must land
-  // the months that carry over exactly where they already were.
   it("travels by the step, not by the width of the range", () => {
     renderCalendar({ months: 3, step: 1 });
     fireEvent.click(nav("Next month"));
@@ -281,23 +252,18 @@ describe("page turn", () => {
     fireEvent.click(nav("Next month"));
     expect(outgoing()!.getAttribute("aria-hidden")).toBe("true");
     expect(outgoing()!.hasAttribute("inert")).toBe(true);
-    // One page answers for the calendar however many are mid-slide — or the
-    // range would read as two months, and announce both.
     expect(screen.getAllByRole("grid")).toHaveLength(1);
     expect(screen.getAllByRole("gridcell")).toHaveLength(42);
   });
 
   it("turns no page when the view stands still", () => {
     renderCalendar({ months: 3 });
-    // February is already on screen, so picking in it moves nothing.
     fireEvent.click(
       screen.getAllByRole("gridcell", { name: "February 10, 2027" })[0],
     );
     expect(outgoing()).toBeNull();
   });
 
-  // Typing a date jumps the range wherever it likes, and a jump is still a
-  // move — the turn is how far it went made legible.
   it("turns the page for a search that lands off the range", () => {
     renderCalendar();
     fireEvent.input(screen.getByRole("searchbox"), {
@@ -309,10 +275,6 @@ describe("page turn", () => {
   });
 });
 
-// How far a chevron moves and how much is on show are separate questions. A
-// range that pages a clear screenful never repeats a month, but it also throws
-// away the context it just built; `step` lets a wide range walk instead, so
-// most of what you were reading stays on screen.
 describe("paging step", () => {
   const range = (props: Partial<React.ComponentProps<typeof Calendar>>) =>
     render(
@@ -339,14 +301,12 @@ describe("paging step", () => {
     range({});
     expect(screen.getByText("December 2026")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next 3 months" }));
-    // Dec–Feb ▸ Mar–May: nothing on screen repeats.
     expect(monthsOnScreen()).toEqual(["March 2027", "April 2027", "May 2027"]);
   });
 
   it("walks one month at a time when step is 1", () => {
     range({ step: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-    // Dec–Feb ▸ Jan–Mar: two of the three months carry over.
     expect(monthsOnScreen()).toEqual([
       "January 2027",
       "February 2027",
@@ -365,8 +325,6 @@ describe("paging step", () => {
     ]);
   });
 
-  // The label has to describe what the button DOES, not how wide the range is —
-  // a chevron announcing "Next 3 months" that moves one is worse than no label.
   it("names the chevrons after the step, not the range", () => {
     range({ step: 1 });
     expect(screen.getByRole("button", { name: "Next month" })).toBeTruthy();
@@ -374,9 +332,6 @@ describe("paging step", () => {
   });
 });
 
-// Each nav DECLARES its role, so neither its position among siblings nor its
-// depth in the tree decides what it does — which is what lets a consumer wrap
-// the chevrons in their own chrome.
 describe("nav role declaration", () => {
   const period = (
     <Calendar.Period>
@@ -391,8 +346,6 @@ describe("nav role declaration", () => {
   );
 
   it("reads the role from the part, not the sibling order", () => {
-    // Next FIRST in the DOM: under the old positional wiring this button would
-    // have paged BACKWARDS, because it was the first Button it found.
     render(
       <Field>
         <Calendar today={TODAY}>
@@ -461,7 +414,6 @@ describe("nav role declaration", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Back a month" }));
     expect(onClick).toHaveBeenCalledOnce();
-    // The consumer's handler REPLACES the paging, it doesn't run alongside it.
     expect(screen.getByText("December 2026")).toBeTruthy();
   });
 
@@ -486,9 +438,6 @@ describe("nav role declaration", () => {
   });
 });
 
-// A range is the same single Period template cloned per month, so these assert
-// the parts read THEIR month rather than the root's view, and that one chevron
-// press moves the whole range (Figma 715:912).
 describe("multi-month ranges", () => {
   const tabstops = () =>
     screen
@@ -498,8 +447,8 @@ describe("multi-month ranges", () => {
   it("clones the one Period template into a grid per month", () => {
     renderCalendar({ months: 3 });
     expect(screen.getAllByRole("grid")).toHaveLength(3);
-    expect(screen.getAllByRole("gridcell")).toHaveLength(126); // 3 × 42
-    expect(screen.getAllByRole("columnheader")).toHaveLength(21); // 3 × 7
+    expect(screen.getAllByRole("gridcell")).toHaveLength(126);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(21);
   });
 
   it("labels each period with its own month, not the view's", () => {
@@ -512,7 +461,6 @@ describe("multi-month ranges", () => {
   it("pages a whole range at a time", () => {
     renderCalendar({ months: 3 });
     fireEvent.click(screen.getByRole("button", { name: "Previous 3 months" }));
-    // Dec–Feb ▸ Sep–Nov: no month carries over between pages.
     expect(monthsOnScreen()).toEqual([
       "September 2026",
       "October 2026",
@@ -535,9 +483,6 @@ describe("multi-month ranges", () => {
   });
 
   it("does not duplicate the tabstop onto a spill-day twin", () => {
-    // Dec 31 renders twice in a Dec–Jan range: as December's own last day, and
-    // as a spill cell leading January's grid. Only the owning month may hold
-    // the tabstop, or the roving-tabindex contract breaks.
     renderCalendar({ months: 2, value: Temporal.PlainDate.from("2026-12-31") });
     expect(
       screen.getAllByRole("gridcell", { name: "December 31, 2026" }),
@@ -547,9 +492,6 @@ describe("multi-month ranges", () => {
     expect(stops[0].hasAttribute("data-outside")).toBe(false);
   });
 
-  // A spill day is a decorative duplicate of a cell another month already owns,
-  // so it carries no state at all — only the owning month may claim it. Without
-  // this, every boundary date paints its chip twice across the range.
   it("marks only the owning month's copy as selected", () => {
     renderCalendar({ months: 2, value: Temporal.PlainDate.from("2026-12-31") });
     const selected = screen
@@ -586,8 +528,6 @@ describe("multi-month ranges", () => {
 
   it("does not page when the clicked date is already on screen", () => {
     renderCalendar({ months: 3 });
-    // February is the third visible month — selecting in it must not shuffle
-    // the range out from under the pointer.
     fireEvent.click(
       screen.getAllByRole("gridcell", { name: "February 10, 2027" })[0],
     );
@@ -747,7 +687,6 @@ describe("search", () => {
 
     expect(onValueChange).toHaveBeenCalledWith("05/01/2027");
     expect(onKeyDown).toHaveBeenCalledOnce();
-    // …and the built-in navigation still ran alongside them.
     expect(screen.getByText("January 2027")).toBeTruthy();
   });
 });
@@ -796,8 +735,6 @@ describe("search preview", () => {
   });
 
   it("still marks a date that min/max makes uncommittable", () => {
-    // The attribute is pure state; the recipe decides that a disabled cell
-    // takes no chip, exactly as it does for :hover.
     renderCalendar({ min: Temporal.PlainDate.from("2026-12-10") });
     type("05/12/2026");
     const cell = screen.getByRole("gridcell", {
@@ -809,8 +746,6 @@ describe("search preview", () => {
 });
 
 describe("custom queryParser", () => {
-  // A fully bespoke parser (not a format pattern) proves the hook is generic —
-  // any string → date function works, and it lives on the Calendar, not the box.
   function renderWithParser(queryParser: (q: string) => Temporal.PlainDate | null) {
     const onValueChange = vi.fn();
     render(
@@ -867,12 +802,6 @@ describe("custom queryParser", () => {
   });
 })
 
-// ---------------------------------------------------------------------------
-// Multiple selection — the second selection mode, plus the two gestures that
-// only exist there: a pointer sweep and its keyboard mirror (Shift+Arrow).
-// ---------------------------------------------------------------------------
-
-/** A `selectionMode="multiple"` tree, no search row. `months` is passthrough. */
 function multiTree(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
   return (
     <Field>
@@ -898,7 +827,7 @@ function multiTree(props: Partial<React.ComponentProps<typeof Calendar>> = {}) {
 const renderMulti = (props: Partial<React.ComponentProps<typeof Calendar>> = {}) =>
   render(multiTree(props));
 
-/** The OWNED cell for a date (a spill copy carries the same accessible name). */
+/** The owned cell for a date; a spill copy shares its accessible name. */
 function cell(name: string): HTMLButtonElement {
   const matches = screen.getAllByRole("gridcell", { name });
   const owned = matches.find((c) => !c.hasAttribute("data-outside"));
@@ -907,17 +836,13 @@ function cell(name: string): HTMLButtonElement {
 
 const iso = (dates: Temporal.PlainDate[]) => dates.map((d) => d.toString());
 
-/** Every OWNED cell currently marked selected, in chronological (DOM) order. */
 const selected = () =>
   screen
     .getAllByRole("gridcell")
     .filter((c) => c.getAttribute("aria-selected") === "true")
     .map((c) => c.getAttribute("data-date"));
 
-// jsdom lays nothing out — every getBoundingClientRect is zeroes — so a marquee
-// has nothing to intersect. Give the cells a synthetic grid: 24px cells on a
-// 28px pitch, each month column offset by 250px, mirroring the real 7-column
-// layout closely enough for overlap maths to mean something.
+// jsdom lays nothing out, so the cells get a synthetic 7-column grid for the overlap maths.
 const CELL = 24;
 const PITCH = 28;
 const MONTH_OFFSET = 250;
@@ -937,16 +862,11 @@ function layoutGrids() {
   });
 }
 
-/** The centre point of a date's own cell, in the synthetic layout above. */
 function centre(name: string): { x: number; y: number } {
   const box = cell(name).getBoundingClientRect();
   return { x: box.left + CELL / 2, y: box.top + CELL / 2 };
 }
 
-/**
- * Press on `from`, drag the band to `to`, release. Both are date names; the
- * band is the rectangle between their cell centres.
- */
 function marquee(from: string, to: string) {
   const a = centre(from);
   const b = centre(to);
@@ -1057,9 +977,6 @@ describe("single selection is unchanged by the new mode", () => {
 });
 
 describe("marquee drag", () => {
-  // The band is a RECTANGLE, not a trail: what matters is the area between the
-  // press point and the pointer, so a row-spanning drag takes the whole block
-  // rather than the cells a cursor happened to touch.
   it("toggles every cell the band overlaps, both ends included", () => {
     renderMulti();
     layoutGrids();
@@ -1070,7 +987,6 @@ describe("marquee drag", () => {
   it("takes a BLOCK when the band spans rows, not just the cursor's path", () => {
     renderMulti();
     layoutGrids();
-    // Dec 7 (Mon) → Dec 15 (Tue): two columns wide, two rows tall.
     marquee("December 7, 2026", "December 15, 2026");
     expect(selected()).toEqual([
       "2026-12-07", "2026-12-08",
@@ -1085,7 +1001,6 @@ describe("marquee drag", () => {
     fireEvent.pointerDown(cell("December 7, 2026"), {
       pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
     });
-    // Creep 1px into the neighbouring cell's box — a sliver, but an overlap.
     fireEvent.pointerMove(window, { clientX: a.x + PITCH - 1, clientY: a.y });
     fireEvent.pointerUp(window);
     expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
@@ -1109,7 +1024,6 @@ describe("marquee drag", () => {
     });
     fireEvent.pointerMove(window, { clientX: far.x, clientY: far.y });
     expect(selected()).toEqual(["2026-12-07", "2026-12-08", "2026-12-09"]);
-    // Shrink back: Dec 9 leaves the band and must return to unselected.
     fireEvent.pointerMove(window, { clientX: near.x, clientY: near.y });
     expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
     fireEvent.pointerUp(window);
@@ -1123,7 +1037,6 @@ describe("marquee drag", () => {
       ],
     });
     layoutGrids();
-    // 7 and 8 were on, so the band turns them off; 9 was off, so it turns on.
     marquee("December 7, 2026", "December 9, 2026");
     expect(selected()).toEqual(["2026-12-09"]);
   });
@@ -1139,10 +1052,6 @@ describe("marquee drag", () => {
     ]);
   });
 
-  // A band between two distant cells necessarily covers everything BETWEEN
-  // them — that is the whole point of a rectangle over a path. So this drags a
-  // thin band along the top row, which crosses the gap between two month
-  // columns without swallowing the rows beneath.
   it("spans the months of a multi-month range", () => {
     renderMulti({ months: 2 });
     layoutGrids();
@@ -1160,7 +1069,6 @@ describe("marquee drag", () => {
     fireEvent.pointerDown(cell("December 7, 2026"), {
       pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
     });
-    // Under the drag threshold — still a click, so the band never applies.
     fireEvent.pointerMove(window, { clientX: a.x + 1, clientY: a.y + 1 });
     fireEvent.pointerUp(window);
     expect(selected()).toEqual([]);
@@ -1172,8 +1080,6 @@ describe("marquee drag", () => {
     renderMulti();
     layoutGrids();
     marquee("December 7, 2026", "December 8, 2026");
-    // Press and release shared a cell only in the browser's eyes; the click
-    // still fires and must be swallowed.
     fireEvent.click(cell("December 7, 2026"), { detail: 1 });
     expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
   });
@@ -1197,9 +1103,6 @@ describe("marquee drag", () => {
   it("never takes a spill-over copy, so a boundary date can't toggle twice", () => {
     renderMulti({ months: 2 });
     layoutGrids();
-    // January's first row opens with Dec 27–31 as spill days, so this band
-    // passes straight over them — but their OWNED cells sit further down in
-    // December's own grid, outside the band, so they must stay untouched.
     marquee("December 1, 2026", "January 2, 2027");
     const taken = selected();
     for (const day of ["27", "28", "29", "30", "31"]) {
@@ -1236,10 +1139,8 @@ describe("marquee drag", () => {
 });
 
 describe("dragging from outside a day cell", () => {
-  /** The period list — the grid's grandparent (grid ▸ period ▸ list). */
   const list = () => screen.getAllByRole("grid")[0].parentElement!.parentElement!;
 
-  /** Press on the LIST itself (a gutter, a label, a short month's tail). */
   function marqueeFromList(at: { x: number; y: number }, to: string) {
     const b = centre(to);
     fireEvent.pointerDown(list(), {
@@ -1255,7 +1156,6 @@ describe("dragging from outside a day cell", () => {
   it("starts a band from empty space in the period list", () => {
     renderMulti();
     layoutGrids();
-    // Above and left of the whole grid — no day cell under the press point.
     marqueeFromList({ x: -20, y: -20 }, "December 1, 2026");
     expect(selected()).toContain("2026-12-01");
   });
@@ -1264,7 +1164,6 @@ describe("dragging from outside a day cell", () => {
     renderMulti();
     layoutGrids();
     marqueeFromList({ x: -20, y: -20 }, "December 2, 2026");
-    // Dec 1 and 2 sit in the band's first row; Dec 3 is past its right edge.
     expect(selected()).toEqual(["2026-12-01", "2026-12-02"]);
   });
 
@@ -1310,7 +1209,7 @@ describe("the drag band", () => {
 
     const box = marqueeEl();
     expect(box).not.toBeNull();
-    // jsdom gives the list a zero-origin rect, so list-relative == client here.
+    // jsdom's zero-origin list rect makes list-relative equal client coordinates.
     expect(box!.style.left).toBe(`${Math.min(a.x, b.x)}px`);
     expect(box!.style.width).toBe(`${Math.abs(b.x - a.x)}px`);
     expect(box!.style.height).toBe(`${Math.abs(b.y - a.y)}px`);
@@ -1359,9 +1258,6 @@ describe("the drag band", () => {
   });
 });
 
-// A `Tooltip` dropped in the period list is the SWEEP's hint: it teaches the
-// drag, so it withdraws itself after a few seconds and for good once you have
-// actually dragged.
 describe("the sweep hint", () => {
   const HINT = "Drag to select multiple";
 
@@ -1390,7 +1286,6 @@ describe("the sweep hint", () => {
     );
   }
 
-  /** The period list — the draggable area the hint describes. */
   const list = () => screen.getAllByRole("grid")[0].parentElement!.parentElement!;
   const hint = () => screen.getByText(HINT).parentElement as HTMLElement;
   const showing = () => hint().hasAttribute("data-visible");
@@ -1413,7 +1308,7 @@ describe("the sweep hint", () => {
   it("follows the cursor, like every other tooltip here", () => {
     renderHinted();
     fireEvent.mouseEnter(list(), { clientX: 100, clientY: 200 });
-    // CURSOR_TOOLTIP_OFFSET — the box trails the cursor by (15, 17).
+    // CURSOR_TOOLTIP_OFFSET is (15, 17).
     expect(hint().style.left).toBe("115px");
     expect(hint().style.top).toBe("217px");
   });
@@ -1448,8 +1343,6 @@ describe("the sweep hint", () => {
     marquee("December 7, 2026", "December 9, 2026");
     expect(showing()).toBe(false);
 
-    // The gesture has been performed — pointing at the grid again teaches
-    // nothing, so the hint stays down.
     fireEvent.mouseLeave(list());
     enter();
     expect(showing()).toBe(false);
@@ -1463,7 +1356,6 @@ describe("the sweep hint", () => {
     fireEvent.pointerDown(cell("December 7, 2026"), {
       pointerType: "mouse", button: 0, clientX: a.x, clientY: a.y,
     });
-    // Inside DRAG_THRESHOLD — a click, not a sweep.
     fireEvent.pointerMove(window, { clientX: a.x + 1, clientY: a.y });
     fireEvent.pointerUp(window);
     expect(showing()).toBe(true);
@@ -1515,9 +1407,9 @@ describe("keyboard grid navigation", () => {
   it("jumps to the ends of the week with Home / End", () => {
     renderMulti({ values: [Temporal.PlainDate.from("2026-12-09")] });
     fireEvent.keyDown(cell("December 9, 2026"), { key: "Home" });
-    expect(cell("December 6, 2026").getAttribute("tabindex")).toBe("0"); // Sunday
+    expect(cell("December 6, 2026").getAttribute("tabindex")).toBe("0");
     fireEvent.keyDown(cell("December 6, 2026"), { key: "End" });
-    expect(cell("December 12, 2026").getAttribute("tabindex")).toBe("0"); // Saturday
+    expect(cell("December 12, 2026").getAttribute("tabindex")).toBe("0");
   });
 
   it("pages the range with PageUp / PageDown", () => {
@@ -1544,9 +1436,6 @@ describe("keyboard grid navigation", () => {
   });
 });
 
-// `sweep={false}` keeps the toggle model but withdraws the two GESTURES that
-// commit more than one date per action, so a multiple-selection calendar can
-// still be strictly one-at-a-time.
 describe("sweep={false} — multiple selection, one date per action", () => {
   it("still toggles on click, in and out", () => {
     const onValuesChange = vi.fn();
@@ -1577,7 +1466,6 @@ describe("sweep={false} — multiple selection, one date per action", () => {
       shiftKey: true,
     });
     expect(selected()).toEqual([]);
-    // The caret still MOVES — only the range-extend is withdrawn.
     expect(cell("December 12, 2026").getAttribute("tabindex")).toBe("0");
   });
 
@@ -1592,8 +1480,8 @@ describe("sweep={false} — multiple selection, one date per action", () => {
 
 describe("Shift+Arrow — the keyboard mirror of the sweep", () => {
   it("toggles each date it moves onto, anchor included", () => {
-    renderMulti(); // uncontrolled: `values: []` would pin it empty
-    const start = cell("December 11, 2026"); // today holds the tabstop
+    renderMulti();
+    const start = cell("December 11, 2026");
     fireEvent.keyDown(start, { key: "ArrowRight", shiftKey: true });
     expect(cell("December 11, 2026").getAttribute("aria-selected")).toBe("true");
     expect(cell("December 12, 2026").getAttribute("aria-selected")).toBe("true");
@@ -1606,7 +1494,7 @@ describe("Shift+Arrow — the keyboard mirror of the sweep", () => {
   });
 
   it("flips dates back when the run reverses over itself", () => {
-    renderMulti(); // uncontrolled: `values: []` would pin it empty
+    renderMulti();
     fireEvent.keyDown(cell("December 11, 2026"), {
       key: "ArrowRight",
       shiftKey: true,
@@ -1641,7 +1529,6 @@ describe("defaultView", () => {
       defaultView: Temporal.PlainDate.from("2026-07-01"),
       defaultValues: [Temporal.PlainDate.from("2026-08-11")],
     });
-    // Without it the range would start at the selection (Aug–Oct).
     expect(screen.getByText("July 2026")).toBeTruthy();
     expect(screen.getByText("September 2026")).toBeTruthy();
   });

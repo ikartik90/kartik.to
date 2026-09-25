@@ -12,8 +12,7 @@ vi.mock("@/store/theme", async (importOriginal) => ({
   useThemeStore: () => ({ mode: mockMode(), setMode: mockSetMode }),
 }));
 
-// jsdom does not implement matchMedia — controllable per test, so `system`
-// mode can be resolved both ways.
+// jsdom has no matchMedia; stubbed per test so `system` mode resolves both ways.
 const mockPrefersDark = vi.fn(() => false);
 Object.defineProperty(window, "matchMedia", {
   writable: true,
@@ -31,8 +30,6 @@ describe("ThemeToggle", () => {
     cleanup();
   });
 
-  // The control names the theme it OFFERS, not the one in force — it is a
-  // door, and a door is labelled with the room on the other side of it.
   it("offers dark while the page is light", () => {
     render(<ThemeToggle />);
     expect(screen.getByRole("button", { name: "Dark theme" })).toBeDefined();
@@ -64,9 +61,6 @@ describe("ThemeToggle", () => {
     expect(mockSetMode).toHaveBeenCalledWith("light");
   });
 
-  // Both glyphs ship on every render and CSS picks between them, so the icon is
-  // right in the FIRST painted frame — a JS-chosen icon would have to wait for
-  // the mount that the label waits for, and be visibly wrong until then.
   it("ships both glyphs so the paint never shows the wrong one", () => {
     const { container } = render(<ThemeToggle />);
     expect(container.querySelectorAll("[data-theme-glyph]").length).toBe(2);

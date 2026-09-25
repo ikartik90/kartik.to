@@ -2,16 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
 import type { GridCard } from "@/lib/grid";
 
-// The real one reaches the database through a server action. What is under test
-// is the ROUTING — which cards get a server-rendered demo and what it is handed
-// — so the reel stands in as a marker component.
+// The real reel reaches the database; only the routing is under test.
 vi.mock("@/components/shader-preset-reel", () => ({
   ShaderPresetReel: function ShaderPresetReel() {
     return null;
   },
 }));
 
-// Likewise the weather card, whose server half calls an external service.
+// The weather card's server half calls an external service.
 vi.mock("@/lib/weather", () => ({ getCurrentWeather: async () => null }));
 
 const { serverDemoSlots, serverDemos } = await import("../server-demos");
@@ -47,9 +45,6 @@ const post = (id: string): GridCard => ({
 
 describe("serverDemoSlots", () => {
   it("renders the reel on the server, keyed by the card and not the demo", () => {
-    // The KEY is the card's, because the same demo is publishable twice and the
-    // two showings are different elements — a map keyed by `componentId` would
-    // hand both cards whichever one was built last, at one card's aspect.
     const slots = serverDemoSlots([component("a", "shader-preset-reel")]);
 
     expect(Object.keys(slots)).toEqual(["component:a"]);
@@ -57,9 +52,6 @@ describe("serverDemoSlots", () => {
   });
 
   it("hands the demo the card's own aspect", () => {
-    // Not the registry's: a row may override the shape, and the reel frames its
-    // shapes for the box it is told it is in. A card published at 16:9 that was
-    // drawn framed for a square is the bug this exists to prevent.
     const wide = { ...component("a", "shader-preset-reel"), aspect: "16/9" as const };
     const slots = serverDemoSlots([wide]);
 
@@ -69,9 +61,6 @@ describe("serverDemoSlots", () => {
   });
 
   it("leaves every demo that has no server half to the browser", () => {
-    // Absent, not null: `ComponentCard` falls back to the client loader on a
-    // missing key, so a demo opting out of server rendering costs no branch
-    // here and keeps working exactly as it did.
     expect(serverDemoSlots([component("a", "calchemy-demo")])).toEqual({});
   });
 
@@ -90,8 +79,6 @@ describe("serverDemoSlots", () => {
     expect((slots["component:b"] as ReactElement).props).toEqual({ aspect: "16/9" });
   });
 
-  // The registry is the catalogue of demos this codebase has; this is the much
-  // shorter list of the ones whose data is fetched before the page is sent.
   it("names only the demos that have a server half", () => {
     expect(Object.keys(serverDemos)).toEqual([
       "shader-preset-reel",

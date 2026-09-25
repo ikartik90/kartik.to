@@ -58,20 +58,12 @@ vi.mock("@/assets/icons/component.svg", () => ({
   ),
 }));
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function setSlashAnchorOnBody() {
   const el = document.createElement("p");
   el.setAttribute("data-slash-anchor", "");
   document.body.appendChild(el);
   return el;
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("SlashMenu", () => {
   let onSelect: Mock<(type: SlashMenuBlockType) => void>;
@@ -87,8 +79,7 @@ describe("SlashMenu", () => {
   afterEach(() => {
     cleanup();
     anchorEl.remove();
-    // Input modality is module-level (it tracks the real device), so an arrow
-    // key in one test would otherwise suppress the next one's hover.
+    // Input modality is module-level: an arrow key in one test would suppress the next one's hover.
     resetInputModality();
   });
 
@@ -98,23 +89,13 @@ describe("SlashMenu", () => {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Positioning
-  // -------------------------------------------------------------------------
-
   it("positions via CSS anchor() — no inline top/left from JavaScript", () => {
     const listbox = renderMenu().getByRole("listbox", { name: "Insert block" });
-    // The positioned element is the popover shell the listbox sits in; nothing
-    // on the way up to the document may carry a top/left set from JavaScript.
     for (let el: HTMLElement | null = listbox; el; el = el.parentElement) {
       expect(el.style.top).toBe("");
       expect(el.style.left).toBe("");
     }
   });
-
-  // -------------------------------------------------------------------------
-  // Rendering
-  // -------------------------------------------------------------------------
 
   it("renders all ten menu items when query is empty", () => {
     renderMenu();
@@ -133,15 +114,12 @@ describe("SlashMenu", () => {
   it("highlights the first item by default", () => {
     renderMenu();
     const items = screen.getAllByRole("option");
-    // The roving highlight is `data-active` (aria-selected is reserved for a
-    // persistent selection, which a transient command menu never commits).
     expect(items[0].hasAttribute("data-active")).toBe(true);
     expect(items[1].hasAttribute("data-active")).toBe(false);
   });
 
   it("renders the Component item as a plain option without a submenu", () => {
     renderMenu();
-    // No chevron / submenu — hovering the row does not open anything.
     fireEvent.pointerEnter(screen.getByText("Component"));
     expect(screen.queryByRole("menu", { name: "Insert component" })).toBeNull();
     expect(onSelect).not.toHaveBeenCalled();
@@ -155,8 +133,7 @@ describe("SlashMenu", () => {
 
   it("calls onSelect with 'component' on Enter when the Component item is active", () => {
     renderMenu();
-    // Derived, not hardcoded — the menu grows, and an off-by-one here would
-    // silently assert about whichever item moved into that slot.
+    // Derived, not hardcoded: the menu grows.
     const steps = screen
       .getAllByRole("option")
       .findIndex((item) => item.textContent === "Component");
@@ -166,10 +143,6 @@ describe("SlashMenu", () => {
     fireEvent.keyDown(document, { key: "Enter" });
     expect(onSelect).toHaveBeenCalledWith("component");
   });
-
-  // -------------------------------------------------------------------------
-  // Filtering
-  // -------------------------------------------------------------------------
 
   it("filters items by query (case-insensitive)", () => {
     renderMenu({ query: "para" });
@@ -188,10 +161,6 @@ describe("SlashMenu", () => {
     renderMenu({ query: "zzz" });
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
-
-  // -------------------------------------------------------------------------
-  // Click selection
-  // -------------------------------------------------------------------------
 
   it("calls onSelect with 'heading' when Sub-heading is clicked", () => {
     renderMenu();
@@ -255,10 +224,6 @@ describe("SlashMenu", () => {
     expect(onSelect).toHaveBeenCalledWith("horizontal_rule");
   });
 
-  // -------------------------------------------------------------------------
-  // Keyboard navigation
-  // -------------------------------------------------------------------------
-
   it("moves active item down with ArrowDown", () => {
     renderMenu();
     fireEvent.keyDown(document, { key: "ArrowDown" });
@@ -269,7 +234,6 @@ describe("SlashMenu", () => {
 
   it("moves active item up with ArrowUp", () => {
     renderMenu();
-    // Move down twice, then up once → should land on index 1.
     fireEvent.keyDown(document, { key: "ArrowDown" });
     fireEvent.keyDown(document, { key: "ArrowDown" });
     fireEvent.keyDown(document, { key: "ArrowUp" });
@@ -279,7 +243,6 @@ describe("SlashMenu", () => {
 
   it("wraps from last item to first when pressing ArrowDown", () => {
     renderMenu();
-    // One press per item walks off the end and back to the top.
     const count = screen.getAllByRole("option").length;
     for (let i = 0; i < count; i++) {
       fireEvent.keyDown(document, { key: "ArrowDown" });
@@ -291,7 +254,6 @@ describe("SlashMenu", () => {
 
   it("wraps from first item to last when pressing ArrowUp", () => {
     renderMenu();
-    // At index 0, pressing ArrowUp once wraps to the last item.
     fireEvent.keyDown(document, { key: "ArrowUp" });
     const items = screen.getAllByRole("option");
     expect(items[items.length - 1].hasAttribute("data-active")).toBe(true);
@@ -300,35 +262,27 @@ describe("SlashMenu", () => {
 
   it("moves highlight to item under pointer (onPointerEnter)", () => {
     renderMenu();
-    // Simulate hovering over the third item (Media, index 2).
     fireEvent.pointerEnter(screen.getByText("Media"));
     const items = screen.getAllByRole("option");
     expect(items[2].hasAttribute("data-active")).toBe(true);
     expect(items[0].hasAttribute("data-active")).toBe(false);
   });
 
-  // The reported bug, end to end. You type `/` with the mouse already sitting
-  // where the menu is about to appear. The cursor never moves, so every pointer
-  // event that follows is the engine's, not yours — and the arrow keys must own
-  // the highlight until you genuinely reach for the mouse.
   it("keeps the keyboard in charge when the menu opens under a parked cursor", () => {
     fireEvent.keyDown(document, { key: "/" });
     renderMenu();
     const items = () => screen.getAllByRole("option");
 
-    // The menu materialising under the cursor makes the engine fire an enter
-    // for the row it landed on. That is not the user pointing at anything.
+    // The engine fires an enter for the row the menu opened under; the user isn't pointing at it.
     fireEvent.pointerEnter(screen.getByText("Media"));
     expect(items()[2].hasAttribute("data-active")).toBe(false);
     expect(items()[0].hasAttribute("data-active")).toBe(true);
 
-    // Arrows walk from the keyboard's position, and stay there.
     fireEvent.keyDown(document, { key: "ArrowDown" });
     expect(items()[1].hasAttribute("data-active")).toBe(true);
     fireEvent.pointerEnter(screen.getByText("Media"));
     expect(items()[1].hasAttribute("data-active")).toBe(true);
 
-    // Reaching for the mouse hands control straight back.
     fireEvent.pointerMove(document, { clientX: 120, clientY: 64 });
     fireEvent.pointerEnter(screen.getByText("Media"));
     expect(items()[2].hasAttribute("data-active")).toBe(true);
@@ -336,7 +290,6 @@ describe("SlashMenu", () => {
 
   it("keyboard arrow navigation takes over from the pointer-entered position", () => {
     renderMenu();
-    // Hover index 2 (Media), then press ArrowDown → should land on index 3 (Component).
     fireEvent.pointerEnter(screen.getByText("Media"));
     fireEvent.keyDown(document, { key: "ArrowDown" });
     const items = screen.getAllByRole("option");
@@ -359,7 +312,6 @@ describe("SlashMenu", () => {
   it("resets active index to 0 when query changes", () => {
     const { rerender } = renderMenu();
     fireEvent.keyDown(document, { key: "ArrowDown" });
-    // Change query so filtered list updates.
     act(() => {
       rerender(
         <SlashMenu query="p" onSelect={onSelect} onDismiss={onDismiss} />,
@@ -368,10 +320,6 @@ describe("SlashMenu", () => {
     const items = screen.getAllByRole("option");
     expect(items[0].hasAttribute("data-active")).toBe(true);
   });
-
-  // -------------------------------------------------------------------------
-  // Dismiss
-  // -------------------------------------------------------------------------
 
   it("calls onDismiss when Escape is pressed", () => {
     renderMenu();

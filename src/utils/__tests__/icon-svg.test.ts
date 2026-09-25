@@ -87,25 +87,20 @@ describe("nativeStrokeOf", () => {
   });
 
   it("assumes the grid's house weight where no stroke says otherwise", () => {
-    // A flattened icon has no stroke to read, and 20-grid icons are drawn at
-    // 1.25 — so the ratio it would be re-weighted by is 1, not a division by
-    // zero.
+    // No stroke to read, so it reports the grid's own 1.25.
     expect(nativeStrokeOf(readIconSvg(FLATTENED)!)).toBe(1.25);
   });
 });
 
 describe("strokeUnitsFor", () => {
   it("renders the three house pairings at their own weight, untouched", () => {
-    // 16 at 1, 20 at 1.25 and 24 at 1.5 are the SAME optical weight, so a
-    // 20-grid icon asked for any of them needs exactly its drawn 1.25.
+    // 16 at 1, 20 at 1.25 and 24 at 1.5 are the same optical weight.
     expect(strokeUnitsFor(20, 16, 1)).toBeCloseTo(1.25);
     expect(strokeUnitsFor(20, 20, 1.25)).toBeCloseTo(1.25);
     expect(strokeUnitsFor(20, 24, 1.5)).toBeCloseTo(1.25);
   });
 
   it("scales a 16-grid icon's units so it lands on the asked-for pixels", () => {
-    // Drawn on 16 and shown at 20: a 1.25px stroke is 1 unit on that grid,
-    // which is exactly what a 16px icon is drawn at.
     expect(strokeUnitsFor(16, 20, 1.25)).toBeCloseTo(1);
     expect(strokeUnitsFor(16, 16, 1)).toBeCloseTo(1);
     expect(strokeUnitsFor(16, 24, 1.5)).toBeCloseTo(1);
@@ -148,8 +143,7 @@ describe("serializeIconSvg", () => {
       <path d="M2 2" stroke="#000" stroke-width="1.25"/>
       <path d="M3 3" stroke="#000" stroke-width="0.625"/>
     </svg>`;
-    // The dominant 1.25 goes to 2.5, so the hairline at half of it goes to
-    // 1.25 — the icon is re-weighted, not levelled.
+    // Re-weighted, not levelled: the half-weight hairline stays half.
     const out = serializeIconSvg(readIconSvg(twoWeights)!, { size: 20, stroke: 2.5 });
     expect(out).toContain('stroke-width="2.5"');
     expect(out).toContain('stroke-width="1.25"');

@@ -37,7 +37,6 @@ function Harness(props: {
   );
 }
 
-/** An open modal dialog with the focus in it, as `showModal()` leaves things. */
 function openDialog(): HTMLInputElement {
   const dialog = document.createElement("dialog");
   dialog.setAttribute("open", "");
@@ -55,9 +54,6 @@ describe("useDismiss", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  // Escape closes ONE thing. Every open surface listens at the document, so
-  // without an order among them a keypress meant for the combobox standing on a
-  // panel takes the panel with it — which is the bug this locks out.
   it("gives Escape to the surface opened last, not to every open one", () => {
     const panel = vi.fn();
     const menu = vi.fn();
@@ -74,8 +70,6 @@ describe("useDismiss", () => {
     expect(panel).not.toHaveBeenCalled();
   });
 
-  // And the next press is the panel's, so two presses close two surfaces —
-  // the layering is an order, not a mute.
   it("hands Escape back to the surface underneath once the top one goes", () => {
     const panel = vi.fn();
     const menu = vi.fn();
@@ -116,10 +110,6 @@ describe("useDismiss", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  // A surface opened from another — the colour picker from a field on a
-  // properties rail — is portalled beside it, so a press in it lands outside
-  // the rail by every measure but this one. It must not take the rail away
-  // (and the picker with it); the bug this locks out.
   it("ignores a press in a surface opened after it", () => {
     const panel = vi.fn();
     const picker = vi.fn();
@@ -136,8 +126,6 @@ describe("useDismiss", () => {
     expect(panel).not.toHaveBeenCalled();
     expect(picker).not.toHaveBeenCalled();
 
-    // The other way round is still a press outside: back on the panel, the
-    // picker goes and the panel stays.
     fireEvent.pointerDown(inPanel);
     expect(picker).toHaveBeenCalledTimes(1);
     expect(panel).not.toHaveBeenCalled();
@@ -161,10 +149,6 @@ describe("useDismiss", () => {
     expect(onDismiss).toHaveBeenCalledTimes(2);
   });
 
-  // A modal <dialog> stands over every surface on the page and joins nothing:
-  // it is shown by a `showModal()` made on a ref, from outside. So the rail it
-  // covers is still the topmost LAYER, and would take the press meant for the
-  // palette over it — the bug this locks out.
   it("leaves an Escape made inside an open dialog to that dialog", () => {
     const rail = vi.fn();
     render(<Harness onDismiss={rail} />);
@@ -174,8 +158,6 @@ describe("useDismiss", () => {
     expect(rail).not.toHaveBeenCalled();
   });
 
-  // The next press, made after the dialog has gone, is the rail's again — two
-  // presses close two things, exactly as two stacked menus do.
   it("hands Escape back to the surface once the dialog has closed", () => {
     const rail = vi.fn();
     render(<Harness onDismiss={rail} />);
@@ -187,8 +169,6 @@ describe("useDismiss", () => {
     expect(rail).toHaveBeenCalledTimes(1);
   });
 
-  // And a menu opened ON the dialog is a menu like any other: the exemption is
-  // for what stands BEHIND one, not for everything while one is up.
   it("still dismisses a surface that lives inside the open dialog", () => {
     const menu = vi.fn();
     const dialog = document.createElement("dialog");

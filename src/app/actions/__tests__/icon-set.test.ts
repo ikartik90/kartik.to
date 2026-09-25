@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { mockGetSession } = vi.hoisted(() => ({ mockGetSession: vi.fn() }));
 
-// The guard now lives in `@/lib/auth/server` and is shared by every action
-// module. Stubbed at its SESSION source rather than by replacing the module, so
-// these tests still run the real comparison — a mock of `requireAdmin` would
-// make every "Unauthorized" case below assert its own stub.
+// Mocked at the session source, not `requireAdmin`, so the real admin check runs.
 vi.mock("@neondatabase/auth/next/server", () => ({
   createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
@@ -93,7 +90,6 @@ describe("listIcons", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     signedOut();
-    // No icon has been renamed unless a test says so.
     mockIconFindMany.mockResolvedValue([]);
   });
 
@@ -143,8 +139,6 @@ describe("listIcons", () => {
   });
 
   it("holds an object whose review state was never written", async () => {
-    // Anything already in the bucket predates this page. It has not been
-    // looked at, so it is not on show — the safe direction for a default.
     mockListR2IconKeys.mockResolvedValue([STROKED]);
     mockHeadR2Object.mockResolvedValue(head({ review: "" }));
 
@@ -198,9 +192,6 @@ describe("createIconUploadUrl", () => {
   });
 
   it("asks for no metadata on the signature, which could not carry it", async () => {
-    // R2 accepts a presigned PUT whose `x-amz-meta-*` were hoisted into the
-    // query string and stores NONE of them, with a 200. Everything the object
-    // is measured as is stamped on afterwards by `finalizeIconUpload`.
     await createIconUploadUrl({ filename: "a.svg", size: 900 });
     expect(mockCreateR2UploadUrl.mock.calls[0]).toHaveLength(2);
   });
@@ -346,11 +337,6 @@ describe("deleteIcon", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// An icon's NAME and its aliases, which are the only two things about an icon
-// that its own file cannot say — see the `Icon` model.
-// ---------------------------------------------------------------------------
-
 describe("icon labels", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -413,9 +399,6 @@ describe("icon labels", () => {
   });
 
   it("deletes the row when the name is cleared, rather than storing an empty one", async () => {
-    // An icon with no row is called what its filename says, so emptying the
-    // field is how you get that name back — and a row holding "" would have
-    // to be told apart from an unset one everywhere it was read.
     signedIn();
 
     await setIconLabels({ key: STROKED, title: "   ", aliases: [] });
@@ -433,14 +416,6 @@ describe("icon labels", () => {
   });
 });
 
-
-// ---------------------------------------------------------------------------
-// The set as the SERVER draws it.
-//
-// The page prerenders the approved icons, so this read must ask nothing about
-// who is calling — a session read is what would make the route dynamic, and
-// the whole point is that the answer is the same for everyone.
-// ---------------------------------------------------------------------------
 
 describe("the set the page is prerendered from", () => {
   const SOURCES: Record<string, string> = {
@@ -473,23 +448,16 @@ describe("the set the page is prerendered from", () => {
 
     expect(set).toHaveLength(1);
     expect(set[0].icon.name).toBe("check.svg");
-    // Parsed on the SERVER — the geometry is in hand, so the page can be HTML
-    // rather than a request for two hundred files.
     expect(set[0].svg).toMatchObject({ viewBox: 20, flattened: false });
     expect(set[0].svg?.nodes.length).toBeGreaterThan(0);
   });
 
   it("leaves the held icons out of it entirely, not merely unmarked", async () => {
-    // The page this feeds is public HTML. A held icon that reached it would be
-    // in the payload for everyone, whatever the grid chose to draw — which is
-    // the one thing holding an icon back has to prevent.
     const set = await listApprovedIconsWithSvg();
     expect(set.map((entry) => entry.icon.key)).not.toContain(FLAT);
   });
 
   it("asks nothing about who is calling, even when the author is", async () => {
-    // A session read is what would make the route dynamic. The approved set is
-    // the same for everyone, so this must never look.
     signedIn();
     const set = await listApprovedIconsWithSvg();
 
@@ -498,8 +466,6 @@ describe("the set the page is prerendered from", () => {
   });
 
   it("keeps an icon whose file will not come, rather than dropping the tile", async () => {
-    // The listing says it exists; the grid marks it broken. Dropping it here
-    // would make a failed read look like a deleted icon.
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, text: () => Promise.resolve("") })));
     const set = await listApprovedIconsWithSvg();
 
@@ -532,14 +498,6 @@ describe("listHeldIcons", () => {
     await expect(listHeldIcons()).rejects.toThrow("Unauthorized");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Revalidation.
-//
-// The grid is prerendered now, so a write that does not say so leaves the page
-// showing the set as it was at the last build — the icon uploaded a minute ago
-// simply is not there, and nothing in the UI can explain why.
-// ---------------------------------------------------------------------------
 
 describe("what a write tells the prerendered page", () => {
   beforeEach(() => {

@@ -27,17 +27,10 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata: Metadata = {
-  // What every relative URL in this app's metadata resolves against, and the
-  // reason the site had no link previews at all: `og:image` and `og:url` are
-  // read by crawlers, which have no page to resolve a path against, so Next
-  // drops a relative one entirely rather than emitting something that cannot
-  // be fetched. Without a base there was nothing to make absolute.
+  // Without a base, Next drops relative og:image / og:url entirely.
   metadataBase: new URL(SITE_URL),
   title: {
     default: SITE_TITLE,
-    // Every page below states its own name and gets the author's after it —
-    // the name is what gets searched for, where the domain is not. The
-    // homepage keeps `default`, which already leads with it.
     template: `%s — ${AUTHOR.name}`,
   },
   description: SITE_DESCRIPTION,
@@ -45,15 +38,10 @@ export const metadata: Metadata = {
   authors: [{ name: AUTHOR.name, url: SITE_URL }],
   creator: AUTHOR.name,
   publisher: AUTHOR.name,
-  // The defaults every page inherits and each post then overrides with its own
-  // title, description and card. The image is not named here: the file
-  // convention supplies it — `app/opengraph-image.tsx` for anything with
-  // nothing more specific, and a post's own route for a post.
   ...siteCard(SITE_DESCRIPTION),
 };
 
-// Runs synchronously before hydration to prevent flash of incorrect theme.
-// Reads the Zustand-persisted mode from localStorage and sets data-theme on <html>.
+// Sets data-theme from the persisted mode before first paint.
 const themeScript = `(function(){try{var s=localStorage.getItem('theme');var m=s?JSON.parse(s).state?.mode:'system';var t=m==='dark'?'dark':m==='light'?'light':window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`;
 
 export default function RootLayout({
@@ -68,17 +56,12 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Raw synchronous inline script — must run before first paint to
-            avoid FOUC. next/script beforeInteractive queues via __next_s and
-            fires after the client runtime loads, too late. */}
+        {/* Raw inline script: next/script's beforeInteractive runs too late to prevent a theme flash. */}
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeScript }}
         />
-        {/* Also synchronous, and for the same reason: the palette's own ⌘K
-            listener does not exist until the layout hydrates, so a press
-            before then is dropped. This one records it; the palette collects
-            it on mount (see palette-intent.ts). */}
+        {/* Records a ⌘K pressed before hydration; the palette collects it on mount. */}
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: PALETTE_INTENT_SCRIPT }}
@@ -92,8 +75,6 @@ export default function RootLayout({
         <CommandPalette />
         <Header />
         {children}
-        {/* Last, and rendering nothing: both clients only attach a deferred
-            script. See analytics.tsx for why the admin surface is filtered. */}
         <Analytics />
       </body>
     </html>

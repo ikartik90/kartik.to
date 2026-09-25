@@ -3,16 +3,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { css } from "../../../../styled-system/css";
 
-// ---------------------------------------------------------------------------
-// Text cut short with an ellipsis, and the whole of it in a tooltip while the
-// pointer is over it — only when it IS cut short.
-//
-// The tooltip is a popover, so it goes to the top layer above the modal it is
-// written inside — the site's `Tooltip` portals to the page, which a modal
-// leaves inert and underneath. It is placed over the text it completes, from
-// where that text is when the pointer arrives. The text is all there for a
-// screen reader regardless; the cut is only drawn.
-// ---------------------------------------------------------------------------
+// A popover, not the site's Tooltip, so it renders in the top layer above an open modal.
 
 const tooltipStyle = css({
   position: "fixed",
@@ -28,18 +19,15 @@ const tooltipStyle = css({
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  // Centred over the text, its bottom edge 6px above it.
   transform: "translate(-50%, calc(-100% - 6px))",
   pointerEvents: "none",
 });
 
 export interface OverflowTooltipProps {
-  /** The whole text, as the tooltip reads it. */
   label: string;
-  /** The element that truncates: it needs `overflow: hidden` and an ellipsis. */
+  /** Must truncate: `overflow: hidden` plus an ellipsis. */
   className: string;
   children: ReactNode;
-  /** Passed through to the truncating element. */
   "data-stage-tag"?: string;
 }
 

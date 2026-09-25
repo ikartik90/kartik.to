@@ -48,62 +48,10 @@ import ChangeIcon from "./icons/replace.svg";
 import ResultsIcon from "./icons/menu-option.svg";
 import InfoIcon from "./icons/info.svg";
 
-// ---------------------------------------------------------------------------
-// What the edit drawer holds (Figma 94:5023): the job's criteria, each as a
-// short title and a prompt the recruiter can rewrite, and the two ways out.
-//
-// The fields are a DRAFT of the criteria RUNNING. This component is remounted
-// every time the drawer opens, so Cancel — or any other way of closing but
-// saving — throws the draft away and the next opening starts from what is
-// running.
-//
-// Choosing it is the walkthrough's second step, and its tip points at Add
-// criteria; retesting is the third, whose tip points at Retest criteria once
-// the typing is through; reviewing the suggested rewrites is the fourth,
-// applying one the fifth, and retesting once more the sixth, at Retest
-// criteria again. The seventh is the results all matching, done with once they
-// are closed.
-//
-// "Add custom" puts the custom criterion at the top, blank, and TYPES it in —
-// title, a breath, then prompt — in the field's own caret, as if the recruiter
-// were writing it (Figma 55:620). Typing into it takes over at once; reduced
-// motion fills it in whole. The header says the criteria have changed since
-// they were tested for as long as the draft differs from what was last tested
-// — until a retest, what is running.
-//
-// View benchmark results shows the last benchmark at once — at first, the run
-// of the criteria running — and Change candidates... shows it at once on the
-// Suggested candidates list. Retesting with the
-// previous candidate set benchmarks the draft (anything still being typed is
-// typed out in full first, so the whole criterion is tested), and from then on
-// the draft counts as tested and that run is the last one. Reviewing its
-// suggested rewrites brings the recruiter back here, each rewrite under the
-// prompt it is for (Figma 86:3757), with focus on it. Applying one writes it
-// into that prompt, so the draft differs from what was tested again and
-// Retest criteria is back (Figma 93:4095); ignoring one just dismisses it.
-//
-// A candidate removed from the suggested list is out of the benchmark until
-// added back: their result goes, and every retest leaves them out. One added
-// back has no result until the next retest, so the results say they are no
-// longer valid.
-//
-// Validate is offered once changed criteria have up-to-date benchmark results
-// and have not been validated since — as the primary action, unless suggested
-// rewrites are still waiting on an answer — and validates in a dialog of its
-// own (Figma 119:5974). Once that has finished and is closed, Validate goes and
-// Save becomes the primary "Save and evaluate all active candidates", which
-// makes the criteria validated the ones running and closes the drawer; the
-// evaluating is pretend. The form opens with neither: the criteria running were
-// validated, saved and evaluated with the last run. Reordering and deleting are
-// drawn but not offered.
-// ---------------------------------------------------------------------------
-
-/** One step of the typing: after `delay`, `field` reads `value`. */
 interface Keystroke {
   delay: number;
   field: Field;
   value: string;
-  /** Move the caret into this field first — the second field's first step. */
   focus?: boolean;
 }
 
@@ -128,8 +76,6 @@ function script(title: string, prompt: string): Keystroke[] {
 
 const prefersReducedMotion = () =>
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-
-// --- Header -----------------------------------------------------------------
 
 const headerStyle = css({
   display: "flex",
@@ -164,14 +110,10 @@ const titleStyle = css({
   font: "var(--cashby-text-section-title)",
 });
 
-// Drawn as a button, and scenery like the rest of the product around the
-// criteria: nothing here leads anywhere.
 const learnMoreStyle = css({
   paddingInlineStart: "8px",
   paddingInlineEnd: "6px",
 });
-
-// --- Body -------------------------------------------------------------------
 
 const bodyStyle = css({
   display: "flex",
@@ -202,8 +144,6 @@ const emptyTextStyle = css({
   "& em": { fontStyle: "italic" },
 });
 
-// --- Footer -----------------------------------------------------------------
-
 const footerStyle = css({
   display: "flex",
   alignItems: "flex-start",
@@ -220,11 +160,8 @@ const footerStyle = css({
 const footerButtonStyle = css({ paddingInline: "8px" });
 
 export interface CriteriaDrawerProps {
-  /** The id its title is given, which the dialog is named by. */
   titleId: string;
-  /** The criteria running: validated, saved, and benchmarked last. */
   running: DraftCriterion[];
-  /** Save the criteria validated, to run from now on. */
   onSave: (criteria: DraftCriterion[]) => void;
   onCancel: () => void;
 }
@@ -238,27 +175,18 @@ export function CriteriaDrawer({
   const [draft, setDraft] = useState(running);
   const [tested, setTested] = useState(running);
   const [rewrites, setRewrites] = useState<SuggestedRewrite[]>([]);
-  // The run the criteria running were saved on — the same prompts give the
-  // same answers.
   const [lastRun, setLastRun] = useState<BenchmarkRow[]>(() =>
     benchmark(running),
   );
-  // Whether the results benchmark first (a retest) or show at once (a view).
   const [benchmarking, setBenchmarking] = useState(false);
-  // Which of the overlay's tabs it opens on.
   const [opensOn, setOpensOn] = useState<CandidatesTab>("results");
-  // The candidates taken out of the benchmark from the suggested list.
   const [removed, setRemoved] = useState<ReadonlySet<string>>(() => new Set());
-  // The ones still in it, in the fixture's order.
   const candidates = BENCHMARK_CANDIDATES.filter(
     (candidate) => !removed.has(candidate.id),
   ).map((candidate) => candidate.id);
   const results = useModal({ onClosed: closeResults });
-  // The criteria last validated: at first, those running, validated with the
-  // last run.
   const [validated, setValidated] = useState(running);
   const validation = useModal({ onClosed: closeValidation });
-  // Whether the validation open now has finished, so that closing it counts.
   const validationDone = useRef(false);
   const validateRef = useRef<HTMLButtonElement>(null);
   const editorsRef = useRef<HTMLUListElement>(null);
@@ -271,11 +199,9 @@ export function CriteriaDrawer({
   const fieldId = (id: string, field: Field) => `${uid}-${id}-${field}`;
   const saveId = `${uid}-save`;
 
-  // The typing in progress: its next timer, and the row it is typing into.
   const typing = useRef<{ timer: number; row: string } | null>(null);
-  // Whether it is, for what waits for it to finish.
   const [typingOn, setTypingOn] = useState(false);
-  // A field to put the caret in once the row holding it has been committed.
+  // Focused after the next commit, once its row exists.
   const focusNext = useRef<string | null>(null);
 
   function stopTyping() {
@@ -297,7 +223,6 @@ export function CriteriaDrawer({
     );
   }
 
-  // The recruiter's own typing: into the row being typed, it takes over.
   function edit(id: string, field: Field, value: string) {
     if (typing.current?.row === id) stopTyping();
     setField(id, field, value);
@@ -325,8 +250,7 @@ export function CriteriaDrawer({
     }
     const timer = window.setTimeout(() => {
       if (next.focus) {
-        // Only while the caret is still in this row — never out of a field
-        // the recruiter has since moved to.
+        // Never take focus from a field the recruiter has since moved to.
         const target = document.getElementById(fieldId(row, next.field));
         const active = document.activeElement;
         if (
@@ -344,8 +268,6 @@ export function CriteriaDrawer({
     typing.current = { timer, row };
   }
 
-  // Whatever is still being typed, typed out in full at once: the draft as it
-  // is about to be.
   function finishTyping(): DraftCriterion[] {
     const row = typing.current?.row;
     if (!row) return draft;
@@ -358,23 +280,18 @@ export function CriteriaDrawer({
     return whole;
   }
 
-  // Against the candidates in the benchmark — the previous set and the
-  // suggested set alike.
   function retest() {
     walkthrough.done("test-criteria");
     walkthrough.done("retest-criteria");
     const draftTested = finishTyping();
     setTested(draftTested);
     setLastRun(benchmark(draftTested, candidates));
-    // A new run supersedes whatever the last one suggested.
     setRewrites([]);
     setBenchmarking(true);
     setOpensOn("results");
     results.open();
   }
 
-  // Out of the benchmark, their results go with them; back in, they have none
-  // until a retest.
   function removeCandidates(ids: readonly string[]) {
     setRemoved((was) => new Set([...was, ...ids]));
     setLastRun((run) => run.filter((row) => !ids.includes(row.id)));
@@ -384,14 +301,12 @@ export function CriteriaDrawer({
     setRemoved((was) => new Set([...was].filter((id) => !ids.includes(id))));
   }
 
-  // From the stale results' own footer: the overlay stays open and benchmarks
-  // in place. The button goes with the results, so the dialog holds focus.
+  // The clicked button unmounts with the results, so the dialog takes focus.
   function retestFromResults() {
     results.dialogProps.ref.current?.focus();
     retest();
   }
 
-  // The last results at once, on either tab.
   function show(tab: CandidatesTab) {
     setBenchmarking(false);
     setOpensOn(tab);
@@ -400,16 +315,13 @@ export function CriteriaDrawer({
   const viewResults = () => show("results");
   const changeCandidates = () => show("suggested");
 
-  // However the results close, the walkthrough's seventh step is done with.
   function closeResults() {
     walkthrough.done("results-match");
     returnFocus();
   }
 
-  // A retest takes Retest criteria away the moment it starts — the criteria are
-  // tested — so the results can close with nothing to hand focus back to; and
-  // Safari never focuses a clicked button, so it hands focus to the drawer
-  // itself. View benchmark results takes it, unless focus has somewhere better.
+  // The opener may be gone (a retest removes it) and Safari never focuses a clicked
+  // button, so focus can end up on the drawer itself; View benchmark results takes it.
   function returnFocus() {
     const drawer = editorsRef.current?.closest("dialog");
     const active = document.activeElement;
@@ -417,8 +329,6 @@ export function CriteriaDrawer({
       viewResultsRef.current?.focus();
   }
 
-  // Closed before it finished, nothing has changed. Finished, the criteria are
-  // validated: Validate goes with that, and saving is what is left to do.
   function closeValidation() {
     if (!validationDone.current) {
       validateRef.current?.focus();
@@ -441,8 +351,6 @@ export function CriteriaDrawer({
       );
   }
 
-  // Either answer takes the suggestion away, and the caret goes to the prompt
-  // it was for — rewritten, if it was applied.
   function answerRewrite(rewrite: SuggestedRewrite, apply: boolean) {
     if (apply) {
       walkthrough.done("apply-rewrite");
@@ -455,13 +363,9 @@ export function CriteriaDrawer({
   }
 
   const changed = hasChanged(draft, tested);
-  // The last results no longer answer for the benchmark: from the retest
-  // menu's View last benchmark results the criteria have changed since, or a
-  // candidate added back has not been benchmarked.
   const stale =
     changed || candidates.some((id) => !lastRun.some((row) => row.id === id));
   const canValidate = !stale && hasChanged(draft, validated);
-  // Validated, and not what is running.
   const canSave = !hasChanged(draft, validated) && hasChanged(draft, running);
 
   return (
@@ -490,10 +394,6 @@ export function CriteriaDrawer({
             <div className={cx(cardActionsStyle, criteriaActionsStyle)}>
               {changed ? <CriteriaChanged /> : <UpToDate />}
               {changed ? (
-                // Retest criteria's menu (Figma 96:5262). The previous
-                // candidate set and the suggested candidates are the same, so
-                // both retest (Figma 73:2989); the last results open at once,
-                // and Change candidates... opens them on the suggested list.
                 <MenuButton
                   className={primaryButtonStyle}
                   width="wide"
@@ -543,8 +443,6 @@ export function CriteriaDrawer({
                   </span>
                 </button>
               )}
-              {/* Beside it: under it is the criterion just typed in, and
-                  then rewritten. */}
               {changed && !typingOn && (
                 <>
                   <WalkthroughTip
@@ -559,7 +457,6 @@ export function CriteriaDrawer({
                   />
                 </>
               )}
-              {/* Only "Add custom" leads anywhere; it cannot add the criterion twice. */}
               <MenuButton
                 className={accentButton({ glyphs: "both" })}
                 width="narrow"
@@ -650,7 +547,6 @@ export function CriteriaDrawer({
           <span className={plainButtonLabelStyle}>Validate</span>
         </button>
         {canSave ? (
-          // No info glyph: it is drawn in the ink, which the accent would drown.
           <button
             id={saveId}
             type="button"

@@ -1,4 +1,3 @@
-/** Derive a display label from a kebab/snake-case filename stem. */
 export function filenameToLabel(filename: string): string {
   return filename
     .split(/[-_]+/)

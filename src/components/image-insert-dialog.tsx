@@ -36,17 +36,6 @@ import CloseIcon from "@/assets/icons/cross.svg";
 import PageIcon from "@/assets/icons/page.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
-// This is the one surface that shows media it holds as an ASSET rather than as
-// a document node, so there is no `kind` field to read — and it needs none,
-// because the content type it does have is where a node's `kind` comes from in
-// the first place. `mediaKindOf` is the same call `getInsertPayload` makes one
-// step later (see `ImageInsertPayload.kind`), so the pane you check a file in
-// and the block that file becomes cannot disagree about which element it is.
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const hiddenWhenEmptyStyle = css({ display: "none" });
 
 const illustrationStyle = css({
@@ -62,13 +51,11 @@ const illustrationImageStyle = css({
   outlineWidth: "0",
 });
 
-/** Dark UI uses the light-themed illustration asset (Figma: image-light). */
 const illustrationForDarkUiStyle = css({
   display: "none",
   _dark: { display: "block" },
 });
 
-/** Light UI uses the dark-themed illustration asset (Figma: image-dark). */
 const illustrationForLightUiStyle = css({
   display: "block",
   _dark: { display: "none" },
@@ -89,10 +76,7 @@ const formatsStyle = css({
   margin: "none",
 });
 
-// The filename reads as plain text until you click it — a bare input with the
-// chrome stripped, exactly like the alt-text field it sits above. `font:
-// inherit` is what keeps it matching the metadata row's caption type, since a
-// form control doesn't inherit typography on its own.
+// `font: inherit`: a form control doesn't inherit typography.
 const filenameFieldStyle = css({
   flex: "1 1 auto",
   minWidth: 0,
@@ -143,10 +127,6 @@ const libraryFilenameStyle = css({
   whiteSpace: "nowrap",
 });
 
-// The sidebar column (`mediaLibrarySidebar`) owns the frame, padding and scroll,
-// so neutralize the OptionList `list` slot's self-contained popover framing —
-// its 4px inset and 7-row max-height cap — and let the list fill the column.
-// Atomic `css()` reliably outranks the recipe slot (utilities cascade layer).
 const libraryListStyle = css({
   flex: "1 1 auto",
   minHeight: 0,
@@ -169,37 +149,22 @@ const errorStyle = css({
 
 const iconStyle = menuIcon();
 
-// Built from the allow-lists rather than restated, so the file picker cannot
-// drift from what `processFiles` and the server will actually take.
 const ACCEPT = {
   media: ALLOWED_MEDIA_CONTENT_TYPES.join(","),
   document: ALLOWED_DOCUMENT_CONTENT_TYPES.join(","),
 } as const;
 
-/** The same lists as `ACCEPT`, for the hint under the drop zone. */
+/** Must match `ACCEPT`'s lists; shown under the drop zone. */
 const FORMAT_NAMES = {
   media: "PNG, SVG, WEBP, JPG, GIF, MP4",
   document: "PDF",
 } as const;
 
-/**
- * A document's stand-in in the list and in the preview pane.
- *
- * There is no element that draws a PDF, and nothing here tries: the pane's job
- * is to let you check WHICH file you are about to point at, and the name, the
- * type and the size below it answer that. An `<embed>` of a document would be a
- * second document viewer to keep working in two browsers for a preview nobody
- * reads at 280px.
- */
 const documentGlyphStyle = css({
   width: "40px",
   height: "40px",
   color: "text.body/50",
 });
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export type ImageDialogMode = "insert" | "change";
 
@@ -207,25 +172,12 @@ interface ImageInsertDialogBaseProps {
   open: boolean;
   mode?: ImageDialogMode;
   initialPhase?: ImageInsertPhase;
-  /**
-   * Which half of the bucket this is opening — pictures and clips by default,
-   * or documents. See {@link ImageInsertAccepts}: it decides what the library
-   * lists, what the drop zone takes and what the dialog calls itself.
-   */
   accepts?: ImageInsertAccepts;
-  /**
-   * Which folder of the bucket to list and upload into. See {@link
-   * MediaFolder} — `profiles` keeps testimonial faces out of the library.
-   */
+  /** `profiles` keeps testimonial faces out of the library. */
   folder?: MediaFolder;
   onClose: () => void;
 }
 
-/**
- * Single- and multi-select are one dialog but two contracts: the payload shape
- * follows the selection mode, so the union makes a mismatched `onInsert` a type
- * error rather than a runtime surprise.
- */
 export type ImageInsertDialogProps = ImageInsertDialogBaseProps &
   (
     | {
@@ -241,15 +193,12 @@ export type ImageInsertDialogProps = ImageInsertDialogBaseProps &
       }
   );
 
-// Left-aligned button cluster in dialog footer.
 const dialogFooterGroupStyle = css({
   display: "flex",
   alignItems: "center",
   gap: "md",
 });
 
-// Flex-grow region that centers the upload block in the dialog content area
-// (Figma y=156 in 480px shell).
 const uploadBodySlotStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -260,15 +209,6 @@ const uploadBodySlotStyle = css({
   minHeight: 0,
 });
 
-// Large image preview in insert-image library view. HEIGHT is the only fixed
-// dimension (280px) — the width hugs the image's own aspect ratio and stretches
-// at most to the pane's content box (`maxWidth: 100%` resolves against the flex
-// container's content box, so the pane's padding is excluded). Fixed rather
-// than max height so the metadata rows below hold their position as you switch
-// images; `object-fit: contain` letterboxes anything the width clamp squeezes.
-// The library holds clips as well as pictures, so the inner rule names both
-// elements — a <video> is a replaced element with the same box model, and the
-// rule is about the BOX, not about what fills it.
 const mediaPreviewStyle = css({
   height: "token(sizes.imagePreviewMax)",
   width: "auto",
@@ -286,7 +226,6 @@ const mediaPreviewStyle = css({
   },
 });
 
-// Filename and file-size row below preview.
 const mediaMetadataRowStyle = css({
   display: "flex",
   alignItems: "center",
@@ -297,7 +236,6 @@ const mediaMetadataRowStyle = css({
   textStyle: "caption",
 });
 
-// Alt-text field row below metadata.
 const mediaAltRowStyle = css({
   width: "100%",
   maxWidth: "token(sizes.imagePreviewMax)",
@@ -305,7 +243,6 @@ const mediaAltRowStyle = css({
   alignSelf: "center",
 });
 
-// Delete action row below alt text in media preview.
 const mediaDeleteRowStyle = css({
   display: "flex",
   justifyContent: "center",
@@ -315,8 +252,6 @@ const mediaDeleteRowStyle = css({
   alignSelf: "center",
 });
 
-// Small thumbnail in image library sidebar. Names <video> alongside <img> — a
-// clip's row shows a live thumbnail of itself, filling the same square.
 const mediaThumbnailStyle = css({
   position: "relative",
   flexShrink: 0,
@@ -391,12 +326,6 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
   });
 
   const selectedCount = selectedKeys.length;
-  // "Media" is the dialog's noun throughout — the library holds clips as well
-  // as stills. It is also a mass noun, so the batch count rides along without
-  // inflecting the way "1 Image / 2 Images" did. A document dialog says
-  // "Document" for the same reason it lists nothing but documents: what you are
-  // picking is the whole difference between the two, and calling both of them
-  // "Media" would leave the two surfaces indistinguishable at the header.
   const noun = isDocument ? "Document" : "Media";
   const title = `${mode === "change" ? "Change" : "Insert"} ${noun}`;
   const confirmLabel = isMultiple ? `Insert ${selectedCount} ${noun}` : title;
@@ -478,10 +407,6 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
             <OptionList
               value={selectedKey}
               selectedValues={isMultiple ? selectedKeys : undefined}
-              // A plain click means "just this one"; a modified click adds or
-              // drops a single image. Shift is what the brief asked for; ⌘/Ctrl
-              // is the same gesture on every desktop file list, and treating it
-              // differently here would only surprise people.
               onValueChange={(key, event) => {
                 const modified =
                   !!event &&
@@ -496,8 +421,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                 aria-label={`${noun} library`}
               >
                 {assets.map((asset) => (
-                  // `label` carries the searchable/accessible text, since the
-                  // children are rich (thumbnail + filename) rather than a string.
+                  // `label` is the searchable, accessible text; the children are rich.
                   <OptionList.Option
                     key={asset.key}
                     value={asset.key}
@@ -505,8 +429,6 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     disabled={isBusy}
                   >
                     <span className={mediaThumbnailStyle}>
-                      {/* The row's own `label` is the accessible name, so the
-                          thumbnail is decorative either way. */}
                       {isDocument ? (
                         <PageIcon aria-hidden />
                       ) : (
@@ -531,18 +453,12 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
           <div className={mediaPreviewPane()}>
             {selectedAsset && (
               <>
-                {/* The pane below edits ONE image — the anchor, i.e. whichever
-                    row you touched last. This line is what keeps that honest
-                    when the batch is larger than what's on screen. */}
                 {isMultiple && (
                   <p className={selectionCountStyle} aria-live="polite">
                     {selectedCount} of {maxSelection} selected
                   </p>
                 )}
                 <figure className={mediaPreviewStyle}>
-                  {/* Controls here and not on the thumbnail: this pane is
-                      where you check what you are about to insert, and for a
-                      clip that means being able to scrub it. */}
                   {isDocument ? (
                     <PageIcon aria-hidden className={documentGlyphStyle} />
                   ) : (
@@ -557,8 +473,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   )}
                 </figure>
                 <div className={mediaMetadataRowStyle}>
-                  {/* Click the name to rename it — display only; the object key
-                      (and any URL already published) is untouched. */}
+                  {/* Renames the display name only; the object key and any published URL are untouched. */}
                   <input
                     type="text"
                     className={filenameFieldStyle}
@@ -573,9 +488,6 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     {formatFileSize(selectedAsset.size)}
                   </span>
                 </div>
-                {/* Nothing draws a document, so there is no picture for a
-                    description to stand in for — alt text on one would be a
-                    field with no reader. */}
                 {!isDocument && (
                   <label className={mediaAltRowStyle}>
                     <span className={css({ srOnly: true })}>Alt text</span>
@@ -658,9 +570,6 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                   value={uploadProgress}
                   label={`Uploading ${noun.toLowerCase()}`}
                 />
-                {/* The bar measures the whole drop in bytes, so on its own it
-                    cannot say how far through the FILES you are — which is the
-                    only question worth asking of a batch that is part way up. */}
                 {uploadTotal > 1 && (
                   <p className={formatsStyle} aria-live="polite">
                     Uploading {uploadIndex} of {uploadTotal}
@@ -743,9 +652,6 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
       <input
         ref={fileInputRef}
         type="file"
-        // A library is a place files LIVE, not a queue of exactly what this
-        // block needs — uploading five and inserting one of them is ordinary,
-        // so the batch is allowed even where the selection is single.
         multiple
         accept={ACCEPT[accepts]}
         className={css({ display: "none" })}

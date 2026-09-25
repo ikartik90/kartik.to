@@ -32,44 +32,17 @@ const BRAND_PINK = "#FF4D97";
 const BRAND_ORANGE = "#FFAB6F";
 const TRANSPARENT = "#00000000";
 
-/**
- * Which size an icon is drawn at: 20px (`spacing.xxl`) or 16px (`spacing.xl`),
- * written on the slot below and NOWHERE else.
- *
- * TWO of them, because an icon that belongs to a LINE OF TEXT is not the same
- * object as one in a row of its own: the homepage's social row draws at 20px,
- * and a testimonial's profile link at 16px beside a 14px name. The chip around
- * it does not change — it is the same 4px inset either way, so the press comes
- * down to 24px with the glyph rather than shrinking to its outline.
- *
- * There is no pixel count left in this file's JavaScript, and that is the
- * point: the shader is placed and sized from the SLOT it is claimed by (see
- * `placementFor`), which is what lets one WebGL context serve both sizes. A
- * constant here would be a second answer to a question the DOM already has.
- */
+/** 20px or 16px, written on the slot below and nowhere else: the shader is sized from the slot. */
 export type SocialIconSize = "md" | "sm";
 
-// Cap the render buffer so retina screens don't quadruple the fragment work on
-// a 20px icon. 40×40 ≈ 2×; smoke is soft, so it reads fine well below native DPR.
-// The 16px icon's own 2× lands under this, so the cap only ever bites the
-// larger one — which is the one it was measured against.
 const SHADER_MAX_PIXELS = 40 * 40;
 
-// How far ahead of the cursor to look. At an ordinary mouse speed this is a
-// few hundred pixels of warning — enough to build the context and compile
-// before the hand arrives, and short enough that crossing the page on other
-// business doesn't trip it.
+// How far ahead of the cursor to look.
 const APPROACH_HORIZON_MS = 300;
 
-// The background warm-up runs when the browser has a moment, and no later than
-// this. Late is fine: the reader who never touches the icons pays nothing they
-// notice, and ⌘K is answered long before it runs.
 const WARM_IDLE_TIMEOUT_MS = 2000;
 
-// The tuning, unchanged — it is now written straight into the uniforms rather
-// than passed as `<GemSmoke>` props, because the mask arrives pre-processed
-// (see gem-smoke-mask.ts) and that component would insist on processing it
-// again. `shape` is GemSmoke's own default, kept so the look does not move.
+// Written into the uniforms, not <GemSmoke> props, which would re-process the pre-processed mask.
 const FLUORESCENT = {
   innerDistortion: 0.5,
   outerDistortion: 0.8,
@@ -81,13 +54,7 @@ const FLUORESCENT = {
   shape: GemSmokeShapes.diamond,
 } as const;
 
-/**
- * What `<GemSmoke>` would have built for these props. Typed as the library's
- * own `GemSmokeUniforms`, so a rename in a future version is a type error here
- * rather than a shader that quietly renders nothing. Spread on return, because
- * an interface has no index signature to satisfy the mount's `Record`-shaped
- * prop while the builder itself stays typed.
- */
+/** What <GemSmoke> would build for these props, typed so a library rename is a type error. */
 function gemSmokeUniforms(
   mask: HTMLImageElement,
   colors: string[],
@@ -160,32 +127,13 @@ function whenIdle(task: () => void): () => void {
   return () => clearTimeout(handle);
 }
 
-// ---------------------------------------------------------------------------
-// The stage
-//
-// ONE shader for the whole row, moved to whichever icon is hovered — not one
-// per icon. Each instance is its own WebGL context, and each mask costs a
-// Poisson pre-pass; four of them warming together blocked the main thread for
-// ~2s on the homepage, which is the window in which ⌘K is first pressed.
-//
-// The two go together. A single instance is only viable because the masks are
-// prepared ahead of the hover (gem-smoke-mask.ts) and handed over finished:
-// `<GemSmoke>` would re-run that pre-pass on every icon change, stalling the
-// hover and — until it finished — drawing the smoke over the icon's whole box
-// with nothing masking it. So this mounts `ShaderMount` directly, and only
-// once the mask it needs is ready.
-//
-// Nothing here is a fallback: the hover effect is the same effect, the same
-// shader and the same warm-before-you-arrive behaviour. What changed is how
-// many copies of it exist, and when the mask work happens.
-// ---------------------------------------------------------------------------
-
+// One shader for the whole row, moved to the hovered icon: each instance is a WebGL context.
+// Mounts ShaderMount directly, once its mask is prepared, since <GemSmoke> would redo the pre-pass.
 interface StageContext {
   /** Register an icon slot; the stage parks on the first one registered. */
   register: (element: HTMLElement, maskSrc: string) => () => void;
-  /** This slot is hovered — bring the shader here. */
   claim: (element: HTMLElement, maskSrc: string) => void;
-  /** This slot's hover ended. Ignored if another slot has since claimed. */
+  /** Ignored if another slot has since claimed. */
   release: (element: HTMLElement) => void;
 }
 
@@ -193,7 +141,6 @@ const StageContext = createContext<StageContext | null>(null);
 
 interface Placement {
   maskSrc: string;
-  /** The claimed slot's box — the shader is drawn at the icon's own size. */
   size: number;
   left: number;
   top: number;
@@ -201,8 +148,6 @@ interface Placement {
 
 const stageStyle = css({ position: "relative" });
 
-// The slot IS the icon's box: the stage measures it to place and size the
-// shader, so these two are the one place an icon's size is written.
 const slotStyle = css({
   position: "relative",
   display: "inline-flex",
@@ -211,7 +156,6 @@ const slotStyle = css({
 });
 
 const slotSizeStyle = {
-  // 20px, and 16px.
   md: css({ width: "token(spacing.xxl)", height: "token(spacing.xxl)" }),
   sm: css({ width: "token(spacing.xl)", height: "token(spacing.xl)" }),
 } as const satisfies Record<SocialIconSize, string>;
@@ -229,8 +173,6 @@ const iconLayerStyle = css({
 
 const iconHiddenStyle = css({ opacity: 0 });
 
-// Absolutely placed against the stage rather than the slot, because there is
-// one of it and four of them. `left`/`top` come from the claimed slot's box.
 const shaderLayerStyle = css({
   position: "absolute",
   opacity: 0,
@@ -257,12 +199,8 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
 
   const [warm, setWarm] = useState(false);
   const [showing, setShowing] = useState(false);
-  // Which masks have been through the pre-pass. The shader is never mounted
-  // without one: an unprepared GemSmoke renders unmasked over its whole box,
-  // which is the flash this replaces.
   const [masks, setMasks] = useState<Record<string, true>>({});
-  // Where the shader sits. Kept after a hover ends so leaving an icon is a
-  // fade-out, not a mask swap back to somewhere else.
+  // Kept after a hover ends, so leaving is a fade-out, not a mask swap.
   const [placement, setPlacement] = useState<Placement | null>(null);
 
   const placementFor = useCallback(
@@ -271,9 +209,6 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
       if (!stage) return null;
       const slotBox = element.getBoundingClientRect();
       const stageBox = stage.getBoundingClientRect();
-      // MEASURED, not looked up. The stage holds one shader for icons that are
-      // not all the same size, so the box it draws in has to come from the slot
-      // claiming it rather than from a constant the stage picks.
       const size = Math.round(slotBox.width);
       return {
         maskSrc,
@@ -297,8 +232,6 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
     (element: HTMLElement, maskSrc: string) => {
       claimedBy.current = element;
       const next = placementFor(element, maskSrc);
-      // Same slot, same box: keep the object, so re-hovering the icon the
-      // shader is already parked on is not a re-render and not a mask swap.
       if (next) {
         setPlacement((current) =>
           current &&
@@ -317,24 +250,19 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
   );
 
   const release = useCallback((element: HTMLElement) => {
-    // Moving from one icon to the next fires the new claim before the old
-    // release; only the slot still holding it may let go.
+    // The next icon's claim fires before this release, so only the current holder may let go.
     if (claimedBy.current !== element) return;
     claimedBy.current = null;
     setShowing(false);
   }, []);
 
-  // Background warm-up: not before the page has loaded, and then only in an
-  // idle slice of its own. Everything the reader can actually act on — the
-  // command palette above all — is live before a WebGL context is built.
   const pageLoaded = usePageLoaded();
   useEffect(() => {
     if (!enabled || warm || !pageLoaded) return;
     return whenIdle(() => setWarm(true));
   }, [enabled, warm, pageLoaded]);
 
-  // Approach warm-up: the cursor is heading at the row, so start now rather
-  // than waiting for it to land. Costs one passive listener until it fires.
+  // Approach warm-up: start as soon as the cursor heads for the row.
   useEffect(() => {
     if (!enabled || warm) return;
 
@@ -371,8 +299,6 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
     };
   }, [enabled, warm]);
 
-  // Park the shader on the first icon so warming has somewhere to be. Its mask
-  // is the one that is already prepared when a hover lands there.
   useEffect(() => {
     if (!warm || placement) return;
     const first = slots.current[0];
@@ -381,10 +307,7 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
     if (parked) setPlacement(parked);
   }, [warm, placement, placementFor]);
 
-  // Prepare the masks — the claimed one first, then the rest of the row, one
-  // at a time. Each is a Poisson pre-pass (see gem-smoke-mask.ts) and they are
-  // deliberately serial: the point of doing this in the background is that the
-  // page stays answerable while it happens.
+  // Serially, claimed mask first, so the page stays responsive through the pre-passes.
   useEffect(() => {
     if (!enabled || !warm) return;
     let cancelled = false;
@@ -408,7 +331,7 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
         try {
           await prepareGemSmokeMask(src);
         } catch {
-          continue; // a mask that will not load is one icon without a glow
+          continue;
         }
         if (cancelled) return;
         setMasks((current) => ({ ...current, [src]: true }));
@@ -425,26 +348,21 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
       ? [BRAND_ORANGE, BRAND_PINK, "#ffffff"]
       : [BRAND_PINK, BRAND_ORANGE, "#ffffff"];
 
-  // The mask for wherever the shader currently is — and the gate on showing it
-  // at all. No prepared mask, no shader: the alternative is the unmasked box.
+  // No prepared mask, no shader: without one it renders unmasked over the whole box.
   const mask =
     placement && masks[placement.maskSrc]
       ? preparedGemSmokeMask(placement.maskSrc)
       : null;
 
-  // Memoised because ShaderMount re-processes and re-uploads its textures
-  // whenever this object's IDENTITY changes — a fresh one per render would
-  // rebuild the texture on every hover, theme read and parent re-render.
+  // Memoised: ShaderMount re-uploads its textures whenever this object's identity changes.
   const uniforms = useMemo(
     () => (mask ? { ...gemSmokeUniforms(mask, colors) } : null),
-    // `colors` is derived from `theme` alone; depending on the array would
-    // defeat the memo for the same reason.
+    // `colors` derives from `theme` alone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mask, theme],
   );
 
-  // Stable, because a slot re-registers and re-claims whenever this changes —
-  // and a fresh object per render would make that a loop rather than an event.
+  // Stable, or every slot re-registers on each render.
   const stage = useMemo(
     () => ({ register, claim, release }),
     [register, claim, release],
@@ -475,10 +393,7 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * One icon's place in the row: it draws the line icon, and tells the stage
- * when the shader belongs over it.
- */
+/** One icon's slot: draws the icon and tells the stage when the shader belongs over it. */
 export function SocialIconShader({
   maskSrc,
   active,
@@ -487,7 +402,6 @@ export function SocialIconShader({
 }: {
   maskSrc: string;
   active: boolean;
-  /** The icon's drawn size — the box the shader is placed and sized from. */
   size?: SocialIconSize;
   children: ReactNode;
 }) {

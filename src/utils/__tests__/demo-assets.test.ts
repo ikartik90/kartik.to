@@ -60,15 +60,13 @@ describe("loadDemoAsset", () => {
   });
 
   it("resolves fonts even without a FontFaceSet (jsdom)", async () => {
-    // jsdom has no document.fonts — the loader must still resolve, not hang.
     await expect(
       loadDemoAsset({ id: "font-x", kind: "font", family: "X" }),
     ).resolves.toBeUndefined();
   });
 
   it("never hangs on an image that never loads (timeout fallback)", async () => {
-    // jsdom does not fetch images, so onload/onerror never fire — the internal
-    // timeout must still settle the promise so the preloader can't wedge.
+    // jsdom never fires image onload/onerror, so the timeout must settle it.
     vi.useFakeTimers();
     try {
       const promise = loadDemoAsset({

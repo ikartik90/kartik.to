@@ -57,45 +57,7 @@ import { AvgScore } from "./avg-score";
 import { plainButtonLabelStyle, plainButtonStyle } from "./parts";
 import { useWalkthrough, WalkthroughTip } from "./walkthrough";
 
-// ---------------------------------------------------------------------------
-// The benchmark's results (Figma 73:2989): the candidate set, split by what
-// really happened to each candidate, and a row for each saying whether the
-// criteria would have let them through — flagged where that disagrees. The
-// Suggested candidates tab beside it (Figma 57:846) lists the same twelve;
-// Candidate search is drawn but not offered.
-//
-// Everything is read off the fixture by `benchmark.ts`; nothing here decides.
-// The first mismatch opens with its details shown, as drawn, and each can be
-// folded and unfolded. The rest of the product around the table — the search,
-// the other tabs, the column controls — is drawn but not offered. Review suggested rewrites is the way on, back to the form; with no
-// mismatch there is nothing to review, and the footer only says that every
-// result matches (Figma 106:5781).
-// Last results viewed after the criteria have changed say they are no longer
-// valid, whatever they found, and offer a retest in place of the review.
-//
-// The summary is of the candidates in the benchmark — not those taken out from
-// the Suggested candidates list, where each can be removed and added back —
-// and says whether they make a fair benchmark: every known outcome among them,
-// and at least ten (Figma 110:5881, 115:5909, 117:5944). A removed candidate's
-// result is gone; one added back is listed with their average score — the
-// talent pool's, not the benchmark's — and nothing else until a retest, so the
-// results say they are no longer valid.
-//
-// Candidates can be selected to act on together: Remove, beside Add column,
-// takes those selected out of the benchmark; on Suggested candidates, Add puts
-// those selected back — each offered where it applies to any of them, and
-// applied only to those. Each tab starts with nothing selected. The results open
-// on Benchmark results, or on Suggested candidates to change the candidates.
-//
-// Rules are inset shadows rather than borders: the source draws its strokes
-// inside each box without taking room, and a real half-pixel border would
-// push every row below it down by half a pixel more.
-// ---------------------------------------------------------------------------
-
-// Past this the findings are too narrow to read; the table scrolls instead.
 const resultsTableStyle = css({ minWidth: "760px" });
-
-// --- The product around the results -----------------------------------------
 
 const chromeStyle = css({
   display: "flex",
@@ -130,8 +92,6 @@ const tabsStyle = css({
   whiteSpace: "nowrap",
 });
 
-// The current tab is joined onto the white panel under it, with two inverted
-// corners carrying its edge out into the band; the others sit in the band.
 const tab = cva({
   base: {
     position: "relative",
@@ -168,7 +128,7 @@ const tab = cva({
 
 const tabLabelStyle = css({ minWidth: "32px" });
 
-// The corner glyphs are `currentColor` once SVGR has been at them.
+// Paints the corners: SVGR turns their white into `currentColor`.
 const tabCornerStyle = css({
   position: "absolute",
   insetBlockEnd: 0,
@@ -187,8 +147,6 @@ const tabCountStyle = css({
   color: "var(--cashby-surface)",
   font: "var(--cashby-text-small)",
 });
-
-// --- Summary ----------------------------------------------------------------
 
 const panelStyle = css({
   flex: 1,
@@ -218,9 +176,6 @@ const summaryTitleStyle = css({
   font: "var(--cashby-text-card-title)",
 });
 
-// Whether the candidates make a fair benchmark: a tint laid over white, ruled
-// as the drawer's Up to date is. One line, cut short where the row is too
-// narrow for it, with the whole of it in a tooltip.
 const setStatus = cva({
   base: {
     display: "inline-block",
@@ -229,7 +184,6 @@ const setStatus = cva({
     paddingInline: "8px",
     borderRadius: "16px",
     font: "var(--cashby-text-small)",
-    // The line is the pill's height, so the text sits in its middle.
     lineHeight: "24px",
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -263,10 +217,6 @@ const outcomeColor = cva({
   },
 });
 
-// A 5px rounded stroke on a line of no height, as drawn — so its caps hang
-// half its weight past every edge — split by how many candidates each
-// outcome holds, out of at least the ten a benchmark needs: short of them, the
-// rest of the bar is left empty (Figma 110:5881).
 const outcomeBarStyle = css({
   display: "flex",
   gap: "3px",
@@ -285,8 +235,6 @@ const legendStyle = css({
   columnGap: "12px",
 });
 
-// An outcome with no one in it is flagged (Figma 115:5909): its dot gives way
-// to a warning, in a tint ruled in the caution colour.
 const legendItem = cva({
   base: {
     display: "flex",
@@ -317,8 +265,6 @@ const legendDotStyle = css({
   borderRadius: "50%",
 });
 
-// --- Toolbar ----------------------------------------------------------------
-
 const toolbarStyle = css({
   display: "flex",
   justifyContent: "flex-end",
@@ -326,7 +272,6 @@ const toolbarStyle = css({
   boxShadow: RULE_BELOW,
 });
 
-// The actions on the selected candidates, on the toolbar's left.
 const selectionActionsStyle = css({
   display: "flex",
   gap: "8px",
@@ -355,12 +300,8 @@ const addColumnStyle = css({
   paddingInlineEnd: "2px",
 });
 
-// The rule's own half-pixel stroke hangs either side of a line of no width.
 const columnsSeparatorStyle = css({ marginInline: "-0.25px" });
 
-// --- Table ------------------------------------------------------------------
-
-/** A known outcome's tag; the intro's pictures draw a hired one's for a strong fit. */
 export const outcomeTag = cva({
   base: {
     display: "flex",
@@ -392,11 +333,8 @@ export const outcomeTag = cva({
 
 const centredStyle = css({ display: "flex", justifyContent: "center" });
 
-// An arrow and the next part, spaced by the tag's own gap.
 const contentsStyle = css({ display: "contents" });
 
-// Drawn at three quarters in the intro's pictures (Figma 133:6289): the arcs
-// scale with the box, so their stroke does too.
 const ring = cva({
   base: { position: "relative" },
   variants: {
@@ -409,11 +347,7 @@ const ring = cva({
 
 const ringArcsStyle = css({ position: "absolute", inset: 0 });
 
-// One arc per criterion tested, clockwise from the top in the order of the
-// criteria. The source draws four quarter arcs (Figma 73:2989); these are the
-// same arcs worked out rather than traced — the circle through their ends, the
-// stroke they are drawn with, and the angle each stops short of a quarter — so
-// three criteria draw thirds in the same hand.
+// The source's quarter-arc geometry (32px box), parametrised so any number of criteria divides the ring.
 const RING = { centre: 16, radius: 14.1687, stroke: 2.72435, gap: 8.851 };
 
 function arcPath(from: number, to: number) {
@@ -482,7 +416,6 @@ const criterionNameStyle = css({
   textDecorationSkipInk: "none",
 });
 
-// Folded, it holds nothing and makes no box, so the gap closes up with it.
 const detailsStyle = css({ display: "contents" });
 
 const detailStyle = css({
@@ -495,8 +428,6 @@ const detailStyle = css({
 
 const detailHeadingStyle = css({ font: "var(--cashby-text-small-bold)" });
 
-// The quote's rule is a 2px rounded stroke on a line of no width, so it hangs
-// a pixel past the quote at either end and a pixel into the margin.
 const quoteStyle = css({ display: "flex", gap: "9px" });
 
 const quoteRuleStyle = css({
@@ -519,8 +450,6 @@ const detailsToggleStyle = css({
 
 const noFindingStyle = css({ font: "var(--cashby-text-body-strong)" });
 
-// --- Footer -----------------------------------------------------------------
-
 const footerStyle = css({ flexShrink: 0 });
 
 const banner = cva({
@@ -542,7 +471,6 @@ const banner = cva({
           "inset 0 1px 0 calc(var(--cashby-rule) - 1px) var(--cashby-caution-border)",
         color: "var(--cashby-caution-ink)",
       },
-      // Every result matches (Figma 106:5781).
       positive: {
         backgroundColor: "var(--cashby-positive-tint)",
         boxShadow:
@@ -581,22 +509,18 @@ const reviewButtonStyle = css({
   },
 });
 
-// ---------------------------------------------------------------------------
-
 export interface BenchmarkResultsProps {
   titleId: string;
   rows: BenchmarkRow[];
-  /** The results no longer answer for the benchmark: the criteria have changed since, or a candidate added back has not been benchmarked. */
+  /** Criteria or candidates changed since the results were benchmarked. */
   stale: boolean;
-  /** The candidates taken out of the benchmark from the suggested list. */
+  /** Candidate ids taken out of the benchmark. */
   removed: ReadonlySet<string>;
   onRemoveCandidates: (ids: readonly string[]) => void;
   onAddCandidates: (ids: readonly string[]) => void;
   onReviewRewrites: () => void;
   onRetest: () => void;
-  /** Close the overlay the results are in. */
   onClose: () => void;
-  /** The tab it opens on. */
   opensOn: CandidatesTab;
 }
 
@@ -621,8 +545,6 @@ export function BenchmarkResults({
   const outcomes = outcomeCounts(benchmarked);
   const status = candidateSetStatus(outcomes);
   const shortfall = MIN_BENCHMARK_CANDIDATES - benchmarked.length;
-  // Every candidate in the benchmark, with their result — none for one added
-  // back since the last run.
   const listed = benchmarked.map((candidate) => ({
     candidate,
     result: rows.find((row) => row.id === candidate.id) ?? null,
@@ -630,7 +552,6 @@ export function BenchmarkResults({
   const countId = useId();
   const reviewRef = useRef<HTMLButtonElement>(null);
   const matchRef = useRef<HTMLSpanElement>(null);
-  // The first mismatch's finding, which the walkthrough's fourth step is about.
   const findingRef = useRef<HTMLParagraphElement>(null);
   const firstMismatch = rows.find((row) => row.mismatch)?.id;
   const walkthrough = useWalkthrough();
@@ -646,8 +567,7 @@ export function BenchmarkResults({
     suggested: suggestedTabId,
   };
 
-  // Opening, the dialog focuses the first tab, current or not; opened on
-  // Suggested candidates, that tab takes focus once it has.
+  // The dialog focuses the first tab; opened on Suggested, move focus there.
   useEffect(() => {
     if (opensOn === "suggested")
       document.getElementById(suggestedTabId)?.focus();
@@ -659,8 +579,6 @@ export function BenchmarkResults({
     setSelected(new Set());
   }
 
-  // The candidates the tab lists, and which of those selected each action
-  // applies to.
   const selectable = (
     current === "results"
       ? listed.map(({ candidate }) => candidate)
@@ -677,7 +595,7 @@ export function BenchmarkResults({
     setSelected(next);
   }
 
-  // The action's buttons go with the selection, so focus goes to the header.
+  // The action buttons unmount with the selection, so focus moves to select-all.
   function act(action: (ids: readonly string[]) => void, ids: string[]) {
     action(ids);
     setSelected(new Set());
@@ -694,7 +612,6 @@ export function BenchmarkResults({
     />
   );
 
-  // Arrows, Home and End move between the two tabs on offer, and choose it.
   function handleTabKeys(event: KeyboardEvent<HTMLDivElement>) {
     const next: CandidatesTab | undefined = {
       ArrowRight: current === "results" ? "suggested" : "results",
@@ -707,7 +624,6 @@ export function BenchmarkResults({
     choose(next);
     document.getElementById(tabIds[next])?.focus();
   }
-  // The first mismatch opens unfolded, as drawn.
   const [unfolded, setUnfolded] = useState(
     () =>
       new Set(
@@ -902,8 +818,6 @@ export function BenchmarkResults({
         )}
       </div>
 
-      {/* The results' own: the suggested candidates are not a benchmark. */}
-      {/* Nothing to say of no results at all. */}
       {current === "results" && (stale || total > 0) && (
         <footer className={footerStyle}>
           {stale || mismatches > 0 ? (
@@ -932,9 +846,6 @@ export function BenchmarkResults({
                 >
                   {stale ? "Retest criteria" : "Review suggested rewrites"}
                 </button>
-                {/* The walkthrough's fourth step is done here, and points at
-                    the finding it is about: over it, clear of the resume
-                    quoted under it. */}
                 {!stale && (
                   <WalkthroughTip
                     step="review-rewrites"
@@ -954,8 +865,6 @@ export function BenchmarkResults({
                   criteria
                 </span>
               </p>
-              {/* The walkthrough's last step: nothing here to press, so its
-                  Finish closes the results. */}
               <WalkthroughTip
                 step="results-match"
                 anchor={matchRef}
@@ -983,7 +892,6 @@ function statusLabel(status: CandidateSetStatus) {
   }
 }
 
-/** The results' table: its columns and their heads, over the rows given. */
 export function ResultsTable({
   labelledBy,
   selectAll,
@@ -1083,14 +991,13 @@ function CandidateTab({
 
 export interface ResultRowProps {
   candidate: Pick<BenchmarkRow, "id" | "name" | "knownOutcome" | "avgScore">;
-  /** Their benchmark result: none for one added back since the last run. */
+  /** Null for a candidate added back since the last run. */
   result: BenchmarkRow | null;
   striped: boolean;
   selected: boolean;
   onSelect: () => void;
   unfolded: boolean;
   onToggle: () => void;
-  /** Given the finding's title, for what points at it. */
   findingRef?: Ref<HTMLParagraphElement>;
 }
 
@@ -1146,7 +1053,6 @@ export function ResultRow({
   );
 }
 
-/** What the benchmark said of a candidate: Evaluations, Result and Finding. */
 function BenchmarkedCells({
   row,
   caution,
@@ -1246,7 +1152,7 @@ export function EvaluationRing({
   met: number;
   className?: string;
   small?: boolean;
-  /** The ring alone, without the count in it (Figma 147:8677). */
+  /** Without the count inside. */
   bare?: boolean;
 }) {
   const size = small ? 24 : 32;

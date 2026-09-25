@@ -1,7 +1,7 @@
 import { OG_CONTENT_TYPE, OG_SIZE } from "@/lib/og/card";
 import { postOgImage } from "@/lib/og/post-image";
 
-// See the twin of this file under `work/[slug]`.
+// Dynamic, or an edited post's card would stay a stale build artefact.
 export const dynamic = "force-dynamic";
 
 export const size = OG_SIZE;

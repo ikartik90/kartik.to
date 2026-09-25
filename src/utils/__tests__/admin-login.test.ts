@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// The server action is the piece under contract here: this module's whole job
-// is to ask it where to go and then go there, so the action is stood in for and
-// the going is watched.
 const { mockStartAdminLogin } = vi.hoisted(() => ({
   mockStartAdminLogin: vi.fn(),
 }));
@@ -16,8 +13,7 @@ const { ADMIN_LOGIN_PENDING_KEY, adminLogin } = await import("../admin-login");
 
 const OAUTH_URL = "https://github.com/login/oauth/authorize?client_id=abc";
 
-// jsdom refuses to redefine `location.assign` in place, so the whole object is
-// swapped for one that records where it was sent.
+// jsdom will not redefine `location.assign` in place, so the whole object is swapped.
 let assign: ReturnType<typeof vi.fn>;
 
 describe("adminLogin", () => {

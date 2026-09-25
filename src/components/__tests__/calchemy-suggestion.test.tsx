@@ -10,19 +10,14 @@ import { CalchemySuggestion } from "../calchemy-suggestion";
 
 afterEach(cleanup);
 
-// The same fixed Wednesday the parser's own suites use, so "tomorrow until
-// march" is backwards by a knowable amount and the rewrite names 2027.
+// A fixed Wednesday, so "tomorrow until march" rolls over to 2027.
 const CONTEXT = {
   locale: "en-US",
   weekStartsOn: 0 as const,
   referenceDate: Temporal.PlainDate.from("2026-09-02"),
 };
 
-/**
- * The arrangement the row actually ships in: a real engine, the real hook, and
- * a box to type the phrase into. Building a `CalchemyQuery` by hand would let
- * the row pass against a shape the hook never produces.
- */
+// The real engine and hook: a hand-built query could take a shape the hook never produces.
 function Harness({ onQueryChange }: { onQueryChange?: (raw: string) => void }) {
   const [engine, setEngine] = useState<Calchemy | null>(null);
   useEffect(() => {
@@ -56,7 +51,6 @@ describe("CalchemySuggestion", () => {
     const { field, user } = await open();
     await user.type(field, "tomorrow");
 
-    // Nothing at all — not an empty row holding space open.
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -81,10 +75,7 @@ describe("CalchemySuggestion", () => {
     await user.click(await screen.findByRole("button"));
 
     expect((field as HTMLInputElement).value).toBe("tomorrow until march 2027");
-    // The consumer hears about it exactly as it would a keystroke — the
-    // playground drops its hand-made selection on either.
     expect(onQueryChange).toHaveBeenLastCalledWith("tomorrow until march 2027");
-    // The rewritten phrase reads, so there is nothing left to offer.
     await waitFor(() => expect(screen.queryByRole("button")).toBeNull());
   });
 });

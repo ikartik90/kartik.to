@@ -32,16 +32,7 @@ import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { autosaveKey } from "@/utils/editor-autosave";
 import { createDraft, saveDraft } from "@/app/actions/post";
 
-// ---------------------------------------------------------------------------
-// Mock SVG icons and slash menu for component tests
-// ---------------------------------------------------------------------------
-
-// The Paper shader is a real WebGL mount, and jsdom has no WebGL: left
-// unmocked it rejects asynchronously with "WebGL is not supported", which
-// Vitest reports as an unhandled error and exits non-zero even though every
-// test passed. Stand it in with a marker element carrying the colours, exactly
-// as the collection and showcase suites do — a media block can carry a shader
-// ground now, so this suite mounts one too.
+// jsdom has no WebGL: unmocked, the shader rejects asynchronously and fails the run.
 vi.mock("@paper-design/shaders-react", () => ({
   StaticMeshGradient: ({
     colors,
@@ -93,8 +84,7 @@ vi.mock("@/components/slash-menu", () => ({
   slashMenuHasResults: () => true,
 }));
 
-// Two instances are mounted (single-image and collection); only one is ever
-// open, and `data-selection-mode` is what tells them apart in assertions.
+// Two instances are mounted; `data-selection-mode` tells them apart.
 vi.mock("@/components/image-insert-dialog", () => ({
   ImageInsertDialog: ({
     open,
@@ -135,10 +125,7 @@ vi.mock("@/components/image-insert-dialog", () => ({
         >
           insert
         </button>
-        {/* The library holds clips too, and the dialog reads their kind off
-            the stored content type rather than off the url — so the src here
-            carries no extension, and a handler that re-derived the kind from
-            it would come back with the wrong answer. */}
+        {/* Extensionless on purpose: the kind must come from the content type, not the url. */}
         <button
           onClick={() =>
             onInsert(
@@ -154,9 +141,6 @@ vi.mock("@/components/image-insert-dialog", () => ({
     ) : null,
 }));
 
-// The component library is a heavy dialog with its own suite; here only its
-// contract matters — which mode it opened in, which demo it opened on, and what
-// it hands back.
 vi.mock("@/components/component-insert-dialog", () => ({
   ComponentInsertDialog: ({
     open,
@@ -221,8 +205,7 @@ vi.mock("@/components/demo/registry", () => ({
   demoComponents: [demoRegistryEntry],
 }));
 
-// The editor imports server actions (⌘S save) and the router — stub both so the
-// component renders under jsdom without pulling in Prisma / the app router.
+// Stubbed so the editor renders under jsdom without Prisma or the app router.
 const mockRouter = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
@@ -243,9 +226,7 @@ const postActions = vi.hoisted(() => ({
 }));
 vi.mock("@/app/actions/post", () => postActions);
 
-// Stubbed so the collection tests can assert what the editor NEVER calls: a
-// picture is a reference, and dropping the reference must not touch the object
-// the rest of the site may still be pointing at. See the removal test below.
+// Stubbed so the collection tests can assert what the editor never calls.
 const mediaActions = vi.hoisted(() => ({
   listMediaAssets: vi.fn(async () => []),
   createMediaUploadUrl: vi.fn(),
@@ -259,10 +240,6 @@ vi.mock("@/utils/content-sync", () => ({
   notifyContentUpdated: vi.fn(),
   subscribeContentUpdated: () => () => {},
 }));
-
-// ---------------------------------------------------------------------------
-// inlineNodesToHtml
-// ---------------------------------------------------------------------------
 
 describe("inlineNodesToHtml", () => {
   it("renders plain text", () => {
@@ -365,9 +342,7 @@ describe("inlineNodesToHtml", () => {
         marks: [{ type: "sidenote", id: "abc", text: "a note" }],
       },
     ];
-    // base 0 → the block's first note is ordinal 1. The annotated text sits in
-    // its own underlined span so the ordinal, a plain inline that follows it,
-    // can never be broken onto a line of its own.
+    // base 0 → the block's first note is ordinal 1.
     expect(inlineNodesToHtml(nodes)).toBe(
       '<span class="article-sidenote" data-sidenote-id="abc"' +
         ' data-sidenote-text="a note" style="anchor-name:--sn-abc">' +
@@ -407,7 +382,6 @@ describe("inlineNodesToHtml", () => {
     expect(inlineNodesToHtml(nodes)).toContain(
       '<span class="article-sidenote" data-sidenote-id="x"',
     );
-    // A single wrapper (one <sup>) with the bold nested inside.
     const html = inlineNodesToHtml(nodes);
     expect(html.match(/<sup/g)?.length).toBe(1);
     expect(html).toContain("hello <strong>world</strong>");
@@ -442,10 +416,6 @@ describe("inlineNodesToHtml", () => {
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// domToInlineNodes
-// ---------------------------------------------------------------------------
 
 describe("domToInlineNodes", () => {
   function parse(html: string): InlineNode[] {
@@ -550,10 +520,6 @@ describe("domToInlineNodes", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// stripEmptySidenoteWrappers
-// ---------------------------------------------------------------------------
-
 describe("stripEmptySidenoteWrappers", () => {
   function make(html: string): HTMLElement {
     const div = document.createElement("div");
@@ -590,7 +556,6 @@ describe("stripEmptySidenoteWrappers", () => {
     const remaining = el.querySelectorAll("[data-sidenote-id]");
     expect(remaining.length).toBe(1);
     expect(remaining[0].getAttribute("data-sidenote-id")).toBe("b");
-    // One wrapper left in the DOM.
     expect(el.querySelectorAll("sup").length).toBe(1);
   });
 });
@@ -626,22 +591,6 @@ describe("renumberSidenoteSups", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ArticleEditor component
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Furniture blocks host a SLOT — the homepage grid, the icon row — and what is
-// inside that slot is somebody else's component with its own controls, its own
-// fields and its own dialogs.
-//
-// The wrapper is a focusable non-text block, so it deletes itself on Backspace
-// like every other one. That must mean "Backspace WITH THE BLOCK FOCUSED", and
-// nothing else: React's handler fires for anything bubbling out of the slot, so
-// without a guard a keystroke aimed at a text field inside the grid — the alt
-// text on a picture being attached to a link card — deletes the whole grid out
-// from under the person typing it.
-// ---------------------------------------------------------------------------
 function furniturePost(): Document {
   return {
     type: "doc",
@@ -749,8 +698,6 @@ describe("ArticleEditor", () => {
     };
     render(<ArticleEditor initialPost={post} />);
 
-    // A code block is the last authored block; Enter inside it inserts a literal
-    // newline, so the editor must synthesise an empty paragraph to escape into.
     const blocks = useEditorStore.getState().document.content;
     expect(blocks).toHaveLength(2);
     expect(blocks[0].type).toBe("code_block");
@@ -758,11 +705,6 @@ describe("ArticleEditor", () => {
     expect((blocks[1] as { children: InlineNode[] }).children[0].text).toBe("");
   });
 
-  // Regression: code blocks carry 32px (3xl) vertical padding — larger than the
-  // ~24px code line height. Line detection used to measure the caret against the
-  // element's border-box edge with a one-line tolerance, so the boundary line
-  // fell outside the band and ArrowUp/ArrowDown could never leave the block.
-  // Detection now measures against the content box (padding subtracted).
   describe("padded code block caret escape", () => {
     const rect = (top: number, bottom: number): DOMRect =>
       ({
@@ -819,8 +761,7 @@ describe("ArticleEditor", () => {
 
       const pre = document.querySelector("[data-block-index='0']") as HTMLElement;
       const next = document.querySelector("[data-block-index='1']") as HTMLElement;
-      // Caret bottom (68) sits at the content-box bottom, 32px above the border
-      // edge — the geometry the old border-box check misread as "not last line".
+      // Caret bottom (68) sits at the content-box bottom, 32px above the border edge.
       mockGeometry(pre, rect(44, 68));
 
       pre.focus();
@@ -953,16 +894,6 @@ describe("ArticleEditor", () => {
     clickSpy.mockRestore();
   });
 
-  // ---------------------------------------------------------------------------
-  // A demo block carries the rail a media block carries
-  //
-  // It used to carry a tinted scrim with a single trash can under it, which
-  // meant the one thing you could not do to a demo was change which demo it
-  // was — you deleted the block and inserted another, losing the caption with
-  // it. Same object, same chrome: a rail on the frame's top edge, revealed by
-  // hover or focus, with the picture's Replace/Delete pair on it.
-  // ---------------------------------------------------------------------------
-
   const componentPost = (caption?: string) => ({
     id: "comp3",
     slug: "comp3",
@@ -1017,8 +948,6 @@ describe("ArticleEditor", () => {
     expect(dialog.getAttribute("data-current")).toBe("calchemy-demo");
   });
 
-  // The caption belongs to the block's POSITION in the article rather than to
-  // the demo standing in it — the same rule a replaced picture follows.
   it("swaps the demo and keeps the block's caption", () => {
     render(<ArticleEditor initialPost={componentPost("Figure 1")} />);
 
@@ -1271,13 +1200,11 @@ describe("ArticleEditor", () => {
     const img = document.querySelector("[data-showcase-media]") as HTMLElement;
     const caption = document.querySelector("figcaption") as HTMLElement;
 
-    // Tab is swallowed — it must not move the caret into the caption.
     img.focus();
     const notPrevented = fireEvent.keyDown(img, { key: "Tab" });
     expect(notPrevented).toBe(false);
     expect(document.activeElement).toBe(img);
 
-    // ArrowDown still descends into the caption.
     fireEvent.keyDown(img, { key: "ArrowDown" });
     expect(document.activeElement).toBe(caption);
   });
@@ -1541,21 +1468,10 @@ describe("ArticleEditor", () => {
     expect(
       within(rail).getByRole("button", { name: "Delete image" }),
     ).toBeDefined();
-    // Featuring is a move-to-front, and a block standing alone has no other
-    // slot to move in front of.
     expect(
       within(rail).queryByRole("button", { name: "Feature image" }),
     ).toBeNull();
   });
-
-  // ---------------------------------------------------------------------------
-  // A media block is a collection of one
-  //
-  // Everything the docked inspector edits already lived on the node — the
-  // caption, the shader ground, the fit, the inset, the corner — and only the
-  // collection ever offered a way to reach it. These are the three that were
-  // unreachable from a block standing alone.
-  // ---------------------------------------------------------------------------
 
   const mediaPost = (media: Record<string, unknown> = {}) => ({
     id: "media-props",
@@ -1603,15 +1519,9 @@ describe("ArticleEditor", () => {
     expect(block.type === "media" && block.backgroundEffect).toEqual(
       DEFAULT_BACKGROUND_EFFECT,
     );
-    // And it is painted, not merely recorded — the canvas is a preview of the
-    // article rather than a form describing one.
     expect(document.querySelector("[data-background-effect]")).not.toBeNull();
   });
 
-  // The panel is a live editor with no apply step, so the canvas has to wear
-  // what it writes. The editor block used to ignore media layout outright,
-  // which would have made every slider in the panel a control with no visible
-  // effect until the article was published.
   it("wears the layout its own properties state", () => {
     render(
       <ArticleEditor initialPost={mediaPost({ padding: 16, borderRadius: 8 })} />,
@@ -1651,17 +1561,6 @@ describe("ArticleEditor", () => {
     expect(dialog.getAttribute("data-mode")).toBe("change");
   });
 
-  // ---------------------------------------------------------------------------
-  // Clips as article blocks
-  //
-  // The whole return on separating the block's IDENTITY from the file's FORMAT.
-  // Every predicate in the editor asks `block.type === "media"`, and `type` is
-  // the same word on a clip as on a photograph, so a clip arrives already
-  // editable: the caption, the traversal, the overlay and the delete all work
-  // without one of them having heard of `kind`. These lock that in — if any of
-  // them ever narrows to a kind, one of these goes red.
-  // ---------------------------------------------------------------------------
-
   const clipPost = () => ({
     id: "clip1",
     slug: "clip1",
@@ -1673,8 +1572,7 @@ describe("ArticleEditor", () => {
         {
           type: "media" as const,
           kind: "video" as const,
-          // Extensionless on purpose: the block's own `kind` is the only thing
-          // that can answer for this src.
+          // Extensionless on purpose: the block's own `kind` is the only thing that can answer for this src.
           src: "https://cdn/8f2c-key",
         },
         {
@@ -1687,17 +1585,6 @@ describe("ArticleEditor", () => {
     updatedAt: new Date(),
   });
 
-  // The editor painted this block with a raw <img> of its own, and that was
-  // survivable only for as long as a clip could not be authored deliberately:
-  // an mp4 reached the document as `type: "image"` because nothing recorded
-  // otherwise, so the broken picture was a thing you had to go out of your way
-  // to produce. Now the block STATES its kind and the insert dialog offers
-  // clips, so an author can make one in two clicks and would have been looking
-  // straight at the broken picture on the very canvas that promises to show
-  // what will be published. The fork is `Media`'s — the reader's block, the
-  // tile, the lightbox and the library's own preview all ask it — and the
-  // editor asking the same question is the only thing that keeps the canvas
-  // and the article agreeing about what a source is.
   it("shows a clip block as the clip it is, not a broken picture", () => {
     render(<ArticleEditor initialPost={clipPost()} />);
 
@@ -1725,14 +1612,6 @@ describe("ArticleEditor", () => {
     }
   });
 
-  // Routing the block through `Media` moves the element out of the editor's own
-  // JSX, and the figure's entire keyboard model hangs off that element: it is
-  // the tab stop, the overlay keys on its focus, the caret keys are read from
-  // it, and `focusBlockAtStart` reaches the block by querying
-  // `[data-showcase-media]` and focusing whatever answers. Put the contract on
-  // a box around the media instead and every one of those still "works" while
-  // the clip itself quietly stops being the thing that takes focus — so this
-  // asserts WHICH element carries it, not merely that something does.
   it("hands a clip the same focus and keyboard contract a picture had", () => {
     render(<ArticleEditor initialPost={clipPost()} />);
 
@@ -1740,7 +1619,6 @@ describe("ArticleEditor", () => {
     expect(media.tagName).toBe("VIDEO");
     expect(media.tabIndex).toBe(0);
 
-    // The caret keys reach the figure's handler from the clip itself.
     fireEvent.keyDown(media, { key: "ArrowDown" });
     expect(document.activeElement).toBe(
       document.querySelector("figcaption[data-placeholder='Add caption...']"),
@@ -1759,9 +1637,6 @@ describe("ArticleEditor", () => {
     ).toBe(false);
   });
 
-  // The insert path's own contribution: the kind comes off the upload's
-  // content type and is written down, so an extensionless key survives into
-  // the document as a clip rather than being guessed back into a picture.
   it("writes an inserted clip's kind, taking the dialog at its word", () => {
     render(<ArticleEditor initialPost={clipPost()} />);
 
@@ -1937,10 +1812,8 @@ describe("ArticleEditor", () => {
     fireEvent.keyDown(block, { key: "Enter" });
 
     const blocks = useEditorStore.getState().document.content;
-    // Original block keeps its type
     expect(blocks[0].type).toBe("heading");
     expect((blocks[0] as { level: number }).level).toBe(2);
-    // New block is a default paragraph, not another heading
     expect(blocks[1].type).toBe("paragraph");
   });
 
@@ -1971,8 +1844,7 @@ describe("ArticleEditor", () => {
     };
     const selectHello = () => {
       block.focus();
-      // The first text node holds "Hello" in both the plain and bolded states
-      // (bolded: <strong>Hello</strong> World; plain: "Hello World").
+      // The first text node holds "Hello" whether bolded or not.
       const textNode = firstText(block);
       const sel = window.getSelection()!;
       const range = document.createRange();
@@ -1982,7 +1854,6 @@ describe("ArticleEditor", () => {
       sel.addRange(range);
     };
 
-    // First ⌘B applies bold to "Hello".
     selectHello();
     fireEvent.keyDown(block, { key: "b", metaKey: true });
     let children = (
@@ -1996,7 +1867,6 @@ describe("ArticleEditor", () => {
       marks: [{ type: "bold" }],
     });
 
-    // Second ⌘B over the same selection removes it (toggle off).
     selectHello();
     fireEvent.keyDown(block, { key: "b", metaKey: true });
     children = (
@@ -2034,21 +1904,17 @@ describe("ArticleEditor", () => {
     };
     render(<ArticleEditor initialPost={post} />);
 
-    // Focus the empty paragraph (index 1) and delete it with Backspace.
     const empty = document.querySelector("[data-block-index='1']") as HTMLElement;
     empty.focus();
     fireEvent.keyDown(empty, { key: "Backspace" });
 
     const blocks = useEditorStore.getState().document.content;
-    // Only the empty paragraph is removed — heading + following paragraph remain.
     expect(blocks).toHaveLength(2);
     expect(blocks[0].type).toBe("heading");
     expect(blocks[1].type).toBe("paragraph");
     expect((blocks[1] as { children: InlineNode[] }).children[0].text).toBe(
       "Following",
     );
-    // The reused DOM node must show the following paragraph's text, not the
-    // deleted paragraph's stale empty content.
     const followingEl = document.querySelector(
       "[data-block-index='1']",
     ) as HTMLElement;
@@ -2357,10 +2223,6 @@ describe("ArticleEditor", () => {
     }
   });
 
-  // -------------------------------------------------------------------------
-  // Numbered list
-  // -------------------------------------------------------------------------
-
   function listPost(text: string) {
     return {
       id: "li",
@@ -2409,7 +2271,6 @@ describe("ArticleEditor", () => {
     fireEvent.keyDown(block, { key: "Enter" });
 
     const blocks = useEditorStore.getState().document.content;
-    // A trailing empty paragraph always follows the list.
     expect(blocks.map((b) => b.type)).toEqual([
       "list_item",
       "list_item",
@@ -2440,8 +2301,6 @@ describe("ArticleEditor", () => {
   });
 
   it("does not leave stale text in the reused element when prepending a list item", () => {
-    // Regression: the index-based key reuses the focused element as the new
-    // empty item; without clearing its DOM the text is duplicated into it.
     render(<ArticleEditor initialPost={listPost("Hello")} />);
     const block = document.querySelector("[data-block-index='0']") as HTMLElement;
     placeCaret(block, 0);
@@ -2491,10 +2350,6 @@ describe("ArticleEditor", () => {
     const blocks = useEditorStore.getState().document.content;
     expect(blocks[0].type).toBe("paragraph");
   });
-
-  // -------------------------------------------------------------------------
-  // Bulleted list (shares list behaviour; only the marker differs)
-  // -------------------------------------------------------------------------
 
   function bulletPost(text: string) {
     return {
@@ -2569,8 +2424,6 @@ describe("ArticleEditor", () => {
     expect(blocks[0].type).toBe("bullet_list_item");
   });
 
-  // A button: the trigger line becomes the button, with no link yet, and the
-  // caret lands in its label — where the link toolbar comes up.
   it("creates a button link via the slash menu, with the caret in its label", async () => {
     render(<ArticleEditor />);
     const block = document.querySelector("[data-block-index='0']") as HTMLElement;
@@ -2582,7 +2435,6 @@ describe("ArticleEditor", () => {
 
     const blocks = useEditorStore.getState().document.content;
     expect(blocks[0]).toEqual({ type: "button_link", text: "", href: "" });
-    // A paragraph follows, so there is somewhere to carry on writing.
     expect(blocks[1].type).toBe("paragraph");
 
     const label = await screen.findByRole("textbox", { name: "Button text" });
@@ -2604,7 +2456,6 @@ describe("ArticleEditor", () => {
     });
   });
 
-  // Reaching a button lands in its label, from either side.
   it("walks through a button with the arrows", () => {
     render(<ArticleEditor initialPost={buttonPost()} />);
     const label = screen.getByRole("textbox", { name: "Button text" });
@@ -2619,7 +2470,6 @@ describe("ArticleEditor", () => {
     fireEvent.keyDown(label, { key: "ArrowUp" });
     expect(firstFocus).toHaveBeenCalled();
 
-    // Onto the button from outside: its block hands the caret to the label.
     const block = document.querySelector("[data-button-link-block]") as HTMLElement;
     act(() => block.focus());
     expect(document.activeElement).toBe(label);
@@ -2703,7 +2553,6 @@ describe("ArticleEditor", () => {
     fireEvent.keyDown(block, { key: "Enter" });
 
     const blocks = useEditorStore.getState().document.content;
-    // The new empty item is prepended; the "Hello" item shifts to index 1.
     if (blocks[0].type === "bullet_list_item")
       expect(blocks[0].marker).toBe("cross");
     if (blocks[1].type === "bullet_list_item")
@@ -2772,7 +2621,6 @@ describe("ArticleEditor", () => {
     };
     render(<ArticleEditor initialPost={post} />);
     const markers = document.querySelectorAll("[data-bullet-marker]");
-    // The second run's marker button is the last one.
     fireEvent.click(markers[markers.length - 1] as HTMLElement);
     fireEvent.click(screen.getByLabelText("Continue bullets from previous list"));
 
@@ -2810,15 +2658,11 @@ describe("ArticleEditor", () => {
     fireEvent.keyDown(para, { key: "Backspace" });
 
     const blocks = useEditorStore.getState().document.content;
-    // Paragraph merges into the bullet; a synthetic trailing paragraph follows
-    // the now-terminal list item.
     expect(blocks.map((b) => b.type)).toEqual(["bullet_list_item", "paragraph"]);
     if (blocks[0].type === "bullet_list_item") {
       expect(blocks[0].children[0]).toMatchObject({ text: "ItemTail" });
       expect(blocks[0].marker).toBe("check");
     }
-    // Regression: the reused (previously-focused) DOM node must show the empty
-    // trailing paragraph, not the deleted paragraph's stale, duplicated "Tail".
     const itemEl = document.querySelector("[data-block-index='0']") as HTMLElement;
     const trailingEl = document.querySelector("[data-block-index='1']") as HTMLElement;
     expect(itemEl.textContent).toBe("ItemTail");
@@ -2869,10 +2713,6 @@ describe("ArticleEditor", () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// Selection toolbar — mark manipulation helpers (pure)
-// ---------------------------------------------------------------------------
 
 describe("mergeAdjacentInlineNodes", () => {
   it("merges consecutive nodes with identical marks", () => {
@@ -3079,10 +2919,6 @@ describe("findSidenoteRangeAt", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Selection toolbar — component integration
-// ---------------------------------------------------------------------------
-
 describe("ArticleEditor selection toolbar", () => {
   beforeEach(() => {
     useEditorStore.getState().reset();
@@ -3204,11 +3040,7 @@ describe("ArticleEditor selection toolbar", () => {
     );
   });
 
-  // --- anchoring across a soft wrap -----------------------------------------
-  // jsdom has no layout, so the browser's client rects are faked: the fragments
-  // a real engine reports for a selection that begins at a wrap boundary — the
-  // space that ends the previous visual line (far right, one line up), then the
-  // glyphs on the next line.
+  // jsdom has no layout, so the client rects a real engine reports at a soft wrap are faked.
   const WRAP_TAIL = { left: 900, top: 100, width: 4, height: 20 };
   const NEXT_LINE = { left: 20, top: 130, width: 8, height: 20 };
 
@@ -3226,8 +3058,7 @@ describe("ArticleEditor selection toolbar", () => {
   }
 
   it("anchors to the first visible glyph when the selection starts at a soft wrap", () => {
-    // The leading space belongs to the previous line, so its rect hangs at the
-    // far right of the line above — the toolbar must ignore it.
+    // The wrap space's rect hangs at the far right of the line above.
     const restore = fakeClientRects((text) =>
       text.startsWith(" ") ? [WRAP_TAIL, NEXT_LINE] : [NEXT_LINE],
     );
@@ -3268,10 +3099,6 @@ describe("ArticleEditor selection toolbar", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ⌘S belongs to the palette, and the metadata sidebar to the store
-// ---------------------------------------------------------------------------
-
 describe("ArticleEditor — saving and metadata", () => {
   const DIRTY_DOC: Document = {
     type: "doc",
@@ -3303,9 +3130,6 @@ describe("ArticleEditor — saving and metadata", () => {
     useEditorStore.getState().reset();
   });
 
-  // The palette's ⌘S saves whatever editor is open. This editor used to claim
-  // the key too, and both answered it — every save was written twice, and a
-  // first save minted two drafts.
   it("leaves ⌘S to the palette", async () => {
     vi.mocked(saveDraft).mockResolvedValue({ ...post, content: DIRTY_DOC });
     render(<ArticleEditor initialPost={post} />);
@@ -3338,7 +3162,6 @@ describe("ArticleEditor — saving and metadata", () => {
     });
   });
 
-  // A refresh must not quietly put a renamed post back at its old address.
   it("restores the sidebar's unsaved changes with the rest of the snapshot", () => {
     window.localStorage.setItem(
       autosaveKey("post-1", "ARTICLE"),
@@ -3358,7 +3181,6 @@ describe("ArticleEditor — saving and metadata", () => {
       category: "WORK",
       slug: "renamed",
       description: null,
-      // The row has not moved, whatever the buffer says.
       savedAddress: { category: "ARTICLE", slug: "post-1" },
     });
   });
@@ -3402,8 +3224,6 @@ describe("ArticleEditor — saving and metadata", () => {
     }
   });
 
-  // A new draft's snapshot is kept under its category, which the sidebar can
-  // change: moving it must not leave a copy under the old one to come back.
   it("moves a new draft's snapshot when its category changes", async () => {
     vi.useFakeTimers();
     try {
@@ -3436,7 +3256,6 @@ describe("ArticleEditor — saving and metadata", () => {
     expect(screen.getByRole("dialog", { name: "Metadata" })).toBeDefined();
   });
 
-  // The sidebar is a view of this buffer; leaving the editor takes it away.
   it("closes the sidebar when the editor goes", () => {
     const { unmount } = render(<ArticleEditor initialPost={post} />);
     act(() => useMetadataPanelStore.getState().setOpen(true));
@@ -3444,10 +3263,6 @@ describe("ArticleEditor — saving and metadata", () => {
     expect(useMetadataPanelStore.getState().open).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Numbered-list marker popover (continue / reset / swap style)
-// ---------------------------------------------------------------------------
 
 describe("ArticleEditor numbering popover", () => {
   beforeEach(() => {
@@ -3525,7 +3340,6 @@ describe("ArticleEditor numbering popover", () => {
     const head = useEditorStore.getState().document.content[0];
     expect(head.type === "list_item" && head.marker).toBe("alpha");
 
-    // The third button now offers switching back to numbers.
     openPopoverForMarker(1);
     fireEvent.click(screen.getByLabelText("Switch to numbered list"));
     expect(markers()).toEqual(["1", "2", "3"]);
@@ -3565,10 +3379,6 @@ describe("ArticleEditor numbering popover", () => {
     expect(markers()).toEqual(["1", "2"]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Block indentation (Tab / Shift+Tab)
-// ---------------------------------------------------------------------------
 
 describe("ArticleEditor block indent", () => {
   beforeEach(() => {
@@ -3712,14 +3522,11 @@ describe("ArticleEditor block indent", () => {
 
     fireEvent.keyDown(el, { key: "Enter" });
 
-    // Both the new empty paragraph and the shifted content stay indented.
     const content = useEditorStore.getState().document.content;
     expect((content[0] as { indent?: boolean }).indent).toBe(true);
     expect((content[1] as { indent?: boolean }).indent).toBe(true);
   });
 
-  // Centring rides along exactly like the indent: splitting the homepage's
-  // centred intro into several paragraphs must not range the rest left.
   describe("centring", () => {
     const alignOf = (i: number) =>
       (useEditorStore.getState().document.content[i] as { align?: string })
@@ -3821,8 +3628,7 @@ describe("ArticleEditor block indent", () => {
     expect(indentOf()).toBe(true);
   });
 
-  // fireEvent.keyDown returns false when a handler called preventDefault — i.e.
-  // Tab was swallowed and won't move the caret to the next node.
+  // `fireEvent.keyDown` returns false when a handler called preventDefault.
   it("swallows Tab on a list item without indenting", () => {
     const el = seed({
       type: "list_item",
@@ -3867,10 +3673,6 @@ describe("ArticleEditor block indent", () => {
     expect(fireEvent.keyDown(el, { key: "Tab", shiftKey: true })).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Bulleted-list marker popover (dot / check / cross)
-// ---------------------------------------------------------------------------
 
 describe("ArticleEditor bullet popover", () => {
   beforeEach(() => {
@@ -3929,7 +3731,6 @@ describe("ArticleEditor bullet popover", () => {
     expect(
       screen.getByRole("toolbar", { name: "List bullet options" }),
     ).toBeDefined();
-    // Default (dot) option is selected.
     expect(
       screen.getByLabelText("Bulleted list").getAttribute("aria-pressed"),
     ).toBe("true");
@@ -3941,9 +3742,6 @@ describe("ArticleEditor bullet popover", () => {
     fireEvent.click(screen.getByLabelText("Checked list"));
 
     expect(markerOf(0)).toBe("check");
-    // The marker button now renders a glyph circle instead of the bare dot.
-    // The glyph is masked onto the circle so the brand gradient can reach it,
-    // so the shape shows up as a recipe variant rather than a child <svg>.
     expect(
       document.querySelector(
         "[data-bullet-marker] .list-bullet-circle--glyph_check",
@@ -3977,10 +3775,6 @@ describe("ArticleEditor bullet popover", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Collection block
-// ---------------------------------------------------------------------------
-
 describe("ArticleEditor collection block", () => {
   beforeEach(() => {
     useEditorStore.getState().reset();
@@ -3991,7 +3785,6 @@ describe("ArticleEditor collection block", () => {
     useEditorStore.getState().reset();
   });
 
-  /** A filled slot, spelled the way a document holds one. */
   const slot = (
     src: string,
     fields: Partial<Omit<MediaNode, "type" | "kind" | "src">> = {},
@@ -4034,7 +3827,6 @@ describe("ArticleEditor collection block", () => {
     const dialog = screen.getByTestId("image-dialog");
     expect(dialog.getAttribute("data-selection-mode")).toBe("multiple");
     expect(dialog.getAttribute("data-max-selection")).toBe("6");
-    // The trigger block waits as an empty paragraph until images arrive.
     expect(blocks()[0].type).toBe("paragraph");
     expect(block.textContent).toBe("");
   });
@@ -4052,7 +3844,6 @@ describe("ArticleEditor collection block", () => {
       "https://cdn/3.png",
       "https://cdn/4.png",
     ]);
-    // A figure can't hold a caret, so a paragraph must follow it.
     expect(blocks()).toHaveLength(2);
     expect(blocks()[1].type).toBe("paragraph");
   });
@@ -4072,13 +3863,10 @@ describe("ArticleEditor collection block", () => {
     fireEvent.click(
       within(toolbarFor(2)).getByRole("button", { name: "Feature image" }),
     );
-    // "b" never moves — only the two slots that traded places change.
     expect(collection().items.map((i) => i.src)).toEqual(["c", "b", "a"]);
   });
 
-  // Reordering runs on pointer events, not the drag-and-drop API, and resolves
-  // the tile under the pointer from the cells' own rects — so jsdom, which lays
-  // nothing out, needs those stated. A row of 100px cells at the origin.
+  // Reordering hit-tests the cells' rects, which jsdom must be given: a row of 100px cells.
   function dragCell(from: number, to: number) {
     const cells = Array.from(
       document.querySelectorAll<HTMLElement>("[data-media-cell]"),
@@ -4103,8 +3891,7 @@ describe("ArticleEditor collection block", () => {
 
     const at = (index: number) => ({ clientX: index * 100 + 50, clientY: 50 });
     const send = (type: string, target: Element, point: ReturnType<typeof at>) => {
-      // jsdom implements no PointerEvent; React dispatches on the type, so a
-      // MouseEvent carrying the pointer fields reaches the handlers.
+      // jsdom has no PointerEvent; a MouseEvent carrying the pointer fields reaches the handlers.
       const event = new MouseEvent(type, {
         bubbles: true,
         cancelable: true,
@@ -4130,7 +3917,6 @@ describe("ArticleEditor collection block", () => {
     expect(collection().items.map((i) => i.src)).toEqual(["a", "c", "b"]);
   });
 
-  // Dropping into the first cell is the same state change as pressing Feature.
   it("features an image dragged into the first cell", () => {
     render(
       <ArticleEditor
@@ -4163,11 +3949,6 @@ describe("ArticleEditor collection block", () => {
   });
 
   it("removes the image from the collection without deleting the stored object", () => {
-    // The cell's trash empties a SLOT, not the bucket. The same picture may be
-    // featured in another collection, embedded in a published article, or about
-    // to be picked again from the library — so the only thing a removal is
-    // allowed to change is this block's `items`. Deleting from R2 is a separate,
-    // deliberate act, and it lives in the media library alone.
     mediaActions.deleteMedia.mockClear();
     render(
       <ArticleEditor initialPost={collectionPost([slot("a"), slot("b")])} />,
@@ -4247,8 +4028,6 @@ describe("ArticleEditor collection block", () => {
       within(toolbarFor(0)).getByRole("button", { name: "Image properties" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Add caption" }));
-    // Live, not a form: the caption is stored as it is typed, with no Enter to
-    // remember and nothing to lose by clicking away.
     fireEvent.change(screen.getByRole("textbox", { name: "Image caption" }), {
       target: { value: "A view" },
     });
@@ -4279,8 +4058,6 @@ describe("ArticleEditor collection block", () => {
     expect(blocks().every((b) => b.type !== "collection")).toBe(true);
   });
 
-  // The grid root owns the figure's caret keys, but it also CONTAINS the cell
-  // toolbars — whose own Enter and Backspace must stay theirs.
   it("leaves the block alone when a key comes from inside a cell", () => {
     render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     const button = within(toolbarFor(0)).getByRole("button", {
@@ -4327,9 +4104,6 @@ describe("ArticleEditor — furniture slots", () => {
     expect(grid()).toBeNull();
   });
 
-  // The keystroke belongs to the field it was typed into. This is the alt-text
-  // box in the media dialog the link card's rail opens, which lives inside the
-  // grid and therefore inside this wrapper.
   it("leaves the block alone when a field inside the slot takes it", () => {
     render(
       <ArticleEditor
@@ -4346,9 +4120,6 @@ describe("ArticleEditor — furniture slots", () => {
     expect(grid()).not.toBeNull();
   });
 
-  // Every other key the wrapper claims is the same mistake in a different
-  // costume: Enter would insert a paragraph above the grid mid-sentence, and
-  // the arrows would throw focus out of the field being typed in.
   it("leaves the block alone for every other key the wrapper claims", () => {
     render(
       <ArticleEditor

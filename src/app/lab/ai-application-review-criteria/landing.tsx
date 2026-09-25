@@ -15,13 +15,6 @@ import AiIcon from "./icons/ai.svg";
 import TabCornerBefore from "./icons/tab-corner-before.svg";
 import TabCornerAfter from "./icons/tab-corner-after.svg";
 
-// ---------------------------------------------------------------------------
-// The job's AI features page, as the recruiter finds it (Figma 94:4840): the
-// criteria running, on the review card (see `ReviewCard`). Only its Edit leads
-// anywhere; everything else is the product around the panel, drawn as text.
-// ---------------------------------------------------------------------------
-
-/** The job's own sections, down the left of the panel. */
 const SECTIONS = [
   { group: "Activity", items: ["Candidate pipeline", "Dashboard"] },
   {
@@ -35,8 +28,6 @@ const pageStyle = css({
   flexDirection: "column",
   minHeight: "100dvh",
 });
-
-// --- Breadcrumb and job header ---------------------------------------------
 
 const breadcrumbStyle = css({
   display: "flex",
@@ -79,7 +70,6 @@ const jobTitleStyle = css({
   whiteSpace: "nowrap",
 });
 
-// The white glyphs are `currentColor` once SVGR has been at them.
 const statusStyle = css({
   display: "flex",
   alignItems: "center",
@@ -119,8 +109,6 @@ const jobActionLabelStyle = css({
   whiteSpace: "nowrap",
 });
 
-// --- The panel: sections on the left, the section's content on the right ---
-
 const panelRegionStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -130,8 +118,7 @@ const panelRegionStyle = css({
   paddingInline: "20px",
 });
 
-// The outline is drawn OVER the content, as the source does: the white pane
-// runs to the edge and would cover a border of the shell's own.
+// The outline is an ::after overlay: the white pane runs to the edge and would cover a border.
 const shellStyle = css({
   position: "relative",
   display: "flex",
@@ -187,9 +174,6 @@ const sectionsRuleLineStyle = css({
   insetInlineStart: "-0.25px",
 });
 
-// The current section is a tab joined onto the pane beside it: white, square
-// on the pane's side, with two inverted corners carrying its edge into the
-// pane above and below.
 const currentSectionStyle = css({
   position: "relative",
   display: "flex",
@@ -205,8 +189,7 @@ const currentSectionStyle = css({
   whiteSpace: "nowrap",
 });
 
-// The corner glyphs are `currentColor` once SVGR has been at them, so they
-// take the pane's white from here.
+// Paints the corners: SVGR turns their white into `currentColor`.
 const tabCornerStyle = css({
   position: "absolute",
   insetInlineEnd: 0,

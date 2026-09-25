@@ -5,9 +5,7 @@ export const sidenoteCard = defineRecipe({
   description:
     "Margin note, CSS-anchored via anchor() and revealed only when its annotation is active (caret in the editor; hover/click in the reader). `side` (default): 100px right of the text-content column (via the --sidenote-rail anchor) and 2px above the annotated line. `stacked` (no room): centred on the content column, 4px below/above the line with flip-block — like the slash menu. Vertical/default anchor is the annotation's --sn-<id> (set inline via --sn-anchor).",
   base: {
-    // Fixed (not absolute) so anchor()'s flip-block fallback measures
-    // overflow against the VIEWPORT. Absolute would measure against the
-    // tall <article> — always room below — and never flip above.
+    // Fixed, not absolute, so the flip-block fallback measures against the viewport.
     position: "fixed",
     zIndex: 40,
     positionAnchor: "var(--sn-anchor)",
@@ -26,16 +24,13 @@ export const sidenoteCard = defineRecipe({
     boxShadow:
       "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
     color: "text.default",
-    // Hidden until its annotation is active.
     opacity: 0,
     visibility: "hidden",
     pointerEvents: "none",
     transitionProperty: "opacity, visibility",
     transitionDuration: "120ms",
     transitionTimingFunction: "ease-out",
-    // allow-discrete so `visibility` flips at the START of the reveal —
-    // otherwise the card is unfocusable and Edit auto-focus lands on
-    // nothing.
+    // So `visibility` flips at the start of the reveal, or Edit's auto-focus lands on nothing.
     transitionBehavior: "allow-discrete",
     "&[data-active='true']": {
       opacity: 1,
@@ -44,17 +39,12 @@ export const sidenoteCard = defineRecipe({
     },
   },
   variants: {
-    // Horizontal geometry (`left`/`width`) comes from inline styles
-    // SidenoteLayer computes: it is scroll-invariant, and it avoids a
-    // SECOND named-anchor query, which WebKit silently fails (only the
-    // default `position-anchor` resolves there). Vertical stays
-    // CSS-anchored to `--sn-anchor` so it tracks scroll.
+    // Horizontal geometry is inline (SidenoteLayer): WebKit fails a second named-anchor query.
     placement: {
       side: {
         top: "anchor(top)",
         marginTop: "calc(-1 * token(spacing.md))",
       },
-      // Centred on the content column (left computed inline).
       stacked: {
         translate: "-50% 0",
         top: "anchor(bottom)",

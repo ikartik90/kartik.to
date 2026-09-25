@@ -56,8 +56,6 @@ describe("hasRoomToScroll", () => {
   });
 
   it("counts a sub-pixel remainder as the end", () => {
-    // Fractional layout leaves scrollTop a hair short of the maximum; a box the
-    // user cannot see move is a box at its end.
     expect(hasRoomToScroll(box({ scrollTop: 199.6 }), DOWN)).toBe(false);
   });
 });

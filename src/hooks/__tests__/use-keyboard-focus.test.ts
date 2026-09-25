@@ -31,9 +31,6 @@ describe("useKeyboardFocus", () => {
     );
   });
 
-  // A demo replayed from the keyboard performs with a stand-in cursor that
-  // presses things. Taking that for the visitor's hand would drop the focus ring
-  // off the very control they are still standing on.
   it("keeps the ring through a demo's own presses", () => {
     renderHook(() => useKeyboardFocus());
 

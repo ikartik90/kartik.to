@@ -1,28 +1,6 @@
-// ---------------------------------------------------------------------------
-// A zip file, written by hand.
-//
-// Bulk download needs an archive and nothing else — no reading, no streaming,
-// no encryption, no directories, no files over 4GB. That is about ninety lines
-// of well-documented format, against a dependency in the runtime bundle of
-// every page that imports it, so this repo writes its own.
-//
-// STORED, not deflated. The obvious objection is size, and it is worth
-// answering rather than waving away: an icon is a kilobyte of XML and a set is
-// a hundred of them, so the whole archive is around 100KB against maybe 25KB
-// compressed. `CompressionStream("deflate-raw")` would close that gap, but it
-// makes every entry asynchronous and the writer a stream pipeline, and it
-// costs the one property this has that a dependency would not — that you can
-// read it in one sitting and see that it is right. If a set ever gets big
-// enough for the difference to matter, deflate goes in behind the same
-// signature.
-//
-// Everything is little-endian, which is the format's own convention, and every
-// size is written twice (local header and central directory) because an
-// unzipper may read the file from either end.
-// ---------------------------------------------------------------------------
+// A minimal zip writer: STORED entries, UTF-8 names, little-endian, no zip64.
 
 export interface ZipEntry {
-  /** The name the file takes inside the archive. */
   name: string;
   text: string;
 }
@@ -31,16 +9,10 @@ const LOCAL_FILE_HEADER = 0x04034b50;
 const CENTRAL_FILE_HEADER = 0x02014b50;
 const END_OF_CENTRAL_DIRECTORY = 0x06054b50;
 
-/** Written into every header: the file is stored whole, and its name is UTF-8. */
 const STORED = 0;
 const UTF8_NAMES = 0x0800;
 const VERSION = 20;
 
-/**
- * The table the checksum is read off, built once. CRC-32 is a bit-by-bit
- * remainder in principle; the table does eight bits at a time, which is the
- * standard implementation and the reason this costs nothing to run.
- */
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
   for (let i = 0; i < 256; i += 1) {
@@ -53,7 +25,6 @@ const CRC_TABLE = (() => {
   return table;
 })();
 
-/** The CRC-32 an unzipper checks each file against. */
 export function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of bytes) {
@@ -62,12 +33,7 @@ export function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-/**
- * A name nothing in `taken` holds, numbered before the extension so the
- * duplicate is still recognisably a `.svg`. Adds the name it settles on to the
- * set, so a caller looping over a selection need only pass the same set each
- * time.
- */
+/** Numbers a duplicate before its extension, and adds the result to `taken`. */
 export function uniqueEntryName(name: string, taken: Set<string>): string {
   if (!taken.has(name)) {
     taken.add(name);
@@ -89,12 +55,7 @@ export function uniqueEntryName(name: string, taken: Set<string>): string {
   return candidate;
 }
 
-/**
- * MS-DOS date and time, which is what the format stores: seconds in two-second
- * steps, and the year counted from 1980. Every entry is stamped with the
- * moment the archive was written rather than with anything about the file,
- * since these files are generated on the spot and have no other date.
- */
+/** MS-DOS format: seconds in two-second steps, years from 1980. */
 function dosStamp(at: Date): { time: number; date: number } {
   return {
     time:
@@ -108,7 +69,6 @@ function dosStamp(at: Date): { time: number; date: number } {
   };
 }
 
-/** The archive, ready to be handed to a Blob and downloaded. */
 export function zipArchive(entries: ZipEntry[], now = new Date()): Uint8Array {
   const encoder = new TextEncoder();
   const { time, date } = dosStamp(now);
@@ -173,8 +133,7 @@ export function zipArchive(entries: ZipEntry[], now = new Date()): Uint8Array {
     view.setUint32(at + 20, file.data.length, true);
     view.setUint32(at + 24, file.data.length, true);
     view.setUint16(at + 28, file.name.length, true);
-    // No extra field, no comment, disk zero, no attributes worth claiming —
-    // the zeroes are already in the buffer, so only the offset is written.
+    // The zeroed fields are already in the buffer; only the offset is written.
     view.setUint32(at + 42, offsets[index], true);
     at += 46;
 

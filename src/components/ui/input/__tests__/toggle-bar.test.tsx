@@ -36,8 +36,6 @@ describe("ToggleBar", () => {
   });
 
   it("adds a pressed option to the value rather than replacing it", () => {
-    // The whole difference from its single-select sibling: these choices are
-    // independent, so pressing a second one does not release the first.
     const onValueChange = vi.fn();
     render(
       <ToggleBar
@@ -53,9 +51,6 @@ describe("ToggleBar", () => {
   });
 
   it("reports the added option in the options' order, not the order it was pressed", () => {
-    // So that two bars in the same state hold equal arrays — which is what
-    // lets a caller compare them, and what keeps a saved value from depending
-    // on the sequence of clicks that produced it.
     const onValueChange = vi.fn();
     render(
       <ToggleBar

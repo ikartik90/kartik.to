@@ -7,8 +7,7 @@ export const dialogPanel = defineRecipe({
     backgroundColor: "bg.surface",
     "--colors-field-bg-default":
       "var(--colors-field-bg-default-on-surface)",
-    // The surface owns the glyph hue: the header/body icon buttons are
-    // `color: inherit` and would otherwise fall through to the app body.
+    // Owns the glyph hue: the dialog's icon buttons are `color: inherit`.
     color: "text.body",
     borderRadius: "md",
     borderWidth: "token(spacing.3xs)",
@@ -51,11 +50,6 @@ export const dialogHeader = defineRecipe({
     justifyContent: "space-between",
     width: "100%",
     height: "token(spacing.4xl)",
-    // 8px, matching the footer below and the panel's `md` radius. Set
-    // on the recipe rather than per dialog: the header row is the one
-    // thing every dialog in the app draws identically, and an inset
-    // that differed between the image and component dialogs would be
-    // visible the moment you opened one after the other.
     paddingInline: "md",
     borderBottomWidth: "token(spacing.3xs)",
     borderBottomStyle: "solid",
@@ -87,8 +81,6 @@ export const dialogFooter = defineRecipe({
     justifyContent: "space-between",
     width: "100%",
     height: "token(sizes.dialogFooter)",
-    // Deliberately the same 8px as the header — these two rows frame
-    // the dialog and any difference between them reads as a slip.
     paddingInline: "md",
     borderTopWidth: "token(spacing.3xs)",
     borderTopStyle: "solid",

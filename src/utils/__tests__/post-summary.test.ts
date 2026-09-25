@@ -34,8 +34,6 @@ describe("postSummary", () => {
   });
 
   it("reads past the furniture a post opens with", () => {
-    // An article opens on its cover and frequently on a heading; neither is a
-    // summary of it.
     expect(
       postSummary(doc(picture, heading("Overview"), words("The real opening."))),
     ).toBe("The real opening.");
@@ -48,7 +46,6 @@ describe("postSummary", () => {
   });
 
   it("joins the run of text it starts in, up to the cap", () => {
-    // One short opening line is not a description. What follows it is.
     const summary = postSummary(doc(words("Shift scheduling."), words("Built for hospital floors.")));
     expect(summary).toBe("Shift scheduling. Built for hospital floors.");
   });
@@ -100,8 +97,6 @@ describe("postDescription", () => {
     );
   });
 
-  // A row written before the domain trimmed its input must not describe a
-  // page as a blank.
   it("reads a blank description as none", () => {
     expect(postDescription({ description: "   ", content: opening })).toBe(
       "The opening line of the post.",

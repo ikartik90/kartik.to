@@ -57,7 +57,6 @@ describe("ArticleRenderer", () => {
       expect(link.getAttribute("target")).toBe("_blank");
     });
 
-    // A sticky button's row pins it in view within the article.
     it("marks a sticky button's row, and only a sticky one", () => {
       const { container } = render(
         <ArticleRenderer
@@ -72,8 +71,6 @@ describe("ArticleRenderer", () => {
       expect(rows[1].hasAttribute("data-sticky")).toBe(false);
     });
 
-    // A button with no words or nowhere to go is a draft left in the page,
-    // and the reader is shown nothing rather than a dead control.
     it("draws nothing for a button that is not finished", () => {
       const { container } = render(
         <ArticleRenderer
@@ -367,7 +364,6 @@ describe("ArticleRenderer", () => {
         "4",
         "5",
       ]);
-      // The continued list carries the semantic start ordinal for a11y.
       expect(lists[1].getAttribute("start")).toBe("4");
     });
 
@@ -398,15 +394,10 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      // Two badge markers (check + cross): each is a 24px box holding a 16px
-      // gradient circle with an svg glyph; the third is a plain dot.
       expect(container.querySelectorAll(".list-bullet-icon")).toHaveLength(2);
       expect(
         container.querySelectorAll(".list-bullet-icon .list-bullet-circle"),
       ).toHaveLength(2);
-      // The glyph is painted by the circle itself (a masked pseudo-element, so
-      // the brand gradient can reach it) — which shape it is rides on the
-      // recipe variant, not on a child <svg>.
       expect(
         container.querySelectorAll(".list-bullet-circle--glyph_check"),
       ).toHaveLength(1);
@@ -487,15 +478,6 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector("figcaption")).toBeNull();
     });
 
-    // The block a reader most needs a way out of: a clip looping beside the
-    // paragraph they are trying to read. It gets the house chip rather than the
-    // browser's strip — one control, in the corner of the picture, inside a box
-    // of the picture's own so it cannot land beside the caption.
-    //
-    // The src is deliberately extensionless. The block hands `Media` its own
-    // `kind` and nothing sniffs the URL any more, so a fixture spelling the
-    // answer into the filename would pass against a renderer that ignored the
-    // field entirely.
     it("gives a clip in a media block a transport of its own", () => {
       const { container } = render(
         <ArticleRenderer
@@ -524,10 +506,6 @@ describe("ArticleRenderer", () => {
       ).toBeTruthy();
     });
 
-    // ...and a still picture has nothing to play, so it gets no transport. The
-    // press that ENLARGES it is a different control and is always there — a
-    // picture standing alone opens in the lightbox exactly as one in a
-    // collection does.
     it("leaves a picture in a media block without one", () => {
       const { container } = render(
         <ArticleRenderer
@@ -598,8 +576,7 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      // Scoped to this render — the suite shares a document, and earlier cases
-      // leave their own images behind in it.
+      // Scoped: this file renders without cleanup.
       expect(within(container).getAllByRole("img")).toHaveLength(3);
       expect(within(container).getByText("+2 Images")).toBeDefined();
     });
@@ -623,8 +600,7 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      // Scope to this render's container (the file renders without cleanup, so
-      // global `screen` would match a prior test's demo before this one reveals).
+      // Scoped: this file renders without cleanup.
       await within(container).findByTestId("demo");
       const figure = container.querySelector("figure");
       expect(figure).not.toBeNull();
@@ -643,8 +619,7 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      // Scope to this render's container (the file renders without cleanup, so
-      // global `screen` would match a prior test's demo before this one reveals).
+      // Scoped: this file renders without cleanup.
       await within(container).findByTestId("demo");
       const figure = container.querySelector("figure");
       expect(figure).not.toBeNull();
@@ -753,7 +728,6 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      // The inline code mark renders inside a <p>, not a <pre>
       const codes = container.querySelectorAll("p code");
       expect(codes.length).toBeGreaterThan(0);
       expect(screen.getByText("someFunction()")).toBeDefined();
@@ -825,7 +799,7 @@ describe("ArticleRenderer", () => {
     });
 
     it("opens a new-tab link in a new tab", () => {
-      // Scoped to this render's container — the file renders without cleanup.
+      // Scoped: this file renders without cleanup.
       const { container } = render(
         <ArticleRenderer
           content={doc([
@@ -907,8 +881,6 @@ describe("ArticleRenderer", () => {
       const wrapper = container.querySelector("[data-sidenote-id]") as HTMLElement;
       const text = wrapper.querySelector(".article-sidenote-text") as HTMLElement;
       const sup = wrapper.querySelector("sup") as HTMLElement;
-      // All annotated words live in the underlined span; the ordinal follows it
-      // as a plain inline sibling — no atomic inline to break the line against.
       expect(text.textContent).toBe("this");
       expect(text.contains(sup)).toBe(false);
       expect(sup.previousElementSibling).toBe(text);
@@ -926,14 +898,13 @@ describe("ArticleRenderer", () => {
       const { container } = render(<ArticleRenderer content={twoNotes} />);
       const cards = container.querySelectorAll("aside");
       expect(cards.length).toBe(2);
-      // Scope to this render's container — the file renders without cleanup.
+      // Scoped: this file renders without cleanup.
       expect(
         within(cards[0] as HTMLElement).getByText("First note"),
       ).toBeDefined();
       expect(
         within(cards[1] as HTMLElement).getByText("Second note"),
       ).toBeDefined();
-      // Card is anchored to the annotation via --sn-anchor.
       expect(
         (cards[0] as HTMLElement).style.getPropertyValue("--sn-anchor"),
       ).toBe("--sn-n1");
@@ -990,7 +961,6 @@ describe("ArticleRenderer", () => {
           ])}
         />,
       );
-      // No mark elements inside the paragraph
       expect(container.querySelector("p strong")).toBeNull();
       expect(container.querySelector("p em")).toBeNull();
     });

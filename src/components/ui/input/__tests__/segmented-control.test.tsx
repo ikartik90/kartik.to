@@ -87,12 +87,9 @@ describe("SegmentedControl", () => {
     const list = screen.getByRole("listbox");
     expect(list.getAttribute("aria-orientation")).toBe("horizontal");
 
-    // Right roves real focus onto the next segment — which is a <button>, so
-    // Enter/Space commit natively from there.
     fireEvent.keyDown(list, { key: "ArrowRight" });
     expect(document.activeElement?.textContent).toBe("Contain");
 
-    // And wraps, because both ends of a two-segment row are one key apart.
     fireEvent.keyDown(list, { key: "ArrowRight" });
     expect(document.activeElement?.textContent).toBe("Cover");
   });

@@ -2,11 +2,8 @@ import { jwtVerify } from "jose";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 
-// Cookie Neon Auth mints after a successful session exchange.
-// It's a signed JWT containing the user's session data (including email).
 const SESSION_DATA_COOKIE = "__Secure-neon-auth.local.session_data";
 
-// Admin route prefix — matches the (admin) route group once it exists.
 const ADMIN_PATTERN = /^\/(admin)(\/|$)/;
 
 async function getSessionEmail(request: NextRequest): Promise<string | null> {

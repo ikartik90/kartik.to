@@ -11,11 +11,6 @@ import { SchedulingLayoutRedesign } from "../scheduling-layout-redesign";
 
 afterEach(cleanup);
 
-/**
- * Which of the two arrangements is being SHOWN. Both stay mounted so the toggle
- * can morph between them, so "presented" is a state the pane carries rather
- * than a question of whether it exists.
- */
 function presented(pane: HTMLElement): boolean {
   return pane.getAttribute("aria-hidden") !== "true";
 }
@@ -58,9 +53,6 @@ describe("SchedulingLayoutRedesign — the toggle", () => {
     expect(presented(screen.getByTestId("before-pane"))).toBe(true);
   });
 
-  // The two arrangements cross-fade into each other, and a pane that unmounted
-  // the moment it went off would have nothing left to fade OUT — the morph
-  // would read as a hard cut with a delay in front of it.
   it("keeps both arrangements mounted across the toggle", () => {
     render(<SchedulingLayoutRedesign />);
 
@@ -73,8 +65,6 @@ describe("SchedulingLayoutRedesign — the toggle", () => {
 });
 
 describe("SchedulingLayoutRedesign — what each arrangement says", () => {
-  // The redlines ARE the argument about the old layout: two separate concerns
-  // bracketed on either side of one screen.
   it("redlines the two concerns the old screen crams together", () => {
     render(<SchedulingLayoutRedesign />);
 
@@ -102,8 +92,6 @@ describe("SchedulingLayoutRedesign — what each arrangement says", () => {
     ).toEqual(["Shift Information", "Shift Planning", "Review Shift Summary"]);
   });
 
-  // The first two steps are the two concerns the redline brackets called out,
-  // in that order — which is the whole point the pair of frames is making.
   it("carries the redlined concerns over as the first two steps", () => {
     render(<SchedulingLayoutRedesign />);
 
@@ -136,11 +124,6 @@ describe("SchedulingLayoutRedesign — a diagram, not a wizard", () => {
     expect(within(before).queryAllByRole("combobox")).toHaveLength(0);
   });
 
-  // The segmented control is the ONE live thing on the stage, so it is the one
-  // thing a keyboard can reach. The wireframed fields are REAL controls — a
-  // Combobox button, a Checkbox button — so they are still in the DOM; what
-  // keeps them out of the tab order is the `inert` their scope carries, and
-  // that is the thing worth pinning.
   it("leaves the segmented control as the only reachable control", () => {
     const { container } = render(<SchedulingLayoutRedesign />);
 

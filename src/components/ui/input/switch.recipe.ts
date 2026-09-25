@@ -1,9 +1,6 @@
 import { defineSlotRecipe } from "@pandacss/dev";
 
-// Named `switchField`, not `switch` — a reserved word breaks the
-// generated `export const switch`. Owns only the track + thumb; the
-// surrounding grid and the label/hint come from `field`, which the
-// Switch plugs into as its control (Figma 607:1166).
+// Named `switchField`: `switch` is a reserved word and breaks the generated export.
 export const switchField = defineSlotRecipe({
   className: "switch-field",
   description:
@@ -11,7 +8,6 @@ export const switchField = defineSlotRecipe({
   slots: ["control", "thumb"],
   base: {
     control: {
-      // First column of the grid `field` sets up for a toggle.
       gridColumn: 1,
       gridRow: 1,
       position: "relative",
@@ -21,13 +17,10 @@ export const switchField = defineSlotRecipe({
       margin: "none",
       appearance: "none",
       cursor: "pointer",
-      // 12px ≥ half of either track height, so both sizes read as pills.
+      // At least half of every track height, so each size stays a pill.
       borderRadius: "lg",
       backgroundColor: "field.bg.default",
-      // An inset box-shadow, NOT a `border`: a real border is
-      // subtracted from the interior (24→23px) and the thumb is offset
-      // from the padding edge, so top:4 would land 4.5px above / 3.5px
-      // below. A shadow takes no layout, so 4+16+4 centres exactly.
+      // Inset box-shadow, not a border: a border shrinks the interior and off-centres the thumb.
       boxShadow:
         "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
       transition: "background-color 150ms ease, box-shadow 150ms ease",
@@ -65,11 +58,6 @@ export const switchField = defineSlotRecipe({
           },
         },
       },
-      // Between the two, on the same derivation: a 12px thumb on a 4px
-      // inset — 12 + 2·4 = 20 tall, 4 + 12 + 12 + 4 = 32 wide, and a
-      // travel of one thumb. For a switch that shares a row with
-      // bodySmall text, where `lg` reads as the loudest thing in the
-      // form and `sm` as a detail on it.
       md: {
         control: {
           width: "token(spacing.3xl)",
@@ -103,6 +91,6 @@ export const switchField = defineSlotRecipe({
     },
   },
   defaultVariants: { size: "lg" },
-  // Runtime variant values — force every branch to be emitted.
+  // Variants are chosen at runtime, so emit every branch.
   staticCss: [{ size: ["*"] }],
 });

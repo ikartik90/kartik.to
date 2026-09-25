@@ -1,12 +1,4 @@
-/**
- * Normalise a user-typed link target. A bare host ("google.com") gets an
- * implicit "https://" so it isn't treated as a page-relative path. An explicit
- * scheme ("http://", "https://", "mailto:", "tel:", any "scheme://…"), a
- * root-relative path ("/writing/x"), a fragment ("#foo"), a query ("?q"), or a
- * protocol-relative URL ("//host") is left untouched. A "host:port" like
- * "google.com:8080" still gets "https://" — its dotted prefix marks it as a
- * host, not a scheme.
- */
+/** Adds "https://" to a bare host (host:port included); schemes, paths, fragments and queries pass through. */
 export function normalizeLinkHref(raw: string): string {
   const href = raw.trim();
   if (!href) return href;

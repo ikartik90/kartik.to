@@ -11,7 +11,6 @@ import {
 
 const specs = Object.values(SHADER_SPECS) as ShaderSpec[];
 
-/** Every spec, as vitest `each` rows, so a failure names the shader. */
 const eachSpec = specs.map((spec) => [spec.id, spec] as const);
 
 describe("defaultParams", () => {
@@ -50,8 +49,6 @@ describe("defaultState", () => {
 
   it("merges the shader's extra colours over the spec's own defaults", () => {
     const spec = SHADER_SPECS.cosmicTrack;
-    // The shader has a second colour beyond the ramp (the bloom tint), and the
-    // defaults may or may not have an opinion about it.
     expect(spec.extraColors.length).toBeGreaterThan(0);
 
     const { extraColors } = defaultState(spec);
@@ -63,10 +60,6 @@ describe("defaultState", () => {
   });
 
   it("hands out a COPY of a list default, not the table's own array", () => {
-    // Every other control's default is a scalar and copies itself. A toggle
-    // row's is an array, so handing it out bare would give every caller the
-    // one the table holds — and the first press of a toggle would rewrite the
-    // shader's default for the rest of the session.
     const spec = SHADER_SPECS.pixelComets;
     const first = defaultParams(spec).direction as string[];
     first.push("sideways");
@@ -86,10 +79,6 @@ describe("defaultState", () => {
   });
 });
 
-// The table is the contract this page is built on, so it is worth asserting
-// against directly: a typo'd key in a shader's defaults is silently inert at
-// runtime (the control just keeps its own default) and would otherwise only
-// show up as "that shader doesn't open looking right".
 describe("the spec table itself", () => {
   it.each(eachSpec)("%s: every default names a control that exists", (_, spec) => {
     const known = new Set(spec.controls.map((control) => control.key));
@@ -122,9 +111,6 @@ describe("the spec table itself", () => {
     expect(spec.defaults.colors.length).toBeLessThanOrEqual(spec.maxColors);
   });
 
-  // The sidebar renders the framing group by looking each of these up in the
-  // shader's own table, so a shader missing one shows a hole rather than an
-  // error.
   it.each(eachSpec)("%s: exposes every shared framing control", (_, spec) => {
     const keys = spec.controls.map((control) => control.key);
     for (const key of FRAMING_CONTROL_KEYS) {
@@ -132,14 +118,6 @@ describe("the spec table itself", () => {
     }
   });
 
-  // Motion is NOT shared, and that is the point of it being its own block: a
-  // shader whose fragment shader never reads `u_time` must not carry a Speed
-  // slider, and the type system will never catch one that does — every
-  // paper-shaders component ACCEPTS `speed`, since they all extend
-  // `ShaderMotionParams`. The table's one static shader (StaticMeshGradient)
-  // went with the rest of the built-ins, so every spec left animates; the
-  // exception this row used to carry is the shape to bring back with the next
-  // shader that does not.
   it.each(eachSpec)("%s: animates, so it exposes the motion controls", (_, spec) => {
     const keys = spec.controls.map((control) => control.key);
     for (const key of MOTION_CONTROL_KEYS) {
@@ -147,10 +125,6 @@ describe("the spec table itself", () => {
     }
   });
 
-  // ONE decimal in the panel, everywhere. The readout's precision is taken from
-  // the step (see `formatSliderValue`), so this is the only place it is set —
-  // and a stray hundredth would show up as a control that reads to a different
-  // precision from the ones above and below it.
   it.each(eachSpec)("%s: no slider asks for a second decimal", (_, spec) => {
     for (const control of spec.controls) {
       if (control.kind !== "slider") continue;
@@ -166,10 +140,6 @@ describe("the spec table itself", () => {
   });
 });
 
-// The panel draws one row per GROUP of extra colours, not one per colour, so
-// that two inks which are one decision (a lattice's minor and major) sit side
-// by side under a single label. The grouping is a reading of the TABLE, which
-// is why it is asserted here rather than through the sidebar.
 describe("extraColorRows", () => {
   it("gives a colour naming no row a row of its own, under its own label", () => {
     const rows = extraColorRows(SHADER_SPECS.cosmicTrack);
@@ -189,15 +159,10 @@ describe("extraColorRows", () => {
       "colorGrid",
       "colorGridMajor",
     ]);
-    // The FIRST of them names the row — the second is a swatch beside it, not a
-    // row of its own.
     expect(rows.some((row) => row.label === "Major")).toBe(false);
   });
 
   it("names every one of a shader's extra colours exactly once", () => {
-    // The rows are what the panel renders, so a colour missing from them is a
-    // control the author cannot reach, and one appearing twice is two swatches
-    // writing the same key.
     for (const spec of specs) {
       const drawn = extraColorRows(spec).flatMap((row) =>
         row.colors.map((color) => color.key),

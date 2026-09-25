@@ -51,23 +51,13 @@ import QuoteIcon from "@/assets/icons/quote.svg";
 import CalendarIcon from "@/assets/icons/calendar.svg";
 import ConsoleIcon from "@/assets/icons/console.svg";
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const inputRowStyle = commandHeader();
 
 const inputStyle = css({
   flex: "1 0 0",
   background: "none",
   border: "none",
-  // 16px on a touch device, and NOT because the field wants to be bigger there.
-  // Mobile Safari zooms the page in on any field it focuses whose text is under
-  // 16px, and the palette is already sized for the viewport it is in — so the
-  // zoom does not reveal anything, it just leaves the page scrolled sideways at
-  // a scale the reader has to pinch back out of. Sizing the text past the
-  // threshold is what declines it; the 14px row is the cursor's, where no
-  // browser does this.
+  // 16px on touch: Mobile Safari zooms into any focused field under 16px.
   textStyle: "bodyLarge",
   _hasCursor: { textStyle: "bodySmall" },
   color: "text.body",
@@ -90,12 +80,6 @@ const hotkeyHintStyle = css({
   flexShrink: 0,
 });
 
-// The way out, on a device that has to be able to press it.
-//
-// An icon button pads its 20px glyph by 4px, so left alone the cross would sit
-// 4px further from the edge than the Esc chip it stands in for. The negative
-// inset pulls the BOX out by that padding, leaving the glyph on the row's own
-// `paddingInline` — the same margin the search icon keeps at the other end.
 const closeButtonStyle = css({ marginInlineEnd: "-sm" });
 
 const hotkeyKeyStyle = hotkey({ surface: "menu" });
@@ -121,21 +105,11 @@ const groupHeadingStyle = css({
 
 const itemStyle = menuItem();
 
-// The row's own shortcut, held against the far end of it — the item says where
-// it goes, the chip says how to get there without opening this at all. Drawn
-// only where there is a keyboard to take the offer up; see `hasCursor`.
 const itemHotkeyStyle = cx(
   hotkey({ surface: "menu" }),
   css({ marginInlineStart: "auto" }),
 );
 
-/**
- * How the palette draws each kind of post: the glyph its rows wear, and the
- * row that starts a new one. A Record over the categories, so a new category
- * does not compile until it has been given both — `POST_CATEGORIES` says what
- * it is called, this says how the palette offers it. A page is started by its
- * own edit route, never from here, so it has no row.
- */
 const CATEGORY_ROWS: Record<
   PostCategory,
   { Icon: React.FC<React.SVGProps<SVGSVGElement>>; create?: string }
@@ -146,7 +120,6 @@ const CATEGORY_ROWS: Record<
   PAGE: { Icon: WriteIcon },
 };
 
-/** The rows that start a post, in the order the Record above lists them. */
 const NEW_POST_ROWS = (
   Object.entries(CATEGORY_ROWS) as [
     PostCategory,
@@ -156,89 +129,34 @@ const NEW_POST_ROWS = (
   create ? [{ category, Icon, label: create }] : [],
 );
 
-/** The glyph a post's row wears, by what the post is filed under. */
 function CategoryIcon({ category }: { category: PostCategory }) {
   const { Icon } = CATEGORY_ROWS[category];
   return <Icon className={iconStyle} />;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function CommandPalette() {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  // Incrementing key forces Command to remount on each open, clearing search
+  // Bumped on each open to remount Command and clear its state.
   const [openKey, setOpenKey] = useState(0);
 
   const close = () => dialogRef.current?.close();
 
-  /**
-   * Which palette this device gets.
-   *
-   * The same field either way — what differs is whether it TAKES the focus, and
-   * what the row says beside it. On a keyboard search is the palette: ⌘K then
-   * type, so the field is focused because the next thing that happens is
-   * typing. A phone opened this to TAP something; the field is there to be
-   * tapped, and a field that grabs focus on open answers a question nobody
-   * asked by filling half the screen with a keyboard.
-   *
-   * It decides the row's other two seats for the same reason. The Esc hint
-   * names a key the device does not have, so a touch visitor gets a close
-   * button that does what Esc does; and the shortcut chips on the rows below
-   * name keys nothing can press, so they are withheld there too — the same
-   * split `_hasCursor` makes of the header's own ⌘K chip.
-   */
   const hasCursor = useHasCursor();
 
-  /**
-   * Whether the palette is up.
-   *
-   * Only here to gate the field's `autoFocus`. `useHasCursor` settles one commit
-   * after hydration, which on a cursor device mounts the field for the first
-   * time while the dialog is still CLOSED — and an `autoFocus` honoured there
-   * would pull focus off the page the reader is actually on. Gating it on this
-   * costs nothing at open time, when the whole `Command` remounts anyway.
-   */
+  /** Gates `autoFocus`: `useHasCursor` settles after hydration, while the dialog is still closed. */
   const [isOpen, setIsOpen] = useState(false);
 
-  /**
-   * What is in the field.
-   *
-   * Held here rather than left to cmdk because the palette now has to READ it:
-   * a leading `>` turns the field from a search into a prompt, and that is a
-   * decision about what the whole list is, not about which rows survive a
-   * filter.
-   */
   const [search, setSearch] = useState("");
 
-  /**
-   * The command being typed, or null while this is an ordinary search.
-   *
-   * Empty string is command mode with nothing named yet — a bare `>` — which is
-   * why this is compared against null rather than tested for truth.
-   */
+  /** Null for an ordinary search; "" is a bare `>`, so compare against null. */
   const commandLine = parseCommandLine(search);
 
-  /**
-   * The command named, or null — for a half-typed name, a shorthand of one, or
-   * anything else short of the name in full. Commands are neither listed nor
-   * narrowed towards; see `data/palette-commands.ts` for why.
-   */
+  /** Resolved only for a name typed in full; see `data/palette-commands.ts`. */
   const command =
     commandLine === null ? null : resolvePaletteCommand(commandLine);
 
-  // The palette owns its own picker rather than reaching for the grid's, even
-  // though both now only open over `/edit/home`. The grid's belongs to a `[+]`
-  // and carries the seat that `[+]` was pressed in; this one has no seat to
-  // carry. Sharing it would mean threading "opened from where" through a
-  // component that exists to answer "which demo".
   const [pickingWidget, setPickingWidget] = useState(false);
 
-  // Anything that removes published work asks first, in the same dialog the
-  // grid uses to retire a component. One piece of state rather than a flag per
-  // action: the question is identical in shape every time and only the wording
-  // differs.
   const [confirm, setConfirm] = useState<{
     title: string;
     message: string;
@@ -287,43 +205,12 @@ export function CommandPalette() {
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
 
-  // The chip names the key this visitor's keyboard actually has — ⌘/ on Apple
-  // hardware, Ctrl / on a PC — which is the same shortcut the hook listens for
-  // on each. It was ⌘[ until Safari turned out never to hand that one over.
+  // Not ⌘[: Safari never hands that one over.
   const backShortcut = useShortcutLabel("/");
   const saveShortcut = useShortcutLabel("S");
 
-  /**
-   * Whether the palette should offer to take you somewhere at all.
-   *
-   * One reason it should not: inside an EDITOR, leaving is not a thing you
-   * simply do. It decides what becomes of the buffered work, which is exactly
-   * why "Back to …" is withheld there too — the exits an editor offers each say
-   * what happens to the document, and a bare destination would answer that by
-   * throwing it away without saying so.
-   *
-   * Being on a playground is NOT that reason and never was. It only means one
-   * row of this group would point at the page you are standing on, which is
-   * dealt with a row at a time below — the same rule the Drafts group follows
-   * in omitting the draft being viewed. Asking `editorKind` rather than the
-   * route is what separates the two: the shader playground is an editor for
-   * whoever can write to it and an ordinary page for everyone else, and this
-   * used to withhold the whole group from both.
-   *
-   * Settings is not covered by this and should not be — it changes the page you
-   * are on rather than taking you off it.
-   */
-  /**
-   * What the open document is called — "Article", "Project", "Prototype", or
-   * "Page" for the About page — as the category list names it.
-   */
   const noun = POST_CATEGORIES[editCategory].label;
 
-  /**
-   * The open editor's heading — one heading in several wordings, because "This
-   * Preset" / "This Page" / "This Article" all name the same thing: whatever is
-   * being edited right now.
-   */
   const editorTitle =
     editorKind === "shaderPreset"
       ? "This Preset"
@@ -334,23 +221,16 @@ export function CommandPalette() {
   const offersDestinations = editorKind === null;
 
   useEffect(() => {
-    // Guarded rather than toggling: `showModal()` on an already-open dialog
-    // throws, and a caller ringing the doorbell is asking for the palette, not
-    // asking about it. Only the shortcut, which is also how you dismiss it,
-    // toggles.
+    // Guarded: `showModal()` throws on an open dialog. Only the shortcut toggles.
     function open() {
       if (dialogRef.current?.open) return;
       dialogRef.current?.showModal();
       setIsOpen(true);
-      // cmdk's own state is cleared by the remount `openKey` forces; the field's
-      // text is ours and has to be cleared with it, or the palette reopens onto
-      // whatever was last typed into it.
+      // The field's text is ours, so the remount doesn't clear it.
       setSearch("");
       setOpenKey((k) => k + 1);
     }
     function handleKeyDown(e: KeyboardEvent) {
-      // ⌘K on Apple hardware, Ctrl K everywhere else — whichever key the
-      // header's chip is offering on this platform.
       if (hasShortcutModifier(e) && e.key === "k") {
         e.preventDefault();
         if (dialogRef.current?.open) {
@@ -362,8 +242,7 @@ export function CommandPalette() {
     }
     window.addEventListener("keydown", handleKeyDown);
     const unsubscribe = subscribeCommandPalette(open);
-    // A ⌘K pressed while this page was still hydrating was recorded by the
-    // head script and is answered here — late, but not lost.
+    // Answers a ⌘K the head script recorded during hydration.
     if (takePaletteIntent()) open();
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -383,22 +262,13 @@ export function CommandPalette() {
         <Command
           key={openKey}
           loop
-          // On the command line the rows are already the answer to what was
-          // typed — matched by NAME, in `matchPaletteCommands` — and cmdk
-          // filtering them a second time against a string that starts with `>`
-          // would leave nothing standing.
+          // Command rows are already matched by name; cmdk would filter them against the `>`.
           shouldFilter={commandLine === null}
           className={css({ display: "contents" })}
         >
-          {/* Input row — the same field on both devices, and a way out that is
-              named as the key that does it where there is a key and drawn as
-              the button that does it where there is not. */}
           <div className={inputRowStyle} data-command-input-row>
             <SearchIcon className={iconStyle} />
             <Command.Input
-              // Focused on a keyboard, where typing is what happens next.
-              // Waiting on a phone, where it is there to be TAPPED. See
-              // `isOpen` for why the cursor half is not simply `autoFocus`.
               autoFocus={isOpen && hasCursor}
               value={search}
               onValueChange={setSearch}
@@ -422,29 +292,8 @@ export function CommandPalette() {
             )}
           </div>
 
-          {/* Results */}
           <Command.List className={listStyle}>
-            {/* The command line.
-
-                Typed rather than chosen, and so the one thing in this palette
-                that is not a row you could have found by scrolling. It replaces
-                the list rather than joining it: `> ` says the field has stopped
-                describing what you are looking for and started naming what you
-                want done, and leaving the search results underneath would be the
-                palette answering a question that is no longer being asked.
-
-                What runs is looked up by name in `data/palette-commands.ts`.
-                Nothing here evaluates anything — the prompt is a borrowed
-                gesture, not a console — so a name that is not in that table has
-                no path to running, whatever it happens to be valid JavaScript
-                for.
-
-                And it draws NOTHING until the name has been typed out in full,
-                exactly: no menu to browse, no rows appearing as you get warmer,
-                no shorthand that also works, and no notice saying what was not
-                found. A stranger who tries `> ` gets the same blank list as one
-                who tries `> window.admin`, which is the only answer that keeps
-                a command hidden. */}
+            {/* Names are looked up, never evaluated, and nothing renders until one is typed in full, so commands stay hidden. */}
             {commandLine !== null ? (
               command && (
                 <Command.Group className={groupStyle}>
@@ -452,10 +301,7 @@ export function CommandPalette() {
                   <Command.Item
                     className={itemStyle}
                     onSelect={() => {
-                      // Closed FIRST: the commands here leave the page — this
-                      // one hands the browser to GitHub — and a palette still
-                      // standing over a page that is on its way out reads as a
-                      // press that did nothing.
+                      // Closed first: these commands leave the page.
                       close();
                       void command.run();
                     }}
@@ -468,10 +314,6 @@ export function CommandPalette() {
               )
             ) : (
               <>
-                {/* Navigate — the way out of here, which used to be an icon
-                    button in the page's left gutter. First, because leaving is the
-                    one thing every page can do and the one thing a reader who
-                    opened this by accident is looking for. */}
                 {backTarget && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Navigate</div>
@@ -485,32 +327,8 @@ export function CommandPalette() {
                   </Command.Group>
                 )}
 
-                {/* Admin-only groups */}
                 {isAdmin && (
                   <>
-                    {/* Whatever editor is open, said the same way in all three.
-                        They differ in what they buffer and where it goes, and in
-                        nothing the author can see from here: each has unsaved work,
-                        a way to commit it and a way to throw it away.
-
-                        Save STAYS PUT — ⌘S means "commit and carry on" everywhere
-                        else and must here too. Discard exits, and belongs here
-                        rather than in Navigate because it is a decision about the
-                        WORK: you are not going somewhere, you are throwing
-                        something away and the leaving follows from it.
-
-                        There is deliberately no save-and-exit. That one IS just
-                        navigation, and "Exit editor" above already offers it — it
-                        asks about unsaved work on the way out, and answering "Save
-                        changes and exit" there is this same command. Two doors to
-                        one room would have to agree forever.
-
-                        Publish and Unpublish are a document's alone here. The
-                        homepage is already live; a preset HAS a publication now, but
-                        its control is the one in the properties panel's header,
-                        beside Reset — both act on the saved row rather than on the
-                        page you are looking at, and two doors to one room would
-                        have to agree forever. */}
                     {editorKind ? (
                       <Command.Group className={groupStyle}>
                         <div className={groupHeadingStyle}>{editorTitle}</div>
@@ -523,19 +341,6 @@ export function CommandPalette() {
                             Publish {noun.toLowerCase()}
                           </Command.Item>
                         )}
-                        {/* A widget goes on the GRID, so it is offered where the
-                            grid is open and nowhere else. It used to sit in
-                            Publish, visible from every page, and it published on
-                            the spot: the one edit to the homepage that "Discard
-                            changes and exit" could not take back, and one that
-                            reached the live grid from pages that were not editing
-                            it. Here it is buffered like every other edit in the
-                            session, and this group's own Save is what writes it.
-
-                            Unpinned, unlike the grid's own [+], which places a
-                            card at the seat you pressed. Chosen from a list there
-                            is no seat in mind, so it takes whatever chronology
-                            gives it — the front, being the newest thing there. */}
                         {editorKind === "grid" && (
                           <Command.Item
                             className={itemStyle}
@@ -548,10 +353,6 @@ export function CommandPalette() {
                             New widget…
                           </Command.Item>
                         )}
-                        {/* The sidebar opens in place, over the post it edits —
-                            its changes are buffered with everything else here,
-                            so it sits among the commands that decide what
-                            becomes of them. */}
                         {canEditMetadata && (
                           <Command.Item
                             className={itemStyle}
@@ -561,10 +362,6 @@ export function CommandPalette() {
                             Edit metadata
                           </Command.Item>
                         )}
-                        {/* The chip sits on THIS one, because this is what the key
-                            does. ⌘S commits and leaves you in the editor — hanging
-                            it off an exit would be a label that lies, the failure
-                            `keyboard-shortcut.ts` exists to prevent. */}
                         <Command.Item
                           className={itemStyle}
                           onSelect={() => void handleSaveChanges()}
@@ -584,7 +381,6 @@ export function CommandPalette() {
                           <TrashIcon className={iconStyle} />
                           Discard changes and exit
                         </Command.Item>
-                        {/* Only a live post has something to withdraw. */}
                         {editorKind === "document" && isPublished && (
                           <Command.Item
                             className={itemStyle}
@@ -636,7 +432,6 @@ export function CommandPalette() {
                           )}
                         </Command.Group>
 
-                        {/* Publish */}
                         <Command.Group className={groupStyle}>
                           <div className={groupHeadingStyle}>Publish</div>
                           {NEW_POST_ROWS.map(({ category, Icon, label }) => (
@@ -651,8 +446,6 @@ export function CommandPalette() {
                           ))}
                         </Command.Group>
 
-                        {/* Drafts — the draft being viewed is omitted so the
-                          current page never lists itself */}
                         {(() => {
                           const listableDrafts = drafts.filter(
                             (draft) => draft.id !== currentDraft?.id,
@@ -680,15 +473,6 @@ export function CommandPalette() {
                   </>
                 )}
 
-                {/* Projects — the published work, offered to everyone: these are
-                    the pages the site exists for, and a visitor who opened this
-                    to go somewhere should find them before the playgrounds.
-                    Destinations, so withheld while editing on the same terms
-                    (see `offersDestinations`); the project being read is
-                    already left out by the hook. No heading over nothing — the
-                    list is empty until the fetch lands, and on a site with no
-                    published work — since a heading standing over an empty
-                    group is a promise the rows never keep. */}
                 {offersDestinations &&
                   projects.length + labPages.length > 0 && (
                     <Command.Group className={groupStyle}>
@@ -716,33 +500,6 @@ export function CommandPalette() {
                     </Command.Group>
                   )}
 
-                {/* Playgrounds — down here with Settings for the reason Settings is:
-                    it is not about the page you are on. Nothing in either one writes
-                    to the site — one reads a shader table, draws a canvas and hands
-                    back a JSX tag; the other parses a phrase and paints the days it
-                    means — so unlike the groups above them there is no session to
-                    have and nothing for a gate to protect. Destinations, so they
-                    lead the furniture.
-
-                    Withheld while you are editing — see `offersDestinations`.
-                    Standing on one of them withdraws that ONE row, not the group:
-                    a command to the page you are already on is a row that does
-                    nothing, but the other playground is still somewhere to go. */}
-                {/* Inbox — what other people have sent me, which is a category
-                    of destination the palette has not had before. One row today;
-                    it is a group rather than a loose item because the next thing
-                    somebody sends through a form belongs beside it rather than
-                    under "Playgrounds".
-
-                    ADMIN ONLY, and that is the whole reason it is down here with
-                    the destinations instead of up with the editor commands: it is
-                    not about the page you are on, it is somewhere to go — but
-                    somewhere only I may go. The page behind it 404s for everyone
-                    else, so this row is the same refusal said earlier and more
-                    politely.
-
-                    Withheld while editing, and withheld while standing on it,
-                    exactly as the playgrounds are. */}
                 {isAdmin && offersDestinations && !isTestimonials && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Inbox</div>
@@ -789,8 +546,6 @@ export function CommandPalette() {
                   </Command.Group>
                 )}
 
-                {/* Settings — always visible, and last: it is the palette's
-                    furniture rather than anything this page is about. */}
                 <Command.Group className={groupStyle}>
                   <div className={groupHeadingStyle}>Settings</div>
                   <Command.Item
@@ -811,11 +566,6 @@ export function CommandPalette() {
         </Command>
       </Dialog>
 
-      {/* Leaving a preset with unsaved work in it. THREE answers, because all
-          three are things the author might mean and none is a rewording of
-          another: keep it and go, drop it and go, or stay. Rendered here beside
-          the other modals for the same reason they are — the palette has
-          already closed by the time this opens. */}
       <ConfirmDialog
         open={pendingExit !== null}
         title="Unsaved Changes"
@@ -831,8 +581,6 @@ export function CommandPalette() {
         onClose={cancelExit}
       />
 
-      {/* Sibling of the palette, not a child: the picker is a modal of its own
-          and the palette closes on the way into it. */}
       <ConfirmDialog
         open={confirm !== null}
         title={confirm?.title ?? ""}
@@ -843,11 +591,7 @@ export function CommandPalette() {
         onClose={() => setConfirm(null)}
       />
 
-      {/* Mounted only where the command that opens it is offered, which is a
-          correctness requirement rather than a saving: a closed `<dialog>`
-          still renders its contents into the document, so mounting this
-          everywhere put the whole demo library into the HTML of every page —
-          the same failure the note over the grid's own copy describes. */}
+      {/* Grid only: a closed <dialog> still renders its contents, which would put the demo library in every page. */}
       {editorKind === "grid" && (
         <ComponentInsertDialog
           open={pickingWidget}

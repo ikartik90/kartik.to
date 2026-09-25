@@ -6,9 +6,6 @@ import { Landing } from "../landing";
 
 afterEach(cleanup);
 
-// The job as the recruiter finds it (Figma 94:4840): three criteria already
-// running. `new-logo` is the one they add in the edit dialog, and adding it is
-// what the rest of the prototype tests.
 const STARTING = [
   "Full Sales Cycle Experience",
   "CRM & Sales Ops",

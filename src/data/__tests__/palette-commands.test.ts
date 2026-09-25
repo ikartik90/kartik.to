@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// The registry's entries are what they delegate TO, so the delegate is stood in
-// for: this file is about which typed text reaches which command, never about
-// what that command then does.
 const { mockAdminLogin } = vi.hoisted(() => ({ mockAdminLogin: vi.fn() }));
 
 vi.mock("@/utils/admin-login", () => ({ adminLogin: () => mockAdminLogin() }));
@@ -29,9 +26,6 @@ describe("resolvePaletteCommand", () => {
     expect(mockAdminLogin).toHaveBeenCalledTimes(1);
   });
 
-  // Exactly, and nothing near it. A shorthand is a second name for a hidden
-  // thing, and every extra name is another way to stumble onto it — so the
-  // command answers to what it is called and to nothing else.
   it("does not answer to a shorthand of its name", () => {
     for (const shorthand of [
       "adminLogin",

@@ -13,23 +13,10 @@ body {
 
 body {
   min-height: 100%;
-  /* A column, so the LAST thing on a page can be sent to the foot of the
-     viewport when the page is shorter than one — the skyline footer's
-     `margin-block-start: auto` (site-footer.tsx). Nothing else changes seat:
-     everything else the body holds is out of flow (the portalled popovers and
-     tooltips, the fixed panels, the dialogs in the top layer) or renders
-     nothing, and the header and main already size and centre themselves. */
+  /* A column, so the footer's `margin-block-start: auto` reaches the viewport foot. */
   display: flex;
   flex-direction: column;
-  /* The page scrolls INSIDE <body> (its own `overflow-x` above makes it the
-     scroll container, not the viewport), so this is what puts a body-portalled
-     popover in the same scrolled coordinate space as the trigger it covers.
-     `position: absolute` against this containing block scrolls with the page in
-     one pass; `position: fixed` has to be re-offset against the scroller every
-     frame from a once-per-frame snapshot, which visibly stutters. See
-     `datePopover` / `comboboxPopover` in panda.config.ts. Safe as a global:
-     every other absolutely positioned element in the app already sits inside a
-     positioned ancestor, and the modal <dialog>s are in the top layer. */
+  /* <body> is the scroll container, so absolute body-portalled popovers scroll with the page; fixed ones stutter. */
   position: relative;
   color: var(--colors-text-default);
   background: var(--colors-bg-canvas);
@@ -39,88 +26,31 @@ body {
   transition:
     background 150ms ease,
     color 150ms ease,
-    /* In step with the panel's own slide — see the inset rule below. */
+    /* In step with the panel's own slide. */
       padding-inline-end 200ms ease-out;
 }
 
-/* The page makes room for a docked properties panel.
-
-   The panel is `position: fixed` at the viewport's edge, so it takes no space
-   of its own and would otherwise lie over the very thing it is inspecting.
-   `usePropertiesPanelInset` marks the body for as long as one is up — from
-   anywhere: the collection's media inspector, the grid's card inspector, the
-   shader playground's rail — and this is what the mark means. One rule, so the
-   three cannot reserve the width three slightly different ways.
-
-   Structural, and so unlayered with the rest of this section: it is the page's
-   own box rather than a style anything themes or overrides.
-
-   From `md` (820px, `breakpoints.md` in panda.config.ts) up only. The panel is
-   360px wide and capped at `100vw`; on a phone giving that up would leave a
-   column too narrow to edit in, so below this it goes on overlaying, which is
-   what it has always done.
-
-   The 200ms ease-out matches `propertiesPanelIn` / `propertiesPanelOut`, so the
-   content and the panel move as one thing; the transition is declared on `body`
-   above, where the reduced-motion rule at the foot of this file already reaches
-   it. */
+/* Room for a docked properties panel (`usePropertiesPanelInset`), from md (820px) up. */
 body {
-  /* How much of the page's inline end a docked panel has taken. The padding
-     below makes room for it in the FLOW, which is all that page content needs;
-     anything FIXED is measured against the viewport instead and would run on
-     underneath the panel, so it reads this instead of re-deriving it. */
+  /* For fixed elements, which the padding below does not move. */
   --page-inset-end: 0px;
 }
 
 @media (min-width: 820px) {
   body[data-properties-panel],
-  /* ...and the same width, reserved by a page that has not opened its panel
-     YET. `data-properties-panel` is set from an effect, so it cannot exist
-     until React has hydrated — and hydration is long after the server's HTML
-     has painted. A page that opens WITH a panel up therefore paints once
-     without the inset and then jumps into it, which is a layout shift nothing
-     downstream can undo: by the time any effect runs, the reader is already
-     looking at the un-inset page.
-
-     So the page says so in markup instead. `usePropertiesPanelInset` exports
-     the attribute (`PANEL_RESERVED_ATTR`) and a page puts it on its own root
-     while its panel is open — server-rendered, in the first HTML, so the first
-     paint is already inset and hydration changes nothing. Folded into THIS
-     rule rather than written as a second one so the two can never reserve the
-     width slightly differently, which is the whole reason the mark is central.
-
-     `:has()` because the page's root is a descendant of the body this insets,
-     and CSS has no other way to look down. */
+  /* Server-rendered reservation, so the first paint is already inset. */
   body:has([data-properties-panel-reserved]) {
     padding-inline-end: var(--sizes-properties-panel-width);
     --page-inset-end: var(--sizes-properties-panel-width);
   }
 }
 
-/* ...but not when the panel was simply THERE on arrival.
-
-   `padding-inline-end` is a layout property, so the 200ms above does not fade
-   the page across — it WALKS it, 360px sideways over a dozen painted frames,
-   every one of them a layout shift. That is the right trade when the reader
-   opened the panel and the page is moving with the thing they opened. It is
-   the wrong one when a panel is part of the page's opening layout and there was
-   never anything to move: the calchemy playground mounts its rail once an async
-   engine lands, and this transition was the whole of that page's CLS.
-
-   `usePropertiesPanelInset` decides which is which — it marks the page for the
-   one frame the uninvited inset needs to land in, and takes the mark off again
-   on the next, so the reader's own next press still slides. The whole
-   declaration goes rather than the one property: `transition` cannot drop a
-   single entry, and for one frame on a page that has not been touched yet
-   there is nothing else of the body's mid-flight to protect. */
+/* No slide when the panel is part of the opening layout: animating padding shifts layout. */
 body[data-properties-panel-instant] {
   transition: none;
 }
 
-/* Custom cursor handed to the OS via the `cursor` property — the compositor
-   moves it, so it never drops frames when the main thread is busy (e.g. the
-   social-icon WebGL shader). PNGs (with `image-set` for retina) so Safari, which
-   ignores SVG cursors, still gets it. `1 3` is the arrow-tip hotspot. */
+/* PNG, not SVG: Safari ignores SVG cursors. `1 3` is the hotspot. */
 @media (pointer: fine) and (hover: hover) {
   html,
   html * {
@@ -139,12 +69,7 @@ body[data-properties-panel-instant] {
   }
 }
 
-/*
-  Reset rules live inside @layer reset so that Panda's @layer utilities
-  can override them. Unlayered styles beat all named layers, so putting
-  * { margin: 0; padding: 0 } outside a layer would silently cancel
-  every margin/padding utility class Panda generates.
-*/
+/* Layered so Panda's utilities win: unlayered, it would cancel every margin/padding utility. */
 @layer reset {
   *,
   ::before,
@@ -161,14 +86,6 @@ body[data-properties-panel-instant] {
 }
 
 @layer base {
-  /* Text selection reads exactly like the prose highlight (articleHighlight):
-     the brand accent at 15% behind the accent at full strength — pink in light,
-     orange in dark. Deliberately the SAME two tokens, so retuning the highlight
-     retunes the selection with it. `::selection` only honours a handful of
-     properties (color, background-color, text-decoration/shadow), which is why
-     the padding and box-decoration-break of the <mark> have no counterpart here.
-     Selecting text that is ALREADY highlighted stacks 15% over 15% (~28%) —
-     still legible, since both layers carry the same hue and text colour. */
   ::selection {
     background-color: var(--colors-bg-highlight);
     color: var(--colors-text-highlight);
@@ -198,11 +115,9 @@ body[data-properties-panel-instant] {
     ):focus-visible {
     /* box-shadow follows border-radius; outline does not reliably match rounded controls */
     box-shadow: 0 0 0 1.5px var(--colors-border-focus-ring);
-    /* 2px floor — recipes/utilities layers override with larger radii on styled controls */
     border-radius: var(--spacing-xs);
   }
 
-  /* Command palette input row — concentric top radii + inset focus ring (globals.css: valid calc) */
   [data-command-input-row] {
     border-top-left-radius: var(--radii-dialog-inner);
     border-top-right-radius: var(--radii-dialog-inner);
@@ -220,7 +135,6 @@ body[data-properties-panel-instant] {
     box-shadow: inset 0 0 0 1.5px var(--colors-border-focus-ring);
   }
 
-  /* Reset UA defaults (padding, border, background) and fix sizing for modal dialogs */
   dialog {
     padding: 0;
     border: none;
@@ -236,13 +150,6 @@ body[data-properties-panel-instant] {
     backdrop-filter: blur(var(--spacing-md));
   }
 
-  /*
-    Showcase-wide like an article's intro, and for the same reason: the brand
-    row keeps the content column, and the width either side of it is the gutter
-    that positions the controls above it. Both surfaces open at the same offset
-    (5xl), and that offset is the strip the controls live in — see the gutter
-    control rules below.
-  */
   [data-site-header] {
     position: relative;
     margin-inline: auto;
@@ -254,46 +161,12 @@ body[data-properties-panel-instant] {
     );
   }
 
-  /*
-    No inset, because centred there is nothing to correct for. The tagline
-    rides a 28-radius path drawn in a 60px stage offset -6px from the 48px
-    avatar, and its glyphs stand off that path — 72.2px of ring around a 48px
-    picture, so it overhangs 12.1px on BOTH sides. Set flush left that was a
-    real error, and the row paid it back with a matching inset; centred, the
-    two overhangs cancel and the ring's middle is the box's middle.
-  */
   [data-site-brand] {
     width: min(100%, var(--sizes-article-content));
     margin-inline: auto;
   }
 
-  /*
-    The gutter controls — the menu on one side, the theme toggle answering from
-    the other — across both surfaces.
-
-    ONE seat, at every width — the row ABOVE the first row, which is where they
-    used to end up only once the showcase gutter beside that row ran out (a
-    container query at 819px). Two seats meant the pair jumped a whole row on a
-    resize that changed nothing about the page under them, so the wrapped seat
-    is now simply the seat: `bottom: 100%` lifts the control clear of the row it
-    is anchored to, `height` fills the 5xl offset that row already opens on
-    exactly, and `align-items: center` drops the control in the middle of it
-    with air above and below.
-
-    Flush with the SHOWCASE edge, so the pair spans the full 960 rather than
-    drawing in to the text column under them. That is also where the squeeze
-    comes from, and why no inset is written here: the surfaces they are anchored
-    to are `min(100%, showcase)` boxes, so past 960 the two controls hold still
-    and below it they come in with the box, on the page's own 20px margin.
-
-    Out of flow throughout, and that is the other half of it: only the controls
-    have ever run out of room, so only the controls should move. In flow the
-    strip would push every line of the page down by its own height.
-
-    `left` alone on one and `right` alone on the other (never both) keeps each
-    box shrunk to its control — a full-width box would lie over its opposite
-    number and swallow its clicks.
-  */
+  /* `left` or `right`, never both: a full-width box would cover the other control and swallow its clicks. */
   [data-site-menu],
   [data-theme-toggle] {
     position: absolute;
@@ -344,11 +217,7 @@ body[data-properties-panel-instant] {
     width: min(100%, var(--sizes-article-content));
   }
 
-  /* A sticky button's chip — the reader's link, the editor's label. Its fill
-     is translucent, so pinned over prose the words beneath would read through
-     its label; the app's one blur strength (the glass chip's) holds it
-     legible, and over the bare page it changes nothing. Here rather than in
-     `buttonLinkStickyRowStyle` because `css()` cannot write backdrop-filter. */
+  /* Here, not in `css()`, which cannot write backdrop-filter. */
   [data-sticky] :is(a, [data-button-label]) {
     -webkit-backdrop-filter: blur(var(--spacing-md));
     backdrop-filter: blur(var(--spacing-md));
@@ -358,30 +227,12 @@ body[data-properties-panel-instant] {
     width: min(100%, var(--sizes-article-showcase));
   }
 
-  /* Furniture (the project grid, the social row) is not prose and is not held
-     to the reading measure. Each caps its own width — the grid at its
-     three-column size — so this only has to stop the text column from doing it
-     first. */
   article > [data-furniture] {
     width: 100%;
   }
 
-  /* The grid's editing controls — hidden until you point at the card, or reach
-     it with the keyboard.
-
-     In CSS rather than React state because the grid can hold dozens of cells
-     and routing pointer enter/leave through state would re-render one on every
-     crossing.
-
-     The keyboard half is GATED on the live input modality, and that gate is
-     load-bearing rather than tidy. A native <dialog> hands focus back to
-     whatever opened it, so clicking a rail's [+] and picking a component left
-     that button focused — and its card's controls lit — with the pointer long
-     gone. They stayed up until something else was clicked. Same gate, and the
-     same reason, as the hover tint in the `optionList` recipe.
-
-     Not written as a Panda selector: it emits a class for a selector with `&`
-     in the middle but no rule to go with it, which fails silently. */
+  /* Keyboard half gated on input modality: a <dialog> returns focus to the [+], which would keep them lit.
+     Not a Panda selector: `&` mid-selector emits a class with no rule, silently. */
   [data-grid-cell] [data-grid-controls] {
     opacity: 0;
     pointer-events: none;
@@ -396,20 +247,7 @@ body[data-properties-panel-instant] {
     pointer-events: auto;
   }
 
-  /* ...but only ONE of the two insertion rails: the one in the gutter the
-     cursor is already next to. Both are mounted, and showing both puts a second
-     identical [+] in the corner of the eye for an insertion point the cursor is
-     moving away from — clutter around a card that is already carrying a
-     toolbar. The cell names the near gutter in `data-near-side` as the pointer
-     crosses it (see `useNearSide`).
-
-     Gated on the pointer being what is driving: a keyboard user has no cursor
-     and so no near side, and a stale attribute left by a cursor parked over the
-     card must not be what decides which insertion point they can tab to. With
-     the pointer gone the attribute is cleared anyway, so this is belt and
-     braces on the one ordering that could outlive it.
-
-     Not written as a Panda selector, for the same reason as the rules above. */
+  /* Only the rail in the gutter nearest the cursor (`data-near-side`, set by `useNearSide`). */
   html:not([data-input-modality="keyboard"])
     [data-grid-cell][data-near-side="before"]
     [data-grid-controls][data-side="after"],
@@ -420,82 +258,40 @@ body[data-properties-panel-instant] {
     pointer-events: none;
   }
 
-  /* The insertion rail's [+] frosts what is behind it on hover. Its hover fill
-     is translucent and it sits in the gutter overhanging the cards either side,
-     so without this you read straight through the button to the cards.
-
-     Here rather than in `css()`, which rejects both the raw `backdrop-filter`
-     key and the `-webkit-` one — and Panda's `backdropFilter` utility emits
-     ONLY the `-webkit-` form, which Chromium does not recognise. Both spellings
-     written out; 8px is the app's one blur strength, as the `glass` emphasis
-     uses. */
+  /* Here, not in `css()`: it rejects backdrop-filter, and Panda's utility emits only the -webkit- form. */
   [data-grid-rail-add]:hover {
     -webkit-backdrop-filter: blur(var(--spacing-md));
     backdrop-filter: blur(var(--spacing-md));
   }
 
-  /* The icon playground's offer to take a dropped file frosts the set behind
-     it, for the same reason and at the same strength. The tint over it is
-     light on purpose (see `dropOverlayStyle`): what is being dropped ONTO
-     should still be there to see, as shape if not as detail. Here rather than
-     in `css()` for the reason given just above. */
   [data-icon-drop] {
     -webkit-backdrop-filter: blur(var(--spacing-md));
     backdrop-filter: blur(var(--spacing-md));
   }
 
-  /* The social row belongs to the intro above it, not to the projects below.
-     Both gaps were the article's uniform 16px, which measures equal and does
-     not READ equal: the grid is a solid mass of cards and pulls the eye, so an
-     evenly-spaced row of icons attaches itself to the wrong neighbour. The
-     extra space below is what breaks that tie.
-
-     5xl on top of the article's 16px gap puts the icons ~22px under the last
-     line of text and ~96px above the first card. The icons read as the tail of
-     the intro, and the grid reads as the next thing on the page rather than as
-     the rest of this one. */
   article > [data-furniture="social_links"] {
     margin-block-end: var(--spacing-5xl);
   }
 
-  /* ...and stands off a button above it — the intro's way on to the About
-     page — by a little more than the article's own gap, the space the two had
-     when the row drew the button itself. Only there: under the intro alone
-     the row keeps the article's gap. Both spellings of the button, the
-     reader's and the editor's, so the canvas measures as the page does. */
   article
     > :is([data-button-link], [data-button-link-block])
     + [data-furniture="social_links"] {
     margin-block-start: var(--spacing-xxl);
   }
 
-  /* Anchor the top of every article surface to the homepage header offset
-     (5xl). The first child differs per surface — the renderer's intro, the
-     editor's title, or (for a titleless draft) its first content block — so
-     target it generically. main's padding-block already contributes 3xl. */
+  /* Anchors the first block at the header offset (5xl); main's padding-block already gives 3xl. */
   article > :first-child {
     margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
   }
 
-  /* …except the homepage, whose first block is the intro text. That offset
-     exists to hang an article's title off the header; here the logo already
-     occupies that space, so adding it again just pushes the intro down a gap
-     that is already there. */
   article[data-home] > :first-child {
     margin-top: 0;
   }
 
-  /* One-level indent (Tab in the editor) — shifts the block's content right by
-     a list marker + gap (3xl) so paragraphs, subheadings, blockquotes, and
-     metrics line up with bulleted/numbered list-item text. box-sizing:border-box
-     keeps the block within its content column. Rendered in the reader too. */
   article [data-indented] {
     padding-inline-start: var(--spacing-3xl);
   }
 
-  /* Centred paragraphs — the homepage's opening lines, and anything else that
-     wants them. `text-align` is inherited, so it also carries to inline marks
-     and to a `<br>`-separated second line without either needing to know. */
   article [data-align="center"] {
     text-align: center;
   }
@@ -508,27 +304,17 @@ body[data-properties-panel-instant] {
     outline-color: var(--colors-border-image-outline);
   }
 
-  /* Bold prose mark — styled via descendant selector (not a class) so the
-     editor's execCommand-generated <strong>/<b> is styled live while typing. */
+  /* A descendant selector, so the editor's execCommand <strong>/<b> is styled while typing. */
   article :is(strong, b) {
     font-weight: var(--font-weights-bold);
     color: var(--colors-text-default);
   }
 
-  /* Slash menu anchor — see slashMenuPopover recipe in panda.config.ts. The
-     editor sets this on its own node; the selection/bullet/number popovers
-     instead carry their `anchor-name` inline via Popover's `anchorName` prop. */
   [data-slash-anchor] {
     anchor-name: --slash-menu;
   }
 
-  /* Sidenote rail — an invisible, out-of-flow box spanning the text-content
-     column (640px, centred in the article). SidenoteLayer measures its rect to
-     place each card horizontally (100px right of the column's right edge when
-     there's room, else centred on it) — done in JS rather than a CSS
-     `anchor(--sidenote-rail …)` query because WebKit/Safari resolves only an
-     element's default position-anchor (the annotation, used for the vertical
-     axis). See the sidenoteCard recipe and SidenoteLayer. */
+  /* Measured by SidenoteLayer in JS: WebKit resolves only an element's default position-anchor. */
   [data-sidenote-rail] {
     position: absolute;
     inset-block: 0;
@@ -554,18 +340,11 @@ body[data-properties-panel-instant] {
     letter-spacing: 0.08em;
   }
 
-  /* Static starting offset only — sets which tagline copy sits at top. */
   [data-brand-orbit-text-group] {
     transform: rotate(var(--brand-orbit-initial-angle, 0deg));
   }
 
-  /* Spin a plain HTML wrapper, not an SVG node. Blink does not composite
-     transform animations on SVG elements, so rotating the <svg>/<g> repaints
-     text-on-path glyphs on the main thread every frame and freezes during
-     load. An HTML element with will-change: transform is promoted to the
-     compositor thread and keeps spinning smoothly through main-thread work.
-     The animation is always-on (no JS load gate) so it starts at first paint
-     already at the correct angle; reduced-motion is handled globally below. */
+  /* An HTML wrapper, not an SVG node: Blink does not composite transform animations on SVG. */
   [data-brand-orbit-spinner] {
     animation: brand-orbit-spin 50s linear infinite;
     will-change: transform;
@@ -581,10 +360,7 @@ body[data-properties-panel-instant] {
   }
 }
 
-/* The social tooltip keeps its own hover-driven visibility (the trigger and the
-   tooltip share one hover region on the <li>), rather than the `tooltip` recipe's
-   [data-visible] toggle that Button/Link use. Unlayered so it beats the recipe's
-   base `@layer recipes .tooltip { opacity: 0 }`. */
+/* Unlayered, so it beats the recipe's base `.tooltip { opacity: 0 }`. */
 [data-social-link-item][data-tooltip-visible]:not([data-tooltip-dismissed])
   [data-social-tooltip],
 [data-social-link-item][data-copy-success]:not([data-tooltip-dismissed])
@@ -595,51 +371,12 @@ body[data-properties-panel-instant] {
   filter: blur(0);
 }
 
-/* The social icons prove hover with the WebGL shader alone — suppress the
-   `action` recipe's icon-variant hover fill for these triggers only. Unlayered
-   so it beats the recipe's `@layer utilities` `:hover` deterministically (a
-   same-layer css() override would be order-dependent). Focus ring is untouched. */
+/* Hover shows through the shader alone; unlayered to beat the recipe's `:hover` fill. */
 [data-social-trigger]:hover {
   background-color: transparent;
 }
 
-/* iOS Safari zooms the page in when a field it is focusing is set below 16px,
-   and then leaves it zoomed — the layout is responsive, so the field was
-   already the right size, and the "help" is a viewport the reader has to pinch
-   back out of. The two ways out are `maximum-scale=1` on the viewport meta and
-   a 16px floor on the controls themselves; this is the second, because the
-   first takes pinch-zoom away from everyone to fix a thing that only happens on
-   focus.
-
-   Scoped to a COARSE pointer — a finger. A trackpad never triggers the zoom, so
-   a desktop keeps the 14px its fields are drawn at, and only a touch device
-   pays the two pixels. Unlayered, so it beats the `textStyle` utility that sets
-   the size (`@layer utilities`) without depending on emission order — the same
-   move the two overrides above make.
-
-   Text entry only. A checkbox, a radio, a range or a colour well is sized off
-   its font in some engines and none of them can be typed into, so raising
-   theirs would resize a control to fix a zoom it never causes. */
-/* A slider is a DRAG target end to end, so nothing in its row may become a text
-   selection anchor.
-
-   The track already declines the selection a primary-button `pointerdown`
-   starts, and on a mouse that is the whole story — measured clean in Chromium,
-   WebKit and Firefox. A finger is a different mechanism: iOS starts its
-   selection from the touch gesture rather than from a cancelable mousedown, so
-   nothing the track's handler does is consulted, and it anchors on the nearest
-   selectable TEXT. That is the field's own label, which sits beside the frame
-   the track is inside — an element no rule written from the track can reach.
-   Dragging "Origin Min" in the shader panel highlighted the words "Origin Min"
-   and raised the Copy / Look Up callout over them.
-
-   Hence `:has()`, reaching up to the field root so the label is covered with
-   the control, and `-webkit-touch-callout` for the bar iOS floats above it. The
-   bare `[role="slider"]` catches the colour picker's saturation map, which is
-   the same gesture without a field around it.
-
-   Unlayered, so it cannot be undone by whichever recipe layer a control's own
-   rules land in. */
+/* No text selection in a slider's field: iOS anchors a touch drag's selection on the label. */
 [data-field]:has([role="slider"]),
 [role="slider"] {
   -webkit-user-select: none;
@@ -647,27 +384,20 @@ body[data-properties-panel-instant] {
   -webkit-touch-callout: none;
 }
 
-/* — except the readout, which is a real text field the value can be typed into.
-   `user-select` inherits, and an input that has inherited `none` cannot have its
-   number selected to be replaced. */
+/* The readout is typed into; an inherited `none` would stop its number being selected. */
 [data-field]:has([role="slider"]) input {
   -webkit-user-select: text;
   user-select: text;
 }
 
-/* The other half, for the length of the drag: the rule above governs where a
-   press LANDS, and a drag then travels wherever the hand takes it. `Slider.Track`
-   and the colour map set this on <html> for as long as a pointer is down and
-   clear it on every route out — lift, cancel, lost capture, unmount (see
-   `src/utils/control-drag.ts`). `*` and `!important` because this has to beat
-   the `user-select: text` above and any control that sets its own, and it only
-   exists while a finger is on the page. */
+/* Set on <html> for the length of a drag (src/utils/control-drag.ts). */
 html[data-control-dragging],
 html[data-control-dragging] * {
   -webkit-user-select: none !important;
   user-select: none !important;
 }
 
+/* A 16px floor on touch: iOS Safari zooms into any focused field below it. */
 @media (pointer: coarse) {
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
   textarea,
@@ -681,12 +411,7 @@ html[data-control-dragging] * {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
-    /* A staged entrance is a stagger of DELAYS with the motion between them
-       (the shader playground assembles itself that way). Zeroing the duration
-       alone would keep the wait and drop only the travel, so a part held back
-       400ms would still arrive 400ms late — a cut, but a late one, and the
-       parts would still appear one at a time. Zeroing the delay too is what
-       makes "no motion" mean the whole thing is simply there. */
+    /* Zero delays too, or a staggered entrance still arrives late, one part at a time. */
     animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

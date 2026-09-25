@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AspectRail } from "../aspect-rail";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
-/** The row read left to right — labels in order, separators as pipes. */
 const rail = () =>
   Array.from(screen.getByRole("toolbar").children).map((el) => {
     if (el.tagName === "BUTTON") return el.getAttribute("aria-label") ?? "?";
@@ -18,7 +17,6 @@ const rail = () =>
     return text ? text : "|";
   });
 
-/** A parent that honours the pick — which is the only kind a real one is. */
 function Controlled({
   aspect: initial,
   onPick,
@@ -79,8 +77,6 @@ describe("AspectRail", () => {
     expect(onPick).toHaveBeenCalledWith("3/2");
   });
 
-  // Flipping turns the CARD over with the list — flipping only the view would
-  // strand the chosen shape in the orientation you just left.
   it("turns the shape over with the list", async () => {
     const user = userEvent.setup();
     const onPick = vi.fn();
@@ -100,10 +96,6 @@ describe("AspectRail", () => {
     ]);
   });
 
-  // Which orientation is shown is READ from the shape rather than remembered,
-  // so a rail whose shape arrives from elsewhere — a saved preset loading a tick
-  // after the playground mounts — follows it instead of showing a list with
-  // nothing pressed in it.
   it("follows a shape that changes from outside it", () => {
     const { rerender } = render(<AspectRail aspect="16/9" onPick={vi.fn()} />);
     expect(rail()[0]).toBe("Switch to portrait");
@@ -115,8 +107,6 @@ describe("AspectRail", () => {
     ).toBe("true");
   });
 
-  // The square is the one shape with no other side. The list still flips, so a
-  // 1:1 can be taken straight to 3:4 — but the shape itself does not change.
   it("flips the list but not a square", async () => {
     const user = userEvent.setup();
     const onPick = vi.fn();
@@ -130,11 +120,6 @@ describe("AspectRail", () => {
     ).toBe("true");
   });
 
-  // Picking the square must not throw away the orientation you are working in.
-  // 1:1 is the one shape that cannot say which side it is on, so the rail has
-  // to carry that over from whatever was on screen when it was picked — landing
-  // in the other orientation turns a shape change into a shape change plus a
-  // flip nobody asked for.
   it("stays in the orientation the square was picked from", async () => {
     const user = userEvent.setup();
     render(<Controlled aspect="9/16" />);
@@ -154,26 +139,17 @@ describe("AspectRail", () => {
     expect(screen.getByRole("button", { name: "4:3" })).toBeTruthy();
   });
 
-  // The square's orientation is the one that was SHOWN, never a tally of how
-  // many times the flip has been pressed. A flip made on a shape that has its
-  // own orientation is already accounted for by that shape; counting it again
-  // leaves the square landing on whichever side the parity happens to fall.
   it("does not let a flip made on a non-square shape decide the square's side", async () => {
     const user = userEvent.setup();
     render(<Controlled aspect="9/16" />);
 
-    // Portrait to landscape by the flip, so the rail is showing landscape...
     await user.click(screen.getByRole("button", { name: /switch to landscape/i }));
     expect(rail()[0]).toBe("Switch to portrait");
 
-    // ...and the square has to land there too, not on the other side.
     await user.click(screen.getByRole("button", { name: "1:1" }));
     expect(rail()[0]).toBe("Switch to portrait");
   });
 
-  // The hint is for a rail that REPLACED something and has to say how to get
-  // back. A permanent one has nothing to exit, and a hint about a key that does
-  // nothing is worse than no hint.
   it("says how to leave only when there is somewhere to leave to", () => {
     const { rerender } = render(<AspectRail aspect="1/1" onPick={vi.fn()} />);
     expect(rail()).not.toContain("Esc to exit");
@@ -183,18 +159,9 @@ describe("AspectRail", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The unsaved-framing marks.
-//
-// A preset's framing is kept per shape, so work can be left unsaved in a frame
-// that is not on screen — and, since the rail shows one orientation at a time,
-// in one that is not even in the list. A mark under the shape says where it is;
-// a mark under the flip says it is on the other side.
-// ---------------------------------------------------------------------------
 describe("AspectRail marks", () => {
   afterEach(cleanup);
 
-  /** Whether a given button carries the mark. */
   const marked = (label: string) =>
     !!screen
       .getByRole("button", { name: label })
@@ -218,10 +185,6 @@ describe("AspectRail marks", () => {
     expect(marked("2:1")).toBe(false);
   });
 
-  // The shape you are looking at is marked too. Its unsaved work is on screen,
-  // so the mark tells you nothing new — but a rule with an exception in it is
-  // one the reader has to hold, and a row where one dot is missing for reasons
-  // reads as a bug rather than as a rule.
   it("marks the shape currently chosen", () => {
     render(
       <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["4/3"]} />,
@@ -230,16 +193,12 @@ describe("AspectRail marks", () => {
     expect(marked("4:3")).toBe(true);
   });
 
-  // The rail is showing landscape, so a reframed 9:16 has no button to sit
-  // under. Without this its unsaved work would be invisible until you happened
-  // to flip — which is the whole thing these marks exist to prevent.
   it("marks the flip when the unsaved shape is on the other side", () => {
     render(
       <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["9/16"]} />,
     );
 
     expect(marked("Switch to portrait")).toBe(true);
-    // And nowhere in the row itself, since 9:16 is not in it.
     expect(marked("16:9")).toBe(false);
   });
 
@@ -251,7 +210,6 @@ describe("AspectRail marks", () => {
     expect(marked("Switch to portrait")).toBe(false);
   });
 
-  // Flipping shows the other orientation, so the marks change sides with it.
   it("moves the marks across when the rail is turned over", async () => {
     const user = userEvent.setup();
     render(<Controlled aspect="4/3" markedAspects={["9/16"]} />);
@@ -263,8 +221,6 @@ describe("AspectRail marks", () => {
     expect(marked("Switch to landscape")).toBe(false);
   });
 
-  // The square sits in both lists, so it can never be the reason the flip is
-  // marked — the flip would then point at a shape already on screen.
   it("does not mark the flip for the square", () => {
     render(
       <AspectRail aspect="4/3" onPick={vi.fn()} markedAspects={["1/1"]} />,

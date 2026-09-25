@@ -1,75 +1,26 @@
-// ---------------------------------------------------------------------------
-// An uploaded icon, read into something the playground can draw, re-weight and
-// hand back as a file.
-//
-// The whole point of the icons playground is that a 16-grid icon and a 20-grid
-// one are the SAME drawing at two scales, and that the weight of the line is a
-// setting rather than a property of the file. So an icon is never rendered as
-// the bytes that were uploaded: it is parsed into a small tree, and every
-// surface — the grid, the download, the zip — asks for it at a size and a
-// weight.
-//
-// Three things happen on the way in, and each of them is a rule this module
-// owns rather than a habit its callers have to remember:
-//
-//   SANITISE   An icon comes out of a bucket, and a file in a bucket is
-//              external content. The tree is REBUILT from an allowlist of
-//              elements and attributes rather than scrubbed, so a `<script>`,
-//              an `on*` handler, a `javascript:` href or anything else nobody
-//              thought of is not dropped — it is never carried across in the
-//              first place. Nothing here ever touches innerHTML: the same tree
-//              is rendered as React elements and serialised as text.
-//
-//   COLOUR     Icons arrive painted whatever the exporter felt like (Figma
-//              writes `white`, others write `#000`). A set that is half white
-//              and half black is invisible in one theme or the other, so every
-//              paint that is a colour becomes `currentColor` and the page it
-//              lands in decides. `none` is left alone — it is not a colour, it
-//              is the absence of one, and it is what keeps a stroked icon from
-//              filling in.
-//
-//   WEIGHT     See `strokeUnitsFor`. The three house pairings — 16 at 1px, 20
-//              at 1.25px, 24 at 1.5px — are one optical weight, and the maths
-//              is built so that asking for any of them costs an icon nothing.
-//
-// What is deliberately NOT carried across: `defs`, `clipPath`, `mask`, `use`,
-// `image`, `text` and `style`. Every one of them is a reference or a resource
-// rather than geometry, and an icon that needs one is not the kind of icon
-// this set is for — it would also arrive with ids that collide the moment two
-// icons are inlined on one page.
-// ---------------------------------------------------------------------------
+// Icons are external content: the tree is REBUILT from an allowlist, never scrubbed, and
+// never touches innerHTML. Colour paints become `currentColor`; `none` is kept.
 
-/** One drawable node of a sanitised icon. */
 export interface IconNode {
   tag: string;
-  /** Allowlisted attributes only, in the order they were read. */
   attrs: Record<string, string>;
   children: IconNode[];
 }
 
 export interface IconSvg {
-  /** The square grid the icon is drawn on — 16 and 20 here, mostly. */
   viewBox: number;
-  /**
-   * Whether any of its geometry is FILLED. Such an icon does not answer to a
-   * stroke width — the outline was flattened before it got here — so the
-   * playground holds it back for review rather than showing a set where the
-   * weight slider silently skips a few tiles.
-   */
+  /** Filled geometry ignores stroke width, so the playground holds such icons for review. */
   flattened: boolean;
   nodes: IconNode[];
 }
 
-/** How an icon is being asked for: its box in px, and the line's px weight. */
+/** Box and line weight, both in px. */
 export interface IconSettings {
   size: number;
   stroke: number;
 }
 
-/**
- * Geometry, and nothing that can reference or execute. `g` is here for the
- * transforms exporters wrap things in; everything else draws a shape.
- */
+/** Geometry only; nothing that can reference or execute. */
 const ALLOWED_TAGS = new Set([
   "g",
   "path",
@@ -81,13 +32,8 @@ const ALLOWED_TAGS = new Set([
   "rect",
 ]);
 
-/**
- * Attributes that describe a shape or how it is painted. No `id`, no `class`,
- * no `style`, no `href`, nothing beginning `on`, and nothing namespaced —
- * which between them is every attribute an icon could carry an instruction in.
- */
+/** No id, class, style, href, `on*` or namespaced attributes: nothing that can carry an instruction. */
 const ALLOWED_ATTRS = new Set([
-  // Shape
   "d",
   "points",
   "cx",
@@ -104,7 +50,6 @@ const ALLOWED_ATTRS = new Set([
   "width",
   "height",
   "transform",
-  // Paint
   "fill",
   "fill-rule",
   "fill-opacity",
@@ -120,19 +65,13 @@ const ALLOWED_ATTRS = new Set([
   "opacity",
 ]);
 
-/** Paints that name no colour, and so are carried across untouched. */
 const NON_COLOURS = new Set(["none", "transparent", "currentcolor", "inherit"]);
 
-/**
- * What a grid is drawn at when nothing in the file says: 1 on a 16, 1.25 on a
- * 20, 1.5 on a 24 — one optical weight expressed three ways, which is exactly
- * the ratio `viewBox / 16` gives.
- */
+/** 1 on a 16 grid, 1.25 on a 20, 1.5 on a 24: one optical weight. */
 function houseStroke(viewBox: number): number {
   return viewBox / 16;
 }
 
-/** The paint an element inherits where it declares none of its own. */
 interface Inherited {
   fill: string;
   stroke: string;
@@ -143,12 +82,7 @@ function isColour(paint: string): boolean {
   return paint.length > 0 && !NON_COLOURS.has(paint.toLowerCase());
 }
 
-/**
- * Parse a file into a document, leniently. An icon export is well-formed XML
- * and parses as `image/svg+xml`; anything hand-edited enough to have lost a
- * quote still parses as HTML, where the parser is namespace-aware and puts an
- * inline `<svg>` in the right namespace anyway.
- */
+/** XML first, then HTML, which tolerates a hand-edited file. */
 function parseDocument(source: string): Element | null {
   if (typeof DOMParser === "undefined") return null;
   const parser = new DOMParser();
@@ -164,15 +98,13 @@ function parseDocument(source: string): Element | null {
   return parser.parseFromString(source, "text/html").querySelector("svg");
 }
 
-/** The square the icon is drawn on, from its viewBox or failing that its box. */
 function squareOf(svg: Element): number | null {
   const viewBox = svg.getAttribute("viewBox");
   if (viewBox) {
     const parts = viewBox.trim().split(/[\s,]+/).map(Number);
     if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
     const [, , width, height] = parts;
-    // Square only. A 32×20 drawing is a logotype or a piece of a sheet, and
-    // scaling it into a square cell would silently letterbox it.
+    // Square only: scaling a non-square drawing into a square cell would letterbox it.
     return width > 0 && width === height ? width : null;
   }
 
@@ -181,10 +113,6 @@ function squareOf(svg: Element): number | null {
   return width > 0 && width === height ? width : null;
 }
 
-/**
- * Rebuild one element and its children from the allowlist, dropping anything
- * that is not on it — and, on the way past, note whether anything is filled.
- */
 function readNode(
   element: Element,
   inherited: Inherited,
@@ -225,10 +153,7 @@ function readNode(
   return { tag, attrs, children };
 }
 
-/**
- * An uploaded file as an icon, or `null` if it is not one: not an SVG, not
- * square, or square and empty.
- */
+/** Null unless it is a square, non-empty SVG. */
 export function readIconSvg(source: string): IconSvg | null {
   const svg = parseDocument(source);
   if (!svg) return null;
@@ -236,10 +161,7 @@ export function readIconSvg(source: string): IconSvg | null {
   const viewBox = squareOf(svg);
   if (!viewBox) return null;
 
-  // SVG's own defaults, which is what an element inherits when the root says
-  // nothing: black fill, no stroke, and a stroke width of 1 if one appears.
-  // The default fill is why an icon whose root does not say `fill="none"`
-  // reads as flattened — because in a browser it genuinely draws filled.
+  // SVG's defaults, which is why an icon without `fill="none"` on its root reads as flattened.
   const root: Inherited = {
     fill: svg.getAttribute("fill") ?? "black",
     stroke: svg.getAttribute("stroke") ?? "none",
@@ -258,7 +180,6 @@ export function readIconSvg(source: string): IconSvg | null {
   return { viewBox, flattened: found.filled, nodes };
 }
 
-/** Every stroke width in the tree, in document order. */
 function strokeWidthsOf(icon: IconSvg): number[] {
   const widths: number[] = [];
 
@@ -282,20 +203,7 @@ function strokeWidthsOf(icon: IconSvg): number[] {
   return widths;
 }
 
-/**
- * The weight the icon was DRAWN at — the one every other stroke in it is
- * proportional to.
- *
- * The commonest width rather than the first or the largest, because an icon
- * that mixes weights (a body at 1.25 with a hairline detail at 0.5) has one
- * that is plainly its own and others that are decisions relative to it. Taking
- * the mode means re-weighting scales the whole icon and keeps those decisions;
- * taking every stroke to the same number would level the icon flat.
- *
- * An icon with no strokes at all — a flattened one — reports its grid's house
- * weight, so the ratio it would be re-weighted by is 1 rather than a division
- * by zero. Nothing in it will move either way.
- */
+/** The commonest stroke width (ties go heavier), so re-weighting keeps the icon's own ratios. */
 export function nativeStrokeOf(icon: IconSvg): number {
   const widths = strokeWidthsOf(icon);
   if (widths.length === 0) return houseStroke(icon.viewBox);
@@ -306,8 +214,6 @@ export function nativeStrokeOf(icon: IconSvg): number {
   let best = widths[0];
   let bestCount = 0;
   for (const [width, count] of tally) {
-    // Ties go to the heavier stroke: the body of an icon is what a hairline is
-    // a detail on, never the other way round.
     if (count > bestCount || (count === bestCount && width > best)) {
       best = width;
       bestCount = count;
@@ -316,23 +222,7 @@ export function nativeStrokeOf(icon: IconSvg): number {
   return best;
 }
 
-/**
- * The stroke width, in the icon's own user units, that renders as exactly
- * `stroke` CSS pixels when the icon is drawn in a `size` box.
- *
- * A stroke in user units is multiplied by `size / viewBox` on its way to the
- * screen, so the units wanted are the pixels wanted divided by that — which is
- * the whole of it:
- *
- *   units = stroke × viewBox / size
- *
- * What makes it the right formula rather than merely a correct one is what it
- * does to the house pairings. A 20-grid icon drawn at 1.25 asked for 16px at
- * 1px needs 1 × 20/16 = 1.25 units — the weight it already has. The same icon
- * at 24px and 1.5px needs 1.5 × 20/24 = 1.25 units. So the three pairings the
- * set is authored around cost the file no change at all, and only genuinely
- * off-grid combinations (24px at 1px, say) re-weight anything.
- */
+/** User units that render as `stroke` px in a `size` box; the house pairings need no change. */
 export function strokeUnitsFor(
   viewBox: number,
   size: number,
@@ -341,16 +231,11 @@ export function strokeUnitsFor(
   return (stroke * viewBox) / size;
 }
 
-/** At most four decimals, with no trailing zeros — `1.25`, not `1.2500`. */
 function num(value: number): string {
   return String(Math.round(value * 10000) / 10000);
 }
 
-/**
- * The tree with its paint and its weight resolved for these settings —
- * geometry untouched. Shared by the renderer and the serialiser so a
- * downloaded icon cannot differ from the one on screen.
- */
+/** Shared by the renderer and the serialiser, so a download matches the screen. */
 export function resolveIconNodes(
   icon: IconSvg,
   settings: IconSettings,
@@ -374,8 +259,7 @@ export function resolveIconNodes(
       if (attrs.fill && isColour(attrs.fill)) attrs.fill = "currentColor";
       if (attrs.stroke && isColour(attrs.stroke)) attrs.stroke = "currentColor";
 
-      // Written out even where the source left it to the default, so the
-      // weight is a fact of the file rather than of what it is dropped into.
+      // Written even when defaulted, so the weight doesn't depend on where the file lands.
       if (node.tag !== "g" && isColour(own.stroke)) {
         attrs["stroke-width"] = num(own.strokeWidth * factor);
       } else if (attrs["stroke-width"]) {
@@ -409,16 +293,7 @@ function serializeNode(node: IconNode, indent: string): string {
   return `${indent}<${node.tag}${attrs}>\n${inner}\n${indent}</${node.tag}>`;
 }
 
-/**
- * The icon as a file, at the size and weight it is being looked at.
- *
- * The box, the viewBox and the drawing are all made to agree: an icon drawn on
- * a smaller grid is scaled by a group transform rather than by rewriting its
- * path data, which is exact, reversible and about forty lines of parser
- * cheaper. The stroke units are worked out for the ORIGINAL grid, since the
- * group scale multiplies them on the way out exactly as the viewBox would
- * have.
- */
+/** Scales by a group transform rather than rewriting path data; stroke units stay on the original grid. */
 export function serializeIconSvg(icon: IconSvg, settings: IconSettings): string {
   const { size } = settings;
   const scale = size / icon.viewBox;
@@ -438,18 +313,12 @@ export function serializeIconSvg(icon: IconSvg, settings: IconSettings): string 
   ].join("\n");
 }
 
-/** An uploaded file straight to a downloadable one, or `null` if it is not an icon. */
 export function bakeIconSvg(source: string, settings: IconSettings): string | null {
   const icon = readIconSvg(source);
   return icon ? serializeIconSvg(icon, settings) : null;
 }
 
-/**
- * Attribute names as React wants them on an SVG element. The allowlist is
- * fixed and short, so this is a transformation rather than a table: React
- * warns on every hyphenated name it knows a camel form for, and passing the
- * hyphenated one through would fill the console with them.
- */
+/** camelCase names: React warns on hyphenated SVG attributes. */
 export function iconAttrsToProps(
   attrs: Record<string, string>,
 ): Record<string, string> {

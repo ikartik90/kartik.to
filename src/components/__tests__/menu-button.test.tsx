@@ -42,7 +42,6 @@ describe("MenuButton", () => {
     render(<MenuButton />);
 
     const button = screen.getByRole("button", { name: "Menu" });
-    // Icon only — the glyph is an <svg>, so the button holds no text of its own.
     expect(button.textContent).toBe("");
     expect(screen.getByText("⌘K").tagName).toBe("KBD");
 

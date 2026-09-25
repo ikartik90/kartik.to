@@ -12,35 +12,12 @@ import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { Tooltip, TooltipHostContext } from "./tooltip";
 import { WireframeText } from "./wireframe";
 
-// ---------------------------------------------------------------------------
-// The parts shared by the two actionable primitives — Button (a <button> that
-// ACTS) and Link (an <a>/next-link that NAVIGATES). They render identically and
-// share the `action` recipe (in panda.config.ts); only the root element and its
-// semantics differ, so the shared TYPES + label + cursor-following tooltip host
-// live here once, next to the recipe they pair with.
-// ---------------------------------------------------------------------------
-
-/** The look a Button/Link takes — mirrors the `action` recipe's `variant`. */
 export type ActionVariant = "text" | "icon" | "link";
 
-/**
- * The fill prominence a Button/Link takes — mirrors the recipe's `emphasis`,
- * orthogonal to `variant` (the shape). `secondary` is the filled chip;
- * `tertiary` has no resting fill and its own subtler hover wash; `glass` is the
- * translucent, blurred chip for an icon button that floats ON a picture, where
- * there is no surface behind the glyph to hold it down; `accent` is the
- * secondary chip in the brand pigment, label included. `primary` is
- * intentionally absent until its look is designed.
- */
+/** `secondary` is filled, `tertiary` unfilled, `glass` sits on a picture, `accent` is brand-tinted. */
 export type ActionEmphasis = "secondary" | "tertiary" | "glass" | "accent";
 
-/**
- * The scale a Button/Link takes — mirrors the recipe's `size`, orthogonal to
- * both `variant` (the shape) and `emphasis` (the fill). `md` is the 40px chip;
- * `sm` is the 32px one. Only the `text` shape has two sizes: an icon button has
- * one inset (a smaller icon is a smaller glyph in the same chip), and a link is
- * inline text.
- */
+/** `md` is the 40px chip, `sm` the 32px one; only the `text` variant has both. */
 export type ActionSize = "md" | "sm";
 
 export interface ActionTextProps {
@@ -48,7 +25,6 @@ export interface ActionTextProps {
   className?: string;
 }
 
-/** The visible label of a text Button/Link (`Button.Text` / `Link.Text`). */
 export function ActionText({ children, className }: ActionTextProps) {
   return (
     <span className={className}>
@@ -65,17 +41,7 @@ const isActionText = (node: ReactNode) =>
 const isActionTooltip = (node: ReactNode) =>
   isValidElement(node) && node.type === Tooltip;
 
-/**
- * Splits an action's children into the rendered CONTENT (icon + label) and its
- * optional `.Tooltip`, and wires that tooltip to a cursor-following hover. The
- * returned `tooltipNode` renders as a sibling of the trigger — it needs no
- * positioned ancestor and takes no layout slot, being `position: fixed` and
- * portalled to the body by `Tooltip` itself; `show`/`hide` drive its
- * visibility. `hasText` feeds the text-vs-icon variant inference.
- *
- * `show` takes the POINTER EVENT rather than coordinates so the one rule about
- * which pointers may open a label lives here, once, for both hosts.
- */
+/** Splits children into content and an optional `.Tooltip` wired to a cursor-following hover. */
 export function useActionTooltip(children: ReactNode) {
   const items = Children.toArray(children);
   const tooltip = items.find(isActionTooltip);
@@ -85,17 +51,7 @@ export function useActionTooltip(children: ReactNode) {
   const [hovered, setHovered] = useState(false);
   const { ref, seed } = useCursorTooltip(hovered);
 
-  // A finger never opens the label. This tooltip is drawn AT THE CURSOR and
-  // names what the cursor is resting on — neither of which a touch has: the
-  // tap is over before the label lands, and the name it carries is already the
-  // trigger's `aria-label`. Left ungated it appears AFTER the interaction and
-  // stays there, since nothing on a touchscreen corresponds to leaving.
-  //
-  // Pointer events, and the check per EVENT rather than per device: a laptop
-  // with a touchscreen answers `(hover: hover)` truthfully for its trackpad
-  // while the hand that just tapped it was still a finger. `pointerenter` also
-  // arrives BEFORE the mouse events the engine synthesises after a tap, which
-  // is what made hovering the old `mouseenter` indistinguishable from tapping.
+  // Touch never opens the label. Checked per event, not per device: touchscreen laptops also hover.
   const show = useCallback(
     (event: ReactPointerEvent) => {
       if (event.pointerType === "touch") return;
@@ -117,16 +73,7 @@ export function useActionTooltip(children: ReactNode) {
     hasText,
     tooltipNode,
     hasTooltip: Boolean(tooltip),
-    /**
-     * Whether the label is up.
-     *
-     * Exposed so that anything drawn INSTEAD of the tooltip can be driven off
-     * the same fact rather than off `:hover`. The two look equivalent and are
-     * not: `:hover` is the browser's answer, recomputed on its own schedule and
-     * sticky when the DOM changes under a still pointer, while this is React's,
-     * set from `pointerenter`/`pointerleave`. A face that hides on one while its
-     * replacement appears on the other will eventually show both at once.
-     */
+    /** Drive anything drawn instead of the tooltip off this, not `:hover`; the two drift apart. */
     visible: hovered,
     show,
     hide,

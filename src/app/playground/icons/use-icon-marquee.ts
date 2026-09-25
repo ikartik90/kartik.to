@@ -11,35 +11,10 @@ import {
   type TileBox,
 } from "./icon-selection";
 
-// ---------------------------------------------------------------------------
-// The sweep: a band dragged across the canvas, and everything it touches.
-//
-// It lives here rather than in the grid because of WHERE it has to be
-// listened for. The band is a gesture of the page — the whole canvas under
-// the chrome, margins and all — while the grid is a 960px column centred in
-// it. Hung off the grid, a sweep could only start on a tile or in the gaps
-// between them, and reaching into the room beside the set did nothing; hung
-// off the canvas, the hand can start anywhere it can see the set from. The
-// panel is not part of it: the canvas is inset by the panel's width, so its
-// box already ends where the rail begins.
-//
-// What the gesture MEANS is `icon-selection`, which is pure. This is only the
-// part that must touch the DOM: measuring the tiles, following the pointer,
-// and holding the band.
-//
-// The band is measured in the canvas's OWN coordinates, converted from the
-// pointer on every move against a freshly read rect. That is what keeps it
-// honest while the page scrolls under a drag — the origin was stored in
-// canvas space once, so it stays on the page rather than on the glass. The
-// tiles are measured once when the drag begins, since nothing reflows during
-// one and two hundred `getBoundingClientRect` calls a frame is not a thing to
-// do.
-// ---------------------------------------------------------------------------
-
 /** A sweep in progress. A ref rather than state: no frame reads it. */
 interface Sweep {
   origin: Point;
-  /** The selection the drag started from — what an additive sweep adds to. */
+  /** The selection before the drag; an additive sweep adds to it. */
   base: string[];
   additive: boolean;
   tiles: TileBox[];
@@ -49,35 +24,23 @@ interface Sweep {
 }
 
 export interface IconMarqueeOptions {
-  /**
-   * The canvas. Owned by the page and passed IN rather than handed back, so
-   * that nothing off this hook's result is ever given to a `ref` attribute —
-   * the React Compiler reads the whole result as a ref when anything is, and
-   * every other property taken off it during render then fails.
-   */
+  /** Passed in, not returned: the React Compiler reads a hook result reaching `ref` as a ref. */
   surfaceRef: RefObject<HTMLDivElement | null>;
   selection: string[];
   onSelectionChange: (keys: string[]) => void;
 }
 
 export interface IconMarquee {
-  /** Handlers for the canvas element. */
   surfaceProps: {
     onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
     onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
     onPointerUp: () => void;
     onPointerCancel: () => void;
   };
-  /** The band to draw, in canvas coordinates, or nothing. */
+  /** In canvas coordinates. */
   band: Rect | null;
-  /** True while one is being drawn — the grid hides its hover label then. */
   sweeping: boolean;
-  /**
-   * Whether the click now arriving is the tail of a sweep, spending the flag
-   * if it is. The pointerup that ends a drag fires a click on whatever is
-   * under it, and a press handler that replaced the selection would undo the
-   * whole sweep.
-   */
+  /** Whether this click ends a sweep, spending the flag: the drag's pointerup clicks what is under it. */
   consumeSweep: () => boolean;
 }
 
@@ -123,13 +86,9 @@ export function useIconMarquee({
     metaKey?: boolean;
     ctrlKey?: boolean;
   }) =>
-    // Shift is what was asked for; the platform's own modifier comes along
-    // because that is what the hand reaches for on a grid of things.
     event.shiftKey || Boolean(event.metaKey) || Boolean(event.ctrlKey);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    // A finger is how the page is scrolled. Claiming the gesture would trap
-    // the canvas, and there is no cursor to draw a band with anyway.
     if (event.pointerType === "touch" || !event.isPrimary || event.button !== 0) {
       return;
     }
@@ -154,8 +113,7 @@ export function useIconMarquee({
       if (!isDragging(sweep.origin, point)) return;
       sweep.moved = true;
       sweep.tiles = measureTiles(surfaceRef.current);
-      // Held from here so the band survives the pointer leaving the canvas.
-      // Not every engine has it, and none of this depends on it.
+      // Not every engine supports capture; the drag works without it.
       try {
         event.currentTarget.setPointerCapture?.(event.pointerId);
       } catch {

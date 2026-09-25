@@ -14,8 +14,7 @@ describe("openInNewTab", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
       this: HTMLAnchorElement,
     ) {
-      // Capture the anchor's state at click time — it must be attached to the
-      // document for the navigation to fire in some engines.
+      // Captured at click time: some engines only navigate from an attached anchor.
       clicks.push({
         href: this.getAttribute("href") ?? "",
         target: this.target,
@@ -32,7 +31,6 @@ describe("openInNewTab", () => {
       target: "_blank",
       attached: true,
     });
-    // noopener severs the opener handle (security + perf).
     expect(clicks[0].rel).toContain("noopener");
   });
 

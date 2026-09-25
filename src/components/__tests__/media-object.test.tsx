@@ -6,8 +6,7 @@ import {
   type MediaNode,
 } from "@/domain/nodes";
 
-// StaticMeshGradient is WebGL; jsdom can't run it. Stand it in with a marker
-// element carrying the colours, so a test can assert what was rendered.
+// StaticMeshGradient is WebGL, which jsdom can't run: a marker element carries its colours.
 vi.mock("@paper-design/shaders-react", () => ({
   StaticMeshGradient: ({
     colors,
@@ -61,10 +60,6 @@ function setup(props: Partial<Parameters<typeof MediaObject>[0]> = {}) {
 
 const toolbar = () => screen.getByRole("toolbar");
 
-// ---------------------------------------------------------------------------
-// The controls
-// ---------------------------------------------------------------------------
-
 describe("MediaObject toolbar", () => {
   it("offers properties, replace and remove on every object", () => {
     setup();
@@ -74,8 +69,6 @@ describe("MediaObject toolbar", () => {
     expect(rail.getByRole("button", { name: "Remove image" })).toBeDefined();
   });
 
-  // Absent, not disabled: a standalone block has no other slot to be featured
-  // OVER, so the control is not merely unavailable — it is meaningless.
   it("withholds the feature control when no handler is given", () => {
     setup();
     expect(
@@ -90,8 +83,6 @@ describe("MediaObject toolbar", () => {
     ).toBeDefined();
   });
 
-  // Pressed rather than disabled — a disabled button dims to 40%, which would
-  // fight the brand chip that is the whole signal here.
   it("holds the feature control down on the featured object", () => {
     setup({ featured: true, onFeature: vi.fn() });
     expect(
@@ -110,8 +101,6 @@ describe("MediaObject toolbar", () => {
     ).toBe("true");
   });
 
-  // A collection slot is emptied; a standalone block is deleted. Same button,
-  // different consequence, so the caller names it.
   it("lets the surface name what removal means", () => {
     setup({ removeLabel: "Delete image" });
     expect(
@@ -125,10 +114,6 @@ describe("MediaObject toolbar", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// What it paints
-// ---------------------------------------------------------------------------
-
 describe("MediaObject media", () => {
   it("paints the shader ground behind the picture", () => {
     setup({ item: image({ backgroundEffect: DEFAULT_BACKGROUND_EFFECT }) });
@@ -140,8 +125,6 @@ describe("MediaObject media", () => {
     expect(document.querySelector("[data-background-effect]")).toBeNull();
   });
 
-  // The panel previews what the reader will see, so the object has to wear its
-  // own fit, inset and corner wherever it is rendered.
   it("wears the layout the object states", () => {
     setup({ item: image({ padding: 16, borderRadius: 8 }) });
     const img = document.querySelector("img")!;
@@ -164,7 +147,6 @@ describe("MediaObject media", () => {
     expect(document.querySelector("[data-placeholder]")).not.toBeNull();
   });
 
-  // The reveal rule keys on this, and it is the ONE hook both surfaces share.
   it("marks the frame as a media cell", () => {
     setup();
     expect(document.querySelector("[data-media-cell]")).not.toBeNull();

@@ -14,10 +14,7 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function () {};
 }
 
-// Polyfill matchMedia for JSDOM — `resolveTheme` asks it what `system` means,
-// so ANY component that reads the theme hits this. Answering "not dark" makes
-// the default light, which is what every fixture in the suite assumes; a test
-// that needs the other answer overrides this on `window` itself.
+// Polyfill matchMedia for JSDOM: answers "not dark", the light default the fixtures assume.
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -60,7 +57,6 @@ if (typeof window !== "undefined" && typeof window.localStorage?.clear !== "func
 // Isolate tests from each other's persisted editor autosave state.
 beforeEach(() => {
   window.localStorage?.clear();
-  // Demo module + asset caches are module-level; reset so cases start cold.
   __resetDemoAssetCache();
   __resetDemoLoadCache();
 });

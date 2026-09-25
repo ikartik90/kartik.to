@@ -5,7 +5,6 @@ import { headingInto, type Box } from "../pointer-trajectory";
 const ROW: Box = { left: 100, top: 100, right: 200, bottom: 120 };
 const HORIZON = 300;
 
-/** A move from `a` to `b` taking `ms`. */
 const move = (a: [number, number], b: [number, number], ms = 100) =>
   [
     { x: a[0], y: a[1], t: 0 },

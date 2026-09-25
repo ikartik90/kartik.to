@@ -146,7 +146,6 @@ describe("SelectionToolbar — sidenote-view mode", () => {
     expect(
       screen.getByRole("toolbar", { name: "Sidenote actions" }),
     ).toBeDefined();
-    // Exactly two actions — no Open, no formatting buttons.
     expect(screen.getByLabelText("Edit sidenote")).toBeDefined();
     expect(screen.getByLabelText("Delete sidenote")).toBeDefined();
     expect(screen.queryByLabelText("Bold")).toBeNull();

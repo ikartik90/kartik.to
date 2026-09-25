@@ -58,10 +58,6 @@ import {
   type Mark,
 } from "@/domain/nodes";
 
-// ---------------------------------------------------------------------------
-// Heading level → Typography tag + type
-// ---------------------------------------------------------------------------
-
 const HEADING_MAP: Record<
   number,
   { tag: TypographyTag; type: TypographyType }
@@ -73,10 +69,6 @@ const HEADING_MAP: Record<
   5: { tag: "h5", type: "caption" },
   6: { tag: "h6", type: "caption" },
 };
-
-// ---------------------------------------------------------------------------
-// Inline node renderer — applies marks as nested elements
-// ---------------------------------------------------------------------------
 
 /** Apply a node's marks as nested elements; `highlight` is applied at the run level. */
 function renderStyledNode(node: InlineNode, index: number): React.ReactNode {
@@ -157,12 +149,6 @@ function renderRun(nodes: InlineNode[], base: number): React.ReactNode[] {
   return out;
 }
 
-/**
- * Render a children array. Contiguous runs sharing a sidenote id are wrapped in
- * one span (carrying the note's anchor-name) holding a dotted-underline span of
- * the annotated prose followed by the superscript ordinal; everything else falls
- * through to the highlight-aware run.
- */
 function renderInlineNodes(
   nodes: InlineNode[],
   numberOf: Map<string, number>,
@@ -185,14 +171,11 @@ function renderInlineNodes(
             { anchorName: sidenoteAnchorName(sidenote.id) } as React.CSSProperties
           }
         >
-          {/* The annotated prose carries the dotted underline; the ordinal is a
-              sibling, so the underline never runs under it AND the ordinal —
-              a plain inline — cannot be wrapped away from the last word. */}
+          {/* The ordinal is a sibling so the underline never runs under it. */}
           <span className={articleSidenoteText()}>
             {renderRun(nodes.slice(start, i), start)}
           </span>
-          {/* Ordinal is set at render (SSR) so no number flashes in on hydrate;
-              SidenoteLayer keeps it live in the editor. */}
+          {/* Numbered at SSR so no ordinal flashes in on hydrate. */}
           <sup
             className={articleSidenoteRef()}
             data-sidenote-number={numberOf.get(sidenote.id)}
@@ -209,23 +192,7 @@ function renderInlineNodes(
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Block node renderer
-// ---------------------------------------------------------------------------
-
-/**
- * What to render in place of a furniture node.
- *
- * Furniture (`project_grid`, `social_links`) says WHERE something goes and
- * nothing about what it is, so the thing itself is supplied by the page. The
- * grid in particular is built from two database tables the renderer has no
- * business reaching for — and on the homepage it also has to be handed its
- * edit state, which only that route knows.
- *
- * A node with no slot renders nothing rather than an error: an article that
- * somehow carries a `project_grid` is a document in the wrong place, and the
- * reader should get the rest of it rather than a blank page.
- */
+/** Page-supplied content for furniture nodes; a node without a slot renders nothing. */
 export type FurnitureSlots = Partial<
   Record<"project_grid" | "social_links", React.ReactNode>
 >;
@@ -245,8 +212,6 @@ function renderBlockNode(
           type="bodyLarge"
           data-indented={node.indent ? "" : undefined}
           data-align={node.align}
-          // `balance` for a centred paragraph: ragged line lengths are barely
-          // visible ranged left and glaring once both edges move.
           wrap={node.align === "center" ? "balance" : undefined}
         >
           {renderInlineNodes(node.children, numberOf)}
@@ -255,8 +220,7 @@ function renderBlockNode(
 
     case "heading": {
       const { tag, type } = HEADING_MAP[node.level] ?? HEADING_MAP[2];
-      // A captionless heading is its own block root; a captioned one is wrapped
-      // in the shell. Put the indent marker on whichever is the outer element.
+      // The indent marker goes on the outer element: the heading, or the caption shell.
       if (!node.caption)
         return (
           <Typography
@@ -315,10 +279,6 @@ function renderBlockNode(
       return <hr key={index} className={horizontalRule()} />;
 
     case "media":
-      // A collection of one, and built out of the same two pieces — the tile
-      // and the lightbox — so a picture standing alone can be enlarged and can
-      // carry a shader ground exactly as the same picture in a collection slot
-      // can. See `MediaShowcase`.
       return (
         <figure key={index} className={articleShowcase()}>
           <MediaShowcase item={node} />
@@ -331,8 +291,6 @@ function renderBlockNode(
       );
 
     case "collection":
-      // An emptied collection is legal in the schema (the editor removes
-      // images one at a time) but has nothing to publish.
       if (node.items.length === 0) return null;
       return (
         <figure key={index} className={articleShowcase()}>
@@ -346,8 +304,6 @@ function renderBlockNode(
       );
 
     case "button_link": {
-      // An unfinished button — no words, or nowhere to go — is a draft left in
-      // the page, and a reader is better shown nothing than a dead control.
       const label = node.text.trim();
       if (!label || !node.href) return null;
       return (
@@ -373,10 +329,7 @@ function renderBlockNode(
 
     case "project_grid":
     case "social_links":
-      // `data-furniture` opts the wrapper out of the `article > *` text-column
-      // clamp (globals.css). Furniture is not prose: the grid caps itself at
-      // its own three-column width and centres there, and being held to the
-      // 640px reading measure would silently make it a two-up.
+      // `data-furniture` opts out of the `article > *` text-column clamp in globals.css.
       return slots[node.type] ? (
         <div key={index} data-furniture={node.type}>
           {slots[node.type]}
@@ -416,17 +369,9 @@ function renderBlockNode(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Lists — consecutive list items render as one <ol> (numbered) or <ul> (bulleted)
-// ---------------------------------------------------------------------------
-
 type ListItemNode = Extract<BlockNode, { type: "list_item" }>;
 type BulletListItemNode = Extract<BlockNode, { type: "bullet_list_item" }>;
 
-// Ordered-list wrapper for read-only article prose — resets native list styling
-// and stacks items with the same rhythm as sibling blocks. No width: inherits
-// the `article > *` content-column width so the list aligns with prose, not
-// showcase blocks.
 const articleListStyle = css({
   listStyle: "none",
   margin: "none",
@@ -468,10 +413,7 @@ function renderNumberedList(
   );
 }
 
-// Both glyph variants resolved STATICALLY. Panda's JIT extractor reads literal
-// call sites, so `listBulletCircle({ glyph: item.marker })` emits no CSS for
-// either variant — the mask never ships and the glyph renders blank in a
-// production build, while dev looks fine.
+// Resolved statically: Panda only extracts literal call sites, so a dynamic variant ships no CSS.
 const BULLET_CIRCLE_CLASS = {
   check: listBulletCircle({ glyph: "check" }),
   cross: listBulletCircle({ glyph: "cross" }),
@@ -502,24 +444,15 @@ function renderBulletList(
   );
 }
 
-// ---------------------------------------------------------------------------
-// ArticleRenderer
-// ---------------------------------------------------------------------------
-
 interface ArticleRendererProps {
   content: Document;
-  /** Supplies the furniture nodes — see {@link FurnitureSlots}. */
   slots?: FurnitureSlots;
 }
 
 export function ArticleRenderer({ content, slots }: ArticleRendererProps) {
   const nodes = content.content;
   const output: React.ReactNode[] = [];
-  // Resolve ordinals/labels for the whole document so "continue numbering"
-  // across separate lists lines up with the editor.
   const numbering = computeListNumbering(nodes);
-  // Document-order sidenote ordinal for each note id — drives the superscript
-  // number (data-sidenote-number) and matches the aside card numbering.
   const sidenotes = collectSidenotes(nodes);
   const numberOf = new Map(sidenotes.map((e) => [e.id, e.number]));
 

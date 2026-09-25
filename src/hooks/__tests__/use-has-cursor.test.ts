@@ -4,13 +4,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { useHasCursor } from "../use-has-cursor";
 import { HAS_CURSOR_QUERY } from "@/data/media-queries";
 
-// ---------------------------------------------------------------------------
-// matchMedia stub — jsdom has none. Hands back the listener it was given so a
-// test can play a device change (a trackpad plugged into a tablet) through it.
-// ---------------------------------------------------------------------------
-
 type Listener = (event: { matches: boolean }) => void;
 
+// jsdom has no matchMedia; the stub hands back its listeners so a test can play a device change.
 function stubMatchMedia(matches: boolean) {
   const listeners: Listener[] = [];
   const queries: string[] = [];
@@ -37,11 +33,6 @@ afterEach(() => {
 });
 
 describe("useHasCursor", () => {
-  // The server cannot know what hardware is on the other end, so it renders the
-  // touch answer and the client corrects it a commit later. Starting from the
-  // cursor answer instead would put a keyboard hint in the server HTML that a
-  // phone then has to take back — and, in the palette's case, would autofocus a
-  // field on a device whose keyboard covers half the screen.
   it("starts from the touch answer, before it has asked", () => {
     stubMatchMedia(true);
     const seen: boolean[] = [];
@@ -71,8 +62,6 @@ describe("useHasCursor", () => {
     expect(result.current).toBe(false);
   });
 
-  // A tablet with a keyboard case attached mid-session is the same device
-  // answering differently, and the answer is live rather than read once.
   it("follows the device changing its answer", () => {
     const { listeners } = stubMatchMedia(false);
     const { result } = renderHook(() => useHasCursor());

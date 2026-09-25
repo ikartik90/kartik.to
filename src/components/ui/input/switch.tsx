@@ -10,40 +10,15 @@ export interface SwitchProps
     ButtonHTMLAttributes<HTMLButtonElement>,
     "onChange" | "type" | "role" | "aria-checked" | "children"
   > {
-  /** Controlled on/off state. */
   checked?: boolean;
-  /** Initial state when uncontrolled. */
   defaultChecked?: boolean;
-  /** Fired with the next state whenever the switch toggles. */
   onCheckedChange?: (checked: boolean) => void;
-  /**
-   * Override the track/thumb geometry, independent of the field `size` — e.g. a
-   * large switch beside a caption-sized label, or `md` for one that shares a
-   * row with bodySmall text and should not be the loudest thing in the form.
-   * Unset → follows `<Field size>`.
-   */
+  /** Overrides the field's size for the track; unset follows `<Field size>`. */
   size?: "sm" | "md" | "lg";
-  /** Applied to the control (track). */
+  /** Applied to the track. */
   className?: string;
 }
 
-/**
- * Toggle switch — the control slot of a `<Field>`. It reads the field context
- * for its id, label association and `aria-describedby` wiring, so `Field.Label`
- * and `Field.Hint` work with it exactly as they do for a text input; it
- * contributes only what is switch-specific: the on/off state and the track +
- * thumb visuals. Its `role="switch"` is what flips the field into the
- * control ∣ label/hint layout. Size comes from the field root (`<Field size>`),
- * so the label typography and the track geometry scale together as a set. State
- * can be controlled (`checked`) or uncontrolled (`defaultChecked`).
- *
- * @example
- * <Field size="lg">
- *   <Switch defaultChecked />
- *   <Field.Label>Wi-Fi</Field.Label>
- *   <Field.Hint>Connect automatically</Field.Hint>
- * </Field>
- */
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
   function Switch(
     {
@@ -63,9 +38,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
     const [internal, setInternal] = useState(defaultChecked ?? false);
     const checked = isControlled ? checkedProp : internal;
 
-    // An explicit `size` prop overrides the field default; otherwise follow the
-    // field. The switch is designed at sm and lg, so the field's text default
-    // (md) coerces to lg — a size-less switch still renders full geometry.
+    // The field's md (the text default) coerces to lg.
     const resolvedSize = sizeProp ?? (size === "sm" ? "sm" : "lg");
     const styles = switchField({ size: resolvedSize });
 
@@ -77,8 +50,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
         role="switch"
         aria-checked={checked}
         aria-describedby={hasHint ? hintId : undefined}
-        // In the tab order explicitly, because WebKit's default one skips a
-        // bare <button> — see `Button`.
+        // WebKit's default Tab order skips a bare <button>.
         tabIndex={0}
         className={cx(styles.control, className)}
         onClick={(e) => {

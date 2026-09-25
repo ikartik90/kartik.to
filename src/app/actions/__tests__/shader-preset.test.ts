@@ -1,20 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
 
-// ---------------------------------------------------------------------------
-// Module mocks — declared before the dynamic import of the module under test.
-//
-// The session is the whole subject here: a preset's library is now readable by
-// anyone and writable by the author alone, so every test below says who is
-// asking before it says what it expects back.
-// ---------------------------------------------------------------------------
-
 const { mockGetSession } = vi.hoisted(() => ({ mockGetSession: vi.fn() }));
 
-// The guard now lives in `@/lib/auth/server` and is shared by every action
-// module. Stubbed at its SESSION source rather than by replacing the module, so
-// these tests still run the real comparison — a mock of `requireAdmin` would
-// make every "Unauthorized" case below assert its own stub.
+// Mocked at the session source, not `requireAdmin`, so the real admin check runs.
 vi.mock("@neondatabase/auth/next/server", () => ({
   createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
@@ -52,10 +41,6 @@ const {
   unpublishShaderPreset,
 } = await import("../shader-preset");
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 
 const SETTINGS = {
@@ -74,7 +59,6 @@ const row = (id: string, publishedAt: Date | null) => ({
   updatedAt: NOW,
 });
 
-/** Who is asking. */
 const signedIn = () =>
   mockGetSession.mockResolvedValue({
     data: { user: { email: "admin@example.com" } },
@@ -89,11 +73,6 @@ describe("preset actions", () => {
     mockFindUnique.mockResolvedValue(null);
   });
 
-  // --- Reading the library --------------------------------------------------
-
-  // The playground is public and so is the strip along its foot — but a
-  // visitor is shown the presets that have been PUBLISHED and no others, so a
-  // half-tuned draft is not on display the moment it is saved.
   describe("getShaderPresets", () => {
     it("shows a visitor only the published presets", async () => {
       mockFindMany.mockResolvedValue([row("a", NOW)]);
@@ -118,7 +97,6 @@ describe("preset actions", () => {
       expect(presets.map((preset) => preset.id)).toEqual(["a", "b"]);
     });
 
-    // Newest first, and by creation rather than by last edit — see the action.
     it("asks for them newest first", async () => {
       await getShaderPresets();
 
@@ -134,14 +112,6 @@ describe("preset actions", () => {
     });
   });
 
-  // The other read, and the difference between them is WHO is asking.
-  //
-  // `getShaderPresets` answers the author with everything, which is right for
-  // the strip along the playground's foot: that is the author's workbench, and
-  // a draft is exactly what you go there to pick up. It is wrong for anything
-  // that DISPLAYS presets — the author's own homepage would put a half-tuned
-  // idea on the front page and show it to nobody else, so the page the author
-  // sees would not be the page that shipped.
   describe("getPublishedShaderPresets", () => {
     it("shows a visitor only the published presets", async () => {
       mockFindMany.mockResolvedValue([row("a", NOW)]);
@@ -154,7 +124,6 @@ describe("preset actions", () => {
       expect(presets.map((preset) => preset.id)).toEqual(["a"]);
     });
 
-    // The one that matters: signed in as the author changes nothing.
     it("shows the author only the published presets too", async () => {
       signedIn();
       mockFindMany.mockResolvedValue([row("b", NOW)]);
@@ -176,11 +145,6 @@ describe("preset actions", () => {
     });
   });
 
-  // --- Reading one ----------------------------------------------------------
-  //
-  // A visitor who reaches a preset's own route must not be able to tell an
-  // unpublished preset from one that does not exist: both answer null, which the
-  // route turns into the same 404.
   describe("getShaderPreset", () => {
     it("gives a visitor a published preset", async () => {
       mockFindUnique.mockResolvedValue(row("a", NOW));
@@ -208,8 +172,6 @@ describe("preset actions", () => {
     });
   });
 
-  // --- Writing --------------------------------------------------------------
-
   describe("createShaderPreset", () => {
     it("refuses a visitor", async () => {
       mockAggregate.mockResolvedValue({ _max: { untitledIndex: 0 } });
@@ -220,8 +182,6 @@ describe("preset actions", () => {
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    // A preset is saved long before it is worth showing anybody, so it arrives
-    // unpublished and publishing is a separate, deliberate press.
     it("saves a new preset unpublished", async () => {
       signedIn();
       mockAggregate.mockResolvedValue({ _max: { untitledIndex: 0 } });
@@ -265,8 +225,6 @@ describe("preset actions", () => {
       expect(mockUpdate).not.toHaveBeenCalled();
     });
 
-    // Clearing the date rather than deleting the row: the preset is still the
-    // author's to open, tune and put back out.
     it("clears the date, leaving the preset where it is", async () => {
       signedIn();
       mockUpdate.mockResolvedValue(row("a", null));

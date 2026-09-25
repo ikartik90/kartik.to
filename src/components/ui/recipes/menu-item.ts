@@ -16,11 +16,6 @@ export const menuItem = defineRecipe({
     textStyle: "bodySmall",
     color: "text.body",
     // cmdk sets data-selected; the slash menu uses aria-selected.
-    //
-    // `field.bg.hover`, not `bg.itemHover`: the two match in dark, but
-    // itemHover stays a flat 25% in light where the field wash drops to
-    // 15%, which read as a heavy grey band beside every other option
-    // list. A menu row and a listbox row are the same gesture.
     "&[data-selected='true'], &[aria-selected='true']": {
       backgroundColor: "field.bg.hover",
     },

@@ -16,34 +16,18 @@ import { css, cva } from "../../../../styled-system/css";
 import { useDismiss } from "@/hooks/use-dismiss";
 import SeparatorLine from "./icons/separator-menu.svg";
 
-// ---------------------------------------------------------------------------
-// A button that opens a menu under it — Add criteria (Figma 94:5177) and
-// Retest criteria (96:5262) are both one.
-//
-// Rendered INSIDE the drawer rather than portalled: everything outside a modal
-// dialog is inert, the site's `Popover` included when it portals. Dismissal is
-// the site's own `useDismiss` — Escape, taken at the document ahead of the
-// drawer's own Escape so it closes the menu and not the drawer, and a press
-// anywhere outside, which is also what closes one menu when the other opens.
-// It opens onto its first item, and the arrow keys walk the items.
-// ---------------------------------------------------------------------------
+// Not portalled: everything outside the modal drawer is inert.
 
 export interface MenuItem {
   icon: FC<SVGProps<SVGSVGElement>>;
   label: string;
-  /** What choosing it does. Without one, choosing it only closes the menu. */
   onSelect?: () => void;
-  /** Shown but refused — dimmed, and choosing it does nothing. */
   disabled?: boolean;
-  /** Drawn under a rule, apart from the items above it. */
   separated?: boolean;
 }
 
 const anchorStyle = css({ position: "relative", flexShrink: 0 });
 
-// Under the button, flush with its right edge. The source gives the menu a
-// hairline and no shadow; over the white criteria below it, the drawer's own
-// shadow is what keeps it off them.
 const menu = cva({
   base: {
     position: "absolute",
@@ -66,8 +50,6 @@ const menu = cva({
   },
 });
 
-// The source draws no hover; the product's fill is what its bands are washed
-// with, so a row under the pointer or the keyboard takes it.
 const itemStyle = css({
   display: "flex",
   alignItems: "flex-start",
@@ -87,7 +69,6 @@ const itemStyle = css({
   },
 });
 
-// A zero-height box the rule's own half-pixel stroke hangs over, as drawn.
 const separatorStyle = css({ position: "relative", flexShrink: 0, height: 0 });
 const separatorLineStyle = css({
   position: "absolute",
@@ -96,14 +77,11 @@ const separatorLineStyle = css({
 });
 
 export interface MenuButtonProps {
-  /** The trigger's own look, and what it says. */
   className: string;
   children: ReactNode;
   width: "narrow" | "wide";
   items: MenuItem[];
-  /** Given the trigger, for what points at it: a walkthrough's tip. */
   triggerRef?: RefObject<HTMLButtonElement | null>;
-  /** What describes the trigger, besides what it says. */
   "aria-describedby"?: string;
 }
 
@@ -122,8 +100,6 @@ export function MenuButton({
   const triggerId = useId();
   const menuId = useId();
 
-  // Focus goes back to the button when it was in the menu — Escape, that is.
-  // A press elsewhere moves focus itself, straight after.
   const dismiss = useCallback(() => {
     if (menuRef.current?.contains(document.activeElement))
       triggerRef.current?.focus();
@@ -161,8 +137,7 @@ export function MenuButton({
     }
   }
 
-  // Focus goes back to the button before the choice is acted on, so whatever
-  // it opens — a dialog, say — hands focus back there when it closes.
+  // Refocus the trigger before acting, so a dialog it opens hands focus back there.
   function choose(item: MenuItem) {
     if (item.disabled) return;
     triggerRef.current?.focus();
@@ -194,7 +169,7 @@ export function MenuButton({
           role="menu"
           aria-labelledby={triggerId}
           className={menu({ width })}
-          // Read by the drawer, so a press outside closes the menu and not it.
+          // Read by useModal: a backdrop press then closes only the menu.
           data-open-menu=""
           onKeyDown={handleKeyDown}
         >

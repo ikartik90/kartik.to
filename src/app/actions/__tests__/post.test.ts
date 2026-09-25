@@ -1,18 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Document } from "@/domain/post";
 
-// ---------------------------------------------------------------------------
-// Module mocks — must be declared before dynamic imports of the module
-// ---------------------------------------------------------------------------
-
 const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
-// The guard now lives in `@/lib/auth/server` and is shared by every action
-// module. Stubbed at its SESSION source rather than by replacing the module, so
-// these tests still run the real comparison — a mock of `requireAdmin` would
-// make every "Unauthorized" case below assert its own stub.
+// Mocked at the session source, not `requireAdmin`, so the real admin check runs.
 vi.mock("@neondatabase/auth/next/server", () => ({
   createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
@@ -56,16 +49,11 @@ vi.mock("@/lib/env", () => ({
   },
 }));
 
-// Stub jwtVerify to skip real crypto
 vi.mock("jose", () => ({
   jwtVerify: vi.fn().mockResolvedValue({
     payload: { user: { email: "admin@example.com" } },
   }),
 }));
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const NOW = new Date("2025-01-01T00:00:00.000Z");
 
@@ -85,10 +73,6 @@ const RAW_POST = {
   updatedAt: NOW,
 };
 
-// ---------------------------------------------------------------------------
-// Import after mocks are set up
-// ---------------------------------------------------------------------------
-
 const {
   createDraft,
   saveDraft,
@@ -98,10 +82,6 @@ const {
   getPublishedProjects,
   isPostSlugAvailable,
 } = await import("../post");
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("post server actions", () => {
   beforeEach(() => {
@@ -118,10 +98,6 @@ describe("post server actions", () => {
     mockPrismaFindMany.mockResolvedValue([RAW_POST]);
     mockPrismaFindFirst.mockResolvedValue(null);
   });
-
-  // -------------------------------------------------------------------------
-  // createDraft
-  // -------------------------------------------------------------------------
 
   describe("createDraft", () => {
     it("persists the provided category", async () => {
@@ -187,10 +163,6 @@ describe("post server actions", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // saveDraft
-  // -------------------------------------------------------------------------
-
   describe("saveDraft", () => {
     it("calls prisma.post.update with the correct data", async () => {
       await saveDraft({ id: "post-1", title: "Updated", document: EMPTY_DOC });
@@ -218,10 +190,6 @@ describe("post server actions", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // publishPost
-  // -------------------------------------------------------------------------
-
   describe("publishPost", () => {
     it("sets publishedAt to a Date", async () => {
       await publishPost("post-1");
@@ -239,20 +207,12 @@ describe("post server actions", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // deleteDraft
-  // -------------------------------------------------------------------------
-
   describe("deleteDraft", () => {
     it("calls prisma.post.delete with the correct id", async () => {
       await deleteDraft("post-1");
       expect(mockPrismaDelete).toHaveBeenCalledWith({ where: { id: "post-1" } });
     });
   });
-
-  // -------------------------------------------------------------------------
-  // getDrafts
-  // -------------------------------------------------------------------------
 
   describe("getDrafts", () => {
     it("fetches only posts where publishedAt is null", async () => {
@@ -270,10 +230,6 @@ describe("post server actions", () => {
       expect(posts[0].id).toBe("post-1");
     });
   });
-
-  // -------------------------------------------------------------------------
-  // getPublishedProjects — the palette's list, for everyone
-  // -------------------------------------------------------------------------
 
   describe("getPublishedProjects", () => {
     beforeEach(() => {
@@ -308,9 +264,6 @@ describe("post server actions", () => {
       expect(mockGetSession).not.toHaveBeenCalled();
     });
   });
-  // -------------------------------------------------------------------------
-  // The metadata sidebar's writes
-  // -------------------------------------------------------------------------
 
   describe("createDraft — metadata", () => {
     it("takes the address the author typed over the one the title mints", async () => {
@@ -374,7 +327,6 @@ describe("post server actions", () => {
       });
     });
 
-    // Renaming back must not leave the current address listed as a former one.
     it("drops an address from the old ones when the post takes it back", async () => {
       mockPrismaFindUnique.mockResolvedValue({
         ...RAW_POST,
@@ -412,8 +364,6 @@ describe("post server actions", () => {
       expect(mockPrismaUpdate).not.toHaveBeenCalled();
     });
 
-    // A page is read at an address of its own route — `/about`, `/` — so
-    // neither of these has anywhere to move it.
     it("refuses to move or refile a page", async () => {
       mockPrismaFindUnique.mockResolvedValue({
         ...RAW_POST,
@@ -505,7 +455,6 @@ describe("post server actions", () => {
       expect(mockPrismaFindFirst).not.toHaveBeenCalled();
     });
 
-    // A visitor asking which addresses exist would be told about drafts.
     it("is the author's alone", async () => {
       mockGetSession.mockResolvedValue({ data: null });
       await expect(isPostSlugAvailable("free", null)).rejects.toThrow();

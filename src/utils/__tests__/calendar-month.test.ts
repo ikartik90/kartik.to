@@ -85,7 +85,6 @@ describe("buildCalendarPeriods", () => {
       expect(period.weeks).toHaveLength(6);
       expect(period.weeks.flat()).toHaveLength(42);
     }
-    // Each period is anchored on its OWN month, not the view's.
     expect(periods[1].weeks.flat().some((c) => c.inCurrentMonth)).toBe(true);
     expect(
       periods[1].weeks.flat().filter((c) => c.inCurrentMonth)[0].date.toString(),
@@ -154,8 +153,6 @@ describe("weekdayHeader", () => {
   });
 });
 
-// ISO runs Mon=1…Sun=7; our keys run Sunday-first. The `% 7` rotation between
-// them is the whole function, so the boundary (Sunday) is the case that matters.
 describe("weekdayOf", () => {
   it("maps every day of a known week to its Sunday-first key", () => {
     // 2026-12-06 is a Sunday.

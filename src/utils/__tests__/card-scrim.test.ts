@@ -27,9 +27,6 @@ describe("cardWashStops", () => {
   });
 
   it("leaves the top of the ramp flat, which is the whole point of the curve", () => {
-    // Smootherstep's slope is zero at both ends: an eighth of the way down the
-    // wash is still doing almost nothing, so there is no edge for the eye to
-    // find. A power curve would already be a quarter opaque here.
     expect(stops[1].alpha).toBeLessThan(0.02 * CARD_WASH_PEAK);
   });
 

@@ -16,7 +16,6 @@ describe("parseCalendarDate", () => {
   });
 
   it("orders the parts by the pattern, not by the input", () => {
-    // Same digits, opposite meaning — the pattern is the only source of order.
     expect(iso(parseCalendarDate("MM/DD/YYYY")("11/12/2026"))).toBe(
       "2026-11-12",
     );
@@ -56,7 +55,6 @@ describe("parseCalendarDate", () => {
   it("rejects a day the month does not have", () => {
     expect(iso(parse("31/11/2026"))).toBeNull();
     expect(iso(parse("29/02/2027"))).toBeNull();
-    // …but 2028 is a leap year.
     expect(iso(parse("29/02/2028"))).toBe("2028-02-29");
   });
 

@@ -1,13 +1,6 @@
 import { css, cva } from "../../../../styled-system/css";
 import { scoreTone } from "./benchmark";
 
-// ---------------------------------------------------------------------------
-// A candidate's average score from the talent pool, as both candidate tables
-// show it (Figma 73:2989): a 32px disc, green from 3 up, amber below it, grey
-// with a dash where there is none. Not the benchmark's — it stands whether or
-// not the candidate has been benchmarked.
-// ---------------------------------------------------------------------------
-
 const centredStyle = css({ display: "flex", justifyContent: "center" });
 
 const score = cva({
@@ -17,8 +10,7 @@ const score = cva({
     justifyContent: "center",
   },
   variants: {
-    // Drawn smaller in the intro's pictures, its figure set a little low to
-    // sit in the middle of the disc (Figma 132:6204).
+    // Intro pictures; the top padding optically centres the figure.
     small: {
       false: {
         width: "32px",

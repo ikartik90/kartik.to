@@ -40,7 +40,6 @@ describe("useDemoLoader", () => {
     const entry = makeEntry();
     renderHook(() => useDemoLoader(entry));
 
-    // Not loaded yet — the effect is gated on page load.
     await Promise.resolve();
     expect(entry.load).not.toHaveBeenCalled();
 
@@ -58,27 +57,18 @@ describe("useDemoLoader", () => {
     expect(entry.load).toHaveBeenCalledOnce();
     first.unmount();
 
-    // A fresh instance of the same demo id is ready on the first render — no
-    // loader (ready is true immediately) and no second load.
     const second = renderHook(() => useDemoLoader(entry));
     expect(second.result.current.ready).toBe(true);
     expect(second.result.current.Component).toBeTypeOf("function");
     expect(entry.load).toHaveBeenCalledOnce();
   });
 
-  // Swapping the demo a LIVE instance is showing — what the editor's Replace
-  // does to a component block. React reads a function handed to a state setter
-  // as an updater, so parking a component in state has to go through
-  // `setState(() => Component)`; passing it bare CALLS it, running its hooks
-  // inside the state update ("Do not call Hooks inside useEffect(…)…") and
-  // storing whatever it returned in place of the component.
   it("swaps to an already-loaded demo without calling it", async () => {
     const Second = vi.fn(() => null);
     const first = makeEntry({ id: "swap-a" });
     const second = makeEntry({ id: "swap-b", load: vi.fn(async () => Second) });
 
-    // Warm the module cache for the demo being swapped IN — the case the
-    // editor is always in, since the picker previews it before you commit.
+    // Warm the cache for the incoming demo, as the picker preview does.
     const warm = renderHook(() => useDemoLoader(second));
     await waitFor(() => expect(warm.result.current.ready).toBe(true));
     warm.unmount();

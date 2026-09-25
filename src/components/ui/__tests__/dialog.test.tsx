@@ -5,8 +5,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Dialog } from "../dialog";
 import { useDismiss } from "@/hooks/use-dismiss";
 
-// JSDOM does not implement showModal/close — patch them so tests can call
-// dialogRef.current.showModal() without throwing.
 afterEach(() => {
   cleanup();
 });
@@ -25,7 +23,6 @@ beforeEach(() => {
   });
 });
 
-/** A floating surface of the ordinary kind, standing behind the dialog. */
 function Rail({ onDismiss }: { onDismiss: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useDismiss({ ref, onDismiss });
@@ -72,18 +69,12 @@ describe("Dialog", () => {
     );
     ref.current?.showModal();
     const dialog = ref.current!;
-    // fireEvent returns false when the event's default was prevented.
     const notPrevented = fireEvent.keyDown(dialog, { key: "Escape" });
     expect(notPrevented).toBe(false);
     expect(dialog.close).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  // The command palette opens over whatever is already on screen, and the rail
-  // it covers listens for Escape at the document like every floating surface
-  // here. One press used to close both — the palette because the press was
-  // made in it, and the rail because by the time it was asked the palette had
-  // already closed itself and nothing said it had ever been there.
   it("keeps a menu behind it open when Escape closes the dialog", () => {
     const rail = vi.fn();
     const ref = createRef<HTMLDialogElement>();
@@ -100,8 +91,6 @@ describe("Dialog", () => {
     expect(rail).not.toHaveBeenCalled();
   });
 
-  // Two presses close two things: with the dialog gone, the rail is what the
-  // next Escape finds.
   it("hands Escape back to that menu once it has closed", () => {
     const rail = vi.fn();
     const ref = createRef<HTMLDialogElement>();
@@ -138,7 +127,6 @@ describe("Dialog", () => {
     );
     ref.current?.showModal();
     const dialog = ref.current!;
-    // Simulate a click where target === currentTarget (backdrop click)
     fireEvent.click(dialog, { target: dialog });
     expect(dialog.close).toHaveBeenCalled();
   });
@@ -152,7 +140,6 @@ describe("Dialog", () => {
     );
     ref.current?.showModal();
     const inner = screen.getByText("inner");
-    // Click on inner content — target !== currentTarget, so close should not be called
     fireEvent.click(inner);
     expect(ref.current?.close).not.toHaveBeenCalled();
   });

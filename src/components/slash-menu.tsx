@@ -17,15 +17,6 @@ import BulletedListIcon from "@/assets/icons/bulleted-list.svg";
 import MetricIcon from "@/assets/icons/metric.svg";
 import ButtonIcon from "@/assets/icons/button.svg";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-// `media`, `collection` and `component` are menu vocabulary, not terminal
-// blocks: selecting one commits the block type and hands off to a dialog (image
-// picker / Insert Component overlay) that fills the remaining field (src /
-// items / componentId). All three ride the same onSelect(type) channel as every
-// other item — the editor decides which types need a follow-up dialog.
 export type SlashMenuBlockType =
   | "heading"
   | "paragraph"
@@ -49,23 +40,13 @@ export interface SlashMenuEntry {
 }
 
 interface SlashMenuProps {
-  /** Characters typed after the "/" — used to filter menu items. */
   query?: string;
-  /**
-   * When provided, only items whose type is in this set are shown.
-   * Used to hide non-text blocks (media, horizontal_rule, component) when the
-   * menu is opened on an existing text block that needs type conversion.
-   */
   allowedTypes?: ReadonlyArray<SlashMenuBlockType>;
-  /** The type of the block currently being edited — hidden from the list. */
+  /** The type of the block being edited, hidden from the list. */
   excludeType?: SlashMenuBlockType;
   onSelect: (type: SlashMenuBlockType) => void;
   onDismiss: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Menu items
-// ---------------------------------------------------------------------------
 
 const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "heading", label: "Sub-heading", Icon: SubheadingIcon },
@@ -80,17 +61,11 @@ const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "button_link", label: "Button Link", Icon: ButtonIcon },
   { type: "code_block", label: "Code Block", Icon: CodeIcon },
   { type: "horizontal_rule", label: "Horizontal Rule", Icon: BorderIcon },
-  // Furniture. Offered everywhere the menu is, because `allowedTypes` is what
-  // decides where a block may go and the editor sets it per page — a second
-  // gate here would be a second place for the two to disagree.
   { type: "project_grid", label: "Project Grid", Icon: ComponentIcon },
   { type: "social_links", label: "Social Links", Icon: LinkIcon },
 ];
 
-/**
- * Pure filter helper — exported so parent components can check whether a given
- * query/context would produce any results without mounting <SlashMenu>.
- */
+/** Exported so a parent can check for results without mounting the menu. */
 export function getFilteredSlashMenu(
   query: string,
   allowedTypes?: ReadonlyArray<SlashMenuBlockType>,
@@ -113,10 +88,7 @@ export function slashMenuHasResults(
   return getFilteredSlashMenu(query, allowedTypes, excludeType).length > 0;
 }
 
-// Slash menu — positioned with CSS anchor() against the active block's
-// anchor-name. Fixed (not absolute) so position-try-fallbacks measures overflow
-// against the viewport — otherwise flip-block never fires (the containing block
-// is taller than the viewport, so there's always 'room below').
+// Fixed, not absolute, so flip-block measures overflow against the viewport.
 const slashMenuPopoverStyle = css({
   position: "fixed",
   zIndex: 50,
@@ -136,30 +108,9 @@ const slashMenuPopoverStyle = css({
   display: "flex",
   flexDirection: "column",
   overflow: "visible",
-  // No internal padding — the listbox's own 4px inset is the only gap
-  // to the rows (its root collapses via the `plain` tone).
   boxShadow:
     "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
 });
-
-// ---------------------------------------------------------------------------
-// Component
-//
-// A thin domain wrapper over the shared Popover + OptionList primitives. The
-// wrapper owns slash-specific data (allowedTypes/excludeType filtering); the
-// OptionList owns cursor/keyboard/hover. Filtering is pre-applied here
-// (non-matching options are absent from the DOM, not merely hidden), so the
-// authored children ARE the filtered set and the highlight re-homes to the first
-// survivor when the active one drops out.
-//
-// `externalKeys` keeps focus in the editor: ArrowUp/Down/Enter are captured at
-// the document to drive the highlight and commit, and the option under the
-// pointer is preselected on open. `tone="plain"` because the slashMenuPopover
-// owns the surface. `fit="content"` because the menu IS the vocabulary — the
-// shared 7-row cap belongs to lists you browse, not to one you read whole.
-// Element-anchored: the editor sets `data-slash-anchor` (→ `--slash-menu`) and
-// the recipe positions against it.
-// ---------------------------------------------------------------------------
 
 export function SlashMenu({
   query = "",
