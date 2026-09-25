@@ -30,6 +30,23 @@ describe("LinkActions", () => {
     ).toBeDefined();
   });
 
+  // Only a button can stay in view; a link inside prose has no toggle.
+  it("offers the sticky toggle only to a host that takes it", () => {
+    render(<LinkActions {...handlers()} />);
+    expect(screen.queryByRole("button", { name: "Sticky" })).toBeNull();
+  });
+
+  it("toggles sticky, showing whether it is on", () => {
+    const onToggleSticky = vi.fn();
+    render(
+      <LinkActions {...handlers()} sticky onToggleSticky={onToggleSticky} />,
+    );
+    const toggle = screen.getByRole("button", { name: "Sticky" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    expect(onToggleSticky).toHaveBeenCalledOnce();
+  });
+
   // A button not linked yet has nowhere to open.
   it("will not open a link that goes nowhere", () => {
     const h = handlers();
@@ -57,7 +74,29 @@ describe("LinkEditRow", () => {
     const input = screen.getByLabelText("Link URL");
     fireEvent.change(input, { target: { value: "  kartik.to  " } });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onApply).toHaveBeenCalledWith("kartik.to");
+    expect(onApply).toHaveBeenCalledWith("kartik.to", false);
+  });
+
+  it("toggles opening in a new tab, and applies it with the address", () => {
+    const onApply = vi.fn();
+    render(<LinkEditRow onApply={onApply} />);
+    const toggle = screen.getByRole("button", { name: "Open in new tab" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    const input = screen.getByLabelText("Link URL");
+    fireEvent.change(input, { target: { value: "kartik.to" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onApply).toHaveBeenCalledWith("kartik.to", true);
+  });
+
+  it("opens on the link's own new-tab setting", () => {
+    render(<LinkEditRow href="https://x.io" newTab onApply={vi.fn()} />);
+    expect(
+      screen
+        .getByRole("button", { name: "Open in new tab" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("applies nothing from an empty box", () => {

@@ -96,7 +96,7 @@ describe("SelectionToolbar — link-edit mode", () => {
     expect(input.value).toBe("https://old.example");
     fireEvent.change(input, { target: { value: "https://new.example" } });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(h.onApplyLink).toHaveBeenCalledWith("https://new.example");
+    expect(h.onApplyLink).toHaveBeenCalledWith("https://new.example", false);
   });
 
   it("does not apply an empty href", () => {

@@ -35,11 +35,32 @@ export const buttonLinkRowStyle = css({
   justifyContent: "center",
 });
 
+/**
+ * A sticky button's row, in the reader and the editor alike. Pinned one
+ * article gap (`xl`, the `<article>`'s own block gap) in from the bottom edge
+ * until its place scrolls up to meet it, and from the top edge once that place
+ * has passed, until the `<article>` — its containing block — runs out. The row spans the text column, so it lets the
+ * pointer through to the prose it passes over; only the button takes it.
+ * The blur behind the pinned chip is in `globals.css`, keyed off the row's
+ * `data-sticky`: `css()` cannot write `backdrop-filter`.
+ */
+export const buttonLinkStickyRowStyle = css({
+  position: "sticky",
+  top: "xl",
+  bottom: "xl",
+  zIndex: 1,
+  pointerEvents: "none",
+  "& > *": { pointerEvents: "auto" },
+});
+
 export function ButtonLink({
   href,
+  newTab = false,
   children,
 }: {
   href: string;
+  /** Open in a new tab; `Link` adds the `rel` that makes that safe. */
+  newTab?: boolean;
   /**
    * A bare string, not `Link.Text`: this renders from Server Components, and
    * the compound sub-parts do not survive the client boundary.
@@ -47,7 +68,11 @@ export function ButtonLink({
   children: ReactNode;
 }) {
   return (
-    <Link href={href} className={pillStyle}>
+    <Link
+      href={href}
+      className={pillStyle}
+      target={newTab ? "_blank" : undefined}
+    >
       {children}
     </Link>
   );

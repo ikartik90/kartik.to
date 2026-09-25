@@ -5110,7 +5110,7 @@ export default defineConfig({
           className: "inline-edit-row",
           description:
             "Inline single-field editor that replaces a floating toolbar's buttons — leading icon, bare input, and an Esc hint. Shared by the link editor and the collection caption editor.",
-          slots: ["root", "input", "hint", "hintKey", "hintLabel"],
+          slots: ["root", "input", "options", "hint", "hintKey", "hintLabel"],
           base: {
             root: {
               display: "flex",
@@ -5120,13 +5120,17 @@ export default defineConfig({
               flex: "1 0 0",
               minWidth: 0,
               alignItems: "center",
-              gap: "md",
+              // 4px between the field, the link editor's toggle group and the
+              // hint; the icon keeps 8px to the field through the input's own
+              // inset (Figma 424:857).
+              gap: "sm",
               height: "token(spacing.4xl)",
-              paddingInline: "lg",
+              paddingInline: "xs",
             },
             input: {
               flex: "1 0 0",
               minWidth: 0,
+              paddingInlineStart: "sm",
               background: "transparent",
               border: "none",
               color: "text.default",
@@ -5135,6 +5139,16 @@ export default defineConfig({
               // a second, nested control.
               focusVisibleRing: "none",
               _placeholder: { color: "text.default/40" },
+            },
+            // Trailing controls between the field and the hint (the link
+            // editor's dividers + new-tab toggle). The box is the button's
+            // height, so a stretched divider stops at 28px, not the rail's 40.
+            options: {
+              display: "flex",
+              alignItems: "center",
+              gap: "sm",
+              flexShrink: 0,
+              height: "token(sizes.toolbarButton)",
             },
             hint: {
               display: "flex",

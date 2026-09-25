@@ -3,6 +3,7 @@ import {
   BACKGROUND_EFFECT_MAX_COLORS,
   BlockNodeSchema,
   ButtonLinkHrefSchema,
+  MarkSchema,
   ButtonLinkNodeSchema,
   BackgroundEffectSchema,
   CollectionItemSchema,
@@ -942,6 +943,20 @@ describe("ButtonLinkNodeSchema", () => {
     ).toBe(true);
   });
 
+  it("may open in a new tab, and may stay in view", () => {
+    const node = {
+      type: "button_link",
+      text: "Go",
+      href: "/",
+      newTab: true,
+      sticky: true,
+    };
+    expect(ButtonLinkNodeSchema.parse(node)).toEqual(node);
+    expect(
+      ButtonLinkNodeSchema.safeParse({ ...node, sticky: "yes" }).success,
+    ).toBe(false);
+  });
+
   it("needs both fields to be present", () => {
     expect(
       BlockNodeSchema.safeParse({ type: "button_link", text: "Go" }).success,
@@ -949,6 +964,20 @@ describe("ButtonLinkNodeSchema", () => {
     expect(
       BlockNodeSchema.safeParse({ type: "button_link", href: "/" }).success,
     ).toBe(false);
+  });
+});
+
+describe("link mark", () => {
+  it("takes an optional new-tab flag", () => {
+    const link = { type: "link", href: "https://example.com" };
+    expect(MarkSchema.parse(link)).toEqual(link);
+    expect(MarkSchema.parse({ ...link, newTab: true })).toEqual({
+      ...link,
+      newTab: true,
+    });
+    expect(MarkSchema.safeParse({ ...link, newTab: "yes" }).success).toBe(
+      false,
+    );
   });
 });
 

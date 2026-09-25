@@ -13,7 +13,11 @@ import {
 import { css, cx } from "../../styled-system/css";
 import { selectionPopover, toolbar } from "../../styled-system/recipes";
 import { Popover } from "@/components/ui/popover";
-import { buttonLinkClass, buttonLinkRowStyle } from "@/components/button-link";
+import {
+  buttonLinkClass,
+  buttonLinkRowStyle,
+  buttonLinkStickyRowStyle,
+} from "@/components/button-link";
 import { LinkActions, LinkEditRow } from "@/components/link-toolbar";
 import { ButtonLinkHrefSchema, type ButtonLinkNode } from "@/domain/nodes";
 import { normalizeLinkHref } from "@/utils/link-href";
@@ -74,6 +78,19 @@ export interface EditableButtonLinkProps {
   onInsertParagraphAfter: () => void;
   /** The block's element, which the editor navigates to. */
   elRef: (el: HTMLElement | null) => void;
+}
+
+/**
+ * `block` with a yes/no setting turned on or off. Off is no field at all, so a
+ * button that never used a setting is saved exactly as before it existed.
+ */
+function withFlag(
+  block: ButtonLinkNode,
+  flag: "newTab" | "sticky",
+  on: boolean,
+): ButtonLinkNode {
+  const { [flag]: _, ...rest } = block;
+  return on ? { ...rest, [flag]: true } : rest;
 }
 
 /** Where the caret sits in `el`, in characters, or null if it is not there. */
@@ -176,13 +193,13 @@ export function EditableButtonLink({
     if (label) focusAtEnd(label);
   };
 
-  const applyHref = (typed: string) => {
+  const applyHref = (typed: string, newTab: boolean) => {
     const href = normalizeLinkHref(typed);
     if (!ButtonLinkHrefSchema.safeParse(href).success) {
       setInvalid(true);
       return;
     }
-    onChange({ ...block, href });
+    onChange(withFlag({ ...block, href }, "newTab", newTab));
     backToLabel();
   };
 
@@ -236,9 +253,13 @@ export function EditableButtonLink({
     <div
       ref={elRef}
       tabIndex={-1}
-      className={buttonLinkRowStyle}
+      className={cx(
+        buttonLinkRowStyle,
+        block.sticky && buttonLinkStickyRowStyle,
+      )}
       data-block-index={blockIndex}
       data-button-link-block=""
+      data-sticky={block.sticky ? "" : undefined}
       onFocus={(event) => {
         // The block is navigated TO as a whole; the label is where that lands.
         if (event.target === event.currentTarget && labelRef.current) {
@@ -256,7 +277,9 @@ export function EditableButtonLink({
         }}
         onBlur={(event) => {
           // Into the toolbar is still here.
-          if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          if (
+            event.currentTarget.contains(event.relatedTarget as Node | null)
+          ) {
             return;
           }
           setFocused(false);
@@ -293,6 +316,7 @@ export function EditableButtonLink({
             >
               <LinkEditRow
                 href={block.href}
+                newTab={block.newTab}
                 invalid={invalid}
                 onInput={() => setInvalid(false)}
                 onApply={applyHref}
@@ -311,6 +335,10 @@ export function EditableButtonLink({
               <LinkActions
                 canOpen={block.href !== ""}
                 removeLabel="Delete button link"
+                sticky={block.sticky}
+                onToggleSticky={() =>
+                  onChange(withFlag(block, "sticky", !block.sticky))
+                }
                 onEdit={() => {
                   cancelGrace();
                   setEditing(true);

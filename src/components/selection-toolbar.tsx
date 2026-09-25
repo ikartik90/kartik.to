@@ -39,9 +39,11 @@ interface SelectionToolbarProps {
   activeMarks: ReadonlySet<Mark["type"]>;
   /** Existing link href — prefilled in link-edit, opened by goto in link-view. */
   linkHref?: string;
+  /** Whether the existing link opens in a new tab — prefills link-edit's toggle. */
+  linkNewTab?: boolean;
   onToggleMark: (type: ToggleableMark) => void;
   onStartLink: () => void;
-  onApplyLink: (href: string) => void;
+  onApplyLink: (href: string, newTab: boolean) => void;
   onRemoveLink: () => void;
   onGotoLink: () => void;
   onEditLink: () => void;
@@ -93,6 +95,7 @@ export function SelectionToolbar({
   rect,
   activeMarks,
   linkHref,
+  linkNewTab,
   onToggleMark,
   onStartLink,
   onApplyLink,
@@ -116,7 +119,11 @@ export function SelectionToolbar({
       >
         {/* Mounted on entering link-edit, so each edit starts from the
             link's own address. */}
-        <LinkEditRow href={linkHref} onApply={onApplyLink} />
+        <LinkEditRow
+          href={linkHref}
+          newTab={linkNewTab}
+          onApply={onApplyLink}
+        />
       </Popover>
     );
   }
@@ -148,7 +155,10 @@ export function SelectionToolbar({
       >
         <OptionList direction="inline">
           <OptionList.Toolbar aria-label="Sidenote actions">
-            <OptionList.Option aria-label="Edit sidenote" onClick={onEditSidenote}>
+            <OptionList.Option
+              aria-label="Edit sidenote"
+              onClick={onEditSidenote}
+            >
               <EditIcon aria-hidden />
             </OptionList.Option>
             <OptionList.Option

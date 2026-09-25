@@ -14,7 +14,13 @@ export const MarkSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("underline") }),
   z.object({ type: z.literal("strikethrough") }),
   z.object({ type: z.literal("highlight") }),
-  z.object({ type: z.literal("link"), href: z.url() }),
+  // `newTab` opens the link in a new tab for the reader; absent means the same
+  // tab, so documents written before the flag read unchanged.
+  z.object({
+    type: z.literal("link"),
+    href: z.url(),
+    newTab: z.boolean().optional(),
+  }),
   // A margin annotation. `id` groups the run and gives it a stable anchor name
   // (two adjacent sidenotes stay distinct); `text` is the note body shown in the
   // aside card. The visible ordinal is derived from document order, not stored.
@@ -1029,6 +1035,13 @@ export const ButtonLinkNodeSchema = z.object({
   type: z.literal("button_link"),
   text: z.string(),
   href: ButtonLinkHrefSchema,
+  /** Opens in a new tab rather than this one. Absent means this tab. */
+  newTab: z.boolean().optional(),
+  /**
+   * Stays in view: pinned at the foot of the screen until its own place
+   * scrolls up to meet it, then at the head until the article runs out.
+   */
+  sticky: z.boolean().optional(),
 });
 
 export type ButtonLinkNode = z.infer<typeof ButtonLinkNodeSchema>;

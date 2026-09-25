@@ -7,6 +7,8 @@ import LinkIcon from "@/assets/icons/link.svg";
 import EditIcon from "@/assets/icons/edit.svg";
 import GotoIcon from "@/assets/icons/goto.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
+import NewTabIcon from "@/assets/icons/new-tab.svg";
+import StickyIcon from "@/assets/icons/sticky.svg";
 
 // ---------------------------------------------------------------------------
 // The link toolbar's two faces — what a link can have done to it, and the row
@@ -31,6 +33,10 @@ export interface LinkActionsProps {
   removeLabel?: string;
   /** False while there is nowhere to open — a button not linked yet. */
   canOpen?: boolean;
+  /** Whether the link stays in view. Only a button can (Figma 425:905). */
+  sticky?: boolean;
+  /** Offers the sticky toggle; a host without it shows no toggle. */
+  onToggleSticky?: () => void;
 }
 
 /** Edit ∣ Open ∣ Remove — what can be done to a link that exists. */
@@ -40,6 +46,8 @@ export function LinkActions({
   onRemove,
   removeLabel = "Remove link",
   canOpen = true,
+  sticky = false,
+  onToggleSticky,
 }: LinkActionsProps) {
   return (
     <OptionList direction="inline">
@@ -57,6 +65,18 @@ export function LinkActions({
         <OptionList.Option aria-label={removeLabel} onClick={onRemove}>
           <TrashIcon aria-hidden />
         </OptionList.Option>
+        {onToggleSticky && (
+          <>
+            <OptionList.Divider />
+            <OptionList.Option
+              aria-label="Sticky"
+              pressed={sticky}
+              onClick={onToggleSticky}
+            >
+              <StickyIcon aria-hidden />
+            </OptionList.Option>
+          </>
+        )}
       </OptionList.Toolbar>
     </OptionList>
   );
@@ -65,8 +85,10 @@ export function LinkActions({
 export interface LinkEditRowProps {
   /** The address the box opens on. */
   href?: string;
+  /** Whether the link opens in a new tab, as the toggle opens on. */
+  newTab?: boolean;
   /** Enter, with something in the box. The host decides what it accepts. */
-  onApply: (href: string) => void;
+  onApply: (href: string, newTab: boolean) => void;
   /** The host refused the last address it was given. */
   invalid?: boolean;
   /** The box changed — a refused address is being corrected. */
@@ -79,12 +101,14 @@ export interface LinkEditRowProps {
  */
 export function LinkEditRow({
   href: initial,
+  newTab: initialNewTab = false,
   onApply,
   invalid,
   onInput,
 }: LinkEditRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [href, setHref] = useState(initial ?? "");
+  const [newTab, setNewTab] = useState(initialNewTab);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -111,10 +135,27 @@ export function LinkEditRow({
           if (e.key === "Enter") {
             e.preventDefault();
             const trimmed = href.trim();
-            if (trimmed) onApply(trimmed);
+            if (trimmed) onApply(trimmed, newTab);
           }
         }}
       />
+      {/* The dividers sit outside the toolbar group so the slot's gap spaces
+          them on both sides, as in Figma (424:857). */}
+      <div className={editRow.options}>
+        <OptionList direction="inline">
+          <OptionList.Divider />
+          <OptionList.Toolbar aria-label="Link options">
+            <OptionList.Option
+              aria-label="Open in new tab"
+              pressed={newTab}
+              onClick={() => setNewTab((was) => !was)}
+            >
+              <NewTabIcon aria-hidden />
+            </OptionList.Option>
+          </OptionList.Toolbar>
+          <OptionList.Divider />
+        </OptionList>
+      </div>
       <div className={editRow.hint} aria-hidden>
         <span className={editRow.hintKey}>Esc</span>
         <span className={editRow.hintLabel}>to exit</span>

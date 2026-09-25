@@ -182,6 +182,46 @@ describe("EditableButtonLink", () => {
       expect(onDelete).toHaveBeenCalledOnce();
     });
 
+    describe("staying in view", () => {
+      it("turns sticky on from the toolbar", () => {
+        const { onChange } = setup();
+        hover(label());
+        const toggle = screen.getByRole("button", { name: "Sticky" });
+        expect(toggle.getAttribute("aria-pressed")).toBe("false");
+        fireEvent.click(toggle);
+        expect(onChange).toHaveBeenCalledWith({
+          type: "button_link",
+          text: "Book a call",
+          href: "/about",
+          sticky: true,
+        });
+      });
+
+      // The canvas is the page: a sticky button pins while it is edited too.
+      it("pins its row only while sticky", () => {
+        const { container, rerender, block, ...props } = setup();
+        const row = () => container.querySelector("[data-button-link-block]")!;
+        expect(row().hasAttribute("data-sticky")).toBe(false);
+        rerender(
+          <EditableButtonLink {...props} block={{ ...block, sticky: true }} />,
+        );
+        expect(row().hasAttribute("data-sticky")).toBe(true);
+      });
+
+      it("turns sticky off, leaving no flag behind", () => {
+        const { onChange } = setup({ sticky: true });
+        hover(label());
+        const toggle = screen.getByRole("button", { name: "Sticky" });
+        expect(toggle.getAttribute("aria-pressed")).toBe("true");
+        fireEvent.click(toggle);
+        expect(onChange).toHaveBeenCalledWith({
+          type: "button_link",
+          text: "Book a call",
+          href: "/about",
+        });
+      });
+    });
+
     describe("editing the link", () => {
       function startEditing() {
         hover(label());
@@ -209,6 +249,35 @@ describe("EditableButtonLink", () => {
         // Back to the actions, with the caret back in the label.
         expect(screen.queryByLabelText("Link URL")).toBeNull();
         expect(document.activeElement).toBe(label());
+      });
+
+      it("takes the new-tab setting with the address", () => {
+        const { onChange } = setup();
+        const input = startEditing();
+        fireEvent.click(
+          screen.getByRole("button", { name: "Open in new tab" }),
+        );
+        fireEvent.keyDown(input, { key: "Enter" });
+        expect(onChange).toHaveBeenCalledWith({
+          type: "button_link",
+          text: "Book a call",
+          href: "/about",
+          newTab: true,
+        });
+      });
+
+      it("drops the new-tab setting when it is turned off", () => {
+        const { onChange } = setup({ newTab: true });
+        const input = startEditing();
+        fireEvent.click(
+          screen.getByRole("button", { name: "Open in new tab" }),
+        );
+        fireEvent.keyDown(input, { key: "Enter" });
+        expect(onChange).toHaveBeenCalledWith({
+          type: "button_link",
+          text: "Book a call",
+          href: "/about",
+        });
       });
 
       // The address is written into the public page's `href`.
