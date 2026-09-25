@@ -1,9 +1,7 @@
 import { OG_CONTENT_TYPE, OG_SIZE } from "@/lib/og/card";
 import { postOgImage } from "@/lib/og/post-image";
 
-// The page is `force-dynamic` because a project can be edited and republished
-// at any moment; its picture is the same card and must not be a build artefact
-// that goes on showing last week's title.
+// Dynamic: a republished project must not keep an old card.
 export const dynamic = "force-dynamic";
 
 export const size = OG_SIZE;

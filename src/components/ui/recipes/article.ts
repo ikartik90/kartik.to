@@ -1,25 +1,14 @@
 import { defineRecipe } from "@pandacss/dev";
 
-/**
- * check-small.svg / cross-small.svg as masks, so the brand gradient can be
- * painted through them. A mask reads alpha: keep `fill='none'` or the glyph
- * masks as a filled blob instead of its stroke. Hand-synced with the .svg files.
- */
+// check-small.svg / cross-small.svg as masks, hand-synced with the files. Keep `fill='none'`, or
+// the glyph masks as a filled blob.
 const CHECK_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.05994 10.1813L9.14253 12.6249L12.9396 7.62488' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 
 const CROSS_GLYPH_MASK =
   "url(\"data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.5 7.5L7.5 12.5M12.5 12.5L7.5 7.5' stroke='white' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 
-/**
- * blockquote.svg as two masks off the SAME path — `fill` gives the body,
- * `stroke` the contour — so the mark can be a translucent wash with a solid
- * edge inside it. Two layers, because one mask reveals one colour. The glyph's
- * lean is drawn into the artwork, not CSS.
- *
- * NOTE: a COPY of the .svg, not a reference — nothing imports that file.
- * Re-inline the path whenever the artwork changes or the two silently drift.
- */
+// A copy of blockquote.svg's path: re-inline it whenever the artwork changes.
 const QUOTE_GLYPH_PATH =
   "M10.9494 8.65295C11.8225 8.41923 12.7194 8.93811 12.9533 9.81116C13.0483 10.1658 13.0219 10.5421 12.8772 10.8795C11.447 14.2114 11.3904 18.3371 12.7082 23.2555C15.3871 22.5377 18.0665 21.82 20.7453 21.1022C21.8548 20.8051 22.9949 21.4635 23.2922 22.5729L27.5989 38.6461C27.8962 39.7557 27.2378 40.8957 26.1282 41.193L12.0647 44.9615C10.9551 45.2589 9.81415 44.6005 9.51683 43.4908C8.26072 38.803 7.00438 34.1152 5.74827 29.4274C3.05655 19.3817 8.94032 9.1913 10.9494 8.65295ZM33.053 9.151C33.7647 8.96045 34.496 9.38266 34.6867 10.0944C34.7642 10.3835 34.7422 10.6903 34.6242 10.9655C33.4584 13.6815 33.4122 17.0449 34.4866 21.0543C36.6703 20.4692 38.8546 19.8836 41.0383 19.2985C41.9427 19.0564 42.8721 19.5934 43.1145 20.4977L46.6252 33.6002C46.8675 34.5047 46.3305 35.434 45.426 35.6764L33.9621 38.7487C33.0576 38.991 32.1274 38.454 31.885 37.5494C30.8611 33.7282 29.8376 29.9068 28.8137 26.0856C26.6195 17.8966 31.4152 9.58985 33.053 9.151Z";
 
@@ -28,20 +17,12 @@ const quoteGlyphMask = (paint: string) =>
 
 const QUOTE_GLYPH_FILL_MASK = quoteGlyphMask("fill='white'");
 
-/**
- * Stroked at 2px — DOUBLE the 1px edge it draws. An SVG stroke straddles its
- * path, so intersecting with the body mask discards the outer half.
- */
+// Stroked at 2px for a 1px edge: the stroke straddles the path and its outer half is masked off.
 const QUOTE_GLYPH_STROKE_MASK = quoteGlyphMask(
   "fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'",
 );
 
-/**
- * The column every list marker occupies — a fixed 24px box centring whatever
- * ink the marker draws, on the first text line via `marginBlockStart` of
- * (28px bodyLarge line box - 24) / 2. Fixed so the prose column starts at the
- * same x for every list style, whatever size the ink inside happens to be.
- */
+// A fixed 24px column, so every list style's prose starts at the same x.
 const markerAlignmentBox = {
   flexShrink: 0,
   display: "inline-flex",
@@ -71,15 +52,12 @@ export const articleLink = defineRecipe({
   description:
     "Hyperlink inside article prose. The underline is drawn as two stacked background bars, not text-decoration, so the hover state can be the brand gradient (text-decoration-color can't be a gradient): a neutral color-mix bar (text.body @ 50%) with the brandedEmphasis gradient layered on top, hidden at rest and grown in on hover. box-decoration-break:clone repeats the bars on each line of a wrapped link.",
   base: {
-    // The underline is the background bars below, so suppress the UA's.
     textDecorationLine: "none",
     color: "text.default",
     paddingBottom: "xs",
     backgroundImage:
       "token(colors.bg.brandedEmphasis), linear-gradient(color-mix(in srgb, var(--colors-text-body) 50%, transparent), color-mix(in srgb, var(--colors-text-body) 50%, transparent))",
     backgroundRepeat: "no-repeat",
-    // Bottom-anchored, so the gradient grows upward to exactly cover
-    // the neutral bar on hover.
     backgroundPosition: "0 100%",
     backgroundSize: "100% 0, 100% token(spacing.xxs)",
     WebkitBoxDecorationBreak: "clone",
@@ -122,7 +100,6 @@ export const articleHighlight = defineRecipe({
     paddingBlock: "xxs",
     boxDecorationBreak: "clone",
     WebkitBoxDecorationBreak: "clone",
-    // Keep nested marks on the highlight's own colour (see self-improvement.md).
     "& :is(strong, b, em, i, u, s, code, a)": {
       color: "inherit",
     },
@@ -135,7 +112,6 @@ export const articleSidenote = defineRecipe({
     "Sidenote annotation mark — wraps the annotated run of prose plus its ordinal superscript. Carries an `anchor-name` (set inline, per note) the aside card positions against; the dotted underline lives on the inner articleSidenoteText span.",
   base: {
     cursor: "default",
-    // Nested marks keep their own colour; only the underline is added.
     "& :is(strong, b, em, i, u, s, code, a)": { color: "inherit" },
   },
 });
@@ -164,10 +140,7 @@ export const articleSidenoteRef = defineRecipe({
     fontSize: "0.7em",
     fontWeight: "medium",
     userSelect: "none",
-    // A PLAIN inline, deliberately: an atomic inline (inline-block)
-    // carries an unconditional soft-wrap opportunity before it, so the
-    // ordinal could be orphaned onto a line of its own. Non-atomic, it
-    // travels with the last annotated word.
+    // Plain inline, not inline-block, which would let the ordinal wrap onto a line of its own.
     display: "inline",
     _after: {
       content: "attr(data-sidenote-number)",
@@ -206,17 +179,8 @@ export const articleShowcase = defineRecipe({
     flexDirection: "column",
     gap: "md",
     alignItems: "center",
-    // The picture is 960 wide; the words under it are not. A caption
-    // set to the block's width would run to a measure no other prose
-    // in the article uses, so it takes the text column's — centred
-    // under the block by the `alignItems` above, exactly as a shorter
-    // caption already sits. `textAlign` centres the LINES too, so a
-    // caption that wraps still reads as centred rather than as a
-    // ragged left column — the same alignment the editor's own
-    // caption has always had.
-    // (The caption's `text-wrap` cannot be set here — `Typography`'s
-    // own `pretty` is an atomic utility, a later layer than this one,
-    // so the balance is a `wrap` variant on the type itself.)
+    // The caption keeps the text column's measure. Its `text-wrap` can't be set here: Typography's
+    // atomic `pretty` sits in a later layer.
     "& > figcaption": {
       maxWidth: "token(sizes.articleContent)",
       textAlign: "center",
@@ -257,22 +221,14 @@ export const articleBlockquoteMark = defineRecipe({
       WebkitMaskRepeat: "no-repeat",
       WebkitMaskPosition: "center",
     },
-    // Both layers paint the SAME gradient over the same box, so the
-    // edge is the full-strength version of the ramp the body is washing
-    // out — the two stay in register at every point of the glyph.
-    // `opacity` rather than a second 15% gradient token: duplicating
-    // the stops would let the copy drift if `bg.brandedEmphasis` is
-    // retuned, and multiplying a fully opaque layer by 0.15 is the same
-    // result as authoring the stops at 15% alpha.
+    // `opacity`, not a 15% copy of the gradient, so the two can't drift apart.
     "&::before": {
       background: "bg.brandedEmphasis",
       opacity: 0.15,
       maskImage: QUOTE_GLYPH_FILL_MASK,
       WebkitMaskImage: QUOTE_GLYPH_FILL_MASK,
     },
-    // The 2px stroke INTERSECTED with the body, keeping only the half
-    // inside the glyph. An inset `box-shadow` can't do this: it draws
-    // on the element's BOX, not along the masked contour.
+    // The 2px stroke intersected with the body keeps only its inner 1px.
     "&::after": {
       background: "bg.brandedEmphasis",
       maskImage: `${QUOTE_GLYPH_STROKE_MASK}, ${QUOTE_GLYPH_FILL_MASK}`,
@@ -313,8 +269,7 @@ export const articleSubheadingCaption = defineRecipe({
     textStyle: "caption",
     width: "fit-content",
     wordBreak: "break-word",
-    // Only clip once there is text, or an empty editor field turns its
-    // own placeholder transparent.
+    // Only once there is text, or an empty editor field's placeholder turns transparent.
     "&:not(:empty):not([data-empty])": {
       background: "bg.brandedEmphasis",
       backgroundClip: "text",
@@ -383,17 +338,11 @@ export const listMarker = defineRecipe({
     height: "token(spacing.xl)",
     minWidth: "token(spacing.xl)",
     paddingInline: "xs",
-    // Optical centring: flex centring aligns the font's CONTENT AREA,
-    // but digits have no descender, so their ink sits low by 0.642px in
-    // Switzer at 12px = 0.0535em. Doubled here, since a centred flex
-    // item shifts up by HALF its padding. Re-measure only if the
-    // typeface changes.
+    // Optical centring: digits sit 0.0535em low in Switzer, doubled because a centred flex item
+    // shifts by half its padding. Re-measure if the typeface changes.
     paddingBlockEnd: "0.107em",
     borderRadius: "lg",
-    // TWO layers on ONE element: the gradient clipped to the glyphs,
-    // the chip clipped to the padding box. A pseudo-element can't
-    // supply the chip — `background-clip: text` paints the digits in
-    // the BACKGROUND layer, which any child would cover.
+    // Two layers on one element: a pseudo-element chip would cover the `background-clip: text` digits.
     backgroundImage:
       "token(colors.bg.brandedEmphasis), linear-gradient(token(colors.bg.listMarker) 0 0)",
     backgroundClip: "text, padding-box",
@@ -529,7 +478,7 @@ export const articleMetricValue = defineRecipe({
     width: "fit-content",
     maxWidth: "token(spacing.full)",
     wordBreak: "break-word",
-    // Only clip once there is text (see articleSubheadingCaption).
+    // Only once there is text; see articleSubheadingCaption.
     "&:not(:empty):not([data-empty])": {
       background: "bg.brandedEmphasis",
       backgroundClip: "text",

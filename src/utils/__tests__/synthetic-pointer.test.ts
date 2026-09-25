@@ -16,9 +16,7 @@ describe("synthetic pointer marking", () => {
   });
 
   it("leaves an unmarked event alone, untrusted or not", () => {
-    // Everything jsdom (or a test) constructs is untrusted, which is exactly why
-    // `isTrusted` cannot be the discriminator: it would read every stand-in for
-    // a real visitor as the show.
+    // Not `isTrusted`: everything jsdom constructs is untrusted.
     const event = new MouseEvent("pointermove");
 
     expect(event.isTrusted).toBe(false);

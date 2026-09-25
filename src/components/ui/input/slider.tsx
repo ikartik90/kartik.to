@@ -27,38 +27,14 @@ import { beginControlDrag, endControlDrag } from "@/utils/control-drag";
 import { Field, useField } from "./field";
 import { WireframeText, useWireframe } from "../wireframe";
 
-// ---------------------------------------------------------------------------
-// Slider — the third control archetype of the field family, composed INTO a
-// <Field> exactly like Switch and DatePicker (label and hint are the consumer's
-// Field.Label / Field.Hint siblings, not props):
-//
-//   <Field size="sm">
-//     <Field.Label>Opacity</Field.Label>
-//     <Slider min={0} max={100} defaultValue={100} />
-//     <Field.Hint>0–100</Field.Hint>
-//   </Field>
-//
-// It brings no surface of its own: it renders the shared `field` frame and
-// draws a ruler, a separator and the value inside it, so the fill, border,
-// radius and the whole focus accent are the same ones the text input wears.
-// The value is a box rather than a label — the number can be typed as readily
-// as it can be dragged, and both routes commit through one place. Track and
-// value box both carry `data-control`, which is all the field recipe needs to
-// flip the frame — and with it the thumb and the number, both painted in
-// `currentColor` — to the brand accent while either one holds focus.
-//
-// Pass children to re-compose those parts (drop the value, reorder, insert
-// your own); pass none and you get the drawn arrangement.
-// ---------------------------------------------------------------------------
-
 type SliderStyles = ReturnType<typeof sliderField>;
 
 type SliderContextValue = {
   scale: SliderScale;
   value: number;
-  /** 0–1 position of the current value, shared by the thumb and the readout. */
+  /** 0–1 position of the value. */
   ratio: number;
-  /** 0–1 position of every mark on the ruler. */
+  /** 0–1 positions of the ruler's marks. */
   ticks: number[];
   disabled: boolean;
   commit: (next: number) => void;
@@ -74,21 +50,16 @@ function useSlider(component: string): SliderContextValue {
 }
 
 export interface SliderProps {
-  /** Controlled value. */
   value?: number;
-  /** Initial value when uncontrolled. Defaults to `min`. */
+  /** Defaults to `min`. */
   defaultValue?: number;
-  /** Fired with the snapped value on every change (drag, key, or click). */
+  /** Fired with the snapped value. */
   onValueChange?: (value: number) => void;
   min?: number;
   max?: number;
   /** Grid the value snaps to, anchored at `min`. */
   step?: number;
-  /**
-   * Overrides the ruler with this many evenly spaced marks (11 at most). Left
-   * off, the ruler comes from the scale: marks a whole number of steps apart,
-   * as dense as a cap of 11 allows, each sitting on a value the slider holds.
-   */
+  /** Overrides the ruler with this many even marks (11 at most); otherwise marks sit on whole steps. */
   ticks?: number;
   disabled?: boolean;
   /** Applied to the field frame. */
@@ -116,8 +87,7 @@ function SliderRoot({
   const [internal, setInternal] = useState(() =>
     snapToStep(defaultValue ?? min, scale),
   );
-  // Snapping the incoming value too means a controlled consumer that echoes an
-  // unsnapped number back cannot park the thumb between two stops.
+  // Snapped even when controlled, so an echoed unsnapped value can't park the thumb between stops.
   const value = snapToStep(isControlled ? valueProp : internal, scale);
 
   const ctx: SliderContextValue = {
@@ -155,17 +125,7 @@ export type SliderTrackProps = Omit<
   "children" | "role" | "tabIndex"
 >;
 
-/**
- * The pointers this track is dragging with, and the promise that every one of
- * them hands the page's selection back.
- *
- * Four routes end a drag — the finger lifts, the gesture is cancelled, capture
- * is lost, the panel closes under it — and `endControlDrag` is idempotent
- * precisely so all four can call it without knowing about each other. The
- * unmount case is the one no event covers: a properties panel dismissed
- * mid-drag takes its listeners with it, and a page left permanently unable to
- * select would be a worse bug than the one this fixes.
- */
+/** Ends every held drag on unmount too, so a panel closed mid-drag can't leave selection disabled. */
 function useDragPointers() {
   const held = useRef(new Set<number>());
   useEffect(() => {
@@ -187,13 +147,6 @@ function useDragPointers() {
   };
 }
 
-/**
- * The ruler and the thumb — and the field's labelable control: it carries the
- * field's id, `role="slider"` with the live value, and the `data-control` hook
- * the frame keys its focus state off. Dragging, clicking and the arrow keys all
- * land here, which is why the element spans the frame's full height rather than
- * the 4px of the visible rule.
- */
 const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
   function SliderTrack(
     {
@@ -214,8 +167,7 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
       useSlider("Slider.Track");
     const drag = useDragPointers();
 
-    // A continuous slider still needs a keyboard increment; 100 stops across
-    // the range is the same granularity a native range input assumes.
+    // A continuous slider still needs a key step: 100 across the range, like a native range input.
     const keyStep = scale.step > 0 ? scale.step : (scale.max - scale.min) / 100;
 
     const valueAtPointer = (e: PointerEvent<HTMLDivElement>) => {
@@ -239,9 +191,7 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
         aria-valuemax={scale.max}
         aria-valuenow={value}
         aria-valuetext={formatSliderValue(value, scale.step)}
-        // A <div> is not a labelable element, so `Field.Label`'s htmlFor cannot
-        // reach it — the field exposes its label id for exactly this case (the
-        // Calendar group does the same).
+        // A <div> can't be `htmlFor`'s target, so it is labelled by id.
         aria-labelledby={hasLabel ? labelId : undefined}
         aria-describedby={hasHint ? hintId : undefined}
         aria-disabled={disabled || undefined}
@@ -250,31 +200,11 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
         onPointerDown={(e) => {
           onPointerDown?.(e);
           if (e.defaultPrevented || disabled || e.button !== 0) return;
-          // Take the press. The default action of a primary-button pointerdown
-          // is to START A TEXT SELECTION, and pointer capture does nothing
-          // about it — the drag keeps steering the thumb while the browser
-          // paints a selection across every label and paragraph the cursor
-          // passes on its way out of the frame.
-          //
-          // It costs the implicit focus that a mousedown would have given the
-          // track, which is why the explicit `focus()` below is load-bearing
-          // rather than belt-and-braces.
+          // Stops the press starting a text selection, which also skips focus: hence `focus()` below.
           e.preventDefault();
-          // That settles a MOUSE — measured clean in Chromium, WebKit and
-          // Firefox — and settles nothing on a phone, which is one of three
-          // reasons this is not one line. iOS starts its selection from the
-          // TOUCH GESTURE rather than from a cancelable mousedown, so nothing
-          // decided here is consulted, and it anchors on the nearest selectable
-          // text: the field's own label, which sits beside the frame this track
-          // is inside and is therefore unreachable from here. globals.css
-          // covers that with a `:has()` rule over the whole field.
-          //
-          // This is the third: the rule above governs where a press LANDS, and
-          // a drag then goes wherever the hand takes it. So the page's
-          // selection is taken outright for as long as the drag runs.
+          // Touch selection starts from the gesture, not a mousedown: globals.css guards where it lands,
+          // and `drag.take` holds the page's selection for the length of the drag.
           drag.take(e.pointerId);
-          // Capture on the track, so a drag that leaves the frame (or the
-          // window) keeps steering the thumb and still ends cleanly.
           e.currentTarget.setPointerCapture(e.pointerId);
           e.currentTarget.focus();
           commit(valueAtPointer(e));
@@ -302,8 +232,6 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
           if (e.defaultPrevented || disabled) return;
           const next = KEY_DELTA[e.key];
           if (next === undefined) return;
-          // Own the key: arrows and Page/Home/End would otherwise scroll the
-          // page out from under the field.
           e.preventDefault();
           commit(
             next === "min"
@@ -334,7 +262,7 @@ const SliderTrack = forwardRef<HTMLDivElement, SliderTrackProps>(
   },
 );
 
-/** How far each key moves the value, in steps. `min`/`max` jump to an end. */
+/** In steps; `min`/`max` jump to an end. */
 const KEY_DELTA: Record<string, number | "min" | "max" | undefined> = {
   ArrowRight: 1,
   ArrowUp: 1,
@@ -351,7 +279,6 @@ export type SliderSeparatorProps = Omit<
   "children"
 >;
 
-/** The hairline rule between the ruler and the readout. */
 function SliderSeparator({ className, ...rest }: SliderSeparatorProps) {
   const { styles } = useSlider("Slider.Separator");
   return (
@@ -363,38 +290,14 @@ export type SliderOutputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "children" | "type" | "value" | "defaultValue"
 > & {
-  /**
-   * How the committed value is written, for a scale counted in something —
-   * `1.5x`, `60%`, `24px`. Replaces the default entirely, which fixes the
-   * decimals to the step so a column of values lines up (1.00 under 1.25);
-   * a unit usually wants the number as spoken instead, trailing zeros gone.
-   *
-   * It never applies to what is being TYPED: the draft is shown back exactly
-   * as entered, or a "2" would gain its unit under the caret and could not
-   * become "2.5".
-   */
+  /** Formats the committed value (`1.5x`, `60%`); never applied to the draft being typed. */
   format?: (value: number) => string;
 };
 
-/** A finished number — "0." and "-" are on the way to one, and 0 is not. */
+/** A finished number: "0." and "-" are not yet one. */
 const NUMERIC = /^-?(\d+(\.\d+)?|\.\d+)$/;
 
-/**
- * The value — readout AND second way to set it, because a number is often
- * easier to type than to hit: an exact 60 on a 0–100 rule is one pixel wide.
- * It is a plain <input> wearing the field's own `control` reset (the colour
- * input's opacity box is the same arrangement), carrying `data-control` so the
- * frame lights up while it holds focus, but never the field's id — a label may
- * point at one control, and that is the track.
- *
- * Typing runs through the SAME `commit` the drag and the arrow keys use, so a
- * typed number is snapped and clamped exactly like a dragged one. What is typed
- * is held as a draft meanwhile: the box would otherwise rewrite itself under the
- * caret between keystrokes (a "0.5" reformatted to "1" the moment the dot
- * lands), which is the one thing that makes a numeric field impossible to type
- * in. The draft goes on blur, and the committed value paints — which is also
- * how an emptied or over-range box resolves.
- */
+/** Commits like the drag; holds a draft so the box isn't rewritten under the caret. */
 function SliderOutput({
   className,
   onChange,
@@ -409,8 +312,7 @@ function SliderOutput({
   const text =
     draft ?? (format ? format(value) : formatSliderValue(value, scale.step));
 
-  // An <input> holds no children, so there is nowhere to put a placeholder bar
-  // — the same trade `Field.Control` makes. The static readout takes over.
+  // An <input> can hold no placeholder bar, so a static readout takes over.
   if (isWireframe) {
     return (
       <span aria-hidden className={cx(styles.output, className)}>
@@ -423,9 +325,7 @@ function SliderOutput({
     <input
       type="text"
       data-control
-      // Named by the field's label rather than by an invented one: this box and
-      // the track are two ways to set the SAME thing, and a screen reader
-      // meeting "Opacity, slider" then "Value, edit text" would not know that.
+      // Named by the field's label: it and the track set the same value.
       aria-labelledby={hasLabel ? labelId : undefined}
       aria-label={hasLabel ? undefined : "Value"}
       value={text}
@@ -436,8 +336,6 @@ function SliderOutput({
       className={cx(fieldStyles.control, styles.output, className)}
       onChange={(e) => {
         onChange?.(e);
-        // Digits, a sign and a point — the numeric field's counterpart to the
-        // colour input's digits-only hex.
         const next = e.currentTarget.value.replace(/[^0-9.-]/g, "");
         setDraft(next);
         if (NUMERIC.test(next)) commit(Number(next));
@@ -451,17 +349,6 @@ function SliderOutput({
   );
 }
 
-/**
- * Compound slider. `Slider` is the control (state, keyboard, drag) and renders
- * the shared field frame; the parts inside it are composable — pass children to
- * rearrange or drop one, pass none for the drawn arrangement (Figma 842:7179).
- *
- * @example
- * <Field size="sm">
- *   <Field.Label>Break duration</Field.Label>
- *   <Slider max={60} step={5} defaultValue={30} />
- * </Field>
- */
 export const Slider = Object.assign(SliderRoot, {
   Track: SliderTrack,
   Separator: SliderSeparator,

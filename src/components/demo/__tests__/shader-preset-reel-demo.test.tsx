@@ -9,10 +9,7 @@ vi.mock("@/app/actions/shader-preset", () => ({
   getPublishedShaderPresets: () => getPublishedShaderPresets(),
 }));
 
-// The player mounts webgl2 contexts, which jsdom has none of. Stubbed with a
-// marker carrying what this wrapper is actually responsible for: which presets
-// it handed over, and at what shape. `toReelPresets` stays REAL — the narrowing
-// is the behaviour under test, not a collaborator.
+// jsdom has no webgl2. `toReelPresets` stays real: the narrowing is under test.
 vi.mock("@/components/shader-preset-reel-player", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/components/shader-preset-reel-player")
@@ -50,10 +47,6 @@ afterEach(() => {
 });
 
 describe("prepareShaderPresetReel", () => {
-  // The fetch belongs to the LOAD, not to a mount: the registry's loader is
-  // what the demo frame's preloader is waiting on, so a reel prepared this way
-  // arrives with its presets already in hand instead of opening on an empty box
-  // and filling a round trip later.
   it("fetches while loading and hands the newest three over", async () => {
     getPublishedShaderPresets.mockResolvedValue([row("a"), row("b"), row("c"), row("d")]);
 
@@ -73,9 +66,6 @@ describe("prepareShaderPresetReel", () => {
     expect(screen.getByTestId("player").dataset.aspect).toBe("16/9");
   });
 
-  // A second card, a re-mount, a scroll back — none of them is a reason to ask
-  // the database again. `useDemoLoader` caches the prepared component by id, so
-  // rendering it repeatedly must not fetch.
   it("does not fetch again for a second render of the same load", async () => {
     getPublishedShaderPresets.mockResolvedValue([row("a")]);
     const Reel = await prepareShaderPresetReel();

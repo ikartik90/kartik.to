@@ -2,8 +2,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The mask pre-pass is canvas + WebGL work jsdom cannot do; stand in with a
-// controllable one, since WHEN a mask becomes ready is what this file is about.
+// The mask pre-pass is canvas + WebGL; controllable, since when a mask is ready is what's tested.
 const maskStub = vi.hoisted(() => {
   const prepared = new Map<string, { src: string }>();
   const waiting: Array<() => void> = [];
@@ -43,8 +42,7 @@ vi.mock("@/utils/gem-smoke-mask", () => ({
   preparedGemSmokeMask: (src: string) => maskStub.prepared.get(src) ?? null,
 }));
 
-// ShaderMount is WebGL; stand in with a marker that reports the mask it was
-// handed, so "which icon is it wearing" is observable.
+// ShaderMount is WebGL; the marker reports the mask it was handed.
 vi.mock("@paper-design/shaders-react", () => ({
   ShaderMount: ({
     uniforms,
@@ -132,8 +130,6 @@ describe("SocialShaderStage", () => {
 
   it("holds nothing back for the row's first frame", () => {
     render(row());
-    // The whole point of the background warm: hydration finishes, the page can
-    // answer a keypress, and only then does a WebGL context get built.
     expect(shaders().length).toBe(0);
   });
 
@@ -147,8 +143,6 @@ describe("SocialShaderStage", () => {
     maskStub.hold(true);
     render(row());
     await tick();
-    // A shader without its mask draws the smoke over its whole box — so there
-    // is no such state to show. It arrives masked or not at all.
     expect(shaders().length).toBe(0);
 
     await act(async () => {
@@ -168,8 +162,6 @@ describe("SocialShaderStage", () => {
 
     expect(shaders().length).toBe(1);
     expect(shaders()[0].getAttribute("data-mask-src")).toBe(MASKS[2]);
-    // The same element: a remount would be a new WebGL context and a fresh
-    // compile, which is the cost this stage exists to pay only once.
     expect(shaders()[0]).toBe(first);
   });
 
@@ -187,8 +179,6 @@ describe("SocialShaderStage", () => {
       rerender(row(null));
     });
     expect(shaders().length).toBe(1);
-    // Parked on the icon it last covered — re-pointing it would swap a mask
-    // for a hover that is over.
     expect(shaders()[0].getAttribute("data-mask-src")).toBe(MASKS[1]);
     expect(shaders()[0].getAttribute("data-shader-active")).toBeNull();
   });
@@ -208,7 +198,6 @@ describe("SocialShaderStage", () => {
     render(row());
     expect(shaders().length).toBe(0);
 
-    // Two samples: below the row, travelling up at it.
     await moveTo(200, 400);
     await moveTo(200, 320);
 

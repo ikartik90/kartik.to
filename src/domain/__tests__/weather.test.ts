@@ -45,8 +45,6 @@ describe("WeatherSchema", () => {
   });
 
   it("keeps a stated time on an overcast condition", () => {
-    // The sky is hidden, but the body behind it still has to be the right one
-    // for the moment the weather clears.
     expect(WeatherSchema.parse({ condition: "rain", time: "night" })).toEqual({
       condition: "rain",
       time: "night",
@@ -89,9 +87,6 @@ describe("weatherVariantName", () => {
 
 describe("weatherLabel", () => {
   it("names the condition and nothing else", () => {
-    // Deliberately NOT qualified by the hour. A caption walking the set has to
-    // read as one label changing its value, and half the conditions needed a
-    // comma to stay grammatical once the time was in there.
     expect(weatherLabel("clear")).toBe("Clear");
     expect(weatherLabel("haze")).toBe("Haze");
     expect(weatherLabel("thundershower")).toBe("Thundershower");
@@ -106,9 +101,7 @@ describe("weatherLabel", () => {
 
 describe("conditionFromWeatherCode", () => {
   it("maps every WMO code Open-Meteo emits onto a drawing", () => {
-    // The API's documented code list. If a code here has no case, the widget
-    // falls through to its default and quietly draws the wrong sky — so the
-    // test is the list, not a sample of it.
+    // The API's full documented list, not a sample: a missing case silently draws the wrong sky.
     const codes = [
       0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75,
       77, 80, 81, 82, 85, 86, 95, 96, 99,
@@ -160,9 +153,6 @@ describe("conditionFromWeatherCode", () => {
 });
 
 describe("conditionFromWeatherCode — haze", () => {
-  // Haze is the one drawing in the set with NO weather code behind it: the
-  // WMO list Open-Meteo emits goes straight from overcast to fog. It is
-  // reached from visibility instead, which rides along on the same request.
   it("reads a short view under an open sky as haze", () => {
     for (const code of [0, 1, 2, 3]) {
       expect(conditionFromWeatherCode(code, 3000), `code ${code}`).toBe("haze");
@@ -180,8 +170,6 @@ describe("conditionFromWeatherCode — haze", () => {
   });
 
   it("never talks a reported condition down to haze", () => {
-    // Fog is already the shorter view, and rain through a murk is still rain.
-    // Visibility only gets to speak when the code says nothing is happening.
     expect(conditionFromWeatherCode(45, 200)).toBe("fog");
     expect(conditionFromWeatherCode(65, 800)).toBe("rain");
     expect(conditionFromWeatherCode(95, 900)).toBe("thundershower");
@@ -189,7 +177,6 @@ describe("conditionFromWeatherCode — haze", () => {
   });
 
   it("stays on the code when visibility is missing", () => {
-    // The field is optional on the response; absent must not read as zero.
     expect(conditionFromWeatherCode(0, undefined)).toBe("clear");
     expect(conditionFromWeatherCode(3, undefined)).toBe("cloudy");
   });
@@ -215,8 +202,6 @@ describe("WeatherReadingSchema", () => {
   });
 
   it("rejects a reading with no place to attach it to", () => {
-    // The place name is what stops a visitor in London reading 22° as theirs,
-    // so an empty one is a broken widget rather than a cosmetic gap.
     expect(
       WeatherReadingSchema.safeParse({ ...reading, place: "" }).success,
     ).toBe(false);
@@ -241,22 +226,14 @@ describe("formatDegrees", () => {
   });
 
   it("never renders a signed zero", () => {
-    // Math.round(-0.4) is -0, which templates as "-0" — a temperature no
-    // thermometer has ever shown.
     expect(formatDegrees(-0.4)).toBe("0");
   });
 
   it("carries no ring of its own", () => {
-    // The ring is a separate string because the widget POSITIONS it separately
-    // — it hangs off the digits rather than sitting inside the centred text, so
-    // that the number lands on the card's axis. A `formatDegrees` that quietly
-    // appended it would put the widget straight back where it started.
     expect(formatDegrees(22.6)).not.toContain(DEGREE_RING);
   });
 
   it("still reads as a temperature once the two are put back together", () => {
-    // Split for LAYOUT only. Whatever a screen reader ends up hearing has to
-    // be the thing a thermometer says.
     expect(`${formatDegrees(22.6)}${DEGREE_RING}`).toBe("23°");
   });
 });

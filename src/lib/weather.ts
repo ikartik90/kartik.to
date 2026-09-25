@@ -6,31 +6,11 @@ import {
   type WeatherReading,
 } from "@/domain/weather";
 
-// ---------------------------------------------------------------------------
-// The current sky at `WEATHER_LOCATION`, from Open-Meteo.
-//
-// Open-Meteo rather than one of the commercial services for the reasons that
-// actually matter here: no API key (so nothing to keep out of the repo and
-// nothing to rotate), no attribution requirement on a personal site, and a
-// free tier that a homepage revalidating four times an hour does not come
-// close to. It is also the one that reports `is_day` and `visibility` on the
-// same call as the temperature, which is exactly the four fields this needs.
-//
-// This is the first outbound HTTP call in the app, so it is worth being
-// explicit about the failure posture: it returns `null` and never throws. The
-// homepage awaits this, and a weather service having a bad afternoon must cost
-// the widget its numbers, not the page its render.
-// ---------------------------------------------------------------------------
+// Current weather from Open-Meteo. Returns null and never throws: a failure costs the widget, not the page.
 
 const ENDPOINT = "https://api.open-meteo.com/v1/forecast";
 
-/**
- * The four measurements the widget draws from, and nothing else.
- *
- * `visibility` is the odd one out — nothing on the card displays it. It is
- * there because `haze` has no weather code behind it and has to be inferred
- * from the length of the view instead; see `conditionFromWeatherCode`.
- */
+/** `visibility` isn't shown; it infers haze, which has no weather code. */
 const CURRENT_FIELDS = [
   "temperature_2m",
   "is_day",
@@ -38,26 +18,9 @@ const CURRENT_FIELDS = [
   "visibility",
 ] as const;
 
-/**
- * How long a reading stands before it is fetched again, in seconds.
- *
- * 900 is not a taste decision: the API stamps every response with
- * `"interval": 900`, which is how often the underlying model is refreshed.
- * Asking more often than that returns the same numbers.
- */
+/** Matches the API's own 900s model refresh interval. */
 const REVALIDATE_SECONDS = 900;
 
-/**
- * The wire format, validated at the boundary.
- *
- * The response is much larger than this and the extra keys are allowed through
- * unread — the point is not to describe Open-Meteo, it is to refuse to hand the
- * widget a `temperature_2m` that has quietly become a string or gone missing.
- * Without this an upstream rename renders as `undefined°` on the homepage.
- *
- * `visibility` is optional because it is the one field the mapping can do
- * without: absent, the sky is simply read off the code.
- */
 const OpenMeteoCurrentSchema = z.object({
   current: z.object({
     temperature_2m: z.number(),
@@ -75,14 +38,6 @@ function endpointUrl(): string {
   return url.toString();
 }
 
-/**
- * The current reading, or `null` if the service could not supply one.
- *
- * `null` rather than a thrown error or a fabricated default: the widget can
- * draw itself without numbers (see `WeatherWidget`), and a made-up "clear, 20°"
- * would be the one outcome worse than saying nothing — a card that is
- * confidently wrong looks exactly like a card that is right.
- */
 export async function getCurrentWeather(): Promise<WeatherReading | null> {
   try {
     const response = await fetch(endpointUrl(), {
@@ -103,7 +58,6 @@ export async function getCurrentWeather(): Promise<WeatherReading | null> {
       place: WEATHER_LOCATION.place,
     };
   } catch {
-    // Network refused, DNS gone, JSON unparseable — all the same answer.
     return null;
   }
 }

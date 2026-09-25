@@ -4,29 +4,12 @@ import path from "node:path";
 
 import { recipes, slotRecipes } from "..";
 
-// ---------------------------------------------------------------------------
-// Where a recipe lives is decided by who imports it, the same way the
-// Two-Page rule decides it for components (AGENTS.md, "Where recipes live"):
-//
-//   - one component  → `<component>.recipe.ts` beside it
-//   - two or more    → `src/components/ui/recipes/`
-//   - panda.config.ts → never; it only imports the index
-//
-// Prose alone did not hold this line: the config grew to 9,700 lines because
-// every pass that added a style found it the easiest place to put one. These
-// read the source rather than the generated `styled-system/`, so they judge
-// what a change actually wrote, not what the last codegen left behind.
-// ---------------------------------------------------------------------------
+// Reads the source rather than `styled-system/`, so stale codegen can't decide the result.
 
 const SHARED_DIR = "src/components/ui/recipes";
 
-// A recipe beside ONE component earns its file by having variants; without
-// them it is a `css()` block in the component (AGENTS.md, "Nothing close").
-// These seven are not, yet, because each shares an element with another
-// recipe's class or takes its caller's `className`: a recipe sits in Panda's
-// `recipes` layer and `css()` in `utilities`, so converting one flips which
-// rule wins on that element. Each converts when its component is next worked
-// on — with the tie rewritten and the screen checked — and leaves this list.
+// Variant-less, but each shares an element with another class: as css() (utilities layer) it would
+// flip which rule wins. Remove an entry once it is converted.
 const VARIANTLESS_EXCEPTIONS = [
   "checkboxField",
   "colorField",
@@ -51,13 +34,11 @@ const sourceFiles = readdirSync("src", { recursive: true, encoding: "utf8" })
   .filter((file) => /\.tsx?$/.test(file) && !file.includes("__tests__"))
   .map((file) => path.join("src", file));
 
-/** Every recipe a file defines, as `name = defineRecipe(` or `name: defineRecipe(`. */
 const definedIn = (file: string) =>
   [...read(file).matchAll(/(\w+)\s*[:=]\s*define(?:Slot)?Recipe\(/g)].map(
     ([, name]) => name,
   );
 
-/** Recipe name → every file under `src/` that defines it. */
 function definitions(): Map<string, string[]> {
   const defined = new Map<string, string[]>();
   for (const file of sourceFiles) {
@@ -68,7 +49,6 @@ function definitions(): Map<string, string[]> {
   return defined;
 }
 
-/** Recipe name → every non-test file that imports it from `styled-system/recipes`. */
 function importers(): Map<string, string[]> {
   const found = new Map<string, string[]>();
   for (const file of sourceFiles) {
@@ -85,7 +65,6 @@ function importers(): Map<string, string[]> {
   return found;
 }
 
-/** `src/components/weather-graphic.tsx` → `src/components/weather-graphic.recipe.ts` */
 const besideIt = (component: string) =>
   component.replace(/\.tsx?$/, ".recipe.ts");
 

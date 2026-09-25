@@ -14,8 +14,7 @@ import { VALIDATING_MS } from "../validate-dialog";
 import { CRITERIA } from "../harness-data";
 import { Landing } from "../landing";
 
-// jsdom implements neither. The stubs mirror the platform: `close()` fires the
-// `close` event, and `showModal()` throws on an already-open dialog.
+// jsdom lacks both; the stubs mirror the platform (close fires `close`, reopening throws).
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -61,7 +60,7 @@ async function advance(ms: number) {
   });
 }
 
-/** Edit, with the clock stopped from then on (`userEvent` never returns under fake timers). */
+/** Fake timers start after the click: `userEvent` never resolves under them. */
 async function edit() {
   const user = userEvent.setup();
   render(<Landing />);
@@ -147,7 +146,6 @@ function validating() {
   return screen.getByRole("dialog", { name: "Validating job criteria" });
 }
 
-/** Changed criteria, retested, and then validated. */
 async function startValidating() {
   await edit();
   await addCustomCriterion();
@@ -223,7 +221,6 @@ describe("validating the criteria (Figma 119:5974)", () => {
 });
 
 describe("saving and evaluating all active candidates", () => {
-  /** The criteria the AI features page lists, by title, each with its prompt. */
   function running() {
     return within(
       screen.getByRole("list", { name: "AI-assisted application review" }),

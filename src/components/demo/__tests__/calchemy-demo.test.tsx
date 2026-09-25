@@ -11,18 +11,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { CalchemyDemo, __resetCalchemyDemoCache } from "../calchemy-demo";
 import { DemoFrame } from "@/components/demo-frame";
 
-// No mocks: the demo runs the real parser now. It used to mock
-// `@calchemy/date-react` — the package it was built on and which no longer
-// exists — and mocking the engine as well left the cases asserting against a
-// stub of the very thing the demo is a demo OF.
-
 afterEach(() => {
   cleanup();
-  // The engine is module-cached; drop it so each case exercises fresh init.
   __resetCalchemyDemoCache();
 });
 
-/** The months on screen, named the way the calendar labels its grids. */
 function monthLabels(): string[] {
   return screen
     .queryAllByRole("grid")
@@ -35,7 +28,6 @@ function selectedLabels(): string[] {
     .map((cell) => cell.getAttribute("aria-label") ?? "");
 }
 
-/** The demo, mounted and waited for. */
 async function renderDemo() {
   render(<CalchemyDemo />);
   const field = await screen.findByRole("searchbox", {
@@ -44,13 +36,7 @@ async function renderDemo() {
   return { field, user: userEvent.setup() };
 }
 
-/**
- * Mount the demo inside a frame of a stated width.
- *
- * The demo reads the width off the `.demo-frame` it is standing in, so the
- * frame is real (jsdom lays nothing out, hence the stubbed rect) and a real
- * ResizeObserver is stubbed to report once, as the browser's does on observe.
- */
+// jsdom lays nothing out, so the frame's rect and ResizeObserver are stubbed.
 function renderInFrameOfWidth(width: number) {
   const realObserver = global.ResizeObserver;
   global.ResizeObserver = class {
@@ -103,9 +89,6 @@ describe("CalchemyDemo", () => {
     await waitFor(() => expect(selectedLabels()).toHaveLength(1));
   });
 
-  // The card cannot scroll a century the way the playground does, so it MOVES
-  // instead: a phrase answered outside the months on screen brings its own
-  // month into them.
   it("moves the run of months to where the answer falls", async () => {
     const { field, user } = await renderDemo();
     expect(monthLabels()).not.toContain("December 2028");
@@ -115,8 +98,6 @@ describe("CalchemyDemo", () => {
     expect(selectedLabels()).toEqual(["December 25, 2028"]);
   });
 
-  // The shared readings row, driven by the shared hook — a phrase with more
-  // than one meaning previews one and offers the rest.
   it("offers the readings of an ambiguous phrase, and settles on one", async () => {
     const { field, user } = await renderDemo();
 
@@ -126,11 +107,9 @@ describe("CalchemyDemo", () => {
     });
     expect(readings.length).toBeGreaterThan(1);
 
-    // The first is previewed, so the grid is already drawing it.
     expect(readings[0].getAttribute("aria-current")).toBe("true");
     expect(readings[0].getAttribute("aria-pressed")).toBe("false");
 
-    // Enter settles on it, which is a different thing from previewing it.
     await user.type(field, "{Enter}");
     await waitFor(() =>
       expect(readings[0].getAttribute("aria-pressed")).toBe("true"),
@@ -154,8 +133,6 @@ describe("CalchemyDemo", () => {
       const field = await screen.findByRole("searchbox", {
         name: "Natural language date query",
       });
-      // The logger is collapsed by default; expand it so its body exposes
-      // role="log" and its entries become visible.
       fireEvent.click(screen.getByRole("button", { name: "Expand output logs" }));
 
       const user = userEvent.setup();
@@ -177,16 +154,6 @@ describe("CalchemyDemo", () => {
     }
   });
 
-  // --- Layout tier ---------------------------------------------------------
-  //
-  // The demo shows as many months as the frame is wide enough for, and pages by
-  // exactly that many — one number, so getting the tier wrong is not a cosmetic
-  // mistake. It is a calendar that shows one month and jumps three when you
-  // press Next, which is what the published grid card once did on a phone.
-  //
-  // The tier has to be settled on MOUNT. Waiting for a resize that never comes
-  // (a card's width does not change after it lands) leaves the demo on its
-  // initial guess, which is the widest tier.
   it("opens on one month inside a narrow frame", async () => {
     const { restore } = renderInFrameOfWidth(350);
     try {

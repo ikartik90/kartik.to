@@ -7,8 +7,6 @@ describe("DEFAULT_HOME_DOCUMENT", () => {
     expect(DocumentSchema.safeParse(DEFAULT_HOME_DOCUMENT).success).toBe(true);
   });
 
-  // The intro, its way on to the About page, the icon row, then the grid —
-  // the order the homepage has always been read in.
   it("offers the About page from the intro, above the icon row", () => {
     expect(DEFAULT_HOME_DOCUMENT.content.map((block) => block.type)).toEqual([
       "paragraph",

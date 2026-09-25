@@ -15,26 +15,15 @@ export const hotkey = defineRecipe({
     borderStyle: "solid",
     borderColor: "border.divider",
     color: "text.body",
-    // Overrides the UA's monospace default on <kbd>, the element this
-    // is nearly always worn by.
+    // Overrides the UA's monospace default on <kbd>.
     textStyle: "caption",
     whiteSpace: "nowrap",
   },
   variants: {
-    // What the chip is standing among, which is what its fill answers
-    // to. A shortcut is a label, not a control, so it should look like
-    // the furniture around it and never like something to press.
     surface: {
-      // Out in the layout, beside a tooltip — the home header, where the
-      // two are one button's two labels and the cursor swaps one for the
-      // other. Same fill, so it reads as a single box changing what it
-      // says rather than as two chips trading places.
       page: {
         backgroundColor: { base: "neutral.200", _dark: "neutral.800" },
       },
-      // Inside a menu, where the rows are what the eye is calibrated to:
-      // the palette's `Esc` takes the wash a hovered row wears, so the
-      // hint sits at the same depth as the thing it is a hint about.
       menu: { backgroundColor: "field.bg.hover" },
     },
   },

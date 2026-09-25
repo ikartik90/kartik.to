@@ -9,8 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// `vi.mock` is hoisted above the file, so anything its factory closes over has
-// to be hoisted with it.
+// `vi.mock` is hoisted, so anything its factory closes over must be hoisted with it.
 const { actions } = vi.hoisted(() => ({
   actions: {
     setPinned: vi.fn(),
@@ -21,7 +20,6 @@ const { actions } = vi.hoisted(() => ({
 }));
 vi.mock("@/app/actions/grid", () => actions);
 
-// The picker and the live demo frame are heavy and prove nothing here.
 vi.mock("@/components/component-insert-dialog", () => ({
   ComponentInsertDialog: () => null,
 }));
@@ -31,9 +29,7 @@ vi.mock("@/components/demo-frame", () => ({
 vi.mock("@/components/demo-component", () => ({
   DemoComponent: () => <div data-testid="demo" />,
 }));
-// The library dialogs reach a server action, and through it `next/headers`.
-// Stubbed to the one fact the grid's own cases are about: which half of the
-// library the rail asked for.
+// These reach a server action and `next/headers`; stubbed to which half of the library was asked for.
 vi.mock("@/components/image-insert-dialog", () => ({
   ImageInsertDialog: ({
     open,
@@ -56,18 +52,13 @@ vi.mock("@/components/image-insert-dialog", () => ({
     ) : null,
 }));
 vi.mock("@/components/demo/registry", () => ({
-  // Only one of these demos logs, which is what the log control keys off —
-  // "can this card log at all" is the registry's answer, not the row's.
+  // Only one demo logs: the log control keys off the registry, not the row.
   getDemoComponent: (id: string) => ({
     id,
     label: id,
     load: vi.fn(),
     logger: id === "calchemy-demo" ? true : undefined,
-    // The one entry that is a CARD rather than a specimen — drawn bare, and
-    // configured per publication. Both halves of that key off this flag.
     card: id === "link-card" ? true : undefined,
-    // One demo in the mocked registry is a picture of somewhere else, which is
-    // what the card's link keys off — see `link` on the real entry.
     link:
       id === "shader-preset-reel"
         ? { href: "/playground/shader", label: "Shader playground" }
@@ -108,14 +99,12 @@ const component = (id: string, gridIndex: number | null = null): GridCard => ({
   span: 1,
 });
 
-/** A card for the one demo in the mocked registry that points somewhere. */
 const linked = (id: string): GridCard => ({
   ...(component(id) as Extract<GridCard, { kind: "component" }>),
   componentId: "shader-preset-reel",
   aspect: "1/1",
 });
 
-/** A card for the one entry in the mocked registry that IS a card. */
 const linkCard = (
   id: string,
   props: LinkCardConfig = {},
@@ -125,7 +114,6 @@ const linkCard = (
   props,
 });
 
-/** A card for the one demo in the mocked registry that logs. */
 const logging = (id: string, logger = true): GridCard => ({
   ...(component(id) as Extract<GridCard, { kind: "component" }>),
   componentId: "calchemy-demo",
@@ -151,18 +139,11 @@ describe("HomeGrid", () => {
   });
   afterEach(cleanup);
 
-  // `/` renders this plain; only `/edit/home` passes `editable`, and that route
-  // has already turned away anyone who is not the admin.
   it("shows no controls when not editable", () => {
     render(<HomeGrid cards={[post("a")]} />);
     expect(screen.queryByRole("button", { name: /pin/i })).toBeNull();
   });
 
-  // The editing DIALOGS are markup, not just controls: a closed `<dialog>`
-  // renders its contents into the document, so mounting them outside edit mode
-  // ships "You are about to unpublish this component" to every visitor of the
-  // public homepage. Invisible is not the same as absent, and an e2e check for
-  // admin text on `/` is what found this.
   it("mounts no editing dialogs when not editable", () => {
     const { container } = render(
       <HomeGrid cards={[post("a"), component("c1")]} />,
@@ -178,9 +159,6 @@ describe("HomeGrid", () => {
     expect(container.querySelector("dialog")).not.toBeNull();
   });
 
-  // Clicking a card in edit mode would navigate away and take the unsaved
-  // layout with it, and a component card is a live demo that would respond to
-  // the click as well.
   it("makes cards unfollowable while editing", () => {
     const { container } = render(
       <HomeGrid cards={[post("a"), component("c1")]} editable />,
@@ -202,8 +180,6 @@ describe("HomeGrid", () => {
     expect(screen.getAllByRole("button", { name: /pin/i })).toHaveLength(1);
   });
 
-  // The seat a pin claims is the card's position in the RENDERED order, which
-  // is the whole contract between the ordering and the toolbar.
   it("pins a card to the index it is currently rendered at", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a"), post("b"), post("c")]} editable />);
@@ -212,8 +188,6 @@ describe("HomeGrid", () => {
     expect(useGridDraftStore.getState().pins).toEqual({ "post:c": 2 });
   });
 
-  // Nothing is written as you click — that is what leaves "Discard and exit"
-  // something to discard.
   it("writes nothing to the server while editing", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a")]} editable />);
@@ -246,7 +220,6 @@ describe("HomeGrid", () => {
     );
   });
 
-  // Unpublishing is confirmed, not immediate — the press opens the question.
   it("asks before unpublishing a component", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[component("c1")]} editable />);
@@ -265,8 +238,6 @@ describe("HomeGrid", () => {
     expect(fwd[1].hasAttribute("disabled")).toBe(true);
   });
 
-  // A masonry of near-identical tiles gives no clue where a moved card landed,
-  // so the one that moved is ringed.
   it("rings the card that was just moved, and only that one", async () => {
     const user = userEvent.setup();
     const { container } = render(
@@ -282,8 +253,7 @@ describe("HomeGrid", () => {
     expect(ringed[0].textContent).toContain("a");
   });
 
-  // Two cards, because a lone card cannot move forward — it is already the end
-  // of the grid and the control is correctly disabled.
+  // Two cards: a lone card can't move forward.
   it("drops the ring when the moved card is unpinned", async () => {
     const user = userEvent.setup();
     const { container } = render(
@@ -296,16 +266,13 @@ describe("HomeGrid", () => {
     const ringed = container.querySelector("[data-moved]");
     expect(ringed).not.toBeNull();
 
-    // Unpin the ringed card itself, not whichever is first — the move may have
-    // reordered them.
+    // The ringed card itself, not the first: the move may have reordered them.
     const pin = ringed!.querySelector<HTMLButtonElement>(
       'button[aria-label="Pin"]',
     );
     await user.click(pin!);
     expect(container.querySelectorAll("[data-moved]")).toHaveLength(0);
   });
-
-  // --- Column span ---------------------------------------------------------
 
   const spanOf = (cell: Element) =>
     (cell as HTMLElement).style.getPropertyValue("--span");
@@ -338,8 +305,6 @@ describe("HomeGrid", () => {
     expect(spanOf(container.querySelectorAll("[data-grid-cell]")[0])).toBe("1");
   });
 
-  // Nothing reaches the database until the palette's "Publish and exit" — a
-  // width is a layout edit like any other and buffers with the rest.
   it("writes no width to the server while editing", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a"), post("b"), post("c")]} editable />);
@@ -357,8 +322,7 @@ describe("HomeGrid", () => {
     ).toBe(true);
   });
 
-  // Three cards is a three-column grid, so the third press is the one that has
-  // nowhere left to go.
+  // Three cards make a three-column grid, so the third press has nowhere to go.
   it("will not widen a card past the columns the grid has", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a"), post("b"), post("c")]} editable />);
@@ -371,8 +335,6 @@ describe("HomeGrid", () => {
     expect(add().hasAttribute("disabled")).toBe(true);
   });
 
-  // The ceiling is the grid's own column count, which a small listing lowers —
-  // a two-card grid is two columns wide, so two is as wide as a card can get.
   it("takes its ceiling from the grid the cards are actually in", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a"), post("b")]} editable />);
@@ -394,8 +356,6 @@ describe("HomeGrid", () => {
     expect(useGridDraftStore.getState().spans).toEqual({ "component:c1": 2 });
   });
 
-  // --- Aspect ratio --------------------------------------------------------
-
   it("reshapes the card the picker was opened from", async () => {
     const user = userEvent.setup();
     const { container } = render(
@@ -415,8 +375,6 @@ describe("HomeGrid", () => {
     expect(cell.style.getPropertyValue("--aspect-h")).toBe("3");
   });
 
-  // One rail per card, and each is its own picker — opening one must not put
-  // every other card into the same mode.
   it("opens the picker on one card at a time", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a"), post("b")]} editable />);
@@ -439,13 +397,6 @@ describe("HomeGrid", () => {
     expect(actions.saveGridLayout).not.toHaveBeenCalled();
   });
 });
-
-// --- Customize -------------------------------------------------------------
-//
-// One docked panel for the whole grid, opened from the card whose properties
-// it is showing. It is a SIBLING of the grid rather than a child of a cell:
-// the panel is fixed to the viewport and only one card can be inspected at a
-// time, so a copy per cell would be a dozen dialogs for one surface.
 
 describe("HomeGrid — card properties", () => {
   beforeEach(() => {
@@ -477,8 +428,6 @@ describe("HomeGrid — card properties", () => {
     expect(logControl()).not.toBeNull();
   });
 
-  // The panel opens on a post too — what it holds differs by card, that it
-  // opens does not.
   it("opens on a card with nothing to customize yet", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a")]} editable />);
@@ -488,9 +437,6 @@ describe("HomeGrid — card properties", () => {
     expect(logControl()).toBeNull();
   });
 
-  // The button is the way back out as well as in, which is what the trigger
-  // exemption on it is for: without it the outside-press dismiss would close
-  // the panel and the click would reopen it.
   it("closes the panel on a second press of the same control", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[post("a")]} editable />);
@@ -511,9 +457,6 @@ describe("HomeGrid — card properties", () => {
     expect(logControl()).not.toBeNull();
   });
 
-  // Whether a demo CAN log is the registry's answer; whether it currently
-  // shows the panel is the row's. A demo the registry does not log has nothing
-  // to show or hide.
   it("offers no log control for a demo that does not log", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[component("c1")]} editable />);
@@ -534,8 +477,6 @@ describe("HomeGrid — card properties", () => {
     ).toBe("true");
   });
 
-  // Buffered like every other edit the rail makes: nothing reaches the server
-  // until "Publish and exit", so a discard still has something to discard.
   it("records a hidden log panel in the draft rather than writing it", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[logging("c1")]} editable />);
@@ -565,8 +506,6 @@ describe("HomeGrid — card properties", () => {
     });
   });
 
-  // The control edits the DRAFT, so the panel has to read back through it —
-  // otherwise the segment you just pressed springs back to the row's value.
   it("keeps the control on what the draft says", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[logging("c1")]} editable />);
@@ -584,22 +523,6 @@ describe("HomeGrid — card properties", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The grid publishes its own width.
-//
-// The masonry fallback computes each card's row span with `tan(atan2(A, B))`,
-// the only construction in CSS that divides one length by another. WebKit gets
-// it wrong the moment a CONTAINER QUERY UNIT is one of the operands — measured
-// in Safari 26.6.2, `tan(atan2(100cqw, 799px))` inside a 799px `inline-size`
-// container resolves `100cqw` against the VIEWPORT, and routed through an
-// unregistered custom property first it computes to 0 outright. So the grid
-// hands the arithmetic a PLAIN PIXEL length instead, measured here.
-//
-// One observer, on the grid — not one per card. The card's own height is
-// already measured by `GridItem`; the grid's width is one number for all of
-// them, and measuring it per card would be a layout pass per card per resize.
-// ---------------------------------------------------------------------------
-
 /** A stand-in ResizeObserver that hands every observed element to the callback. */
 class StubResizeObserver {
   static callbacks = new Set<ResizeObserverCallback>();
@@ -615,7 +538,6 @@ class StubResizeObserver {
     StubResizeObserver.callbacks.delete(this.callback);
   }
 
-  /** Re-run every live observer, as the browser would after a reflow. */
   static flush() {
     for (const callback of [...StubResizeObserver.callbacks]) {
       callback([], {} as ResizeObserver);
@@ -675,9 +597,6 @@ describe("HomeGrid width measurement", () => {
     );
   });
 
-  // Up, never down, for the same reason `--card-height` rounds up: the span is
-  // a whole number of 1px rows, and a width rounded down understates the
-  // shape's height, which hands the next card a row this one is still using.
   it("rounds a fractional width up", () => {
     stubWidth(798.328125);
     const { container } = render(<HomeGrid cards={[post("a")]} />);
@@ -700,11 +619,6 @@ describe("HomeGrid width measurement", () => {
     );
   });
 
-  // The flag and the width are ONE fact, and the stylesheet leans on that: the
-  // 1px-row tier is gated on `data-measured`, and `--grid-width` falls back to
-  // `100cqw` for everything outside it. A grid flagged measured with no width
-  // published would put a `cqw` back inside the `atan2` — the exact WebKit
-  // failure this arrangement exists to remove.
   it("does not mark itself measured until it has a width", () => {
     stubWidth(0);
     const { container } = render(<HomeGrid cards={[post("a")]} />);
@@ -719,16 +633,6 @@ describe("HomeGrid width measurement", () => {
     expect(grid(container).hasAttribute("data-measured")).toBe(true);
   });
 
-  // A ResizeObserver watches the CONTENT BOX, so it fires on height as well as
-  // width — and height is exactly what this hook's own publication changes,
-  // since `--grid-width` decides every card's row span. Writing the property
-  // and the flag on every notification invalidates style for the grid and all
-  // of its cards, which produces the next notification, and WebKit reports the
-  // cycle as "ResizeObserver loop completed with undelivered notifications" —
-  // a window `error` event, not a console line. Measured in Safari 26.6.2 over
-  // five window resizes: 5 errors against 0 before the hook existed, and it
-  // fires with `grid-lanes` on too, where the span arithmetic is not even
-  // running. Publishing only on a CHANGED width is what breaks it.
   it("writes nothing when it is remeasured at the same width", () => {
     stubWidth(799);
     const { container } = render(<HomeGrid cards={[post("a")]} />);
@@ -742,19 +646,10 @@ describe("HomeGrid width measurement", () => {
 
     expect(setProperty).not.toHaveBeenCalled();
     expect(setAttribute).not.toHaveBeenCalled();
-    // And what the first measurement published still stands.
     expect(node.style.getPropertyValue("--grid-width")).toBe("799px");
     expect(node.hasAttribute("data-measured")).toBe(true);
   });
 
-  // -------------------------------------------------------------------------
-  // Component cards: the link over a view-only demo, and the server-rendered
-  // half that lets one paint before its chunk has loaded.
-  // -------------------------------------------------------------------------
-
-  // A demo that is a PICTURE of somewhere else is worth clicking, and clicking
-  // it must not mean clicking the demo: the reel is a ground, not a control
-  // panel, so the whole card is one link and nothing inside it takes a pointer.
   it("wraps a card whose demo points somewhere in a link to it", () => {
     render(<HomeGrid cards={[linked("a")]} />);
 
@@ -763,9 +658,6 @@ describe("HomeGrid width measurement", () => {
     ).toHaveProperty("pathname", "/playground/shader");
   });
 
-  // The demos that are played in place keep their pointer, and gain no link —
-  // a card that navigated away from a scheduler you were using would be taking
-  // the click you meant for the scheduler.
   it("leaves a card whose demo has no link unlinked", () => {
     render(<HomeGrid cards={[component("a")]} />);
 
@@ -773,9 +665,6 @@ describe("HomeGrid width measurement", () => {
     expect(screen.getByTestId("demo")).toBeTruthy();
   });
 
-  // The same rule `LinkCard` follows while the grid is being edited, and for
-  // the same reason: `data-inert` stops the pointer, but the card is an
-  // `<a href>` and Enter on a focused link navigates just as well.
   it("takes the card's link out of the tab order while editing", () => {
     render(<HomeGrid cards={[linked("a")]} editable />);
 
@@ -788,9 +677,6 @@ describe("HomeGrid width measurement", () => {
     expect(screen.getByRole("link").hasAttribute("tabindex")).toBe(false);
   });
 
-  // The server-rendered half. A demo whose data the page already fetched
-  // arrives as a finished node, so the card paints it immediately instead of
-  // mounting the browser's loader and waiting a chunk and a round trip.
   it("renders the server's node for a card that came with one", () => {
     render(
       <HomeGrid
@@ -803,8 +689,6 @@ describe("HomeGrid width measurement", () => {
     expect(screen.queryByTestId("demo")).toBeNull();
   });
 
-  // Keyed by CARD, so the node built for one showing cannot be drawn in
-  // another's seat — the two are published at different shapes.
   it("falls back to the browser for a card the server sent no node for", () => {
     render(
       <HomeGrid
@@ -817,8 +701,6 @@ describe("HomeGrid width measurement", () => {
     expect(screen.getByTestId("demo")).toBeTruthy();
   });
 
-  // A card inserted while editing has no server node and cannot have one: it
-  // does not exist until the layout is saved. It must still draw.
   it("falls back to the browser when the page sent no nodes at all", () => {
     render(<HomeGrid cards={[linked("a")]} />);
 
@@ -826,10 +708,6 @@ describe("HomeGrid width measurement", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The link card — the one published component that is a CARD rather than a
-// specimen, and the only one whose content is authored in the rail.
-// ---------------------------------------------------------------------------
 describe("HomeGrid — link cards", () => {
   beforeEach(() => {
     HTMLDialogElement.prototype.showModal = vi.fn(function (
@@ -849,8 +727,6 @@ describe("HomeGrid — link cards", () => {
 
   const customize = () => screen.getAllByRole("button", { name: /customize/i });
 
-  // Drawn from its own row, with no frame around it and no chunk to fetch —
-  // the demo loader is never reached, which is what the absent preloader says.
   it("draws itself rather than loading a demo into a frame", () => {
     render(
       <HomeGrid
@@ -883,8 +759,6 @@ describe("HomeGrid — link cards", () => {
     ).toBe("_blank");
   });
 
-  // The picture is decorative, so a card with no words would otherwise be a
-  // link announced as its own URL.
   it("names a wordless card by where it goes", () => {
     render(
       <HomeGrid
@@ -916,8 +790,6 @@ describe("HomeGrid — link cards", () => {
     expect(screen.queryByText("Link")).toBeNull();
   });
 
-  // The grid is edited as a draft, exactly as its placements are: nothing
-  // reaches the database until the palette's exit commits the lot.
   it("records what the rail writes in the draft, not on the server", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[linkCard("c1")]} editable />);
@@ -985,8 +857,6 @@ describe("HomeGrid — link cards", () => {
       });
     });
 
-    // Only the URL travels. A document is fetched rather than drawn, so the
-    // kind and the pixel shape the payload also carries describe nothing.
     it("points a document link at the file, and nothing else", async () => {
       const user = userEvent.setup();
       await openSection(user, "link");
@@ -1003,13 +873,6 @@ describe("HomeGrid — link cards", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A post's card, authored from the rail.
-//
-// The same rail as the link card's and the same draft under it: a picture per
-// theme and the ground the caption stands on, buffered until the palette's
-// exit commits the lot.
-// ---------------------------------------------------------------------------
 describe("HomeGrid — a post's card", () => {
   beforeEach(() => {
     useGridDraftStore.getState().reset();
@@ -1023,12 +886,10 @@ describe("HomeGrid — a post's card", () => {
     kind: "image" as const,
     src: "https://cdn.test/media/uuid-first.png",
   };
-  /** A post whose document opens with a picture — the ordinary case. */
   const pictured = (id: string): GridCard => ({
     ...(post(id) as Extract<GridCard, { kind: "post" }>),
     cover: first,
   });
-  /** An article's card: one the post itself files, by its date. */
   const dated = (id: string): GridCard => ({
     ...(post(id) as Extract<GridCard, { kind: "post" }>),
     date: "Jan 1, 2026",
@@ -1057,8 +918,6 @@ describe("HomeGrid — a post's card", () => {
     expect(actions.saveGridLayout).not.toHaveBeenCalled();
   });
 
-  // Rendered through the draft, like every other edit: the band is on the
-  // card while the switch is on, and gone the moment it is not.
   it("takes the band off the card behind it", async () => {
     const user = userEvent.setup();
     const { container } = render(<HomeGrid cards={[pictured("a")]} editable />);
@@ -1084,8 +943,6 @@ describe("HomeGrid — a post's card", () => {
     expect(screen.getByText("Case Study")).toBeTruthy();
   });
 
-  // A dated card keeps its date, and the rail says so by not offering the row
-  // at all — the one reading under which the control cannot lie about the tile.
   it("keeps a dated card's own line, and offers no row over it", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[dated("a")]} editable />);
@@ -1108,8 +965,6 @@ describe("HomeGrid — a post's card", () => {
     expect(actions.saveGridLayout).not.toHaveBeenCalled();
   });
 
-  // Opening Media seeds the light slot with the document's picture, so the
-  // pick lands BESIDE it rather than on a card that has just gone blank.
   it("puts the picked file in the slot that asked for it", async () => {
     const user = userEvent.setup();
     render(<HomeGrid cards={[pictured("a")]} editable />);

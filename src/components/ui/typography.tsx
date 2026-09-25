@@ -25,8 +25,7 @@ export type TypographyTag =
   | "cite"
   | "label";
 
-// Single home for all typography styles. All variant values are static string
-// literals so Panda's extractor generates the CSS at build time.
+// Variant values must stay static literals so Panda can extract them at build time.
 export const typographyStyles = cva({
   base: {
     color: "text.default",
@@ -55,10 +54,6 @@ export const typographyStyles = cva({
         textStyle: "quote",
       },
       caption: {
-        // `balance` rather than the base's `pretty`: a caption is a line or
-        // two set under something and centred on it, so what matters is that
-        // the lines come out even — `pretty` only guards the last one, which
-        // leaves a centred caption looking bottom-heavy.
         textStyle: "caption",
         textWrap: "balance",
       },
@@ -66,13 +61,7 @@ export const typographyStyles = cva({
         textStyle: "sidenote",
       },
     },
-    // The base's `pretty` is right for prose that runs on — it guards the last
-    // line and leaves the rest alone. A short centred paragraph standing on its
-    // own wants every line even instead, and that has to be asked for HERE: the
-    // base is an atomic utility, so a `text-wrap` from the call site would sit
-    // in the same layer at the same specificity and the winner would be
-    // stylesheet order. As a variant it is merged into one class before
-    // anything is emitted.
+    // A variant, not a call-site `textWrap`, which would tie with the base on specificity.
     wrap: {
       balance: {
         textWrap: "balance",

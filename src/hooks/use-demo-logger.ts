@@ -117,10 +117,7 @@ export function useDemoLoggerEntries(): DemoLoggerEntry[] {
 
 export function useDemoLogger() {
   const context = useContext(DemoLoggerContext);
-  // Mirror the latest context callbacks into refs so the memoized log helpers
-  // below stay referentially stable (empty deps) while always calling through
-  // to the current provider. Synced in an effect — writing refs during render
-  // is unsafe (react-hooks/refs).
+  // Refs keep the helpers stable; synced in an effect, since writing refs in render is unsafe.
   const appendRef = useRef(context?.append);
   const upsertRef = useRef(context?.upsert);
   const removeRef = useRef(context?.remove);

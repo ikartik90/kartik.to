@@ -8,25 +8,6 @@ import type { useModal } from "./modal";
 import { overlayBase } from "./overlay";
 import { ProgressBar } from "./progress-bar";
 
-// ---------------------------------------------------------------------------
-// Retesting the criteria: an overlay in the middle of the window, 50px clear
-// of its top and bottom, that benchmarks the draft against the candidate set
-// and then shows how each candidate came out (Figma 73:2989).
-//
-// The benchmarking is pretend — a bar that fills while nothing is computed —
-// and every retest runs it again: the overlay's contents are keyed on the
-// modal's session, so they remount from the start. Viewing the last results
-// shows them at once; changing the candidates does too, on the suggested list.
-//
-// Opened from inside the drawer and written inside it, so it inherits the
-// product's look; as a modal it is in the top layer all the same, over a scrim
-// that dims the drawer and the page behind it. It fades and settles in, the
-// scrim with it, and both fade out while `data-closing`.
-//
-// Review suggested rewrites closes it, and the drawer takes it from there.
-// ---------------------------------------------------------------------------
-
-/** How long the pretend benchmarking takes. */
 export const BENCHMARKING_MS = 300;
 
 const overlayStyle = css(overlayBase, {
@@ -54,23 +35,18 @@ const benchmarkingLabelStyle = css({ font: "var(--cashby-text-body-strong)" });
 
 export interface BenchmarkDialogProps {
   modal: ReturnType<typeof useModal>;
-  /** The results to show. */
   rows: BenchmarkRow[];
-  /** Benchmark first — a retest — rather than show the results at once. */
+  /** Run the pretend benchmark before showing results. */
   benchmarking: boolean;
-  /** The tab it opens on. */
   opensOn: CandidatesTab;
-  /** The results no longer answer for the benchmark: the criteria have changed since, or a candidate added back has not been benchmarked. */
+  /** Criteria or candidates changed since the results were benchmarked. */
   stale: boolean;
-  /** The candidates taken out of the benchmark from the suggested list. */
+  /** Candidate ids taken out of the benchmark. */
   removed: ReadonlySet<string>;
-  /** Take candidates out of the benchmark. */
   onRemoveCandidates: (ids: readonly string[]) => void;
-  /** Put candidates back in the benchmark. */
   onAddCandidates: (ids: readonly string[]) => void;
-  /** Review suggested rewrites. */
   onReviewRewrites: () => void;
-  /** Retest the criteria as they are now — offered in place of the review when the results are stale. */
+  /** Offered in place of the review when `stale`. */
   onRetest: () => void;
 }
 

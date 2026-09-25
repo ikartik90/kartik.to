@@ -7,37 +7,17 @@ import { css } from "../../styled-system/css";
 import { Button } from "./ui/button";
 import { Tooltip } from "./ui/tooltip";
 
-// The control names and pictures the theme it OFFERS, never the one in force:
-// it is a door, and a door is labelled with the room on the other side — here
-// with the room's NAME and nothing else, because the door is a door and does
-// not need to say so.
-//
-// Exported, and the command palette's row reads from it rather than restating
-// it: that row is the same act reached another way, and the site names an
-// action once.
+// Names the theme it offers, not the one in force. The command palette reads this too.
 export const OFFER = {
   light: "Light theme",
   dark: "Dark theme",
 } as const;
 
-// Both glyphs ship on every render and the cascade picks between them, so the
-// right one is there in the first painted frame — the theme is already on
-// <html> by then, written by the blocking script in the document head. Choosing
-// in JS instead would mean waiting for the mount `useThemeToggle` waits for,
-// and showing the wrong glyph until it came.
+// Both glyphs render and CSS picks, so the right one shows before hydration.
 const glyphForDark = css({ display: "block", _dark: { display: "none" } });
 const glyphForLight = css({ display: "none", _dark: { display: "block" } });
 
-/**
- * The control itself, with no box of its own — the chip, the two glyphs, the
- * accessible name and the tooltip that repeats it.
- *
- * Split out from `ThemeToggle` so a consumer that has to PLACE the control can
- * take it without the wrapper below, whose position globals.css owns. The card
- * studio sits one in the corner of its canvas; the site sits it above the
- * header's brand row. One control, two placements — not two controls drawn to
- * match.
- */
+/** The bare control, for consumers that place it themselves. */
 export function ThemeToggleButton() {
   const { isDark, toggle } = useThemeToggle();
   const label = isDark ? OFFER.light : OFFER.dark;
@@ -53,10 +33,7 @@ export function ThemeToggleButton() {
   );
 }
 
-/**
- * The site's own, in the slot `[data-theme-toggle]` is positioned into by
- * globals.css — the header's row and an article's intro.
- */
+/** In the `[data-theme-toggle]` slot that globals.css positions. */
 export function ThemeToggle() {
   return (
     <div data-theme-toggle>

@@ -1,9 +1,5 @@
 import { defineSlotRecipe } from "@pandacss/dev";
 
-// The other toggle control of the field family (see `switchField`).
-// Structural difference: no `size` — the checkbox is drawn at a single
-// geometry (Figma 757:4635), so the field's `size` scales only the
-// label/hint beside it.
 export const checkboxField = defineSlotRecipe({
   className: "checkbox-field",
   description:
@@ -11,14 +7,11 @@ export const checkboxField = defineSlotRecipe({
   slots: ["control", "box"],
   base: {
     control: {
-      // First column of the grid `field` sets up for a toggle.
       gridColumn: 1,
       gridRow: 1,
       position: "relative",
       flexShrink: 0,
       display: "block",
-      // The full 20px frame — hit target and layout box; the `box` slot
-      // draws the 16px square centred inside it.
       width: "token(spacing.xxl)",
       height: "token(spacing.xxl)",
       padding: "none",
@@ -37,11 +30,9 @@ export const checkboxField = defineSlotRecipe({
       height: "token(spacing.xl)",
       borderRadius: "sm",
       backgroundColor: "field.bg.default",
-      // Inset box-shadow, not a `border` — same reasoning as the switch
-      // track.
+      // Inset box-shadow, not a border, which would shrink the box's interior.
       boxShadow:
         "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-default)",
-      // The glyph is invisible until checked, so it needs no off tone.
       color: "field.text.active",
       transition: "background-color 150ms ease, box-shadow 150ms ease",
       "[aria-checked='true'] &": {
@@ -49,9 +40,7 @@ export const checkboxField = defineSlotRecipe({
         boxShadow:
           "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-active)",
       },
-      // A 20px icon on a 16px box, so it hangs 2px off every side —
-      // drawn at its own size rather than scaled down to fit. SVGR
-      // rewrites its stroke to currentColor, so `color` above tints it.
+      // SVGR sets the stroke to currentColor, so `color` above tints it.
       "& > svg": {
         position: "absolute",
         top: "calc(token(spacing.xs) * -1)",

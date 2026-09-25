@@ -17,9 +17,8 @@ const at = (iso: string, span: { first: string; last: string }, week = "sun") =>
     week as Parameters<typeof rangeCell>[2],
   );
 
-// January 2026 opens on a Thursday, so a Sunday-first grid rows it
-// Dec 28–Jan 3 · Jan 4–10 · Jan 11–17 · Jan 18–24 · Jan 25–31, and both
-// February and March open on a Sunday. That is what these fixtures lean on.
+// Sunday-first, January 2026 rows as Dec 28–Jan 3 · Jan 4–10 · … · Jan 25–31;
+// February and March open on a Sunday.
 const JAN_TO_FEB = { first: "2026-01-20", last: "2026-02-10" };
 
 describe("rangeOf", () => {
@@ -84,8 +83,6 @@ describe("rangeCell", () => {
     expect(at("2026-01-25", JAN_TO_FEB)?.run).toEqual({
       length: 7,
       fadesIn: false,
-      // Jan 25–31 ends on the last of January, and the range runs on into
-      // February — so this is where the band leaves the month.
       fadesOut: true,
     });
   });
@@ -118,8 +115,6 @@ describe("rangeCell", () => {
   });
 
   it("never fades at the ends of the range itself", () => {
-    // The range opens on the 1st and closes on the last of the month, so both
-    // runs sit on a month boundary — and neither has anywhere else to go.
     const february = { first: "2026-02-01", last: "2026-02-28" };
     expect(at("2026-02-01", february)?.run?.fadesIn).toBe(false);
     expect(at("2026-02-22", february)?.run?.fadesOut).toBe(false);
@@ -134,8 +129,7 @@ describe("rangeCell", () => {
   });
 
   it("rows the runs by the week start it is given", () => {
-    // Monday-first moves the break: the row now runs Jan 19–25, so the range's
-    // first day opens a SIX-cell run instead of a five-cell one.
+    // Monday-first, the row runs Jan 19–25: a six-cell run.
     expect(at("2026-01-20", JAN_TO_FEB, "mon")?.run?.length).toBe(6);
     expect(at("2026-01-25", JAN_TO_FEB, "mon")?.run).toBeNull();
     expect(at("2026-01-26", JAN_TO_FEB, "mon")?.run).toEqual({

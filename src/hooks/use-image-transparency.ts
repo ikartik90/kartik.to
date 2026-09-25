@@ -7,52 +7,18 @@ import {
   sampleSize,
 } from "@/utils/image-transparency";
 
-// ---------------------------------------------------------------------------
-// useImageTransparency — which of these pictures you can see through.
-//
-// A picture with an alpha channel and no background effect of its own is
-// standing on whatever happens to be behind it, and in the editor that is the
-// page: a transparent screenshot of dark UI simply disappears into a dark
-// theme, and there is nothing on screen to say the emptiness is the PICTURE's
-// rather than the slot's. Knowing which images those are is what lets the grid
-// paint the checkerboard every image editor uses to mean exactly this.
-//
-// Takes the whole list rather than one src, so the grid can ask once at the top
-// instead of turning each cell into a component to hold a hook.
-// ---------------------------------------------------------------------------
+// Which images are see-through, so the grid can paint a checkerboard behind them.
 
-/**
- * The long edge the picture is decoded down to before its alpha is scanned.
- * See `sampleSize` — this is a yes/no question, and a 256px thumbnail answers
- * it for 262KB instead of the 48MB a phone photo's full `ImageData` costs.
- */
 const MAX_SAMPLE_EDGE = 256;
 
-/**
- * Answers, keyed by src and kept for the life of the page.
- *
- * MODULE level, not per hook: the same picture appears in the grid, in a
- * remounted grid after an undo, and in any other consumer, and its alpha
- * channel is not going to change.
- */
+// Module-level: a picture's alpha never changes, and every consumer shares the answer.
 const resolved = new Map<string, boolean>();
 
 /** Inspections in flight, so two cells asking at once share the one decode. */
 const pending = new Map<string, Promise<boolean>>();
 
-/**
- * Every see-through picture found so far, as ONE immutable value that is
- * replaced rather than mutated — which is what `useSyncExternalStore` needs to
- * see a change, and what lets a consumer read the answer during render.
- *
- * A superset of what any one caller asked about, deliberately. The question a
- * consumer actually has is "is THIS picture see-through", and answering it out
- * of a shared store means a grid that remounts, or that gains a slot holding a
- * picture some other grid already inspected, paints the checkerboard on its
- * FIRST frame. Mirroring the cache into per-component state cannot do that
- * without a synchronous setState in an effect — a cascading render, and the one
- * the React compiler rejects.
- */
+// One immutable set, replaced on change as useSyncExternalStore needs, and shared so a
+// remounted grid paints the checkerboard on its first frame.
 let transparentSrcs: ReadonlySet<string> = new Set();
 const listeners = new Set<() => void>();
 
@@ -66,13 +32,9 @@ const subscribe = (notify: () => void) => {
 const getSnapshot = () => transparentSrcs;
 
 export function useImageTransparency(srcs: string[]): ReadonlySet<string> {
-  // A string, because `srcs` is a fresh array on every render — including every
-  // pointer move of a reorder. The list's CONTENTS are what the effect depends
-  // on.
+  // A string key: `srcs` is a fresh array every render.
   const key = srcs.join("\n");
 
-  // The server snapshot is the same empty set: nothing is decoded there, and a
-  // checkerboard the client immediately agrees with is not worth a mismatch.
   const transparent = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => {
@@ -101,23 +63,8 @@ function inspect(src: string): Promise<boolean> {
   return run;
 }
 
-/**
- * Whether `src` has anything to see through, decided as cheaply as it can be.
- *
- * Three tiers, in increasing cost. A JPEG cannot carry alpha, so it never
- * touches the network. Anything that can is decoded a SECOND time with
- * `crossOrigin` — the cell's own <img> is loaded without it, and CORS mode is a
- * property of the request rather than of the response, so the picture on screen
- * is unreadable however permissive the bucket is. That copy comes off the HTTP
- * cache in the ordinary case.
- *
- * And if the CORS load fails, the two reasons it can are told apart by loading
- * the picture the way the cell does. Succeeding there means the bucket serves
- * the image but declines to say who may read it — the answer is unknowable, so
- * the checkerboard is ASSUMED, which is invisible if the picture turns out to
- * be opaque (it covers the ground it stands on). Failing there means the src is
- * simply broken, and there is nothing to stand a ground behind.
- */
+// JPEGs can't carry alpha. Others are re-decoded with CORS (the on-screen <img> isn't); if
+// that fails but a plain load works, transparency is assumed, and a broken src is not.
 async function detect(src: string): Promise<boolean> {
   if (!formatCanCarryAlpha(src)) return false;
 
@@ -138,8 +85,7 @@ function load(
 ): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const image = new Image();
-    // BEFORE the src, which is what starts the fetch — setting it afterwards
-    // would send the request in the wrong mode.
+    // Before src, which starts the fetch in the request's mode.
     if (crossOrigin) image.crossOrigin = crossOrigin;
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
@@ -149,9 +95,7 @@ function load(
 
 function scan(image: HTMLImageElement): boolean {
   const { naturalWidth, naturalHeight } = image;
-  // An SVG with no width/height of its own decodes to nothing measurable.
-  // Unreadable rather than opaque, and such a file is all but always drawn on
-  // a transparent ground anyway.
+  // An SVG with no intrinsic size can't be measured; assume transparent.
   if (!naturalWidth || !naturalHeight) return true;
 
   const { width, height } = sampleSize(
@@ -160,8 +104,7 @@ function scan(image: HTMLImageElement): boolean {
     MAX_SAMPLE_EDGE,
   );
   const canvas = document.createElement("canvas");
-  // Sized to the draw EXACTLY. A canvas is born fully transparent, so a single
-  // row the picture did not reach would answer the question by itself.
+  // Sized exactly: any undrawn (transparent) row would read as see-through.
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");

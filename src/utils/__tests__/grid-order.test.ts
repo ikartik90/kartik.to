@@ -50,8 +50,6 @@ describe("orderGridItems", () => {
     expect(ids(out)).toEqual(["pin", "newest"]);
   });
 
-  // The user's stated requirement, and the reason a pin is worth having:
-  // position 3 is position 3 no matter how the unpinned set grows around it.
   it("holds an index steady as unpinned items are added around it", () => {
     const pinned = item("pin", 3, "2020-01-01");
     const filler = (n: number) =>
@@ -75,9 +73,6 @@ describe("orderGridItems", () => {
     expect(out).toHaveLength(3);
   });
 
-  // The schema deliberately allows this — see `GridIndexSchema`, which prices a
-  // collision as cosmetic and self-healing. Cosmetic still has to be DECIDED:
-  // the loser takes the next free slot, and nothing is dropped.
   it("gives a colliding pin the next free slot instead of overwriting", () => {
     const out = orderGridItems([
       item("first", 1, "2026-06-01"),

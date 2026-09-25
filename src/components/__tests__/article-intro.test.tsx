@@ -5,8 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ArticleIntro } from "../article-intro";
 import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 
-// jsdom does not implement matchMedia, which the theme toggle in the opposite
-// gutter resolves `system` mode through.
+// jsdom has no matchMedia; the theme toggle resolves `system` mode through it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockReturnValue({ matches: false }),
@@ -52,7 +51,6 @@ describe("ArticleIntro", () => {
     render(<ArticleIntro title="Hello World" />);
 
     const button = screen.getByRole("button", { name: "Menu" });
-    // Icon only — the glyph is an <svg>, so the button holds no text of its own.
     expect(button.textContent).toBe("");
 
     const tip = screen.getByText("Menu").parentElement as HTMLElement;

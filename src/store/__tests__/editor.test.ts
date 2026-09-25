@@ -136,10 +136,9 @@ describe("useEditorStore", () => {
     it("trims the redo stack when a new snapshot is pushed after undoing", () => {
       useEditorStore.getState().pushHistory({ title: "A", document: DOC });
       useEditorStore.getState().pushHistory({ title: "B", document: DOC2 });
-      useEditorStore.getState().undo(); // back to A
+      useEditorStore.getState().undo();
       useEditorStore.getState().pushHistory({ title: "C", document: DOC });
       const { history, historyIndex } = useEditorStore.getState();
-      // B is gone; history is now [A, C]
       expect(history).toHaveLength(2);
       expect(historyIndex).toBe(1);
       expect(history[1].title).toBe("C");
@@ -175,7 +174,7 @@ describe("useEditorStore", () => {
 
     it("is a no-op when already at the oldest snapshot", () => {
       useEditorStore.getState().pushHistory({ title: "A", document: DOC });
-      useEditorStore.getState().undo(); // no-op: index is already 0
+      useEditorStore.getState().undo();
       expect(useEditorStore.getState().title).toBe("");
       expect(useEditorStore.getState().historyIndex).toBe(0);
     });
@@ -211,13 +210,11 @@ describe("useEditorStore", () => {
 
     it("is a no-op when already at the newest snapshot", () => {
       useEditorStore.getState().pushHistory({ title: "A", document: DOC });
-      useEditorStore.getState().redo(); // no-op: at latest
+      useEditorStore.getState().redo();
       expect(useEditorStore.getState().historyIndex).toBe(0);
     });
   });
 
-  // What the metadata sidebar edits. Buffered with the document, so Save and
-  // Publish write it and Discard throws it away with everything else.
   describe("metadata", () => {
     it("starts with no address and no written description", () => {
       expect(useEditorStore.getState().slug).toBeNull();
@@ -247,9 +244,6 @@ describe("useEditorStore", () => {
       expect(useEditorStore.getState().isDirty).toBe(true);
     });
 
-    // Where the post is read as the ROW has it, which the sidebar's buffer is
-    // not: an exit goes to the saved address, and a save that moves the post
-    // is how the editor knows to follow it.
     it("remembers where the post was last saved, without it being a change", () => {
       expect(useEditorStore.getState().savedAddress).toBeNull();
       useEditorStore

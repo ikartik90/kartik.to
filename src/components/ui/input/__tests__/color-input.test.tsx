@@ -37,15 +37,8 @@ describe("the swatch as a trigger", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  // The picker used to take its vertical position from `anchor(top)` against
-  // this swatch, which TRACKED it: scrolling the properties rail dragged the
-  // panel along with the row. It now opens where the swatch was and holds
-  // there, so the position is a number read once rather than a live anchor.
   it("pins itself where the swatch stood when it opened", () => {
     render(<Host />);
-    // jsdom measures everything at zero, so the assertion is about WHERE the
-    // number comes from, not what it is: a `top` written inline at all means
-    // the panel is no longer following anything.
     vi.spyOn(
       HTMLButtonElement.prototype,
       "getBoundingClientRect",
@@ -53,8 +46,6 @@ describe("the swatch as a trigger", () => {
 
     fireEvent.click(swatch());
     expect(screen.getByRole("dialog").style.top).toBe("240px");
-    // And the swatch claims no anchor of its own any more, so two pickers in
-    // one rail cannot collide over the name.
     expect(swatch().style.getPropertyValue("anchor-name")).toBe("");
   });
 
@@ -83,7 +74,6 @@ describe("the swatch as a trigger", () => {
     fireEvent.click(format);
     const option = screen.getByRole("option", { name: "RGB" });
 
-    // The press that picks the option lands OUTSIDE the picker's own container.
     fireEvent.pointerDown(option);
     fireEvent.click(option);
 

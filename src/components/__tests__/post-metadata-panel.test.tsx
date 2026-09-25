@@ -74,9 +74,6 @@ describe("PostMetadataPanel", () => {
     await waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
   });
 
-  // The buffer can become a different post under an open sidebar — the editor
-  // reading one in, a new draft's first save giving it an id. The sidebar has
-  // to describe the post that arrives, not the buffer it met.
   it("describes the post once the editor has read it in", async () => {
     render(<PostMetadataPanel onDismiss={vi.fn()} />);
     act(() =>
@@ -119,8 +116,6 @@ describe("PostMetadataPanel", () => {
       expect(useEditorStore.getState().isDirty).toBe(true);
     });
 
-    // A page is read at an address of its own — `/about`, `/` — so there is
-    // nothing to file it under and no slug to change.
     it("offers no address on a page", () => {
       seed({ category: "PAGE", slug: "about" });
       render(<PostMetadataPanel onDismiss={vi.fn()} />);
@@ -144,7 +139,6 @@ describe("PostMetadataPanel", () => {
       render(<PostMetadataPanel onDismiss={vi.fn()} />);
       fireEvent.change(slugBox(), { target: { value: "renamed" } });
 
-      // Not on the keystroke.
       expect(useEditorStore.getState().slug).toBe("hello");
       await waitFor(() =>
         expect(useEditorStore.getState().slug).toBe("renamed"),
@@ -156,8 +150,6 @@ describe("PostMetadataPanel", () => {
       expect(useEditorStore.getState().isDirty).toBe(true);
     });
 
-    // Refused silently: no message beside the box, and the post keeps the
-    // address it had. The box is marked invalid for assistive technology.
     const invalid = () => slugBox().getAttribute("aria-invalid") === "true";
     const pause = () => new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -187,8 +179,6 @@ describe("PostMetadataPanel", () => {
       ).toBeNull();
     });
 
-    // Only the answer to the LAST thing typed may land: a slow "is it free?"
-    // for a half-typed address must not overwrite the finished one.
     it("ignores an answer that arrives for an address since replaced", async () => {
       let answerFirst: (free: boolean) => void = () => {};
       postActions.isPostSlugAvailable
@@ -222,8 +212,6 @@ describe("PostMetadataPanel", () => {
       expect(useEditorStore.getState().slug).toBe("good");
     });
 
-    // A draft that has never been saved has no address; its first save mints
-    // one from the title unless the author types one first.
     it("offers the address the title would mint on a draft that has none", () => {
       seed({ slug: null, draftId: null });
       useEditorStore.setState({ title: "A New Idea" });
@@ -259,8 +247,6 @@ describe("PostMetadataPanel", () => {
       ).toBe("For search.");
     });
 
-    // The placeholder is what the page says NOW, so the author can see what
-    // they are replacing.
     it("shows the opening it stands in for, and takes what is typed", async () => {
       seed();
       render(<PostMetadataPanel onDismiss={vi.fn()} />);
@@ -272,7 +258,6 @@ describe("PostMetadataPanel", () => {
         name: "Description",
       }) as HTMLTextAreaElement;
       expect(box.placeholder).toBe("The opening line of the post.");
-      // Opening the section is not itself a change.
       expect(useEditorStore.getState().isDirty).toBe(false);
 
       await user.type(box, "Hi");

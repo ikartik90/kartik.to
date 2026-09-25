@@ -9,18 +9,8 @@ import GotoIcon from "@/assets/icons/goto.svg";
 import CopyIcon from "@/assets/icons/copy.svg";
 import CheckIcon from "@/assets/icons/check.svg";
 
-// ---------------------------------------------------------------------------
-// The foot of the sidebar (Figma 1383:2283): where the package the page runs
-// on is documented, and the one line that installs it.
-//
-// Both rows are the `action` recipe's icon chip — its 4px inset, 4px gap and
-// hover wash are the card's own measurements — with the block inset halved so
-// a 24px line of text makes the 28px row the icons do.
-// ---------------------------------------------------------------------------
-
 const DOCS_URL = "https://www.npmjs.com/package/@calchemy/date-core";
 const INSTALL = "npm i @calchemy/date-core";
-/** How long the check stands in for the copy glyph. */
 const COPIED_MS = 1500;
 
 const cardStyle = css({
@@ -38,7 +28,6 @@ const rowStyle = css({
   paddingBlock: "xs",
 });
 
-// Both rows fill the card, so the copy glyph stands under the external one.
 const fillStyle = css({ width: "100%" });
 
 const docsStyle = css({ justifyContent: "space-between" });

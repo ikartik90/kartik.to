@@ -67,10 +67,6 @@ describe("resolvePost", () => {
     vi.clearAllMocks();
   });
 
-  // A slug the database does not know is a 404, even when `src/data` still
-  // holds a post by that name. The fixtures are not a shadow copy of the site:
-  // an article nobody can edit or unpublish should not stay reachable just
-  // because a module in the tree happens to spell its slug.
   it("returns null when the database has no match", async () => {
     mockFindFirst.mockResolvedValue(null);
     const post = await resolvePost("static", "WORK", { allowDraft: false });
@@ -91,8 +87,6 @@ describe("resolvePost", () => {
     expect(post?.title).toBe("Draft version");
   });
 
-  // The admin's draft is a courtesy, not a bypass: a visitor asking for the
-  // same slug gets nothing.
   it("does not reach for a draft when allowDraft is false", async () => {
     mockFindFirst.mockResolvedValue(null);
     await resolvePost("static", "WORK", { allowDraft: false });
@@ -106,8 +100,6 @@ describe("findMovedPostPath", () => {
     mockFindFirst.mockResolvedValue(null);
   });
 
-  // Slugs are unique across categories, so an article refiled as a project is
-  // found by its slug alone.
   it("sends a post's old category address to its new one", async () => {
     mockFindFirst.mockResolvedValueOnce({ slug: "hello", category: "WORK" });
     await expect(
@@ -143,7 +135,6 @@ describe("findMovedPostPath", () => {
     );
   });
 
-  // The post that holds an address NOW wins over one that used to.
   it("asks for the current holder before the former ones", async () => {
     mockFindFirst.mockResolvedValueOnce({ slug: "x", category: "ARTICLE" });
     await findMovedPostPath("x", "WORK", { allowDraft: false });
@@ -156,7 +147,6 @@ describe("findMovedPostPath", () => {
     ).resolves.toBeNull();
   });
 
-  // A refusal is a 404: redirecting a visitor to a draft would confirm it.
   it("follows drafts for the author alone", async () => {
     await findMovedPostPath("hello", "ARTICLE", { allowDraft: true });
     for (const [args] of mockFindFirst.mock.calls as [

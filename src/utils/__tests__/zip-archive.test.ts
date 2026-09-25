@@ -5,12 +5,7 @@ const LOCAL_HEADER = 0x04034b50;
 const CENTRAL_HEADER = 0x02014b50;
 const END_OF_DIRECTORY = 0x06054b50;
 
-/**
- * Read the archive back the way an unzipper does: from the end-of-directory
- * record at the tail, through the central directory, out to each local header.
- * A test that walked the file front to back would be checking the writer
- * against itself.
- */
+/** Reads the archive back as an unzipper does: from the tail's end-of-directory record inward. */
 function readArchive(bytes: Uint8Array) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const decoder = new TextDecoder();
@@ -77,8 +72,7 @@ describe("zipArchive", () => {
   });
 
   it("counts bytes rather than characters", () => {
-    // An en dash is three bytes of UTF-8 in a one-character string; a size
-    // written from `text.length` would truncate the file at the unzip.
+    // An en dash is three UTF-8 bytes in a one-character string.
     const bytes = zipArchive([{ name: "dash.svg", text: "–" }]);
     expect(readArchive(bytes)[0].text).toBe("–");
   });

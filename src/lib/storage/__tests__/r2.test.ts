@@ -67,10 +67,6 @@ describe("r2 storage helpers", () => {
     expect(result.publicUrl).toBe("https://cdn.example.com/media/x.png");
   });
 
-  // Documents included: the library holds the bucket's whole insertable half,
-  // and the dialog picks which part of it to show. A filter that could not see
-  // a PDF made the document picker permanently empty — you could upload a CV
-  // and never see it again, let alone rename it.
   it("listR2MediaKeys filters to library extensions — clips and documents included", async () => {
     mockSend.mockResolvedValueOnce({
       Contents: [
@@ -104,9 +100,6 @@ describe("r2 storage helpers", () => {
     expect(head).toEqual({
       size: 512,
       contentType: "image/png",
-      // The whole map as it was stored, alongside the fields the media
-      // library has read out of it for years — a caller storing its own facts
-      // (the icon set does) reads them from here.
       metadata: { alt: "desc" },
       alt: "desc",
     });
@@ -135,9 +128,7 @@ describe("r2 storage helpers", () => {
 
     const copyInput = mockSend.mock.calls[1][0].input;
     expect(copyInput.MetadataDirective).toBe("REPLACE");
-    // The untouched field survives...
     expect(copyInput.Metadata).toEqual({ alt: "keep me", filename: "new.png" });
-    // ...and REPLACE would otherwise reset the content type to a default.
     expect(copyInput.ContentType).toBe("image/png");
   });
 

@@ -119,6 +119,7 @@ Project Root
 - **Server-First**: Default to Server Components. Use `'use client'` only for interactive state (Zustand) or `adminLogin()` console utility.
 - **Flat Discovery**: Keep `src/components/` flat. Avoid deep nesting unless functionally justified.
 - **Test-First**: Write tests before implementing logic (TDD); every functional directory MUST contain a co-located `__tests__` subfolder.
+- **Comments**: Describe the code as it is now, and only what the code can't say itself: a constraint that would break something if changed, in a line or two. No history, rationale essays, design references or restated code; those belong in the commit message.
 
 ---
 

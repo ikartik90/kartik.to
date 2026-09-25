@@ -37,47 +37,11 @@ import { Slider } from "./slider";
 import CloseIcon from "@/assets/icons/cross.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
-// ---------------------------------------------------------------------------
-// ColorPicker — the panel a colour swatch opens (Figma 1066:2338): a
-// saturation/brightness plane over a hue ramp and an alpha ramp, with a format
-// menu and the channel fields for whichever format is chosen underneath.
-//
-//   <ColorPicker value={color} onValueChange={setColor} onClose={close} />
-//
-// ONE value in, one value out — `#RRGGBBAA`, the same string `ColorInput` takes,
-// so the two are interchangeable ends of the same field and the document never
-// learns that a picker exists.
-//
-// It is a compound: pass children to re-compose the parts (drop the header,
-// reorder the ramps, put the fields on top), pass none and you get the drawn
-// arrangement. Every part reads the same context, so a re-composed picker is
-// still one control over one colour.
-//
-// ── Why the picker keeps its own HSB ────────────────────────────────────────
-// The plane and the hue ramp are coordinates in HSB, and HSB is a LOSSY view of
-// a colour on two counts:
-//
-//   • A grey has no hue. Reach black on the plane and the colour you would read
-//     back is 0°, so a picker that re-derived its hue each render would drop the
-//     author at red every time they touched the bottom edge — and dragging back
-//     out would come back the wrong colour.
-//   • 360 × 101 × 101 nameable triples cannot address 256³ colours. Seeding from
-//     a colour and immediately spelling it back can shift a channel by one.
-//
-// So the hue/saturation/brightness the author is standing on is held HERE, and
-// the value is only ever written OUT of it — never read back in, except when the
-// colour changes from somewhere that is not this picker (a preset, an undo, the
-// field's own hex box). Opening the picker emits nothing at all, which is what
-// keeps a colour from drifting a digit for having been looked at.
-// ---------------------------------------------------------------------------
-
 type ColorPickerStyles = ReturnType<typeof colorPicker>;
 
 type ColorPickerContextValue = {
-  /** The colour as stored, split into the two things a field edits. */
   hex: string;
   opacity: number;
-  /** Where the author is standing in the colour solid — see the note above. */
   hsb: Hsb;
   format: ColorFormat;
   setFormat: (format: ColorFormat) => void;
@@ -105,30 +69,17 @@ function usePicker(component: string): ColorPickerContextValue {
 export interface ColorPickerProps {
   /** The colour, as `#RRGGBBAA`. */
   value: string;
-  /** Fired with the recombined `#RRGGBBAA` on every move, drag or keystroke. */
   onValueChange: (value: string) => void;
-  /** Fired by the header's close chip. Left off, no chip is drawn. */
+  /** Left off, no close chip is drawn. */
   onClose?: () => void;
-  /**
-   * Fired by the header's trash chip — drop the thing this colour belongs to.
-   *
-   * Left off, no chip is drawn, which is the case for every colour that is a
-   * PROPERTY of something (a ground, a rail): there is nothing to remove, only
-   * a value to change. It is the ramp's stops that can leave, and the caller is
-   * the one that knows whether this is the last of them.
-   */
+  /** Left off, no trash chip is drawn. */
   onRemove?: () => void;
-  /** The header's text. */
   title?: string;
   disabled?: boolean;
-  /**
-   * Take focus on mount — for a picker in a popover, whose trigger is outside
-   * it in the tab order and would otherwise leave the panel unreachable by
-   * keyboard. Lands on the plane, which is what the panel is for.
-   */
+  /** Focuses the plane on mount, for a picker whose trigger sits outside it. */
   autoFocus?: boolean;
   className?: string;
-  /** Defaults to the drawn arrangement — header, plane, ramps, fields. */
+  /** Defaults to header, plane, ramps and fields. */
   children?: ReactNode;
 }
 
@@ -149,16 +100,12 @@ function ColorPickerRoot({
   const [hsb, setHsb] = useState<Hsb>(() => rgbToHsb(hexToRgb(hex)));
   const [format, setFormat] = useState<ColorFormat>("hex");
 
-  // The colour this picker is EXPECTING to be handed next. Emitting records
-  // the value on the way out, so the prop that comes back is recognised as
-  // this picker's own echo and passes through without re-seeding the hue it
-  // just came from — the round trip the whole arrangement exists to avoid.
-  // Anything else that arrives is a colour from elsewhere (a preset, an undo,
-  // the field's own hex box) and does re-seed.
+  // HSB lives here, never re-derived from `value`: a grey has no hue, and a round trip can shift a
+  // channel. `expected` recognises this picker's own echo, so only an outside change re-seeds.
   const [expected, setExpected] = useState(value);
   if (value !== expected) {
     setExpected(value);
-    // Take the new colour, but keep the hue if the new one has none to offer.
+    // A grey keeps the current hue.
     const next = rgbToHsb(hexToRgb(parseColor(value).hex));
     setHsb(next.s === 0 ? { ...next, h: hsb.h } : next);
   }
@@ -181,9 +128,6 @@ function ColorPickerRoot({
       emit(formatColor(rgbToHex(hsbToRgb(next)), opacity));
     },
     commitHex: (nextHex) => {
-      // A hue the new colour cannot state is the hue the author was already on
-      // — see the note above. `sanitizeHex` lets a half-typed value through, so
-      // this runs on every keystroke and the plane walks towards the colour.
       const derived = rgbToHsb(hexToRgb(nextHex));
       setHsb(derived.s === 0 ? { ...derived, h: hsb.h } : derived);
       emit(formatColor(nextHex, opacity));
@@ -200,11 +144,6 @@ function ColorPickerRoot({
     <ColorPickerContext.Provider value={ctx}>
       <div
         className={cx(styles.root, className)}
-        // The two things every part below is drawn from, handed to CSS once:
-        // the plane's ground is the pure hue, and the alpha ramp fades to the
-        // colour itself. Both change with the value, so neither can live in the
-        // recipe — but they are still ONE declaration each, not a style object
-        // rebuilt on every part.
         style={
           {
             "--color-picker-hue": `#${rgbToHex(hsbToRgb({ h: hsb.h, s: 100, b: 100 }))}`,
@@ -228,23 +167,7 @@ function ColorPickerRoot({
   );
 }
 
-/**
- * The title strip, and the chips at the end of it.
- *
- * Trash BEFORE close, and the order is the point: close is the one control
- * every panel in the app puts last, so anything else has to arrive to its left
- * rather than displace it. The destructive chip is also the one that must not
- * be where a hand goes by habit to dismiss.
- *
- * The pair sits in its own box rather than as two more children of the strip.
- * The strip used to spread its children with `space-between`, which divides the
- * space between ALL of them — so Trash came to rest midway between the title
- * and Close rather than next to it. Grouping them is what puts the cluster at
- * the end, the way the properties panel's own header does it.
- *
- * The rule between them is drawn only when both are there: a divider hanging
- * off a lone chip would separate it from nothing.
- */
+/** Trash sits before close, so close stays last and the destructive chip is not where dismissal is. */
 function ColorPickerHeader() {
   const { title, onClose, onRemove, styles } = usePicker("ColorPicker.Header");
   return (
@@ -273,13 +196,11 @@ function ColorPickerHeader() {
   );
 }
 
-/** The padded column the plane and the ramps are stacked in. */
 function ColorPickerBody({ children }: { children: ReactNode }) {
   const { styles } = usePicker("ColorPicker.Body");
   return <div className={styles.body}>{children}</div>;
 }
 
-/** How far one arrow press moves across the plane, in whole percent. */
 const MAP_STEP = 1;
 const MAP_KEY_DELTA: Record<string, { s?: number; b?: number } | undefined> = {
   ArrowRight: { s: MAP_STEP },
@@ -290,24 +211,13 @@ const MAP_KEY_DELTA: Record<string, { s?: number; b?: number } | undefined> = {
 
 const clampPercent = (value: number) => Math.min(Math.max(value, 0), 100);
 
-/**
- * The saturation/brightness plane at the current hue — saturation left to
- * right, brightness bottom to top, which is the arrangement the recipe's two
- * gradients paint.
- *
- * One `role="slider"` rather than two: it is one gesture over one surface, and
- * splitting it would give the pointer two controls to be inside at once. The
- * cost is that a slider role can only carry one number, so `aria-valuetext`
- * states both — the reading a screen reader gets is the coordinate, not half
- * of it.
- */
+/** One slider for both axes; `aria-valuetext` states both. */
 function ColorPickerMap() {
   const { hsb, disabled, autoFocus, commitHsb, styles } =
     usePicker("ColorPicker.Map");
   const ref = useRef<HTMLDivElement>(null);
 
-  // `autoFocus` as an attribute is only honoured on form controls, and the
-  // plane is a <div role="slider"> — so it is done by hand, once, on mount.
+  // `autoFocus` only works on form controls, so it is done by hand.
   useEffect(() => {
     if (autoFocus && !disabled) ref.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,8 +228,6 @@ function ColorPickerMap() {
     if (rect.width === 0 || rect.height === 0) return null;
     return {
       s: Math.round(clampPercent(((e.clientX - rect.left) / rect.width) * 100)),
-      // Brightness runs UP the plane, so the y axis is inverted: the top edge
-      // is the bright end, the bottom is black.
       b: Math.round(
         clampPercent(100 - ((e.clientY - rect.top) / rect.height) * 100),
       ),
@@ -340,14 +248,8 @@ function ColorPickerMap() {
       className={styles.map}
       onPointerDown={(e) => {
         if (disabled || e.button !== 0) return;
-        // Decline the text selection a primary-button press starts — the same
-        // reason the Slider's track does, and for the same drag that would
-        // otherwise paint a selection across the panel on its way out.
+        // Stops a mouse drag selecting text; `beginControlDrag` does the same for touch.
         e.preventDefault();
-        // And the same second half: `preventDefault` settles a mouse, not a
-        // finger. A touch drag on this map is the slider's case exactly — iOS
-        // anchors on the nearest selectable text, which is the panel's labels
-        // outside the map — so the drag takes the page's selection too.
         beginControlDrag(e.pointerId);
         e.currentTarget.setPointerCapture(e.pointerId);
         e.currentTarget.focus();
@@ -367,8 +269,6 @@ function ColorPickerMap() {
         if (disabled) return;
         const delta = MAP_KEY_DELTA[e.key];
         if (!delta) return;
-        // Own the key: the arrows would otherwise scroll the rail out from
-        // under the panel.
         e.preventDefault();
         commitHsb({
           s: clampPercent(hsb.s + (delta.s ?? 0)),
@@ -385,14 +285,6 @@ function ColorPickerMap() {
   );
 }
 
-/**
- * A ramp — the shared `Slider` re-composed onto a gradient track.
- *
- * Its parts are spelled out rather than left to the Slider's own arrangement
- * because the track has to carry the gradient and its two end-caps (see the
- * recipe). `ticks={0}` empties the ruler — hue and alpha are continuous, and
- * marks across a rainbow would only be a grid over a thing that has no stops.
- */
 function Ramp({
   label,
   max,
@@ -429,7 +321,6 @@ function Ramp({
   );
 }
 
-/** Hue, in degrees, over the ramp it is an angle on. */
 function ColorPickerHue() {
   const { hsb, commitHsb, styles } = usePicker("ColorPicker.HueSlider");
   return (
@@ -458,7 +349,6 @@ function ColorPickerAlpha() {
   );
 }
 
-/** The strip under the ramps: which format, and the channels for it. */
 function ColorPickerFooter() {
   const { styles } = usePicker("ColorPicker.Footer");
   return (
@@ -475,25 +365,14 @@ const FORMATS: { value: ColorFormat; label: string }[] = [
   { value: "hsb", label: "HSB" },
 ];
 
-/**
- * The format menu. A `Combobox` with its filter box turned off — three options
- * are a menu, not a search — so the Select's trigger, chevron, popover and
- * keyboard are the app's one implementation rather than a second one drawn to
- * look the same.
- */
 function ColorPickerFormat() {
   const { format, setFormat, styles } = usePicker("ColorPicker.Format");
   return (
     <Field size="sm" className={styles.format}>
-      {/* The trigger shows the format, so a visible label would say it twice.
-          It still needs a NAME, and this is the field's own label doing its
-          ordinary job with nothing drawn. */}
       <Field.Label className={css({ srOnly: true })}>Colour format</Field.Label>
       <Combobox
         search={false}
-        // In place, not portalled: this panel is `position: fixed`, which ends
-        // the trigger's containing-block chain at the viewport and leaves a
-        // body-portalled menu with no anchor it can accept — see the prop.
+        // Not portalled: this panel is `position: fixed`, so a body-portalled menu has no anchor.
         portal={false}
         value={format}
         onValueChange={(next) => setFormat(next as ColorFormat)}
@@ -508,18 +387,7 @@ function ColorPickerFormat() {
   );
 }
 
-/**
- * One channel of the current format — a plain `<input>` wearing the field's own
- * control reset, exactly as the ColorInput's opacity box and the Slider's
- * readout do, carrying `data-control` so the frame lights up while it holds
- * focus.
- *
- * What is typed is held as a DRAFT, because every one of these is lossy on the
- * way out and the round trip would fight the typist: an emptied box would snap
- * back to its committed number before the new one could be typed, and a hex
- * would be zero-padded under the caret on the second keystroke. `null` means
- * "show the committed value", so an edit from anywhere else still lands here.
- */
+/** A channel box; its draft stops the lossy round trip rewriting what is being typed. */
 function Channel({
   label,
   value,
@@ -532,7 +400,7 @@ function Channel({
   label: string;
   value: string;
   onCommit: (raw: string) => void;
-  /** Whether this is the box the field's label points at. One per field. */
+  /** The box the field's label points at; one per field. */
   claimsField?: boolean;
   numeric?: boolean;
   maxLength: number;
@@ -553,12 +421,9 @@ function Channel({
         ? event.target.value.replace(/[^0-9]/g, "").slice(0, maxLength)
         : sanitizeHex(event.target.value);
       setDraft(raw);
-      // An emptied box is still being typed in. Committing it as zero would
-      // blink the colour black between "1" and "10".
+      // An emptied box is mid-edit, not zero.
       if (raw !== "") onCommit(raw);
     },
-    // The draft goes on blur and the committed value paints, which is how an
-    // emptied or out-of-range box resolves.
     onBlur: () => setDraft(null),
   };
 
@@ -585,7 +450,6 @@ function Channel({
   );
 }
 
-/** The hairline between two channels — the colour field's own. */
 function ChannelSeparator() {
   return (
     <span
@@ -614,15 +478,6 @@ const opacityBoxStyle = css({
   },
 });
 
-/**
- * The channel row, whichever format is chosen: one box per channel, a hairline
- * between each, and the opacity — which belongs to none of them — always last
- * (Figma 1066:2338 hex / 1066:2514 RGB).
- *
- * The channels differ per format, but the FRAME does not: it is the same field
- * shell the hex + opacity pair wears in the rail, so switching format changes
- * what is in the box and never the box.
- */
 function ColorPickerFields() {
   const { hex, opacity, hsb, format, commitHex, commitHsb, commitOpacity, styles } =
     usePicker("ColorPicker.Fields");
@@ -656,9 +511,7 @@ function ColorPickerFields() {
               commitHex(rgbToHex(replace(clampChannel(Number(raw))))),
           }))
         : ([
-            // Named with their unit, because the ramps above already have a
-            // "Hue" and an "Opacity" and a reader meeting two of each would
-            // have no way to tell the plane's coordinate from the ramp's.
+            // Units tell them apart from the ramps' "Hue" and "Opacity".
             ["Hue, degrees", hsb.h, 360, (n: number) => ({ h: n })],
             ["Saturation, percent", hsb.s, 100, (n: number) => ({ s: n })],
             ["Brightness, percent", hsb.b, 100, (n: number) => ({ b: n })],
@@ -684,8 +537,6 @@ function ColorPickerFields() {
               maxLength={c.maxLength}
               numeric={c.numeric}
               onCommit={c.commit}
-              // The first box is the one the field's label would point at —
-              // a label may name one control, and that is this.
               claimsField={index === 0}
             />
           </Fragment>
@@ -703,15 +554,6 @@ function ColorPickerFields() {
   );
 }
 
-/**
- * Compound colour picker. `ColorPicker` is the control (the colour, the point
- * in the solid, the chosen format) and draws the panel; the parts inside it are
- * composable — pass children to rearrange or drop one, pass none for the drawn
- * arrangement (Figma 1066:2338).
- *
- * @example
- * <ColorPicker value={color} onValueChange={setColor} onClose={close} />
- */
 export const ColorPicker = Object.assign(ColorPickerRoot, {
   Header: ColorPickerHeader,
   Body: ColorPickerBody,

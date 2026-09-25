@@ -1,14 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 
-/**
- * A crashed Server Component or a hydration mismatch still paints markup, so a
- * text assertion alone will happily pass against a broken deploy. Every test
- * that loads a page therefore also asserts the page came up *clean*.
- *
- * Uncaught exceptions are a hard failure. Console errors are filtered to the
- * React-lifecycle ones — a preview deployment logs plenty of unrelated noise
- * (blocked third parties, aborted prefetches) that would only make this flaky.
- */
+// Only React-lifecycle console errors count; preview deploys log unrelated noise.
 const REACT_FAILURE = /minified react error|hydration failed|hydrat/i;
 
 export const test = base.extend<{ pageFailures: string[] }>({
@@ -26,15 +18,6 @@ export const test = base.extend<{ pageFailures: string[] }>({
 
 export { expect };
 
-/**
- * Slugs that exist ONLY in `src/data`, and must not resolve anywhere.
- *
- * These used to be the suite's anchor: seed posts that the site served out of
- * `articles.ts` / `projects.ts`, so a detail page could be asserted against an
- * empty database. That is exactly what stopped — the modules stayed in the
- * tree for the playgrounds, but nothing publishes them — so the same two slugs
- * now pin the opposite guarantee, and the suite tests the site's real content
- * instead of its fixtures.
- */
+/** Slugs that exist only in `src/data` and must not resolve anywhere. */
 export const FIXTURE_ONLY_ARTICLE_SLUG = "css-anchor-positioning";
 export const FIXTURE_ONLY_PROJECT_SLUG = "kartik-to";

@@ -1,33 +1,11 @@
-// ---------------------------------------------------------------------------
-// The Toronto skyline's silhouette, as a number per slice of the drawing.
-//
-// GENERATED from `src/assets/illustrations/toronto-skyline.svg` — the roofline
-// of every path in it, reduced to the highest point in each of
-// `SKYLINE_PROFILE_BINS` equal vertical slices of the 4000×600 viewBox. Regenerate
-// it with `scripts/skyline-profile.mjs` if the drawing ever changes.
-//
-// WHY IT EXISTS. The homepage's testimonial band stands in front of this
-// picture, and the one thing it must not do is crowd it: every column of cards
-// stops a fixed distance above whatever is directly beneath it — the CN Tower
-// under the middle of the screen, the financial district right of it, low
-// warehouses at the edges. That is a question about the ARTWORK, and CSS has no
-// way to ask it. So the artwork is asked once, here, and the answer is a small
-// array the band can look up at whatever width it is being drawn.
-//
-// Smaller y is HIGHER, as in the viewBox: 18 is the tip of the tower's antenna
-// and ~520 is the roof of the lowest shed on the waterfront.
-// ---------------------------------------------------------------------------
+// GENERATED from src/assets/illustrations/toronto-skyline.svg by scripts/skyline-profile.mjs.
+// Each entry is a slice's highest point in viewBox y (smaller is higher).
 
-/** The viewBox the numbers below are in — the drawing's own coordinates. */
 export const SKYLINE_VIEWBOX_WIDTH = 4000;
 export const SKYLINE_VIEWBOX_HEIGHT = 600;
 
-/** How many slices the width is cut into. 400 gives a 10-unit slice, which is
- *  finer than the tower is wide (58) — coarser bins would smear the antenna
- *  sideways and push the columns either side of it further up than they need. */
 export const SKYLINE_PROFILE_BINS = 400;
 
-/** The highest point of the drawing in each slice, left to right. */
 export const SKYLINE_PROFILE: readonly number[] = [
   492, 492, 492, 492, 492, 492, 484, 484, 484, 517, 512, 500, 500, 500, 484,
   484, 484, 490, 504, 504, 504, 504, 481, 481, 481, 481, 481, 521, 488, 488,
@@ -58,19 +36,7 @@ export const SKYLINE_PROFILE: readonly number[] = [
   490, 516, 494, 494, 494, 494, 518, 497, 497, 497,
 ];
 
-/**
- * The highest point of the drawing between two x positions, in viewBox units.
- *
- * Takes a RANGE rather than a point because the caller is a column of cards
- * several hundred pixels wide, and what it needs to clear is the tallest thing
- * anywhere under it — a column whose left edge happens to fall in a gap between
- * two towers is not clear of either.
- *
- * Clamped rather than wrapped: the drawing is sliced by the viewport
- * (`xMidYMax slice`), so a caller can legitimately ask about a column that
- * hangs past the edge of the artwork, and the nearest real slice is the honest
- * answer for it.
- */
+/** Highest point (min y) between two x positions; x outside the drawing clamps to its edge slices. */
 export function skylineTopAt(fromX: number, toX: number): number {
   const perBin = SKYLINE_VIEWBOX_WIDTH / SKYLINE_PROFILE_BINS;
   const lo = Math.max(0, Math.min(SKYLINE_PROFILE_BINS - 1, Math.floor(Math.min(fromX, toX) / perBin)));

@@ -76,8 +76,6 @@ describe("frameEnergy", () => {
   });
 
   it("reads a dark frame and its inverse the same", () => {
-    // Energy is DEVIATION, not brightness: a white-on-black screen and a
-    // black-on-white one hold the same amount of picture.
     const light = frameEnergy(halved(0).pixels);
     const inverted = halved(0);
     for (let i = 0; i < inverted.pixels.length; i += 4) {
@@ -113,8 +111,7 @@ describe("pickPosterFrame", () => {
   });
 
   it("prefers a settled frame to one mid-transition", () => {
-    // Two candidates with content: one held across its neighbours, one that is
-    // a different picture from every frame around it.
+    // One candidate held across its neighbours, one unlike every frame around it.
     const held = halved(2);
     const index = pickPosterFrame([
       speckled(0.5, 1),

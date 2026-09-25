@@ -3,14 +3,7 @@ import { DocumentSchema, PostSchema, type Document, type Post } from "@/domain/p
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
 import { HOME_SLUG } from "@/data/page-slugs";
 
-/**
- * The homepage's stored content, or null if it has never been edited.
- *
- * Null rather than a thrown error on every failure path — an unreachable
- * database, a row that does not parse, or simply no row yet all mean the same
- * thing to the caller: fall back to the default document. The homepage is the
- * last page that should be able to 500.
- */
+/** The homepage's stored content, or null on any failure so the default shows; the homepage must never 500. */
 export async function getHomeDocument(): Promise<Document | null> {
   try {
     const row = await prisma.post.findFirst({
@@ -24,11 +17,6 @@ export async function getHomeDocument(): Promise<Document | null> {
   }
 }
 
-/**
- * What the author wrote in the metadata sidebar for search engines to say about
- * the homepage, or null — for no row, no description, or a database that cannot
- * be reached, all of which leave the site's own description standing.
- */
 export async function getHomeDescription(): Promise<string | null> {
   try {
     const row = await prisma.post.findFirst({
@@ -41,18 +29,7 @@ export async function getHomeDescription(): Promise<string | null> {
   }
 }
 
-/**
- * The homepage's record, created from the default document if it has none yet.
- *
- * An upsert on the slug, which is unique, so this is idempotent and safe to run
- * on every load of the edit route. Writing on a GET is not lovely, but the
- * alternative is an editor with no row behind it — and the first save would
- * then have to invent a slug, which `createDraft` derives from the title and
- * would not make "home".
- *
- * Published on creation: the homepage is already live. It is a record of what
- * `/` shows, arriving late, not a draft of it.
- */
+/** Upserts the homepage's PAGE record (published: `/` is already live) so the editor always has a row. */
 export async function getOrCreateHomePost(): Promise<Post> {
   const row = await prisma.post.upsert({
     where: { slug: HOME_SLUG },

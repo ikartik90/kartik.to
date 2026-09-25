@@ -8,7 +8,6 @@ import { ImageInput, type ImageInputProps } from "../image-input";
 
 afterEach(() => cleanup());
 
-/** A library URL — uuid-stamped key and all, as every stored file has. */
 const PICTURE =
   "https://cdn.example.com/media/550e8400-e29b-41d4-a716-446655440000-rajat-saxena.png";
 const CLIP =
@@ -19,8 +18,6 @@ const DOCUMENT =
 function renderInput(props: Partial<ImageInputProps> = {}) {
   const onPick = vi.fn();
   render(
-    // The rail's own wrapper — `PropertiesPanel.Control` is a `Field` with a
-    // label, and this control composes into it exactly as ColorInput does.
     <Field size="sm">
       <Field.Label>Image</Field.Label>
       <ImageInput noun="picture" onPick={onPick} {...props} />
@@ -40,8 +37,6 @@ describe("ImageInput", () => {
     expect(document.querySelector("img")?.getAttribute("src")).toBe(PICTURE);
   });
 
-  // The field is the big target and the obvious one: you press the thing you
-  // want to change.
   it("opens the library from the field itself", async () => {
     const user = userEvent.setup();
     const onPick = renderInput({ src: PICTURE });
@@ -58,8 +53,6 @@ describe("ImageInput", () => {
     expect(onPick).toHaveBeenCalledOnce();
   });
 
-  // An empty slot has nothing to replace, so the button that would say so is
-  // not drawn — the field itself is the whole control, and it asks.
   it("stands alone when the slot is empty, and asks", () => {
     renderInput();
 
@@ -75,9 +68,6 @@ describe("ImageInput", () => {
     expect(screen.getByRole("button", { name: "Replace document" })).toBeDefined();
   });
 
-  // The slot holds whatever the library holds, and a card's cover is routinely
-  // a clip. An `<img>` pointed at an mp4 is a broken thumbnail in the one place
-  // you look to check which file is in the slot.
   it("draws a clip with a video element, never a broken picture", () => {
     renderInput({ src: CLIP, kind: "video" });
 
@@ -92,8 +82,6 @@ describe("ImageInput", () => {
     expect(document.querySelector("video")?.getAttribute("poster")).toBe(poster);
   });
 
-  // Nothing draws a PDF: the glyph stands in for it, as it does in the insert
-  // dialog, and the name below is what says which file this is.
   it("draws no picture for a document, only its name", () => {
     renderInput({ src: DOCUMENT, kind: "document", noun: "document" });
 
@@ -111,12 +99,6 @@ describe("ImageInput", () => {
     expect((replace as HTMLButtonElement).disabled).toBe(true);
   });
 
-  // -------------------------------------------------------------------------
-  // The name is SET by the field, not by itself. Written as a style of its own
-  // it had no typography at all, so it took the page's 16px and stood in a rail
-  // of 14px values as a visibly bigger, looser line — and it would not have
-  // followed the field's `size` either.
-  // -------------------------------------------------------------------------
   it("wears the field's own control typography, at the field's size", () => {
     renderInput({ src: PICTURE });
 
@@ -126,9 +108,6 @@ describe("ImageInput", () => {
     }
   });
 
-  // The same attribute an empty text input is written with, so "Add picture"
-  // is the placeholder tone rather than a tone of its own — and shifts with the
-  // field when it is engaged, as every other prompt in the family does.
   it("asks in the family's placeholder tone when the slot is empty", () => {
     renderInput();
     expect(screen.getByText("Add picture").hasAttribute("data-placeholder")).toBe(
@@ -142,14 +121,6 @@ describe("ImageInput", () => {
     ).toBe(false);
   });
 
-  // -------------------------------------------------------------------------
-  // The design draws the chip OUTSIDE the field — a 220px field, 8px, a 28px
-  // button (Figma 1233:2639) — and the properties row reserves a column for
-  // exactly that. Inside the frame it changes the shape of the control; in a
-  // grid of its own inside the field column it takes 36px off the field and
-  // leaves a picture slot narrower than every other row in the rail. So: two
-  // children of the row, and the row places them.
-  // -------------------------------------------------------------------------
   it("puts the replace chip beside the field, not inside it", () => {
     renderInput({ src: PICTURE });
 
@@ -160,8 +131,6 @@ describe("ImageInput", () => {
 
     expect(frame).not.toBeNull();
     expect(frame!.contains(replace)).toBe(false);
-    // Siblings: the field's own children, which in a properties row are the
-    // field column and the action column.
     expect(replace.parentElement).toBe(frame!.parentElement);
   });
 });

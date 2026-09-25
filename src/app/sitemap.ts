@@ -4,8 +4,7 @@ import { getPublishedPostsByCategory } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
 import { sitemapEntries } from "@/utils/site-index";
 
-// Read on every request, like the posts it lists: a sitemap cached at build
-// would leave a newly published post out of it until the next deploy.
+// Dynamic, so a newly published post is listed without a redeploy.
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

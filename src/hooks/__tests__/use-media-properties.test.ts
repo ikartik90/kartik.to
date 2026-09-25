@@ -34,9 +34,6 @@ describe("useMediaProperties", () => {
     expect(result.current.panel).not.toBeNull();
   });
 
-  // Keyed on the OBJECT, not the slot: featuring moves an image to another
-  // cell and removing one slides its neighbours along, so a stored index would
-  // strand the open panel on whatever took that slot.
   it("follows its object when the order changes", () => {
     const { result, rerender } = setup([item("a"), item("b")]);
     act(() => result.current.toggle(1));
@@ -52,9 +49,6 @@ describe("useMediaProperties", () => {
     expect(result.current.panel).toBeNull();
   });
 
-  // Opening applies NOTHING — reaching for the button is a request to SEE an
-  // object's properties, which must not be the same gesture as giving it a
-  // gradient it didn't have.
   it("writes nothing on the way in", () => {
     const { result, onItemsChange } = setup([item("a")]);
     act(() => result.current.toggle(0));
@@ -67,8 +61,6 @@ describe("useMediaProperties", () => {
     expect(result.current.isOpen(1)).toBe(true);
     expect(result.current.isOpen(0)).toBe(false);
   });
-
-  // ---- What the panel writes back ----------------------------------------
 
   it("writes a caption onto the open object alone", () => {
     const { result, onItemsChange } = setup([item("a"), item("b")]);
@@ -91,8 +83,6 @@ describe("useMediaProperties", () => {
     ]);
   });
 
-  // A patch, not a wholesale write: the three layout controls commit
-  // separately and each other's value has to survive.
   it("patches layout without dropping what the other controls set", () => {
     const { result, onItemsChange } = setup([item("a", { padding: 16 })]);
     act(() => result.current.toggle(0));
@@ -112,8 +102,6 @@ describe("useMediaProperties", () => {
     expect(result.current.panel!.props.padding).toBe(24);
   });
 
-  // Remounted per object, so a panel reopened on another picture starts from
-  // that picture's values rather than the previous one's drafts.
   it("keys the panel on the object it is editing", () => {
     const { result } = setup([item("a"), item("b")]);
     act(() => result.current.toggle(1));

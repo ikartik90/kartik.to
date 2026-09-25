@@ -25,7 +25,6 @@ describe("Popover", () => {
     expect(screen.getByText("Item")).toBeDefined();
     const anchor = document.querySelector<HTMLElement>("[data-popover-anchor]");
     expect(anchor).not.toBeNull();
-    // The caller-supplied name threads through to the anchor's CSS anchor-name.
     expect(anchor?.style.getPropertyValue("anchor-name")).toBe("--test-anchor");
   });
 

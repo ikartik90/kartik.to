@@ -8,14 +8,11 @@ export const toolbarSwatch = defineRecipe({
     display: "block",
     width: "token(spacing.xl)",
     height: "token(spacing.xl)",
-    // Inset to the 20px box a glyph fills, so its chip is the
-    // toolbar's 28px like every icon beside it.
     margin: "xs",
     borderRadius: "xs",
     borderWidth: "token(spacing.xxs)",
     borderStyle: "solid",
     borderColor: "bg.surface",
-    // The fill is `currentColor`, so the ring below can be too.
     backgroundColor: "currentColor",
     transition: "box-shadow 150ms ease",
     "[aria-checked='true'] > &": {

@@ -4,10 +4,7 @@ const { mockGetSession } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
 }));
 
-// The guard now lives in `@/lib/auth/server` and is shared by every action
-// module. Stubbed at its SESSION source rather than by replacing the module, so
-// these tests still run the real comparison — a mock of `requireAdmin` would
-// make every "Unauthorized" case below assert its own stub.
+// Mocked at the session source, not `requireAdmin`, so the real admin check runs.
 vi.mock("@neondatabase/auth/next/server", () => ({
   createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
@@ -84,8 +81,6 @@ describe("media server actions", () => {
   });
 
   it("recovers the original name from the key for legacy objects", async () => {
-    // Uploaded before the name was stored as metadata — the uuid must be
-    // stripped WHOLE, not split at its first dash.
     mockListR2MediaKeys.mockResolvedValue([KEY]);
     mockHeadR2Object.mockResolvedValue({ size: 100, contentType: "image/png" });
 
@@ -124,7 +119,6 @@ describe("media server actions", () => {
 
     const asset = await updateMediaAlt({ key: KEY, alt: "updated" });
 
-    // Patches only `alt` — the merge in the storage layer keeps the filename.
     expect(mockUpdateR2ObjectMetadata).toHaveBeenCalledWith(KEY, {
       alt: "updated",
     });
@@ -143,15 +137,11 @@ describe("media server actions", () => {
     expect(mockUpdateR2ObjectMetadata).toHaveBeenCalledWith(KEY, {
       filename: "invoice.png",
     });
-    // The key — and every URL already published from it — is unchanged.
     expect(asset.key).toBe(KEY);
     expect(asset.url).toBe(`https://cdn.example.com/${KEY}`);
     expect(asset.filename).toBe("invoice.png");
   });
 
-  // Held to the DISPLAY standard, not the key's: nothing about this name ever
-  // reaches an object key, so a space is just a space. It used to come back
-  // "my-invoice-.png", which is the rename field arguing with the author.
   it("keeps a renamed file readable, and only strips what a header cannot hold", async () => {
     mockHeadR2Object.mockResolvedValue({ size: 100, contentType: "image/png" });
 
@@ -174,12 +164,6 @@ describe("media server actions", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Folders. The bucket holds the media library under `media/` and the faces that
-// go beside a testimonial under `profiles/`, and the folder travels with the
-// request rather than being inferred from the file — nothing about a headshot
-// looks different from any other photo.
-// ---------------------------------------------------------------------------
 describe("media folders", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -239,9 +223,6 @@ describe("media folders", () => {
     expect(mockListR2MediaKeys).toHaveBeenLastCalledWith("media/");
   });
 
-  // The filename shown in the library is the key with its prefix and uuid
-  // stripped. A profile key that kept its prefix would read
-  // "profiles/<uuid>-face.png" in the picker.
   it("names a profile object by its file, not its path", async () => {
     const key = "profiles/550e8400-e29b-41d4-a716-446655440000-face.png";
     mockListR2MediaKeys.mockResolvedValue([key]);
@@ -274,14 +255,6 @@ describe("media folders", () => {
     ).rejects.toThrow();
   });
 
-  // -------------------------------------------------------------------------
-  // A folder is where an object LIVES, not what may be done to it. Every edit
-  // below was written against `media/` alone, so a face under `profiles/` was
-  // listed, shown and inserted — and then refused the moment you tried to
-  // rename it. A failed rename is non-blocking in the dialog, so the refusal
-  // never reached the screen: the typed name simply sprang back to the one off
-  // the key, as though the field had not been edited at all.
-  // -------------------------------------------------------------------------
   const PROFILE_KEY = "profiles/550e8400-e29b-41d4-a716-446655440000-face.png";
 
   it("renames a profile picture, like any other object in the library", async () => {
@@ -325,10 +298,6 @@ describe("media folders", () => {
     expect(mockDeleteR2Object).toHaveBeenCalledWith(PROFILE_KEY);
   });
 
-  // Widened to the library's FOLDERS, not dropped: the rest of the bucket is
-  // still out of reach. An icon is approved and retired by its own actions, a
-  // poster belongs to the clip it was taken from, and neither is something the
-  // media dialog may rename or delete.
   it.each(["icons/star.svg", "posters/x.jpg", "secrets.env", "../etc/passwd"])(
     "refuses %s, which is not a library object",
     async (key) => {

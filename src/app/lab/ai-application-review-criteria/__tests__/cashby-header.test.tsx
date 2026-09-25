@@ -5,8 +5,6 @@ import { CashbyHeader } from "../cashby-header";
 
 afterEach(cleanup);
 
-// The bar is scenery, bar one control: the home glyph beside the logo is the
-// way back out of the prototype, to the site it sits in.
 describe("CashbyHeader", () => {
   it("takes the home glyph to the site's homepage", () => {
     render(<CashbyHeader />);

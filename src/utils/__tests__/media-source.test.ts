@@ -26,9 +26,6 @@ describe("isVideoSource", () => {
     );
   });
 
-  // The reverse of `formatCanCarryAlpha`'s bias, and for the same reason:
-  // an unknown source renders as a picture, which is what every source in
-  // every document written before mp4 support actually is.
   it("is false for pictures and for anything it cannot name", () => {
     for (const src of ["a.png", "a.gif", "a.svg", "a.webp", "a.jpg", "a"]) {
       expect(isVideoSource(src)).toBe(false);

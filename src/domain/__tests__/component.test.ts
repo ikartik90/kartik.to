@@ -9,7 +9,6 @@ import {
 import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 import { MAX_GRID_SPAN } from "@/utils/listing-columns";
 
-// A published row exactly as Prisma hands one back: every override stated.
 const publishedRow = {
   id: "ckl0000000000000000000000",
   componentId: "calchemy-demo",
@@ -37,8 +36,6 @@ describe("ComponentSchema", () => {
     expect(ComponentSchema.safeParse(bare).success).toBe(true);
   });
 
-  // Prisma hands back `null`, never `undefined`, for an unset nullable column —
-  // a bare `.optional()` would reject every one of these reading off the table.
   it("accepts the nulls Prisma returns for unset columns", () => {
     expect(
       ComponentSchema.safeParse({
@@ -69,9 +66,6 @@ describe("ComponentSchema", () => {
     ).toBe(false);
   });
 
-  // The point of the model: the same demo, published twice. Both rows are
-  // valid, and they differ in the aspect they are drawn at — the case a unique
-  // constraint on `componentId` would have made unreachable.
   it("accepts two publications of the same demo at different aspects", () => {
     const wide = { ...publishedRow, id: "a", aspect: "16/9" };
     const tall = { ...publishedRow, id: "b", aspect: "9/16" };
@@ -79,10 +73,6 @@ describe("ComponentSchema", () => {
     expect(ComponentSchema.safeParse(tall).success).toBe(true);
   });
 
-  // Deliberately NOT checked against the registry. Doing so would drag the demo
-  // modules into every server-side parse, and would make a row referencing a
-  // demo since deleted fail to parse — so the admin screen would throw instead
-  // of showing the broken card with a button to remove it.
   it("accepts a componentId no registry entry claims", () => {
     expect(
       ComponentSchema.safeParse({
@@ -92,8 +82,6 @@ describe("ComponentSchema", () => {
     ).toBe(true);
   });
 
-  // The column is `Boolean?`. The registry's richer `DemoLoggerConfig` object
-  // is not storable, and must not silently become one by being truthy.
   it("rejects a logger override that is a config object rather than a flag", () => {
     expect(
       ComponentSchema.safeParse({
@@ -104,15 +92,8 @@ describe("ComponentSchema", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ComponentAspectSchema
-// ---------------------------------------------------------------------------
-
 describe("ComponentAspectSchema", () => {
-  // Written out as literals ON PURPOSE: this is the independent statement of
-  // what the eleven ratios are. Looping over `ASPECT_RATIOS` here would
-  // recompute the answer the implementation computes and could never disagree
-  // with it.
+  // Literals on purpose: looping over `ASPECT_RATIOS` could never disagree with the implementation.
   it.each([
     "1/1",
     "4/3",
@@ -142,19 +123,12 @@ describe("ComponentAspectSchema", () => {
     expect(ComponentAspectSchema.safeParse("16:9").success).toBe(false);
   });
 
-  // The derivation contract. It cannot fail while the enum is built from the
-  // map, which is the point — it fails the moment somebody replaces that with a
-  // hand-written list and `ASPECT_RATIOS` then gains its twelfth entry.
   it("offers exactly the ratios ASPECT_RATIOS defines", () => {
     expect([...ComponentAspectSchema.options].sort()).toEqual(
       Object.keys(ASPECT_RATIOS).sort(),
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// CreateComponentInputSchema / UpdateComponentInputSchema
-// ---------------------------------------------------------------------------
 
 describe("CreateComponentInputSchema", () => {
   it("accepts a publication that names only the demo it publishes", () => {
@@ -211,16 +185,11 @@ describe("GridSpanSchema", () => {
     }
   });
 
-  // A card spans at least the column it is in. Zero and negative are not
-  // narrower cards, they are cards with no cell at all.
   it("rejects a span narrower than one column", () => {
     expect(GridSpanSchema.safeParse(0).success).toBe(false);
     expect(GridSpanSchema.safeParse(-1).success).toBe(false);
   });
 
-  // The CSS clamps anything wider down to the column count, so a stored 4 would
-  // render as 3 and read back as a width the grid never had. Rejected at the
-  // door rather than silently corrected on the way out.
   it("rejects a span wider than the grid", () => {
     expect(GridSpanSchema.safeParse(MAX_GRID_SPAN + 1).success).toBe(false);
   });
@@ -237,8 +206,6 @@ describe("ComponentSchema — gridSpan", () => {
     ).toBe(true);
   });
 
-  // Null is the honest record of "no opinion", exactly as it is for `aspect` —
-  // the card is one column wide because nothing said otherwise.
   it("accepts a publication with no width of its own", () => {
     expect(
       ComponentSchema.safeParse({ ...publishedRow, gridSpan: null }).success,

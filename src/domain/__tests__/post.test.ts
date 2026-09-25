@@ -22,10 +22,6 @@ import {
   postCardMedia,
 } from "../post";
 
-// ---------------------------------------------------------------------------
-// MarkSchema
-// ---------------------------------------------------------------------------
-
 describe("MarkSchema", () => {
   it("accepts bold", () => {
     expect(MarkSchema.safeParse({ type: "bold" }).success).toBe(true);
@@ -72,10 +68,6 @@ describe("MarkSchema", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// TextNodeSchema
-// ---------------------------------------------------------------------------
-
 describe("TextNodeSchema", () => {
   it("accepts a plain text node", () => {
     expect(
@@ -103,10 +95,6 @@ describe("TextNodeSchema", () => {
     expect(TextNodeSchema.safeParse({ type: "text" }).success).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// BlockNodeSchema
-// ---------------------------------------------------------------------------
 
 describe("BlockNodeSchema", () => {
   it("accepts a paragraph node", () => {
@@ -229,9 +217,6 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  // A clip is the same block as a picture, distinguished by `kind` — see
-  // `MediaNodeSchema`. The union has to carry media in BOTH of the places it
-  // is written down, and only the schema half of that pair is testable.
   it("accepts a clip, with everything a picture takes", () => {
     expect(
       BlockNodeSchema.safeParse({
@@ -244,7 +229,6 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  // Nothing sniffs the src any more: the block says which element it is.
   it("accepts a clip whose src does not look like one", () => {
     expect(
       BlockNodeSchema.safeParse({
@@ -255,10 +239,6 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  // The block spelling every document on disk actually uses. `type: "image"`
-  // was this block's IDENTITY, never a claim about the file, so the migration
-  // reads the src and not the stored word — which is the whole reason `kind`
-  // is a new field rather than a reuse of that one.
   it("migrates a legacy image block, taking its kind from the src", () => {
     const picture = BlockNodeSchema.parse({
       type: "image",
@@ -272,20 +252,11 @@ describe("BlockNodeSchema", () => {
       alt: "A photo",
     });
 
-    // Every mp4 ever inserted as a standalone block is stored under
-    // `type: "image"`. Believing that literal would strand each one.
     expect(
       BlockNodeSchema.parse({ type: "image", src: "/uploads/demo.mp4" }),
     ).toEqual({ type: "media", kind: "video", src: "/uploads/demo.mp4" });
   });
 
-  // A BLOCK has always had to say what it is. The old `ImageNodeSchema` made
-  // `type` a required literal, so a typeless object could never have parsed as
-  // one — every media block in every document that has ever loaded carries it.
-  // The migration's tolerance of an absent `type` exists for COLLECTION ITEMS,
-  // which were written `{ src, alt? }` with no type at all, and letting that
-  // tolerance reach the block union quietly turned every malformed block into a
-  // media block instead of a parse error.
   it("refuses a block that never says what it is", () => {
     expect(BlockNodeSchema.safeParse({ src: "/a.png" }).success).toBe(false);
     expect(
@@ -354,8 +325,6 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  // The editor can empty a collection slot by slot; a minimum would make the
-  // document unparseable mid-edit.
   it("accepts a collection node with no items", () => {
     expect(
       BlockNodeSchema.safeParse({ type: "collection", items: [] }).success,
@@ -401,10 +370,6 @@ describe("BlockNodeSchema", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// DocumentSchema
-// ---------------------------------------------------------------------------
-
 describe("DocumentSchema", () => {
   const minimalDoc = {
     type: "doc",
@@ -440,10 +405,6 @@ describe("DocumentSchema", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// PostCategorySchema
-// ---------------------------------------------------------------------------
-
 describe("PostCategorySchema", () => {
   it.each(["ARTICLE", "WORK", "PAGE"])(
     "accepts %s",
@@ -456,10 +417,6 @@ describe("PostCategorySchema", () => {
     expect(PostCategorySchema.safeParse("NEWSLETTER").success).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// PostSchema
-// ---------------------------------------------------------------------------
 
 const validPost = {
   id: "clxyz123",
@@ -508,13 +465,7 @@ describe("PostSchema", () => {
     ).toBe(false);
   });
 
-  // A post pins to the homepage grid exactly the way a published component
-  // does — same field, same rules — so these mirror the `ComponentSchema`
-  // cases in `component.test.ts`.
-
-  // Asserts the parsed VALUE, not just success — Zod strips unknown keys, so a
-  // post carrying a `gridIndex` the schema has never heard of parses happily
-  // and drops the pin on the floor.
+  // Asserts the parsed value, not just success: Zod strips unknown keys, so a lost pin would still pass.
   it("accepts a post pinned to a grid position and keeps the pin", () => {
     const result = PostSchema.safeParse({ ...validPost, gridIndex: 3 });
     expect(result.success).toBe(true);
@@ -540,10 +491,6 @@ describe("PostSchema", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// CreatePostInputSchema
-// ---------------------------------------------------------------------------
-
 describe("CreatePostInputSchema", () => {
   it("accepts valid create input without server-generated fields", () => {
     const input = {
@@ -567,10 +514,6 @@ describe("CreatePostInputSchema", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The card a post draws on the homepage, beyond what the post decides for it
-// ---------------------------------------------------------------------------
-
 describe("PostSchema — card", () => {
   const picture = { type: "media", kind: "image", src: "/a.png" };
 
@@ -592,7 +535,6 @@ describe("PostSchema — card", () => {
     if (result.success) expect(result.data.card).toEqual(card);
   });
 
-  // The one line of the caption a post can leave unwritten — see the schema.
   it("carries the meta line for a card the post files under nothing", () => {
     const result = PostSchema.safeParse({
       ...validPost,
@@ -602,9 +544,6 @@ describe("PostSchema — card", () => {
     if (result.success) expect(result.data.card).toEqual({ meta: "Case Study" });
   });
 
-  // A post's card has no content section — the words are the post's — so the
-  // ground sits at the top level, where a link card's sits under `content`. A
-  // blob written the link card's way is stripped, not read.
   it("holds the ground beside the media, not under a content key", () => {
     const result = PostSchema.safeParse({
       ...validPost,
@@ -614,9 +553,6 @@ describe("PostSchema — card", () => {
     if (result.success) expect(result.data.card).toEqual({});
   });
 
-  // `parsePost` is the one reader of a post, and it throws on failure — so a
-  // card blob that no longer parses would 404 the article over its tile. The
-  // card is the trim; the post is the page. Lose the trim.
   it("drops a card that no longer parses rather than the post", () => {
     const result = PostSchema.safeParse({
       ...validPost,
@@ -647,8 +583,6 @@ describe("postCardMedia", () => {
     });
   });
 
-  // Taken over is taken over: an emptied slot is a flat plate, not the
-  // document's picture coming back. See `PostCardConfigSchema`.
   it("leaves an emptied slot empty rather than falling back to the document", () => {
     expect(postCardMedia({ media: { dark } }, derived)).toEqual({
       light: null,
@@ -660,10 +594,6 @@ describe("postCardMedia", () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// PostLinkSchema — the little of a post a list names it by
-// ---------------------------------------------------------------------------
 
 describe("PostLinkSchema", () => {
   it("accepts a slug and a title", () => {
@@ -693,10 +623,6 @@ describe("PostLinkSchema", () => {
     expect(result.success && "content" in result.data).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// The metadata sidebar — a post's address and its search description
-// ---------------------------------------------------------------------------
 
 describe("PostSchema — description", () => {
   it("keeps a written description", () => {
@@ -728,8 +654,6 @@ describe("PostSlugSchema", () => {
     expect(PostSlugSchema.safeParse("  hello  ").data).toBe("hello");
   });
 
-  // Slugs minted from a title (`generateSlug`) can carry a doubled hyphen, and
-  // an address that is already live must stay saveable as it is.
   it("accepts a doubled hyphen inside", () => {
     expect(PostSlugSchema.safeParse("before--after").success).toBe(true);
   });
@@ -753,8 +677,6 @@ describe("PostSlugSchema", () => {
     expect(PostSlugSchema.safeParse("a".repeat(81)).success).toBe(false);
   });
 
-  // `/edit/<slug>` shares its folder with the admin surface's own pages, and
-  // a post called `new` would be edited at the address that starts a draft.
   it.each(RESERVED_POST_SLUGS)("refuses %s, which the site uses", (slug) => {
     expect(PostSlugSchema.safeParse(slug).success).toBe(false);
   });
@@ -788,8 +710,6 @@ describe("PostDescriptionSchema", () => {
     );
   });
 
-  // Empty is the author taking the override away, which hands the page back
-  // to the summary read off its opening paragraph.
   it("reads an emptied box as no description", () => {
     expect(PostDescriptionSchema.parse("")).toBeNull();
     expect(PostDescriptionSchema.parse("   ")).toBeNull();

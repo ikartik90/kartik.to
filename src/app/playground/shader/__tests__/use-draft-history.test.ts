@@ -66,9 +66,6 @@ describe("useDraftHistory", () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  // A field has its OWN undo, and it is the one the author means while the
-  // caret is in it. Hijacking it would make ⌘Z in the hex box rewrite the ramp
-  // instead of the four characters just typed.
   it("leaves a text field's own undo alone", () => {
     const input = document.createElement("input");
     document.body.appendChild(input);
@@ -93,8 +90,6 @@ describe("useDraftHistory", () => {
     expect(paramNow()).toBe(0.25);
   });
 
-  // A slider drag emits a value per frame. One step per frame would bury every
-  // other edit in the stack, so the push waits for the hand to stop.
   it("records one step for a burst of edits", () => {
     vi.useFakeTimers();
     renderHook(() => useDraftHistory());
@@ -112,8 +107,6 @@ describe("useDraftHistory", () => {
     expect(depth()).toBe(before + 1);
   });
 
-  // The restore itself must not be recorded, or the redo stack it just made
-  // available would be trimmed off by the debounce that follows it.
   it("does not record the state an undo restored", () => {
     vi.useFakeTimers();
     renderHook(() => useDraftHistory());

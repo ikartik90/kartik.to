@@ -1,23 +1,8 @@
 import type { BlockNode, MediaNode, TextNode } from "@/domain/nodes";
 import type { Document } from "@/domain/post";
 
-// ---------------------------------------------------------------------------
-// A post as Markdown, for readers that are not browsers.
-//
-// AI assistants and answer engines read a page's TEXT, and a rendered post
-// makes them dig it out of shader canvases, hydration payloads and a design
-// system's worth of class names. The same words as plain Markdown are what
-// `llms.txt` links to and what `/work/<slug>.md` serves.
-//
-// Lossy by design: underline and highlight have no Markdown spelling and keep
-// their words; an interactive component is named rather than carried; the
-// homepage's grid and social row are furniture, not content.
-// ---------------------------------------------------------------------------
-
 interface MarkdownOptions {
-  /** Written as the one `#` heading, above everything else. */
   title?: string | null;
-  /** What a site-relative media source is made absolute against. */
   origin: string;
 }
 
@@ -26,7 +11,7 @@ type Mark = NonNullable<TextNode["marks"]>[number];
 const sameMarks = (a: TextNode, b: TextNode) =>
   JSON.stringify(a.marks ?? []) === JSON.stringify(b.marks ?? []);
 
-/** Adjacent runs carrying identical marks, as one run — `**a****b**` is not bold. */
+/** Merges adjacent runs with identical marks: `**a****b**` is not bold. */
 function mergeRuns(children: TextNode[]): TextNode[] {
   const merged: TextNode[] = [];
   for (const child of children) {
@@ -105,7 +90,6 @@ function media(node: MediaNode, origin: string): string {
 
 const caption = (value: string | undefined) => (value ? [`_${value}_`] : []);
 
-/** One block as its Markdown chunks, or none for a block with nothing to say. */
 function block(
   node: BlockNode,
   origin: string,

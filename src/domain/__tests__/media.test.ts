@@ -51,8 +51,6 @@ describe("MediaAssetSchema", () => {
     expect(input.contentType).toBe("video/mp4");
   });
 
-  // The cap is per FORMAT, not per upload: a clip that would be an absurd
-  // screenshot is an ordinary ten seconds of product demo.
   it("holds a clip to the video cap, not the image one", () => {
     const size = MAX_IMAGE_UPLOAD_BYTES + 1;
     expect(() =>
@@ -71,10 +69,6 @@ describe("MediaAssetSchema", () => {
     ).toThrow();
   });
 
-  // The file's own shape, carried from the moment it is picked to the node
-  // that ends up pointing at it — the whole chain a reserved box depends on
-  // (`mediaReservedAspect`). Optional at every link, because a measurement can
-  // fail and every object stored before this existed has none.
   it("carries the source's measured shape, and does without it", () => {
     expect(
       CreateMediaUploadInputSchema.parse({
@@ -106,8 +100,6 @@ describe("MediaAssetSchema", () => {
     ).toMatchObject({ width: 1600, height: 900 });
   });
 
-  // Zero is what an element that decoded nothing reports. It must never be
-  // stored as if it were an answer, at this link or the next one.
   it("refuses a dimension no source could have", () => {
     expect(() =>
       CreateMediaUploadInputSchema.parse({
@@ -155,12 +147,6 @@ describe("mediaKindOf", () => {
     expect(mediaKindOf("image/svg+xml")).toBe("image");
   });
 
-  // The library only ever holds types that passed
-  // `CreateMediaUploadInputSchema`, so this branch is unreachable through the
-  // app — it is pinned because the fall-through is the SAFE direction and
-  // should stay that way. An unrecognised type shown as a picture is a broken
-  // image; shown as a clip it is an empty black box with nothing to say it
-  // failed.
   it("falls through to a picture for a type it does not know", () => {
     expect(mediaKindOf("application/octet-stream")).toBe("image");
     expect(mediaKindOf("")).toBe("image");
@@ -173,10 +159,6 @@ describe("sanitizeMediaFilename", () => {
   });
 });
 
-// A rename never reaches a key, so it is held to a far looser standard than
-// the one above: the name is a label the author reads, and a label that turns
-// "Old shift form" into "Old-shift-form" as you type it is the sanitiser
-// editing your notes for you.
 describe("sanitizeMediaDisplayName", () => {
   it("keeps a name a person would actually type", () => {
     expect(sanitizeMediaDisplayName("Old shift form (v2).mp4")).toBe(
@@ -184,9 +166,6 @@ describe("sanitizeMediaDisplayName", () => {
     );
   });
 
-  // Object metadata is carried in an HTTP header, which is US-ASCII — so the
-  // accents cannot be stored, but the LETTERS can: folding beats dropping,
-  // which would leave "Rsum".
   it("folds an accent rather than dropping the letter under it", () => {
     expect(sanitizeMediaDisplayName("Résumé.pdf")).toBe("Resume.pdf");
   });
@@ -202,8 +181,6 @@ describe("sanitizeMediaDisplayName", () => {
 
 describe("filenameFromMediaKey", () => {
   it("recovers the original filename from a uuid-prefixed key", () => {
-    // randomUUID() itself contains dashes — the split must skip the whole uuid,
-    // not stop at its first dash.
     expect(
       filenameFromMediaKey(
         "media/550e8400-e29b-41d4-a716-446655440000-favicon.png",
@@ -224,15 +201,6 @@ describe("filenameFromMediaKey", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Documents — the second thing the bucket now holds.
-//
-// A PDF is uploaded and listed exactly as a picture is, and is EXCLUDED from
-// everywhere media is offered: it has no `MediaKind`, so nothing can render it
-// as a picture or a clip, and a library row for one would be a broken image.
-// The one surface that wants it is the link card's document picker.
-// ---------------------------------------------------------------------------
-
 describe("documents", () => {
   it("takes a PDF", () => {
     expect(isDocumentContentType("application/pdf")).toBe(true);
@@ -242,14 +210,10 @@ describe("documents", () => {
     expect(isDocumentContentType("image/png")).toBe(false);
   });
 
-  // The media list is what the image dialog offers and what `mediaKindOf`
-  // answers for. A document in it would be shown as a picture that cannot load.
   it("is not one of the media types", () => {
     expect(isAllowedMediaContentType("application/pdf")).toBe(false);
   });
 
-  // The upload path is shared — one bucket, one signer, one allow-list — so
-  // the union is what the server validates against.
   it("is allowed to be uploaded", () => {
     expect(isAllowedUploadContentType("application/pdf")).toBe(true);
     expect(isAllowedUploadContentType("image/png")).toBe(true);
@@ -266,9 +230,6 @@ describe("documents", () => {
     ).toBe(true);
   });
 
-  // Its own ceiling, for the reason a clip has one: a print-quality portfolio
-  // is a different order of file from a screenshot, and one cap for both would
-  // either refuse ordinary documents or stop being a guard on pictures.
   it("has a ceiling of its own", () => {
     expect(maxUploadBytesFor("application/pdf")).toBe(
       MAX_DOCUMENT_UPLOAD_BYTES,
@@ -292,15 +253,12 @@ describe("filenameFromMediaUrl", () => {
     ).toBe("cv.pdf");
   });
 
-  // A signed URL buries the path behind a query, which is the case the plain
-  // "everything after the last slash" reading gets wrong.
   it("ignores a query and a fragment", () => {
     expect(
       filenameFromMediaUrl("https://cdn.example.com/media/photo.png?sig=abc#x"),
     ).toBe("photo.png");
   });
 
-  // A worse label, never a broken one — a rewritten path still names something.
   it("falls back to whatever the last segment is", () => {
     expect(filenameFromMediaUrl("https://cdn.example.com/abc123")).toBe(
       "abc123",
@@ -314,8 +272,6 @@ describe("MediaFolderSchema", () => {
     expect(MediaFolderSchema.parse("profiles")).toBe("profiles");
   });
 
-  // The folder decides a KEY PREFIX, so an unrecognised one would write an
-  // object to a path nothing lists and nothing cleans up.
   it("refuses a folder that is not one of them", () => {
     expect(() => MediaFolderSchema.parse("avatars")).toThrow();
     expect(() => MediaFolderSchema.parse("")).toThrow();
@@ -330,8 +286,6 @@ describe("CreateMediaUploadInputSchema folder", () => {
     size: 500,
   };
 
-  // Absent means the library, because every caller that existed before
-  // profiles did meant the library and none of them says so.
   it("defaults to the media library", () => {
     expect(CreateMediaUploadInputSchema.parse(base).folder).toBe("media");
   });

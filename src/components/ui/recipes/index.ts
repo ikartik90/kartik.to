@@ -1,12 +1,5 @@
-// Every recipe, registered for panda.config.ts. A recipe used by one component
-// lives beside it as `<component>.recipe.ts`; one used by two or more lives in
-// this folder (see recipe-placement.test.ts).
-//
-// ORDER HERE IS CASCADE ORDER. Panda emits recipes in the order they are
-// registered, so at equal specificity a recipe listed later beats one listed
-// earlier. The order below is the one panda.config.ts had when the recipes
-// moved out of it; changing it changes which rule wins wherever two recipes
-// meet on one element.
+// Every recipe, registered for panda.config.ts. Order is cascade order: at equal specificity a
+// later recipe beats an earlier one, so reordering changes which rule wins.
 
 import { demoFrame, demoFrameDemoArea } from "../../demo-frame.recipe";
 import {

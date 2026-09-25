@@ -17,9 +17,6 @@ describe("getBackTarget", () => {
     });
   });
 
-  // `/playground` is a prefix with no page behind it, so the climb finds no
-  // real ancestor and lands on the floor — which is the right answer here, and
-  // the case that would catch a blind parent offering `/playground` instead.
   it("sends the shader playground back to the index", () => {
     expect(getBackTarget("/playground/shader")).toEqual({
       href: "/",
@@ -27,10 +24,6 @@ describe("getBackTarget", () => {
     });
   });
 
-  // It used to climb: an article's editor answered to the article, and only a
-  // page with no real ancestor fell through to the index. One destination now,
-  // because the command is "go to the index" rather than "go up a level" —
-  // somewhere to stand, not a step in a history nobody is tracking.
   it("sends a deep page to the index rather than to its parent", () => {
     expect(getBackTarget("/writing/my-post/edit")).toEqual({
       href: "/",

@@ -47,9 +47,6 @@ describe("TestimonialForm", () => {
     );
   });
 
-  // The cap is the brief, so it has to be visible while writing rather than
-  // discovered on submit. Counted down, because what a writer wants to know is
-  // how much room is left, not how much they have used.
   it("counts down the characters left as you type", async () => {
     const user = userEvent.setup();
     render(<TestimonialForm />);
@@ -66,8 +63,6 @@ describe("TestimonialForm", () => {
     ).toBeTruthy();
   });
 
-  // Belt and braces with the schema's own cap: the box refuses the 281st
-  // character rather than letting it be typed and then refused on send.
   it("stops the box at the maximum length", () => {
     render(<TestimonialForm />);
     expect((quote() as HTMLTextAreaElement).maxLength).toBe(
@@ -75,8 +70,6 @@ describe("TestimonialForm", () => {
     );
   });
 
-  // The form is gone once it has been sent. Leaving it on screen invites a
-  // second send, and the person has no way to tell the first one landed.
   it("thanks them and retires the form once it lands", async () => {
     const user = userEvent.setup();
     render(<TestimonialForm />);
@@ -88,9 +81,6 @@ describe("TestimonialForm", () => {
     expect(screen.getByRole("status").textContent).toMatch(/thank/i);
   });
 
-  // A refusal has to land UNDER the box it belongs to, and everything typed has
-  // to survive it — retyping a testimonial because one URL was wrong is how you
-  // lose the testimonial.
   it("shows a refusal under its own field and keeps what was typed", async () => {
     const user = userEvent.setup();
     mockSubmit.mockResolvedValue({
@@ -105,8 +95,6 @@ describe("TestimonialForm", () => {
     await waitFor(() =>
       expect(screen.getByText("That name is too long.")).toBeTruthy(),
     );
-    // Nothing typed is lost to a refusal — retyping a testimonial because one
-    // field was wrong is how you lose the testimonial.
     expect((quote() as HTMLTextAreaElement).value).toBe(
       "Shipped it, on time, and it was beautiful.",
     );
@@ -119,16 +107,12 @@ describe("TestimonialForm", () => {
     expect(name().getAttribute("aria-invalid")).toBe("true");
   });
 
-  // The field was removed on 2026-09-10. A stale build that still rendered it
-  // would collect a value nothing stores, so its absence is worth asserting
-  // rather than assuming.
   it("offers no LinkedIn field", () => {
     render(<TestimonialForm />);
     expect(screen.queryByLabelText(/linkedin/i)).toBeNull();
     expect(screen.getAllByRole("textbox")).toHaveLength(2);
   });
 
-  // A failure that belongs to no field still has to be said out loud.
   it("shows a whole-form failure", async () => {
     const user = userEvent.setup();
     mockSubmit.mockResolvedValue({
@@ -148,7 +132,6 @@ describe("TestimonialForm", () => {
     expect(screen.getByLabelText(/your name/i)).toBeTruthy();
   });
 
-  // Double-click, slow connection, same result: one row.
   it("refuses a second send while the first is in flight", async () => {
     const user = userEvent.setup();
     let release: (value: { ok: true }) => void = () => {};
@@ -170,8 +153,6 @@ describe("TestimonialForm", () => {
     release({ ok: true });
   });
 
-  // Hidden from EYES and from assistive tech — a screen reader reaching a field
-  // it is meant to leave blank is a trap for the wrong person.
   it("carries a honeypot no human is offered", () => {
     const { container } = render(<TestimonialForm />);
     const trap = container.querySelector(

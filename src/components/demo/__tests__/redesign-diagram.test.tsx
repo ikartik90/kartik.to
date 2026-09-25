@@ -18,9 +18,6 @@ import {
 
 afterEach(cleanup);
 
-// Two marks that between them cover both endings the stage can draw: one that
-// runs on into dots because the card crops it, and one that closes with a foot
-// tick because the region it brackets actually ends.
 const REDLINES: DiagramRedline[] = [
   { label: "Cropped region", side: "start", top: 68, spine: 118, tail: 44, attach: 59 },
   { label: "Whole region", side: "end", top: 68, spine: 218, attach: 109 },
@@ -32,7 +29,6 @@ function Diagram({
 }: {
   cropped?: boolean;
   toggleGap?: number;
-  /** Which arrangements run past the foot of the block. */
   overflows?: Arrangement[];
 }) {
   return (
@@ -56,11 +52,6 @@ function Diagram({
 const pickSegment = (name: string) =>
   fireEvent.click(screen.getByRole("option", { name }));
 
-/**
- * Which of the two arrangements is being SHOWN. Both stay mounted so the toggle
- * can morph between them, so "presented" is a state the pane carries rather
- * than a question of whether it exists.
- */
 function presented(pane: HTMLElement): boolean {
   return pane.getAttribute("aria-hidden") !== "true";
 }
@@ -81,12 +72,9 @@ describe("RedesignDiagram — the toggle", () => {
 
     expect(presented(screen.getByTestId("after-pane"))).toBe(true);
     expect(presented(screen.getByTestId("before-pane"))).toBe(false);
-    // The marks annotate the OLD arrangement, so they withdraw with it.
     expect(presented(screen.getByTestId("redlines"))).toBe(false);
   });
 
-  // A pane that unmounted the moment it went off would have nothing left to
-  // fade OUT — the morph would read as a hard cut with a delay in front of it.
   it("keeps both arrangements mounted across the toggle", () => {
     render(<Diagram />);
 
@@ -97,8 +85,6 @@ describe("RedesignDiagram — the toggle", () => {
     expect(screen.getByTestId("after-pane")).toBeTruthy();
   });
 
-  // Only one arrangement is on show, so only one may be reached — by a pointer,
-  // by a screen reader, or by the tab key.
   it("makes the arrangement that is off inert as well as invisible", () => {
     render(<Diagram />);
 
@@ -114,17 +100,12 @@ describe("RedesignDiagram — how a redline ends", () => {
   const markFor = (label: string) =>
     screen.getByText(label).parentElement?.querySelector("svg");
 
-  // The mark's foot carries the whole meaning of the mark. A bracket that
-  // closes with a tick has said everything it had to say; one that trails off
-  // into dots is pointing at something the card cut in half.
   it("runs a cropped region on into dots below its spine", () => {
     render(<Diagram />);
 
     const paths = markFor("Cropped region")?.querySelectorAll("path") ?? [];
     expect(paths).toHaveLength(2);
     expect(paths[1].getAttribute("stroke-dasharray")).toBe("1.5 1.5");
-    // Opened at the top, and NOT closed at the bottom — 118 is where the solid
-    // run stops, and the only move at that point is back up to the leader.
     expect(paths[0].getAttribute("d")).toBe(
       "M8.375 0.375H4.375V59.375M4.375 118.375V59.375M4.375 59.375H0.375",
     );
@@ -140,8 +121,6 @@ describe("RedesignDiagram — how a redline ends", () => {
     );
   });
 
-  // The mark stands as tall as its spine plus the 2px break and the run-on, and
-  // the caption hangs off the leader tick wherever the caller put it.
   it("sizes the mark to everything it draws, run-on included", () => {
     render(<Diagram />);
 
@@ -153,8 +132,6 @@ describe("RedesignDiagram — how a redline ends", () => {
 describe("RedesignDiagram — the cut at the foot of the block", () => {
   const Cut = () => <Diagram overflows={["before"]} />;
 
-  // The cut is decorative and permanently `aria-hidden`, so unlike a pane its
-  // state is carried by `data-presented` alone.
   const cutShown = () =>
     screen.getByTestId("crop-fade").getAttribute("data-presented") !== "false";
 
@@ -166,9 +143,6 @@ describe("RedesignDiagram — the cut at the foot of the block", () => {
     expect(cutShown()).toBe(false);
   });
 
-  // It stays MOUNTED across the toggle, because on the way out it has to outlive
-  // the arrangement it belongs to — dropping it the instant the toggle moves
-  // takes the gradient off content that is still fully there.
   it("keeps it mounted while it withdraws, rather than pulling it", () => {
     render(<Cut />);
 
@@ -176,8 +150,6 @@ describe("RedesignDiagram — the cut at the foot of the block", () => {
     expect(screen.getByTestId("crop-fade")).toBeTruthy();
   });
 
-  // Which arrangement is cut is a fact about the LAYOUT, not about the card:
-  // one comparison crops both of its arrangements, another only the old one.
   it("draws it for the new arrangement too, when that one is cut as well", () => {
     render(<Diagram overflows={["before", "after"]} />);
     expect(cutShown()).toBe(true);
@@ -191,26 +163,17 @@ describe("RedesignDiagram — the cut at the foot of the block", () => {
     expect(screen.queryByTestId("crop-fade")).toBeNull();
   });
 
-  // The mechanism, not the look: a child cannot opt out of its parent's opacity
-  // or transform, so a cut INSIDE the pane would fade and slide in with the old
-  // arrangement instead of being the edge that arrangement is cut against.
-  // Sitting outside both panes is what lets it appear the instant the toggle
-  // moves.
   it("keeps it outside both panes, so it cannot travel with either", () => {
     render(<Cut />);
 
     const cut = screen.getByTestId("crop-fade");
     expect(screen.getByTestId("before-pane").contains(cut)).toBe(false);
     expect(screen.getByTestId("after-pane").contains(cut)).toBe(false);
-    // Still inside the card, though — it is the block's own bottom edge.
     expect(screen.getByTestId("redesign-drawing").contains(cut)).toBe(true);
   });
 });
 
 describe("RedesignDiagram — fitting the drawing to the frame", () => {
-  // The frame gives the drawing its width less a 20px gutter on each side, and
-  // the drawing spends that room in the order its annotations can afford to
-  // lose it: the labels go first, the drawing itself last.
   it("draws the labelled diagram at full size while it clears the gutter", () => {
     expect(resolveDiagramFit(LABELLED_WIDTH)).toMatchObject({
       annotation: "labels",
@@ -226,7 +189,6 @@ describe("RedesignDiagram — fitting the drawing to the frame", () => {
     });
   });
 
-  // The first boundary: the labels are what the gutter takes, not the drawing.
   it("numbers the redlines rather than scaling once the labels reach it", () => {
     expect(resolveDiagramFit(LABELLED_WIDTH - 1)).toMatchObject({
       annotation: "numbers",
@@ -242,7 +204,6 @@ describe("RedesignDiagram — fitting the drawing to the frame", () => {
     });
   });
 
-  // The second boundary, and only here: nothing is left to give up but size.
   it("scales the numbered diagram once even that reaches the gutter", () => {
     const available = NUMBERED_WIDTH - 100;
 
@@ -252,17 +213,11 @@ describe("RedesignDiagram — fitting the drawing to the frame", () => {
     });
   });
 
-  // A frame measured mid-collapse reports nothing to fit into. A negative
-  // scale would MIRROR the diagram rather than hide it.
   it("never resolves a scale below zero", () => {
     expect(resolveDiagramFit(-200).fit).toBe(0);
   });
 });
 
-/**
- * Mount the diagram inside a stand-in demo frame of a given inner width — what
- * the component measures itself against. Outside one it has nothing to fit to.
- */
 function renderInFrame(clientWidth: number) {
   const frame = document.createElement("div");
   frame.setAttribute("data-demo-frame", "");
@@ -274,7 +229,7 @@ function renderInFrame(clientWidth: number) {
   return render(<Diagram />, { container: frame });
 }
 
-/** The gutter the demo area keeps on each side, both of them. */
+/** Both 20px side gutters. */
 const GUTTERS = 40;
 
 describe("RedesignDiagram — what a narrowing frame takes", () => {
@@ -298,8 +253,6 @@ describe("RedesignDiagram — what a narrowing frame takes", () => {
     expect(within(legend).getByText("Whole region")).toBeTruthy();
   });
 
-  // The legend belongs to the redlines, so it goes when they do — a key to
-  // marks that are no longer on screen is a key to nothing.
   it("withdraws the legend with the arrangement the redlines annotate", () => {
     renderInFrame(NUMBERED_WIDTH + GUTTERS);
     expect(presented(screen.getByTestId("redline-legend"))).toBe(true);
@@ -316,10 +269,6 @@ describe("RedesignDiagram — what a narrowing frame takes", () => {
     ).toBe("1");
   });
 
-  // The toggle is a control and the legend is a key: both are chrome around the
-  // picture, both have room to spare at every width the picture runs out at, and
-  // neither gets smaller just because the drawing had to. Only the drawing is
-  // inside the box the scale is applied to.
   it("scales the drawing, and only the drawing", () => {
     renderInFrame(NUMBERED_WIDTH + GUTTERS - 200);
 
@@ -338,15 +287,11 @@ describe("RedesignDiagram — what a narrowing frame takes", () => {
     );
     expect(fit).toBeLessThan(1);
     expect(fit).toBeCloseTo((NUMBERED_WIDTH - 100) / NUMBERED_WIDTH, 5);
-    // Scaled, not re-annotated: the numbers are still what is drawn.
     expect(screen.getAllByTestId("redline-badge")).toHaveLength(2);
   });
 });
 
 describe("RedesignDiagram — the card holds still", () => {
-  // A box that resized mid-morph would make the change look like it was about
-  // the box. Both panes are laid over one BODY of the caller's stated height,
-  // and the card the frame reserves room for is that plus the shell's own rows.
   it("reserves one card height for both arrangements", () => {
     render(<Diagram />);
 
@@ -354,10 +299,6 @@ describe("RedesignDiagram — the card holds still", () => {
     expect(diagram.style.getPropertyValue("--demo-body-height")).toBe("190px");
   });
 
-  // A card that ends at a tear is its header, the body, and the closing edge:
-  // 52 + 190 + 20. The whole dialog adds the action bar, the form surface's
-  // inset above and below the body, and three more torn bands — one under the
-  // header and the form's own two — for 418.
   it("measures the card from the rows the shell actually draws", () => {
     const cardHeight = () =>
       screen
@@ -371,12 +312,6 @@ describe("RedesignDiagram — the card holds still", () => {
     expect(cardHeight()).toBe("418px");
   });
 
-  // The MOST the drawing hangs below the toggle is the Figma's own and varies by
-  // design, so it is the caller's to state — and it scales with the drawing,
-  // since the distance from a control to the picture it drives belongs to the
-  // composition. It is a ceiling on the spring above the drawing rather than a
-  // distance: what the air actually comes to is a layout question, and layout
-  // is not something jsdom answers.
   it("takes the most the drawing hangs below the toggle from the caller", () => {
     const { rerender } = render(<Diagram />);
     expect(
@@ -393,10 +328,6 @@ describe("RedesignDiagram — the card holds still", () => {
     ).toBe("12px");
   });
 
-  // The column fills the frame's content box so the demo area has no slack to
-  // centre, which is what puts the toggle at the TOP where the Figma draws it.
-  // The share it fills is the SHAPE's, not a constant: a demo shown at 3/2 is
-  // two thirds as tall as it is wide, and one at 2/1 is half.
   it("fills the height of whatever shape it is being shown at", () => {
     const { rerender } = render(<Diagram />);
     expect(

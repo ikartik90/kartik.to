@@ -2,8 +2,7 @@ import type { NextConfig } from "next";
 import { LISTED_CATEGORIES, POST_CATEGORIES } from "./src/data/post-categories";
 
 const svgrOptions = {
-  // SVGO normalises colour names to hex before replaceAttrValues runs, so
-  // match the post-SVGO hex value rather than the original keyword.
+  // SVGO turns colour names into hex before this runs, so match the hex.
   replaceAttrValues: { "#fff": "currentColor", "#ffffff": "currentColor" },
   svgoConfig: {
     plugins: [
@@ -27,10 +26,6 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        // `www.kartik.to` served a second, identical copy of the whole site,
-        // and search engines split what little credit the site had between the
-        // two. Every `www.` host now answers with a permanent redirect to the
-        // same path on the bare domain.
         source: "/:path*",
         has: [{ type: "host", value: "www\\.(?<domain>.+)" }],
         destination: "https://:domain/:path*",
@@ -40,11 +35,7 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
-    // A post's Markdown copy lives at its own address with `.md` appended, the
-    // `llms.txt` convention. A segment cannot be named `[slug].md`, so the
-    // handler is an `md` route beside the page and this maps the address onto
-    // it — before the dynamic `[slug]` page can claim `scheduling.md` as a slug.
-    // One per category, read off the list that names their prefixes.
+    // Maps `<post>.md` onto the `md` route before `[slug]` claims it; a segment cannot be named `[slug].md`.
     return [
       ...LISTED_CATEGORIES.map((category) => {
         const { path } = POST_CATEGORIES[category];
@@ -54,23 +45,11 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // The typeface every Open Graph card is set in, stated explicitly so it
-  // reaches the functions that draw one.
-  //
-  // Satori has no stylesheet and no `next/font`; it is handed font BYTES, and
-  // `src/lib/og/card.tsx` reads them off the filesystem at request time. Which
-  // files a serverless function's filesystem actually contains is decided by
-  // Next's tracing, and tracing infers that from static analysis of the code —
-  // it does handle `join(process.cwd(), "<literal>")`, but a missing font here
-  // is not a degraded card, it is no card at all: Satori refuses to render
-  // without one. So the trace is told rather than trusted.
-  //
-  // The glob covers `app/opengraph-image` and both `[slug]` routes under it.
+  // Satori cannot render without this font, so it is forced into the trace.
   outputFileTracingIncludes: {
     "/**/opengraph-image": ["./public/fonts/Switzer-Variable.woff"],
   },
 
-  // Turbopack (default in Next.js 16)
   turbopack: {
     rules: {
       "*.svg": {
@@ -80,7 +59,6 @@ const nextConfig: NextConfig = {
     },
   },
 
-  // Webpack (next dev --webpack / next build --webpack)
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
       (rule: { test?: { test?: (s: string) => boolean } }) =>
@@ -88,9 +66,7 @@ const nextConfig: NextConfig = {
     );
 
     config.module.rules.push(
-      // Reapply the existing rule, but only for svg imports ending in ?url
       { ...fileLoaderRule, test: /\.svg$/i, resourceQuery: /url/ },
-      // Convert all other *.svg imports to React components
       {
         test: /\.svg$/i,
         issuer: fileLoaderRule?.issuer,

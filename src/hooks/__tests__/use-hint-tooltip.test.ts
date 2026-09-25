@@ -25,8 +25,6 @@ describe("useHintTooltip", () => {
     expect(result.current.visible).toBe(false);
   });
 
-  // The hint with nowhere to point: no cursor to seed it at, so it hands its
-  // placement to the stylesheet and says so.
   it("docks on demand, on the same clock", () => {
     const { result } = renderHook(() => useHintTooltip());
     expect(result.current.docked).toBe(false);
@@ -48,8 +46,6 @@ describe("useHintTooltip", () => {
     expect(result.current.visible).toBe(false);
   });
 
-  // A docked hint drops its inline placement, which would otherwise outrank
-  // the rule that centres it.
   it("clears the inline placement a previous show wrote", () => {
     const el = document.createElement("div");
     const { result } = renderHook(() => useHintTooltip());

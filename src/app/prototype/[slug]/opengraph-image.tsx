@@ -1,7 +1,6 @@
 import { OG_CONTENT_TYPE, OG_SIZE } from "@/lib/og/card";
 import { postOgImage } from "@/lib/og/post-image";
 
-// See the twin of this file under `work/[slug]`.
 export const dynamic = "force-dynamic";
 
 export const size = OG_SIZE;

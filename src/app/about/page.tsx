@@ -12,11 +12,6 @@ import { resolvePost } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
 import { postJsonLd } from "@/utils/structured-data";
 
-// The About page is an article in everything but its address: a `PAGE` post
-// with the slug "about", written in the same editor (`/edit/about`) and read
-// with the same intro and renderer as `/writing/:slug`. Until it is published
-// it is a 404 for everyone but the author, who can read the draft here.
-
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {

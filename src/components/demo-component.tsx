@@ -9,7 +9,6 @@ import { useDemoLoader, useTrickleProgress } from "@/hooks/use-demo-loader";
 import type { DemoComponentEntry, DemoProps } from "@/components/demo/registry";
 import { css } from "../../styled-system/css";
 
-// Centers the shared progress bar while a component demo loads.
 const demoPreloaderStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -22,11 +21,7 @@ const demoPreloaderStyle = css({
   paddingInline: "lg",
 });
 
-/**
- * The component-demo preloader — the same progress bar the upload-media dialog
- * uses, centered in the demo frame. Pass `value` (0–100) for real progress, or
- * omit it for an indeterminate trickle (used during a demo's own async init).
- */
+/** Pass `value` (0–100) for real progress, or omit it for an indeterminate trickle. */
 export function DemoPreloader({ value }: { value?: number }) {
   const trickle = useTrickleProgress(value === undefined);
   const shown = value ?? Math.min(99, trickle * 100);
@@ -38,11 +33,7 @@ export function DemoPreloader({ value }: { value?: number }) {
   );
 }
 
-/**
- * Renders a registry demo: shows the preloader while the demo's module and
- * assets load (deferred until the page has loaded), then swaps in the demo.
- * Every demo call site goes through this so the loading behaviour lives once.
- */
+/** Renders a registry demo, showing the preloader while its module and assets load. */
 export function DemoComponent({
   entry,
   aspect,
@@ -50,10 +41,6 @@ export function DemoComponent({
   const { Component, ready, fraction } = useDemoLoader(entry);
   const trickle = useTrickleProgress(!ready);
 
-  // If the demo is ready on the very first render it was already loaded — no
-  // loader was shown, so reveal immediately (no completion hold). Otherwise a
-  // loader is shown while it loads, then held briefly at 100% so the fill
-  // visibly finishes before the demo swaps in.
   const [revealed, setRevealed] = useState(ready);
   const [loadedEntry, setLoadedEntry] = useState(entry);
   if (loadedEntry !== entry) {
@@ -72,8 +59,5 @@ export function DemoComponent({
     return <DemoPreloader value={value} />;
   }
 
-  // The SHOWING's shape, not the entry's: a publication may override it, and a
-  // demo that frames its contents for a shape needs the box it actually landed
-  // in. Handed to every demo; the ones that draw to fill ignore it.
   return <Component aspect={aspect} />;
 }

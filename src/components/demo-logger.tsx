@@ -84,13 +84,11 @@ const illustrationImageStyle = css({
   outlineWidth: "0",
 });
 
-/** Dark UI uses the light-themed illustration asset. */
 const illustrationForDarkUiStyle = css({
   display: "none",
   _dark: { display: "block" },
 });
 
-/** Light UI uses the dark-themed illustration asset. */
 const illustrationForLightUiStyle = css({
   display: "block",
   _dark: { display: "none" },
@@ -111,7 +109,6 @@ const emptyHintStyle = css({
   textAlign: "center",
 });
 
-// Footer region for demo logger with inset padding.
 const demoLoggerSectionStyle = css({
   width: "token(spacing.full)",
   flexShrink: 0,
@@ -132,8 +129,6 @@ export function DemoLogger({
   const entries = useDemoLoggerEntries();
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // A log that has scrolled to its last line lets the wheel carry on to the
-  // page, rather than being a dead patch in the middle of a demo card.
   useScrollHandoff(bodyRef);
 
   useEffect(() => {

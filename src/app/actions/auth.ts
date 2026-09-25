@@ -2,32 +2,9 @@
 
 import { auth } from "@/lib/auth/server";
 
-// ---------------------------------------------------------------------------
-// The one thing a visitor with no session is allowed to ask the server for:
-// where to go to get one.
-//
-// The handshake is started HERE rather than in the browser because starting it
-// is the server's business — it is the half that holds the Neon Auth base URL,
-// the cookie secret and the state Neon mints to recognise the browser when it
-// comes back. The client's part is what is left over once that is done: follow
-// the URL. So this returns the URL rather than performing the redirect itself,
-// which is what lets the same answer serve a console call, a palette command,
-// or anything else that later wants to send someone to sign in.
-//
-// `disableRedirect` is what makes that possible: without it Neon Auth answers
-// the POST with a 302 and the caller never sees the address.
-//
-// Nothing is gated. This is the front door, and a door that only opens for
-// people who are already inside is not one — the gate is on the way BACK, where
-// `isAdmin()` in `@/lib/auth/server` decides whether the session that came out
-// of this handshake is the author's. Every admin page asks it before rendering
-// and every action asks it before writing; `proxy.ts` only pre-filters
-// `/admin/*` from the cookie and is not the boundary. Signing in with GitHub is
-// not the same thing as being the author, and only the second of those is worth
-// guarding.
-// ---------------------------------------------------------------------------
+// Deliberately public: the sign-in front door. isAdmin() gates the session that comes back.
 
-/** Where the browser has to go to sign in, once the handshake is under way. */
+/** Returns the GitHub sign-in URL; `disableRedirect` stops Neon Auth answering with a 302 instead. */
 export async function startAdminLogin(): Promise<string> {
   const { data, error } = await auth.signIn.social({
     provider: "github",

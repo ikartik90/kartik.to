@@ -9,32 +9,8 @@ import {
 } from "@/domain/shader-preset";
 import type { ShaderId } from "@/data/shader-specs";
 
-// ---------------------------------------------------------------------------
-// Mutations for saved presets — the shader backgrounds authored in the
-// playground and reused wherever a surface wants a ground.
-//
-// Every write goes through `ShaderPresetContentSchema` rather than trusting the
-// caller's object. These actions are a public HTTP surface, not an internal
-// function call, so "the playground only ever sends valid params" is not a
-// guarantee this layer is allowed to make on its own — and the schema is also
-// what NORMALISES on the way in (six-digit colours padded, retired keys
-// stripped, missing ones defaulted), so parsing here is what keeps one shape in
-// the column rather than whatever a given build happened to send.
-//
-// READING is public and WRITING is the author's, which is a split the file used
-// to not have: every action required the admin session, so the playground's
-// preset strip was the author's alone. A visitor can now walk into the
-// playground and take up a saved preset — but only one that has been PUBLISHED,
-// which is `publishedAt`'s whole job. The gate is here rather than in the
-// components that draw the strip: a component decides what to draw, and this is
-// the layer that decides what may be seen.
-// ---------------------------------------------------------------------------
+// Deliberately public: the reads, which show visitors published presets only.
 
-// BOTH halves of the shared guard, because this module needs both: the writes
-// need the throw, and the reads need the ANSWER — they serve everybody and only
-// the size of what comes back changes. See `@/lib/auth/server`.
-
-/** The row as the app holds it, with the blob parsed back into content. */
 function parseShaderPreset(row: {
   id: string;
   title: string | null;
@@ -52,52 +28,18 @@ function parseShaderPreset(row: {
   return { ...row, ...content };
 }
 
-/**
- * The saved library, newest FIRST — the order the playground's presets strip
- * shows them in, stated here because the database is the only thing that knows
- * it. Nothing downstream re-sorts: a second answer to "what order are these in"
- * is a second place for it to be wrong.
- *
- * By `createdAt`, not `updatedAt`, and the difference is the whole point: the
- * strip is a record of what has been ADDED, and ordering by last-touched would
- * make a preset jump to the front of the row every time you pressed ⌘S while
- * editing it — the row reshuffling under the pointer that is using it.
- */
+/** Published presets, plus the author's drafts. */
 export async function getShaderPresets(): Promise<(ShaderPreset & ShaderPresetContent)[]> {
-  // A visitor is shown the PUBLISHED presets and no others. The playground is
-  // public and so is its strip, but saving is how the author keeps a half-tuned
-  // idea overnight — and a library that showed those would turn every save into
-  // an act of publishing, which is the pressure that stops you saving.
   return readShaderPresets(!(await isAdmin()));
 }
 
-/**
- * The library as everyone sees it — the published presets, to the author too.
- *
- * The other read answers the AUTHOR with their drafts as well, which is right
- * for the strip along the playground's foot: that is a workbench, and picking
- * up an unfinished idea is what you go there for. It is wrong for anything that
- * DISPLAYS presets. The reel on the homepage is the case that found this: the
- * author's own front page was playing a preset nobody else could see, so the
- * page being looked at was not the page that shipped — and "publish" had
- * quietly stopped meaning anything on the surface it governs.
- *
- * A separate action rather than an argument to the one above, because the
- * question each answers is different — "what may I work with" against "what is
- * on show" — and a boolean parameter on a public HTTP surface is one the caller
- * gets to choose. This one has no parameter to get wrong.
- */
+/** Published only, even for the author: for surfaces that display presets. */
 export async function getPublishedShaderPresets(): Promise<
   (ShaderPreset & ShaderPresetContent)[]
 > {
   return readShaderPresets(true);
 }
 
-/**
- * The shared query. Not exported, so it is not an endpoint — the two reads
- * above are the surface, and this is only what keeps their ordering and their
- * parsing identical.
- */
 async function readShaderPresets(
   publishedOnly: boolean,
 ): Promise<(ShaderPreset & ShaderPresetContent)[]> {
@@ -108,14 +50,7 @@ async function readShaderPresets(
   return rows.map(parseShaderPreset);
 }
 
-/**
- * One saved preset, by id — the route `/playground/shader/[id]` opens on.
- *
- * An unpublished preset answers NULL to a visitor rather than throwing, and the
- * difference matters: the route turns null into a 404, so "not published" and
- * "no such preset" are indistinguishable from outside. An Unauthorized here
- * would have said a preset by that id exists.
- */
+/** Null for an unpublished preset to a visitor, so the route 404s without confirming it exists. */
 export async function getShaderPreset(
   id: string,
 ): Promise<(ShaderPreset & ShaderPresetContent) | null> {
@@ -137,9 +72,6 @@ export async function createShaderPreset({
   await requireAdmin();
   const content = ShaderPresetContentSchema.parse({ shaderId, settings });
 
-  // Named the way an untitled draft is, and counted the same way: the highest
-  // index so far plus one, so a deleted preset does not hand its number to the
-  // next one and leave two "Untitled 3"s a month apart.
   let untitledIndex: number | null = null;
   if (!title?.trim()) {
     const result = await prisma.shaderPreset.aggregate({
@@ -176,9 +108,6 @@ export async function saveShaderPreset({
   const row = await prisma.shaderPreset.update({
     where: { id },
     data: {
-      // `title` is only written when the caller has an opinion. Undefined is
-      // Prisma's "leave it", which is what a save from the playground wants:
-      // it edits the picture, not the name.
       ...(title === undefined ? {} : { title: title?.trim() || null }),
       shaderId: content.shaderId,
       settings: content.settings as object,
@@ -187,14 +116,6 @@ export async function saveShaderPreset({
   return parseShaderPreset(row);
 }
 
-/**
- * Put a preset on show — which is what makes it visible to anybody but the
- * author, in the strip and at its own route.
- *
- * The SAVED preset, not what is currently in the panel: publishing and saving
- * are separate presses here exactly as they are for an article, so that ⌘S
- * stays the only thing that decides between creating and updating a row.
- */
 export async function publishShaderPreset(
   id: string,
 ): Promise<ShaderPreset & ShaderPresetContent> {
@@ -206,17 +127,6 @@ export async function publishShaderPreset(
   return parseShaderPreset(row);
 }
 
-/**
- * Take a preset back off show, without destroying it.
- *
- * Clearing the date rather than deleting the row, the same call `unpublishPost`
- * makes: the preset is still the author's to open, tune and put back out, and
- * the destructive half of "remove this" is `deleteShaderPreset`.
- *
- * No confirmation in front of it, unlike unpublishing an article. This one is
- * undone by pressing the same button again, and `ConfirmDialog` is for what
- * cannot be.
- */
 export async function unpublishShaderPreset(
   id: string,
 ): Promise<ShaderPreset & ShaderPresetContent> {

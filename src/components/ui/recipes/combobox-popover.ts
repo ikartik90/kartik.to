@@ -1,14 +1,11 @@
 import { defineRecipe } from "@pandacss/dev";
 
-// The Select counterpart to datePopover, sized to the option list
-// (Figma 629:1416 dark / 630:1702 light).
 export const comboboxPopover = defineRecipe({
   className: "combobox-popover",
   description:
     "Covering option-list popover for the Combobox input: anchored over the trigger frame (top/left) with an opaque brand-tinted surface + brand inset border, ≥ the option-list width and ≥ the trigger width. The Select sibling of datePopover.",
   base: {
-    // Absolute for the same reason as datePopover — same shell, same
-    // covering geometry, same scroll flutter if it were fixed.
+    // Absolute, not fixed: a fixed anchored popover lags its trigger on scroll.
     position: "absolute",
     zIndex: 50,
     positionAnchor: "--combobox-popover",

@@ -52,19 +52,7 @@ export async function getDraftPostBySlug(
   }
 }
 
-/**
- * The post a public URL names, or null for the 404.
- *
- * Published first, then — for the admin alone — the unpublished draft, so that
- * writing can be read at its real address before it goes out.
- *
- * There is deliberately no third step. This used to fall back to
- * `src/data/articles.ts` / `src/data/projects.ts`, which kept those slugs
- * reachable at `/writing/…` and `/work/…`; the fixtures are not a shadow copy
- * of the site, and a post nobody can edit, unpublish or take down through the
- * app has no business being served by it. They stay in the tree for the
- * playgrounds, where a document is wanted as INPUT rather than as a page.
- */
+/** Published first, then the draft when `allowDraft` (the admin); null means 404. */
 export async function resolvePost(
   slug: string,
   category: PostCategory,
@@ -82,25 +70,8 @@ export async function resolvePost(
 }
 
 /**
- * Where a post that is not at this address any more lives now, or null for the
- * 404 — asked by a post's page only once `resolvePost` has found nothing.
- *
- * Two ways a post leaves an address, both made from the metadata sidebar. It
- * can be REFILED, which changes the prefix and keeps the slug — and slugs are
- * unique across categories, so `/writing/x` finds `x` wherever it went. Or it
- * can be RENAMED, and the save remembers the slug it left
- * (`Post.previousSlugs`). The current holder of a slug is asked for first, so a
- * post that has since taken an address wins over one that used to have it.
- *
- * Checked at the page rather than as a config redirect, for the reason
- * `/work/scheduling-extensions` always was: a redirect in `next.config.ts`
- * fires before the database is read, and would point at a page that did not
- * exist yet for as long as a deploy and a rename were apart.
- *
- * Drafts are followed for the author alone. A redirect is an answer, and
- * sending a visitor on to an unpublished post would confirm it exists. Pages
- * are never a destination: a page's address is its own route, so nothing is
- * ever moved into one.
+ * A refiled or renamed post's current path. Checked here rather than as a config redirect,
+ * which fires before the database is read. Drafts only with `allowDraft`, lest it confirm them.
  */
 export async function findMovedPostPath(
   slug: string,

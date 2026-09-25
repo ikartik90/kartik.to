@@ -73,8 +73,6 @@ describe("MediaPropertiesPanel", () => {
     ).toBeDefined();
   });
 
-  // Which sections stand open is read off the picture: a panel that opened
-  // everything would bury the one property that is actually set.
   it("opens the sections whose property the picture already carries", () => {
     setup({ caption: "A note" });
     expect(captionField()).not.toBeNull();
@@ -89,8 +87,6 @@ describe("MediaPropertiesPanel", () => {
 });
 
 describe("MediaPropertiesPanel caption section", () => {
-  // Opening the section is not itself a caption — there is nothing yet to
-  // store, and emitting an empty one would mark the picture as captioned.
   it("adds the section without writing a caption", async () => {
     const { user, onCaptionChange } = setup();
     await user.click(screen.getByRole("button", { name: "Add caption" }));
@@ -110,8 +106,6 @@ describe("MediaPropertiesPanel caption section", () => {
     expect(onCaptionChange.mock.calls.at(-1)).toEqual(["Hi"]);
   });
 
-  // Emptying the field is not the same as removing the section: the field has
-  // to stay to be typed in again, so what goes is only the stored value.
   it("stores an emptied caption as nothing at all, keeping the field", async () => {
     const { user, onCaptionChange } = setup({ caption: "Existing" });
     await user.clear(captionField()!);
@@ -128,8 +122,6 @@ describe("MediaPropertiesPanel caption section", () => {
     expect(captionField()).toBeNull();
   });
 
-  // The draft goes with it, or re-adding the section would hand back the text
-  // that removing it had just thrown away.
   it("comes back empty after being removed and re-added", async () => {
     const { user } = setup({ caption: "Existing" });
     await user.click(screen.getByRole("button", { name: "Remove caption" }));
@@ -159,9 +151,6 @@ describe("MediaPropertiesPanel background section", () => {
     expect(screen.queryByRole("group", { name: "Background" })).toBeNull();
   });
 
-  // The controls draw on the defaults rather than waiting for the effect to
-  // come back from the parent — a round trip that a purely observing consumer
-  // would never complete.
   it("draws the controls without waiting for the applied effect", async () => {
     const { user } = setup();
     await user.click(screen.getByRole("button", { name: "Add background" }));
@@ -188,8 +177,6 @@ describe("MediaPropertiesPanel background section", () => {
     ).toBeNull();
   });
 
-  // A new stop the same as its neighbour is invisible until you edit it; a
-  // black one would drop a hole into the gradient mid-tune.
   it("grows the colour list by repeating the last colour", async () => {
     const { user, onEffectChange } = setup({
       effect: { ...DEFAULT_BACKGROUND_EFFECT, colors: ["#FFAB6FFF"] },
@@ -219,8 +206,6 @@ describe("MediaPropertiesPanel background section", () => {
     });
   });
 
-  // Live, not a form: the gradient behind the picture is always exactly what
-  // the panel says, so there is no apply step to forget.
   it("commits a slider on the change, not on a submit", async () => {
     const { user, onEffectChange } = setup({
       effect: { ...DEFAULT_BACKGROUND_EFFECT, rotation: 90 },
@@ -228,9 +213,6 @@ describe("MediaPropertiesPanel background section", () => {
     slider("Rotation").focus();
     await user.keyboard("{ArrowRight}");
 
-    // One STEP, which rotation takes in fifteens — the same stops the preset
-    // playground offers, so a background can be set to the turn a preset was
-    // authored at. See `@/utils/rotation`.
     expect(onEffectChange).toHaveBeenCalledExactlyOnceWith({
       ...DEFAULT_BACKGROUND_EFFECT,
       rotation: 105,
@@ -250,10 +232,6 @@ describe("MediaPropertiesPanel background section", () => {
     expect(onEffectChange.mock.calls.at(-1)?.[0].colors).toEqual(["#00FF00FF"]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Layout — the always-on section (Figma 885:1963)
-// ---------------------------------------------------------------------------
 
 describe("MediaPropertiesPanel layout section", () => {
   it("stands open with no add/remove control — it is not a property you attach", () => {
@@ -312,7 +290,6 @@ describe("MediaPropertiesPanel radius control", () => {
     const rows = within(layoutPanel())
       .getAllByRole("slider")
       .map((s) => s.getAttribute("aria-label") ?? "");
-    // Two sliders: padding, then radius.
     expect(rows).toHaveLength(2);
   });
 

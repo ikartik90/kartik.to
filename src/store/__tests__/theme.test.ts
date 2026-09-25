@@ -1,6 +1,3 @@
-// Tests for theme store helpers.
-// TODO: implement once resolveTheme is exported from the theme store.
-
 import { describe, it } from "vitest";
 
 describe("theme store", () => {

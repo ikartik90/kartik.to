@@ -1,10 +1,6 @@
 import { defineRecipe } from "@pandacss/dev";
 
-// The command palette's frame, shared with `ConfirmDialog`, which asks
-// its question in the palette's shape: a 40px top row, then groups of
-// `menuItem` rows. One definition so the two cannot drift apart — a
-// confirm that opens as the palette closes should read as the same
-// panel changing what it says.
+// Shared with `ConfirmDialog`, so a confirm opening as the palette closes reads as one panel.
 export const commandHeader = defineRecipe({
   className: "command-header",
   description:
@@ -33,10 +29,7 @@ export const commandList = defineRecipe({
     gap: "sm",
     paddingBlock: "md",
     overflowY: "auto",
-    // cmdk makes the list `tabindex="-1"`, and moves the focus onto it
-    // once the arrows are used in a panel with no field to hold it —
-    // where the browser's own ring then circled the whole list. The
-    // highlighted row is what says where the focus is.
+    // cmdk focuses the list itself; the highlighted row, not a ring, shows where focus is.
     outline: "none",
   },
 });

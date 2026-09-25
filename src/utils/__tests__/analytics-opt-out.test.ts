@@ -16,9 +16,6 @@ describe("the analytics opt-out mark", () => {
   });
 
   it("is set and read back under a stable key", () => {
-    // The key is part of the contract, not an implementation detail: it is
-    // typed by hand into the console of a browser that has no opt-out helper
-    // yet, so renaming it silently breaks the escape hatch.
     setAnalyticsOptOut(true);
     expect(localStorage.getItem(ANALYTICS_OPT_OUT_KEY)).not.toBeNull();
     expect(isAnalyticsOptedOut()).toBe(true);
@@ -31,8 +28,6 @@ describe("the analytics opt-out mark", () => {
   });
 
   it("opting back in removes the key rather than storing a falsy string", () => {
-    // `"false"` in localStorage is a truthy string, and a later reader that
-    // forgets that counts the author again. Nothing stored is the off state.
     setAnalyticsOptOut(true);
     setAnalyticsOptOut(false);
     expect(localStorage.getItem(ANALYTICS_OPT_OUT_KEY)).toBeNull();
@@ -40,8 +35,6 @@ describe("the analytics opt-out mark", () => {
   });
 
   it("takes any value a hand-typed mark might have", () => {
-    // Set from a console on a phone, this is as likely to be `true` or `yes` as
-    // the string the helper happens to write.
     for (const value of ["1", "true", "yes", "0"]) {
       localStorage.setItem(ANALYTICS_OPT_OUT_KEY, value);
       expect(isAnalyticsOptedOut()).toBe(true);
@@ -54,9 +47,6 @@ describe("the analytics opt-out mark", () => {
   });
 
   it("says 'not opted out' when storage cannot be read, and does not throw", () => {
-    // Safari in private browsing, and any browser set to block site data,
-    // throw on access rather than returning null. A visitor whose storage is
-    // unreadable is a visitor, and must still be counted.
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("SecurityError");
     });
@@ -65,8 +55,6 @@ describe("the analytics opt-out mark", () => {
   });
 
   it("swallows a storage that cannot be written", () => {
-    // Called from an effect on every load once the author is signed in; a
-    // throw there would take the page down over a dashboard number.
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");
     });

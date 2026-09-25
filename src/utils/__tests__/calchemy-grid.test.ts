@@ -4,7 +4,6 @@ import { MONTHS_IN_RUN, monthGrid } from "../calchemy-grid";
 
 const WIDTHS = [1, 2, 3];
 
-/** The months a row holds, in reading order. */
 function monthsOn(
   grid: ReturnType<typeof monthGrid>,
   row: number,
@@ -17,8 +16,6 @@ function monthsOn(
 
 describe("monthGrid", () => {
   it("puts today on the origin row at every width", () => {
-    // The whole point of the anchor: however many columns survive the
-    // viewport, the row the page opens against is the row today is on.
     for (const today of ["2026-01-01", "2026-09-04", "2026-12-31"]) {
       const date = Temporal.PlainDate.from(today);
       for (const columns of WIDTHS) {
@@ -32,9 +29,6 @@ describe("monthGrid", () => {
   });
 
   it("aligns rows to the calendar, not to today", () => {
-    // October is the third month of its pair (Sep–Oct) and the first of its
-    // quarter — so the two widths open on different months, and neither of
-    // them opens on October just because that is where today is.
     const today = Temporal.PlainDate.from("2026-10-15");
 
     expect(
@@ -75,7 +69,6 @@ describe("monthGrid", () => {
       for (const row of [0, 12, grid.originRow, grid.totalRows - 1]) {
         for (const month of monthsOn(grid, row)) {
           expect(grid.rowForDate(month)).toBe(row);
-          // Any day of the month, not just its first.
           expect(grid.rowForDate(month.with({ day: 28 }))).toBe(row);
         }
       }
@@ -88,8 +81,6 @@ describe("monthGrid", () => {
     for (const columns of WIDTHS) {
       const grid = monthGrid(columns, today);
       expect(grid.totalRows * columns).toBe(MONTHS_IN_RUN);
-      // A century either side of today, which is what makes the scroll feel
-      // endless without ever moving the rows already on screen.
       expect(grid.rowForDate(today.add({ years: 99 }))).toBeLessThan(
         grid.totalRows,
       );
@@ -105,8 +96,6 @@ describe("monthGrid", () => {
   });
 
   it("opens on today's row where only one does", () => {
-    // A short viewport: one row above would push today off the bottom, and
-    // arriving with today off screen is the one thing the opening may not do.
     const grid = monthGrid(1, Temporal.PlainDate.from("2026-09-04"));
 
     expect(grid.openingRow(1)).toBe(grid.originRow);
@@ -120,7 +109,6 @@ describe("monthGrid", () => {
     expect(middle.start).toBeLessThan(grid.originRow);
     expect(middle.start + middle.rows).toBeGreaterThan(grid.originRow + 4);
 
-    // Neither end of the run can be overrun, however hard it is scrolled at.
     const top = grid.windowFor(0, 4);
     expect(top.start).toBe(0);
 

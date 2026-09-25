@@ -23,23 +23,9 @@ import { OverflowTooltip } from "./overflow-tooltip";
 import { Checkbox } from "./checkbox";
 import { AvgScore } from "./avg-score";
 
-// ---------------------------------------------------------------------------
-// The job's suggested candidates (Figma 57:846) — the same twelve the benchmark
-// is run against, each with where they work now, their average score from the
-// talent pool, and how their application to one of the company's past openings
-// ended, and when.
-//
-// Remove takes a candidate out of the benchmark — they stay listed, to be
-// added back.
-// ---------------------------------------------------------------------------
-
-// The name and average score columns are the results table's, so the two
-// line up from tab to tab; the stage outcome takes what is left, and one too
-// long for it is cut short (see `StageTag`). Past this the table scrolls, as
-// the results' does.
+// Name and score column widths match the results table, so the tabs line up.
 const suggestedTableStyle = css({ minWidth: "760px" });
 
-// Where the candidate works now, and when their application was decided.
 const quietStyle = css({
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -55,10 +41,6 @@ const stageCellStyle = css({
   gap: "4px",
 });
 
-// The opening and how it ended, in one pill ruled down the middle in its own
-// colour — a tint laid over white, outlined in the ink. One line of text, so
-// that where the column is too narrow for it, it ends in an ellipsis; the
-// whole of it is in a tooltip.
 const stageTag = cva({
   base: {
     display: "inline-block",
@@ -67,7 +49,6 @@ const stageTag = cva({
     paddingInline: "8px",
     borderRadius: "16px",
     font: "var(--cashby-text-small)",
-    // The line is the pill's height, so the text sits in its middle.
     lineHeight: "24px",
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -94,10 +75,7 @@ const stageTag = cva({
   },
 });
 
-// The rule runs the pill's full height, 4px clear either side; its own
-// half-pixel stroke hangs either side of a line of no width. In a box of its
-// own: the source's glyph is `display: block` inline, which would break the
-// pill's one line in two.
+// An inline-block box: the glyph is `display: block` and would break the line.
 const stageSeparatorStyle = css({
   display: "inline-block",
   verticalAlign: "top",
@@ -107,18 +85,14 @@ const stageSeparatorStyle = css({
   "& svg": { marginBlock: "-0.25px", marginInline: "-0.25px" },
 });
 
-// Each later part of the outcome, 4px after the one before.
 const stagePartStyle = css({ marginInlineStart: "4px" });
 
 const removeStyle = css({ paddingInline: "8px" });
 
 export interface SuggestedCandidatesProps {
   labelledBy: string;
-  /** The candidates taken out of the benchmark. */
   removed: ReadonlySet<string>;
-  /** Take a candidate out of the benchmark, or put them back. */
   onToggle: (id: string) => void;
-  /** The header's checkbox, for every candidate listed. */
   selectAll: ReactNode;
   selected: ReadonlySet<string>;
   onSelect: (id: string) => void;

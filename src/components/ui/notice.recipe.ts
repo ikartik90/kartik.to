@@ -9,18 +9,12 @@ export const notice = defineSlotRecipe({
     root: {
       display: "flex",
       alignItems: "flex-start",
-      // 4px between the icon and the prose, on an 8px inline inset —
-      // the Figma's own (1167:7922: a 20px icon at x=8, its text
-      // opening at 32). The radius stays `sm`, which already resolves
-      // to the 4px it is drawn at.
       gap: "sm",
       width: "token(spacing.full)",
       paddingInline: "md",
       paddingBlock: "md",
       borderRadius: "sm",
       backgroundColor: "bg.notice",
-      // One source for the icon + emphasized runs; the label dials its
-      // own body prose back off this so the <strong> bits pop.
       color: "field.text.default",
     },
     icon: {
@@ -42,9 +36,6 @@ export const notice = defineSlotRecipe({
       flex: "1 1 0",
       minWidth: 0,
       textStyle: "sidenote",
-      // Body prose sits a step below the accent; the emphasized runs
-      // step back up to full colour and weight (the Figma's Regular →
-      // Semibold shift).
       color: "field.text.default/75",
       wordBreak: "break-word",
       "& :is(strong, b)": {

@@ -27,34 +27,15 @@ import BackIcon from "./icons/chevron-left.svg";
 import NextIcon from "./icons/chevron-right.svg";
 import InfoIcon from "./icons/info-subtle.svg";
 
-// ---------------------------------------------------------------------------
-// What the prototype is for, before it is tried: a dialog that opens as the
-// page does on a title page (Figma 147:8677), and goes on from Get started to
-// three pages (Figma 134:7340, 139:7493 and 143:7778), each a picture of the
-// product over what it says. Back and Next step through them, a dot goes
-// straight to one, and any of Close, Escape or the scrim puts the intro away.
-//
-// The title page and the pages are stacked in one cell, and the pages in
-// another, so the dialog is as tall as the tallest and does not jump from one
-// to the next; what is not on screen is inert, and fades out as the next fades
-// in.
-//
-// The first page has no way back, and the last has Start walkthrough in Next's
-// place: it puts the intro away and starts the walkthrough (see `Walkthrough`)
-// once the intro has gone. Nothing else that closes the intro starts it.
-// ---------------------------------------------------------------------------
-
 const dialogStyle = css(overlayBase, {
   margin: "auto",
-  // 800 by 616, and taller only where a narrow window wraps the text further.
   width: "800px",
   maxWidth: "calc(100% - 40px)",
   minHeight: "min(616px, calc(100% - 40px))",
   maxHeight: "calc(100% - 40px)",
   borderRadius: "12px",
   filter: "drop-shadow(0 0 10px var(--cashby-border))",
-  // The outline is drawn over what it holds, as the product's dialogs draw it:
-  // the pictures run to the edge and would cover an inset shadow on the dialog.
+  // An ::after outline: the pictures run to the edge and would cover an inset shadow.
   _after: {
     content: '""',
     position: "absolute",
@@ -65,9 +46,7 @@ const dialogStyle = css(overlayBase, {
   },
 });
 
-// Grows from its content, not from nothing: the dialog is as tall as what it
-// holds, and Safari sizes a `flex: 1` (a 0% basis) in it to nothing at all.
-// Its one row may shrink below that, on a window too short for it.
+// `1 1 auto`, not `flex: 1`: Safari sizes a 0% basis here to nothing.
 const stagesStyle = css({
   display: "grid",
   gridTemplateRows: "minmax(0, 1fr)",
@@ -75,17 +54,14 @@ const stagesStyle = css({
   minHeight: 0,
 });
 
-// Inert, what is not on screen is out of reach of pointer, keyboard and
-// assistive tech alike; it only has to fade. Not hidden as well: reduced motion
-// gives every property of every element a transition, and a visibility coming
-// back is still hidden as it starts, too hidden to take the focus.
+// Inert, not also hidden: reduced motion transitions visibility, so a returning
+// page would still be hidden when it should take focus.
 const stackedStyle = css({
   gridArea: "1 / 1",
   transition: "opacity 200ms cubic-bezier(0.22, 1, 0.36, 1)",
   "&[inert]": { opacity: 0 },
 });
 
-// The benchmark's rings over the wash, and the title on white under them.
 const welcomeStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -117,7 +93,6 @@ const welcomeTitleStyle = css({ font: "var(--cashby-text-page-title)" });
 
 const welcomeSubtitleStyle = css({ font: "var(--cashby-text-body-strong)" });
 
-// The product's primary button a size up.
 const startStyle = css({
   display: "flex",
   alignItems: "center",
@@ -142,7 +117,6 @@ const tourStyle = css({
   minHeight: 0,
 });
 
-// Scrolls, pictures and all, on a window too short for the page.
 const pagesStyle = css({
   display: "grid",
   flex: "1 1 auto",
@@ -152,7 +126,6 @@ const pagesStyle = css({
 
 const pageStyle = css({ display: "flex", flexDirection: "column" });
 
-// Ruled off from the picture over it, and down to the footer.
 const textStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -163,7 +136,6 @@ const textStyle = css({
   boxShadow: RULE_ABOVE,
 });
 
-// What the page is about, over its title.
 const headingStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -186,7 +158,6 @@ const listStyle = css({
   _marker: { color: "var(--cashby-slate-muted)" },
 });
 
-// At the foot of the page's text, however short it runs.
 const noteStyle = css({
   display: "flex",
   alignItems: "flex-start",
@@ -197,10 +168,8 @@ const noteStyle = css({
   "& > svg": { flexShrink: 0 },
 });
 
-// The product's plain button, square around a glyph.
 const iconButtonStyle = css({ justifyContent: "center", width: "32px" });
 
-// Over the picture, clear of its panels.
 const closeStyle = css({
   position: "absolute",
   insetBlockStart: "12px",
@@ -217,8 +186,6 @@ const footerStyle = css({
   boxShadow: RULE_ABOVE,
 });
 
-// The dots 8px apart, the first at the footer's edge; each is a button the
-// size of the dot and its share of the gaps.
 const dotsStyle = css({ display: "flex", marginInlineStart: "-4px" });
 
 const dotStyle = css({
@@ -342,13 +309,10 @@ export function Intro() {
     if (page >= 0 && page <= last) setCurrent(page);
   }
 
-  // Opens as the page does. Once, however often it re-renders.
   const arrive = useEffectEvent(() => modal.open());
   useEffect(() => arrive(), []);
 
-  // Opening, the dialog focuses the first thing it can — Close; Get started is
-  // the way in, so it takes focus once the dialog has, and Next once it is
-  // pressed, as Get started goes.
+  // The dialog would focus Close; Get started (then Next) takes focus instead.
   useEffect(() => {
     if (modal.session > 0) startRef.current?.focus();
   }, [modal.session]);
@@ -423,9 +387,8 @@ export function Intro() {
                 </button>
               ))}
             </div>
-            {/* Back goes as the first page comes, and hands the focus on to Next
-            first; Next and Start walkthrough are one button, so the focus stays
-            on it as it changes. */}
+            {/* Back passes focus to Next before it unmounts; Next and Start
+                walkthrough are one button, so focus survives the swap. */}
             <div className={waysStyle}>
               {current > 0 && (
                 <button
@@ -464,7 +427,6 @@ export function Intro() {
             </div>
           </footer>
 
-          {/* Not on the title page, which goes on only by Get started. */}
           <button
             type="button"
             aria-label="Close"

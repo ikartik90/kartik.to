@@ -16,7 +16,6 @@ describe("Link", () => {
     );
     const link = screen.getByRole("link", { name: "About" });
     expect(link.getAttribute("href")).toBe("/about");
-    // next/link does not add target/rel to internal links.
     expect(link.hasAttribute("target")).toBe(false);
   });
 
@@ -97,7 +96,7 @@ describe("Link", () => {
       clientX: 5,
       clientY: 5,
     });
-    // The mouse compatibility events the engine fires after the tap.
+    // The mouse compatibility events a tap fires.
     fireEvent.mouseEnter(link, { clientX: 5, clientY: 5 });
     fireEvent.click(link);
     expect(tip.hasAttribute("data-visible")).toBe(false);

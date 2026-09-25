@@ -1,22 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Module mocks — declared before the dynamic import of the module under test.
-//
-// WHO IS ASKING is the subject of this file, and the answer differs by action
-// in a way no other action module here does: `submitTestimonial` serves people
-// with no session at all — that is the entire point of the form — while
-// `getTestimonials` serves the author alone. So every test says who is asking
-// before it says what it expects back, and the ones that say "nobody" are the
-// important ones.
-// ---------------------------------------------------------------------------
-
 const { mockGetSession } = vi.hoisted(() => ({ mockGetSession: vi.fn() }));
 
-// The guard now lives in `@/lib/auth/server` and is shared by every action
-// module. Stubbed at its SESSION source rather than by replacing the module, so
-// these tests still run the real comparison — a mock of `requireAdmin` would
-// make every "Unauthorized" case below assert its own stub.
+// Mocked at the session source, not `requireAdmin`, so the real admin check runs.
 vi.mock("@neondatabase/auth/next/server", () => ({
   createNeonAuth: () => ({ getSession: () => mockGetSession() }),
 }));
@@ -52,10 +38,6 @@ const {
   getPublishedTestimonials,
   updateTestimonialDetails,
 } = await import("../testimonial");
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 
@@ -101,14 +83,7 @@ beforeEach(() => {
   mockFindMany.mockResolvedValue([]);
 });
 
-// ---------------------------------------------------------------------------
-// submitTestimonial
-// ---------------------------------------------------------------------------
-
 describe("submitTestimonial", () => {
-  // The whole reason this action exists. Every other write in this app refuses
-  // a caller without the author's session; this one must not, or the form is a
-  // page only I can fill in.
   it("accepts a submission from someone with no session", async () => {
     const result = await submitTestimonial(submission);
 
@@ -116,8 +91,6 @@ describe("submitTestimonial", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  // The row is built from the PARSED value, not from the caller's object — so
-  // a caller that posted padded text still stores it trimmed.
   it("writes the normalised submission rather than the raw input", async () => {
     await submitTestimonial({ name: "  Ada Lovelace  ", quote: "  Shipped it.  " });
 
@@ -127,10 +100,6 @@ describe("submitTestimonial", () => {
     });
   });
 
-  // The LinkedIn URL is gone, and with it the unique key that made a repeat
-  // send a correction. Nothing replaces it — `name` as a key would let anybody
-  // overwrite somebody else's words — so a plain CREATE is the honest write and
-  // two sends are two rows for me to sort out by hand.
   it("creates a row rather than keying on anything", async () => {
     await submitTestimonial(submission);
 
@@ -140,9 +109,6 @@ describe("submitTestimonial", () => {
     expect(Object.keys(args.data)).toEqual(["name", "quote"]);
   });
 
-  // A caller that still posts the retired field must not be able to widen the
-  // write with it — the schema strips unknown keys, and this is what proves the
-  // stripped value never reaches Prisma.
   it("drops a retired field a stale caller still sends", async () => {
     await submitTestimonial({
       ...submission,
@@ -152,8 +118,6 @@ describe("submitTestimonial", () => {
     expect(mockCreate.mock.calls[0][0].data).not.toHaveProperty("linkedinUrl");
   });
 
-  // Errors come back keyed BY FIELD, because the form shows them under the box
-  // they belong to. One flat message would make the caller guess.
   it.each([
     ["name", { name: "   " }],
     ["quote", { quote: "" }],
@@ -167,9 +131,6 @@ describe("submitTestimonial", () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  // The honeypot is a field no human sees and every form-filling bot completes.
-  // A filled one is DISCARDED but reported as success on purpose: telling a bot
-  // it failed is telling it to try again with the field left blank.
   it("silently discards a submission with the honeypot filled", async () => {
     const result = await submitTestimonial({ ...submission, website: "spam.example" });
 
@@ -183,8 +144,6 @@ describe("submitTestimonial", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  // A crash here would show a stranger a Next.js error page on a form I asked
-  // them to fill in as a favour.
   it("reports a write that fails rather than throwing", async () => {
     mockCreate.mockRejectedValue(new Error("connection lost"));
 
@@ -193,10 +152,6 @@ describe("submitTestimonial", () => {
     expect(result.ok).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// getTestimonials
-// ---------------------------------------------------------------------------
 
 describe("getTestimonials", () => {
   it("returns what has come in, newest first", async () => {
@@ -209,8 +164,6 @@ describe("getTestimonials", () => {
     });
   });
 
-  // Reading is the author's alone. Writing is open because it has to be; that
-  // is not a reason for the collected words to be.
   it.each([
     ["a visitor with no session", signedOut],
     ["somebody else's session", signedInAsSomeoneElse],
@@ -221,14 +174,6 @@ describe("getTestimonials", () => {
     expect(mockFindMany).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// updateTestimonialDetails
-//
-// The author's door onto the author's two fields. Everything worth testing here
-// is a boundary: who may open it, what it will take, and — the one that matters
-// most — what it refuses to touch on the way through.
-// ---------------------------------------------------------------------------
 
 describe("updateTestimonialDetails", () => {
   const details = {
@@ -253,9 +198,6 @@ describe("updateTestimonialDetails", () => {
     });
   });
 
-  // The rail clears a field by emptying it, and an empty box has to reach the
-  // column as NULL rather than as the empty string — otherwise "no profile"
-  // becomes a profile whose URL happens to be nothing.
   it("clears both fields when they are emptied", async () => {
     signedInAsAdmin();
     mockUpdate.mockResolvedValue(row());
@@ -283,10 +225,6 @@ describe("updateTestimonialDetails", () => {
     );
   });
 
-  // THE IMPORTANT ONE, and the line moved once: the name became editable (it is
-  // a label on an attribution, and people put job titles in it), the QUOTE did
-  // not. A caller that posts a quote must not be able to edit what somebody else
-  // wrote through a door that was opened for a picture.
   it("cannot reach the quote", async () => {
     signedInAsAdmin();
     mockUpdate.mockResolvedValue(row());
@@ -315,9 +253,6 @@ describe("updateTestimonialDetails", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  // Writing is open on the way IN because it has to be. Nothing about that
-  // applies here: this edits a row that already exists, from a board only I can
-  // reach, and the guard is checked before the input is even looked at.
   it.each([
     ["a visitor with no session", signedOut],
     ["somebody else's session", signedInAsSomeoneElse],
@@ -328,11 +263,6 @@ describe("updateTestimonialDetails", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// The excerpt — the one field on this row whose validity depends on ANOTHER
-// field, which is why the action reads the row before it writes it.
-// ---------------------------------------------------------------------------
 
 describe("updateTestimonialDetails (excerpt)", () => {
   const base = { id: "t1", avatarUrl: null, linkedinUrl: null };
@@ -349,9 +279,6 @@ describe("updateTestimonialDetails (excerpt)", () => {
     expect(mockUpdate.mock.calls[0][0].data.excerpt).toBe("Shipped the thing");
   });
 
-  // THE ONE THAT MATTERS. The excerpt is checked against the stored quote, not
-  // against anything the caller sent alongside — otherwise "is this their
-  // words" is answered by the same request that is trying to change them.
   it("refuses words they never wrote", async () => {
     await expect(
       updateTestimonialDetails({ ...base, excerpt: "Shipped it late, badly." }),
@@ -366,7 +293,6 @@ describe("updateTestimonialDetails (excerpt)", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  // A caller cannot smuggle its own quote in to make the check pass.
   it("checks against the STORED quote, not a supplied one", async () => {
     await expect(
       updateTestimonialDetails({
@@ -381,11 +307,9 @@ describe("updateTestimonialDetails (excerpt)", () => {
     await updateTestimonialDetails({ ...base, excerpt: "" });
 
     expect(mockUpdate.mock.calls[0][0].data.excerpt).toBeNull();
-    // Cleared without consulting the quote — there is nothing to check.
     expect(mockFindUnique).not.toHaveBeenCalled();
   });
 
-  // Editing only the picture must not silently wipe a chosen excerpt.
   it("leaves an existing excerpt alone when it is not named", async () => {
     await updateTestimonialDetails({
       id: "t1",
@@ -396,8 +320,6 @@ describe("updateTestimonialDetails (excerpt)", () => {
     expect("excerpt" in mockUpdate.mock.calls[0][0].data).toBe(false);
   });
 
-  // The tagline follows the excerpt's three states rather than the picture's
-  // two: a board saving one field must not clear a line it said nothing about.
   it("writes a tagline under the name", async () => {
     signedInAsAdmin();
     mockUpdate.mockResolvedValue(row());
@@ -456,7 +378,6 @@ describe("updateTestimonialDetails (excerpt)", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  // The line that did not move: the name became editable, the words did not.
   it("still cannot touch the quote", async () => {
     await updateTestimonialDetails({
       ...base,
@@ -477,15 +398,6 @@ describe("updateTestimonialDetails (excerpt)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// `getPublishedTestimonials` — the homepage's read, and the one read in this
-// file that is deliberately open to everybody.
-//
-// Every test here is really the same test asked twice: does the gate hold when
-// nobody is signed in? That is the only state that matters, because the only
-// caller is a page served to strangers.
-// ---------------------------------------------------------------------------
-
 describe("getPublishedTestimonials", () => {
   it("serves a stranger — the homepage has no session to offer", async () => {
     signedOut();
@@ -500,10 +412,6 @@ describe("getPublishedTestimonials", () => {
 
     await getPublishedTestimonials();
 
-    // The filter is the WHOLE of this action's job, so it is asserted on the
-    // query rather than inferred from the rows a mock chose to return: a read
-    // that fetched everything and filtered in JavaScript would pass a
-    // rows-based assertion and still ship every unpublished row to the client.
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { publishedAt: { not: null } },
@@ -530,10 +438,6 @@ describe("getPublishedTestimonials", () => {
     await expect(getPublishedTestimonials()).resolves.toEqual(published);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Publishing — the switch in the rail, and the column it writes.
-// ---------------------------------------------------------------------------
 
 describe("updateTestimonialDetails (published)", () => {
   const details = { id: "t1", avatarUrl: null, linkedinUrl: null };
@@ -566,9 +470,6 @@ describe("updateTestimonialDetails (published)", () => {
     expect(mockUpdate.mock.calls[0][0].data.publishedAt).toBeNull();
   });
 
-  // The three-state rule, and the case it exists for: adding a picture to a
-  // published testimonial must not take it off the homepage, and adding one to
-  // an unpublished testimonial must not put it on.
   it("leaves publication alone when it was not asked about", async () => {
     signedInAsAdmin();
     mockUpdate.mockResolvedValue(row());
@@ -581,9 +482,6 @@ describe("updateTestimonialDetails (published)", () => {
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty("publishedAt");
   });
 
-  // The date is the ACTION's to write. A caller handing over its own instant —
-  // or a stale one, or a future one — is writing a publication date rather than
-  // answering the switch's question, and the schema has already stripped it.
   it("refuses a publication date chosen by the caller", async () => {
     signedInAsAdmin();
     mockUpdate.mockResolvedValue(row());
@@ -596,18 +494,6 @@ describe("updateTestimonialDetails (published)", () => {
     expect(mockUpdate.mock.calls[0][0].data).not.toHaveProperty("publishedAt");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Revalidation — the difference between a write that happened and a write
-// anybody can see.
-//
-// The homepage is a cached render. Publishing a testimonial changed the table
-// and nothing else: the row was `publishedAt`-stamped in Postgres and the band
-// on the front page went on serving the eight it was built with. So this is not
-// a nicety about freshness, it is the second half of publishing, and every
-// other write in this codebase already does it — `grid.ts` four times over,
-// `revalidatePostPaths` for a post.
-// ---------------------------------------------------------------------------
 
 describe("updateTestimonialDetails (revalidation)", () => {
   const stored = row({ id: "t1" });
@@ -627,8 +513,6 @@ describe("updateTestimonialDetails (revalidation)", () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith("/");
   });
 
-  // ...and when it is taken down, which is the case that would otherwise leave
-  // somebody's words on the front page after they had been withdrawn.
   it("rebuilds the homepage when a row is taken down", async () => {
     await updateTestimonialDetails({
       id: "t1",
@@ -639,9 +523,6 @@ describe("updateTestimonialDetails (revalidation)", () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith("/");
   });
 
-  // EVERY write, not just the publish switch. A published testimonial's name,
-  // face, tagline and excerpt are all on the homepage too, so editing one of
-  // those is as much a change to that page as publishing is.
   it("rebuilds the homepage when any other field is edited", async () => {
     await updateTestimonialDetails({
       id: "t1",
@@ -662,8 +543,6 @@ describe("updateTestimonialDetails (revalidation)", () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith("/edit/testimonials");
   });
 
-  // A refused write leaves the pages as they are: nothing changed, so there is
-  // nothing to rebuild, and rebuilding anyway would say otherwise.
   it("rebuilds nothing when the write was refused", async () => {
     signedOut();
     await expect(

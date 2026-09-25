@@ -9,22 +9,11 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// The board: a card per row, a rail on the selected one, and the two fields the
-// rail writes showing up on the card they belong to.
-//
-// That last part is the whole point of this surface and the thing most worth
-// testing. The value travels a long way — field → action → stored row → card —
-// and every hop is somewhere it could be dropped, or land on the wrong card.
-// ---------------------------------------------------------------------------
-
 const mockUpdate = vi.fn();
 vi.mock("@/app/actions/testimonial", () => ({
   updateTestimonialDetails: (input: unknown) => mockUpdate(input),
 }));
 
-// The real dialog reaches a server action, and through it `next/headers`.
-// Stubbed to the one fact this file's cases are about: a picture was chosen.
 const PICKED = "https://cdn.test/media/uuid-ada.jpg";
 vi.mock("@/components/image-insert-dialog", () => ({
   ImageInsertDialog: ({
@@ -48,10 +37,6 @@ vi.mock("@/components/image-insert-dialog", () => ({
 
 const { TestimonialBoard } = await import("../testimonial-board");
 type Row = import("@/domain/testimonial").Testimonial;
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const ada: Row = {
   id: "t1",
@@ -77,19 +62,10 @@ const grace: Row = {
   publishedAt: null,
 };
 
-/**
- * The action's honest behaviour: the stored row, with the write applied.
- *
- * Takes the rows it is standing in for, because a stub that rebuilt them from
- * the module's fixtures would answer with THOSE values for any field the test
- * had overridden — which is how a published row came back unpublished from a
- * write that never mentioned publication.
- */
+/** The seeded rows with the write applied; rebuilding from fixtures would lose test overrides. */
 function storesWhatItIsGiven(seed: Row[] = [ada, grace]) {
   mockUpdate.mockImplementation(async (input) => {
     const row = seed.find((r) => r.id === input.id)!;
-    // Mirrors the action: an unnamed excerpt leaves the stored one alone, and a
-    // quote that is not a slice of the row's own words is refused outright.
     if (typeof input.excerpt === "string" && input.excerpt !== "") {
       if (!row.quote.includes(input.excerpt.trim())) {
         throw new Error("An excerpt has to be their words.");
@@ -107,8 +83,6 @@ function storesWhatItIsGiven(seed: Row[] = [ada, grace]) {
         input.excerpt === undefined ? row.excerpt : (input.excerpt || null),
       tagline:
         input.tagline === undefined ? row.tagline : (input.tagline || null),
-      // The action's three-state rule, mirrored: absent leaves the stored
-      // publication alone, and a boolean becomes an instant or a null.
       publishedAt:
         input.published === undefined
           ? row.publishedAt
@@ -119,15 +93,10 @@ function storesWhatItIsGiven(seed: Row[] = [ada, grace]) {
   });
 }
 
-/**
- * One card, by whose it is. The button is an empty overlay stretched over the
- * card (so the profile beside it can be a real link), so the words are in its
- * PARENT — which is the card.
- */
+/** The select button is an empty overlay, so the card is its parent. */
 const card = (name: RegExp | string) =>
   screen.getByRole("button", { name }).parentElement!;
 
-/** The same card's select button, for a press. */
 const selectCard = (name: RegExp | string) =>
   screen.getByRole("button", { name });
 const rail = () => screen.getByRole("dialog");
@@ -157,8 +126,6 @@ describe("TestimonialBoard", () => {
     expect(selectCard(/ada lovelace/i).getAttribute("aria-pressed")).toBe("false");
   });
 
-  // The rail is one surface for the whole board, so moving to another card has
-  // to re-point it — not open a second one, and not keep showing the first.
   it("moves the rail to the next card selected", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
@@ -169,20 +136,8 @@ describe("TestimonialBoard", () => {
     expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
   });
 
-  // ...and STAYS UP while it does. The panel dismisses itself on any outside
-  // pointerdown, and a card is outside it — so pressing the next card started
-  // the rail's slide-out, and the click that followed re-selected into a panel
-  // already on its way off screen. The card is the control that OPENS the
-  // panel, so it is exempt from that dismiss (`PROPERTIES_TRIGGER_ATTR`).
-  //
-  // Two things this has to do to be able to fail, both learned the hard way:
-  //   • press WITHOUT releasing. A whole click is one task here, so React
-  //     coalesces the close and the re-open into a single render and the rail
-  //     never leaves the DOM — where a browser commits and paints between the
-  //     two, and shows the collapse.
-  //   • wait out the exit. The panel outlives the decision to close it by 200ms
-  //     so it can slide rather than vanish, so the DOM looks untouched for as
-  //     long as the animation runs.
+  // Press without releasing (a whole click coalesces close and reopen into one
+  // render), and wait out the 200ms exit, or this cannot fail.
   it("keeps the rail standing when the next card is pressed", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
@@ -194,13 +149,10 @@ describe("TestimonialBoard", () => {
 
     expect(screen.queryByRole("dialog")).toBe(standing);
 
-    // ...and the press still selects, in that same standing rail.
     await userEvent.click(selectCard(/grace hopper/i));
     expect(rail()).toBe(standing);
     expect(within(standing).getByText("Grace Hopper")).toBeTruthy();
   });
-
-  // ---- The picture -------------------------------------------------------
 
   it("puts a picked picture on the card it was picked for", async () => {
     const { container } = render(
@@ -222,14 +174,9 @@ describe("TestimonialBoard", () => {
         container.querySelector(`img[src="${PICKED}"]`),
       ).not.toBeNull(),
     );
-    // On ONE card. A picture that landed on every row would pass every
-    // assertion above.
     expect(container.querySelectorAll("img")).toHaveLength(1);
   });
 
-  // A testimonial's face is not library material. The dialog that adds one
-  // opens on `profiles/` — the same folder it uploads into, so a picture added
-  // here is still there the next time the picker is opened.
   it("picks from the profiles folder rather than the media library", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
@@ -264,8 +211,6 @@ describe("TestimonialBoard", () => {
     );
   });
 
-  // ---- The profile -------------------------------------------------------
-
   it("puts a typed profile on the card, as its handle", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
@@ -276,9 +221,6 @@ describe("TestimonialBoard", () => {
       "linkedin.com/in/ada-lovelace",
     );
 
-    // CANONICAL, not as typed. The rail normalises before it commits, so the
-    // board's own copy of the row is the spelling the column will hold and the
-    // card never flashes the raw typing before settling on the stored form.
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -287,16 +229,11 @@ describe("TestimonialBoard", () => {
         }),
       ),
     );
-    // The HANDLE, which is what the card shows and what the tooltip carries —
-    // `in/` is LinkedIn's routing rather than any part of a name, and it says
-    // nothing that the glyph beside it is not already saying.
     await waitFor(() =>
       expect(screen.getByText("ada-lovelace")).toBeTruthy(),
     );
   });
 
-  // The box is labelled LinkedIn. Typing something else is answered rather than
-  // stored, and — the load-bearing half — nothing is written while it is wrong.
   it("says so, and writes nothing, when the URL is not a profile", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
@@ -313,9 +250,6 @@ describe("TestimonialBoard", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  // Typing a URL passes through a dozen states that are not one. The message
-  // has to go when the value comes good, or it is a complaint about a field
-  // that is now correct.
   it("stops complaining once the URL is a profile", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
@@ -356,8 +290,6 @@ describe("TestimonialBoard", () => {
     await waitFor(() => expect(screen.queryByText("in/ada")).toBeNull());
   });
 
-  // The card cannot hold a link (it is a button), so the rail is the only place
-  // the profile is actually reachable from.
   it("offers the stored profile as a link, which the card cannot", async () => {
     render(
       <TestimonialBoard
@@ -371,8 +303,6 @@ describe("TestimonialBoard", () => {
     expect(link.getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
   });
 
-  // A write that fails must not leave the card showing a value the database
-  // does not have — that is a board that lies about what is stored.
   it("puts the card back when the write fails", async () => {
     const { container } = render(<TestimonialBoard testimonials={[ada]} />);
     mockUpdate.mockRejectedValue(new Error("connection lost"));
@@ -388,18 +318,13 @@ describe("TestimonialBoard", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The excerpt — choosing which portion of somebody's words a card carries.
-// ---------------------------------------------------------------------------
-
 describe("TestimonialBoard (excerpt)", () => {
   const openExcerpt = async () => {
     await userEvent.click(selectCard(/ada lovelace/i));
     await userEvent.click(
       within(rail()).getByRole("button", { name: /excerpt/i }),
     );
-    // By ROLE, not by label alone: the section's control group is named
-    // "Excerpt" too, so a bare label query matches the box and its container.
+    // By role: the section's control group is also named "Excerpt".
     return within(rail()).getByRole("textbox", { name: "Excerpt" });
   };
 
@@ -418,8 +343,7 @@ describe("TestimonialBoard (excerpt)", () => {
         }),
       ),
     );
-    // Scoped to the CARD: the rail's box holds the same words, so an
-    // unscoped query would pass on the textarea alone and prove nothing.
+    // Scoped to the card: the rail's box holds the same words.
     await waitFor(() =>
       expect(card(/ada lovelace/i).textContent).toContain(
         "something we could actually ship",
@@ -430,8 +354,6 @@ describe("TestimonialBoard (excerpt)", () => {
     );
   });
 
-  // Opening the section hands you the whole thing to cut down, which is the
-  // gesture the rule expects — trim, do not retype.
   it("opens with the whole quote to trim", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
@@ -440,8 +362,6 @@ describe("TestimonialBoard (excerpt)", () => {
     expect((box as HTMLTextAreaElement).value).toBe(ada.quote);
   });
 
-  // The board must not let a misquote leave the screen, let alone reach the
-  // column. The refusal is shown and the card does not change.
   it("refuses words they never wrote, and says so", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
 
@@ -477,17 +397,10 @@ describe("TestimonialBoard (excerpt)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The name — the one field here that was written by somebody else and is still
-// mine to correct. People put job titles in it.
-// ---------------------------------------------------------------------------
-
 describe("TestimonialBoard (name)", () => {
   const nameBox = () =>
     within(rail()).getByRole("textbox", { name: "Name" });
 
-  /** The card carrying these words. Found by the QUOTE, which renaming does not
-   *  change — and scoped, because the rail's header shows the name too. */
   const cardSaying = (quote: string) =>
     screen.getByText(quote).closest("[class*='testimonial-card__root']")!;
 
@@ -513,13 +426,9 @@ describe("TestimonialBoard (name)", () => {
     await waitFor(() =>
       expect(cardSaying(ada.quote).textContent).toContain("Ada L"),
     );
-    // The other card is untouched.
     expect(cardSaying(grace.quote).textContent).toContain("Grace Hopper");
   });
 
-  // A name cannot be cleared — the column is NOT NULL and a testimonial
-  // credited to nobody is not a state worth having. An emptied box is answered,
-  // not obeyed, and nothing is written.
   it("refuses an emptied name rather than clearing it", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
     await userEvent.click(selectCard(/ada lovelace/i));
@@ -533,7 +442,6 @@ describe("TestimonialBoard (name)", () => {
     expect(cardSaying(ada.quote).textContent).toContain("Ada Lovelace");
   });
 
-  // The line that did not move.
   it("offers no way to edit the words themselves", async () => {
     render(<TestimonialBoard testimonials={[ada]} />);
     await userEvent.click(selectCard(/ada lovelace/i));
@@ -543,9 +451,6 @@ describe("TestimonialBoard (name)", () => {
     ).toBeNull();
   });
 });
-// ---------------------------------------------------------------------------
-// The tagline, and the rail that stays put while you move between cards.
-// ---------------------------------------------------------------------------
 
 describe("TestimonialBoard (tagline)", () => {
   it("writes a typed tagline to the row it was typed for", async () => {
@@ -578,9 +483,6 @@ describe("TestimonialBoard (tagline)", () => {
     );
   });
 
-  // A stage holds ONE WebGL context and moves it to whichever icon is hovered.
-  // One per card would be a context per card, against a browser limit of about
-  // sixteen — so the board wraps the whole grid in a single stage.
   it("gives the whole board one shader stage, not one per card", async () => {
     render(
       <TestimonialBoard
@@ -597,9 +499,6 @@ describe("TestimonialBoard (tagline)", () => {
     expect(screen.getAllByRole("link").length).toBe(2);
   });
 
-  // Moving between cards used to tear the panel down and build it again — the
-  // rail slid out and back in on every press. It is ONE surface for the whole
-  // board and it stays open until it is closed.
   it("keeps the rail open when another card is selected", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
@@ -608,13 +507,10 @@ describe("TestimonialBoard (tagline)", () => {
 
     await userEvent.click(selectCard(/grace hopper/i));
 
-    // The same element, not a replacement wearing the same role.
     expect(rail()).toBe(panel);
     expect(within(rail()).getByText("Grace Hopper")).toBeTruthy();
   });
 
-  // What the remount used to buy, kept: the boxes belong to the row on screen,
-  // so a value half-typed for one card can never be sitting in another's.
   it("carries no half-typed value across a selection", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 
@@ -630,26 +526,12 @@ describe("TestimonialBoard (tagline)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Publishing — the one press between a private table and the homepage.
-//
-// The one control on this board whose effect is not on this board. Everything
-// else here changes how a card is DRAWN; this changes who can see it at all, so
-// what these cases check is that the button says what is stored and that a save
-// of something else never moves it.
-//
-// ONE button with two faces rather than two buttons, so the thing to assert is
-// which face it is wearing: the name IS the state, and a row that is already
-// published offers to take it down.
-// ---------------------------------------------------------------------------
-
 describe("TestimonialBoard (published)", () => {
   const publishedAda = {
     ...ada,
     publishedAt: new Date("2026-03-10T10:00:00.000Z"),
   };
 
-  /** Select a card and hand back the button that publishes it. */
   async function openPublishButton(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: /Edit Ada/ }));
     return within(rail()).getByRole("button", {
@@ -703,9 +585,6 @@ describe("TestimonialBoard (published)", () => {
     );
   });
 
-  // The press flips what it offers next, which is the whole of "one button with
-  // two faces" — and it is drawn off the STORED row, so this also proves the
-  // board's optimistic copy reached the rail.
   it("turns into its opposite once the row has moved", async () => {
     const user = userEvent.setup();
     render(<TestimonialBoard testimonials={[ada, grace]} />);
@@ -719,11 +598,6 @@ describe("TestimonialBoard (published)", () => {
     );
   });
 
-  // The case the three-state rule in the action exists for, asserted from the
-  // surface that would trip it. The board sends the other five fields whole on
-  // every save; this one must NOT go along for the ride, or `publishedAt` is
-  // re-stamped on every keystroke's worth of save and quietly becomes "last
-  // edited" rather than "published".
   it("says nothing about publication when an unrelated field is edited", async () => {
     const user = userEvent.setup();
     storesWhatItIsGiven([publishedAda]);
@@ -743,9 +617,6 @@ describe("TestimonialBoard (published)", () => {
     expect(mockUpdate.mock.calls[0][0]).not.toHaveProperty("published");
   });
 
-  // ...and the row stays on the homepage through it. The assertion above is
-  // about the payload; this is about what the reader ends up with, which is the
-  // thing that would actually be broken.
   it("leaves the row published while an unrelated field is edited", async () => {
     const user = userEvent.setup();
     storesWhatItIsGiven([publishedAda]);
@@ -758,8 +629,6 @@ describe("TestimonialBoard (published)", () => {
     );
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
-    // Still offering to take it DOWN, which is the button saying the row is
-    // still up.
     expect(
       within(rail()).getByRole("button", { name: "Unpublish" }),
     ).toBeTruthy();

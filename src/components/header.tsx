@@ -14,11 +14,9 @@ const STAGE_WIDTH = 60;
 const STAGE_HEIGHT = 60;
 const ORBIT_CENTER_X = STAGE_WIDTH / 2;
 const ORBIT_CENTER_Y = STAGE_HEIGHT / 2;
-/** Clockwise offset in degrees before/at orbit start. Tweak to align tagline copy. */
+/** Orbit start angle, clockwise; tuned to align the tagline. */
 const ORBIT_INITIAL_ANGLE_DEG = -132;
 
-// One thing in the row now, so the row's whole job is to put it in the middle
-// of the column the page below it reads on.
 const brandStyle = css({
   display: "flex",
   justifyContent: "center",
@@ -32,9 +30,7 @@ const orbitStageStyle = css({
   overflow: "visible",
 });
 
-/** Plain HTML box that carries the spin. Blink composites transform
- *  animations on HTML elements (unlike inner-SVG <g>/<svg>), so the rotation
- *  runs on the compositor thread and stays smooth during load. */
+// An HTML box, not an SVG group, so Blink runs the spin on the compositor.
 const orbitSpinnerStyle = css({
   position: "absolute",
   top: "-6px",
@@ -80,9 +76,7 @@ function buildOrbitPath(
 
 export function Header() {
   const pathname = usePathname();
-  // `/edit/home` is the homepage, being edited — the same page wearing a
-  // different hat. Editing it must not strip the logo, the menu and the theme
-  // toggle off the top of it; they are the page's furniture, not the reader's.
+  // `/edit/home` is the homepage being edited, and keeps the header's furniture.
   const isHome = pathname === "/" || pathname === "/edit/home";
   const pathId = `brand-tagline-path-${useId().replace(/:/g, "")}`;
 
@@ -90,11 +84,6 @@ export function Header() {
 
   return (
     <header data-site-header>
-      {/* The left gutter's control, in the same seat the article pages give
-          their own: flush with the showcase edge, centred on the first row of
-          the page. The same control on both now — the one control a surface
-          opens with — and the theme toggle answers it from the gutter
-          opposite. */}
       <div data-site-menu>
         <MenuButton />
       </div>
@@ -152,9 +141,7 @@ export function Header() {
             <img
               data-brand-avatar=""
               src="/assets/kartik-iyer-logo.png"
-              // Named, not decorative: with no title beside it the picture is
-              // the only place the name is said, so an empty alt would take it
-              // off the page for anyone not looking at it.
+              // Named, not decorative: no title beside it says the name.
               alt="Kartik Iyer"
               width={LOGO_SIZE}
               height={LOGO_SIZE}

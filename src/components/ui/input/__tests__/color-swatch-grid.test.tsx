@@ -32,13 +32,8 @@ describe("ColorSwatchGrid", () => {
     expect(screen.getByRole("button", { name: "Colour 2" })).toBeTruthy();
   });
 
-  // The ramp is DENSE — a colour lands in the first gap, never in the seventh —
-  // but WHERE it lands and where you may press are different questions. Every
-  // empty cell takes the press, because a row of identical blanks of which
-  // only one is live is a target you have to find rather than one you can hit.
   it("offers to add on every empty cell", () => {
     renderGrid({ onAdd: noop });
-    // Ten cells, two filled — the other eight all offer the same thing.
     expect(screen.getAllByRole("button", { name: "Add a colour" })).toHaveLength(
       8,
     );
@@ -57,8 +52,6 @@ describe("ColorSwatchGrid", () => {
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
-  // Pressing the LAST blank is the same act as pressing the first: one colour,
-  // appended. The press is not a choice of slot.
   it("appends once from any empty cell, not into the cell pressed", async () => {
     const onAdd = vi.fn();
     renderGrid({ onAdd });
@@ -67,9 +60,6 @@ describe("ColorSwatchGrid", () => {
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
-  // Adding is the start of choosing a colour, not the end of it: the press
-  // opens the picker on the stop it just made, so the ramp does not gain a
-  // default nobody asked for and then have to be clicked a second time.
   it("opens the picker on the colour an empty cell just added", async () => {
     function Harness() {
       const [values, setValues] = useState(["#FFAB6FFF", "#FF4D97FF"]);
@@ -88,12 +78,9 @@ describe("ColorSwatchGrid", () => {
     await userEvent.click(blanks.at(-1)!);
 
     expect(screen.getByRole("dialog", { name: "Color picker" })).toBeTruthy();
-    // The stop it appended, not the one that was already there.
     expect(screen.getByDisplayValue("00FF00")).toBeTruthy();
   });
 
-  // A full ramp has nowhere to put another colour, so the affordance goes
-  // rather than becoming a button that declines.
   it("offers no add once the ramp is full", () => {
     renderGrid({ capacity: 2, onAdd: noop });
     expect(screen.queryByRole("button", { name: "Add a colour" })).toBeNull();
@@ -105,7 +92,6 @@ describe("ColorSwatchGrid", () => {
 
     const picker = screen.getByRole("dialog", { name: "Color picker" });
     expect(picker).toBeTruthy();
-    // The hex box reads the colour of the cell that opened it, not the first.
     expect(screen.getByDisplayValue("FF4D97")).toBeTruthy();
   });
 
@@ -120,8 +106,6 @@ describe("ColorSwatchGrid", () => {
     expect(onValueChange.mock.calls.at(-1)?.[0]).toBe(0);
   });
 
-  // Removal moved into the picker when the count slider went; the last colour
-  // is the floor the schema already enforces, so the control must not offer it.
   it("offers removal in the picker, except on the last colour", async () => {
     const onRemove = vi.fn();
     const { unmount } = renderGrid({ onRemove });
@@ -145,8 +129,6 @@ describe("ColorSwatchGrid", () => {
   });
 });
 
-// A panel holds several of these, and a one-cell grid sitting under a section
-// called Edge must not announce a second "Colour 1" for the ramp's first stop.
 describe("ColorSwatchGrid, single cell", () => {
   it("names its one swatch after the row rather than by position", () => {
     renderGrid({ capacity: 1, values: ["#FFFFFFFF"], ariaLabel: "Edge colour" });

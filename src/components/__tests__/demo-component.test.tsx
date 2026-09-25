@@ -36,14 +36,12 @@ describe("DemoComponent", () => {
 
     render(<DemoComponent entry={entry} />);
 
-    // The preloader is shown while the module load is pending.
     expect(screen.getByRole("progressbar")).toBeDefined();
     expect(screen.queryByTestId("loaded-demo")).toBeNull();
 
     resolveLoad(() => <div data-testid="loaded-demo">Loaded</div>);
 
     await waitFor(() => expect(screen.getByTestId("loaded-demo")).toBeDefined());
-    // Preloader is gone once the demo is ready.
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 });

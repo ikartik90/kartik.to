@@ -12,67 +12,17 @@ import {
 } from "@/domain/shader-preset";
 import { ShaderStage } from "@/components/shaders/shader-stage";
 
-// ---------------------------------------------------------------------------
-// Pictures of saved presets, drawn once each and kept.
-//
-// The strip has to show what a preset ACTUALLY looks like, and it cannot do
-// that by mounting one: every paper-shaders mount holds its own webgl2 context,
-// the library pools nothing, `dispose()` does not call `loseContext`, and there
-// is no `webglcontextlost` handler anywhere — so a strip of live presets would
-// spend a context per tile and go permanently blank somewhere around the
-// browser's sixteen, taking the playground's own preview down with it (the
-// oldest context is the one a browser drops).
-//
-// So exactly ONE preset is mounted at a time, off-screen, and photographed:
-// render it, read the canvas out as a PNG, move on to the next. The tiles show
-// the photographs, which cost nothing to keep on screen.
-//
-// Two details make the context count safe rather than merely smaller:
-//
-//   • The queue is grouped by SHADER. The React wrapper creates its mount in an
-//     effect keyed on `fragmentShader` and updates everything else through
-//     `setUniforms`, so consecutive presets that share a shader reuse one
-//     context. A library of forty presets over six shaders costs six.
-//   • The renderer UNMOUNTS itself when the queue is empty, so the strip holds
-//     no context at rest.
-//
-// And one makes the photograph possible at all: `preserveDrawingBuffer`, or the
-// buffer is cleared on composite and `toDataURL` returns an empty picture.
-// ---------------------------------------------------------------------------
+// One preset is mounted at a time, off-screen, and photographed: every mount holds its own
+// WebGL context. `preserveDrawingBuffer` keeps the frame readable for `toDataURL`.
 
-/** A saved preset as the action hands it over: the row, with its blob parsed. */
 type Preset = ShaderPreset & ShaderPresetContent;
 
-/**
- * A picture is of a preset AT AN EDIT, not of a preset — retuning one leaves the
- * id alone and changes everything about how it looks, and a cache that could not
- * tell those apart would keep showing the old picture until a reload.
- */
 export function thumbnailKey(preset: Preset, theme: ShaderPresetTheme): string {
-  // The THEME is part of the identity of a picture, not merely of the request
-  // for one. A preset holds a colour per ground, so the same preset at the same
-  // `updatedAt` is two different photographs — and without this the strip would
-  // keep showing the light one after the site went dark, with nothing to
-  // invalidate it but an edit.
-  //
-  // REQUIRED, where it used to default to "light". A default here is not a
-  // convenience, it is a way to file a picture under a ground it was not drawn
-  // on: the capture below forgot to pass one, so every photograph taken on a
-  // dark site was filed as the light one. The dark key nothing had written was
-  // the key the strip then asked for, and every tile fell back to its ramp — a
-  // gradient in place of the picture — while the light key held a dark
-  // photograph for whenever the site went back. Required, that is a type error
-  // rather than a wrong picture.
+  // Theme is required, not defaulted: a default files pictures under the wrong ground.
   return `${preset.id}:${new Date(preset.updatedAt).getTime()}:${theme}`;
 }
 
-/**
- * What is left to draw, in the order that costs the fewest contexts.
- *
- * Grouped by shader rather than sorted — the incoming order is the strip's own
- * (newest first), and within a shader it is kept, so the tiles nearest the add
- * button tend to fill in first.
- */
+/** What is left to draw, grouped by shader so consecutive presets reuse a context. */
 export function captureOrder(
   presets: Preset[],
   captured: ReadonlySet<string>,
@@ -90,14 +40,8 @@ export function captureOrder(
   return [...byShader.values()].flat();
 }
 
-// Survives the component, which is the point: the strip re-reads its list every
-// time the draft opens a different preset, and re-photographing the whole library
-// on each of those would be the expensive half of this feature happening over
-// and over. Pruned against the current list on every pass, so an edited preset's
-// old picture does not sit here for the rest of the session.
 const cache = new Map<string, string>();
 
-/** Every picture taken so far, for a consumer that wants to start from them. */
 export function thumbnailSnapshot(): Record<string, string> {
   return Object.fromEntries(cache);
 }
@@ -107,17 +51,12 @@ export function clearThumbnailCache(): void {
   cache.clear();
 }
 
-// Off-screen but ON-SCREEN: the mount sizes itself from a ResizeObserver and
-// draws into a canvas the browser has to be willing to composite, so this is a
-// real 80px box at the top-left corner, merely invisible. `display: none` would
-// give it no size and nothing to photograph.
+// Invisible but laid out: `display: none` would leave nothing to size or photograph.
 const rendererStyle = css({
   position: "fixed",
   insetBlockStart: 0,
   insetInlineStart: 0,
-  // The tile's own size (`TILE_PX`). What is captured is this box at
-  // `THUMBNAIL_SCALE`, so the two have to agree or the picture is drawn for a
-  // different square than the one it ends up in.
+  // Must match `TILE_PX`.
   width: "token(spacing.5xl)",
   height: "token(spacing.5xl)",
   opacity: 0,
@@ -125,48 +64,20 @@ const rendererStyle = css({
   zIndex: -1,
 });
 
-/**
- * The tile's CSS size, in pixels — `spacing.5xl`, the same 80 the strip lays
- * out. Repeated as a number because the buffer below is derived from it and
- * CSS cannot do that arithmetic for us.
- */
+/** `spacing.5xl` as a number, for the buffer arithmetic; must match `rendererStyle`. */
 const TILE_PX = 80;
 
-/**
- * How many device pixels per CSS pixel the picture is drawn at.
- *
- * PINNED at 3 rather than left at the library's floor of 2, and this is the
- * difference between a live shader and a kept photograph. A live one re-renders
- * at `max(devicePixelRatio, 2)` whenever the screen changes, so it is always
- * exactly 1:1; a photograph is taken once, on whatever screen happened to be
- * there, and shown on whatever screen comes later. Taken at 2 it is UPSCALED on
- * a 3× display — soft, in a strip whose whole job is showing what a preset
- * actually looks like. Taken at 3 the worst case is a downscale, which is
- * supersampling and looks better than the alternative.
- *
- * The library's rule is `max(devicePixelRatio, minPixelRatio)` scaled to fit
- * `maxPixelCount`, so 3 with a ceiling of exactly 240² lands on 240 square from
- * a 1× screen to a 4× one.
- */
+/** Pinned at 3, not the library's 2: a photograph taken at 2 is upscaled on 3× screens. */
 const THUMBNAIL_SCALE = 3;
 const THUMBNAIL_SIZE = TILE_PX * THUMBNAIL_SCALE;
 const THUMBNAIL_PIXELS = THUMBNAIL_SIZE * THUMBNAIL_SIZE;
 
-/**
- * How many frames to give one capture before moving on.
- *
- * The first draw is a `requestAnimationFrame` behind an async uniform pass, and
- * the canvas has to have been sized by a ResizeObserver before there is anything
- * to read — so the capture is a poll rather than a timeout. Half a second is far
- * more than either takes; running out means something is wrong with this preset
- * in particular, and the tile keeps its colour swatch.
- */
+/** Frames to wait for one capture before giving up and keeping the swatch. */
 const CAPTURE_FRAMES = 30;
 
 export interface ShaderPresetThumbnailsProps {
   presets: Preset[];
   onCaptured: (key: string, dataUrl: string) => void;
-  /** Which ground to photograph on — the strip's, which is the page's. */
   theme: ShaderPresetTheme;
 }
 
@@ -175,23 +86,14 @@ export function ShaderPresetThumbnails({
   onCaptured,
   theme,
 }: ShaderPresetThumbnailsProps) {
-  // Where the queue was up to. An index rather than a shrinking list, so a
-  // capture that fails cannot leave its preset at the head of the queue forever.
+  // An index, not a shrinking list, so a failed capture cannot stall the queue.
   const [index, setIndex] = useState(0);
   const hostRef = useRef<HTMLDivElement>(null);
-  // The picture taken for the preset BEFORE this one, which is the only thing a
-  // too-early read could return: a reused mount keeps its last frame (that is
-  // what `preserveDrawingBuffer` is for), so a capture that beat the redraw
-  // would quietly photograph the wrong preset. Two presets that genuinely look
-  // identical cost this one the rest of its frame budget and are then accepted.
+  // A reused mount keeps its last frame, so a read matching this is still the previous preset.
   const lastCapture = useRef<string | null>(null);
 
   const queue = useMemo(() => {
-    // An edited preset leaves a picture of its old self behind; nothing else
-    // will ever ask for it again.
-    // Both grounds stay live: flipping the site's theme must not throw away the
-    // pictures taken on the other one, or every flip back costs the whole strip
-    // a re-photograph.
+    // Both grounds stay live, so a theme flip does not re-photograph the strip.
     const live = new Set([
       ...presets.map((preset) => thumbnailKey(preset, "light")),
       ...presets.map((preset) => thumbnailKey(preset, "dark")),
@@ -200,9 +102,6 @@ export function ShaderPresetThumbnails({
     return captureOrder(presets, new Set(cache.keys()), theme);
   }, [presets, theme]);
 
-  // A new queue starts at its own beginning. Written as a state reset keyed on
-  // the queue rather than as an effect, so the render that receives a new list
-  // is already the one drawing its first preset.
   const [queueRef, setQueueRef] = useState(queue);
   if (queueRef !== queue) {
     setQueueRef(queue);
@@ -219,26 +118,18 @@ export function ShaderPresetThumbnails({
     const tick = () => {
       frames += 1;
       const canvas = hostRef.current?.querySelector("canvas");
-      // Three frames of grace before the first read: the mount's own render is
-      // one frame behind the uniforms it was given, and reading earlier would
-      // photograph the PREVIOUS preset — `preserveDrawingBuffer` keeps those
-      // pixels around precisely so they can be read late.
+      // Three frames' grace: the mount renders a frame behind its uniforms.
       if (canvas && canvas.width > 0 && frames > 3) {
         try {
           const url = canvas.toDataURL("image/png");
           if (url !== lastCapture.current || frames > CAPTURE_FRAMES) {
             lastCapture.current = url;
-            // On the THEME it was drawn on — `palette` below resolves the
-            // preset onto that same ground, and the two have to agree or the
-            // picture is filed where nothing will look for it.
             cache.set(thumbnailKey(current, theme), url);
             onCaptured(thumbnailKey(current, theme), url);
             setIndex((was) => was + 1);
             return;
           }
         } catch {
-          // A canvas that will not hand over its pixels is not worth stalling
-          // the queue for — the tile keeps its colour swatch.
           setIndex((was) => was + 1);
           return;
         }
@@ -252,32 +143,20 @@ export function ShaderPresetThumbnails({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-    // `theme` is in here because the key written depends on it: a capture in
-    // flight when the site's theme changes must not file its picture under the
-    // ground it has just stopped drawing on.
   }, [current, onCaptured, theme]);
 
-  // Nothing left to draw, so nothing mounted — and no context held.
   if (!current) return null;
 
   const spec = SHADER_SPECS[current.shaderId];
-  // Resolved onto the ground the strip is painting on — see `thumbnailKey`,
-  // which is what keeps the picture and the cache entry in step.
   const palette = paletteFor(current.settings, theme);
   return (
     <div ref={hostRef} className={rendererStyle} aria-hidden>
       <ShaderStage
         spec={spec}
-        // A still, whatever the preset was saved at: the tile is a photograph,
-        // and an animating one would be a rAF per frame spent on a picture
-        // nobody is watching. Zero also stops the library's loop outright.
-        // Framed for the SQUARE, because the tile is one. A preset holds a
-        // placement per shape and names none of them as its own, so the shape
-        // the picture is drawn in is what picks — and that is this 80px square.
+        // A still, framed for the square tile; speed 0 stops the library's loop.
         params={{ ...shaderParamsFor(current.settings, "1/1"), speed: 0 }}
         colors={palette.colors}
-        // Spelled out rather than spread: `paletteFor` leaves the key OFF a
-        // shader with no ground, and the stage's prop is required-but-optional.
+        // Spelled out, not spread: `paletteFor` omits the key for a shader with no ground.
         colorBack={palette.colorBack}
         extraColors={palette.extraColors}
         maxPixelCount={THUMBNAIL_PIXELS}

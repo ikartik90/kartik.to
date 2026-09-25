@@ -12,8 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CRITERIA } from "../harness-data";
 import { Landing } from "../landing";
 
-// jsdom implements neither. The stubs mirror the platform: `close()` fires the
-// `close` event, and `showModal()` throws on an already-open dialog.
+// jsdom lacks both; the stubs mirror the platform (close fires `close`, reopening throws).
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -101,7 +100,7 @@ describe("criteria drawer", () => {
     fireEvent.click(within(drawer()).getAllByLabelText("Prompt")[0]);
     expect(drawer().open).toBe(true);
 
-    // A click on the backdrop lands on the <dialog> itself.
+    // A backdrop click lands on the <dialog> itself.
     fireEvent.pointerDown(drawer());
     fireEvent.click(drawer());
     expect(drawer().open).toBe(false);
@@ -109,8 +108,7 @@ describe("criteria drawer", () => {
 
   it("stays open when a press that began inside it is released over the page", async () => {
     await openDrawer();
-    // Dragging a selection out of a prompt: the click the browser reports goes
-    // to the nearest common ancestor, which is the <dialog>.
+    // A drag out of a prompt: the browser reports the click on the <dialog>.
     fireEvent.pointerDown(within(drawer()).getAllByLabelText("Prompt")[0]);
     fireEvent.click(drawer());
     expect(drawer().open).toBe(true);
@@ -164,12 +162,8 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>) {
   );
 }
 
-/**
- * Opens the drawer and adds the custom criterion, with the clock stopped from
- * the moment it is added. Everything after runs on `fireEvent`: Testing
- * Library's async wrapper waits on a `setTimeout(0)` it only advances for
- * Jest's fake timers, so `userEvent` never returns under Vitest's.
- */
+// Fakes timers once the typing starts; use `fireEvent` after, as `userEvent`
+// never resolves under Vitest's fake timers.
 async function addCustom() {
   const user = await openDrawer();
   await openMenu(user);

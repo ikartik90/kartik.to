@@ -10,8 +10,6 @@ describe("timeZoneLabel", () => {
     );
   });
 
-  // The whole reason this is computed rather than written down: the label has
-  // to change by itself twice a year.
   it("follows daylight saving in and out", () => {
     const eastern = (iso: string) => timeZoneLabel("America/New_York", at(iso));
     expect(eastern("2026-01-15T12:00:00Z")).toBe(

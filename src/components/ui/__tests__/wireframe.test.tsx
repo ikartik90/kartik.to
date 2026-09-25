@@ -8,7 +8,6 @@ import { Checkbox } from "../input/checkbox";
 
 afterEach(cleanup);
 
-/** Every bar the treatment draws carries `data-skeleton`. */
 const bars = (container: HTMLElement) =>
   container.querySelectorAll("[data-skeleton]");
 
@@ -48,7 +47,6 @@ describe("Wireframe scope", () => {
         <TextInput label="Shift role" hint="Pick one" />
       </Wireframe>,
     );
-    // Label + hint + the control's value slot.
     expect(bars(container).length).toBeGreaterThanOrEqual(2);
     expect(container.querySelector("[data-field]")).toBeTruthy();
   });
@@ -60,7 +58,6 @@ describe("Wireframe scope", () => {
       </Wireframe>,
     );
     expect(screen.queryByRole("textbox")).toBeNull();
-    // The placeholder text still sizes the bar it became.
     expect(screen.getByText("Select a role")).toBeTruthy();
   });
 
@@ -92,8 +89,6 @@ describe("Wireframe scope", () => {
   });
 
   it("leaves an explicitly authored Skeleton alone rather than wrapping it again", () => {
-    // Stating the shape by hand is the loading case — there is no text to
-    // measure. Wrapping it would hide the author's bar inside an outer one.
     const { container } = render(
       <Wireframe mode="loading">
         <Typography tag="p" type="bodyLarge">

@@ -34,24 +34,11 @@ interface DemoFrameProps
     ComponentPropsWithoutRef<"div"> {
   children: ReactNode;
   logger?: boolean | DemoLoggerConfig;
-  /** When false, logger controls are inert (e.g. article edit preview). */
+  /** When false, logger controls are inert. */
   interactive?: boolean;
-  /**
-   * `"none"` drops the frame's outline — for a demo that is a widget rather
-   * than a specimen, where a box around it reads as a picture OF the thing
-   * instead of the thing. Everything the frame measures is unchanged.
-   */
+  /** `"none"` drops the frame's outline. */
   chrome?: "none";
-  /**
-   * The demo lays itself out against the FRAME rather than being measured at
-   * its intrinsic size and centred — for one whose own furniture sits on the
-   * frame's edges (the calchemy demo's query bar and chevrons). It is handed
-   * the demo area directly, exactly as a logger frame's child is, so it has a
-   * definite height to fill; the intrinsic-size wrapper below has none.
-   *
-   * The frame still measures: `measureRef` falls back to the content box, the
-   * same fallback the logger path has always used.
-   */
+  /** Hands the demo the frame's area to fill instead of measuring it at its intrinsic size. */
   fill?: boolean;
 }
 
@@ -69,7 +56,6 @@ function resolveLoggerConfig(
   return { enabled: true, config: logger };
 }
 
-// Intrinsic-size wrapper used to measure demo content without flex stretch.
 const demoFrameDemoMeasureStyle = css({
   width: "fit-content",
   maxWidth: "token(spacing.full)",
@@ -113,15 +99,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
       [ref],
     );
 
-    // Logger frames reserve their aspect-ratio height as a CSS floor (cqw
-    // compound variant on `demoFrameDemoArea`), so the frame is full-height from
-    // SSR with no client-measured jump — no JS sizing needed here.
-    //
-    // Neither does a FILLING one, and it must not be measured at all: what this
-    // raises the floor to is the demo's own height, and a demo that fills the
-    // area is as tall as the area — so its height feeds back into its own floor
-    // and the frame runs away (8,000px on the first pass). Its height is the
-    // aspect ratio's, which the area carries already.
+    // Logger frames size from CSS. A filling demo must not be measured: its height feeds its own floor.
     useLayoutEffect(() => {
       if (loggerEnabled || fill) return;
 
@@ -159,8 +137,7 @@ export const DemoFrame = forwardRef<HTMLDivElement, DemoFrameProps>(
     const frame = (
       <div
         ref={mergedRef}
-        // The hook the frame's own controls reveal themselves off — they are
-        // absolute against this box, and up only while the visitor is in it.
+        // The frame's controls reveal off this attribute.
         data-demo-frame=""
         className={cx(
           demoFrame({ logger: loggerEnabled ? true : undefined, chrome }),

@@ -15,24 +15,10 @@ import { gridItemVars } from "@/utils/grid-item-vars";
 import { nearerInsertSide } from "@/utils/grid-insert-side";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
-// ---------------------------------------------------------------------------
-// One cell of the homepage grid: the card, and — while editing — the controls
-// that place it.
-//
-// This exists as a wrapper rather than being folded into the cards themselves
-// for a reason the markup forces: the toolbar is made of buttons, a link card
-// is an `<a>`, and a `<button>` inside an `<a>` is invalid HTML that browsers
-// un-nest at parse time. The card cannot host its own controls. So the cell
-// takes the placement variables and the card simply fills it.
-//
-// It also means the two kinds of card — a link and a live component — get their
-// controls from one place instead of each growing a copy.
-// ---------------------------------------------------------------------------
-
+// A wrapper because a link card is an <a>, and the toolbar's buttons cannot nest inside it.
 export interface GridItemProps {
   aspect: DemoFrameAspectRatio;
   span?: number;
-  /** Controls are mounted only in edit mode; nothing is rendered otherwise. */
   editing: boolean;
   pinned: boolean;
   canMoveBack: boolean;
@@ -40,32 +26,19 @@ export interface GridItemProps {
   onTogglePin: () => void;
   onMoveBack: () => void;
   onMoveForward: () => void;
-  /** Whether the card has room to get wider, or is already down to one column. */
   canAddColumn: boolean;
   canRemoveColumn: boolean;
   onAddColumn: () => void;
   onRemoveColumn: () => void;
   onAspectChange: (aspect: DemoFrameAspectRatio) => void;
-  /**
-   * Whether the grid's one properties panel is currently showing THIS card.
-   * The panel is a single docked surface shared by every cell, so which card
-   * has it is the grid's state rather than the cell's.
-   */
   propertiesOpen: boolean;
   onToggleProperties: () => void;
-  /** Components only — see `GridItemToolbar`. */
   onUnpublish?: () => void;
   onInsertBefore: () => void;
   onInsertAfter: () => void;
   /** Names the card in the insertion controls' accessible labels. */
   label: string;
-  /**
-   * Ring this card as the one that just moved.
-   *
-   * A move changes a card's position, and in a masonry of near-identical tiles
-   * that is very easy to lose: the thing you pressed a button about is now
-   * somewhere else on screen. The ring says which one it went to.
-   */
+  /** Rings this card as the one that just moved. */
   moved?: boolean;
   children: ReactNode;
 }
@@ -73,16 +46,10 @@ export interface GridItemProps {
 const cellStyle = css({
   position: "relative",
 
-  // A column, so the card can be told to fill the cell without a percentage
-  // height — and so the cell measures the card when the card is the taller of
-  // the two, which is the point of the whole arrangement.
   display: "flex",
   flexDirection: "column",
 
-  // The ring for a card that has just been moved. `outline` rather than a
-  // border so it costs no layout — a border would resize the cell and shift
-  // every card after it, which is the opposite of what a "here it is" marker
-  // should do. Flush to the card's edge, and radiused to match it.
+  // Outline, not border, so the ring costs no layout.
   "&[data-moved]": {
     borderRadius: "lg",
     outlineWidth: "token(spacing.xs)",
@@ -90,58 +57,21 @@ const cellStyle = css({
     outlineColor: "border.focusRing",
   },
 
-  // The cell states its own shape, and has to: the grid places items with
-  // `align-self: start`, which sizes an item to its content rather than to the
-  // rows it spans, and the controls that float over the cell are out of flow.
-  // Without this a cell holding a short card measures that card and the shape
-  // it was given means nothing.
-  //
-  // A MINIMUM height, not `aspect-ratio`. The shape is what the card is given
-  // if it fits; it is not a ceiling. A demo frame stops shrinking with its
-  // width at its own content's height plus its padding, so on a narrow screen
-  // a card is regularly taller than its shape — `aspect-ratio` states an exact
-  // height and left the frame to overflow it, which is how a demo needing
-  // 717px came to be cut off inside a 233px card on a phone. `--aspect-height`
-  // is that same shape at the width the card landed at, handed down by
-  // `masonryGrid` from the very variables the row span is computed from, so
-  // the reserved space and the drawn box cannot disagree.
+  // A minimum, not `aspect-ratio`: on a narrow screen a demo can need more than its shape.
   minHeight: "var(--aspect-height, 0px)",
-
-  // The controls are hidden until hover / keyboard focus. Those two rules live
-  // in globals.css against `[data-grid-cell]`, not here: Panda emits a class
-  // for a selector with `&` in the MIDDLE (`html[…] &:focus-within …`) but no
-  // rule to go with it, so the keyboard half silently did nothing.
+  // The hover/focus reveal lives in globals.css: Panda emits no rule for a mid-selector `&`.
 });
 
-/**
- * Publish the height the cell actually took, for the grid to reserve rows for.
- *
- * The grid packs cards into 1px rows and states each card's span in CSS, so it
- * needs the card's height as a number — and a rendered height is the one thing
- * CSS cannot be asked for. Hence a measurement, written back as a custom
- * property the span arithmetic reads (`--card-height`), rather than as a span
- * this would have to compute itself: the shape's height is still CSS's to work
- * out, and a span set from here would be a second, staler copy of it that also
- * had to know the gutter.
- *
- * Writing to the observed element does not restart the observer: the only
- * thing `--card-height` feeds is `grid-row`, and the grid sizes these items
- * with `align-self: start`, so the rows a card is given never change how tall
- * it is.
- */
+/** Publishes the cell's rendered height as `--card-height` for the grid's row-span arithmetic. */
 function useCardHeight(cell: RefObject<HTMLDivElement | null>) {
   useLayoutEffect(() => {
     const node = cell.current;
     if (!node) return;
 
     const publish = () => {
-      // Up, never down: the span is a whole number of 1px rows, so a card of
-      // 233.33px rounded down is one that finishes in a row the grid gave to
-      // whatever packs in beneath it.
+      // Up, never down, or the card overruns the row given to the next one.
       const height = Math.ceil(node.getBoundingClientRect().height);
-      // Nothing to say until there is a layout. A measured zero — an unmounted
-      // grid, a hidden tab — would otherwise overwrite a real height with one
-      // that loses every `max()` it is put into.
+      // A measured zero (hidden tab, unmounted grid) must not overwrite a real height.
       if (height > 0) node.style.setProperty("--card-height", `${height}px`);
     };
 
@@ -153,24 +83,7 @@ function useCardHeight(cell: RefObject<HTMLDivElement | null>) {
   }, [cell]);
 }
 
-/**
- * Publish which of the cell's two gutters the cursor is nearest.
- *
- * Edit mode hangs an [+] in the gutter either side of every card, and only the
- * one the cursor is on its way to is worth drawing — the far one is a second
- * identical button sitting in the corner of the eye. The stylesheet hides it,
- * off `data-near-side` here.
- *
- * Written straight to the DOM rather than held in state, and for the same
- * reason the hover reveal is CSS: this fires on every pointer move over a grid
- * that can hold dozens of cards, and a `setState` per move would re-render the
- * cell — with the demo component inside it — the whole way across. The
- * attribute only feeds a selector, so nothing React draws depends on it.
- *
- * Cleared when the pointer leaves, because a card with no cursor on it has no
- * near side: keyboard focus reveals BOTH rails, which is the only way to reach
- * the leading insertion point without a mouse.
- */
+/** Publishes the gutter nearest the cursor as `data-near-side`; DOM, not state, so a move never re-renders. */
 function useNearSide(editing: boolean) {
   const track = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const cell = event.currentTarget;
@@ -178,8 +91,6 @@ function useNearSide(editing: boolean) {
       event.clientX,
       cell.getBoundingClientRect(),
     );
-    // Only on a change: the attribute is read by a selector, and rewriting the
-    // same value on every move is a style invalidation for nothing.
     if (cell.dataset.nearSide !== side) cell.dataset.nearSide = side;
   }, []);
 

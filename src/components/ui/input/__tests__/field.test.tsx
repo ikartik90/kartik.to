@@ -4,11 +4,6 @@ import { Field } from "../field";
 
 afterEach(cleanup);
 
-// Field.Search is a deliberately DUMB search box: it emits nothing but the raw
-// query string. Interpreting that query — parsing a date, filtering a list — is
-// the container's job (Calendar's `queryParser`, OptionList's `filter`), since
-// only the container holds what the query is matched against. These specs pin
-// that the box itself carries no interpretation.
 describe("Field.Search", () => {
   const typeInto = (value: string) =>
     fireEvent.input(screen.getByRole("searchbox"), { target: { value } });

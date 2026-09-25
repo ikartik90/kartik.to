@@ -21,40 +21,9 @@ import { postSummary } from "@/utils/post-summary";
 import { generateSlug } from "@/utils/slug";
 import SearchIcon from "@/assets/icons/search.svg";
 
-// ---------------------------------------------------------------------------
-// The open post's metadata, in the docked inspector every other editor uses:
-// the category it is filed under, its address, and what it says about itself
-// to search engines.
-//
-// A VIEW of the editor store, not a form. Every change goes into the same
-// buffer as the words, so ⌘S and Publish write it with them and Discard throws
-// it away with them — the panel has no apply step and no copy of its own,
-// except for the one field where every intermediate state is invalid.
-//
-// That field is the slug. An address is typed a character at a time, and most
-// of the way there it is either malformed or someone else's, so the box holds
-// what is being typed and offers it to the store only once the typing has
-// paused and the address has been found free. One that is not is kept out of
-// the buffer and marked invalid for assistive technology, with no message
-// beside the box — the post keeps the address it had.
-//
-// A page (the homepage, About) has no address to change — it is read at a
-// route of its own rather than at a prefix and a slug — so it is offered its
-// description and nothing else.
-// ---------------------------------------------------------------------------
-
-/**
- * How long a pause counts as "done typing" — the testimonial rail's 400ms, and
- * for the same two jobs: when the address is judged, and when it is taken.
- */
 const COMMIT_DELAY_MS = 400;
 
-/**
- * How many categories a segmented control can hold before it stops reading as
- * one. Past it the choice is drawn as the inline list the card panel uses for
- * its destinations — a Combobox cannot open inside this rail (see
- * `SiteDestination` in `card-properties-panel.tsx`).
- */
+/** Past this, categories render as an inline list: a Combobox cannot open inside this rail. */
 const MAX_SEGMENTS = 3;
 
 const categoryListStyle = css({
@@ -77,11 +46,7 @@ export function PostMetadataPanel({ onDismiss, ref }: PostMetadataPanelProps) {
   return (
     <PropertiesPanel ref={ref} ariaLabel="Metadata" onDismiss={onDismiss}>
       <PropertiesPanel.Header>Metadata</PropertiesPanel.Header>
-      {/* Remounted per post. What the sections open on and what the slug box
-          holds are read once, at mount, so they are read again whenever the
-          buffer becomes a different post — the editor reading one in, or a
-          new draft's first save giving it an id and a minted address — and
-          never carried from one post to the next. */}
+      {/* Keyed per post: the sections and the slug box read their values once, at mount. */}
       <MetadataContents key={draftId ?? "new"} />
     </PropertiesPanel>
   );
@@ -102,9 +67,6 @@ function MetadataContents() {
 
   return (
     <>
-      {/* Always on and headerless: every post HAS a category and an address,
-          so there is nothing to add or remove — the panel's idiom for a group
-          of properties a thing simply has. */}
       {movable && (
         <PropertiesPanel.Section enabled>
           <PropertiesPanel.ControlPanel ariaLabel="Address">
@@ -121,11 +83,6 @@ function MetadataContents() {
         </PropertiesPanel.Section>
       )}
 
-      {/* A section, because a written description is an OVERRIDE: absent is
-          the ordinary state, where the page is described by its own opening.
-          Removing the section is how the override is taken away, so there is
-          no separate "clear". Opening it changes nothing until something is
-          typed — the placeholder is the line the page says now. */}
       <PropertiesPanel.Section
         defaultEnabled={description !== null}
         onEnabledChange={(enabled) => {
@@ -152,10 +109,6 @@ function MetadataContents() {
   );
 }
 
-/**
- * Which category the post is filed under — a segmented control while the
- * categories fit one, an inline list once they do not.
- */
 function CategoryControl({
   value,
   onChange,
@@ -195,33 +148,25 @@ function CategoryControl({
   );
 }
 
-/**
- * The post's address. See the note at the top for why this one field keeps a
- * draft of its own.
- */
+/** Keeps its own draft, committed after a typing pause once the address is found free. */
 function SlugControl({
   slug,
   draftId,
   mintedFrom,
   onCommit,
 }: {
-  /** The address in the buffer — null for a draft that has none yet. */
   slug: string | null;
   draftId: string | null;
-  /** The title a draft with no address will have one minted from. */
+  /** The title a draft without an address mints one from. */
   mintedFrom: string;
   onCommit: (slug: string) => void;
 }) {
   const [draft, setDraft] = useState(slug ?? "");
   const [invalid, setInvalid] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Which keystroke an answer belongs to. The availability check is a round
-  // trip, and an answer for an address that has since been typed over must not
-  // land on top of the address that replaced it.
+  // Tags each check so a stale answer never lands on a newer address.
   const typed = useRef(0);
 
-  // A pause still running when the panel closes would otherwise commit an
-  // address to a buffer nobody is looking at.
   useEffect(
     () => () => {
       if (timer.current !== null) clearTimeout(timer.current);

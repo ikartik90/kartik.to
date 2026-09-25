@@ -8,8 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The mask pre-pass is canvas + WebGL work jsdom cannot do; resolve it at once,
-// so a hover here is the already-prepared case.
+// The mask pre-pass is canvas + WebGL; resolved at once, so a hover is the prepared case.
 const preparedMasks = vi.hoisted(() => new Map<string, { src: string }>());
 vi.mock("@/utils/gem-smoke-mask", () => ({
   prepareGemSmokeMask: async (src: string) => {
@@ -19,8 +18,7 @@ vi.mock("@/utils/gem-smoke-mask", () => ({
   preparedGemSmokeMask: (src: string) => preparedMasks.get(src) ?? null,
 }));
 
-// ShaderMount is WebGL; stand in with a marker element — one per mounted
-// instance, which is what this file counts.
+// ShaderMount is WebGL; one marker per mounted instance.
 vi.mock("@paper-design/shaders-react", () => ({
   ShaderMount: ({
     uniforms,
@@ -175,8 +173,6 @@ describe("SocialLinks", () => {
   it("points one shader at the hovered icon, and keeps it after the hover", async () => {
     render(<SocialLinks />);
 
-    // Nothing at rest — the row's single context is built in the background
-    // once the page has settled, not during hydration.
     expect(document.querySelectorAll("[data-social-icon-shader]").length).toBe(
       0,
     );
@@ -185,13 +181,10 @@ describe("SocialLinks", () => {
     await act(async () => {
       fireEvent.mouseEnter(githubLink);
     });
-    // A second flush: claiming the icon is one commit, and the mask it needs
-    // resolving is the next.
+    // A second flush: claiming the icon is one commit, resolving its mask the next.
     await act(async () => {});
 
     const shaders = document.querySelectorAll("[data-social-icon-shader]");
-    // ONE for the whole row, wearing the hovered icon's mask — four contexts
-    // compiling the same program is what this replaced.
     expect(shaders.length).toBe(1);
     expect(shaders[0].getAttribute("data-mask-src")).toBe(
       "/social-shader-masks/octocat.svg",
@@ -203,8 +196,6 @@ describe("SocialLinks", () => {
     });
 
     const parked = document.querySelectorAll("[data-social-icon-shader]");
-    // Still mounted: tearing it down would mean compiling again on the next
-    // hover, which is the whole cost being avoided.
     expect(parked.length).toBe(1);
     expect(parked[0].getAttribute("data-shader-active")).toBeNull();
   });

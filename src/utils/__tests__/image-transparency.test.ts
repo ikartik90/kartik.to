@@ -18,16 +18,6 @@ describe("formatCanCarryAlpha", () => {
     expect(formatCanCarryAlpha("photo.jfif")).toBe(false);
   });
 
-  // This used to rule an mp4 out, and that was picture-vs-clip being decided
-  // from a filename on a render path — the one thing the `kind` field exists to
-  // stop. It could not even do the job: a clip under a bare R2 key carries no
-  // extension, so the case it was there for was the case it missed.
-  //
-  // A clip is now excluded by its node's own `kind` before this is ever
-  // reached, so an mp4 here is simply a format nobody asks about, and it must
-  // answer like any other unrecognised one. Pinned so that the video knowledge
-  // cannot creep back in: if it does, this goes red rather than quietly
-  // reinstating the guess.
   it("has no opinion about a clip — that is not this question", () => {
     expect(formatCanCarryAlpha("demo.mp4")).toBe(true);
     expect(
@@ -57,9 +47,6 @@ describe("formatCanCarryAlpha", () => {
     expect(formatCanCarryAlpha("https://cdn.example.com/v1.2/shot")).toBe(true);
   });
 
-  // Unknown means "might be" — the checkerboard is painted BEHIND the picture,
-  // so guessing it can be transparent costs nothing when it turns out not to be
-  // (the image covers it), whereas guessing the other way loses the feature.
   it("assumes alpha is possible when the format is unknown", () => {
     expect(formatCanCarryAlpha("https://cdn.example.com/media/uuid-shot")).toBe(
       true,
@@ -98,9 +85,6 @@ describe("hasTransparentPixels", () => {
     expect(hasTransparentPixels(pixels)).toBe(true);
   });
 
-  // Downscaling into the sample canvas AVERAGES alpha, so a sparse transparent
-  // region arrives as a near-opaque value rather than a zero. The threshold is
-  // what keeps those legible; an exactly-opaque picture stays at 255.
   it("counts a near-opaque pixel below the threshold", () => {
     const pixels = opaque(4);
     pixels[3] = ALPHA_OPAQUE_THRESHOLD - 1;

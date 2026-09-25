@@ -24,8 +24,6 @@ describe("containedSize", () => {
   });
 
   it("has no answer for a picture whose shape was never recorded", () => {
-    // Every document written before the measurement existed — the box is left
-    // to the renderer's own `object-fit` rather than sized from a guess.
     expect(containedSize({}, 1000, 1000)).toBeNull();
     expect(containedSize({ width: 100 }, 1000, 1000)).toBeNull();
     expect(containedSize({ width: 0, height: 0 }, 1000, 1000)).toBeNull();

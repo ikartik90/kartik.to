@@ -18,12 +18,7 @@ import {
   swapItems,
 } from "../collection-items";
 
-/**
- * Everything a media node holds bar the two words that classify it. Spelling
- * `type: "media"` into every fixture would say nothing — it is constant across
- * both arms — and spelling `kind` into every one would bury the handful of
- * cases where the kind is the point.
- */
+/** A media node without `type` and `kind`, which fixtures add only where they matter. */
 type MediaFields = Omit<MediaNode, "type" | "kind">;
 
 const picture = (fields: MediaFields): MediaNode => ({
@@ -42,10 +37,6 @@ const items = (...srcs: string[]): MediaNode[] =>
   srcs.map((src) => picture({ src }));
 
 const srcs = (list: MediaNode[]) => list.map((item) => item.src);
-
-// ---------------------------------------------------------------------------
-// featureItem
-// ---------------------------------------------------------------------------
 
 describe("swapItems", () => {
   it("exchanges two slots and leaves the rest alone", () => {
@@ -79,8 +70,6 @@ describe("swapItems", () => {
 });
 
 describe("featureItem", () => {
-  // Featuring SWAPS with slot 0 rather than moving to the front: it disturbs
-  // exactly two cells instead of re-laying-out everything in between.
   it("exchanges the item with whatever is currently featured", () => {
     expect(srcs(featureItem(items("a", "b", "c", "d"), 3))).toEqual([
       "d",
@@ -116,10 +105,6 @@ describe("featureItem", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// removeItem
-// ---------------------------------------------------------------------------
-
 describe("removeItem", () => {
   it("drops the item and shifts later items left", () => {
     expect(srcs(removeItem(items("a", "b", "c"), 1))).toEqual(["a", "c"]);
@@ -133,10 +118,6 @@ describe("removeItem", () => {
     expect(srcs(removeItem(items("a", "b"), 9))).toEqual(["a", "b"]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// setItemCaption
-// ---------------------------------------------------------------------------
 
 describe("setItemCaption", () => {
   it("sets the caption on the addressed item only", () => {
@@ -161,10 +142,6 @@ describe("setItemCaption", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// appendItems
-// ---------------------------------------------------------------------------
-
 describe("appendItems", () => {
   it("appends in order", () => {
     expect(srcs(appendItems(items("a"), items("b", "c")))).toEqual([
@@ -186,10 +163,6 @@ describe("appendItems", () => {
     expect(srcs(appendItems(full, items("g")))).toEqual(srcs(full));
   });
 });
-
-// ---------------------------------------------------------------------------
-// replaceItem
-// ---------------------------------------------------------------------------
 
 describe("replaceItem", () => {
   it("swaps the image but keeps the caption already written for that slot", () => {
@@ -235,9 +208,6 @@ describe("replaceItem", () => {
     expect(next[0].objectFit).toBe("cover");
   });
 
-  // A zero the panel writes is dropped rather than stored, but a document
-  // written before that was true can still hold one — and the merge tests for
-  // ABSENCE, not truthiness, so it carries across either way.
   it("keeps a stored zero corner, which is falsy but not absent", () => {
     const seeded = [picture({ src: "old", borderRadius: 0 })];
     expect(
@@ -252,14 +222,6 @@ describe("replaceItem", () => {
     ).toBeUndefined();
   });
 
-  // The one property that is emphatically NOT the slot's. Everything in
-  // SLOT_OWNED_PROPERTIES is work the author did against a POSITION in the
-  // grid and rightly outlives the file standing in it; `kind` is a statement
-  // about the file itself, in exactly the way `src` and `alt` are. Preserve it
-  // from the outgoing item and dropping a clip into a slot that used to hold a
-  // photograph leaves an `<img>` pointed at an mp4 — a broken image where the
-  // demo should be, and one that no amount of re-picking the file can fix,
-  // because every replacement would inherit the same stale word.
   it("takes the incoming item's kind, never the outgoing one's", () => {
     const seeded = [picture({ src: "old.png", caption: "Kept", padding: 24 })];
     expect(replaceItem(seeded, 0, clip({ src: "new.mp4" }))[0]).toEqual(
@@ -281,10 +243,6 @@ describe("replaceItem", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// collectionItemAlt
-// ---------------------------------------------------------------------------
-
 describe("collectionItemAlt", () => {
   it("prefers explicit alt text", () => {
     expect(
@@ -301,10 +259,6 @@ describe("collectionItemAlt", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// collectionSurplusCount
-// ---------------------------------------------------------------------------
-
 describe("collectionSurplusCount", () => {
   it("counts the items the reader grid cannot show", () => {
     expect(collectionSurplusCount(5)).toBe(2);
@@ -317,10 +271,6 @@ describe("collectionSurplusCount", () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// collectionLayout
-// ---------------------------------------------------------------------------
 
 describe("collectionLayout", () => {
   it("always gives the editor the full 3×2 slot grid", () => {
@@ -343,10 +293,6 @@ describe("collectionLayout", () => {
     expect(collectionLayout(0, "reader")).toBe("single");
   });
 });
-
-// ---------------------------------------------------------------------------
-// setItemBackgroundEffect
-// ---------------------------------------------------------------------------
 
 describe("setItemBackgroundEffect", () => {
   it("attaches an effect to the addressed slot only", () => {
@@ -401,10 +347,6 @@ describe("setItemBackgroundEffect", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// setItemLayout
-// ---------------------------------------------------------------------------
-
 describe("setItemLayout", () => {
   it("patches one slot only", () => {
     const next = setItemLayout(items("a", "b"), 1, { objectFit: "contain" });
@@ -442,10 +384,6 @@ describe("setItemLayout", () => {
 });
 
 describe("setItemLayout border radius", () => {
-  // Zero is the DEFAULT now — no surface rounds a picture that has not asked to
-  // be rounded — so a zero corner is nothing to record, exactly like a zero
-  // inset. Rounding a picture and squaring it again leaves the document as it
-  // started.
   it("drops a zero corner, which is now the default rather than an override", () => {
     const rounded = setItemLayout(items("a"), 0, { borderRadius: 12 });
     expect(setItemLayout(rounded, 0, { borderRadius: 0 })[0]).toEqual(

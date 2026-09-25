@@ -4,8 +4,7 @@ import { setAnalyticsOptOut } from "../analytics-opt-out";
 
 const at = (url: string) => ({ type: "pageview" as const, url });
 
-// Every case below but the last group is a visitor's browser, which carries no
-// mark. The mark is stored, so it would otherwise leak from one case to the next.
+// The opt-out mark is stored, so it would leak between cases.
 afterEach(() => localStorage.clear());
 
 describe("dropPrivateEvents", () => {
@@ -29,9 +28,6 @@ describe("dropPrivateEvents", () => {
   });
 
   it("reports /vouch — unlisted, but deliberately public", () => {
-    // The one route handed out to other people on purpose. Obscurity is not
-    // privacy here (see app/vouch/page.tsx), and how many of them open it is
-    // exactly the number worth having.
     expect(dropPrivateEvents(at("https://kartik.to/vouch"))).not.toBeNull();
   });
 
@@ -61,7 +57,6 @@ describe("dropPrivateEvents", () => {
   });
 
   it("keeps a public path that merely starts with a stealth prefix", () => {
-    // `/editorial` is not `/edit`, and `/work/edit-workflow` is not an editor.
     for (const path of [
       "/editorial",
       "/writing/editing-well",
@@ -80,8 +75,6 @@ describe("dropPrivateEvents", () => {
   });
 
   it("accepts a bare path, not just an absolute URL", () => {
-    // Both vendors build `url` inside their remote script, so the shape is
-    // theirs to choose and not ours to assume. Handle either.
     expect(dropPrivateEvents(at("/edit/home"))).toBeNull();
     expect(dropPrivateEvents(at("/writing/some-post/edit"))).toBeNull();
     expect(dropPrivateEvents(at("/edit/new?category=WORK"))).toBeNull();
@@ -95,16 +88,10 @@ describe("dropPrivateEvents", () => {
   });
 
   it("drops anything that is neither a URL nor a path", () => {
-    // Unrecognizable means unknown, and an unknown page might be an editor
-    // one. A missed pageview costs a number; a leaked one costs the point.
     expect(dropPrivateEvents(at("not a url"))).toBeNull();
     expect(dropPrivateEvents(at(""))).toBeNull();
   });
   it("drops every page once the browser is marked as the author's", () => {
-    // The reason this filter exists twice over: `/edit/*` is dropped because
-    // nobody else can reach it, and everything ELSE is dropped on this browser
-    // because the author reading their own site is not traffic. Same lever,
-    // returning `null`, so neither leaves the page.
     setAnalyticsOptOut(true);
     for (const path of [
       "/",
@@ -125,9 +112,6 @@ describe("dropPrivateEvents", () => {
   });
 
   it("reads the mark per event, not once when the filter was handed over", () => {
-    // `beforeSend` is registered with the vendor script at mount and called for
-    // every event after that. Closing over the answer would mean a browser
-    // marked mid-session keeps reporting until the next full reload.
     const event = at("https://kartik.to/");
     expect(dropPrivateEvents(event)).toBe(event);
     setAnalyticsOptOut(true);

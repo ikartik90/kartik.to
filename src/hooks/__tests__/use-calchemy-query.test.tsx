@@ -7,8 +7,6 @@ import { useCalchemyQuery } from "../use-calchemy-query";
 
 afterEach(cleanup);
 
-// A Wednesday, fixed, so "tomorrow" has an answer that does not move with the
-// wall clock — the same reference `calchemy-query`'s own tests use.
 const REFERENCE = Temporal.PlainDate.from("2026-09-02");
 const CONTEXT = {
   locale: "en-US",
@@ -16,7 +14,6 @@ const CONTEXT = {
   referenceDate: REFERENCE,
 };
 
-/** A slashed date nobody has said the order of — three readings. */
 const AMBIGUOUS = "03/04/25";
 
 let calchemy: Calchemy;
@@ -50,8 +47,6 @@ describe("useCalchemyQuery", () => {
     expect(result.current.activeId).toBeNull();
   });
 
-  // The point of the readings: the one being pointed at is DRAWN, so moving
-  // through the list shows what each would select rather than describing it.
   it("previews the first reading of an ambiguous phrase", () => {
     const { result, type } = open("single");
     type(AMBIGUOUS);
@@ -72,7 +67,6 @@ describe("useCalchemyQuery", () => {
     act(() => result.current.movePreview(1));
     expect(result.current.dates.map(String)).toEqual(["2025-03-04"]);
 
-    // Three readings, so a fourth step is back at the first.
     act(() => result.current.movePreview(1));
     act(() => result.current.movePreview(1));
     expect(result.current.activeId).toBe(result.current.candidates[0].id);
@@ -81,8 +75,6 @@ describe("useCalchemyQuery", () => {
     expect(result.current.dates.map(String)).toEqual(["2003-04-25"]);
   });
 
-  // Previewing and settling are two different things: the highlight moves
-  // freely, and committing is the separate act that says "this one".
   it("commits the reading being previewed", () => {
     const { result, type } = open("single");
     type(AMBIGUOUS);
@@ -94,8 +86,6 @@ describe("useCalchemyQuery", () => {
     expect(result.current.dates.map(String)).toEqual(["2025-03-04"]);
   });
 
-  // A click is not an Enter: it names the reading it landed on, which need not
-  // be the one the arrows were sitting on.
   it("commits the reading it is given, not the one highlighted", () => {
     const { result, type } = open("single");
     type(AMBIGUOUS);
@@ -118,13 +108,9 @@ describe("useCalchemyQuery", () => {
 
     type("03/04/25 ");
     expect(result.current.committed).toBeNull();
-    // Back to the first reading, not the one settled on for the last phrase.
     expect(result.current.activeId).toBe(result.current.candidates[0].id);
   });
 
-  // A phrase whose readings the kind cannot use offers no choice, because
-  // there is none to make — and nothing to draw either. Every reading of this
-  // one is a single day, which `range` has no use for.
   it("offers no readings the asked-for kind cannot use", () => {
     const { result } = renderHook(() =>
       useCalchemyQuery(calchemy, CONTEXT, "range"),
@@ -135,9 +121,6 @@ describe("useCalchemyQuery", () => {
     expect(result.current.dates).toEqual([]);
   });
 
-  // The rewrite the parser offers for a phrase it could not read, carried so a
-  // caller can put it in front of the reader. Taking it is an ordinary retype,
-  // which is why there is no act of its own for it.
   it("carries the phrase the parser would have read, and drops it once taken", () => {
     const { result, type } = open();
     type("tomorrow until march");

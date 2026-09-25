@@ -11,17 +11,8 @@ import HelpIcon from "./icons/question-mark.svg";
 import AccountSeparator from "./icons/separator-account.svg";
 import AccountChevron from "./icons/chevron-small-down-account.svg";
 
-// ---------------------------------------------------------------------------
-// The product's own top bar (Figma 94:4841).
-//
-// Scenery: the prototype is about the criteria panel, and nearly nothing up
-// here does anything. So it is drawn in text and glyphs rather than as buttons
-// and links — a row of controls that answer nothing is a row a keyboard has to
-// tab through for nothing. The one exception is the home glyph, which leaves
-// the prototype for the site's homepage.
-// ---------------------------------------------------------------------------
+// Scenery, drawn as text rather than dead controls a keyboard would tab through; only Home links.
 
-/** The top-level sections, and which of them open a menu. */
 const SECTIONS = [
   { label: "Pipeline", menu: false },
   { label: "Candidates", menu: true },
@@ -52,7 +43,6 @@ const barStyle = css({
 
 const groupStyle = css({ display: "flex", alignItems: "center", gap: "8px" });
 
-// The left group gives way first on a narrow window, so the account stays whole.
 const leadingStyle = css({
   display: "flex",
   alignItems: "center",
@@ -81,7 +71,7 @@ const logoTileStyle = css({
   paddingInline: "4px",
   borderRadius: "8px",
   backgroundColor: "var(--cashby-accent)",
-  // The mark is white, so `currentColor` once SVGR has been at it.
+  // Paints the mark: SVGR turns its white into `currentColor`.
   color: "var(--cashby-surface)",
 });
 
@@ -101,7 +91,6 @@ const homeLinkStyle = css({
   _focusVisible: { outline: "none", boxShadow: "var(--cashby-focus-ring)" },
 });
 
-// A zero-width box the rule's own half-pixel stroke hangs over, as drawn.
 const separatorStyle = css({ position: "relative", flexShrink: 0, width: 0 });
 const navSeparatorStyle = css({ height: "28px" });
 const accountSeparatorStyle = css({ height: "32px" });
@@ -161,8 +150,6 @@ const hotkeyStyle = css({
   whiteSpace: "nowrap",
 });
 
-// The white chevron is `currentColor` once SVGR has been at it, so the button
-// owns its hue.
 const addStyle = css({
   display: "flex",
   alignItems: "center",

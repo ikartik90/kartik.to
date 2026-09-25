@@ -9,14 +9,6 @@ import { primaryButtonStyle } from "./parts";
 import { RULE_ABOVE, RULE_BELOW } from "./candidate-table";
 import ValidIcon from "./icons/check-circle-ink.svg";
 
-// ---------------------------------------------------------------------------
-// Validating the criteria (Figma 119:5974): a small dialog in the middle of
-// the window that pretends to check them — a bar that fills while nothing is
-// computed — then says they are all valid, and only then offers Close. Every
-// opening validates afresh: its contents are keyed on the modal's session.
-// ---------------------------------------------------------------------------
-
-/** How long the pretend validation takes. */
 export const VALIDATING_MS = 300;
 
 const dialogStyle = css(overlayBase, {
@@ -26,8 +18,7 @@ const dialogStyle = css(overlayBase, {
   height: "200px",
   maxHeight: "calc(100% - 40px)",
   borderRadius: "12px",
-  // Its outline is drawn over what it holds, as the source draws it: the
-  // footer's fill would cover an inset shadow on the dialog itself.
+  // An ::after outline: the footer's fill would cover an inset shadow.
   _after: {
     content: '""',
     position: "absolute",
@@ -55,7 +46,6 @@ const bodyStyle = css({
   padding: "8px",
 });
 
-// The bar, a little clear of the dialog's edges.
 const progressStyle = css({ width: "100%", paddingInline: "32px" });
 
 const resultStyle = css({
@@ -80,7 +70,6 @@ export function ValidateDialog({
   onValidated,
 }: {
   modal: ReturnType<typeof useModal>;
-  /** The validation has finished: the criteria are valid. */
   onValidated: () => void;
 }) {
   const titleId = useId();
@@ -118,7 +107,7 @@ function Validation({
 }) {
   const [done, setDone] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
-  // Not a reason to start over: the timer runs once, from opening.
+  // An effect event, so a new `onValidated` doesn't restart the timer.
   const finish = useEffectEvent(() => {
     setDone(true);
     onValidated();
@@ -129,8 +118,6 @@ function Validation({
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Close is all there is to do once there is an answer, so it takes focus as
-  // it appears; the answer is read out as it replaces the bar.
   useEffect(() => {
     if (done) closeRef.current?.focus();
   }, [done]);

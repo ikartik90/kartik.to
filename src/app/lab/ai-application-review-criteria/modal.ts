@@ -10,38 +10,13 @@ import {
 } from "react";
 import { preservePageScroll } from "@/utils/preserve-page-scroll";
 
-// ---------------------------------------------------------------------------
-// A native modal <dialog>, opened and closed the way the product's drawer and
-// its benchmark overlay both are.
-//
-// Modal, so what is behind is inert, focus is kept inside and handed back to
-// whatever opened it, and the dialog sits in the top layer above every
-// clipping box it is written inside.
-//
-// Each opening is a new SESSION: the caller keys the dialog's contents on it,
-// so they are remounted fresh and nothing from the last opening survives.
-//
-// OPENING is the caller's CSS: `@starting-style` gives its transition
-// somewhere to come from. CLOSING cannot be, because `close()` hides the
-// element at once: the dialog is marked `data-closing`, the caller's CSS
-// animates that, and it is closed when the animation has finished — which
-// the promise `close` returns resolves on.
-//
-// A dialog opened from inside another is inside it in the DOM and in React's
-// tree too, and React passes `cancel` and `close` up that tree although the
-// platform does not bubble them. So every handler answers only for its own
-// dialog, or closing the inner one would close both.
-// ---------------------------------------------------------------------------
-
 export function useModal({ onClosed }: { onClosed?: () => void } = {}) {
   const ref = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
   const closing = useRef<Promise<void> | null>(null);
-  // Where the press that became this click began. See `onClick`.
   const pressedBackdrop = useRef(false);
 
-  // After the new contents are committed, so the dialog opens on them and
-  // focus lands inside them rather than on what the last session left.
+  // Opens after commit, so focus lands in the new session's contents.
   useLayoutEffect(() => {
     const dialog = ref.current;
     if (session > 0 && dialog && !dialog.open) dialog.showModal();
@@ -56,8 +31,7 @@ export function useModal({ onClosed }: { onClosed?: () => void } = {}) {
     if (!dialog?.open) return Promise.resolve();
     if (closing.current) return closing.current;
     dialog.setAttribute("data-closing", "");
-    // Reading the animations settles the style change, so the exit is already
-    // among them. None at all (jsdom has no `getAnimations`) closes on the spot.
+    // getAnimations() flushes style, so the exit is already listed; jsdom has none.
     const leaving = dialog.getAnimations?.() ?? [];
     if (leaving.length === 0) {
       dialog.close();
@@ -69,6 +43,7 @@ export function useModal({ onClosed }: { onClosed?: () => void } = {}) {
     return closing.current;
   }
 
+  // React bubbles cancel/close out of nested dialogs; answer only for our own.
   const own = (event: SyntheticEvent) => event.target === event.currentTarget;
 
   const dialogProps = {
@@ -86,9 +61,7 @@ export function useModal({ onClosed }: { onClosed?: () => void } = {}) {
       event.preventDefault();
       close();
     },
-    // Escape is taken in the capture phase and its default refused, as the
-    // site's `Dialog` does: in Safari the same key also leaves full screen.
-    // A key pressed inside a dialog opened from this one is that dialog's.
+    // Escape's default is refused: in Safari it also exits full screen.
     onKeyDownCapture(event: KeyboardEvent<HTMLDialogElement>) {
       if (
         event.key !== "Escape" ||
@@ -103,10 +76,8 @@ export function useModal({ onClosed }: { onClosed?: () => void } = {}) {
       pressedBackdrop.current =
         own(event) && !event.currentTarget.querySelector("[data-open-menu]");
     },
-    // A click on the backdrop lands on the <dialog> itself. So does the click a
-    // drag ends in when it began inside the dialog and was let go outside it —
-    // selecting a prompt's text, say — because a click goes to the nearest
-    // ancestor of both ends. Only a press that STARTED outside closes.
+    // A drag from inside to outside also clicks the <dialog>, so only a press
+    // that started on the backdrop closes.
     onClick(event: MouseEvent<HTMLDialogElement>) {
       if (pressedBackdrop.current && own(event)) close();
     },

@@ -17,11 +17,7 @@ vi.mock("@/app/actions/media", () => ({
   deleteMedia: (...args: unknown[]) => mockDeleteMedia(...args),
 }));
 
-// The measurement is the DOM's answer about a real file, and jsdom loads
-// nothing — an <img> pointed at a blob URL fires neither `load` nor `error`,
-// so the real one would sit out its whole timeout on every upload here. Its
-// own behaviour is covered in `utils/__tests__/measure-media.test.ts`; what
-// this file cares about is that whatever it answers reaches the signing call.
+// Mocked: jsdom loads nothing, so the real measurement would sit out its timeout on every upload.
 const mockMeasureMediaFile = vi.fn();
 vi.mock("@/utils/measure-media", () => ({
   measureMediaFile: (...args: unknown[]) => mockMeasureMediaFile(...args),
@@ -132,16 +128,7 @@ describe("useImageInsert", () => {
     expect(result.current.selectedKey).toBe("media/b.png");
   });
 
-  // The content type is validated on the way in and stored on the asset, and
-  // until now it stopped here — the payload carried an src and an alt, and the
-  // renderer was left to work the rest out from the URL. Passing it through is
-  // what stops the untyped set from growing: every node inserted from this
-  // dialog states its own kind, so the filename guess only ever has to answer
-  // for documents written before there was a field to write it in.
-  //
-  // The urls below carry NO extension on purpose. That is the case the sniffer
-  // cannot get right — a bare R2 key reads as a picture whatever it holds — so
-  // it is the case that proves the answer came from the content type.
+  // Extensionless urls on purpose: the kind must come from the content type.
   it("hands the insert its kind, read from the stored content type", async () => {
     mockListMediaAssets.mockResolvedValue([
       {
@@ -185,23 +172,15 @@ describe("useImageInsert", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// What the drop zone will take — the same allow-list and the same per-format
-// ceilings the server enforces, answered here without the round trip.
-// ---------------------------------------------------------------------------
-
 describe("useImageInsert file validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListMediaAssets.mockResolvedValue([]);
     mockMeasureMediaFile.mockResolvedValue(null);
-    // Reaching the signing call at all is the proof that the gates let the file
-    // through, and refusing there stops the test short of jsdom's XHR — which
-    // would put a real PUT on the wire.
+    // Refused here so no test reaches jsdom's XHR, which would put a real PUT on the wire.
     mockCreateMediaUploadUrl.mockRejectedValue(new Error("no upload here"));
   });
 
-  /** A file of `size` bytes without allocating any of them. */
   const fileOf = (name: string, type: string, size: number) => {
     const file = new File(["x"], name, { type });
     Object.defineProperty(file, "size", { value: size });
@@ -232,11 +211,6 @@ describe("useImageInsert file validation", () => {
     });
   });
 
-  // The shape is measured from the file in hand and signed into the upload, so
-  // the object carries it from the moment it exists — which is what lets a
-  // surface reserve the right box for it before a byte has arrived. It rides
-  // in the SIGNING call rather than a patch afterwards: the answer is already
-  // in hand, so recording it costs no round trip of its own.
   it("records the file's own shape with the upload", async () => {
     mockMeasureMediaFile.mockResolvedValue({ width: 1600, height: 900 });
     await drop(fileOf("shot.png", "image/png", 1024));
@@ -250,9 +224,6 @@ describe("useImageInsert file validation", () => {
     });
   });
 
-  // A file the browser will not decode still uploads. The shape is an
-  // optimisation — the box falls back to the house ratio without it — and an
-  // upload is not worth failing over a measurement.
   it("uploads a file it could not measure, with no shape at all", async () => {
     mockMeasureMediaFile.mockResolvedValue(null);
     await drop(fileOf("odd.svg", "image/svg+xml", 1024));
@@ -264,9 +235,6 @@ describe("useImageInsert file validation", () => {
     });
   });
 
-  // The ceiling follows the FORMAT. A clip is allowed to be an order larger
-  // than a picture, and a single shared limit would either refuse ordinary
-  // videos or stop being a guard on images.
   it("holds each format to its own ceiling", async () => {
     const size = 20 * 1024 * 1024;
 
@@ -279,10 +247,6 @@ describe("useImageInsert file validation", () => {
     expect(mockCreateMediaUploadUrl).toHaveBeenCalledOnce();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Multi-selection — the collection block picks several images at once
-// ---------------------------------------------------------------------------
 
 describe("useImageInsert (selectionMode: multiple)", () => {
   const asset = (name: string) => ({
@@ -353,8 +317,6 @@ describe("useImageInsert (selectionMode: multiple)", () => {
     expect(result.current.selectedKeys).toEqual(["media/a.png"]);
   });
 
-  // Click order IS collection order — the first image picked becomes the
-  // featured one, so the payloads must not fall back to library order.
   it("returns payloads in selection order", async () => {
     const { result } = await openMultiple();
     act(() => result.current.toggleAsset("media/c.png"));
@@ -366,11 +328,6 @@ describe("useImageInsert (selectionMode: multiple)", () => {
     ]);
   });
 
-  // Same argument as the single-insert case above: a batch dropped into a
-  // collection is exactly where a wall of untyped items used to come from.
-  // The shape travels with the source through the batch, exactly as `kind`
-  // does: both are things the library knows first-hand and the document could
-  // never recover afterwards.
   it("carries each asset's recorded shape into its payload", async () => {
     mockListMediaAssets.mockResolvedValue([
       { ...asset("a"), width: 1600, height: 900 },
@@ -421,8 +378,6 @@ describe("useImageInsert (selectionMode: multiple)", () => {
     ]);
   });
 
-  // The alt field debounces its save by 400ms, so the asset in state can still
-  // be stale at the moment Insert is pressed — the anchor's live draft wins.
   it("prefers the anchor's in-flight alt draft over the stored value", async () => {
     const { result } = await openMultiple();
     act(() => result.current.toggleAsset("media/a.png"));
@@ -435,7 +390,6 @@ describe("useImageInsert (selectionMode: multiple)", () => {
     mockDeleteMedia.mockResolvedValue(undefined);
     const { result } = await openMultiple();
     act(() => result.current.toggleAsset("media/a.png"));
-    // Toggling makes b the anchor, so it is what the delete button acts on.
     act(() => result.current.toggleAsset("media/b.png"));
 
     await act(async () => {
@@ -447,12 +401,7 @@ describe("useImageInsert (selectionMode: multiple)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A drop is a BATCH — one file is just the shortest one
-// ---------------------------------------------------------------------------
-
 describe("uploading several files at once", () => {
-  /** A PUT that reports half-way and then lands. */
   class FakeXhr {
     upload: {
       onprogress:
@@ -470,7 +419,6 @@ describe("uploading several files at once", () => {
     }
   }
 
-  /** A file of a known size, so batch progress has something to weigh. */
   const fileOf = (name: string, type = "image/png", size = 100) => {
     const file = new File(["x"], name, { type });
     Object.defineProperty(file, "size", { value: size });
@@ -523,12 +471,7 @@ describe("uploading several files at once", () => {
     );
   });
 
-  // One bar for the whole drop, not a bar that snaps back to zero on every
-  // file: the second file starts where the first finished. Weighed in BYTES,
-  // so a 40MB clip dropped beside two screenshots does not report itself
-  // two-thirds done before it has begun.
   it("measures progress across the batch, not across one file", async () => {
-    /** A PUT that reports half-way and then waits to be landed by the test. */
     class HeldXhr {
       static landings: (() => void)[] = [];
       upload: {
@@ -561,14 +504,12 @@ describe("uploading several files at once", () => {
       batch = result.current.processFiles([fileOf("a.png"), fileOf("b.png")]);
       await flush();
     });
-    // Half of the first of two equal files — a per-file bar would say 50.
     expect(result.current.uploadProgress).toBe(25);
 
     await act(async () => {
       HeldXhr.landings.shift()?.();
       await flush();
     });
-    // The second file begins with the first one's bytes already behind it.
     expect(result.current.uploadProgress).toBe(75);
 
     await act(async () => {
@@ -579,8 +520,6 @@ describe("uploading several files at once", () => {
     expect(result.current.phase).toBe("library");
   });
 
-  // A drop is whatever the finder handed over — one bad file in it is a file
-  // to skip, not a reason to refuse the other four.
   it("carries on past a file it cannot take, and names the one it skipped", async () => {
     const result = await dropAll([
       fileOf("a.png"),
@@ -601,8 +540,6 @@ describe("uploading several files at once", () => {
     expect(mockCreateMediaUploadUrl).not.toHaveBeenCalled();
   });
 
-  // Uploading into a batch picker adds to the batch — the whole point of
-  // dropping five files on a collection is inserting five.
   it("joins the whole upload to a multiple selection, in the order dropped", async () => {
     mockListMediaAssets.mockResolvedValue([
       storedAsset("b.png"),
@@ -634,8 +571,6 @@ describe("uploading several files at once", () => {
     expect(result.current.selectedKeys).toEqual(["media/uuid-a.png"]);
   });
 
-  // Single-select takes the batch too: uploading five and inserting one is an
-  // ordinary thing to want. The first arrival is what the panel opens on.
   it("uploads a batch into a single-select dialog and anchors on the first", async () => {
     mockListMediaAssets.mockResolvedValue([
       storedAsset("b.png"),
@@ -649,12 +584,6 @@ describe("uploading several files at once", () => {
     expect(result.current.selectedKeys).toEqual([]);
   });
 
-  // -------------------------------------------------------------------------
-  // Renaming, which had no coverage here at all — which is how it shipped
-  // working for the library and broken for every other folder. The edit is
-  // debounced, so the test has to let the pause run out; what it asserts is
-  // that the key it saves under is the ANCHORED one, prefix and all.
-  // -------------------------------------------------------------------------
   const FACE = {
     key: "profiles/550e8400-e29b-41d4-a716-446655440000-face.png",
     url: "https://cdn/profiles/face.png",
@@ -663,7 +592,6 @@ describe("uploading several files at once", () => {
     size: 100,
   };
 
-  /** Open on the library with one profile picture in it, anchored. */
   async function renderWithFace() {
     mockListMediaAssets.mockResolvedValue([FACE]);
     const view = renderHook(() =>
@@ -701,9 +629,6 @@ describe("uploading several files at once", () => {
     }
   });
 
-  // A rename that fails must SAY so. Swallowing it is what made a refused
-  // rename look like the field forgetting what you typed: the name stood until
-  // the next refresh and then sprang back, with nothing on screen in between.
   it("says so when a rename is refused, rather than failing quietly", async () => {
     vi.useFakeTimers();
     try {

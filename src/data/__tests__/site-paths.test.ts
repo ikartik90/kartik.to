@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { SITE_PAGES, SITE_PATHS, sitePathTitle } from "../site-paths";
 
 describe("SITE_PAGES", () => {
-  // The name everyone else reads: the tab, a search result, the palette row,
-  // `llms.txt` and a wordless card.
   it("gives each page its public name", () => {
     expect(SITE_PAGES.shader.title).toBe("Waveform Studio");
     expect(SITE_PAGES.calchemy.title).toBe(
@@ -14,7 +12,6 @@ describe("SITE_PAGES", () => {
     );
   });
 
-  // The name only the link-card picker shows.
   it("gives each page a short name for the picker", () => {
     expect(SITE_PAGES.shader.label).toBe("Shader Playground");
     expect(SITE_PAGES.calchemy.label).toBe("Calchemy Playground");

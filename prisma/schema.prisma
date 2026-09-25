@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,9 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// What a post is filed under — its address prefix, its noun, its section.
-// Each value is described once in `src/data/post-categories.ts`; a new one
-// needs a reading route at the prefix named there.
+// Described in `src/data/post-categories.ts`; a new value needs a reading route at its prefix.
 enum PostCategory {
   ARTICLE
   WORK
@@ -25,135 +18,38 @@ model Post {
   id             String       @id @default(cuid())
   title          String?
   slug           String       @unique
-  // Every address this post has been read at before its current one, so a link
-  // that was shared or indexed keeps arriving: the post's page answers an old
-  // slug with a permanent redirect (`findMovedPostPath`). Written by the save
-  // that renames it, never by hand. No index — it is read only on the way to a
-  // 404, which is the rare path, and a slug's CURRENT owner is always looked up
-  // first, so a new post may take an address somebody else once had.
-  //
-  // A category is not recorded here, because it does not need to be: slugs are
-  // unique across every category, so `/writing/x` finds `x` wherever it is now.
+  // Old slugs, redirected permanently (`findMovedPostPath`). Written only by the renaming save.
   previousSlugs  String[]     @default([])
   category       PostCategory @default(ARTICLE)
   content        Json
-  // What the post says about itself to search engines and link previews, in
-  // place of the summary read off its opening paragraph. Null — the ordinary
-  // case — is that summary; see `postDescription`. Nullable rather than empty
-  // for the reason `Testimonial.excerpt` is: the fallback costs one `??`, and a
-  // copy of the derived line stored here would go stale the first time the
-  // opening was rewritten.
+  // Null falls back to the summary of the opening paragraph (`postDescription`).
   description    String?
   coverImageKey  String?
-  // The shape this post's CARD is drawn at on the homepage, overriding the
-  // 16:9 every project and article defaults to. A property of the post rather
-  // than of the grid — which is why it is `aspect` and not `gridAspect`, and
-  // why it sits up here with the cover rather than down with `gridIndex`.
-  // Same column, same meaning, as `Component.aspect`; see there for why the
-  // ratio set is validated in Zod rather than declared as a database enum.
+  // The homepage card's shape; null is 16:9. A String validated in Zod, like `Component.aspect`.
   aspect         String?
   publishedAt    DateTime?
   untitledIndex  Int?
-  // Where this post sits on the homepage grid, if it has been pinned there.
-  // Null is the ordinary case: the card takes its place from `publishedAt`
-  // along with everything else. Nullable rather than defaulted to 0, because
-  // "position zero" and "no position" are different behaviours and a default
-  // would pin every existing row to the front of the grid at once.
-  //
-  // Same column, same rules, as `Component.gridIndex` — a project and a demo
-  // are pinned by one control and must not answer differently. See
-  // `GridIndexSchema` in `src/domain/component.ts` for why neither of them
-  // carries a unique constraint.
+  // Homepage pin; null places the card by `publishedAt`. Same rules as `Component.gridIndex`.
   gridIndex      Int?
-  // How many of the grid's columns this post's card occupies. Null is one, the
-  // ordinary case — the same absent-means-default rule `Component.aspect` uses,
-  // and the reason it is nullable rather than `@default(1)`: every row that
-  // existed before cards could be widened has no opinion about its width, and a
-  // default would record one on all of their behalf. Bounded above by
-  // `GridSpanSchema`, not by the column, since the ceiling is however many
-  // columns the grid is currently drawing.
+  // Grid columns the card spans; null is one.
   gridSpan       Int?
-  // How this post's CARD is drawn beyond what the post decides for it: a
-  // picture per theme, and whether the caption stands on a scrim and in which
-  // tone. Everything else about the card is derived — the title from the post,
-  // the destination from the slug, the picture from the document's first media
-  // — and these are the parts that cannot be. Sits with `aspect`, which is the
-  // same kind of fact and would live in this blob had it not come first.
-  //
-  // A blob rather than columns, for the reason `Component.props` is one: the
-  // shape belongs to the card (`PostCardConfigSchema`), where one edit reaches
-  // it. Null for every post that predates it — the truthful record of a card
-  // nobody has authored, which draws exactly as it always did.
+  // Card overrides (`PostCardConfigSchema`); null draws the derived card.
   card           Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
 
-// A demo's PUBLICATION on the homepage grid — which is a different fact from
-// the demo existing.
-//
-// `src/components/demo/registry.ts` is the catalogue: it lists every demo this
-// codebase has, so an article can embed one. It is emphatically NOT the
-// published set, and the three shift-scheduling demos are why. They exist to be
-// embedded in an article about shift scheduling; if the registry doubled as the
-// homepage's source, all three of them would appear on it the moment the grid
-// shipped, and the only way to keep them off would be a hardcoded exclusion
-// list that every future article-only demo would have to remember to join. A
-// demo appears on the homepage once, and only once, somebody writes a row here.
+// A demo's publication on the homepage grid. `registry.ts` lists every demo, not the published set.
 model Component {
   id          String    @id @default(cuid())
-  // The registry key this row publishes. NOT unique, and that is deliberate.
-  //
-  // A unique constraint here looks like the obvious safety rail and enforces
-  // the wrong thing: "which demo" is not the identity of a publication. The
-  // same demo is legitimately published more than once — a decorative component
-  // that belongs in two places on the grid, or one demo shown twice at
-  // different aspects because the wide slot and the tall slot want different
-  // shapes of it. Under a unique index the second of those is not a slower
-  // path, it is impossible, and the author's only recourse would be a duplicate
-  // registry entry, which also puts the copy in the article insert overlay
-  // where nobody asked for it. The row's identity is `id`; this is a foreign
-  // key in spirit (there is no table to point at — the registry is code) and is
-  // as repeatable as any other foreign key.
+  // Registry key. Not unique: one demo may be published more than once.
   componentId String
-  // OVERRIDES, not copies — which is exactly why they are nullable.
-  //
-  // Null means "whatever the registry entry says", the same absent-means-
-  // default convention `padding` and `borderRadius` use on a media node in
-  // `src/domain/nodes.ts`. It is NOT the same as storing the registry's value:
-  // a row that copied `aspectRatio: "3/2"` out of the registry at publish time
-  // would go stale and then silently win the next time that entry's shape was
-  // corrected in code, so the fix would never reach the grid. Null is the
-  // honest record of "this publication has no opinion", and a publication with
-  // no opinion must keep tracking the entry it publishes.
-  //
-  // `aspect` is a String rather than a Prisma enum on purpose. The ratio set
-  // belongs to the frame (`ASPECT_RATIOS` in `src/utils/demo-frame-sizing.ts`),
-  // which is the single source of truth the Zod layer derives its validator
-  // from; a database enum would be a second copy of that list, and adding a
-  // twelfth ratio would turn a one-line code change into a schema migration.
-  // Nothing writes this column except through `ComponentSchema`.
+  // Overrides of the registry entry; null tracks the entry. Written only through `ComponentSchema`.
   aspect      String?
   logger      Boolean?
-  // What this publication IS, for the one entry that is a shell rather than a
-  // specimen — the link card. Null for every other row, and that is the honest
-  // record: a scheduling demo's content is its own code, so there is nothing a
-  // publication of it could carry here.
-  //
-  // A blob rather than columns, because the shape belongs to the ENTRY. A
-  // `mediaLight`, `mediaDark`, `linkHref`, `linkKind` and `newTab` spread across
-  // this table would be five columns that are null on every row but one, and the
-  // next configurable entry would want five more of its own. Validated in Zod
-  // (`LinkCardConfigSchema`) exactly as `aspect` and `shaderId` are, and for the
-  // same reason: the schema lives with the component, where one edit reaches it,
-  // rather than being a second copy here that a migration has to keep in step.
-  //
-  // Read leniently (`getGridCards`): a blob that no longer parses renders as an
-  // unconfigured card rather than taking the homepage down.
+  // The link card's config (`LinkCardConfigSchema`); null on every other row, read leniently.
   props       Json?
-  // See `Post.gridIndex` / `Post.gridSpan` — identical fields, identical
-  // meanings. A project and a demo are placed and sized by one control and must
-  // not answer differently.
+  // Same meaning as `Post.gridIndex` / `Post.gridSpan`.
   gridIndex   Int?
   gridSpan    Int?
   publishedAt DateTime?
@@ -161,58 +57,16 @@ model Component {
   updatedAt   DateTime  @updatedAt
 }
 
-// A saved shader background, authored in the shader playground and reused
-// wherever a surface wants a ground: a picture or a clip in a collection, a
-// component's backdrop.
-//
-// A TABLE of its own rather than columns on `Component`, and the distinction is
-// the same one that table's own comment draws. A `Component` row PUBLISHES
-// something that already exists in code — `componentId` is a foreign key in
-// spirit to `src/components/demo/registry.ts`. A preset has nothing to point at,
-// because its settings ARE the artefact. Folding the two together would mean a
-// nullable "which demo" beside a nullable "which shader", which is a table
-// admitting it holds two kinds of row, and every existing read of `Component`
-// would need a discriminator it does not need today.
-//
-// It is also one-to-MANY by design: a preset is referenced from many embeds and
-// edited in one place, which is the plainest case there is for its own table.
-//
-// SHAPELESS. There is deliberately no aspect, width, padding or corner here: a
-// preset takes the shape of whatever it is embedded into, the way an image under
-// `object-fit: cover` does, so the HOST owns all of that. A column for it here
-// would be a second answer that could disagree with the host's. That is also
-// why there is no `gridIndex`/`gridSpan` — a preset is a background, not a card,
-// and giving it a seat would put a third table into `saveGridLayout`'s fan-out
-// for a thing that is never placed on its own.
+// A saved shader background. Shapeless: the embedding host owns aspect, size and corners.
 model ShaderPreset {
   id            String   @id @default(cuid())
-  // What the palette calls it when listing saved presets. Nullable with an
-  // index beside it, exactly as `Post` does it: a preset is worth saving before
-  // it is worth naming, and "Untitled 2" is a better handle than a cuid.
   title         String?
   untitledIndex Int?
-  // The discriminant, and a column rather than a key inside the blob: it is
-  // what every read switches on, it is a closed set (`SHADER_IDS`), and it is
-  // what a library view would group by.
-  //
-  // A String rather than a Prisma enum for the reason `Component.aspect` is
-  // one: the shader list belongs to `src/data/shader-specs.ts`, which is the
-  // single source the Zod layer derives its validator from. A database enum
-  // would be a second copy, and adding a seventh shader would turn a one-line
-  // code change into a schema migration. Nothing writes this except through
-  // `ShaderPresetContentSchema`.
+  // One of `SHADER_IDS`; a String validated through `ShaderPresetContentSchema`, not an enum.
   shaderId      String
-  // Everything whose SHAPE depends on `shaderId` — the uniforms, the colour
-  // ramp, the ground — as one blob, because they are only meaningful together
-  // and only validatable together. See `ShaderPresetContentSchema`.
+  // Everything whose shape depends on `shaderId` (`ShaderPresetContentSchema`).
   settings      Json
-  // When the preset went on show, and null while it is the author's alone. The
-  // same nullable-timestamp shape `Post` uses, for the same reason: it records
-  // WHEN as well as whether, and taking a preset back is clearing a column
-  // rather than destroying the work.
-  //
-  // The playground is public, so this is the column that decides what a visitor
-  // is shown — every read of the library filters on it (see `getShaderPresets`).
+  // Null keeps the preset private; every public read filters on it.
   publishedAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -229,140 +83,33 @@ model UserProfile {
   updatedAt       DateTime @updatedAt
 }
 
-// A few words somebody who has worked with me agreed to put their name to,
-// collected through the form at `/vouch`.
-//
-// The ONLY table in this schema a stranger writes. Every other row here is the
-// author's, made from an admin surface behind a session the proxy has already
-// checked; these arrive from whoever I sent the link to, with no account to
-// check them against. That is not a reason to treat the data as suspect once it
-// is here — it is the reason `TestimonialSubmissionSchema` is the only way in,
-// and the reason the form's page is kept out of the nav, the palette,
-// `SITE_PATHS` and the crawlers: the link's obscurity is part of the gate.
-//
-// NO NATURAL KEY, and it briefly had one. A unique `linkedinUrl` made the
-// profile this table's identity, so a second send from one person corrected the
-// first instead of duplicating it. The field was dropped on 2026-09-10 and
-// nothing replaces it: a unique `name` would be worse than no key at all, since
-// it would let anybody overwrite somebody else's words by typing their name.
-// Two sends are therefore two rows, and `id` is the only identity here.
-//
-// No `publishedAt`, and its absence is deliberate rather than an oversight.
-// `Post` and `ShaderPreset` carry one because the same row is both the draft and
-// the published thing, so the column is what separates them. A testimonial is
-// not published by this table at all — it is raw material I read, and putting a
-// column here for a page that does not exist yet would be inventing a workflow
-// in a migration. It is one nullable column away on the day there is one.
+// Submitted by anyone holding the `/vouch` link, only through `TestimonialSubmissionSchema`.
+// No natural key: a unique `name` would let anyone overwrite somebody else's words.
 model Testimonial {
   id          String   @id @default(cuid())
-  // What they want to be called, in their own spelling. Not derived from the
-  // profile: the name on a LinkedIn page is whatever LinkedIn last scraped, and
-  // this is the one they chose to be quoted under.
   name        String
-  // The testimonial, and the reason the row exists. Plain `String` with no
-  // `@db.VarChar`, and that is the same
-  // call `Component.aspect` makes: the 280-character brief belongs to
-  // `TESTIMONIAL_QUOTE_MAX_LENGTH`, which the schema and the form's counter both
-  // read, and a width here would be a second copy of it that a change to the
-  // brief would have to remember to migrate.
+  // No `@db.VarChar`: the limit is `TESTIMONIAL_QUOTE_MAX_LENGTH`.
   quote       String
-  // When it arrived. No `updatedAt` beside it, because nothing updates a row
-  // except the writer re-sending their own — and `createdAt` already answers
-  // the only question the list asks, which is what came in and in what order.
   createdAt   DateTime @default(now())
-  // ---------------------------------------------------------------------------
-  // The two columns below are MINE, not theirs. Everything above arrives from a
-  // stranger through the form; these are added afterwards from the admin board,
-  // about a row that already exists. Nullable because that is the honest state
-  // of a row the moment it lands, and because a testimonial is perfectly
-  // readable without either.
-  // ---------------------------------------------------------------------------
-  // A face to put beside the words: the URL of something already in the media
-  // library, picked through the same dialog as every other picture on this
-  // site. A URL and not a key, because that is what the picker returns and what
-  // an `<img>` needs — a key would mean a resolution step on every read for a
-  // value that is only ever used one way.
+  // The columns below are set from the admin board, not the form.
   avatarUrl   String?
-  // What they do, under their name on the card — "Senior Product Designer at
-  // Shyft". Mine to write: the form collects a name and a quote and nothing
-  // else, so a role is something I know about them rather than something they
-  // sent. Kept OUT of `name` on purpose — people type their own title into that
-  // box, and a column of its own is what lets a card draw the two as two lines.
+  // The role line under the name, e.g. "Senior Product Designer at Shyft".
   tagline     String?
-  // Their profile. This column existed once, held nothing, and was dropped —
-  // and this is NOT that column coming back. That one was collected from the
-  // submitter and was UNIQUE, which made it the table's natural key. This one I
-  // type by hand, and carries no unique index on purpose: a key over a field I
-  // fill in myself would turn my own typo into a collision with somebody else's
-  // row. See the note in `src/domain/testimonial.ts`.
+  // Typed by the admin; deliberately not unique.
   linkedinUrl String?
-  // WHICH PART of `quote` a card shows. Null is the ordinary state and means
-  // "all of it" — nullable rather than defaulted to a copy of the quote,
-  // because the same words in two columns is two places for them to drift
-  // apart. The fallback costs one `??` at the point of use
-  // (`testimonialShown`).
-  //
-  // A slice, and only ever a slice. `updateTestimonialDetails` refuses anything
-  // that is not a verbatim, contiguous substring of `quote`, so this column
-  // cannot hold a sentence its author never wrote. That rule needs both columns
-  // at once, so it lives in the action rather than here — see the migration for
-  // why a CHECK was considered and rejected.
-  //
-  // `quote` is untouched by any of this and stays the canonical record of what
-  // was sent. Nothing shortens it, so an excerpt can always be widened or
-  // dropped to get back to the whole thing.
+  // A verbatim substring of `quote` (enforced in `updateTestimonialDetails`); null shows it all.
   excerpt     String?
-  // WHETHER THESE WORDS ARE ON THE HOMEPAGE, and the only column in this table
-  // that is about the reader rather than about the row.
-  //
-  // It exists because of who writes this table. `/vouch` is open to anyone
-  // holding the link — there is no account and no session to check them
-  // against — so a homepage that simply read the table would publish whatever
-  // arrived next, unreviewed, the moment it was sent. Every other surface here
-  // is written by me and needs no such gate; this one is the exception, and
-  // this column is the gate.
-  //
-  // A TIMESTAMP and not a boolean, matching `Post.publishedAt` exactly: the two
-  // answer the same question and there is no reason for a reader to learn two
-  // spellings of it. Null means "not on the page", which is the honest state of
-  // a row the moment it lands.
-  //
-  // Backfilled to `now()` for every row that already existed — see the
-  // migration. Those eight were collected, annotated and read by hand before
-  // the column existed, so defaulting them to unpublished would have hidden
-  // work that was already done; the gate is for what arrives NEXT.
+  // Null keeps it off the homepage until reviewed.
   publishedAt DateTime?
 }
 
-/// What the bucket cannot say about an icon: the name it is called by, and the
-/// words it can be found under.
-///
-/// The set itself is still a bucket prefix — the objects under `icons/` ARE
-/// the set, and everything readable from the bytes is read from the bytes.
-/// This table holds only what the file has no way to carry, and it exists as
-/// a TABLE rather than as object metadata for one reason: the icons listing
-/// searches by these words, and metadata cannot be listed by. Reading it costs
-/// one query for the whole set beside the HEADs the listing already makes;
-/// as metadata it would have been free to write and impossible to search.
-///
-/// A row is the EXCEPTION, not the rule. An icon with no row is an icon called
-/// what its filename says (`iconTitleFrom`) and findable under that alone,
-/// which is every icon the moment it is uploaded — so nothing backfills, and
-/// clearing the fields deletes the row rather than storing a name that would
-/// have to be told apart from an unset one.
+/// An icon's name and search words; a row exists only when they differ from the filename.
 model Icon {
-  /// The R2 object key, which is what the bucket and this table agree on. It
-  /// is minted with a uuid and never changes, so it is the id: a filename
-  /// would collide the moment two `check.svg` were uploaded.
+  /// The R2 object key.
   key       String   @id
-  /// What the icon is called. Never empty — see the note above about deleting.
+  /// Never empty: clearing the fields deletes the row.
   title     String
-  /// The other words it answers to. Tags rather than names: two icons may
-  /// hold the same one, which is what makes typing `arrow` useful, so there
-  /// is no unique constraint and no separate table to join through. A plain
-  /// array because nothing ever asks "which icons are tagged X" from the
-  /// database — the whole set is already in the browser, and the search runs
-  /// there against what is on screen.
+  /// Search words; not unique across icons.
   aliases   String[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -5,25 +5,10 @@ import { css } from "../../styled-system/css";
 import { sidenoteCard } from "../../styled-system/recipes";
 import type { SidenoteEntry } from "@/utils/sidenotes";
 
-// ---------------------------------------------------------------------------
-// SidenoteLayer — the margin notes.
-//
-// A note's card is CSS-anchored (see the sidenoteCard recipe) and revealed only
-// when its annotation is "active": in the editor (`trigger="caret"`) that means
-// the caret sits on the annotated text (or the card is being edited); in the
-// reader (`trigger="pointer"`) it means the annotation is hovered or clicked.
-//
-// Placement is chosen per active note: `side` (100px right of the text-content
-// column, 2px above the line) when the viewport has room, else `stacked`
-// (centred on the column, 4px below/above the line — like the slash menu).
-// ---------------------------------------------------------------------------
-
 const cardClass = {
   side: sidenoteCard({ placement: "side" }),
   stacked: sidenoteCard({ placement: "stacked" }),
 } as const;
-// Text row of a margin-note card — the ordinal marker followed by the note
-// body.
 const contentClass = css({
   display: "flex",
   gap: "xs",
@@ -33,8 +18,6 @@ const contentClass = css({
   color: "text.default",
 });
 
-// Leading ordinal in a margin-note card (matches the annotation's superscript),
-// painted in the brand gradient.
 const markerClass = css({
   fontWeight: "medium",
   background: "bg.brandedEmphasis",
@@ -44,9 +27,6 @@ const markerClass = css({
   userSelect: "none",
 });
 
-// Editable/read note body inside a margin-note card. Paragraphs are block
-// children separated by 4px (Shift+Enter in the editor). Shows a placeholder
-// while empty and unfocused.
 const bodyClass = css({
   // inline-block + a min width gives an EMPTY contentEditable a line
   // box, so the caret is placeable on click.
@@ -61,8 +41,6 @@ const bodyClass = css({
   },
 });
 
-// "Esc to exit" hint below the note body — mirrors the link-input hint in the
-// selection toolbar (an Esc key-cap followed by a muted label).
 const hintStyle = css({
   display: "flex",
   alignItems: "center",
@@ -89,14 +67,8 @@ const hintLabelStyle = css({
   whiteSpace: "nowrap",
 });
 
-// Horizontal geometry (mirrors the sidenote size tokens in panda.config.ts).
-// The `left`/`width` of a card are computed here from the rail's measured rect
-// and applied inline, rather than via CSS `anchor(--sidenote-rail …)`: WebKit
-// resolves only an element's default `position-anchor` (here the annotation,
-// used for the vertical axis), so a second named-anchor query for the
-// horizontal axis silently fails in Safari. Doing it in JS is safe because the
-// content column's x-edges are scroll-invariant.
-const SIDE_OFFSET = 100; // sizes.sidenoteOffset — 100px right of the column.
+// Computed here, not anchored: WebKit fails a second named-anchor query.
+const SIDE_OFFSET = 100; // sizes.sidenoteOffset
 const CARD_WIDTH = 320; // sizes.sidenoteWidth
 const SIDE_SAFE_GAP = 16; // room to keep before falling back to `stacked`.
 const STACKED_INSET = 80; // sizes.sidenoteStackedInset
@@ -105,9 +77,7 @@ const STACKED_MAX_WIDTH = 480; // sizes.sidenoteMaxWidth
 
 type Placement = "side" | "stacked";
 
-// Inline horizontal geometry for the active card. `left` is a viewport px value
-// (the card is position:fixed); `stacked` is centred on the column via the
-// recipe's `translate: -50%`.
+// `left` is in viewport px (the card is fixed); `stacked` centres via the recipe's translate.
 interface CardGeometry {
   left: number;
   width: number;
@@ -117,7 +87,6 @@ interface SidenoteLayerProps {
   entries: SidenoteEntry[];
   /** Reveal model: caret (editor) or hover/click (reader). */
   trigger?: "caret" | "pointer";
-  /** Editor mode — the note body is contentEditable. */
   editable?: boolean;
   /** Editor: id of the note whose card is open for editing. */
   activeId?: string | null;
@@ -126,8 +95,7 @@ interface SidenoteLayerProps {
   onAutoFocused?: () => void;
   /** Editor: the editing card lost focus — the parent should close it. */
   onStopEditing?: () => void;
-  /** Editor: Escape pressed in the note body — close the card and return the
-   *  caret to the annotated text. */
+  /** Escape in the note body: close the card and return the caret to the annotated text. */
   onExitEdit?: (entry: SidenoteEntry) => void;
   onChangeText?: (entry: SidenoteEntry, text: string) => void;
 }
@@ -144,7 +112,6 @@ export function SidenoteLayer({
   onChangeText,
 }: SidenoteLayerProps) {
   const railRef = useRef<HTMLDivElement>(null);
-  // Reader: annotation hovered / clicked. Both surfaces: card being edited.
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [clickId, setClickId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -185,11 +152,7 @@ export function SidenoteLayer({
     };
   }, [trigger]);
 
-  // Choose side vs stacked for the visible note and compute its horizontal
-  // geometry from the rail's rect. Layout effect so the inline left/width is set
-  // before paint (no flash at a stale position as the card reveals). Runs on
-  // mount + resize; horizontal geometry is scroll-invariant so scroll needs no
-  // recompute (the card is position:fixed and the column's x-edges don't move).
+  // Layout effect, so geometry lands before paint; scroll needs no recompute (fixed card, static column edges).
   useLayoutEffect(() => {
     if (!visibleId) return;
     function measure() {
@@ -208,7 +171,6 @@ export function SidenoteLayer({
           STACKED_MIN_WIDTH,
           Math.min(rect.width - STACKED_INSET, STACKED_MAX_WIDTH),
         );
-        // Centred on the column — the recipe applies translate: -50%.
         setGeometry({ left: rect.left + rect.width / 2, width });
       }
     }
@@ -245,7 +207,6 @@ export function SidenoteLayer({
           onBlurCapture={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
               setFocusedId((cur) => (cur === entry.id ? null : cur));
-              // Editing this note is over once its card loses focus.
               onStopEditing?.();
             }
           }}
@@ -276,16 +237,8 @@ export function SidenoteLayer({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Note text ↔ DOM.
-//
-// A note is stored as plain text on its mark, with `\n` between paragraphs. In
-// the card each paragraph is its own <div> so the gap between them is a real
-// margin (a `\n` under `white-space: pre-wrap` can't be spaced) — see the
-// sidenoteCardBody recipe. An EMPTY note keeps a childless body so the recipe's
-// `:empty` placeholder still shows.
-// ---------------------------------------------------------------------------
-
+// A note is newline-separated plain text, drawn as one <div> per paragraph so the gap is a real margin.
+// An empty note keeps a childless body for the `:empty` placeholder.
 const PARAGRAPH_TAGS = new Set(["DIV", "P"]);
 
 /** Paragraph-aware text of a note body (or of a cloned range fragment). */
@@ -308,7 +261,6 @@ function readNoteText(root: Node): string {
   return lines.join("\n");
 }
 
-/** Rebuild a note body's DOM from its text. */
 function renderNoteText(el: HTMLElement, text: string): void {
   if (text === "") {
     el.replaceChildren();
@@ -333,7 +285,6 @@ function offsetOf(el: HTMLElement, node: Node, offset: number): number {
   return readNoteText(range.cloneContents()).length;
 }
 
-/** The selection as text offsets in `el`, or null if it isn't inside the body. */
 function selectionOffsets(el: HTMLElement): { start: number; end: number } | null {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -347,7 +298,6 @@ function selectionOffsets(el: HTMLElement): { start: number; end: number } | nul
   };
 }
 
-/** Collapse the caret at text offset `at` in a freshly rendered body. */
 function placeCaret(el: HTMLElement, at: number): void {
   const lines = readNoteText(el).split("\n");
   let index = 0;
@@ -370,12 +320,7 @@ function placeCaret(el: HTMLElement, at: number): void {
   sel?.addRange(range);
 }
 
-/**
- * Shift+Enter: break the note into a new paragraph at the caret (replacing any
- * selected text). Returns the new note text, or null if the caret isn't in the
- * body. The body is uncontrolled, so the DOM is rebuilt here and the caret
- * restored just after the break.
- */
+/** Shift+Enter: splits at the caret, rebuilding the uncontrolled body; null if the caret isn't in it. */
 function splitParagraphAtCaret(el: HTMLElement): string | null {
   const offsets = selectionOffsets(el);
   if (!offsets) return null;
@@ -386,12 +331,7 @@ function splitParagraphAtCaret(el: HTMLElement): string | null {
   return next;
 }
 
-// ---------------------------------------------------------------------------
-// SidenoteBody — the note text. Editable bodies are uncontrolled (seeded via a
-// ref) so React never reconciles the contentEditable children and steals the
-// caret; external changes (undo, another card) re-seed only while unfocused.
-// ---------------------------------------------------------------------------
-
+// Uncontrolled, so React never reconciles the contentEditable and steals the caret; re-seeded only while unfocused.
 interface SidenoteBodyProps {
   text: string;
   editable: boolean;
@@ -425,11 +365,7 @@ function SidenoteBody({
     if (!autoFocus) return;
     const el = ref.current;
     if (!el) return;
-    // The card reveals via a visibility transition (hidden → visible), so it
-    // isn't focusable the instant its annotation becomes active: focus() on a
-    // still-hidden element is a silent no-op. Retry across a few frames until
-    // focus actually lands (fresh cards mount visible and land on the first
-    // try; a re-opened card takes a frame for `visibility` to compute visible).
+    // focus() is a no-op until the visibility transition reveals the card, so retry across frames.
     let raf = 0;
     let tries = 0;
     const attempt = () => {
@@ -472,9 +408,7 @@ function SidenoteBody({
       onInput={(e) => {
         const el = e.currentTarget;
         const next = readNoteText(el);
-        // Deleting the last character leaves an empty paragraph (or the
-        // browser's <br>) behind, which would keep the `:empty` placeholder
-        // hidden — drop it so the note reads as empty again.
+        // Drop the leftover empty paragraph so the `:empty` placeholder shows again.
         if (next === "" && el.childNodes.length > 0) {
           el.replaceChildren();
           if (document.activeElement === el) placeCaret(el, 0);
@@ -482,17 +416,12 @@ function SidenoteBody({
         onChange(next);
       }}
       onKeyDown={(e) => {
-        // Esc exits the card (mirrors the link input) — hand back to the parent
-        // to close it and restore the caret to the annotated text.
         if (e.key === "Escape") {
           e.preventDefault();
           e.stopPropagation();
           onExit?.();
           return;
         }
-        // Shift+Enter opens a new paragraph inside the note; a plain Enter is
-        // "done" — the text is already committed on every input, so exiting is
-        // all that's left.
         if (e.key === "Enter") {
           e.preventDefault();
           e.stopPropagation();

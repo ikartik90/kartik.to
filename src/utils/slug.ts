@@ -1,7 +1,3 @@
-/**
- * Derives a URL-safe slug from a title string.
- * Falls back to a timestamp-based slug for untitled content.
- */
 export function generateSlug(title?: string): string {
   const trimmed = title?.trim();
   if (trimmed) {

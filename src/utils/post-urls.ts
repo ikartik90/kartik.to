@@ -3,17 +3,12 @@ import { LISTED_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
 import { ABOUT_SLUG, HOME_SLUG } from "@/data/page-slugs";
 
 export function getPostReadUrl(category: PostCategory, slug: string): string {
-  // The homepage's record has a slug so it can be edited at `/edit/home`; the
-  // page itself is the site's root.
+  // The homepage's record has a slug (for `/edit/home`), but it lives at the root.
   if (category === "PAGE" && slug === HOME_SLUG) return "/";
   return `${POST_CATEGORIES[category].path}/${slug}`;
 }
 
-/**
- * The post a reading address names, or null for any other page — the inverse
- * of `getPostReadUrl`. A page is recognised only by the slugs the site has a
- * route for, since every other single-segment path (`/vouch`) is not a post.
- */
+/** Inverse of `getPostReadUrl`; pages match only the slugs the site routes. */
 export function parsePostReadUrl(
   pathname: string,
 ): { category: PostCategory; slug: string } | null {
@@ -30,19 +25,13 @@ export function parsePostReadUrl(
   return null;
 }
 
-/**
- * The post as Markdown, for AI agents — the `llms.txt` convention of the page's
- * own address with `.md` appended. `next.config.ts` rewrites it to the `md`
- * route handler beside the page.
- */
+/** `next.config.ts` rewrites it to the `md` route handler beside the page. */
 export function getPostMarkdownUrl(category: PostCategory, slug: string): string {
   return `${getPostReadUrl(category, slug)}.md`;
 }
 
 export function getEditUrl(category: PostCategory, slug?: string): string {
-  // A page has a static edit route of its own (`/edit/home`, `/edit/about`),
-  // which is what creates its record the first time; there is no category for
-  // it to be told.
+  // A page has its own static edit route, which creates its record the first time.
   if (slug && category === "PAGE") return `/edit/${slug}`;
   if (slug) {
     return `/edit/${slug}?category=${category}`;

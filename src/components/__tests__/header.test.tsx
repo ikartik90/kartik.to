@@ -10,8 +10,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
 }));
 
-// jsdom does not implement matchMedia, which the theme toggle in the opposite
-// gutter resolves `system` mode through.
+// jsdom has no matchMedia; the theme toggle resolves `system` mode through it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockReturnValue({ matches: false }),
@@ -46,8 +45,6 @@ describe("Header", () => {
 
   it("leaves the name to the logo rather than setting it beside it", () => {
     render(<Header />);
-    // Nothing spells the name out in the row any more, so the picture has to
-    // carry it — an empty alt would drop it from the page entirely.
     expect(screen.queryByText("Kartik Iyer")).toBeNull();
     expect(screen.getByAltText("Kartik Iyer")).toBeDefined();
   });
@@ -74,8 +71,6 @@ describe("Header", () => {
     stubPlatform("macOS");
     render(<Header />);
 
-    // The shortcut is the resting label; CSS is what withholds it from a
-    // touch-first device and hides it under the cursor.
     expect(screen.getByText("⌘K").tagName).toBe("KBD");
 
     const menu = screen.getByRole("button", { name: "Menu" });

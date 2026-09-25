@@ -3,9 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { Field } from "../field";
 import { Slider } from "../slider";
 
-// jsdom lays nothing out, so the track has no width to map a pointer onto.
-// Give it the drawn geometry — a 140px ruler starting at x=8 (Figma 842:7179) —
-// so a clientX means the same thing here as it does in the browser.
+// jsdom lays nothing out, so the track is given a fixed geometry.
 const TRACK_LEFT = 8;
 const TRACK_WIDTH = 140;
 
@@ -26,12 +24,9 @@ function layoutTrack() {
   return track;
 }
 
-/** clientX of a 0–1 position along the laid-out track. */
 const atRatio = (ratio: number) => TRACK_LEFT + ratio * TRACK_WIDTH;
 
-// jsdom implements no pointer capture at all. Model the real contract — capture
-// makes hasPointerCapture true until released — because "is this pointer
-// captured?" is exactly what the drag handler branches on.
+// jsdom has no pointer capture; model it, since the drag handler branches on it.
 beforeEach(() => {
   const captured = new WeakMap<Element, Set<number>>();
   Element.prototype.setPointerCapture = function (id: number) {
@@ -164,7 +159,6 @@ describe("Slider", () => {
     it("claims the keys it acts on, so the page cannot scroll under the field", () => {
       const { track } = setup();
       const moved = fireEvent.keyDown(track, { key: "ArrowRight" });
-      // fireEvent returns false once a handler has called preventDefault.
       expect(moved).toBe(false);
       const ignored = fireEvent.keyDown(track, { key: "a" });
       expect(ignored).toBe(true);
@@ -202,7 +196,6 @@ describe("Slider", () => {
       expect(track.getAttribute("aria-valuenow")).toBe("50");
       fireEvent.pointerMove(track, { clientX: atRatio(0.2), pointerId: 1 });
       expect(track.getAttribute("aria-valuenow")).toBe("20");
-      // Dragged well past the left end — the value stops, the handler does not.
       fireEvent.pointerMove(track, { clientX: -400, pointerId: 1 });
       expect(track.getAttribute("aria-valuenow")).toBe("0");
     });
@@ -218,10 +211,6 @@ describe("Slider", () => {
       expect(track.getAttribute("aria-valuenow")).toBe("0");
     });
 
-    // The default action of a primary-button pointerdown is to begin a text
-    // selection, and pointer capture does not stop it: the drag keeps steering
-    // the thumb while the browser paints a growing selection across whatever
-    // the cursor passes over outside the frame.
     it("declines the pointerdown default, so a drag selects no text", () => {
       render(
         <Field size="sm">
@@ -239,8 +228,6 @@ describe("Slider", () => {
       expect(notCancelled).toBe(false);
     });
 
-    // ...but only for a drag it is actually taking. A right-click has to keep
-    // its context menu, and a disabled slider has no drag to protect.
     it("leaves the default alone for a non-primary button", () => {
       render(
         <Field size="sm">
@@ -333,8 +320,6 @@ describe("Slider", () => {
     });
 
     it("thins a capped ruler to whole steps rather than even fractions", () => {
-      // −180…180 by 15° holds 25 values; every third one is nine marks, and
-      // eleven even ones would have sat at −144 and −108, which are not stops.
       const { container } = render(
         <Field size="sm">
           <Slider min={-180} max={180} step={15} defaultValue={0} />
@@ -354,14 +339,11 @@ describe("Slider", () => {
     });
 
     it("closes a ruler its stride cannot reach the end of", () => {
-      // 1–20 by 1 strides every second step to 19, then a closing mark on 20
-      // says where the rule ends — the last gap is half the width of the rest.
       const { container } = render(
         <Field size="sm">
           <Slider min={1} max={20} step={1} defaultValue={1} />
         </Field>,
       );
-      // Read back as the values they sit on: 1, 3 … 19, then the closing 20.
       expect(
         tickOffsets(container).map((left) =>
           Math.round(1 + (parseFloat(left) / 100) * 19),
@@ -430,8 +412,6 @@ describe("Slider", () => {
         </Field>,
       );
       fireEvent.change(output(), { target: { value: "43" } });
-      // Mid-edit the box holds exactly what was typed — rewriting it under the
-      // caret is what makes a self-correcting field impossible to type in.
       expect(output().value).toBe("43");
       expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("40");
       fireEvent.blur(output());
@@ -458,7 +438,6 @@ describe("Slider", () => {
           <Slider min={0} max={1} step={0.25} defaultValue={0.5} onValueChange={onValueChange} />
         </Field>,
       );
-      // "" and "0." are both waypoints on the way to a number, not zero.
       fireEvent.change(output(), { target: { value: "" } });
       fireEvent.change(output(), { target: { value: "0." } });
       expect(onValueChange).not.toHaveBeenCalled();
@@ -582,7 +561,6 @@ describe("Slider — text selection during a drag", () => {
 
     fireEvent.pointerDown(track, { pointerId: 1, button: 0, clientX: atRatio(0) });
     expect(dragging()).toBe(true);
-    // A panel closed under a finger still has to hand selection back.
     unmount();
     expect(dragging()).toBe(false);
   });

@@ -3,11 +3,7 @@ import { usePageLoaded } from "@/hooks/use-page-loaded";
 import { loadDemoAsset, resolveDemoAssets } from "@/utils/demo-assets";
 import type { DemoComponentEntry, DemoProps } from "@/components/demo/registry";
 
-// A demo's module (including its warm-up, e.g. the Calchemy engine) is loaded
-// once per session and cached by id. Any later instance — a second copy on the
-// page, a re-mount, scrolling back after it finished — reads this cache and
-// renders the component immediately, so the loader only ever shows for a
-// genuine first load, never a fake replay.
+// Loaded modules are cached per session, so later instances render without the loader.
 const loadedComponents = new Map<string, ComponentType<DemoProps>>();
 const loadPromises = new Map<string, Promise<ComponentType<DemoProps>>>();
 
@@ -17,17 +13,12 @@ function loadDemoModule(entry: DemoComponentEntry): Promise<ComponentType<DemoPr
 
   let promise = loadPromises.get(entry.id);
   if (!promise) {
-    // A `card` entry has no module — it is drawn from its publication's own
-    // configuration. Nothing routes one here (the grid and the insert dialog
-    // both branch on `card` before rendering), so this is the assertion of that
-    // rather than a path anyone takes.
     const load = entry.load;
     if (!load) {
       return Promise.reject(
         new Error(`Demo "${entry.id}" is a card and has no module to load`),
       );
     }
-    // De-duplicate concurrent instances so the module loads a single time.
     promise = load()
       .then((component) => {
         loadedComponents.set(entry.id, component);
@@ -50,29 +41,21 @@ export function __resetDemoLoadCache(): void {
 }
 
 interface DemoLoaderState {
-  /** The demo component, once its module chunk has loaded. */
   Component: ComponentType<DemoProps> | null;
   /** True once the module and all reveal-gating fonts have settled. */
   ready: boolean;
-  /** Real completion fraction (0–1) across the module + gating fonts. */
+  /** 0–1 across the module and gating fonts. */
   fraction: number;
 }
 
-/**
- * Drives a component demo's lazy load: after the page has loaded, it fetches the
- * demo's module chunk and its gating fonts in parallel (kicking off decorative
- * image preloads in the background), tracking progress for the preloader. A demo
- * already loaded earlier in the session resolves synchronously — no loader.
- */
+/** Lazy-loads a demo's module and gating fonts once the page has loaded, with progress. */
 export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
   const pageLoaded = usePageLoaded();
   const [Component, setComponent] = useState<ComponentType<DemoProps> | null>(
     () => loadedComponents.get(entry.id) ?? null,
   );
   const [settled, setSettled] = useState(0);
-  // Was this demo already loaded when this instance mounted? Captured once (and
-  // on entry change) so a mid-load cache write doesn't retroactively skip the
-  // fill; a fresh instance of an already-loaded demo reveals with no loader.
+  // Captured at mount (and on entry change) so a mid-load cache write can't skip the fill.
   const [preloaded, setPreloaded] = useState(() =>
     loadedComponents.has(entry.id),
   );
@@ -80,15 +63,10 @@ export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
   const { fonts, images } = useMemo(() => resolveDemoAssets(entry), [entry]);
   const total = fonts.length + 1;
 
-  // Reset during render (not in an effect) when the demo changes, reusing the
-  // cache for the new entry.
   const [loadedEntry, setLoadedEntry] = useState(entry);
   if (loadedEntry !== entry) {
     setLoadedEntry(entry);
-    // Through an updater, exactly as the effect below parks its result: a
-    // component IS a function, and a function handed to a state setter is read
-    // as `updater(prev)` — so the bare form CALLS the demo, running its hooks
-    // inside the state update and storing what it returned in its place.
+    // Via an updater: a component is a function, which setState would call as `updater(prev)`.
     setComponent(() => loadedComponents.get(entry.id) ?? null);
     setPreloaded(loadedComponents.has(entry.id));
     setSettled(0);
@@ -123,15 +101,10 @@ export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
   return { Component, ready, fraction };
 }
 
-/**
- * A self-incrementing "trickle" that eases toward ~90% while `active`, so the
- * preloader keeps moving during long, milestone-sparse loads (and covers
- * indeterminate phases). Returns 0–1.
- */
+/** Eases toward ~0.9 while `active`, so the preloader keeps moving between milestones. */
 export function useTrickleProgress(active: boolean): number {
   const [progress, setProgress] = useState(active ? 0.06 : 0);
 
-  // Re-seed during render on an active transition, avoiding setState-in-effect.
   const [prevActive, setPrevActive] = useState(active);
   if (prevActive !== active) {
     setPrevActive(active);

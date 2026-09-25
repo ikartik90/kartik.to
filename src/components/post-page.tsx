@@ -13,15 +13,6 @@ import { SITE_URL } from "@/lib/site-url";
 import { getPostReadUrl } from "@/utils/post-urls";
 import { postJsonLd } from "@/utils/structured-data";
 
-// ---------------------------------------------------------------------------
-// A post, read at `<category prefix>/<slug>` — the whole of every category's
-// reading route, which is left holding only its own name for the category.
-//
-// One component rather than a copy per route, because the routes only ever
-// differed in which category they looked the slug up in; a category added to
-// `POST_CATEGORIES` gets its page by pointing a two-line route at this.
-// ---------------------------------------------------------------------------
-
 /** The `generateMetadata` of a category's reading route. */
 export async function postPageMetadata(
   category: PostCategory,
@@ -46,8 +37,6 @@ export async function PostPage({
   const post = await resolvePost(slug, category, { allowDraft });
 
   if (!post) {
-    // Refiled or renamed from the metadata sidebar: the address it left
-    // sends the reader on rather than to a 404.
     const moved = await findMovedPostPath(slug, category, { allowDraft });
     if (moved) permanentRedirect(moved);
     notFound();

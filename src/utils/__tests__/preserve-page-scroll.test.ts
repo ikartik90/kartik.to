@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { preservePageScroll } from "../preserve-page-scroll";
 
-/**
- * A hand-cranked `requestAnimationFrame`, so a test can advance exactly as many
- * frames as it means to. Safari's clobber lands on the second or third frame
- * after the dialog closes, and the whole point of the budget is WHICH frames
- * are still watched — that is only assertable if frames are stepped one by one.
- */
+/** A hand-cranked `requestAnimationFrame`, so a test steps exactly the frames it means to. */
 function fakeFrames() {
   const queue: Array<() => void> = [];
   vi.stubGlobal("requestAnimationFrame", (cb: () => void) => queue.push(cb));

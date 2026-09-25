@@ -3,7 +3,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { WeatherGraphic } from "../weather-graphic";
 import { WEATHER_CONDITIONS } from "@/domain/weather";
 
-// Every layer in the kit, by the `data-layer` it is tagged with.
 const LAYERS = [
   "plasma",
   "halo",
@@ -21,9 +20,6 @@ describe("WeatherGraphic", () => {
   afterEach(cleanup);
 
   it("keeps every layer mounted in every condition", () => {
-    // The whole transition model rests on this: a condition change moves and
-    // fades layers that are ALREADY on screen. The moment one of them is
-    // conditionally rendered instead, clear → rain becomes a cut.
     for (const condition of WEATHER_CONDITIONS) {
       const { container, unmount } = render(
         <WeatherGraphic condition={condition} />,
@@ -48,21 +44,15 @@ describe("WeatherGraphic", () => {
   });
 
   it("keeps tracking the time of day under an overcast sky", () => {
-    // Rain has one Figma variant for both halves of the day, but the body
-    // behind the cloud still has to be the moon so that rain → clear at night
-    // does not reveal a sun.
     const { container } = render(
       <WeatherGraphic condition="rain" time="night" />,
     );
     const svg = container.firstElementChild as SVGSVGElement;
     expect(svg.getAttribute("data-variant")).toBe("Weather=Rain, Time=Anytime");
-    // The night fills are still selected underneath the overcast.
     expect(svg.getAttribute("class")).toContain("time_night");
   });
 
   it("is announced by its condition alone", () => {
-    // Not "Clear night" — see weatherLabel. The hour stays available on
-    // `data-variant` for anyone tracing a drawing back to its Figma cell.
     const { container } = render(
       <WeatherGraphic condition="clear" time="night" />,
     );
@@ -90,9 +80,6 @@ describe("WeatherGraphic", () => {
   });
 
   it("gives each instance its own gradient and clip ids", () => {
-    // Two graphics on one page — the demo grid renders eleven. Shared ids
-    // would make every clip path resolve to the FIRST instance's, so ten
-    // clouds would be frosting a sun that is somewhere else entirely.
     const { container } = render(
       <>
         <WeatherGraphic condition="cloudy" />
@@ -105,9 +92,6 @@ describe("WeatherGraphic", () => {
   });
 
   it("points every url() reference at an id that exists in the same instance", () => {
-    // A namespaced id is only half the job: the references have to be
-    // namespaced with it. A stale `url(#cloud-mask)` fails silently — SVG
-    // renders the element unmasked rather than erroring.
     const { container } = render(<WeatherGraphic condition="thundershower" />);
     const svg = container.firstElementChild as SVGSVGElement;
     const ids = new Set([...svg.querySelectorAll("[id]")].map((n) => n.id));

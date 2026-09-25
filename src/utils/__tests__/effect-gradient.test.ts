@@ -24,12 +24,10 @@ describe("effectSpots", () => {
   });
 
   it("lays the colours out along the effect's own turn", () => {
-    // A three-quarter turn points the ramp UP the card, so the first colour is
-    // at the foot and the last at the head.
+    // -90° points the ramp up the card: first colour at the foot.
     const up = effectSpots(effect({ rotation: -90, colors: ["#000000FF", "#FFFFFFFF"] }));
     expect(up[0].y).toBeGreaterThan(up[1].y);
 
-    // And the other way round when the turn is.
     const down = effectSpots(effect({ rotation: 90, colors: ["#000000FF", "#FFFFFFFF"] }));
     expect(down[0].y).toBeLessThan(down[1].y);
   });
@@ -66,10 +64,6 @@ describe("effectStyle", () => {
   });
 
   it("fades each spot to its OWN colour rather than to `transparent`", () => {
-    // `transparent` is transparent BLACK, and a gradient to it is interpolated
-    // through progressively darker, greyer pixels — which turned a pale blue
-    // ground into a grey one. Fading to the same colour at zero alpha is the
-    // same fade with nothing else mixed into it.
     const style = effectStyle(
       effect({ colors: ["#1954DCFF", "#DAEBFFFF"], rotation: -90 }),
     );

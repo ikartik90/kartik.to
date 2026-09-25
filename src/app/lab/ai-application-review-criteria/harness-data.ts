@@ -1,22 +1,8 @@
-/**
- * Fixture data for the criteria-benchmark prototype.
- *
- * EVERYTHING HERE IS INVENTED. No real candidate, resume or company.
- *
- * Two things are wrong ON PURPOSE and must not be "fixed":
- *  1. `new-logo` is a claim test. Its prompt asks for experience without naming
- *     any evidence, so it is satisfied by a resume that states the experience and
- *     missed by one that demonstrates it in numbers. This is the finding the
- *     whole prototype exists to surface.
- *  2. `large-deals` abstains on half the benchmark, because most resumes give no
- *     ACV figure. A criterion can be useless without ever causing a disagreement.
- *
- * Nothing here is computed. Result, counts and findings are derived in the view.
- */
+// Invented data, flawed on purpose; don't "fix": `new-logo` asks for experience with no
+// evidence (the prototype's finding), and `large-deals` is undecided for half (no ACV).
 
-/** A candidate is included who meets all but this many of the criteria tested: 3 of 4, 2 of 3. */
+/** Criteria a candidate may miss and still be included. */
 export const MISSES_ALLOWED = 1;
-/** Fewer candidates than this are too few to benchmark against. */
 export const MIN_BENCHMARK_CANDIDATES = 10;
 export const CREDITS_PER_CANDIDATE = 1;
 
@@ -47,7 +33,6 @@ export const CRITERIA = [
     id: "new-logo",
     title: "New Logo Acquisition",
     prompt: "New logo acquisition experience in B2B SaaS environment.",
-    /** The word doing the damage. Highlighted in the form. */
     flawWord: "experience",
     suggestedRewrite: {
       prompt:
@@ -56,14 +41,9 @@ export const CRITERIA = [
         "evidenced by the number of accounts won or the new business quota attained",
       effect:
         "Accepts a resume that reports the outcome in numbers, not only one that names the experience.",
-      /** No outcome is claimed. Changing a criterion means a new, paid test. */
       costNote:
         "Applying is free. Retesting your 12 benchmark candidates costs 12 credits.",
-      /**
-       * How the rewrite evaluates where the claim test did not: the two hires who
-       * report accounts won in numbers now meet it, and the resume that only
-       * names the experience no longer does. Everyone else comes out the same.
-       */
+      /** Only the evaluations the rewrite changes. */
       reevaluated: { dana: "met", priya: "met", tomas: "not-met" },
     },
   },
@@ -77,15 +57,7 @@ export const CRITERIA = [
   },
 ] as const;
 
-/**
- * The twelve candidates the benchmark is run against — the job's suggested
- * candidates, and the set it was last run with. `company` is where each works
- * now; `role`, `knownOutcome` and `decided` say which of the company's past
- * openings they applied to, how far they got and when it was decided.
- *
- * Evaluations are ordered to match CRITERIA; a benchmark reads them off in the
- * order the criteria are tested in, which is the ring's.
- */
+/** `evaluations` are in CRITERIA order. */
 export const BENCHMARK_CANDIDATES = [
   {
     id: "renee",
@@ -198,7 +170,6 @@ export const BENCHMARK_CANDIDATES = [
     role: "Senior AE",
     decided: "Mar 2024",
     knownOutcome: "archived-application-review",
-    // No interview happened, so no scorecards exist to average.
     avgScore: null,
     evaluations: ["met", "met", "met", "undecided"],
     finding: {
@@ -246,28 +217,13 @@ export const BENCHMARK_CANDIDATES = [
   },
 ] as const;
 
-/**
- * The benchmark last run on the job, before New Logo Acquisition was added: its
- * three running criteria against the same twelve candidates, and every result
- * agreeing with what really happened.
- *
- * The same evaluations as now but for one, recorded as that run had it: Tomas
- * Reyes came out undecided on CRM & Sales Ops, so he met one of three and was
- * excluded. Without that difference he and Kevin Tran — identical on the other
- * three — could not both agree with their outcomes.
- */
+// Tomas's CRM difference is load-bearing: without it he and Kevin (otherwise
+// identical) can't both agree with their outcomes.
 export const PREVIOUS_BENCHMARK = {
   criteria: ["full-cycle", "crm", "large-deals"],
   differences: { tomas: { crm: "undecided" } },
 } as const;
 
-/**
- * A result agrees with the known outcome when:
- *   hired                        -> Included
- *   archived-interview           -> Included  (they cleared the resume screen in real life)
- *   archived-application-review  -> Excluded
- * Three rows break this, and `new-logo` is decisive in all three.
- */
 export const EXPECTED_RESULT: Record<KnownOutcome, "included" | "excluded"> = {
   hired: "included",
   "archived-interview": "included",

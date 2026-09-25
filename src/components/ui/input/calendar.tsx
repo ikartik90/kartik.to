@@ -34,59 +34,6 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 import { Tooltip, TooltipHostContext } from "@/components/ui/tooltip";
 import { useHintTooltip } from "@/hooks/use-hint-tooltip";
 
-// ---------------------------------------------------------------------------
-// Calendar — the composable grid behind the Date input's popover.
-//
-//   <Calendar value={date} onValueChange={setDate} months={3}>
-//     <Field.Search />
-//     <Calendar.PeriodList>
-//       <Button variant="icon"><ChevronLeft/></Button>
-//       <Calendar.Period>                                {/* one template, cloned per month */}
-//         <Calendar.Month />
-//         <Calendar.Week><Calendar.Day/></Calendar.Week>   {/* cloned per weekday */}
-//         <Calendar.Grid><Calendar.Date/></Calendar.Grid>  {/* cloned per day     */}
-//       </Calendar.Period>
-//       <Button variant="icon"><ChevronRight/></Button>
-//     </Calendar.PeriodList>
-//   </Calendar>
-//
-// The root owns Temporal month math + selection and hands each part what it
-// needs through context. Cloning is the idiom at every level: `PeriodList`
-// clones its single `Period` template once per visible month (and its two
-// icon-`Button` chevrons into prev/next), and inside each `Period` the
-// `Week`/`Grid` clone their own single child once per header/day cell. A
-// `Period` publishes its month on a second context, so the parts below it read
-// THEIR month rather than the root's — which is what makes one template render
-// April, May and June without any of them taking a prop.
-//
-// `months` (default 1) sets the range size, and `step` (default `months`) how
-// far one chevron press moves it — equal by default, so the range PAGES and
-// nothing on screen repeats; `step={1}` on a wider range WALKS it instead,
-// keeping most of the previous view as context. Every day cell surfaces its
-// state (aria-selected, data-state=today,
-// data-outside, :disabled) AND identity (data-weekday, data-weekend) as
-// attributes, so the look is fully re-skinnable off selectors.
-//
-// `selectionMode` picks how many dates can be held at once. `single` (default)
-// is the Date input's picker — one date, and picking replaces it. `multiple`
-// swaps in a toggle model (`values` / `onValuesChange`) and unlocks two
-// gestures that only make sense there:
-//
-//   • DRAG — a marquee. The press point pins one corner of a rectangle and the
-//     cursor is the other; every day cell the rectangle overlaps, by any amount,
-//     is toggled against the selection the drag started from. So the band is
-//     reversible: shrink it back off a cell and that cell reverts. It is pure
-//     geometry over the whole period list, which is why a band can span months
-//     and why it never depends on the path the cursor took.
-//   • Shift+Arrow — a path, since a keyboard caret has no second corner to drag.
-//     A run flips what it steps onto, and reversing over it rubs it out.
-//
-// Neither gesture is visible in the chrome, so a `Calendar.Tooltip` dropped in
-// the `PeriodList` volunteers the drag: the cursor-following tooltip, shown
-// while the pointer is over the draggable area, withdrawing after a few seconds
-// and for good after the first drag (the consumer writes the copy).
-// ---------------------------------------------------------------------------
-
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -101,10 +48,8 @@ const WEEKDAY_LONG: Record<WeekdayKey, string> = {
   thu: "Thursday", fri: "Friday", sat: "Saturday",
 }; // prettier-ignore
 
-/** How a `Calendar.Month` renders its label. */
 export type MonthFormat = "full" | "narrow";
 
-/** "July 2026" / "Jul 2026" — the two `monthFormat`s, from a first-of-month. */
 function monthLabel(
   start: Temporal.PlainDate,
   format: MonthFormat = "full",
@@ -115,54 +60,38 @@ function monthLabel(
 
 type CalendarStyles = ReturnType<typeof calendar>;
 
-/** How many dates the calendar can hold at once. */
 export type CalendarSelectionMode = "single" | "multiple";
 
 type CalendarContextValue = {
   styles: CalendarStyles;
   today: Temporal.PlainDate;
   selectionMode: CalendarSelectionMode;
-  /**
-   * Are the multi-commit GESTURES live? Already folded in with the mode, so a
-   * consumer of this context asks one question rather than two.
-   */
+  /** Already false outside `multiple` mode. */
   sweep: boolean;
-  /**
-   * The selection as ISO day keys — ONE representation for both modes, so a
-   * cell only ever asks "is my key in here" rather than branching on the mode.
-   */
+  /** ISO day keys, whichever the mode. */
   selection: ReadonlySet<string>;
   min?: Temporal.PlainDate;
   max?: Temporal.PlainDate;
-  /** First-of-month for the FIRST month of the visible range. */
+  /** First-of-month of the first visible month. */
   view: Temporal.PlainDate;
-  /** How many months one chevron press moves — NOT the range's width. */
+  /** How far one chevron press moves, not the range's width. */
   step: number;
-  /** The date the search currently resolves to — Enter's pending target. */
+  /** What the search resolves to: Enter's pending target. */
   query: Temporal.PlainDate | null;
-  /**
-   * The single roving-tabindex anchor across the whole range
-   * (keyboard focus ▸ query ▸ earliest selected ▸ today ▸ first-of-range).
-   */
+  /** The roving tabstop: keyboard focus ▸ query ▸ earliest selected ▸ today ▸ first of range. */
   activeDate: Temporal.PlainDate;
-  /** One entry per visible month, in order. */
   periods: CalendarMonth[];
   /** Single-mode commit — replaces the selection. */
   select: (date: Temporal.PlainDate) => void;
   /** Multiple-mode commit — flips one date in or out. */
   toggle: (date: Temporal.PlainDate) => void;
-  /** Parks the roving tabstop without touching DOM focus (pointer paths). */
+  /** Parks the roving tabstop without moving DOM focus. */
   anchorFocus: (date: Temporal.PlainDate) => void;
-  /**
-   * Moves the roving tabstop AND DOM focus, paging the range if the date is off
-   * screen. `extend` also toggles what the step lands on — the Shift+Arrow run.
-   */
+  /** Moves the tabstop and DOM focus, paging if needed; `extend` also toggles the date. */
   moveFocus: (date: Temporal.PlainDate, extend?: boolean) => void;
-  /** Pins the marquee's first corner at a viewport point and measures the grid. */
   dragStart: (x: number, y: number, listRect: DOMRect) => void;
-  /** The live drag band, or null when no drag is in flight. */
   band: CalendarBand | null;
-  /** Did the last drag actually leave its press point? Guards the trailing click. */
+  /** Guards the trailing click after a real drag. */
   dragMoved: () => boolean;
   prevPage: () => void;
   nextPage: () => void;
@@ -176,9 +105,6 @@ function useCalendar(component: string): CalendarContextValue {
   return ctx;
 }
 
-// The month a `Calendar.Period` is rendering, published so the parts beneath it
-// (Month / Week / Grid) read THEIR month instead of the root's — the whole
-// reason one Period template can render a three-month range.
 const CalendarPeriodContext = createContext<CalendarMonth | null>(null);
 
 function usePeriod(component: string): CalendarMonth {
@@ -198,17 +124,11 @@ function isDisabled(
   return false;
 }
 
-/**
- * Dates as deduplicated, sorted ISO day keys. ISO-8601 sorts lexicographically
- * in chronological order, so the plain string sort IS the date sort — which is
- * why the selection can live as keys end to end and only become `PlainDate`s
- * again on the way out to the consumer.
- */
+/** Deduplicated, sorted ISO day keys; ISO strings sort chronologically. */
 function toKeys(dates: readonly Temporal.PlainDate[] = []): string[] {
   return [...new Set(dates.map((date) => date.toString()))].sort();
 }
 
-/** How far one arrow key moves, in days. Up/Down are a whole week. */
 const ARROW_DAYS: Record<string, number> = {
   ArrowLeft: -1,
   ArrowRight: 1,
@@ -216,28 +136,10 @@ const ARROW_DAYS: Record<string, number> = {
   ArrowDown: 7,
 };
 
-/**
- * One marquee drag. The press point pins one corner of a rectangle and the live
- * pointer is the opposite corner, so the band grows, shrinks and flips
- * direction with the cursor instead of tracing the path it took to get there.
- *
- * `cells` is measured once, at press time: nothing in the grid moves mid-drag
- * (the range only pages on a chevron or a keyboard nav), so the move handler
- * stays pure arithmetic over a snapshot instead of hitting layout every frame.
- *
- * `base` is the selection the drag started from, and every frame recomputes the
- * result as `base` XOR "cells the band currently covers" rather than
- * accumulating flips. That is what makes the band reversible — retreat off a
- * cell and it returns to exactly the state it had before the drag began.
- *
- * `moved` keeps a click a click: until the pointer clears `DRAG_THRESHOLD` no
- * band is applied, and once it has, the browser's trailing click is swallowed
- * so the press cell isn't flipped a second time.
- */
+/** A marquee drag: each frame is `base` XOR the covered `cells`, so retreating off a cell reverts it. */
 type CalendarGesture = {
   originX: number;
   originY: number;
-  /** The period list's own box, so the band can be drawn in list-relative px. */
   listRect: DOMRect;
   cells: { key: string; rect: DOMRect }[];
   base: string[];
@@ -245,7 +147,6 @@ type CalendarGesture = {
   active: boolean;
 };
 
-/** The drag band's box, in period-list-relative pixels. */
 export type CalendarBand = {
   left: number;
   top: number;
@@ -253,17 +154,12 @@ export type CalendarBand = {
   height: number;
 };
 
-/** Pointer slop, in px, before a press is treated as a drag rather than a click. */
 const DRAG_THRESHOLD = 3;
 
-/**
- * How long a page turn takes — the window in which both the arriving and the
- * leaving range are on screen. Kept in step with the `calendarPageIn/Out`
- * keyframes in `panda.config.ts`.
- */
+/** Must match the 200ms page-turn animation in calendar.recipe.ts. */
 const PUSH_MS = 200;
 
-/** Do two boxes overlap at all? Touching edges don't count; any sliver does. */
+/** Strict overlap: touching edges don't count. */
 function overlaps(
   rect: DOMRect,
   left: number,
@@ -281,107 +177,44 @@ function overlaps(
 
 export interface CalendarProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "onChange"> {
-  /**
-   * `single` (default) holds one date and picking replaces it — the Date
-   * input's picker. `multiple` holds a set and picking toggles, which is also
-   * what turns on the pointer sweep and Shift+Arrow.
-   */
+  /** `multiple` holds a set, toggles on pick, and enables the sweep gestures. */
   selectionMode?: CalendarSelectionMode;
-  /**
-   * Whether `multiple` also gets the two gestures that commit MORE than one
-   * date per action — the marquee drag and its keyboard mirror, Shift+Arrow.
-   * Defaults to `true`. Set `false` for a calendar that still holds a set but
-   * takes it strictly one date at a time; clicking (and plain arrow movement)
-   * are unaffected. Ignored in `single` mode, which has no sweep to withdraw.
-   */
+  /** In `multiple` mode, enables the marquee drag and Shift+Arrow. Defaults to true. */
   sweep?: boolean;
-  /** Controlled selection — `single` only. */
+  /** `single` only. */
   value?: Temporal.PlainDate | null;
-  /** Initial selection when uncontrolled — `single` only. */
+  /** `single` only. */
   defaultValue?: Temporal.PlainDate | null;
-  /** Fired with the picked date — `single` only. */
+  /** `single` only. */
   onValueChange?: (date: Temporal.PlainDate) => void;
-  /** Controlled selection — `multiple` only. Order is irrelevant on the way in. */
+  /** `multiple` only. */
   values?: readonly Temporal.PlainDate[];
-  /** Initial selection when uncontrolled — `multiple` only. */
+  /** `multiple` only. */
   defaultValues?: readonly Temporal.PlainDate[];
-  /** Fired with the WHOLE selection after a toggle, in chronological order. */
+  /** `multiple` only; the whole selection, in chronological order. */
   onValuesChange?: (dates: Temporal.PlainDate[]) => void;
-  /**
-   * Which month the range OPENS on. Uncontrolled — the chevrons, a search and
-   * an off-range pick all move on from it freely. Without it the range starts
-   * at the selection, then today; pass it when neither is where the range
-   * should begin (e.g. opening a 3-month range one month BEFORE today, so the
-   * current month sits in the middle).
-   */
+  /** The month the range opens on; defaults to the selection's, then today's. */
   defaultView?: Temporal.PlainDate;
-  /**
-   * Controlled first month of the range, for a consumer that owns which months
-   * exist — a lazily loaded run, say, where moving the range is how more of it
-   * is brought in. Pair it with `onViewChange`: everything that moves the range
-   * from the inside (a chevron, a searched date, an arrow key walking off the
-   * end) reports through that instead of moving it itself.
-   *
-   * Controlled deliberately rather than remount-with-a-new-`defaultView`: the
-   * periods are keyed by month, so a range that SHIFTS keeps the DOM for every
-   * month it still holds. Remounting throws all of them away, which a scroll
-   * position cannot survive.
-   */
+  /** Controlled first month; internal moves report through `onViewChange` instead. */
   view?: Temporal.PlainDate;
-  /** Fired with the range's new first month whenever the calendar moves it. */
   onViewChange?: (view: Temporal.PlainDate) => void;
-  /** Lower/upper selectable bounds (inclusive). */
+  /** Inclusive selectable bounds. */
   min?: Temporal.PlainDate;
   max?: Temporal.PlainDate;
-  /** Which weekday sits in column 0. Defaults to Sunday. */
   weekStartsOn?: WeekdayKey;
-  /**
-   * How many consecutive months the range shows, starting at the view — one
-   * `Calendar.Period` each. Defaults to 1.
-   */
+  /** How many months are shown. */
   months?: number;
-  /**
-   * How many months one chevron press moves. Defaults to `months`, which PAGES:
-   * the range turns over completely, so nothing on screen repeats
-   * (Apr–Jun ▸ Jul–Sep). Set `step={1}` on a wider range to WALK it instead
-   * (Apr–Jun ▸ May–Jul), which costs a press to cross the same distance but
-   * keeps most of what you were just reading on screen — the right trade when
-   * the months are being compared rather than flipped through. Also sets what
-   * PageUp/PageDown move by, so the keyboard matches the chevrons.
-   */
+  /** Months per chevron or PageUp/PageDown press; defaults to `months`. */
   step?: number;
-  /**
-   * Parses a dropped-in `Field.Search`'s raw query into a date to navigate to
-   * (e.g. `parseCalendarDate("DD/MM/YYYY")`). The box stays dumb — it emits the
-   * raw string and the Calendar interprets it here, the mirror of OptionList's
-   * `filter`. Omit it and typing navigates nowhere (a bare search is inert).
-   */
+  /** Parses a child `Field.Search` query into a date; without it, typing navigates nowhere. */
   queryParser?: (query: string) => Temporal.PlainDate | null;
-  /**
-   * Retint for the surface it sits on. `default` = standalone; `onBrand` = the
-   * Date input popover's brand-tinted surface (palette inverts).
-   */
+  /** `onBrand` inverts the palette for the Date popover's brand surface. */
   tone?: "default" | "onBrand";
-  /**
-   * How the flanking chevrons meet the list's edges. `label` (default) is a
-   * bare chevron on the month label row — right for one month. `edge` gives
-   * each a full-height gradient scrim with the chevron centred in it, which is
-   * what a range WIDER than its frame wants: the fade dissolves the half-cut
-   * outer columns rather than leaving them on a hard crop, and centring suits
-   * chevrons that belong to the whole run rather than to any one month's
-   * label row.
-   */
+  /** `label` puts the chevrons on the month row; `edge` gives full-height scrims for a cropped range. */
   navPlacement?: "label" | "edge";
-  /**
-   * Fill the box rather than hug the months. The calendar's width is otherwise
-   * intrinsic (208px a month), so in a wider column it simply sits in one
-   * corner of it; `fluid` grows the period to the column and opens the gutters
-   * between the seven day columns to take up the slack, leaving the day cell
-   * itself at its 24px square. A no-op at the natural measure, which is what
-   * makes it safe to set once and let the column decide.
-   */
+  /** Fill a wider box by widening the gutters; day cells stay 24px. */
   fluid?: boolean;
-  /** Override "today" — primarily for tests/deterministic rendering. */
+  /** Override "today", e.g. for tests. */
   today?: Temporal.PlainDate;
   children: ReactNode;
 }
@@ -412,23 +245,12 @@ function CalendarRoot({
   children,
   ...rest
 }: CalendarProps) {
-  // This interactive calendar is always a field control (inline, or the Date
-  // input's popover), so it hard-consumes the field wiring like Switch does —
-  // but as a compound group it associates via aria-labelledby/-describedby
-  // (a <div role="group"> is not a labelable `htmlFor` target). Display-only
-  // calendars (availability/event/heatmap) are a separate component.
+  // A role=group div can't take `htmlFor`, so it is labelled via aria-labelledby.
   const { labelId, hasLabel, hintId, hasHint, size } = useField("Calendar");
-  // The search row follows the FIELD's size, the way Switch's track does — a
-  // small date field opens a popover whose search stands exactly where its
-  // input stood, rather than a 40px row overhanging a 28px trigger. The grid
-  // below it does not scale; see the recipe's `size`.
   const styles = calendar({ tone, navPlacement, fluid, size });
   const today = todayProp ?? Temporal.Now.plainDateISO();
 
   const multiple = selectionMode === "multiple";
-  // The multi-commit gestures. Folded together here so neither the pointer path
-  // nor the keyboard one has to re-check the mode: `single` never had a sweep,
-  // and `sweep={false}` withdraws it from `multiple`.
   const sweep = multiple && sweepProp;
 
   const isControlled = value !== undefined;
@@ -443,19 +265,13 @@ function CalendarRoot({
   );
   const multiKeys = isMultiControlled ? toKeys(values) : multiInternal;
 
-  // Both modes collapse to one sorted key list, so everything downstream —
-  // the `aria-selected` test, the roving anchor, the toggle — is mode-blind.
   const selectionKeys = multiple
     ? multiKeys
     : selected
       ? [selected.toString()]
       : [];
-  // Rebuilt each render rather than memoised: it holds one key per selected
-  // date, so there is nothing here worth a dependency array.
   const selection = new Set(selectionKeys);
 
-  // An explicit `defaultView` wins; otherwise the range opens where the
-  // selection is, and failing that on today.
   const [uncontrolledView, setUncontrolledView] = useState<Temporal.PlainDate>(
     () => {
       if (defaultView) return defaultView.with({ day: 1 });
@@ -467,8 +283,7 @@ function CalendarRoot({
   );
   const viewControlled = viewProp !== undefined;
   const view = viewControlled ? viewProp.with({ day: 1 }) : uncontrolledView;
-  // Every internal move goes through here, so a controlled consumer hears about
-  // all of them and an uncontrolled one behaves exactly as it always did.
+  // Every internal move must go through here so a controlled consumer hears it.
   const setView = (
     next: Temporal.PlainDate | ((current: Temporal.PlainDate) => Temporal.PlainDate),
   ) => {
@@ -482,14 +297,10 @@ function CalendarRoot({
     [view, months, weekStartsOn],
   );
 
-  // What the search currently resolves to, if anything — see `goToQuery` below.
   const [query, setQuery] = useState<Temporal.PlainDate | null>(null);
 
-  // Where the keyboard has walked the roving tabstop to. Null until something
-  // moves it, so an untouched calendar still opens on query/selection/today.
   const [focusDate, setFocusDate] = useState<Temporal.PlainDate | null>(null);
-  // Set only by `moveFocus`, so the effect below moves DOM focus for keyboard
-  // navigation WITHOUT stealing it on mount or on any unrelated re-render.
+  // Set only by `moveFocus`, so focus is never stolen on mount or an unrelated render.
   const pendingFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -497,11 +308,6 @@ function CalendarRoot({
     const offset = monthsBetween(view, d);
     return offset >= 0 && offset < Math.max(1, months);
   };
-  // Keyboard focus outranks everything — once you've arrowed somewhere, that IS
-  // the tabstop. Below it a resolving query outranks the selection: it's what
-  // Enter would commit, so it's also where a Tab into the grid should land.
-  // In `multiple` mode the earliest selected date in view stands in for "the"
-  // selection (`selectionKeys` is sorted, so `find` is that date).
   const anchorKey = selectionKeys.find((key) =>
     inView(Temporal.PlainDate.from(key)),
   );
@@ -516,9 +322,7 @@ function CalendarRoot({
             ? today
             : view;
 
-  // Page the range onto `date` only if it isn't already on screen. Clicking a
-  // day in the third visible month must not shuffle the grid out from under the
-  // pointer; an off-range date pages so it lands in the FIRST slot.
+  // Pages only for an off-range date, landing it in the first slot.
   const reveal = (date: Temporal.PlainDate) => {
     if (!inView(date)) setView(date.with({ day: 1 }));
   };
@@ -535,10 +339,7 @@ function CalendarRoot({
     onValuesChange?.(keys.map((key) => Temporal.PlainDate.from(key)));
   };
 
-  // Flips a whole batch in ONE commit. The batch matters: a Shift+Arrow run's
-  // first step has to flip both the cell it left and the one it landed on, and
-  // two sequential `toggle` calls in one handler would each read the same stale
-  // selection, the second dropping the first.
+  // One commit per batch: two `toggle` calls in one handler would both read the stale selection.
   const toggleMany = (dates: Temporal.PlainDate[]) => {
     const allowed = dates.filter((date) => !isDisabled(date, min, max));
     if (!allowed.length) return;
@@ -553,15 +354,9 @@ function CalendarRoot({
 
   const toggle = (date: Temporal.PlainDate) => toggleMany([date]);
 
-  // The open marquee. A ref, not state: it is read only inside event handlers,
-  // and re-rendering on every pointer move would buy nothing.
   const gesture = useRef<CalendarGesture | null>(null);
-  // Mirrors whether a Shift+Arrow run is mid-flight, so the first step of a run
-  // can flip its origin too and later steps only flip what they land on.
   const keyRun = useRef(false);
-  // Drives the window listeners below. The only reason this is state.
   const [dragging, setDragging] = useState(false);
-  // The band's box, in list-relative px — state because it is rendered.
   const [band, setBand] = useState<CalendarBand | null>(null);
 
   const dragStart = (x: number, y: number, listRect: DOMRect) => {
@@ -575,11 +370,7 @@ function CalendarRoot({
       originX: x,
       originY: y,
       listRect,
-      // Spill copies are already excluded by the selector, and a date outside
-      // min/max can't be dragged into any more than it can be clicked. A page
-      // mid-turn is a picture of the range it is replacing: its cells are
-      // duplicates, and their boxes are still moving — the band is measured
-      // off the live page alone.
+      // Live page only: the outgoing page's cells are duplicates, still moving.
       cells: cells
         .filter((cell) => !cell.disabled && !cell.closest("[data-outgoing]"))
         .map((cell) => ({
@@ -604,17 +395,11 @@ function CalendarRoot({
         return;
       open.moved = true;
     }
-    // Normalised so the band works in every direction — up-left drags give the
-    // same rectangle as down-right ones.
     const left = Math.min(open.originX, x);
     const right = Math.max(open.originX, x);
     const top = Math.min(open.originY, y);
     const bottom = Math.max(open.originY, y);
 
-    // Drawn relative to the period list, which is both the band's positioning
-    // parent and (since a page turn has to be cropped to it) the box that
-    // clips it — so a drag that runs off the grid stops at the frame instead
-    // of trailing across the page.
     setBand({
       left: left - open.listRect.left,
       top: top - open.listRect.top,
@@ -633,18 +418,12 @@ function CalendarRoot({
 
   const dragMoved = () => gesture.current?.moved ?? false;
 
-  // `dragTo` closes over the current selection commit path, so the listeners
-  // below read it through a ref rather than being torn down and rebound on
-  // every render of a drag.
   const dragToRef = useRef(dragTo);
   useEffect(() => {
     dragToRef.current = dragTo;
   });
 
-  // A drag is tracked on `window`, not on the cells: the band is defined by the
-  // POINTER, so it has to keep updating while the cursor is between cells, over
-  // the chevrons, or outside the calendar altogether — and it has to end
-  // wherever the button is released.
+  // On `window`, not the cells: the band follows the pointer anywhere until release.
   useEffect(() => {
     if (!dragging) return;
     const move = (event: PointerEvent) =>
@@ -668,10 +447,7 @@ function CalendarRoot({
 
   const moveFocus = (date: Temporal.PlainDate, extend = false) => {
     if (extend && sweep) {
-      // Shift+Arrow stays a PATH, not a rectangle — a keyboard caret has no
-      // second corner to drag, so a run flips what it steps onto. The first
-      // step also flips the cell it left, since you extended FROM there;
-      // reversing back over the run rubs it out again.
+      // A path, not a rectangle: the first step also flips the cell it left.
       if (!keyRun.current) {
         keyRun.current = true;
         toggleMany([activeDate, date]);
@@ -679,8 +455,6 @@ function CalendarRoot({
         toggle(date);
       }
     } else {
-      // A plain move closes the run, so the next Shift+Arrow starts fresh
-      // rather than resuming one from minutes ago.
       keyRun.current = false;
     }
     pendingFocus.current = true;
@@ -688,11 +462,7 @@ function CalendarRoot({
     reveal(date);
   };
 
-  // Chase the roving tabstop with real DOM focus after the commit that moved
-  // it — one tick later than `moveFocus`, because paging to an off-range date
-  // means the target cell doesn't exist yet when the key is handled. `view` is
-  // a dependency for exactly that case. The owned copy is the target: a spill
-  // copy carries the same date but never takes the tabstop.
+  // A tick after `moveFocus`: paging means the target cell may not exist yet, hence `view`.
   useEffect(() => {
     if (!pendingFocus.current || !focusDate) return;
     pendingFocus.current = false;
@@ -703,9 +473,6 @@ function CalendarRoot({
       ?.focus();
   }, [focusDate, view]);
 
-  // Unset, a chevron press moves a whole range, so the months on screen never
-  // repeat between pages (Apr–Jun ▸ Jul–Sep). `step` decouples the two — how
-  // far the chevrons move is a separate question from how much is on show.
   const stride = Math.max(1, stepProp ?? months);
 
   const ctx: CalendarContextValue = {
@@ -732,51 +499,25 @@ function CalendarRoot({
     nextPage: () => setView((v) => v.add({ months: stride })),
   };
 
-  // Type-ahead is a division of labour: the Field.Search stays a dumb box that
-  // emits the raw query; the Calendar interprets it with its OWN `queryParser`
-  // and decides what to DO with the result (the mirror of OptionList's `filter`,
-  // which lives on the container for the same reason — only the container holds
-  // what the query is matched against). Parsing is opt-in: no `queryParser` prop
-  // means the raw string never resolves to a date, so nothing navigates.
-  //
-  // Typing only NAVIGATES: a resolved date pages the grid to that month, takes
-  // the roving tabstop, and marks its cell `data-query` so the recipe can
-  // preview it — but it stops there. Committing stays an explicit act — Enter
-  // here, or Space / Enter on a day cell (they're real buttons) — so Escape can
-  // dismiss a picker without the last thing typed becoming the selection.
+  // Typing only navigates and marks the cell; committing takes Enter or a click.
   const commitQuery = (event: KeyboardEvent<HTMLInputElement>) => {
-    // Enter commits whatever the search currently resolves to — the `query` the
-    // last keystroke parsed. Space is a literal character in a text field, so
-    // the day cells own that half of the "Enter/Space commits" convention.
     if (event.key !== "Enter" || !query) return;
     event.preventDefault();
-    select(query); // still gated by min/max, exactly like a clicked cell
+    select(query);
   };
 
-  // Dress a Field.Search dropped directly under <Calendar>: give it the `search`
-  // slot and interpret its raw query here via `queryParser`. Every other child,
-  // and the consumer's own handlers, are left untouched / composed with.
   const dressed = Children.map(children, (child) => {
     if (isValidElement(child) && child.type === Field.Search) {
       const el = child as ReactElement<FieldSearchProps>;
       return cloneElement(el, {
         className: cx(styles.search, el.props.className),
-        // The calendar's width is its PERIODS (208px a month), and the root
-        // hugs its content — so a search left at the HTML default of `size=20`
-        // claims an intrinsic width of its own and can outvote them. WebKit
-        // sizes that default at 219px, which widened every date popover by 11px
-        // of empty surface beside the month; Chromium's is narrower, so the
-        // fault only showed in Safari. `1` withdraws the claim, and the `search`
-        // slot's `width: 100%` then takes the row it is given. A consumer who
-        // states one means it.
+        // Without `size`, WebKit gives the input an intrinsic 219px that widens the popover.
         size: el.props.size ?? 1,
         onValueChange: (raw: string) => {
           el.props.onValueChange?.(raw);
           const date = queryParser?.(raw) ?? null;
           setQuery(date);
-          // Typing hands the roving tabstop back to the query, so a Tab into
-          // the grid lands on what Enter would commit rather than on wherever
-          // the arrow keys were left.
+          // Hand the tabstop back to the query.
           setFocusDate(null);
           if (date) reveal(date);
         },
@@ -817,14 +558,6 @@ const NAV_VERB: Record<CalendarNavDirection, string> = {
   next: "Next",
 };
 
-/**
- * Shared body of `Calendar.Prev` / `Calendar.Next`. Each DECLARES its role, so
- * the calendar never has to infer one: the role is the part you reached for,
- * not this button's position among its siblings. That's what lets the chevrons
- * be reordered, or wrapped in a consumer's own chrome at any depth — they read
- * the root context rather than being cloned by a parent, so they only have to
- * be somewhere under `<Calendar>`.
- */
 function CalendarNav({
   direction,
   onClick,
@@ -833,17 +566,10 @@ function CalendarNav({
   ...rest
 }: CalendarNavProps & { direction: CalendarNavDirection }) {
   const part = direction === "prev" ? "Calendar.Prev" : "Calendar.Next";
-  // Named for the distance it MOVES, not the width of the range — a chevron
-  // announcing "Next 3 months" that advances one is worse than no label.
   const { styles, step, prevPage, nextPage } = useCalendar(part);
   const unit = step === 1 ? "month" : `${step} months`;
 
-  // The chevron sits in a positioned wrapper rather than being positioned
-  // itself: it renders a `Button`, and Panda emits plain recipes into a layer
-  // that always beats the `recipes.slots` sublayer a slot style lands in — so
-  // nothing here could override `action`'s own `position: relative`. The
-  // wrapper also carries `data-nav`, which is what a `PeriodList` keys off to
-  // pin it to the matching corner; anywhere else it just sits in the flow.
+  // Positioned via a wrapper: slot styles can't override the button's `action` recipe.
   return (
     <div data-nav={direction} className={styles.nav}>
       <Button
@@ -857,53 +583,27 @@ function CalendarNav({
   );
 }
 
-/** Moves the range back by one `step` (a whole range unless `step` says less). */
 function CalendarPrev(props: CalendarNavProps) {
   return <CalendarNav direction="prev" {...props} />;
 }
 
-/** Moves the range forward by one `step`. */
 function CalendarNext(props: CalendarNavProps) {
   return <CalendarNav direction="next" {...props} />;
 }
 
 export type CalendarPeriodListProps = HTMLAttributes<HTMLDivElement>;
 
-/**
- * The row of months on screen, and the one being pushed off to make room for
- * it. `view` is held alongside `periods` because it is what a change is
- * MEASURED against — the direction of a turn is the compare between the view
- * that arrived and the one it replaced.
- */
 type CalendarPageState = {
   view: Temporal.PlainDate;
   periods: CalendarMonth[];
-  /** The leaving page, mounted only for the length of the slide. */
   out: {
-    /** Its view, as a React key — a new turn remounts, and so restarts. */
     key: string;
     periods: CalendarMonth[];
-    /** Is the range moving forward in time? Decides which side to push from. */
     forward: boolean;
   } | null;
 };
 
-/**
- * The row of months, and the only part that knows how many there are. It clones
- * its single `Calendar.Period` template once per visible month and leaves every
- * other child alone — including the navs, which wire themselves. Dropping a
- * `Calendar.Prev`/`Calendar.Next` directly in here pins it to the matching
- * corner, so one pair flanks the WHOLE range rather than any single month.
- *
- * It is also the DRAGGABLE area, which is why an optional `Calendar.Tooltip`
- * dropped in here is the sweep's hint — see `useHintTooltip` below.
- *
- * And it is where a view change becomes a PAGE TURN. Moving the range replaces
- * every month at once, and cut between the two the range simply blinks:
- * nothing says which way it went, or that the months either side of the press
- * are neighbours at all. So this holds the page it turned away from beside the
- * one arriving and pushes the pair along together — see `page` below.
- */
+/** Stamps the Period template per visible month, hosts the sweep hint and plays the page turn. */
 function CalendarPeriodList({
   className,
   children,
@@ -916,10 +616,6 @@ function CalendarPeriodList({
   const { styles, periods, view, step, sweep, dragStart, band } =
     useCalendar("Calendar.PeriodList");
 
-  // A `Calendar.Tooltip` child is lifted out of the flow and hosted here: this
-  // list IS the draggable area, so pointing at it is exactly the moment the
-  // sweep is worth mentioning. It teaches rather than labels, hence the hint
-  // clocks — a few seconds per hover, and gone for good after the first drag.
   const items = Children.toArray(children);
   const hint = items.find(
     (child) => isValidElement(child) && child.type === Tooltip,
@@ -931,19 +627,13 @@ function CalendarPeriodList({
     hide: hideHint,
     retire: retireHint,
   } = useHintTooltip();
-  // No hint to give when there is no gesture to teach: `sweep` is already the
-  // folded "can this calendar sweep at all" answer.
   const hinting = Boolean(hint) && sweep;
 
-  // `band` is non-null only once a press has cleared DRAG_THRESHOLD — which is
-  // precisely "the user dragged". A click never draws one, so it never retires
-  // a hint the user hasn't acted on yet.
   useEffect(() => {
     if (band) retireHint();
   }, [band, retireHint]);
 
-  // The one child this part does rewrite: `Period` is a TEMPLATE, not a role —
-  // it has to be a direct child because it's stamped out once per month.
+  // `Period` is a template, so it must be a direct child.
   const stamp = (
     template: ReactElement<CalendarPeriodProps>,
     row: readonly CalendarMonth[],
@@ -958,18 +648,12 @@ function CalendarPeriodList({
       return child;
     });
 
-  // The same template again, for the row a page turn is pushing off.
   const template = items.find(
     (child): child is ReactElement<CalendarPeriodProps> =>
       isValidElement(child) && child.type === CalendarPeriod,
   );
 
-  // The page turn. `view` moving is the whole trigger — a chevron, a searched
-  // date, an arrow key walking off the range — so every one of them turns the
-  // page, and picking a date already on screen (which moves nothing) turns
-  // none. Derived during render rather than in an effect: the leaving page has
-  // to be mounted in the SAME commit the arriving one is, or the first frame of
-  // the slide is a range with nothing behind it.
+  // Derived during render, not in an effect, so the leaving page mounts in the same commit.
   const [page, setPage] = useState<CalendarPageState>(() => ({
     view,
     periods,
@@ -982,30 +666,18 @@ function CalendarPeriodList({
       out: {
         key: page.view.toString(),
         periods: page.periods,
-        // Which side the arriving page comes from. A jump of any distance
-        // still only says forward or back — the turn is a direction, not a
-        // measure of how far it went.
         forward: Temporal.PlainDate.compare(view, page.view) > 0,
       },
     });
   } else if (periods !== page.periods) {
-    // `months` / `weekStartsOn` changed under a standing view: no turn to play,
-    // but the snapshot the NEXT one takes has to be the row actually on screen.
+    // No turn, but the next turn's snapshot must be the row on screen.
     setPage({ ...page, periods });
   }
 
-  // A clock rather than `animationend`: a turn is one animation per COLUMN, so
-  // the event arrives once per month and the last one to fire is the page's
-  // own business, not this component's. (PropertiesPanel's exit makes the same
-  // trade.) Under `prefers-reduced-motion` globals.css collapses the slide to
-  // 0.01ms, so the leaving page is off frame immediately either way and the
-  // wait costs nothing anyone can see.
+  // A timer, not `animationend`, which fires once per column.
   const { out } = page;
   useEffect(() => {
     if (!out) return;
-    // A turn that interrupts this one replaces `out`, and the cleanup below
-    // takes its clock with it — so this only ever drops the page it was set
-    // for, and the new one gets its own full slide.
     const timer = setTimeout(
       () => setPage((current) => ({ ...current, out: null })),
       PUSH_MS,
@@ -1013,10 +685,7 @@ function CalendarPeriodList({
     return () => clearTimeout(timer);
   }, [out]);
 
-  // One signed distance drives both halves, in COLUMNS rather than screenfuls:
-  // a range that walks (step < months) travels one column, so the months that
-  // carry over land exactly where they already were instead of sliding against
-  // themselves.
+  // In columns, not screenfuls, so months that carry over stay put.
   const push = out
     ? { "--calendar-push": `${(out.forward ? step : -step) * 100}%` }
     : null;
@@ -1026,16 +695,11 @@ function CalendarPeriodList({
       className={cx(styles.periodList, className)}
       data-push={out ? "" : undefined}
       style={{ ...style, ...push } as CSSProperties}
-      // The band opens HERE rather than on a day cell, so a drag can begin on
-      // the gutters between months, the month labels, or the empty tail of a
-      // short month — anywhere in the list. A press that lands on a day cell
-      // still bubbles up to this handler, so that case is unchanged.
+      // The band opens here, not on a day cell, so a drag can start anywhere in the list.
       onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
         onPointerDown?.(event);
         if (event.defaultPrevented || !sweep) return;
         if (event.pointerType === "touch" || event.button !== 0) return;
-        // The chevrons live in this list too, and pressing one pages the range
-        // — that is a button, not the start of a selection.
         if ((event.target as HTMLElement).closest?.("[data-nav]")) return;
         dragStart(
           event.clientX,
@@ -1045,7 +709,6 @@ function CalendarPeriodList({
       }}
       onMouseEnter={(event: ReactMouseEvent<HTMLDivElement>) => {
         onMouseEnter?.(event);
-        // Seeded at the cursor so it opens in place, exactly like Button's.
         if (hinting) showHint(event.clientX, event.clientY);
       }}
       onMouseLeave={(event: ReactMouseEvent<HTMLDivElement>) => {
@@ -1056,11 +719,7 @@ function CalendarPeriodList({
     >
       {expanded}
       {out && template ? (
-        // Keyed on the view it shows, so a turn that interrupts another
-        // restarts the slide instead of inheriting its tail. Last in the DOM
-        // and `inert`, so neither the focus chase nor a Tab can reach a cell
-        // on a page that is already leaving; `aria-hidden` keeps the month
-        // labels from announcing themselves a second time on the way out.
+        // Keyed by its view so an interrupting turn restarts the slide.
         <div
           key={out.key}
           aria-hidden
@@ -1084,9 +743,6 @@ function CalendarPeriodList({
         />
       ) : null}
       {hint ? (
-        // A plain sibling: the tooltip box is `position: fixed`, placed by the
-        // ref and portalled to the body, so it needs no positioned ancestor and
-        // takes no layout slot in this flex row.
         <TooltipHostContext.Provider value={{ ref: hintRef, visible: hintVisible }}>
           {hint}
         </TooltipHostContext.Provider>
@@ -1100,11 +756,6 @@ export interface CalendarPeriodProps extends HTMLAttributes<HTMLDivElement> {
   period?: CalendarMonth;
 }
 
-/**
- * One month column — its label, weekday header and day grid. Written once and
- * cloned per visible month, so it publishes the month it was handed and the
- * parts inside read that rather than the root's view.
- */
 function CalendarPeriod({
   period,
   className,
@@ -1128,7 +779,6 @@ export interface CalendarMonthProps extends HTMLAttributes<HTMLDivElement> {
   monthFormat?: MonthFormat;
 }
 
-/** The "July 2026" label for the month its `Calendar.Period` is rendering. */
 function CalendarMonthLabel({
   monthFormat = "full",
   className,
@@ -1146,7 +796,6 @@ function CalendarMonthLabel({
 
 export type CalendarWeekProps = HTMLAttributes<HTMLDivElement>;
 
-/** The weekday header row — clones its single Calendar.Day per header cell. */
 function CalendarWeek({ className, children, ...rest }: CalendarWeekProps) {
   const { styles } = useCalendar("Calendar.Week");
   const { weekdays } = usePeriod("Calendar.Week");
@@ -1163,7 +812,6 @@ export interface CalendarDayProps extends HTMLAttributes<HTMLDivElement> {
   headerCell?: WeekdayHeaderCell;
 }
 
-/** One weekday header cell (e.g. "S"), carrying data-weekday/data-weekend. */
 function CalendarDay({
   headerCell,
   className,
@@ -1188,7 +836,6 @@ function CalendarDay({
 
 export type CalendarGridProps = HTMLAttributes<HTMLDivElement>;
 
-/** The day grid — clones its single Calendar.Date per day in the 6×7 month. */
 function CalendarGrid({ className, children, ...rest }: CalendarGridProps) {
   const { styles, selectionMode } = useCalendar("Calendar.Grid");
   const { weeks, start } = usePeriod("Calendar.Grid");
@@ -1196,10 +843,9 @@ function CalendarGrid({ className, children, ...rest }: CalendarGridProps) {
   return (
     <div
       role="grid"
-      // Always the full month name, whatever the visible label's `monthFormat`.
+      // Full month name regardless of `monthFormat`.
       aria-label={monthLabel(start)}
-      // Announced here rather than on the root: `grid` takes
-      // aria-multiselectable, the root's `group` does not.
+      // On the grid: `group` does not take aria-multiselectable.
       aria-multiselectable={selectionMode === "multiple" || undefined}
       className={cx(styles.grid, className)}
       {...rest}
@@ -1216,12 +862,6 @@ export interface CalendarDateProps
   children?: ReactNode;
 }
 
-/**
- * One day cell — a real <button>. This is the "you have the button" leaf: your
- * `className` lands straight on it, while the component sets the state + identity
- * attributes (aria-selected, data-state, data-outside, data-weekday,
- * data-weekend, disabled) the styling keys off.
- */
 function CalendarDate({
   cell,
   className,
@@ -1250,23 +890,14 @@ function CalendarDate({
   const { weekdays } = usePeriod("Calendar.Date");
   if (!cell) throw new Error("Calendar.Date must be a child of Calendar.Grid.");
 
-  // Across a range, a date on a month boundary renders twice — once for real,
-  // once as the neighbouring grid's spill day. State belongs to the month that
-  // OWNS the date: the spill copy is a decorative placeholder holding a column,
-  // so it claims neither the chip nor the tabstop, and a boundary date can't
-  // paint itself twice. `disabled` is deliberately NOT gated — min/max is a
-  // constraint on the date itself, and a spill day must stay unclickable when
-  // its real counterpart is.
+  // State belongs to the owning month; spill copies claim none. `disabled` stays ungated on purpose.
   const owned = cell.inCurrentMonth;
   const multiple = selectionMode === "multiple";
   const isSelected = owned && selection.has(cell.key);
   const isToday = owned && cell.date.equals(today);
   const isQuery = owned && query != null && cell.date.equals(query);
   const disabled = isDisabled(cell.date, min, max);
-  // The same reason a spill copy draws no chip applies to toggling it: one
-  // sweep along a boundary would otherwise flip that date twice, once per
-  // month that renders it. Single-select has no such hazard — picking a spill
-  // day is a useful "jump to next month" — so only `multiple` opts out.
+  // Only `multiple` opts out: a sweep would otherwise flip a boundary date twice.
   const inert = multiple && !owned;
 
   return (
@@ -1287,14 +918,9 @@ function CalendarDate({
       onPointerDown={(event: ReactPointerEvent<HTMLButtonElement>) => {
         onPointerDown?.(event);
         if (event.defaultPrevented || inert || !multiple) return;
-        // Coarse pointers never drag a band — dragging a finger across the grid
-        // would fight the page's own scroll. Touch stays tap-to-toggle, which
-        // the trailing click below already handles.
+        // Touch never drags a band; it would fight the page's scroll.
         if (event.pointerType === "touch" || event.button !== 0) return;
-        // Park the roving tabstop here; the DRAG itself is opened by
-        // Calendar.PeriodList, which this event goes on to bubble to. A band is
-        // pointer geometry over the whole list, so it must be able to start on
-        // the gutters and the month labels too — not only on a day cell.
+        // Park the tabstop; the drag itself opens in Calendar.PeriodList.
         anchorFocus(cell.date);
       }}
       onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -1305,9 +931,7 @@ function CalendarDate({
           return;
         }
         if (inert) return;
-        // `detail` is 0 only for a keyboard-activated button, which is how
-        // Enter/Space stay live even while a drag's own trailing click — fired
-        // when press and release share a cell — has to be swallowed.
+        // `detail` is 0 for keyboard activation, which must not be swallowed like a drag's trailing click.
         if (event.detail !== 0 && dragMoved()) return;
         anchorFocus(cell.date);
         toggle(cell.date);
@@ -1319,14 +943,10 @@ function CalendarDate({
         const days = ARROW_DAYS[event.key];
         if (days !== undefined) {
           event.preventDefault();
-          // Shift makes the move a sweep — the keyboard half of "every date
-          // you cross flips".
           moveFocus(cell.date.add({ days }), event.shiftKey);
           return;
         }
-        // Home/End run to the ends of THIS row, which is a `weekStartsOn`
-        // question — hence the column index off the period's own header order
-        // rather than an assumed Sunday start.
+        // Column index from the period's header, since weeks may not start on Sunday.
         if (event.key === "Home" || event.key === "End") {
           event.preventDefault();
           const column = weekdays.findIndex((wd) => wd.key === cell.weekday);
@@ -1338,9 +958,6 @@ function CalendarDate({
           );
           return;
         }
-        // Paging moves by the chevrons' own step, and keeps the day-of-month —
-        // so PageDown/PageUp round-trips back to where you started (Temporal
-        // clamps a short month for you).
         if (event.key === "PageUp" || event.key === "PageDown") {
           event.preventDefault();
           const months = event.key === "PageUp" ? -stride : stride;
@@ -1354,12 +971,6 @@ function CalendarDate({
   );
 }
 
-/**
- * Compound calendar. `Calendar` is the root/context; the parts read it and stay
- * dumb. `Field.Search` (from field.tsx) and a pair of icon `Button` chevrons
- * compose in as the search row and the range steppers. Surface it as
- * `Field.Calendar` from the Date-input assembly when that lands.
- */
 export const Calendar = Object.assign(CalendarRoot, {
   PeriodList: CalendarPeriodList,
   Tooltip,

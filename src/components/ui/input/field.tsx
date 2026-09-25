@@ -21,13 +21,7 @@ import { Skeleton, WireframeText, useWireframe } from "../wireframe";
 type FieldSize = "sm" | "md" | "lg";
 type FieldStyles = ReturnType<typeof field>;
 
-/**
- * The field text scale — the guardrailed set a part's `type` override may pick
- * from (a curated subset of the typography tokens; `title`/`quote`/`code` are
- * article styles and deliberately excluded). Set `type` to deviate a single
- * part from the field's size-derived default; reach for `className` only to go
- * outside the scale.
- */
+/** The text styles a part's `type` override may pick from. */
 export type FieldTextStyle =
   | "fineprint"
   | "caption"
@@ -36,9 +30,7 @@ export type FieldTextStyle =
   | "bodyLarge"
   | "subheading";
 
-// Pre-generated from literal css() calls: a dynamic `css({ textStyle: type })`
-// is invisible to Panda's static extractor and would emit no CSS, so each
-// override utility is spelled out here (mirrors the recipe's staticCss trick).
+// Literal css() calls: a dynamic `css({ textStyle })` is invisible to Panda's extractor.
 const TEXT_STYLE_OVERRIDE: Record<FieldTextStyle, string> = {
   fineprint: css({ textStyle: "fineprint" }),
   caption: css({ textStyle: "caption" }),
@@ -59,59 +51,29 @@ type FieldContextValue = {
   setHasHint: (present: boolean) => void;
   registerControl: (node: HTMLElement | null) => void;
   focusControl: () => void;
-  // Slot classNames resolved once in the root (they depend on `size`) and shared
-  // with every part, so a Field.Label / Switch in another file styles itself
-  // from the same source without re-invoking the recipe.
   styles: FieldStyles;
 };
 
 const FieldContext = createContext<FieldContextValue | null>(null);
 
-/** Read the enclosing field's context; throws if a part is used outside <Field>. */
 export function useField(component: string): FieldContextValue {
   const ctx = useContext(FieldContext);
   if (!ctx) throw new Error(`${component} must be used within <Field>.`);
   return ctx;
 }
 
-/**
- * Like {@link useField} but returns null outside a <Field> instead of throwing.
- * For a control that composes INTO a Field when there's a label/hint to wire
- * (the Combobox's OptionList), yet also stands alone with nothing to label (a
- * toolbar, the slash menu). OptionList reads the field ONLY for the aria-*
- * wiring, so when there's no Field it simply emits no aria-labelledby/-describedby
- * — exactly right for a control that isn't a labelled form field.
- */
+/** {@link useField} that returns null outside a <Field> instead of throwing. */
 export function useOptionalField(): FieldContextValue | null {
   return useContext(FieldContext);
 }
 
 export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
-  /**
-   * Scales the field as a set — label/hint typography (and, for text inputs, the
-   * frame; for switches, the track geometry via the control). `md` is the
-   * default; `sm` and `lg` step the whole set down / up together.
-   */
   size?: FieldSize;
-  /**
-   * Put the label BEFORE the control, and let it take the slack so the control
-   * sits on the field's far edge — a settings row, rather than a switch with a
-   * caption. Toggle controls only (`role="switch"` / `role="checkbox"`); a
-   * stacked text field already has its label first.
-   */
+  /** Toggle controls only: the label leads and the control sits on the far edge. */
   labelFirst?: boolean;
   children: ReactNode;
 }
 
-/**
- * The field root — pure layout plus the context that wires the compound parts
- * together: it mints the control/hint ids (so Label ↔ Control and the
- * aria-describedby link resolve automatically), resolves the size-dependent slot
- * styles once, and holds the control ref used to forward focus from the frame's
- * dead space. The layout adapts to its control: a `role="switch"` inside flips
- * the root from a vertical stack to the control ∣ label/hint grid (see the
- * `field` recipe's `:has` branches), so no orientation prop is needed.
- */
 function FieldRoot({
   children,
   className,
@@ -151,20 +113,14 @@ function FieldRoot({
 }
 
 export interface FieldLabelProps extends LabelHTMLAttributes<HTMLLabelElement> {
-  /**
-   * Override this label's typography, independent of the field `size`. Unset →
-   * inherits the field's size-derived default; set → deviates just this label,
-   * bounded to {@link FieldTextStyle}. The override lands in the utilities layer,
-   * so it wins over the recipe cleanly.
-   */
+  /** Overrides this label's size-derived text style. */
   type?: FieldTextStyle;
   children: ReactNode;
 }
 
 function FieldLabel({ children, type, className, ...rest }: FieldLabelProps) {
   const { controlId, labelId, setHasLabel, styles } = useField("Field.Label");
-  // Register presence + expose an id so a compound control that can't be a
-  // single `htmlFor` target (e.g. the Calendar group) can `aria-labelledby` it.
+  // Registered so a group control (Calendar) can point aria-labelledby at it.
   useEffect(() => {
     setHasLabel(true);
     return () => setHasLabel(false);
@@ -185,12 +141,6 @@ export interface FieldFrameProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
 }
 
-/**
- * The presentational input shell — border, fill, and the leading/control/
- * trailing layout. It owns no value or keyboard behavior; its one job beyond
- * looks is to forward a click on its dead padding to the control so the field
- * doesn't feel broken near the edges.
- */
 function FieldFrame({
   children,
   className,
@@ -204,9 +154,6 @@ function FieldFrame({
       onMouseDown={(e) => {
         onMouseDown?.(e);
         if (e.defaultPrevented) return;
-        // Interactive descendants (the control, or a future trailing action
-        // button) handle their own focus — only the frame's padding and the
-        // decorative leading icon forward focus to the control.
         if (
           (e.target as HTMLElement).closest(
             "input, textarea, select, button, a, [data-control]",
@@ -214,7 +161,7 @@ function FieldFrame({
         ) {
           return;
         }
-        e.preventDefault(); // keep selection; focus lands without a blur flash
+        e.preventDefault();
         focusControl();
       }}
       {...rest}
@@ -227,19 +174,13 @@ function FieldFrame({
 
 export type FieldControlProps = InputHTMLAttributes<HTMLInputElement>;
 
-/** The value slot for a text field — a native input carrying `data-control`. */
 const FieldControl = forwardRef<HTMLInputElement, FieldControlProps>(
   function FieldControl({ className, ...rest }, forwardedRef) {
     const { controlId, hintId, hasHint, registerControl, styles } =
       useField("Field.Control");
     const isWireframe = useWireframe() !== null;
 
-    // The one part that cannot keep its element: an <input> holds no children
-    // and no pseudo-element, so there is nowhere to put a bar. Swap it for a
-    // static value slot wearing the same `control` styles — the bar then lands
-    // on exactly the cap height the live value would (Figma 745:4389). Dropping
-    // `data-control` is deliberate: the frame's click-to-focus has nothing to
-    // focus now, and should not pretend otherwise.
+    // An <input> can hold no bar, so wireframe mode swaps in a static slot without `data-control`.
     if (isWireframe) {
       const stand = rest.placeholder ?? rest.value ?? rest.defaultValue;
       const text = typeof stand === "string" && stand !== "" ? stand : undefined;
@@ -269,30 +210,13 @@ const FieldControl = forwardRef<HTMLInputElement, FieldControlProps>(
 
 export type FieldTextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
-/**
- * The value slot for a MULTI-LINE field — the same `control` styles on a native
- * textarea, carrying the same `data-control` so the frame forwards focus to it
- * exactly as it does to an input.
- *
- * A part of its own rather than a `multiline` flag on {@link FieldControl},
- * because the two do not share an element type: every ref, every event and every
- * native attribute below differs between `HTMLInputElement` and
- * `HTMLTextAreaElement`, and a flag would force one of them to lie about the
- * other. The FRAME is what they share, and it adapts on its own — the `field`
- * recipe detects a textarea with `:has` and lets the shell grow, so there is no
- * prop to pass and no way for the two to fall out of step.
- *
- * `resize` is off in the recipe: the frame clips its overflow, so the native
- * grip would be drawn into a corner it cannot escape. Size the box with `rows`.
- */
+/** `resize` is off in the recipe: the frame clips, so size the box with `rows`. */
 const FieldTextArea = forwardRef<HTMLTextAreaElement, FieldTextAreaProps>(
   function FieldTextArea({ className, ...rest }, forwardedRef) {
     const { controlId, hintId, hasHint, registerControl, styles } =
       useField("Field.TextArea");
     const isWireframe = useWireframe() !== null;
 
-    // Same swap {@link FieldControl} makes, and for the same reason: a textarea
-    // holds no children and no pseudo-element, so there is nowhere to put a bar.
     if (isWireframe) {
       const stand = rest.placeholder ?? rest.value ?? rest.defaultValue;
       const text = typeof stand === "string" && stand !== "" ? stand : undefined;
@@ -321,18 +245,13 @@ const FieldTextArea = forwardRef<HTMLTextAreaElement, FieldTextAreaProps>(
 );
 
 export interface FieldHintProps extends HTMLAttributes<HTMLParagraphElement> {
-  /**
-   * Override this hint's typography, independent of the field `size` (see
-   * {@link FieldLabelProps.type}).
-   */
+  /** Overrides this hint's size-derived text style. */
   type?: FieldTextStyle;
   children: ReactNode;
 }
 
 function FieldHint({ children, type, className, ...rest }: FieldHintProps) {
   const { hintId, setHasHint, styles } = useField("Field.Hint");
-  // Register presence so the control only advertises aria-describedby when a
-  // hint is actually mounted (no dangling id reference otherwise).
   useEffect(() => {
     setHasHint(true);
     return () => setHasHint(false);
@@ -350,23 +269,12 @@ function FieldHint({ children, type, className, ...rest }: FieldHintProps) {
 
 export interface FieldSearchProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
-  /** Controlled query. */
   value?: string;
-  /** Initial query when uncontrolled. */
   defaultValue?: string;
-  /** Fired with the raw query string on every keystroke. */
   onValueChange?: (value: string) => void;
 }
 
-// A bare, borderless search input — the type-ahead slot atop the calendar /
-// option-list popover, reusable by any filterable control. Presentation-light so
-// a parent slot (the recipe's `search`) can dress it via `className`; owns only
-// the controlled/uncontrolled value like Switch. Deliberately DUMB: it emits
-// nothing but the raw query string. Interpreting that query — parsing a date,
-// filtering a list, ranking matches — belongs to the container it's dropped into
-// (Calendar's `queryParser`, OptionList's `filter`), the only node that holds
-// what the query is matched against. That's what lets the SAME box serve the
-// date field and the option list untouched.
+// Deliberately dumb: emits the raw query; the container (Calendar, OptionList) interprets it.
 const FieldSearch = forwardRef<HTMLInputElement, FieldSearchProps>(
   function FieldSearch(
     { className, value, defaultValue, onValueChange, onInput, ...rest },
@@ -389,17 +297,6 @@ const FieldSearch = forwardRef<HTMLInputElement, FieldSearchProps>(
   },
 );
 
-/**
- * Compound field primitives. Presentation (root/label/frame/hint) is shared and
- * dumb; behavior lives in the control slot, which the assemblies (TextInput, and
- * later Select/Date) fill. Decorative icons compose straight into the Frame as
- * bare `<Icon aria-hidden />` children — the `frame` recipe sizes and tints them
- * (leading before the control, trailing after it); no wrapper part. The Switch
- * plugs into the same context as an alternative control (see switch.tsx), reusing
- * Label + Hint; Search (type-ahead input) is the shared type-ahead the Calendar
- * composes (its month chevrons are plain icon `Button`s). Compose these directly
- * for bespoke fields, or use the flat-prop assemblies for the common case.
- */
 export const Field = Object.assign(FieldRoot, {
   Label: FieldLabel,
   Frame: FieldFrame,

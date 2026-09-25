@@ -11,8 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Intro } from "../intro";
 
-// jsdom implements neither. The stubs mirror the platform: `close()` fires the
-// `close` event, and `showModal()` throws on an already-open dialog.
+// jsdom lacks both; the stubs mirror the platform (close fires `close`, reopening throws).
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -29,7 +28,6 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-// What the title page says (Figma 147:8677).
 const WELCOME = {
   title: "Benchmarking AI review criteria",
   text: [
@@ -38,8 +36,6 @@ const WELCOME = {
   ],
 };
 
-// What each page after it says (Figma 134:7340, 139:7493 and 143:7778), in
-// order.
 const PAGES = [
   {
     title: "AI criteria can silently exclude strong candidates",
@@ -81,8 +77,6 @@ function page(title: string) {
     .closest("section")!;
 }
 
-// Out of reach of the keyboard and assistive tech: inert, or inside something
-// that is.
 function hidden(element: Element) {
   return element.closest("[inert]") !== null;
 }
@@ -234,14 +228,12 @@ describe("intro", () => {
 
   it("keeps its pictures out of reach: what they show is not there to use", async () => {
     const user = await start();
-    // The title page's, and one for each page after it.
     const covers = intro().querySelectorAll("[data-cover]");
     expect(covers).toHaveLength(PAGES.length + 1);
     for (const cover of covers) {
       expect(cover.getAttribute("aria-hidden")).toBe("true");
       expect(cover.hasAttribute("inert")).toBe(true);
     }
-    // The last page's picture draws the rewrite's own buttons.
     await user.click(screen.getByRole("button", { name: "Page 3" }));
     expect(
       screen.queryByRole("button", { name: "Apply suggested rewrite" }),

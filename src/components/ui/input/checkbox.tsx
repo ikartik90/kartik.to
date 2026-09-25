@@ -11,34 +11,13 @@ export interface CheckboxProps
     ButtonHTMLAttributes<HTMLButtonElement>,
     "onChange" | "type" | "role" | "aria-checked" | "children"
   > {
-  /** Controlled on/off state. */
   checked?: boolean;
-  /** Initial state when uncontrolled. */
   defaultChecked?: boolean;
-  /** Fired with the next state whenever the checkbox toggles. */
   onCheckedChange?: (checked: boolean) => void;
-  /** Applied to the control (the 20px frame around the box). */
+  /** Applied to the 20px frame, not the box. */
   className?: string;
 }
 
-/**
- * Checkbox — the control slot of a `<Field>`, and the Switch's sibling. It reads
- * the field context for its id, label association and `aria-describedby` wiring,
- * so `Field.Label` and `Field.Hint` work with it exactly as they do for a text
- * input; it contributes only what is checkbox-specific: the on/off state and the
- * box + check visuals. Its `role="checkbox"` is what flips the field into the
- * control ∣ label/hint layout. Unlike the Switch it takes no `size` — the box is
- * drawn at one geometry, so `<Field size>` scales the label and hint around a
- * fixed control. State can be controlled (`checked`) or uncontrolled
- * (`defaultChecked`).
- *
- * @example
- * <Field>
- *   <Checkbox defaultChecked />
- *   <Field.Label>Remember me</Field.Label>
- *   <Field.Hint>Stay signed in on this device</Field.Hint>
- * </Field>
- */
 export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
   function Checkbox(
     {

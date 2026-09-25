@@ -63,16 +63,11 @@ describe("postMarkdownResponse", () => {
   });
 
   it("is a 404 for anything unpublished or missing", async () => {
-    // Published only — a draft is not public at its page either, and there is
-    // no admin session worth reading for a file served to agents.
     mockGetPublished.mockResolvedValue(null);
     const response = await postMarkdownResponse("draft", "ARTICLE");
     expect(response.status).toBe(404);
   });
 
-  // The copy follows its page: a post refiled or renamed from the sidebar is
-  // sent on from the address it left, `.md` and all, and for published posts
-  // alone — nothing here reads a session.
   it("sends an address a post has left to the copy at its new one", async () => {
     mockGetPublished.mockResolvedValue(null);
     mockFindMoved.mockResolvedValue("/work/renamed");

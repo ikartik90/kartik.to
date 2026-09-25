@@ -21,20 +21,11 @@ import { DEFAULT_DATE_FORMAT, formatCalendarDate } from "@/utils/calendar-date";
 
 afterEach(() => {
   cleanup();
-  // The demo only performs itself where an IntersectionObserver exists, so
-  // dropping the stub is what keeps the walkthrough OUT of every other case.
+  // The tour only runs where an IntersectionObserver exists; unstubbing keeps it out of other cases.
   vi.unstubAllGlobals();
 });
 
-// The CLOCK is frozen, not the expectations: every date below is still derived
-// from `Temporal.Now` exactly as the component derives it, so this doesn't
-// re-pin what the demo leaves live — it just stops the suite depending on which
-// day it runs. It has to be frozen at module scope, since TODAY is read here at
-// import time.
-//
-// The timers go with it: the walkthrough is a chain of `setTimeout`s, so the
-// suite drives that clock too rather than waiting out ten seconds of animation.
-// React's own scheduling stays real.
+// Frozen at module scope, since TODAY is read at import; the walkthrough's timers are faked with it.
 vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
 vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
 afterAll(() => vi.useRealTimers());
@@ -53,10 +44,9 @@ const counterweight = () => screen.getByTestId("repeat-counterweight");
 
 const notice = () => screen.getByRole("status").textContent ?? "";
 
-/** Opens the recurrence card the way a visitor would, for the cases about it. */
 const openRepeat = () => fireEvent.click(repeatSwitch());
 
-// Sunday-first, matching Temporal's `dayOfWeek % 7` (ISO runs Mon=1…Sun=7).
+// Sunday-first, for Temporal's `dayOfWeek % 7`.
 const WEEKDAY_NAMES = [
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 ]; // prettier-ignore
@@ -69,18 +59,13 @@ const MONTH_NAMES = [
 const weekdayName = (date: Temporal.PlainDate) =>
   WEEKDAY_NAMES[date.dayOfWeek % 7];
 
-/** "Tuesday, 25 August, 2026" — the Notice's own long form. */
 const longDate = (date: Temporal.PlainDate) =>
   `${WEEKDAY_NAMES[date.dayOfWeek % 7]}, ${date.day} ${MONTH_NAMES[date.month - 1]}, ${date.year}`;
 
-/**
- * The weekday chips' toolbar, by name — the frame's own Replay/Reset rail is
- * a toolbar too, so an unqualified role query now matches both.
- */
+/** By name: the frame's Replay/Reset rail is a toolbar too. */
 const weekdayToolbar = () =>
   screen.getByRole("toolbar", { name: "Repeat on weekdays" });
 
-/** The accessible names of the weekday chips currently toggled on. */
 const pressedWeekdays = () =>
   within(weekdayToolbar())
     .getAllByRole("button")
@@ -98,12 +83,7 @@ interface Frame {
   notice: string;
 }
 
-/**
- * Runs the walkthrough right through, sampling the form as it goes. The tour's
- * length depends on how far the cursor has to travel between stops, which jsdom
- * cannot know — so nothing here asserts on a wall-clock instant. What it holds
- * is a series of frames, and the case picks the one it cares about out of it.
- */
+/** Samples the form through the whole tour; jsdom cannot time the cursor's travel. */
 async function play(steps = 64, stepMs = 250): Promise<Frame[]> {
   const frames: Frame[] = [];
   for (let step = 0; step < steps; step += 1) {
@@ -117,20 +97,12 @@ async function play(steps = 64, stepMs = 250): Promise<Frame[]> {
   return frames;
 }
 
-/**
- * The walkthrough's finished run: the LAST frame holding the most weekdays.
- * Last, not first — the pattern is complete several stops before the end date
- * is, and the first frame at full weekdays still names the opening range.
- */
+/** The last frame with the most weekdays; the first one still names the opening range. */
 const peak = (frames: Frame[]) =>
   frames.reduce((best, frame) =>
     frame.weekdays.length >= best.weekdays.length ? frame : best,
   );
 
-// ---------------------------------------------------------------------------
-
-// The walkthrough's arithmetic, checked by COUNTING the range it produces
-// rather than by restating the formula that produced it.
 describe("planDemoRecurrence", () => {
   const shiftsIn = (first: Temporal.PlainDate, count?: number) => {
     const plan = planDemoRecurrence(first, count);
@@ -147,7 +119,6 @@ describe("planDemoRecurrence", () => {
   };
 
   it("takes every other weekday, opening on the one the first shift falls on", () => {
-    // 2026-08-09 is a Sunday.
     const sunday = Temporal.PlainDate.from("2026-08-09");
     expect(planDemoRecurrence(sunday).weekdays).toEqual([
       "sun",
@@ -158,7 +129,6 @@ describe("planDemoRecurrence", () => {
   });
 
   it("wraps the alternation round the end of the week", () => {
-    // 2026-08-13 is a Thursday: thu → sat → mon → wed.
     const thursday = Temporal.PlainDate.from("2026-08-13");
     expect(planDemoRecurrence(thursday).weekdays).toEqual([
       "thu",
@@ -182,8 +152,6 @@ describe("planDemoRecurrence", () => {
     expect(shiftsIn(first, 40)).toBe(40);
   });
 
-  // A range that ended on a day the run doesn't repeat on would be describing
-  // a last shift that never happens.
   it("closes the run on a day it actually repeats on", () => {
     const plan = planDemoRecurrence(Temporal.PlainDate.from("2026-08-09"));
     expect(plan.weekdays).toContain(weekdayOf(plan.lastShift));
@@ -206,8 +174,6 @@ describe("monthsBetween", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-
 describe("ShiftSchedulingV1 — repeat toggle", () => {
   it("opens with the repeat card closed, ready for the walkthrough to open it", () => {
     render(<ShiftSchedulingV1 />);
@@ -216,9 +182,6 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(screen.getByText("Shift Date")).toBeTruthy();
   });
 
-  // The switch adds a SECOND date to the form; it does not re-describe the one
-  // already filled in. Renaming it under the pointer made the field the visitor
-  // had just set look like it had become something else.
   it("leaves the date field labelled 'Shift Date' whether or not it repeats", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
@@ -259,9 +222,6 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(recurrence().hasAttribute("inert")).toBe(false);
   });
 
-  // Re-entry from `display: none` needs an @starting-style before-change style,
-  // but that also fires on FIRST render — which would play a spurious open
-  // animation on page load. `data-armed` gates it to post-interaction only.
   it("does not arm the entry animation until the switch is first touched", () => {
     render(<ShiftSchedulingV1 />);
     expect(recurrence().getAttribute("data-armed")).toBe("false");
@@ -269,7 +229,6 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(recurrence().getAttribute("data-armed")).toBe("true");
   });
 
-  // The Notice fades out WITH the region, so its text must not re-flow mid-exit.
   it("holds the Notice's recurrence sentence steady while the region collapses", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
@@ -277,10 +236,6 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     expect(notice()).toContain("repeat every");
   });
 
-  // The whole sentence, not a fragment of it: the Notice is what v1 exists to
-  // show, so its wording is the specification rather than an implementation
-  // detail. A run is a PATTERN bounded by two dates — the pattern leads, and
-  // both dates are named in the same breath as the range they bracket.
   it("reads the run as a pattern between two dates", () => {
     render(<ShiftSchedulingV1 />);
     expect(notice()).toBe(
@@ -289,8 +244,6 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     );
   });
 
-  // Deselecting every weekday leaves the region VISIBLE, so the sentence must
-  // fall back to the one thing it can still say.
   it("drops the Notice's repeat clause when every weekday is deselected", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
@@ -304,9 +257,6 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
   });
 });
 
-// The recurrence controls are boxed WITH the switch that governs them (Figma
-// 901:2365): the switch is the card's header, a rule separates it from what it
-// turns on, and everything below that rule folds away together.
 describe("ShiftSchedulingV1 — repeating shift card", () => {
   it("groups the repeat switch and the recurrence region in one card", () => {
     render(<ShiftSchedulingV1 />);
@@ -325,8 +275,6 @@ describe("ShiftSchedulingV1 — repeating shift card", () => {
     expect(repeatCard().contains(screen.getByText("Shift Date"))).toBe(false);
   });
 
-  // A rule left hanging under the switch is the obvious way this collapse can
-  // go wrong, so the divider folds away inside the region with everything else.
   it("folds the card's divider away with the recurrence region", () => {
     render(<ShiftSchedulingV1 />);
     expect(recurrence().contains(screen.getByTestId("repeat-divider"))).toBe(
@@ -335,11 +283,6 @@ describe("ShiftSchedulingV1 — repeating shift card", () => {
   });
 });
 
-// Collapsing the recurrence would otherwise shrink the whole dialog, and the
-// DemoFrame centres it — so the switch you just clicked would slide out from
-// under the pointer. A wireframe block in the footer takes back exactly the
-// space the recurrence gave up (Figma 902:2390), holding the dialog's height
-// and the switch's position steady.
 describe("ShiftSchedulingV1 — collapsed counterweight", () => {
   it("keeps the counterweight folded away while repeating", () => {
     render(<ShiftSchedulingV1 />);
@@ -358,8 +301,6 @@ describe("ShiftSchedulingV1 — collapsed counterweight", () => {
     expect(counterweight().getAttribute("data-open")).toBe("false");
   });
 
-  // It is scenery standing in for the rest of the form, so it must never take
-  // focus or be read out — the same contract the shell's header and footer keep.
   it("keeps the counterweight out of the tab order and the a11y tree", () => {
     render(<ShiftSchedulingV1 />);
     const scope = counterweight().firstElementChild;
@@ -368,9 +309,6 @@ describe("ShiftSchedulingV1 — collapsed counterweight", () => {
   });
 });
 
-// The form seeds a plausible near-future run off the real clock, so these are
-// derived the same way rather than pinned — a fixed date here would just
-// re-introduce what the component stopped hard-coding.
 describe("ShiftSchedulingV1 — default date range", () => {
   const format = formatCalendarDate(DEFAULT_DATE_FORMAT);
 
@@ -402,8 +340,6 @@ describe("ShiftSchedulingV1 — default repeat weekday", () => {
     expect(notice()).toContain(`repeat every ${weekdayName(FIRST_SHIFT)}`);
   });
 
-  // Seeded from the opening date, NOT bound to it — the toolbar is the user's
-  // to edit once they are in the form.
   it("leaves the weekday alone once the user has toggled it", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
@@ -415,13 +351,9 @@ describe("ShiftSchedulingV1 — default repeat weekday", () => {
   });
 });
 
-// The demo performs itself: repeat on, every other weekday, and a last shift
-// far enough out to book 25 of them — then clears the run and hands over a form
-// that is open and ready to use.
 describe("ShiftSchedulingV1 — walkthrough", () => {
   const PLAN = planDemoRecurrence(FIRST_SHIFT);
-  // The toolbar reads its chips out in row order, not in the order the tour
-  // presses them, so every comparison against this is order-independent.
+  // Sorted: the toolbar reads chips in row order, not press order.
   const PLANNED_NAMES = PLAN.weekdays
     .map((key) => WEEKDAY_KEYS.indexOf(key))
     .map((index) => WEEKDAY_NAMES[index])
@@ -457,9 +389,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     expect(notice()).toContain(longDate(TODAY.add({ days: 8 })));
   });
 
-  // Shut is the walkthrough's starting position, not the demo's resting one:
-  // handing back a form with a single switch in it would make the visitor's
-  // first act the very click they have just been shown.
   it("leaves the card OPEN when it hands the form over", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
@@ -470,9 +399,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     expect(recurrence().getAttribute("data-collapsed")).toBe("false");
   });
 
-  // The picker hands focus back to its trigger as it closes, so without this
-  // the walkthrough leaves the Until field sitting in its focused state,
-  // as though the visitor had tabbed into it. Nobody did.
   it("gives up the focus its own clicks took", async () => {
     const reveal = scrollIntoView();
     const { container } = render(<ShiftSchedulingV1 />);
@@ -494,16 +420,11 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     expect(peak(frames).weekdays).toEqual([weekdayName(FIRST_SHIFT)]);
   });
 
-  // Rewound, not handed over: a finished run leaves the card OPEN because that
-  // is the usable form, but a run nobody saw the end of has to go back to the
-  // position the NEXT one starts from — which is the card shut, so its first
-  // click has something to open.
   it("rewinds the card shut when the frame scrolls away mid-performance", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
     reveal();
 
-    // Far enough in for the switch to have been thrown and chips pressed.
     await advance(4000);
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
 
@@ -528,8 +449,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     expect(finished.notice).toContain(longDate(PLAN.lastShift));
   });
 
-  // The gate holds its answer between its two lines, so a frame parked near the
-  // edge does not flicker the performance on and off.
   it("plays on through a frame that is only half out of view", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
@@ -541,7 +460,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     expect(finished.weekdays.sort()).toEqual(PLANNED_NAMES);
   });
 
-  // The visitor got there first — the tour's opening move would be undoing it.
   it("declines to perform over a card the visitor has already opened", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
@@ -557,7 +475,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     render(<ShiftSchedulingV1 />);
     reveal();
 
-    // Far enough in for the switch to have been thrown.
     await advance(1600);
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
 
@@ -565,14 +482,10 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
       fireEvent.pointerDown(repeatCard());
     });
     const frames = await play();
-    // Whatever it had already committed stays — it committed it the way a
-    // visitor would — but nothing more is added, and it never resets.
     expect(peak(frames).weekdays).toEqual([weekdayName(FIRST_SHIFT)]);
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
   });
 
-  // Replay is the ONE path that shuts the card again, because the tour's first
-  // move is to throw that switch and it needs somewhere to throw it to.
   it("replays on request, rewinding the card shut first", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
@@ -591,19 +504,15 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
     reveal();
-    // Far enough in for chips to have been pressed — a run to clear.
     await advance(2600);
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
     expect(pressedWeekdays().length).toBeGreaterThan(1);
 
-    // Touching the form stands the show down — which is what hands the control
-    // back, with the pattern it had already built still on the form.
     fireEvent.pointerDown(repeatCard());
     fireEvent.click(screen.getByRole("button", { name: "Reset Demo" }));
     expect(repeatSwitch().getAttribute("aria-checked")).toBe("true");
     expect(pressedWeekdays()).toEqual([weekdayName(FIRST_SHIFT)]);
 
-    // …and the performance really is off: nothing else lands afterwards.
     const frames = await play();
     expect(peak(frames).weekdays).toEqual([weekdayName(FIRST_SHIFT)]);
     expect(notice()).toContain(longDate(TODAY.add({ days: 8 })));
@@ -613,7 +522,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     render(<ShiftSchedulingV1 />);
     openRepeat();
     const toolbar = within(weekdayToolbar());
-    // Any weekday but the seeded one, so this adds rather than deselects.
     const extra = WEEKDAY_NAMES.find(
       (name) => name !== weekdayName(FIRST_SHIFT),
     )!;
@@ -627,7 +535,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
 
   it("offers replay in the frame's corner with reset inboard of it", () => {
     render(<ShiftSchedulingV1 />);
-    // Reset only exists once there is a pattern to clear.
     openRepeat();
     fireEvent.click(
       within(weekdayToolbar()).getByRole("button", {
@@ -641,10 +548,6 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     ).toBeTruthy();
   });
 
-  // Reset is offered against WORK — chips and dates — and NOT against the
-  // switch, which reset never puts back either: it always hands the card over
-  // open. A form still carrying its seeded pattern has nothing to clear,
-  // whichever way that switch happens to be sitting.
   it("withholds reset until there is a pattern or a date to clear", () => {
     render(<ShiftSchedulingV1 />);
     expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
@@ -659,14 +562,10 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
     fireEvent.click(chip);
     expect(screen.getByRole("button", { name: "Reset Demo" })).toBeTruthy();
 
-    // ...and it goes again when the visitor puts the pattern back themselves.
     fireEvent.click(chip);
     expect(screen.queryByRole("button", { name: "Reset Demo" })).toBeNull();
   });
 
-  // "Back to how it started" is a moving target while the walkthrough is still
-  // building, so the offer waits for the performance to be over — and by then
-  // the run has cleared itself, leaving nothing to offer.
   it("keeps reset off the rail while the walkthrough is performing", async () => {
     const reveal = scrollIntoView();
     render(<ShiftSchedulingV1 />);
@@ -692,23 +591,8 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
 });
 
 describe("ShiftSchedulingV1 — hydration safety", () => {
-  // The surfaces this demo renders on are PRERENDERED — a static dev route and
-  // an embed in a cached article — so the server's markup is written on the
-  // build machine and hydrated by a visitor on some later day. A clock read
-  // during render bakes the BUILD's date into that HTML; the first client
-  // render computes a different one, the two disagree, and React throws away
-  // the tree with error #418. Integration caught it 41 seconds into a day the
-  // build had never heard of.
-  //
-  // `renderToString` reproduces the server pass — effects do not run — so the
-  // same render on two different days has to come out identical. The dates the
-  // visitor actually reads are still today's: they arrive in a layout effect,
-  // which is what the "default date range" cases above assert.
   it("renders markup that does not depend on the day the server is on", () => {
-    // A full day apart, not a minute either side of midnight UTC: the polyfill
-    // resolves `plainDateISO` in the LOCAL zone, so a UTC-midnight pair is the
-    // same local day everywhere west of Greenwich and the case would pass
-    // without proving anything.
+    // A full day apart: `plainDateISO` reads the local zone, so a UTC-midnight pair can be one local day.
     vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
     const buildDay = renderToString(<ShiftSchedulingV1 />);
 
@@ -720,8 +604,6 @@ describe("ShiftSchedulingV1 — hydration safety", () => {
   });
 });
 
-// The shift's hours, beside the date it runs on: two time fields either side of
-// a rule, under ONE hint naming the clock they are quoted in.
 describe("shift time range", () => {
   const group = () => screen.getByRole("group", { name: "Shift time" });
   const timeTrigger = (name: "Start Time" | "End Time") => {
@@ -742,13 +624,12 @@ describe("shift time range", () => {
 
   it("names the clock its hours are quoted in, once, for both fields", () => {
     render(<ShiftSchedulingV1 />);
-    // Frozen at 13 July — daylight saving is in force, and the label says so.
+    // 13 July: daylight saving is in force.
     expect(
       within(group()).getByText("Eastern Daylight Time (UTC-4)"),
     ).toBeTruthy();
   });
 
-  // The end of a shift is most usefully read as its LENGTH.
   it("measures the end against the start, and the start against nothing", () => {
     render(<ShiftSchedulingV1 />);
     const end = openList("End Time");
@@ -775,10 +656,6 @@ describe("shift time range", () => {
     ).toBeTruthy();
   });
 
-  // The group must NOT be a `[data-field]`. The field recipe's active state is
-  // `[data-field]:has([data-control][aria-expanded='true'])`, so an ancestor
-  // field would see the OPEN trigger through its own `:has` and light every
-  // frame beneath it — opening the end time lit the start field too.
   it("does not put a field around both controls", () => {
     render(<ShiftSchedulingV1 />);
     expect(group().hasAttribute("data-field")).toBe(false);

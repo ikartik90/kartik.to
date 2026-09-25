@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCurrentWeather } from "../weather";
 import { WEATHER_LOCATION } from "@/data/weather-location";
 
-// A response shaped exactly like the one the endpoint returns — copied from a
-// real call rather than invented, so a field the API renames breaks this too.
+// Copied from a real response, so a field the API renames breaks this too.
 function currentPayload(over: Record<string, unknown> = {}) {
   return {
     latitude: 43.646603,
@@ -63,9 +62,6 @@ describe("getCurrentWeather", () => {
   });
 
   it("takes the hour from the service rather than from a clock", async () => {
-    // The base fixture is a daytime response, so this pins the other branch:
-    // the widget must not work the hour out from the visitor's own timezone,
-    // which is not the timezone the reading was taken in.
     vi.stubGlobal("fetch", respondWith(currentPayload({ is_day: 0 })));
     expect((await getCurrentWeather())?.time).toBe("night");
   });
@@ -84,14 +80,11 @@ describe("getCurrentWeather", () => {
   });
 
   it("returns nothing when the service answers with a shape it does not know", async () => {
-    // A silently renamed field must not reach the widget as `undefined°`.
     vi.stubGlobal("fetch", respondWith({ current: { temp: 22.6 } }));
     expect(await getCurrentWeather()).toBeNull();
   });
 
   it("returns nothing when the request throws outright", async () => {
-    // The homepage renders this. A DNS failure must cost the widget, not
-    // the page.
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ENOTFOUND")));
     expect(await getCurrentWeather()).toBeNull();
   });

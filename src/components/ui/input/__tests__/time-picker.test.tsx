@@ -33,9 +33,7 @@ function trigger(): HTMLButtonElement {
 }
 
 const rows = () => screen.getAllByRole("option");
-// OptionList re-roles a dropped-in Field.Search as the listbox's `combobox`
-// input (it drives the highlight through aria-activedescendant), so the
-// type-ahead answers to that role rather than to `searchbox`.
+// OptionList gives a dropped-in Field.Search the combobox role, not searchbox.
 const search = () => screen.getByRole("combobox") as HTMLInputElement;
 const rowNames = () => rows().map((r) => r.textContent);
 
@@ -61,7 +59,6 @@ describe("collapsed trigger", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  // See Button: WebKit's default tab order skips a bare <button>.
   it("states its own place in the tab order", () => {
     renderTimePicker();
     expect(trigger().getAttribute("tabindex")).toBe("0");
@@ -96,8 +93,6 @@ describe("opening", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
-  // The design shows the current value in the search strip — but as a READING
-  // of the field, not as a filter, so the whole day is still there behind it.
   it("seeds the search with the value without filtering by it", () => {
     renderTimePicker({ defaultValue: at("13:30") });
     fireEvent.click(trigger());
@@ -149,8 +144,6 @@ describe("the day's slots", () => {
   });
 });
 
-// The Figma's list: anchored at 3:00 PM, 11:00 PM reads "+8 hours" and the day
-// rolls over at 12:00 AM.
 describe("the time difference", () => {
   const openAnchored = (props: Partial<TimePickerProps> = {}) => {
     renderTimePicker({ differenceFrom: at("15:00"), ...props });
@@ -188,7 +181,6 @@ describe("the time difference", () => {
     expect(screen.queryByText("Next Day")).toBeNull();
   });
 
-  // A row read aloud has neither the rule above it nor the column beside it.
   it("carries the day and the duration into the row's accessible name", () => {
     openAnchored();
     expect(
@@ -225,7 +217,6 @@ describe("selecting a time", () => {
     fireEvent.click(trigger());
     fireEvent.click(screen.getByRole("option", { name: "1:30 PM" }));
     expect(onValueChange).toHaveBeenCalledOnce();
-    // The parent didn't update `value`, so the trigger holds the old time.
     expect(trigger().textContent).toBe("12:00 AM");
   });
 });
@@ -265,8 +256,6 @@ describe("type-ahead", () => {
     expect(screen.getByText("No results")).toBeTruthy();
   });
 
-  // The rule belongs to the rows it precedes: with none of them left, it is
-  // labelling nothing.
   it("drops the day rule when no row past midnight survives", () => {
     openAndType("11:00 pm", { differenceFrom: at("15:00") });
     expect(rowNames()).toEqual(["11:00 PM+8 hours"]);

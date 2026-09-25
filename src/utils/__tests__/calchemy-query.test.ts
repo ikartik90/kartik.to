@@ -3,8 +3,7 @@ import { Temporal } from "@js-temporal/polyfill";
 import { createCalchemy, type Calchemy } from "@calchemy/date-core";
 import { parseQuery, parseQueryDates } from "../calchemy-query";
 
-// A Wednesday, so "tomorrow" and the weekday queries below have an unambiguous
-// answer that does not move with the wall clock.
+// A fixed Wednesday, so relative queries have stable answers.
 const REFERENCE = Temporal.PlainDate.from("2026-09-02");
 const CONTEXT = {
   locale: "en-US",
@@ -18,8 +17,7 @@ beforeAll(async () => {
   calchemy = await createCalchemy({ defaultContext: CONTEXT });
 });
 
-/** Every date in `month` falling on `weekday` (1 = Monday), computed here so
- *  the expectation is the calendar's answer rather than the parser's. */
+/** Every `weekday` (1 = Monday) in `month`, computed independently of the parser. */
 function weekdaysIn(month: Temporal.PlainYearMonth, weekday: number) {
   const dates: Temporal.PlainDate[] = [];
   for (let day = 1; day <= month.daysInMonth; day += 1) {
@@ -71,12 +69,9 @@ describe("parseQueryDates", () => {
   });
 
   it("holds a phrase to the kind it was asked for", () => {
-    // `single` takes a phrase that means one day...
     expect(parseQueryDates(calchemy, "tomorrow", CONTEXT, "single").map(String)).toEqual([
       REFERENCE.add({ days: 1 }).toString(),
     ]);
-    // ...and a recurrence is not one, so it resolves to nothing rather than to
-    // some arbitrary day out of the set.
     expect(parseQueryDates(calchemy, "mondays next month", CONTEXT, "single")).toEqual([]);
   });
 
@@ -89,8 +84,6 @@ describe("parseQueryDates", () => {
   });
 
   it("previews the first reading of an ambiguous phrase, and offers the rest", () => {
-    // A slashed date nobody has said the order of: the parser knows it means
-    // three different days.
     const { dates, candidates, activeId } = parseQuery(
       calchemy,
       "03/04/25",
@@ -103,8 +96,6 @@ describe("parseQueryDates", () => {
       "March 4, 2025",
       "April 25, 2003",
     ]);
-    // The highlighted reading is PREVIEWED on the grid, so moving through the
-    // list shows what each one would select. Committing it is a separate act.
     expect(dates.map(String)).toEqual(["2025-04-03"]);
     expect(activeId).toBe(candidates[0].id);
   });
@@ -119,14 +110,11 @@ describe("parseQueryDates", () => {
     );
 
     expect(dates.map(String)).toEqual(["2025-03-04"]);
-    // Still offered, so the choice can be changed without retyping.
     expect(candidates).toHaveLength(3);
     expect(activeId).toBe("mdy");
   });
 
   it("offers only the readings the chosen kind can use", () => {
-    // Every reading of this phrase is a single date, so under `range` there is
-    // nothing to choose BETWEEN — and nothing to draw.
     const { dates, candidates } = parseQuery(calchemy, "03/04/25", CONTEXT, "range");
 
     expect(candidates).toEqual([]);
@@ -140,9 +128,6 @@ describe("parseQueryDates", () => {
     expect(dates.map(String)).toEqual([REFERENCE.add({ days: 1 }).toString()]);
   });
 
-  // 0.3.0 hands back the phrase it WOULD have read, when it can work one out:
-  // a backwards range given the year that makes it run forwards, a numeric date
-  // given its dashes. Passed straight through, so a caller can offer it back.
   it("passes on the phrase the parser would have read instead", () => {
     expect(
       parseQuery(calchemy, "tomorrow until march", CONTEXT).suggestion,
@@ -154,7 +139,6 @@ describe("parseQueryDates", () => {
 
   it("has nothing to suggest for a phrase that already reads", () => {
     expect(parseQuery(calchemy, "tomorrow", CONTEXT).suggestion).toBeNull();
-    // Ambiguous is not broken: three readings is a choice, not a mistake.
     expect(parseQuery(calchemy, "03/04/25", CONTEXT).suggestion).toBeNull();
   });
 
@@ -163,9 +147,6 @@ describe("parseQueryDates", () => {
     expect(parseQuery(calchemy, "", CONTEXT).suggestion).toBeNull();
   });
 
-  // A phrase the KIND turned down is not a typo. "mondays next month" is
-  // perfectly readable; asked for one date it simply does not mean one, and
-  // rewriting it would answer a question nobody asked.
   it("does not offer a rewrite for a phrase only the kind refused", () => {
     expect(
       parseQuery(calchemy, "mondays next month", CONTEXT, "single").suggestion,
@@ -175,9 +156,6 @@ describe("parseQueryDates", () => {
   it("hands back this app's PlainDate, not the parser's", () => {
     const [date] = parseQueryDates(calchemy, "today", CONTEXT);
 
-    // The calendar it feeds compares with `Temporal.PlainDate.compare` from
-    // THIS polyfill copy; a date carried over from another one would still
-    // stringify correctly and silently fail to match.
     expect(date).toBeInstanceOf(Temporal.PlainDate);
   });
 });

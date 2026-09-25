@@ -82,7 +82,6 @@ describe("downloadPlanFor", () => {
 
     expect(plan?.filename).toBe("icons-20-1.25.zip");
     expect(plan?.blob.type).toBe("application/zip");
-    // "PK" — the local file header every zip opens with.
     const head = new Uint8Array(await plan!.blob.arrayBuffer()).subarray(0, 4);
     expect(Array.from(head)).toEqual([0x50, 0x4b, 0x03, 0x04]);
   });

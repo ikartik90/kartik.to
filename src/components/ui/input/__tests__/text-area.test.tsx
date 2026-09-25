@@ -5,8 +5,6 @@ import { TextArea } from "../text-area";
 afterEach(() => cleanup());
 
 describe("TextArea", () => {
-  // The whole reason this exists beside TextInput: prose WRAPS, and a
-  // single-line input hides everything past its right edge.
   it("renders a textarea in the control slot", () => {
     render(<TextArea label="Testimonial" />);
     expect(screen.getByLabelText("Testimonial").tagName).toBe("TEXTAREA");
@@ -28,9 +26,6 @@ describe("TextArea", () => {
     expect(document.getElementById(describedBy!)?.textContent).toBe("Hint text");
   });
 
-  // Same assertion TextInput makes, and for the same reason: a size that scales
-  // the label but not the frame is the exact mismatch the recipe's size variant
-  // exists to prevent.
   it("forwards size to every field slot", () => {
     render(<TextArea label="Label" hint="Hint text" size="sm" />);
     const control = screen.getByRole("textbox");
@@ -41,9 +36,6 @@ describe("TextArea", () => {
     );
   });
 
-  // `data-control` is what the frame's mousedown looks for when forwarding a
-  // click on its dead padding. Without it a click near the frame's edge focuses
-  // nothing and the field feels broken.
   it("carries data-control so the frame can forward focus", () => {
     render(<TextArea label="Label" />);
     const control = screen.getByRole("textbox");

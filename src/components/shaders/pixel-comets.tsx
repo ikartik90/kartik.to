@@ -15,15 +15,6 @@ import {
 } from "./pixel-comets-uniforms";
 import { useShaderPolicy } from "./use-shader-policy";
 
-// ---------------------------------------------------------------------------
-// Pixel Comets — coloured pixels running the lanes of a lattice, trailing as
-// they go.
-//
-// Shaped exactly like `CosmicTrack`, which is shaped exactly like one of the
-// library's own: friendly props in, a `uniforms` object out, straight into
-// `ShaderMount`. No layer of ours in between to drift.
-// ---------------------------------------------------------------------------
-
 export interface PixelCometsProps
   extends ShaderComponentProps,
     Partial<PixelCometsParams>,
@@ -126,11 +117,7 @@ function PixelCometsImpl({
   );
 }
 
-/**
- * Memoised with a comparator that looks INSIDE `colors` — see `CosmicTrack`,
- * where the same note explains why the default `memo` is defeated by an array
- * prop and re-uploads every uniform on every parent render.
- */
+/** Compares `colors` by value: a literal array would otherwise defeat memo on every render. */
 export const PixelComets = memo(PixelCometsImpl, (prev, next) => {
   const { colors: prevColors, ...prevRest } = prev;
   const { colors: nextColors, ...nextRest } = next;

@@ -1,16 +1,6 @@
 import { defineSlotRecipe } from "@pandacss/dev";
 import { fieldValueBox } from "../recipes/shared";
 
-// The third control archetype of the field family, after the text input
-// and the toggles: a ruler and a numeric readout sharing one frame
-// (Figma 842:7179). It owns NO surface of its own — the 28px shell, its
-// fill, border and focus accent are the `field` recipe's `frame` at
-// `size="sm"`, and the 8px padding + 8px gap the frame already carries
-// place the track, separator and readout at exactly the drawn offsets.
-// So this recipe is only the marks inside: ruler ticks and separator on
-// the border token (the same hairline the frame's own edge uses), the
-// thumb and readout on `currentColor` — which the frame flips to the
-// brand accent on focus, so the whole active state comes for free.
 export const sliderField = defineSlotRecipe({
   className: "slider-field",
   description:
@@ -21,36 +11,23 @@ export const sliderField = defineSlotRecipe({
       position: "relative",
       flex: "1 1 0",
       minWidth: 0,
-      // Full height rather than the 4px of the rule: the whole strip is
-      // the drag target, so a grab anywhere in the frame lands on the
-      // slider instead of the frame's dead padding.
       alignSelf: "stretch",
       cursor: "pointer",
-      // Claim the horizontal pan gesture — without it a touch drag
-      // scrolls the page instead of moving the thumb.
+      // Otherwise a touch drag scrolls the page instead of moving the thumb.
       touchAction: "none",
-      // `_disabled` covers [aria-disabled=true] as well as :disabled,
-      // which is what a <div role="slider"> can actually carry.
+      // `_disabled` also matches [aria-disabled=true], the only form a div role=slider can carry.
       _disabled: { cursor: "not-allowed", opacity: 0.5 },
     },
-    // Ticks and thumb are both centred on the track's midline and on
-    // their own value, so they share the same centring transform and
-    // differ only in size and colour.
     tick: {
       position: "absolute",
       top: "token(spacing.half)",
       transform: "translate(-50%, -50%)",
       width: "token(spacing.xxs)",
       height: "token(spacing.sm)",
-      // Rounds the 1px hairline's ends, matching the round cap the
-      // drawn vector has.
       borderRadius: "full",
       backgroundColor: "field.border.default",
       pointerEvents: "none",
       transition: "background-color 150ms ease",
-      // The frame's own border goes accent on focus; the hairlines drawn
-      // inside it follow, keyed off the same selector the `field` recipe
-      // uses so the whole field flips in one step.
       "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &":
         {
           backgroundColor: "field.border.active",
@@ -63,8 +40,6 @@ export const sliderField = defineSlotRecipe({
       width: "token(spacing.sm)",
       height: "token(spacing.xxl)",
       borderRadius: "full",
-      // The frame owns the resting → active colour for everything it
-      // contains; the thumb rides it like the leading icon does.
       backgroundColor: "currentColor",
       pointerEvents: "none",
     },
@@ -82,18 +57,13 @@ export const sliderField = defineSlotRecipe({
     output: {
       ...fieldValueBox,
       color: "inherit",
-      // The value sits OUTSIDE the track, so the track's own dimming
-      // can't reach it — without this a disabled slider greys its ruler
-      // and leaves the number at full strength.
+      // The value sits outside the track, so the track's own dimming can't reach it.
       "[data-field]:has([role='slider'][aria-disabled='true']) &": {
         opacity: 0.5,
       },
     },
   },
   variants: {
-    // Only the readout's type: the ruler is drawn at one geometry (the
-    // checkbox's bargain), so a bigger field grows label, hint and value
-    // around an unchanged rule. Mirrors the `field` recipe's control.
     size: {
       sm: { output: { textStyle: "bodySmall" } },
       md: { output: { textStyle: "bodyLarge" } },
@@ -101,7 +71,6 @@ export const sliderField = defineSlotRecipe({
     },
   },
   defaultVariants: { size: "sm" },
-  // Slider calls sliderField({ size }) with the field's runtime size, so
-  // the extractor only sees the default — force all three.
+  // Called with the field's runtime size, so emit every branch.
   staticCss: [{ size: ["*"] }],
 });

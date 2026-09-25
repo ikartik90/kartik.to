@@ -36,33 +36,15 @@ export const tooltip = defineRecipe({
       opacity: 0,
       filter: "blur(1px)",
     },
-    // Shown by its host toggling `data-visible`. The cursor trails the
-    // box by its offset, so `pointer-events: auto` never intercepts the
-    // pointer yet still lets an interactive tooltip be hit.
+    // The cursor trails the box by its offset, so `pointer-events: auto` never intercepts it.
     "&[data-visible]": {
       opacity: 1,
       visibility: "visible",
       pointerEvents: "auto",
       filter: "blur(0)",
     },
-    // The one placement this box has of its own, for the one case with
-    // no cursor to hang from: the demos' invitation on a touch device,
-    // where the coordinates of the last thing a finger touched are not
-    // a place anybody is looking. Bottom centre, over the page.
-    //
-    // Placed HERE rather than written onto the element, because a phone
-    // is the one viewport that changes height while the box is up — the
-    // URL bar slides away as the visitor scrolls — and `bottom` follows
-    // that edge where a `top` computed once from `innerHeight` would be
-    // stranded. `useCursorTooltip` leaves the inline `left`/`top` off
-    // while docked so this rule is unopposed.
-    //
-    // 50px is a clearance, not a step on the spacing scale: far enough
-    // up to read as floating over the page rather than stuck to its
-    // edge, plus whatever the home indicator is holding, so it sits the
-    // same height above the glass on a phone that has one and a phone
-    // that doesn't. And nothing to press — the box is over content the
-    // visitor is being invited to touch.
+    // Touch fallback with no cursor to follow: bottom centre. In CSS, not inline, so `bottom`
+    // tracks a phone's collapsing URL bar.
     "&[data-docked]": {
       top: "auto",
       left: "token(spacing.half)",
@@ -71,7 +53,6 @@ export const tooltip = defineRecipe({
       maxWidth: "calc(100% - token(spacing.3xl))",
     },
     "&[data-docked][data-visible]": { pointerEvents: "none" },
-    // A composed trailing glyph, sized and tinted with no className.
     "& svg": {
       flexShrink: 0,
       width: "token(sizes.tooltipIcon)",
@@ -81,11 +62,6 @@ export const tooltip = defineRecipe({
     "& svg path[fill]": { fill: "currentColor" },
   },
   variants: {
-    // Opt-in, for the tooltip that makes an OFFER rather than naming a
-    // control — the demos' "Try it yourself". Brand type on the opaque
-    // brand surface the popovers already use (rosemilk/rust): the box
-    // covers whatever it is drawn over, so the fill can't be a
-    // translucent brand wash the way an inline emphasis is.
     tone: {
       brand: {
         backgroundColor: {
@@ -93,9 +69,6 @@ export const tooltip = defineRecipe({
           _dark: "brand.rust",
         },
         color: { base: "brand.pink", _dark: "brand.orange" },
-        // The bright hue again at 25%, exactly as `field.border.active`
-        // draws a focused frame — a neutral hairline is the one part of
-        // the box that would still read as the default tooltip.
         borderColor: {
           base: "color-mix(in srgb, var(--colors-brand-pink) 25%, transparent)",
           _dark:
@@ -104,9 +77,7 @@ export const tooltip = defineRecipe({
       },
     },
   },
-  // The variant reaches the recipe through `Tooltip`'s rest props, which
-  // is a runtime value Panda cannot read statically — without this the
-  // class lands on the box and no rule is ever emitted for it.
+  // `tone` arrives at runtime through rest props, so every value must be emitted.
   staticCss: [{ tone: ["*"] }],
 });
 

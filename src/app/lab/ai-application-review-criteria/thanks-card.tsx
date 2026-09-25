@@ -9,18 +9,6 @@ import CloseIcon from "./icons/close.svg";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import XIcon from "@/assets/icons/twitter.svg";
 
-// ---------------------------------------------------------------------------
-// The thanks the walkthrough ends on: who made the prototype, and the ways to
-// get in touch. A card in the window's bottom-left corner, 20px clear of both
-// edges.
-//
-// A popover, so it is in the top layer; and written inside whichever modal
-// dialog is open, because everything outside one is inert, and the drawer is
-// still open when the walkthrough finishes. As that dialog starts to close, the
-// card moves back to where it is written, without fading in a second time:
-// inside the prototype, whose theme it is drawn in — not to the page's body.
-// ---------------------------------------------------------------------------
-
 const BOOKING = "https://calendly.com/ikartik90/30min";
 
 const cardStyle = css({
@@ -44,7 +32,6 @@ const cardStyle = css({
   transform: "translateY(8px)",
   transition:
     "opacity 200ms cubic-bezier(0.22, 1, 0.36, 1), transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
-  // Laid out only while shown: a closed popover is hidden by `display: none`.
   "&:popover-open": {
     display: "flex",
     flexDirection: "column",
@@ -53,7 +40,7 @@ const cardStyle = css({
     transform: "none",
   },
   _starting: { "&:popover-open": { opacity: 0, transform: "translateY(8px)" } },
-  // In once: moved, it is simply there.
+  // No second fade-in after moving to another dialog.
   "&[data-shown]": { transition: "none" },
 });
 
@@ -63,7 +50,6 @@ const whoStyle = css({
   gap: "12px",
 });
 
-// As tall as the name and role beside it.
 const avatarStyle = css({
   flexShrink: 0,
   width: "44px",
@@ -78,7 +64,6 @@ const roleStyle = css({
   color: "var(--cashby-slate-subtle)",
 });
 
-// 12px from the card's corner, a glyph in no box of its own.
 const closeStyle = css({
   position: "absolute",
   insetBlockStart: "12px",
@@ -108,16 +93,14 @@ const actionsStyle = css({
   gap: "8px",
 });
 
-// The product's plain button, square around a glyph. Its name is text only a
-// screen reader has: named by `aria-label` alone, a bare glyph gets a hover
-// hint of the browser's own.
+// Named by sr-only text, not `aria-label`, which gets a native hover hint on a bare glyph.
 const profileStyle = css({ justifyContent: "center", width: "32px" });
 
 const glyphStyle = css({ width: "16px", height: "16px" });
 
 const nameOnlyReadStyle = css({ srOnly: true });
 
-// The dialog on top, if one is open and staying open.
+// The card portals into the top open modal: everything outside it is inert.
 function topDialog() {
   return (
     [
@@ -143,7 +126,7 @@ export function ThanksCard({ onClose }: { onClose: () => void }) {
     return () => watch.disconnect();
   }, []);
 
-  // Moved, it is a new element, to be shown afresh.
+  // A moved popover is a new element and must be shown again.
   useLayoutEffect(() => {
     ref.current?.showPopover();
   }, [host]);
@@ -161,7 +144,6 @@ export function ThanksCard({ onClose }: { onClose: () => void }) {
       onTransitionEnd={() => setShown(true)}
     >
       <div className={whoStyle}>
-        {/* The name is beside it. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={AUTHOR.avatar}

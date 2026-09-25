@@ -23,7 +23,6 @@ describe("getPostReadUrl", () => {
     expect(getPostReadUrl("PAGE", "about")).toBe("/about");
   });
 
-  // The homepage's record is called `home`, and `/home` is nothing.
   it("returns / for the homepage's record", () => {
     expect(getPostReadUrl("PAGE", "home")).toBe("/");
   });
@@ -97,8 +96,6 @@ describe("getEditUrl", () => {
     );
   });
 
-  // A page is edited at a static route of its own — `/edit/home`,
-  // `/edit/about` — which is what creates its record the first time.
   it("returns a page's own edit route, with no category to carry", () => {
     expect(getEditUrl("PAGE", "home")).toBe("/edit/home");
     expect(getEditUrl("PAGE", "about")).toBe("/edit/about");

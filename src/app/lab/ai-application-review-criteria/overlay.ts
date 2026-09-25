@@ -1,14 +1,5 @@
 import { css } from "../../../../styled-system/css";
 
-// ---------------------------------------------------------------------------
-// What the prototype's modal dialogs share — the benchmark overlay and the
-// validation dialog: a surface in the product's look, in the top layer over a
-// scrim that dims everything behind it. It fades and settles in, the scrim
-// with it, and both fade out while `data-closing` (see `useModal`).
-//
-// Each dialog adds its own size and place.
-// ---------------------------------------------------------------------------
-
 const AWAY = "translateY(8px) scale(0.98)";
 
 export const overlayBase = css.raw({
@@ -19,8 +10,7 @@ export const overlayBase = css.raw({
   backgroundColor: "var(--cashby-surface)",
   color: "var(--cashby-ink)",
   font: "var(--cashby-text-body)",
-  // With nothing inside that can take focus yet, opening focuses the dialog
-  // itself — and WebKit rings the whole of it for that.
+  // Opening may focus the dialog itself, and WebKit would ring all of it.
   outline: "none",
   opacity: 0,
   transform: AWAY,
@@ -44,7 +34,7 @@ export const overlayBase = css.raw({
   "&::backdrop": {
     backgroundColor: "var(--cashby-scrim)",
     transition: "background-color 200ms cubic-bezier(0.22, 1, 0.36, 1)",
-    // The site blurs every dialog's backdrop (globals.css); the product dims it.
+    // Overrides the site-wide dialog backdrop blur (globals.css).
     // @ts-expect-error -- raw CSS property: `backdropFilter` reaches the page prefixed alone, which Chromium ignores
     "backdrop-filter": "none",
   },

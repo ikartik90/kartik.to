@@ -25,73 +25,15 @@ import RemoveIcon from "@/assets/icons/remove.svg";
 import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 import BottomSheetIcon from "@/assets/icons/bottom-sheet.svg";
 
-// ---------------------------------------------------------------------------
-// PropertiesPanel — the docked inspector, composed the way the rest of the
-// system composes (Figma 845:7223):
-//
-//   <PropertiesPanel ariaLabel="Media properties" onDismiss={close}>
-//     <PropertiesPanel.Header>Media Properties</PropertiesPanel.Header>
-//
-//     <PropertiesPanel.Section
-//       defaultEnabled={Boolean(caption)}
-//       onEnabledChange={(on) => !on && clearCaption()}
-//     >
-//       <PropertiesPanel.SectionHeader icon={<EditIcon />}>
-//         Caption
-//       </PropertiesPanel.SectionHeader>
-//       <PropertiesPanel.ControlPanel>
-//         <PropertiesPanel.Text value={caption} onValueChange={setCaption} />
-//       </PropertiesPanel.ControlPanel>
-//     </PropertiesPanel.Section>
-//   </PropertiesPanel>
-//
-// Three nestings of one shape — a 40px header strip over a body. The panel is
-// a header over its sections; a section is a header over its control panel; a
-// control panel is a column of rows. Each level is a part, so a new section is
-// a new `<Section>` and a new control is a new `<Control>`, with nothing to
-// widen and no shape prop to extend. A `<Group>` is the section that is
-// always on: the same strip and body, with a title and no add/remove pair.
-//
-// A section's control panel is MOUNTED, not hidden: enabling adds it to the
-// DOM and disabling takes it away, which is what makes the add/remove pair
-// honest — a collapsed section holds no focusable controls to tab into and no
-// stale values to read back.
-//
-// A section that is ALWAYS on is the same part with its header left off and
-// `enabled` held true (Figma 885:1963) — the properties every picture has,
-// which are not something you add or remove. Its control panel takes an
-// `ariaLabel` instead, since there is no heading left to be named by.
-//
-// The panel knows nothing about what it is inspecting. `Section` owns only
-// whether it is open (uncontrolled by default, like Slider and Switch) and
-// reports the change; what enabling MEANS — applying a default gradient,
-// clearing a caption — belongs to the consumer that has the document.
-//
-// Whatever opens the panel must mark itself {@link PROPERTIES_TRIGGER_ATTR},
-// or it cannot be the thing that closes it — see the constant.
-// ---------------------------------------------------------------------------
-
-/**
- * Spread onto the control that opens the panel:
- *
- *   <Button {...PROPERTIES_TRIGGER_ATTR} onClick={toggle} />
- *
- * It exempts that control from the outside-pointerdown dismiss. Without it a
- * toggling trigger can only ever OPEN: the dismiss runs on pointerdown, the
- * click arrives to find the panel already closed, and re-opens it — which
- * reads as the button doing nothing at all.
- */
+/** Spread onto the trigger, or the dismiss fires on pointerdown and the click reopens the panel. */
 export const PROPERTIES_TRIGGER_ATTR = { "data-properties-trigger": "" };
 
 const TRIGGER_SELECTOR = "[data-properties-trigger]";
 
-/**
- * How long the panel takes to slide back out. Kept in step with the
- * `propertiesPanelOut` keyframe in `panda.config.ts`.
- */
+/** Must match the `propertiesPanelOut` keyframe's duration. */
 const EXIT_MS = 200;
 
-/** How each docked panel is asked to leave — see the one-at-a-time rule. */
+/** One docked panel at a time: each new one asks these to leave. */
 const openPanels = new Set<() => void>();
 
 type PanelStyles = ReturnType<typeof propertiesPanel>;
@@ -113,14 +55,7 @@ function usePanel(component: string): PanelContextValue {
 type SectionContextValue = {
   enabled: boolean;
   setEnabled: (next: boolean) => void;
-  /** Ties the section header's toggle to the panel it mounts, via aria-controls. */
   panelId: string;
-  /**
-   * The heading the control panel is named by. An ID rather than the string
-   * itself: the name is authored in the header and READ in the panel, and
-   * passing the text back up would mean a child writing to its parent's state
-   * during render.
-   */
   titleId: string;
 };
 
@@ -136,65 +71,26 @@ function useSection(component: string): SectionContextValue {
   return ctx;
 }
 
-/** What a `ref` on the panel gets you: the way to close it from outside. */
 export interface PropertiesPanelHandle {
-  /**
-   * Start the closing slide. `onDismiss` follows when it is over — so the
-   * trigger that opened the panel closes it through HERE rather than by
-   * dropping it from the tree, which would take the animation with it.
-   */
+  /** Starts the closing slide; `onDismiss` follows once it ends. Close through this, not by unmounting. */
   dismiss: () => void;
 }
 
 export interface PropertiesPanelProps {
-  /** Names the dialog for assistive technology. */
   ariaLabel: string;
-  /**
-   * Fired once the panel has finished leaving — the point at which the
-   * consumer should stop rendering it. NOT the moment it was asked to close.
-   */
+  /** Fired once the panel has finished leaving, not when it is asked to close. */
   onDismiss: () => void;
-  /**
-   * Extra CSS selector exempted from the outside-pointerdown dismiss, on top of
-   * the panel's own trigger. For a panel that opens a surface of its OWN beside
-   * itself — a picker docked off the rail's edge, say: it is portalled, so it
-   * is outside this panel by every measure the dismiss can take, and a press in
-   * it would close the panel it belongs to.
-   */
+  /** Also exempt from the outside-press dismiss, e.g. a portalled surface of the panel's own. */
   ignoreSelector?: string;
-  /**
-   * Whether a press outside closes the panel (default true).
-   *
-   * True suits a panel that is transient — docked beside the object it edits,
-   * dismissed by turning to something else. Pass false for one that IS the
-   * page's settings: it stands over the surface it configures, so every press
-   * on that surface would otherwise take it away, and it is opened and closed
-   * deliberately instead. Escape and the header's close button are unaffected.
-   */
+  /** Default true; false for a panel that is the page's settings. Escape and close still work. */
   dismissOnOutsidePointer?: boolean;
-  /**
-   * Whether the page SLIDES into the width this panel takes (default true).
-   *
-   * Pass false on a page that opens with the panel already up AND draws nothing
-   * until it does — the calchemy playground, whose rail and whose calendar both
-   * arrive the moment its engine lands. There is nothing on screen to slide
-   * there, and the slide is a layout animation: it walks the page 360px
-   * sideways across a dozen painted frames, every one of them a layout shift.
-   * See `usePropertiesPanelInset`, which has the rest of it. A panel the reader
-   * opens slides regardless of this.
-   */
+  /** Default true; false for a page that opens with the panel up and draws nothing before it. */
   animateInset?: boolean;
   ref?: Ref<PropertiesPanelHandle>;
   children: ReactNode;
 }
 
-/**
- * The docked shell: Escape / outside-pointer dismissal from the shared
- * {@link Popover}, portalled to the body so no ancestor's `overflow`,
- * `transform` or `container-type` can clip it or steal its containing block —
- * the panel is fixed to the VIEWPORT, and a demo frame or a scroll container
- * around the thing being edited must not become the box it docks to.
- */
+/** Portalled, so no ancestor's overflow, transform or container-type becomes the box it docks to. */
 function PropertiesPanelRoot({
   ariaLabel,
   onDismiss,
@@ -206,29 +102,15 @@ function PropertiesPanelRoot({
 }: PropertiesPanelProps) {
   const styles = propertiesPanel();
 
-  // The panel LEAVES the way it arrived, which means it has to outlive the
-  // decision to close it: the consumer unmounts it the moment `onDismiss`
-  // fires, and an unmounted node has nothing to animate. So every dismissal
-  // routes through here first, holds the panel on screen for the length of
-  // the slide, and only then tells the consumer.
+  // Every dismissal holds the panel through its exit slide before telling the consumer, which unmounts it.
   const [exiting, setExiting] = useState(false);
   const close = useCallback(() => setExiting(true), []);
 
-  // The page gives up the width the panel is about to occupy, and takes it back
-  // the moment the panel is asked to leave rather than when it has gone — so
-  // the content expands across the same 200ms the panel spends sliding out,
-  // instead of snapping open behind it.
+  // The page takes its width back as soon as the panel is asked to leave, so both move together.
   usePropertiesPanelInset(!exiting, { animate: animateInset });
-  // Escape, the header button, a press outside, and the trigger that opened
-  // it all end up here — so the panel leaves the same way whichever of them
-  // asked, and the timing lives in exactly one place.
   useImperativeHandle(ref, () => ({ dismiss: close }), [close]);
 
-  // One inspector at a time. Every panel docks to the same edge, so a second
-  // one opening is the reader turning to something else — the card they just
-  // pressed while the metadata sidebar was up, say — and the first one leaves
-  // the way it would for any other outside press. Asked on MOUNT, so the panel
-  // arriving is the one that stays.
+  // One inspector at a time, asked on mount, so the arriving panel is the one that stays.
   useEffect(() => {
     for (const other of openPanels) other();
     openPanels.add(close);
@@ -237,8 +119,7 @@ function PropertiesPanelRoot({
     };
   }, [close]);
 
-  // Read through a ref so the timer is started by the EXIT, not restarted by
-  // a consumer that hands down a fresh arrow on every render.
+  // Through a ref, so a fresh `onDismiss` each render doesn't restart the timer.
   const dismissRef = useRef(onDismiss);
   useEffect(() => {
     dismissRef.current = onDismiss;
@@ -246,11 +127,7 @@ function PropertiesPanelRoot({
 
   useEffect(() => {
     if (!exiting) return;
-    // A clock rather than `animationend`: the animated element is the shared
-    // Popover's node, which this component never holds. Under
-    // `prefers-reduced-motion` globals.css collapses the slide to 0.01ms, so
-    // the panel is off screen immediately either way and the wait costs
-    // nothing anyone can see.
+    // A timer, not `animationend`: the animated node is the Popover's, which this never holds.
     const timer = setTimeout(() => dismissRef.current(), EXIT_MS);
     return () => clearTimeout(timer);
   }, [exiting]);
@@ -276,14 +153,7 @@ function PropertiesPanelRoot({
   );
 }
 
-/**
- * The strip's own end, where the dismiss button lives and anything given to
- * `actions` lines up beside it.
- *
- * A box of its own because the strip is `space-between`: a title and one button
- * sit at the two ends, and a third child would be centred between them. `xs` is
- * the gap every other cluster of icon chips in this app is drawn with.
- */
+// A box of its own: in the `space-between` strip, a third child would sit centred.
 const headerActionsStyle = css({
   display: "flex",
   alignItems: "center",
@@ -291,25 +161,13 @@ const headerActionsStyle = css({
 });
 
 export interface PropertiesPanelHeaderProps {
-  /** The panel's title. */
   children: ReactNode;
   /** Overrides the dismiss button's accessible name. */
   closeLabel?: string;
-  /**
-   * Controls that act on the thing this strip NAMES, drawn before the dismiss
-   * button.
-   *
-   * For a panel whose title is a row rather than a word. "Properties" names the
-   * panel, and an action on the document would be wrongly placed beside it —
-   * which is why the shader playground moved its preset actions down into a
-   * heading of their own. A panel headed with somebody's NAME is the other
-   * case: a control that decides whether those words are on the homepage
-   * belongs next to whose words they are.
-   */
+  /** Controls acting on what the title names, drawn before the dismiss button. */
   actions?: ReactNode;
 }
 
-/** Title over the whole panel, with the control that sends it back to the edge. */
 function PropertiesPanelHeader({
   children,
   closeLabel = "Close properties panel",
@@ -331,31 +189,13 @@ function PropertiesPanelHeader({
   );
 }
 
-// Which picture the panel's own control wears, decided the way the panel
-// decides everything else about its dock: the media query. A sheet rises from
-// the bottom of a phone and a rail comes in from the side of a desktop, and a
-// button that pointed at the wrong edge would be describing a panel the reader
-// is not about to get.
-//
-// CSS rather than `isBottomSheetLayout()`, and that is the load-bearing half:
-// the panel is rendered on the server and the query cannot be asked there, so a
-// scripted answer would hydrate the rail's glyph onto a phone and swap it a
-// frame later. It is also one button either way — the label and the press are
-// stated once, and only the picture changes.
+// The dock glyph is chosen in CSS, not `isBottomSheetLayout()`: the query can't run on the server.
 const railOnlyIconStyle = css({ _bottomSheet: { display: "none" } });
 const sheetOnlyIconStyle = css({
   display: "none",
   _bottomSheet: { display: "block" },
 });
 
-/**
- * The glyph for "this panel" — the rail on a desktop, the sheet on a phone.
- *
- * Exported because the control that BRINGS the panel back does not live inside
- * it: it sits on the page's own chrome, with no panel mounted to read a dock
- * off. Both ends of that one toggle wear this, so the picture agrees with the
- * panel the press is about to produce.
- */
 function PropertiesPanelDockIcon() {
   return (
     <>
@@ -366,25 +206,13 @@ function PropertiesPanelDockIcon() {
 }
 
 export interface PropertiesPanelSectionProps {
-  /** Controlled open state. Omit to let the section own it. */
   enabled?: boolean;
-  /** Initial open state when uncontrolled — typically "the property is set". */
   defaultEnabled?: boolean;
-  /** Fired when the add/remove button flips the section. */
   onEnabledChange?: (enabled: boolean) => void;
   children: ReactNode;
 }
 
-/**
- * One property group: a header strip and — once enabled — the control panel it
- * mounts.
- *
- * Uncontrolled by default, and that is the load-bearing choice rather than a
- * convenience. Deriving "open" from the value it edits would make a section
- * close itself the moment its value went empty — a caption unmounting its own
- * field on the keystroke that cleared it. Open is a fact about the PANEL; the
- * value is a fact about the document.
- */
+/** Open is the panel's state, not derived from the value, or clearing a field would unmount it. */
 function PropertiesPanelSection({
   enabled: enabledProp,
   defaultEnabled = false,
@@ -420,18 +248,11 @@ function PropertiesPanelSection({
 }
 
 export interface PropertiesPanelSectionHeaderProps {
-  /** Bare `<Icon />`; sized and tinted by the recipe. */
   icon?: ReactNode;
-  /** The section's name — also what the add/remove button is labelled with. */
+  /** Also labels the add/remove button. */
   children: string;
 }
 
-/**
- * The section's name and its one control: add to open the section, remove to
- * close it. Both are the SAME button — a section is either open or it is not,
- * and two buttons where one is always inert would be two hit targets for one
- * piece of state.
- */
 function PropertiesPanelSectionHeader({
   icon,
   children,
@@ -452,8 +273,6 @@ function PropertiesPanelSectionHeader({
       <Button
         aria-label={`${enabled ? "Remove" : "Add"} ${children.toLowerCase()}`}
         aria-expanded={enabled}
-        // Only ever points at a panel that exists — a dangling `aria-controls`
-        // is worse than none.
         aria-controls={enabled ? panelId : undefined}
         onClick={() => setEnabled(!enabled)}
       >
@@ -464,42 +283,20 @@ function PropertiesPanelSectionHeader({
 }
 
 export interface PropertiesPanelGroupProps {
-  /** The heading — and the name of the group of controls under it. */
+  /** Also names the group of controls. */
   title: string;
-  /**
-   * Controls that sit AGAINST the heading rather than in the panel below it —
-   * the strip's own end, where a `Section` keeps its add/remove button.
-   *
-   * For a control that acts on what the group NAMES rather than on a property
-   * in it: a reset beside the heading, or a heading with two chips and nothing
-   * under it, which is a group whose whole content is its strip.
-   */
+  /** Controls acting on what the group names, at the strip's end. */
   actions?: ReactNode;
   children?: ReactNode;
 }
 
-// The actions sit together at the strip's end rather than being left to the
-// header's own `space-between`, which would push two of them to opposite ends.
 const groupActionsStyle = css({
   display: "flex",
   alignItems: "center",
   gap: "xs",
 });
 
-/**
- * A titled, ALWAYS-ON section: a heading strip over its controls, with no
- * add/remove button in the strip. For a panel whose every group describes
- * properties the thing HAS — a shader's parameters, its colours, its motion —
- * where there is nothing for adding one to mean, and the headers exist because
- * there are several groups and they need telling apart. (A single always-on
- * group draws no header at all: see `Section` with `enabled` held true.)
- *
- * The one part that does not insist on the panel's context. The shader
- * playground's rail is a hand-rolled panel over the same recipe — it has to
- * be, for its drag-to-dismiss sheet — and its groups are these; inside a
- * `PropertiesPanel` the styles are the panel's, and outside one the recipe is
- * asked directly.
- */
+/** An always-on titled section. Works outside a `PropertiesPanel` too, taking the recipe directly. */
 function PropertiesPanelGroup({
   title,
   actions,
@@ -518,17 +315,7 @@ function PropertiesPanelGroup({
         </div>
         {actions && <div className={groupActionsStyle}>{actions}</div>}
       </div>
-      {/* Absent rather than empty for a group that is only a heading: the
-          control panel carries its own inset, so an empty one would leave a
-          strip of nothing under the title and make the chips beside it look
-          like a row that had lost its contents.
-
-          Counted rather than tested for truth. A group whose contents are
-          decided per render hands down a LIST — `[false, []]` for an alias
-          section with no name to edit and no words in common — and a list is
-          truthy however empty it is. `Children.toArray` drops the nulls and
-          the booleans and flattens what is left, which is the question being
-          asked: is there anything here to draw. */}
+      {/* Counted, not truth-tested: a list of empties is still truthy. */}
       {Children.toArray(children).length > 0 && (
         <div className={styles.controlPanel} role="group" aria-label={title}>
           {children}
@@ -539,17 +326,11 @@ function PropertiesPanelGroup({
 }
 
 export interface PropertiesPanelControlPanelProps {
-  /**
-   * Names the group when its section has no {@link PropertiesPanelSectionHeader}
-   * to be named by — an always-on section, which carries no add/remove control
-   * and so draws no header at all (Figma 885:1963). Omit it whenever there IS a
-   * header: the heading is the visible name, and a second one would win over it.
-   */
+  /** Only for a section with no header to be named by. */
   ariaLabel?: string;
   children: ReactNode;
 }
 
-/** The section's controls — in the DOM only while its section is enabled. */
 function PropertiesPanelControlPanel({
   ariaLabel,
   children,
@@ -563,9 +344,7 @@ function PropertiesPanelControlPanel({
     <div
       id={panelId}
       role="group"
-      // One name or the other, never both and never neither: pointing
-      // `aria-labelledby` at a heading that was never rendered is a group with
-      // a BROKEN name, which reads worse than an unnamed one.
+      // One name or the other: labelled by a heading never rendered is a broken name.
       aria-label={ariaLabel}
       aria-labelledby={ariaLabel ? undefined : titleId}
       className={styles.controlPanel}
@@ -576,18 +355,10 @@ function PropertiesPanelControlPanel({
 }
 
 export interface PropertiesPanelControlProps {
-  /** The row's label, wired to the control by the field's own `htmlFor`. */
   label: ReactNode;
-  /** A field-family control — Slider, ColorInput, Field.Frame, … */
   children: ReactNode;
 }
 
-/**
- * One labelled row. A real {@link Field}, relaid by the recipe from the field's
- * vertical stack into the panel's label ∣ control grid — so every control keeps
- * the native label association it would have anywhere else in the system, and a
- * new row is a new `<Control>` with nothing else to touch.
- */
 function PropertiesPanelControl({
   label,
   children,
@@ -602,30 +373,13 @@ function PropertiesPanelControl({
 }
 
 export interface PropertiesPanelTieProps {
-  /**
-   * The one control the rows are tied to — the lock that makes an icon's size
-   * and stroke move together. It stands in the action column the rows give
-   * up, centred against them.
-   */
+  /** Stands in the action column the rows give up. */
   action: ReactNode;
-  /** The rows it is about: two or more {@link PropertiesPanelControl}s. */
+  /** Two or more {@link PropertiesPanelControl}s. */
   children: ReactNode;
 }
 
-/**
- * Several rows under ONE action (Figma 1274:3765).
- *
- * A row reserves an action column for the chip that acts on THAT row, and a
- * chip about two of them has nowhere honest to stand: put in the second row it
- * reads as the second row's, which is how the icon set's size/stroke lock came
- * to look like a property of the stroke. So the rows give their action column
- * up, the tie takes it once for the pair, and a bracket drawn from each row's
- * midline into the chip says which rows it is about.
- *
- * Everything visible here is the recipe's, keyed off `data-property-tie` — the
- * bracket included, which is two bordered corners rather than an asset, so it
- * takes the field's own hairline in both themes.
- */
+/** Several rows under one action; the recipe draws the bracket off `data-property-tie`. */
 function PropertiesPanelTie({ action, children }: PropertiesPanelTieProps) {
   usePanel("PropertiesPanel.Tie");
   return (
@@ -643,17 +397,11 @@ export interface PropertiesPanelTextProps {
   placeholder?: string;
   /** Lines the box starts at where `field-sizing: content` is unsupported. */
   rows?: number;
-  /** The longest value the box takes — stated where the domain caps it. */
   maxLength?: number;
   className?: string;
 }
 
-/**
- * Prose filling the control panel rather than a value in a labelled row — the
- * caption case (Figma 885:2249). A `<textarea>` because a caption WRAPS, and a
- * single-line input would hide everything past its right edge; Enter is
- * declined because the value is still one line of text.
- */
+/** A caption: it wraps like prose, but Enter is declined since the value is one line. */
 function PropertiesPanelText({
   value,
   onValueChange,
@@ -684,11 +432,6 @@ export interface PropertiesPanelFooterProps {
   children: ReactNode;
 }
 
-/**
- * What stands at the foot of the panel, under every section — pinned to the
- * bottom edge while the sections leave room, and last in the scroll once they
- * do not.
- */
 function PropertiesPanelFooter({ children }: PropertiesPanelFooterProps) {
   const { styles } = usePanel("PropertiesPanel.Footer");
   return <div className={styles.footer}>{children}</div>;

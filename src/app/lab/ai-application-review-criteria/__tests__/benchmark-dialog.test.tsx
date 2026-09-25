@@ -13,8 +13,7 @@ import { BENCHMARKING_MS } from "../benchmark-dialog";
 import { CRITERIA } from "../harness-data";
 import { Landing } from "../landing";
 
-// jsdom implements neither. The stubs mirror the platform: `close()` fires the
-// `close` event, and `showModal()` throws on an already-open dialog.
+// jsdom lacks both; the stubs mirror the platform (close fires `close`, reopening throws).
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -34,7 +33,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// The footer when every result agrees with what really happened (Figma 106:5781).
 const ALL_MATCH =
   "12/12 results match with their known outcomes on all criteria";
 
@@ -52,11 +50,8 @@ async function advance(ms: number) {
   });
 }
 
-/**
- * Edit → Add custom → Retest criteria, with the clock stopped from the moment
- * the custom criterion is added (`userEvent` never returns under Vitest's fake
- * timers, so everything after runs on `fireEvent`).
- */
+// Fakes timers once Add custom is chosen; use `fireEvent` after, as `userEvent`
+// never resolves under Vitest's fake timers.
 async function openRetestMenu() {
   const user = userEvent.setup();
   render(<Landing />);
@@ -142,7 +137,6 @@ describe("retesting with the previous candidate set", () => {
     const results = screen.getByRole("dialog", { name: "Benchmark results" });
     expect(results).toBe(overlay());
     expect(within(results).queryByRole("progressbar")).toBeNull();
-    // A header row, and one for each of the twelve candidates.
     expect(within(results).getAllByRole("row")).toHaveLength(13);
   });
 
@@ -181,7 +175,6 @@ describe("changing the candidates", () => {
         name: "Remove",
       }),
     ).toBeTruthy();
-    // The criteria are still to be retested.
     expect(
       within(drawer()).getByRole("button", { name: "Retest criteria" }),
     ).toBeTruthy();
@@ -359,7 +352,6 @@ describe("reviewing the suggested rewrites", () => {
     const suggestion = rewrite()!;
     expect(suggestion.closest("li")).toBe(titles()[0].closest("li"));
     expect(titles()[0].value).toBe(NEW_LOGO.title);
-    // Offered, not applied: the prompt is still the one that was tested.
     expect(prompts()[0].value).toBe(NEW_LOGO.prompt);
     expect(suggestion.textContent).toContain(NEW_LOGO.suggestedRewrite.prompt);
     expect(
@@ -662,13 +654,11 @@ describe("the other ways to see results from the retest menu", () => {
     );
     const results = screen.getByRole("dialog", { name: "Benchmark results" });
     expect(within(results).queryByRole("progressbar")).toBeNull();
-    // Nothing has been retested yet: the last run is the three criteria that were running.
     expect(
       within(row(results, "Renee Acheampong")).getByRole("img", {
         name: "2 of 3 criteria met",
       }),
     ).toBeTruthy();
-    // The draft is still untested.
     expect(
       within(drawer()).getByText("Criteria changed since last test"),
     ).toBeTruthy();
@@ -797,7 +787,6 @@ describe("the last results, once the criteria have changed since", () => {
   it("say they are no longer valid, and offer a retest in place of anything to review", async () => {
     const results = await viewStale();
     expect(within(results).getByText(STALE)).toBeTruthy();
-    // Every one of them matched, but that is no longer worth saying.
     expect(within(results).queryByText(ALL_MATCH)).toBeNull();
     expect(
       within(results).getByRole("button", { name: "Retest criteria" }),
@@ -846,7 +835,7 @@ describe("the last results, once the criteria have changed since", () => {
 });
 
 describe("a stage tag too long for its column", () => {
-  // jsdom hides every popover and cannot show one: this stands in for it.
+  // jsdom can't show a popover; this stub stands in.
   const showPopover = vi.fn();
   beforeEach(() => {
     showPopover.mockClear();
@@ -983,7 +972,6 @@ describe("taking candidates out of the benchmark", () => {
     showTab(results, /Benchmark results/);
     const dana = row(results, "Dana Whitlock");
     expect(within(dana).getByText("Hired")).toBeTruthy();
-    // Avg. score, then Evaluations, Result and Finding — blank.
     const [, avgScore, ...benchmarked] = within(dana).getAllByRole("cell");
     expect(avgScore.textContent).toBe("3.7");
     expect(benchmarked.map((cell) => cell.textContent)).toEqual(["", "", ""]);
@@ -1132,7 +1120,6 @@ describe("acting on several candidates at once", () => {
     }) as HTMLInputElement;
   }
 
-  /** The actions on the selected candidates, beside Add column. */
   function actions(results: HTMLElement) {
     return within(results).queryByRole("group", {
       name: "Selected candidates",
@@ -1177,7 +1164,6 @@ describe("acting on several candidates at once", () => {
         "1/10 results mismatch with their known outcomes on 1 criterion",
       ),
     ).toBeTruthy();
-    // Nothing is left selected, and focus has somewhere to be.
     expect(actions(results)).toBeNull();
     expect(document.activeElement).toBe(selectAll(results));
     showTab(results, /Suggested candidates/);

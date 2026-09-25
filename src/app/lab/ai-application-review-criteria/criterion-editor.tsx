@@ -5,17 +5,8 @@ import { RewriteSuggestion } from "./rewrite-suggestion";
 import ReorderIcon from "./icons/reorder.svg";
 import TrashIcon from "./icons/trash.svg";
 
-// ---------------------------------------------------------------------------
-// One criterion in the edit drawer (Figma 94:5023): a handle, its short title
-// and a trash can on one line, its prompt under them — as tall as its text —
-// and under that any rewrite suggested for it. Reordering and deleting are
-// drawn but not offered. The drawer holds the values and owns the field ids;
-// the intro's third picture draws one too.
-// ---------------------------------------------------------------------------
-
 export type Field = "title" | "prompt";
 
-/** The list the editors are stacked in, on the card's white body. */
 export const criterionEditorsStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -89,8 +80,6 @@ const labelStyle = css({
   color: "var(--cashby-slate)",
 });
 
-// The source draws no focus state; the ring turns accent while the field is
-// being typed in.
 const fieldFrame = {
   borderRadius: "4px",
   backgroundColor: "var(--cashby-surface)",
@@ -110,10 +99,6 @@ const titleInputStyle = css({
   _focus: { boxShadow: "inset 0 0 0 1px var(--cashby-accent)" },
 });
 
-// A prompt is as tall as its text, one line or several, with no scrollbar and
-// no measuring: the textarea shares a grid cell with an invisible copy of its
-// own value, and the copy — ordinary wrapping text — sets the cell's height.
-// The prompt, and under it any rewrite suggested for it.
 const promptColumnStyle = css({
   display: "flex",
   flexDirection: "column",
@@ -122,6 +107,7 @@ const promptColumnStyle = css({
   minWidth: 0,
 });
 
+// Auto-height: the textarea shares a grid cell with a hidden copy of its text, which sizes it.
 const promptFieldStyle = css({
   ...fieldFrame,
   display: "grid",
@@ -161,11 +147,9 @@ const trashStyle = css({
 
 export interface CriterionEditorProps {
   row: DraftCriterion;
-  /** The ids of its two fields, which the drawer moves the focus by. */
   titleField: string;
   promptField: string;
   onEdit: (field: Field, value: string) => void;
-  /** A rewrite suggested for its prompt, answered with Apply or Ignore. */
   rewrite?: SuggestedRewrite;
   onAnswerRewrite: (apply: boolean) => void;
 }

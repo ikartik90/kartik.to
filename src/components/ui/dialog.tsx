@@ -29,11 +29,8 @@ export interface DialogProps
   children: ReactNode;
 }
 
-// All variant values are static string literals — Panda's extractor generates
-// the CSS at build time. No runtime variables passed into cva().
 const dialogRecipe = cva({
   base: {
-    // Closed state — exit target
     opacity: 0,
     display: "none",
     transform: "scale(0.95)",
@@ -43,7 +40,7 @@ const dialogRecipe = cva({
     transitionDelay: "0s",
     transitionBehavior: "allow-discrete",
 
-    // Open/steady state — flex column so panel recipes (footer marginTop: auto, body flex: 1) work
+    // Flex column: panel footers (`marginTop: auto`) and bodies (`flex: 1`) rely on it.
     "&[open]": {
       opacity: 1,
       transform: "scale(1)",
@@ -51,17 +48,9 @@ const dialogRecipe = cva({
       flexDirection: "column",
     },
 
-    // Backdrop — closed/exit state
     "&::backdrop": {
       opacity: 0,
-      // The blur deliberately does NOT live here. Panda's `backdropFilter`
-      // utility emits ONLY the -webkit- form, which Chromium does not
-      // recognise, and the raw `backdrop-filter` key that the config's recipes
-      // use as the workaround is rejected by the stricter typing on this call.
-      // A declaration here would therefore be inert in Chromium while looking
-      // authoritative — the worst of both. It lives in ONE place instead, the
-      // `dialog::backdrop` rule in globals.css, which can write both
-      // spellings. Everything else about the backdrop is fine to state here.
+      // No blur here: Panda emits only `-webkit-backdrop-filter`; globals.css sets both.
       backgroundColor: "bg.canvas/50",
       transitionProperty: "opacity, display, overlay",
       transitionDuration: "80ms",
@@ -70,12 +59,11 @@ const dialogRecipe = cva({
       transitionBehavior: "allow-discrete",
     },
 
-    // Backdrop — open/steady state
     "&[open]::backdrop": {
       opacity: 1,
     },
 
-    // Entry animation — must be a sibling of "&[open]", not nested inside it
+    // Must be a sibling of "&[open]", not nested inside it.
     _starting: {
       "&[open]": {
         opacity: 0,
@@ -88,7 +76,6 @@ const dialogRecipe = cva({
   },
 
   variants: {
-    // Vertical placement — drives margin-block axis
     align: {
       top: {
         marginBlockStart: "xl",
@@ -115,9 +102,7 @@ const dialogRecipe = cva({
       },
     },
 
-    // Horizontal placement — drives margin-inline axis.
-    // Uses 100% (not 100vw) for stretch to exclude the scrollbar gutter,
-    // preventing a horizontal scrollbar on pages with a visible scrollbar.
+    // 100%, not 100vw, so `stretch` excludes the scrollbar gutter.
     justify: {
       start: {
         marginInlineStart: "xl",
@@ -149,18 +134,14 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
     ref,
   ) {
     function handleClick(e: MouseEvent<HTMLDialogElement>) {
-      // Close when clicking the backdrop (the dialog element itself, not its content)
+      // A click on the dialog element itself is a click on its backdrop.
       if (e.target === e.currentTarget) {
         (e.currentTarget as HTMLDialogElement).close();
       }
       onClick?.(e);
     }
 
-    // Own the Escape dismissal rather than leaving it to the browser's native
-    // <dialog> cancel. In Safari, an Escape that closes a modal dialog is also
-    // treated as an "exit fullscreen" request; preventDefault() suppresses that,
-    // and we close the dialog ourselves. Capture phase so no child (e.g. cmdk)
-    // can swallow the key first.
+    // preventDefault stops Safari also exiting fullscreen; capture so no child (cmdk) swallows Escape.
     function handleKeyDownCapture(e: KeyboardEvent<HTMLDialogElement>) {
       if (e.key === "Escape" && e.currentTarget.open) {
         e.preventDefault();
@@ -168,20 +149,13 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
       }
     }
 
-    // Safari drops the page's scroll position a couple of frames after a modal
-    // dialog closes — the reader is thrown back to the top for having opened
-    // the command palette at all. The position is still intact here, in the
-    // close handler, so this is where it gets captured. See preservePageScroll.
+    // Safari loses the page scroll a few frames after a modal closes; it is still intact here.
     function handleClose() {
       preservePageScroll();
       onClose?.();
     }
 
     return (
-      // A dialog is the end of the scroll as it is the end of the focus: the
-      // page behind it is not being read. `data-scroll-boundary` says so to
-      // `useScrollHandoff`, whose walk would otherwise pass straight through a
-      // panel that clips rather than scrolls.
       <dialog
         ref={ref}
         {...scrollBoundary}

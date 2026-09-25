@@ -231,8 +231,6 @@ describe("documentToMarkdown", () => {
     ).toBe("[Book a call](https://cal.com/kartik)\n");
   });
 
-  // The page draws nothing for a button that has no words or no destination,
-  // and the copy says as much as the page does.
   it("leaves out a button that is not finished", () => {
     expect(
       md(

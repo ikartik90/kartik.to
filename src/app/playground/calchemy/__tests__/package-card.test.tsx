@@ -6,10 +6,8 @@ import { PackageCard } from "../package-card";
 
 afterEach(cleanup);
 
-// The foot of the playground's sidebar (Figma 1383:2283): where the package
-// is documented, and the line that installs it.
 describe("PackageCard", () => {
-  // After `userEvent.setup()`, which installs a clipboard of its own.
+  // Call after `userEvent.setup()`, which installs a clipboard of its own.
   function stubClipboard() {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -55,8 +53,7 @@ describe("PackageCard", () => {
     await user.click(
       screen.getByRole("button", { name: "Copy install command" }),
     );
-    // The copy lands a microtask after the click; on a slow runner the timer
-    // below would otherwise run out before the one it is meant to expire.
+    // Wait for the copy to land, or on a slow runner the timer below expires first.
     await screen.findByRole("button", { name: "Copied install command" });
     act(() => vi.advanceTimersByTime(2000));
     expect(

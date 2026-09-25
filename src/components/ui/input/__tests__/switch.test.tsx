@@ -17,8 +17,6 @@ describe("Switch", () => {
     expect(sw.getAttribute("aria-checked")).toBe("false");
   });
 
-  // See Button: WebKit's default tab order skips a bare <button>, so every
-  // control drawn as one states its own place in it.
   it("states its own place in the tab order", () => {
     render(
       <Field>
@@ -72,7 +70,7 @@ describe("Switch", () => {
 
     fireEvent.click(sw);
     expect(onCheckedChange).toHaveBeenCalledWith(true);
-    expect(sw.getAttribute("aria-checked")).toBe("false"); // parent still owns state
+    expect(sw.getAttribute("aria-checked")).toBe("false");
 
     rerender(
       <Field>

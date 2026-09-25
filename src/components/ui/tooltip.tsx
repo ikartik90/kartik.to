@@ -17,38 +17,9 @@ import {
   type TooltipVariantProps,
 } from "../../../styled-system/recipes";
 
-// ---------------------------------------------------------------------------
-// Tooltip — the cursor-following hover tooltip, same chrome as the social links
-// (a leading label ∣ hairline ∣ trailing 14px glyph). It carries no position or
-// visibility of its own: a HOST (Button.Tooltip / Link.Tooltip, which ARE this
-// component) supplies the element ref + `visible` through context, wiring it to
-// the trigger's hover and the `useCursorTooltip` positioner. Because the box is
-// `position: fixed` AND portalled, the host can render it as a plain sibling of
-// the trigger and forget about it.
-//
-//   <Button aria-label="Delete">
-//     <TrashIcon />
-//     <Button.Tooltip>
-//       <Tooltip.Text>Delete</Tooltip.Text>
-//       <TrashIcon />
-//     </Button.Tooltip>
-//   </Button>
-//
-// PORTALLED TO THE BODY, always. `position: fixed` buys the right COORDINATES,
-// never the right to be seen: an ancestor still clips its subtree at paint time,
-// and the box is drawn at the VISITOR'S CURSOR — a point on the page at large,
-// routinely outside whatever element it labels. A DemoFrame is the standing
-// example: `overflow: hidden` over a `container-type`, and containment makes it
-// the containing block for a fixed child, so its replay/reset rail's tooltips
-// were positioned perfectly and painted nowhere. The tell is a box with a
-// correct `getBoundingClientRect`, `opacity: 1`, and no pixels.
-//
-// The escape lives here rather than in each host because a host cannot know
-// what it will be dropped inside — a frame, a popover, a clip-path'd surface —
-// and every one of them wants the same answer.
-// ---------------------------------------------------------------------------
+// Position and visibility come from the host (Button/Link) via context. Always portalled to the
+// body: an ancestor with `overflow: hidden` or containment would clip a fixed box at the cursor.
 
-/** Never changes after the first client render, so there is nothing to subscribe to. */
 const subscribeNever = () => () => {};
 const onClient = () => true;
 const onServer = () => false;
@@ -56,12 +27,7 @@ const onServer = () => false;
 type TooltipHost = {
   ref: Ref<HTMLElement>;
   visible: boolean;
-  /**
-   * Placed by the stylesheet at the foot of the viewport rather than at a
-   * cursor — for a hint offered on a device that has no cursor to trail. The
-   * positioner leaves the box's inline `left`/`top` off in that case, so the
-   * recipe's `&[data-docked]` rule is the only thing placing it.
-   */
+  /** For a device with no cursor: the recipe's `&[data-docked]` rule places it instead. */
   docked?: boolean;
 };
 
@@ -82,7 +48,6 @@ export interface TooltipTextProps {
   className?: string;
 }
 
-/** The tooltip's leading label — the accessible name still lives on the trigger. */
 function TooltipText({ children, className }: TooltipTextProps) {
   return <span className={className}>{children}</span>;
 }
@@ -96,24 +61,10 @@ export interface TooltipProps extends TooltipVariantProps {
   className?: string;
 }
 
-/**
- * The tooltip surface. A hairline is inserted automatically between the label
- * and any trailing content (an icon), matching the social `[label ∣ icon]`
- * shape; `aria-hidden` because it's decorative — screen readers get the
- * trigger's `aria-label`.
- */
+/** Inserts a hairline between the label and trailing content. Decorative: the trigger carries the accessible name. */
 function TooltipRoot({ children, className, ...variants }: TooltipProps) {
   const host = useContext(TooltipHostContext);
-  // Portalled only from the second render on. There is no `document` to portal
-  // into on the server, and simply branching on that is what CAUSES a mismatch:
-  // React hydrates by walking the client tree against the server's markup, and
-  // a first client render that differs from the server's — even to nothing in
-  // place — is the thing it refuses. Rendering null on both passes and moving
-  // in after is the fix, and it costs nothing: the box is decorative, hidden,
-  // and wanted no earlier than the first hover. `useSyncExternalStore` with a
-  // server snapshot of false is the house way of asking this (see
-  // `usePageLoaded`) — false on the server AND through hydration, then true,
-  // with no state write in an effect.
+  // Portalled only after hydration: a first client render that differs from the server's is a mismatch.
   const hydrated = useSyncExternalStore(subscribeNever, onClient, onServer);
   const items = Children.toArray(children);
   const label = items.find(isTooltipText);

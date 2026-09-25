@@ -12,12 +12,6 @@ import { HAS_CURSOR_QUERY } from "@/data/media-queries";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
-// ---------------------------------------------------------------------------
-// The question is asked in the command palette's shape: the answers are its
-// rows, each with the key that gives it — the affirmative on 1, the alternate
-// on 0, and Cancel on Esc, last.
-// ---------------------------------------------------------------------------
-
 let hasCursor = true;
 
 beforeEach(() => {
@@ -32,7 +26,7 @@ beforeEach(() => {
     })),
   });
 
-  // jsdom ships no `<dialog>` behaviour — the same stub the palette's tests use.
+  // jsdom ships no `<dialog>` behaviour.
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
   ) {
@@ -167,7 +161,6 @@ describe("ConfirmDialog", () => {
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  // ⌘1 / Ctrl 1 switch browser tabs; the question only answers the bare key.
   it("leaves a modified digit to the browser", () => {
     const { props } = renderExit();
     press("1", { metaKey: true });
@@ -206,10 +199,6 @@ describe("ConfirmDialog", () => {
     expect(props.alternate.onClick).not.toHaveBeenCalled();
   });
 
-  // The keys only mean something while the question is up. Safari leaves the
-  // focus on the rows after the dialog closes, so a 1 or an Enter pressed
-  // afterwards still lands on them — and must not answer a question that has
-  // already been answered.
   it("ignores the keys once closed, even with the focus left on the rows", () => {
     const { props } = renderExit();
     const root = document.querySelector("[cmdk-root]") as HTMLElement;

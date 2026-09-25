@@ -22,8 +22,7 @@ export function useKeyboardFocus() {
       }
     }
 
-    // A self-playing demo presses things with a stand-in cursor of its own. The
-    // ring belongs to the visitor's keyboard, and the show cannot take it away.
+    // A demo's synthetic presses must not clear the visitor's focus ring.
     function onPointerDown(event: Event) {
       if (isSyntheticPointer(event)) return;
       disableKeyboardFocus();

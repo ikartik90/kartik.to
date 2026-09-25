@@ -15,10 +15,8 @@ import { Landing } from "../landing";
 import { Walkthrough } from "../walkthrough";
 import { AUTHOR, SOCIAL_PROFILES } from "@/data/site";
 
-// jsdom implements none of these. The dialog stubs mirror the platform:
-// `close()` fires the `close` event, and `showModal()` throws on an
-// already-open dialog. jsdom hides every popover and cannot show one, so a
-// tip is shown and hidden by the stubs alone.
+// jsdom lacks these; the dialog stubs mirror the platform. jsdom can't show a
+// popover, so a tip is shown and hidden by the stubs alone.
 const showPopover = vi.fn();
 const hidePopover = vi.fn();
 beforeEach(() => {
@@ -44,7 +42,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// What each step says, in order.
 const STEPS = [
   {
     title: "Edit the AI review criteria",
@@ -77,7 +74,6 @@ const STEPS = [
 ];
 const [FIRST, SECOND, THIRD, FOURTH, FIFTH, SIXTH, SEVENTH] = STEPS;
 
-// Named for the page on screen, so found by the way in on its title page.
 function intro() {
   return screen
     .getByRole("button", { name: "Get started", hidden: true })
@@ -102,7 +98,6 @@ function tip({ title }: (typeof STEPS)[number]) {
   );
 }
 
-// Once the tip has been shown: it waits for what it points at to settle.
 async function shown(step: (typeof STEPS)[number]) {
   await waitFor(() => {
     expect(tip(step)).not.toBeNull();
@@ -154,7 +149,6 @@ function frames() {
   );
 }
 
-// The text of whatever describes a control.
 function description(control: HTMLElement) {
   return (control.getAttribute("aria-describedby") ?? "")
     .split(" ")
@@ -163,7 +157,6 @@ function description(control: HTMLElement) {
     .join(" ");
 }
 
-// The page as it is served: the job, with the intro open over it.
 async function arrive() {
   const user = userEvent.setup();
   render(
@@ -176,7 +169,6 @@ async function arrive() {
   return user;
 }
 
-// Through the intro to its last page, and on from there.
 async function startWalkthrough() {
   const user = await arrive();
   const dialog = within(intro());
@@ -187,7 +179,6 @@ async function startWalkthrough() {
   return user;
 }
 
-// On to the second step, in the drawer.
 async function secondStep() {
   const user = await startWalkthrough();
   await user.click(edit());
@@ -195,7 +186,6 @@ async function secondStep() {
   return user;
 }
 
-// Add custom chosen, and its typing begun on a clock the test turns.
 async function addCustom() {
   const user = await secondStep();
   await user.click(addCriteria());
@@ -205,7 +195,6 @@ async function addCustom() {
   );
 }
 
-// On to the third step, once the typing is through.
 async function thirdStep() {
   await addCustom();
   await act(async () => {
@@ -215,45 +204,38 @@ async function thirdStep() {
   return shown(THIRD);
 }
 
-// On to the fourth step, once the retest has benchmarked.
 async function fourthStep() {
   await thirdStep();
   await retestMenu("Retest with previous candidate set");
   return shown(FOURTH);
 }
 
-// On to the fifth step, back in the drawer with the rewrite suggested.
 async function fifthStep() {
   await fourthStep();
   fireEvent.click(reviewRewrites());
   return shown(FIFTH);
 }
 
-// On to the sixth step, with the rewrite applied.
 async function sixthStep() {
   await fifthStep();
   fireEvent.click(applyRewrite());
   return shown(SIXTH);
 }
 
-// On to the seventh step, once the retest has benchmarked.
 async function seventhStep() {
   await sixthStep();
   await retestMenu("Retest with previous candidate set");
   return shown(SEVENTH);
 }
 
-// A tip's own buttons, in its footer.
 function button(shownTip: HTMLElement, name: string) {
   return within(shownTip).queryByRole("button", { name, hidden: true });
 }
 
-// Where it is in the walkthrough: "1 of 7".
 function count(shownTip: HTMLElement, at: number) {
   return within(shownTip).queryByText(`${at} of ${STEPS.length}`);
 }
 
-// Whether `before` comes before `after` in the footer, as it is laid out.
 function precedes(before: Element, after: Element) {
   return Boolean(
     before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -290,7 +272,6 @@ describe("walkthrough", () => {
       const label = shownTip.getAttribute("aria-labelledby")!;
       expect(document.getElementById(label)!.textContent).toBe(step.title);
       expect(within(shownTip).getByText(step.body)).toBeTruthy();
-      // Counted, not numbered.
       expect(within(shownTip).queryByText(/Step \d/)).toBeNull();
     },
   );
@@ -331,7 +312,6 @@ describe("walkthrough", () => {
       expect(precedes(counted, within(shownTip).getByText(step.title))).toBe(
         true,
       );
-      // One heading with the title.
       expect(counted.closest("hgroup")).toBe(
         within(shownTip).getByText(step.title).closest("hgroup"),
       );
@@ -519,8 +499,7 @@ describe("walkthrough", () => {
   describe("the thanks at the end", () => {
     const THANKS = "Thanks for trying the prototype";
 
-    // A popover, so found by its words: Testing Library names nothing jsdom
-    // hides.
+    // Found by text: Testing Library names nothing jsdom hides.
     function thanks() {
       return (
         screen.queryByText(THANKS)?.closest<HTMLElement>("[popover]") ?? null
@@ -589,8 +568,6 @@ describe("walkthrough", () => {
       expect(thanks()).toBeNull();
     });
 
-    // Everything outside a modal dialog is inert, so it sits in the one open
-    // until that closes, and then on the page.
     it("sits in the drawer while it is open, and on the page once it closes", async () => {
       await finish();
       expect(drawer().contains(thanks())).toBe(true);

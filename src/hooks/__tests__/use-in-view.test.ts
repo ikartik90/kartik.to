@@ -3,9 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { inViewThreshold, useInView } from "../use-in-view";
 
-// jsdom ships no IntersectionObserver, so the stub IS the test harness: it
-// captures the callback and lets a case hand the hook any (ratio, element
-// height, viewport height) triple it wants to reason about.
+// jsdom has no IntersectionObserver; the stub captures the callback so a case can emit any entry.
 type Emit = (
   ratio: number,
   boxes?: { elementHeight?: number; rootHeight?: number },
@@ -74,8 +72,6 @@ describe("inViewThreshold", () => {
   });
 
   it("never asks for more of the element than can ever be on screen", () => {
-    // 1600px tall in an 800px viewport: at most half of it is ever visible, so
-    // a flat 0.7 would never fire. 0.5 × 0.9 leaves a little slack.
     expect(inViewThreshold(0.7, 1600, 800)).toBeCloseTo(0.45);
   });
 
@@ -114,21 +110,17 @@ describe("useInView", () => {
     expect(result.current).toBe(false);
   });
 
-  // The two lines are far apart on purpose: one threshold would chatter for any
-  // scroll position parked on it, and what this gates is a performance.
   it("holds its answer between the two lines, in both directions", () => {
     const observer = mockIntersectionObserver();
     const ref = stage();
     const { result } = renderHook(() => useInView(ref));
 
-    // Coming up from nothing, half on screen is not yet enough.
     observer.emit(0.5);
     expect(result.current).toBe(false);
 
     observer.emit(0.8);
     expect(result.current).toBe(true);
 
-    // ...and going back down, half on screen is still plenty.
     observer.emit(0.5);
     expect(result.current).toBe(true);
 
@@ -147,9 +139,6 @@ describe("useInView", () => {
     expect(result.current).toBe(true);
   });
 
-  // A 1600px block in an 800px viewport can never show more than half of
-  // itself, so the ask is capped at 45% — and a fixed 30% exit would then sit
-  // dangerously close to it. Scaled, it lands at 45% × 3/7 ≈ 19%.
   it("scales the exit line with an entry line that had to be capped", () => {
     const observer = mockIntersectionObserver();
     const ref = stage();
@@ -171,7 +160,6 @@ describe("useInView", () => {
     const ref = stage();
     const { result } = renderHook(() => useInView(ref));
 
-    // 45% of a 1600px block fills 90% of an 800px viewport — as good as it gets.
     observer.emit(0.45, { elementHeight: 1600, rootHeight: 800 });
     expect(result.current).toBe(true);
   });

@@ -20,17 +20,11 @@ describe("CardPropertiesPanel", () => {
     ).toBeDefined();
   });
 
-  // A post, or a demo the registry does not log: there is nothing to show or
-  // hide, and a control that only ever says "Hide" over a card with no log
-  // output would be describing something that is not there.
   it("offers no log control to a card that cannot log", () => {
     render(<CardPropertiesPanel onDismiss={vi.fn()} />);
     expect(logPanel()).toBeNull();
   });
 
-  // The panel opens on every card, including the ones whose properties are
-  // still to be specified — so the near-empty state has to SAY it is empty
-  // rather than looking like a panel that failed to load.
   it("says so when the card has no properties yet", () => {
     render(<CardPropertiesPanel onDismiss={vi.fn()} />);
     expect(screen.getByText(/no properties/i)).toBeDefined();
@@ -51,8 +45,6 @@ describe("CardPropertiesPanel", () => {
     expect(screen.queryByText(/no properties/i)).toBeNull();
   });
 
-  // The control reports the card's CURRENT state, so a demo whose panel is
-  // already hidden opens on "Hide" rather than on the registry's default.
   it("reads the state the card is in", () => {
     render(
       <CardPropertiesPanel
@@ -67,8 +59,6 @@ describe("CardPropertiesPanel", () => {
     ).toBe("true");
   });
 
-  // Live, like every control in the media panel: there is no apply step, so
-  // what is on the card is always what the panel says.
   it("hides the log output on the press", async () => {
     const user = userEvent.setup();
     const onShownChange = vi.fn();
@@ -96,20 +86,6 @@ describe("CardPropertiesPanel", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The link card's three sections.
-//
-// A link card is the one published component that has no code of its own to
-// speak for it: it is a picture, some words and a destination, and all three
-// are authored here. So this is the only card whose panel is the card.
-//
-// Live like every other control in the app's inspectors — there is no apply
-// step, and the tile behind the rail always shows what the rail says. What the
-// panel hands back is the WHOLE configuration each time, because a section that
-// has been removed has to arrive as an absent key; a partial patch could never
-// clear anything.
-// ---------------------------------------------------------------------------
-
 const linkCardProps = (config: LinkCardConfig = {}) => ({
   config,
   onChange: vi.fn(),
@@ -135,13 +111,9 @@ describe("CardPropertiesPanel — link card", () => {
     for (const name of ["Media", "Content", "Link"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
-    // It has properties now, so the stand-in note has nothing to stand in for.
     expect(screen.queryByText(/no properties/i)).toBeNull();
   });
 
-  // A SECTION IS THE PROPERTY, the rule the media panel's header states: a
-  // section that is closed is a property the card does not have, so opening one
-  // on a card whose configuration is empty must not already be open.
   it("opens the sections the card actually carries", () => {
     render(
       <CardPropertiesPanel
@@ -168,9 +140,6 @@ describe("CardPropertiesPanel — link card", () => {
       ).toEqual(["Add light media", "Add dark media"]);
     });
 
-    // The rail emits the intent and the GRID owns the dialog: the panel is
-    // portalled and fixed, and a modal opened from inside it would be a second
-    // surface fighting the first for the dismiss.
     it("asks for the library rather than opening it", async () => {
       const user = userEvent.setup();
       const props = linkCardProps({ media: {} });
@@ -193,9 +162,6 @@ describe("CardPropertiesPanel — link card", () => {
       ).toContain("shader.png");
     });
 
-    // Swapping a picture is the SLOT's act; emptying one is the section's (the
-    // test below). A filled slot therefore offers the field and the replace
-    // button beside it — Figma 1233:2639 — and no third control.
     it("offers to replace a filled slot, never to clear it", async () => {
       const user = userEvent.setup();
       const props = linkCardProps({
@@ -262,9 +228,6 @@ describe("CardPropertiesPanel — link card", () => {
       });
     });
 
-    // Auto is the default and a real choice, not the absence of one: a post's
-    // tile follows the reader's theme, and a link card should be able to as
-    // well. Light and Dark pin the band to the picture under it.
     it("offers the reader's theme as well as the two pinned ones", () => {
       open();
       expect(
@@ -312,9 +275,6 @@ describe("CardPropertiesPanel — link card", () => {
       ]);
     });
 
-    // Changing the sort of link drops the destination with it: a URL is not a
-    // path, and carrying one across would leave the card pointing somewhere the
-    // new control cannot even display.
     it("drops the destination when the sort of link changes", async () => {
       const user = userEvent.setup();
       const props = open({
@@ -322,7 +282,6 @@ describe("CardPropertiesPanel — link card", () => {
       });
       await user.click(screen.getByRole("option", { name: "Internal" }));
       expect(props.onChange).toHaveBeenCalledWith({
-        // The switch is about the card, not about the destination, so it stays.
         link: { kind: "internal", newTab: true },
       });
     });
@@ -377,7 +336,6 @@ describe("CardPropertiesPanel — link card", () => {
         link: { kind: "internal", href: "/playground/shader" },
       });
       await user.click(screen.getByRole("button", { name: "Remove link" }));
-      // The words stay — removing a section removes THAT property and no other.
       expect(props.onChange).toHaveBeenCalledWith({
         content: { title: "Shader" },
       });
@@ -385,13 +343,6 @@ describe("CardPropertiesPanel — link card", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The scrim switch tells the truth about the card behind it.
-//
-// `LinkCard` draws the band wherever there is a picture unless told not to, so
-// the switch has to open ON for a pictured card with no stored value. The bug
-// this pins down was a switch reading "off" over a band that was plainly drawn.
-// ---------------------------------------------------------------------------
 describe("CardPropertiesPanel — the scrim's default", () => {
   const scrimSwitch = () => screen.getByRole("switch", { name: "Scrim" });
   const pictured = { media: { light: image("/a.png") } };
@@ -406,8 +357,6 @@ describe("CardPropertiesPanel — the scrim's default", () => {
     expect(scrimSwitch().getAttribute("aria-checked")).toBe("true");
   });
 
-  // Over the flat plate there is nothing to separate the words from, so the
-  // card draws no band — and the switch says so.
   it("opens off for a card with no picture", () => {
     render(
       <CardPropertiesPanel
@@ -428,8 +377,6 @@ describe("CardPropertiesPanel — the scrim's default", () => {
     expect(scrimSwitch().getAttribute("aria-checked")).toBe("false");
   });
 
-  // Off is a VALUE, not the absence of one: an absent key would hand the card
-  // back to its default, which draws the band straight back.
   it("writes a definite off when turned off over a picture", async () => {
     const user = userEvent.setup();
     const props = linkCardProps({ ...pictured, content: {} });
@@ -442,18 +389,9 @@ describe("CardPropertiesPanel — the scrim's default", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A post's card: the picture per theme, and the ground the caption stands on.
-//
-// A post's tile is derived — its words from the post, its destination from the
-// slug, its picture from the document's first media — and these are the two
-// things about it that cannot be. They take the link card's own controls, so
-// one band cannot be authored two ways.
-// ---------------------------------------------------------------------------
 const postCardProps = (
   config: PostCardConfig = {},
   cover: MediaNode | null = null,
-  /** Null is a project: a post that files its card under nothing. */
   meta: string | null = null,
 ) => ({
   config,
@@ -472,16 +410,12 @@ describe("CardPropertiesPanel — post card", () => {
     expect(screen.getByText("Media")).toBeTruthy();
     expect(scrimSwitch()).toBeTruthy();
     expect(screen.getByLabelText("Meta")).toBeTruthy();
-    // The name on the card is the post's, and so is where the card goes.
     expect(screen.queryByLabelText("Title")).toBeNull();
     expect(screen.queryByText("Content")).toBeNull();
     expect(screen.queryByText("Link")).toBeNull();
     expect(screen.queryByText(/no properties/i)).toBeNull();
   });
 
-  // The line belongs to the post wherever the post writes one: an article's
-  // card is filed by its date, and a row offering to overwrite a line this
-  // rail cannot take off the tile would be a control that lies about it.
   it("leaves the meta line alone on a card the post already files", () => {
     render(
       <CardPropertiesPanel
@@ -509,10 +443,6 @@ describe("CardPropertiesPanel — post card", () => {
     expect(props.onChange).toHaveBeenCalledWith({});
   });
 
-  // Opening Media on a post takes the picture OVER, starting from what the
-  // card is already showing: the slot names the document's file, the tile
-  // behind the rail does not change, and clearing the slot means what
-  // "Remove" means everywhere else.
   it("starts the media from the document's picture when opened", async () => {
     const user = userEvent.setup();
     const props = postCardProps({}, first);
@@ -549,7 +479,6 @@ describe("CardPropertiesPanel — post card", () => {
     expect(props.onPickMedia).toHaveBeenCalledWith("dark");
   });
 
-  // As on the link card: the slot swaps, the section empties.
   it("offers to replace a filled slot, never to clear it", async () => {
     const user = userEvent.setup();
     const props = postCardProps({
@@ -575,9 +504,6 @@ describe("CardPropertiesPanel — post card", () => {
     expect(props.onChange).toHaveBeenCalledWith({ scrim: false });
   });
 
-  // The default is read off the picture the card is SHOWING, which for an
-  // untouched post is the document's — the band is drawn over it, so the
-  // switch opens on.
   it("reads the scrim's default off the derived picture", () => {
     render(
       <CardPropertiesPanel postCard={postCardProps({}, first)} onDismiss={vi.fn()} />,

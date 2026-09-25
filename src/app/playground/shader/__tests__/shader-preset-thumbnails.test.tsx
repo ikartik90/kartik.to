@@ -3,9 +3,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHADER_SPECS, defaultState } from "@/data/shader-specs";
 
-// The stage is the real thing's only job — mounting a webgl2 context, which
-// jsdom has none of. Stubbed with a canvas, because a canvas is exactly what
-// the thumbnailer goes looking for.
+// jsdom has no WebGL; a canvas is what the thumbnailer looks for.
 vi.mock("@/components/shaders/shader-stage", () => ({
   MAX_PIXELS: 1,
   layerStyle: "",
@@ -21,13 +19,7 @@ const {
   clearThumbnailCache,
 } = await import("../shader-preset-thumbnails");
 
-// The shader is a plain STRING here rather than a `ShaderId`, so that the two
-// pure functions below can be handed two different ones. `captureOrder` and
-// `thumbnailKey` treat the column as opaque — they group and hash it, they
-// never look it up — and the table holds a single shader today, so a real
-// second id does not exist to group against. Anything that MOUNTS is given the
-// real one, because the thumbnailer does look that up (see `SHADER_SPECS`
-// there); the settings come from the real spec either way.
+// A plain string so the pure functions can be given two shaders; mounting tests use the real one.
 const preset = (id: string, shaderId = "cosmicTrack", updatedAt = "2026-01-01") =>
   ({
     id,
@@ -43,13 +35,7 @@ const preset = (id: string, shaderId = "cosmicTrack", updatedAt = "2026-01-01") 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 
-// The ground is passed at every call rather than defaulted. It used to default
-// to "light", which is how a picture came to be filed under a ground it was not
-// drawn on — see the key's own note.
 describe("thumbnailKey", () => {
-  // Keyed on the EDIT, not just the row: a preset that has been retuned is a
-  // different picture under the same id, and a cache that could not tell them
-  // apart would show the old one until a reload.
   it("changes when the preset is edited", () => {
     expect(
       thumbnailKey(preset("a", "cosmicTrack", "2026-01-01"), "light"),
@@ -64,10 +50,6 @@ describe("thumbnailKey", () => {
 });
 
 describe("captureOrder", () => {
-  // Presets are grouped by SHADER because the mount is only reused while the
-  // fragment shader stays the same — the library keys its context on that, and
-  // an alternating order would create one context per preset, which is the
-  // whole thing this strip is avoiding.
   it("groups what is left to capture by shader", () => {
     const order = captureOrder(
       [
@@ -120,10 +102,7 @@ describe("ShaderPresetThumbnails", () => {
   });
   afterEach(cleanup);
 
-  // Both on the real shader, because this one MOUNTS — and with one shader in
-  // the table "one at a time" is one group of two rather than two groups of
-  // one. What it proves is unchanged: every preset comes back with a picture of
-  // its own, taken through a single stage.
+  // The real shader, because this one mounts.
   it("hands back a picture for every preset, one shader at a time", async () => {
     const captured: Record<string, string> = {};
     const presets = [preset("a"), preset("b")];
@@ -143,22 +122,12 @@ describe("ShaderPresetThumbnails", () => {
     });
     expect(captured[thumbnailKey(presets[0], "light")]).toContain("cosmicTrack");
     expect(captured[thumbnailKey(presets[1], "light")]).toContain("cosmicTrack");
-    // Two pictures, not one picture counted twice.
     expect(thumbnailKey(presets[0], "light")).not.toBe(
       thumbnailKey(presets[1], "light"),
     );
   });
 
-  // A picture is filed under the ground it was DRAWN on.
-  //
-  // It was filed under "light" whatever it was drawn on — `thumbnailKey`'s
-  // default, taken by a call that forgot to pass the theme — so on a dark site
-  // the strip asked for a key nothing had ever written and every tile fell back
-  // to its ramp swatch: a gradient where a photograph should be. The light key
-  // meanwhile held a dark photograph, so switching back showed the wrong ground.
-  //
-  // The `light` half of this is as load-bearing as the `dark` half: writing
-  // BOTH keys would hide the fault behind a tile that happened to look right.
+  // Asserts both keys: a capture writing both would hide the fault.
   it("files a picture under the ground it was drawn on", async () => {
     const captured: Record<string, string> = {};
     const presets = [preset("a")];
@@ -180,9 +149,6 @@ describe("ShaderPresetThumbnails", () => {
     expect(captured[thumbnailKey(presets[0], "light")]).toBeUndefined();
   });
 
-  // Nothing left to draw means nothing mounted: the renderer holds a webgl2
-  // context for as long as it is on screen, and the strip is at rest far more
-  // often than it is capturing.
   it("unmounts itself once there is nothing left to capture", async () => {
     const presets = [preset("a", "cosmicTrack")];
     const { container } = render(
@@ -195,9 +161,6 @@ describe("ShaderPresetThumbnails", () => {
     });
   });
 
-  // The cache is what makes navigating between presets free — the strip
-  // re-reads its list on every one, and re-rendering forty presets each time
-  // would be forty contexts' worth of work for pictures already taken.
   it("does not redraw a preset it has already captured", async () => {
     const presets = [preset("a", "cosmicTrack")];
     const onCaptured = vi.fn();

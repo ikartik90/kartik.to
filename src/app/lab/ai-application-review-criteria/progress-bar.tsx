@@ -1,11 +1,6 @@
 import { css } from "../../../../styled-system/css";
 
-// ---------------------------------------------------------------------------
-// A pretend progress bar — the benchmark's and the validation's: it fills
-// from nothing as it appears, over `ms`, while nothing is computed. Drawn like
-// the benchmark's own outcome bar, a 5px rounded stroke; named by the heading
-// of what it is progress on.
-// ---------------------------------------------------------------------------
+// A pretend progress bar: fills from empty over `ms`, tracking no real work.
 
 const trackStyle = css({
   width: "320px",
@@ -16,7 +11,6 @@ const trackStyle = css({
   backgroundColor: "var(--cashby-fill)",
 });
 
-// `@starting-style` is where it fills from.
 const barStyle = css({
   height: "100%",
   borderRadius: "inherit",

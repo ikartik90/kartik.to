@@ -1,18 +1,6 @@
 import type { Document } from "@/domain/post";
 
-// ---------------------------------------------------------------------------
-// What the homepage says before anyone has edited it.
-//
-// The page is an ordinary document — text, furniture, more text — so that it
-// can be written the way every other page is. This is only its starting state,
-// used until a `PAGE` post with the slug `home` exists to override it: the
-// intro lines, the way on to the About page, the row of social icons, and the
-// grid.
-//
-// It lives as data rather than as JSX because the moment the page became a
-// document, its initial content became content — the thing an editor opens and
-// changes, not a component tree.
-// ---------------------------------------------------------------------------
+// The homepage's default content, until a `PAGE` post with slug `home` overrides it.
 
 export const DEFAULT_HOME_DOCUMENT: Document = {
   type: "doc",

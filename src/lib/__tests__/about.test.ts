@@ -59,8 +59,6 @@ describe("getOrCreateAboutPost", () => {
     expect(post?.publishedAt).toEqual(NOW);
   });
 
-  // Slugs are unique across every category, so an article titled "About" would
-  // already own the slug. That article is not the About page.
   it("returns null when the slug belongs to a post that is not a page", async () => {
     mockUpsert.mockResolvedValue(row({ category: "ARTICLE" }));
     expect(await getOrCreateAboutPost()).toBeNull();

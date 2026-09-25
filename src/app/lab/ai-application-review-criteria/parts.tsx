@@ -2,17 +2,7 @@ import { css, cva } from "../../../../styled-system/css";
 import UpToDateIcon from "./icons/question-mark-badge.svg";
 import ChangedIcon from "./icons/changed-warning.svg";
 
-// ---------------------------------------------------------------------------
-// The product's pieces that the page and its edit drawer both draw — written
-// once here so the two cannot drift apart.
-// ---------------------------------------------------------------------------
-
-/**
- * The titled card: a band over a white body, clipped to its corners, with the
- * outline drawn OVER the content as the source does — the white body runs to
- * the edge and would cover a border of the card's own. The page's card is
- * outlined a shade lighter than the drawer's.
- */
+// The outline is an ::after overlay: the white body runs to the edge and would cover a border.
 export const card = cva({
   base: {
     position: "relative",
@@ -47,8 +37,6 @@ export const card = cva({
   defaultVariants: { outline: "border" },
 });
 
-// Ruled off from what it heads, and nowhere else: the card's own outline is
-// its edge.
 export const cardHeaderStyle = css({
   display: "flex",
   alignItems: "center",
@@ -69,7 +57,6 @@ export const cardTitleBoxStyle = css({
   paddingInline: "6px",
 });
 
-// Ends in an ellipsis rather than running under the actions on a narrow window.
 export const cardTitleStyle = css({
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -83,8 +70,7 @@ export const cardActionsStyle = css({
   flexShrink: 0,
 });
 
-// A status pill: a tint laid over white, as drawn — not a paler colour. Up to
-// date is drawn at a fixed width; the longer caution takes what it needs.
+// The tint is a gradient over white, not a paler colour, as drawn.
 const statusBadge = cva({
   base: {
     display: "flex",
@@ -131,7 +117,6 @@ export function UpToDate() {
   );
 }
 
-/** What the drawer says once its criteria are no longer the ones last tested. */
 export function CriteriaChanged() {
   return (
     <span className={statusBadge({ tone: "caution" })}>
@@ -141,11 +126,6 @@ export function CriteriaChanged() {
   );
 }
 
-/**
- * The product's accent button: white, ringed in the accent, accent label. Its
- * padding depends on what flanks the label — a leading glyph, glyphs both
- * sides, or none.
- */
 export const accentButton = cva({
   base: {
     display: "flex",
@@ -159,10 +139,8 @@ export const accentButton = cva({
     color: "var(--cashby-accent)",
     font: "var(--cashby-text-body-strong)",
     whiteSpace: "nowrap",
-    // Keyboard focus only, as the site gates its own ring (`data-keyboard-focus`):
-    // a native dialog hands focus back to what opened it, and a pointer user
-    // would be left with a lit button. Written as a parent selector around
-    // `_focusVisible` — an `&` mid-selector is not one Panda will emit.
+    // Keyboard focus only: a dialog hands focus back here, lighting it for pointer
+    // users. A parent selector because Panda won't emit an `&` mid-selector.
     "html[data-keyboard-focus] &": {
       _focusVisible: {
         boxShadow:
@@ -184,7 +162,6 @@ export const accentButtonLabelStyle = css({
   textAlign: "center",
 });
 
-/** The product's plain button: white, hairline border, ink label. */
 export const plainButtonStyle = css({
   display: "flex",
   alignItems: "center",
@@ -201,15 +178,11 @@ export const plainButtonStyle = css({
     _focusVisible: { boxShadow: "var(--cashby-focus-ring)" },
   },
   _disabled: {
-    // Washed rather than white: the bar it sits on shows through.
     backgroundColor: "var(--cashby-veil)",
     color: "var(--cashby-ink-disabled)",
   },
 });
 
-// The product's primary button: white on the accent — Retest criteria, Validate
-// when it is the thing to do next, a dialog's Close. The ring sits off the
-// button so it shows against the accent.
 export const primaryButtonStyle = css({
   display: "flex",
   alignItems: "center",

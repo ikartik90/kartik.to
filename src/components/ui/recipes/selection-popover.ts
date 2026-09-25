@@ -8,7 +8,6 @@ export const selectionPopover = defineRecipe({
     position: "fixed",
     zIndex: 50,
     positionAnchor: "--selection-popover",
-    // Default above the target; flip below when there is no room.
     bottom: "anchor(top)",
     marginBottom: "sm",
     positionTryFallbacks: "flip-block",

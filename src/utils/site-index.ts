@@ -8,27 +8,16 @@ import { LISTED_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
 import { postDescription } from "@/utils/post-summary";
 import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
 
-// ---------------------------------------------------------------------------
-// The site's public pages, listed for machines: `sitemap.xml` for search
-// engines and `llms.txt` for AI agents.
-//
-// Both are built from the published posts, so a post appears in each the
-// moment it is published and leaves the moment it is not. Drafts, `/edit`, and
-// `/vouch` are never named — the admin surface must not be advertised to
-// crawlers, and `/vouch` is reached only by a link handed out by hand.
-// ---------------------------------------------------------------------------
+// Drafts, `/edit` and `/vouch` are never named: the admin surface must not be advertised,
+// and `/vouch` is reached only by a link handed out by hand.
 
-/** Published projects and articles, newest first. */
 function listedPosts(posts: Post[]): Post[] {
   return posts
     .filter((post) => post.publishedAt && POST_CATEGORIES[post.category].listed)
     .sort((a, b) => b.publishedAt!.getTime() - a.publishedAt!.getTime());
 }
 
-/**
- * Published pages with an address of their own — the About page. The homepage
- * is a PAGE too, but its record is not a page to list: it IS the site's entry.
- */
+/** The homepage's record is left out: it is the site's entry, not a page to list. */
 function listedPages(posts: Post[]): Post[] {
   return posts.filter(
     (post) =>
@@ -41,8 +30,7 @@ export function sitemapEntries(
   siteUrl: string,
 ): MetadataRoute.Sitemap {
   const pages = listedPages(posts);
-  // The homepage shows every post's card, so any post's edit changes it. A page
-  // like About has no card there, so its edits do not.
+  // Any post's edit changes the homepage, where its card is; a page like About has none.
   const homeModified = posts
     .filter((post) => post.publishedAt && !pages.includes(post))
     .reduce<Date | undefined>(
@@ -63,11 +51,7 @@ export function sitemapEntries(
   return [
     { url: siteUrl, ...(homeModified ? { lastModified: homeModified } : {}) },
     ...pages.map(entry),
-    // Oldest first reads as the order the work happened; the order has no
-    // meaning to a crawler either way, so it follows publication.
     ...listedPosts(posts).reverse().map(entry),
-    // Every playground: the pages that are not posts, read off the one list
-    // that names them so a new one cannot be left out of the index.
     ...SITE_PATHS.map(({ path }) => ({ url: `${siteUrl}${path}` })),
   ];
 }
@@ -78,7 +62,7 @@ const PROFILE_LABELS: Record<keyof typeof SOCIAL_PROFILES, string> = {
   twitter: "X (Twitter)",
 };
 
-/** The `llms.txt` file — https://llmstxt.org — for the published site. */
+/** https://llmstxt.org */
 export function llmsTxt(posts: Post[], siteUrl: string): string {
   const { locality, region, country } = AUTHOR.location;
   const listed = listedPosts(posts);

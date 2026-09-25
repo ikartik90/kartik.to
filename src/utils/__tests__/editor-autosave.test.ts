@@ -52,8 +52,6 @@ describe("editor-autosave", () => {
     });
   });
 
-  // The metadata sidebar's buffer rides along, so a refresh does not quietly
-  // put a renamed post back at its old address.
   it("carries the metadata the sidebar changed", () => {
     const key = autosaveKey("post-1", "WORK");
     writeAutosave(key, {

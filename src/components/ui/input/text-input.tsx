@@ -5,30 +5,15 @@ import { Field, type FieldProps } from "./field";
 
 export interface TextInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "children" | "size"> {
-  /**
-   * Scales label, value, hint and frame as a set — `sm` (28px frame) through
-   * `lg`. Forwarded straight to the field root; see {@link FieldProps.size}.
-   */
   size?: FieldProps["size"];
-  /** Label rendered above the input and associated with it. */
   label?: ReactNode;
-  /** Helper text below the input, linked to the control via aria-describedby. */
   hint?: ReactNode;
-  /**
-   * Leading icon inside the input shell — a bare `<Icon/>`, sized and tinted by
-   * the frame. Mark it `aria-hidden` when it's purely decorative.
-   */
+  /** A bare icon, sized and tinted by the frame; mark it `aria-hidden` if decorative. */
   iconBefore?: ReactNode;
-  /** Applied to the field root — use it to size or place the whole field. */
+  /** Applied to the field root. */
   className?: string;
 }
 
-/**
- * Flat-prop text input assembled from the {@link Field} primitives. Compound
- * underneath, ergonomic on top: the shared frame + label + hint are wired here,
- * leaving only the value control local to the text case. The active (focused)
- * styling is handled by the recipe in CSS, so there is no state to pass.
- */
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   function TextInput(
     { label, hint, iconBefore, className, size, ...inputProps },

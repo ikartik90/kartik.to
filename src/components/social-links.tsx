@@ -74,15 +74,11 @@ const SOCIAL_ITEMS = [
 
 type SocialItem = (typeof SOCIAL_ITEMS)[number];
 
-// The row reads as two sets: the social profiles, then the work — code, a way
-// to get in touch, the resume. A rule stands before the first of the second.
 const DIVIDER_BEFORE: SocialItem["id"] = "github";
 
 const triggerIconStyle = menuIcon();
 const tooltipIconStyle = tooltipIcon();
 
-// The icons already ship a `viewBox="0 0 20 20"` and svgr preserves it
-// (removeViewBox:false), so CSS-sizing to 14px scales them — no viewBox override.
 function TooltipIcon({ Icon }: { Icon: FC<SVGProps<SVGSVGElement>> }) {
   return (
     <Icon className={tooltipIconStyle} data-social-tooltip-icon aria-hidden />
@@ -203,8 +199,6 @@ function CopyActionIcon({ copied }: { copied: boolean }) {
   );
 }
 
-// One rule for the tooltip's label | action and for the row's two sets, where
-// it stands 16px against the 20px glyphs.
 const dividerStyle = css({
   alignSelf: "center",
   flexShrink: 0,
@@ -225,12 +219,6 @@ const tooltipActionStyle = css({
   cursor: "pointer",
 });
 
-// No margin of its own. It carried a 32px `marginTop` from when the intro
-// section stacked it straight under a paragraph and that margin WAS the gap.
-// The row is now a block in a document, spaced by the layout around it, and an
-// internal margin there is invisible from the outside: it made the space above
-// the icons 48px while the markup said 16, so tuning the gap from the page
-// moved a number that was never the whole story.
 const listStyle = css({
   display: "flex",
   gap: "xl",
@@ -304,8 +292,6 @@ function SocialTooltip({
     onMouseLeave: onPointerLeave,
   };
 
-  // Position is written imperatively via tooltipRef (ref + rAF) so tracking the
-  // cursor never triggers a React re-render on every pointermove.
   if (item.action === "copy") {
     return (
       <button
@@ -373,8 +359,6 @@ export function SocialLinks() {
   }
 
   return (
-    // The stage owns the row's single shader — one WebGL context moved to the
-    // hovered icon, rather than one parked in each.
     <SocialShaderStage>
       <ul className={listStyle}>
         {SOCIAL_ITEMS.map((item) => (
@@ -424,9 +408,6 @@ function SocialLinkItem({
   const [tooltipHovered, setTooltipHovered] = useState(false);
   const tooltipVisible =
     (triggerHovered || tooltipHovered || copySuccess) && !tooltipDismissed;
-  // Cursor-following positioning is the shared engine now (Button/Link use it
-  // too); this component keeps only its bespoke copy/goto/email-morph content
-  // and its own visibility state.
   const { ref: tooltipRef, seed } = useCursorTooltip(tooltipVisible);
 
   const triggerLabel =
@@ -451,15 +432,9 @@ function SocialLinkItem({
     setTooltipHovered(false);
   }
 
-  // A LINK is the shared control — the icon, its shader and the cursor tooltip
-  // are one implementation now, used here and by a testimonial's profile on the
-  // admin board. Everything kept below belongs to the EMAIL: it copies rather
-  // than navigates, and its tooltip morphs through a copied state.
   if (item.action === "link") {
     return (
-      // The same flex box as the email's item. A plain list item lays the icon
-      // on a line of text, whose descender space made the row 30.5px tall, and
-      // the email's centred button sat 1.25px below the links in it.
+      // The same flex item as the email's, so the links sit level with it.
       <li className={itemStyle}>
         <SocialIconLink
           href={item.href}

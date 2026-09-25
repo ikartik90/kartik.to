@@ -72,7 +72,6 @@ describe("ogCard", () => {
     );
     expect(pinnedDark.cover?.src).toBe("/a-dark.png");
 
-    // And falls back to whichever one exists — one picture serves both bands.
     const onlyDark = ogCard(
       post({ content, card: { tone: "light", media: { dark: darkPicture } } }),
     );
@@ -80,7 +79,6 @@ describe("ogCard", () => {
   });
 
   it("is drawn light unless the card was pinned dark", () => {
-    // A shared link has no reader's theme to follow, so the card has to choose.
     expect(ogCard(post()).tone).toBe("light");
     expect(ogCard(post({ card: { tone: "dark" } })).tone).toBe("dark");
   });

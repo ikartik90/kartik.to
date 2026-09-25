@@ -44,8 +44,6 @@ describe("postCover", () => {
   });
 
   it("takes a collection's FEATURED item — the one in slot 0", () => {
-    // Index 0 is the featured position by definition (`collection-items.ts`);
-    // there is no flag to read, so the cover is a plain first element.
     const cover = postCover(
       doc(collection(picture("/featured.png"), picture("/second.png"))),
     );
@@ -67,9 +65,6 @@ describe("postCover", () => {
   });
 
   it("walks PAST a collection holding nothing", () => {
-    // An empty collection is a legal document — removing images one by one has
-    // to pass through zero — so it is a block with no cover in it rather than
-    // an answer of "no cover".
     const cover = postCover(doc(collection(), picture("/later.png")));
     expect(cover).toEqual(picture("/later.png"));
   });
@@ -80,10 +75,6 @@ describe("postCover", () => {
   });
 
   it("carries the GROUND and the way the picture sits in it", () => {
-    // A shader is only ever visible through what the fit and the inset leave
-    // uncovered, so carrying the effect and dropping the composition that
-    // reveals it would carry nothing at all. The whole object travels, and the
-    // surfaces render it in shares of their own box.
     const composed = {
       type: "media",
       kind: "image",

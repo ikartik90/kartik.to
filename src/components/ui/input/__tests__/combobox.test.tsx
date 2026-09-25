@@ -67,15 +67,12 @@ describe("field composition", () => {
 describe("collapsed trigger", () => {
   it("shows the selected option's label and no popover", () => {
     renderCombobox({ defaultValue: "grapes" });
-    // The label comes from the authored children even though the popover (and
-    // its option list) is closed and unmounted.
     expect(trigger().textContent).toBe("Grapes");
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
-  // See Button: WebKit's default tab order skips a bare <button>.
   it("states its own place in the tab order", () => {
     renderCombobox({});
     expect(trigger().getAttribute("tabindex")).toBe("0");
@@ -106,8 +103,6 @@ describe("opening", () => {
 
   it("opens from the chevron / frame padding, not only the value text", () => {
     renderCombobox({ defaultValue: "grapes" });
-    // The decorative chevron icon is pointer-events:none; the whole frame must
-    // be the open target.
     const icon = trigger().parentElement!.querySelector("[aria-hidden]");
     fireEvent.click(icon!);
     expect(screen.getByRole("dialog")).toBeTruthy();
@@ -134,7 +129,6 @@ describe("selecting an option", () => {
     fireEvent.click(screen.getByRole("option", { name: "Mango" }));
 
     expect(onValueChange).toHaveBeenCalledExactlyOnceWith("mango");
-    // Parent didn't update `value`, so the trigger still shows the old label.
     expect(trigger().textContent).toBe("Grapes");
   });
 });
@@ -182,8 +176,7 @@ describe("search={false}", () => {
     renderCombobox({ search: false });
     fireEvent.click(trigger());
     expect(screen.getByRole("listbox")).toBeTruthy();
-    // The dressed search input takes role=combobox, not searchbox — see the
-    // OptionList root. Its absence is what "no search" means here.
+    // The search input's role is combobox, not searchbox.
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 

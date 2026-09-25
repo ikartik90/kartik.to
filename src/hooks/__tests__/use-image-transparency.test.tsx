@@ -3,23 +3,15 @@ import { renderHook, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useImageTransparency } from "@/hooks/use-image-transparency";
 
-// ---------------------------------------------------------------------------
-// jsdom decodes nothing and paints nothing, so both halves of the inspection
-// are stood in for: an <img> whose load outcome is scripted per src (separately
-// for the CORS attempt and the plain one), and a 2D context that hands back the
-// pixels that src was registered with.
-// ---------------------------------------------------------------------------
+// jsdom decodes nothing: FakeImage scripts each src's load (CORS and plain separately), and
+// the stubbed 2D context hands back the pixels that src was registered with.
 
 interface Outcome {
-  /** Whether a load with `crossOrigin="anonymous"` succeeds. */
   cors?: boolean;
-  /** Whether a plain load — the one the cell itself does — succeeds. */
   plain?: boolean;
   width?: number;
   height?: number;
-  /** Alpha values, one per pixel; the colour bytes are filled in opaque. */
   alpha?: number[];
-  /** Readback refused, as a cross-origin canvas would. */
   tainted?: boolean;
 }
 
@@ -91,12 +83,7 @@ const transparency = (srcs: string[]) =>
     initialProps: { list: srcs },
   });
 
-/**
- * A picture that is definitely see-through, inspected alongside the one under
- * test. "It is not in the set" is true before an inspection finishes as well as
- * after, so an absence only means anything once something has landed — and the
- * store is shared, so the barrier has to be a src this test put there itself.
- */
+/** A see-through src to wait on: an absence only means something once an inspection has landed. */
 const marker = (name: string) => register(`marker-${name}.png`, { alpha: [0] });
 
 const settled = (
@@ -118,20 +105,14 @@ describe("useImageTransparency", () => {
     expect(result.current.has(src)).toBe(false);
   });
 
-  // The cheapest answer, and it keeps the common case off the network: a JPEG
-  // has no alpha channel to inspect.
   it("never decodes a JPEG", async () => {
     const src = register("photo.jpg", { alpha: [0, 0, 0, 0] });
     const { result } = transparency([src, marker("jpeg")]);
     await settled(result, "jpeg");
     expect(result.current.has(src)).toBe(false);
-    // The marker is a PNG, so exactly one picture was decoded — not this one.
     expect(loads.map((load) => load.src)).toEqual([marker("jpeg")]);
   });
 
-  // A bucket that declines CORS fails the readback load outright. The picture
-  // is fine — it is only unreadable — so the checkerboard is assumed rather
-  // than dropped, which is safe: an opaque picture covers it.
   it("assumes transparency when the host refuses the CORS read", async () => {
     const src = register("no-cors.png", { cors: false, plain: true });
     const { result } = transparency([src]);
@@ -148,19 +129,14 @@ describe("useImageTransparency", () => {
     await waitFor(() => expect(result.current.has(src)).toBe(true));
   });
 
-  // Neither load works, so the src is broken rather than unreadable — nothing
-  // to stand a ground behind.
   it("leaves a picture that cannot be loaded at all out", async () => {
     const src = register("missing.png", { cors: false, plain: false });
     const { result } = transparency([src, marker("missing")]);
     await settled(result, "missing");
     expect(result.current.has(src)).toBe(false);
-    // Both attempts were made — the CORS read and the plain one that tells a
-    // refused read from a broken src.
     expect(loads.filter((load) => load.src === src)).toHaveLength(2);
   });
 
-  // An SVG with no intrinsic size decodes to 0×0 and cannot be sampled.
   it("assumes transparency for a picture with no intrinsic size", async () => {
     const src = register("icon.svg", { width: 0, height: 0 });
     const { result } = transparency([src]);
@@ -173,9 +149,6 @@ describe("useImageTransparency", () => {
     await waitFor(() => expect(first.result.current.has(src)).toBe(true));
     cleanup();
 
-    // Synchronously on the FIRST render of the second mount — a picture whose
-    // answer is already known must not flash over a bare cell while it is
-    // re-derived.
     const { result } = transparency([src]);
     expect(result.current.has(src)).toBe(true);
     expect(loads).toHaveLength(1);
@@ -200,8 +173,6 @@ describe("useImageTransparency", () => {
     await waitFor(() => expect(loads).toHaveLength(1));
     expect(errors).not.toHaveBeenCalled();
 
-    // And the work it started is not wasted: the answer landed in the shared
-    // store, so the next grid to show that picture has it on its first render.
     const { result } = transparency([src]);
     await waitFor(() => expect(result.current.has(src)).toBe(true));
     expect(loads).toHaveLength(1);

@@ -8,7 +8,6 @@ afterEach(() => cleanup());
 describe("TextInput", () => {
   it("associates the label with the input", () => {
     render(<TextInput label="Date of birth" />);
-    // getByLabelText only resolves if htmlFor/id wire the label to the control.
     expect(screen.getByLabelText("Date of birth")).toBe(
       screen.getByRole("textbox"),
     );
@@ -22,10 +21,6 @@ describe("TextInput", () => {
     expect(document.getElementById(describedBy!)?.textContent).toBe("Hint text");
   });
 
-  // The assembly used to hardcode the field's default size, so `sm` was
-  // unreachable without dropping down to the compound parts. Assert the prop
-  // reaches every slot — a size that scales the label but not the frame is the
-  // exact mismatch the recipe's size variant exists to prevent.
   it("forwards size to every field slot", () => {
     render(<TextInput label="Label" hint="Hint text" size="sm" />);
     const control = screen.getByRole("textbox");
@@ -60,8 +55,6 @@ describe("TextInput", () => {
         iconBefore={<CalendarIcon aria-hidden data-testid="cal" />}
       />,
     );
-    // Icons pass bare into the frame; the caller marks a purely decorative one
-    // aria-hidden, and the frame just sizes/tints it.
     expect(screen.getByTestId("cal").closest("[aria-hidden]")).not.toBeNull();
   });
 
@@ -77,10 +70,9 @@ describe("TextInput", () => {
   it("focuses the control when the frame's dead space is clicked", () => {
     render(<TextInput label="Label" iconBefore={<CalendarIcon />} />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
-    const frame = input.parentElement as HTMLElement; // Field.Frame wraps the control
+    const frame = input.parentElement as HTMLElement;
     expect(document.activeElement).not.toBe(input);
 
-    // preventDefault (returns false) so focus lands cleanly without a blur flash.
     const notCancelled = fireEvent.mouseDown(frame);
     expect(notCancelled).toBe(false);
     expect(document.activeElement).toBe(input);
@@ -89,7 +81,6 @@ describe("TextInput", () => {
   it("leaves focus handling to the browser when the control itself is clicked", () => {
     render(<TextInput label="Label" />);
     const input = screen.getByRole("textbox");
-    // Clicking the control must not be intercepted — no preventDefault.
     expect(fireEvent.mouseDown(input)).toBe(true);
   });
 });

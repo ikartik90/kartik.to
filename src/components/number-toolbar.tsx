@@ -10,16 +10,11 @@ import ResetNumberingIcon from "@/assets/icons/reset-numbering.svg";
 import AlphabetedListIcon from "@/assets/icons/alphabeted-list.svg";
 import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface NumberToolbarProps {
   /** Viewport-relative rect of the clicked ordinal marker. */
   rect: PopoverRect;
   /** Current run style — decides whether the swap button offers a→z or 1→n. */
   marker: ListMarkerStyle;
-  /** Whether "continue numbering" is currently on for this run. */
   continueActive: boolean;
   onContinue: () => void;
   onReset: () => void;
@@ -27,17 +22,9 @@ interface NumberToolbarProps {
   onDismiss: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const toolbarClass = cx(toolbar(), selectionPopover({ align: "start" }));
 // Pairs with the selectionPopover recipe's `position-anchor`.
 const selectionAnchor = "--selection-popover";
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function NumberToolbar({
   rect,

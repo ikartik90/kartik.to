@@ -23,14 +23,7 @@ describe("useIsAdmin", () => {
     expect(result.current).toBe(true);
   });
 
-  // The admin session lives in localStorage, invisible to the server, so the
-  // server always renders the logged-out tree. Answering `true` on the first
-  // client render would put admin-only nodes against server markup that has
-  // none of them, which is React error #418 — hydration aborted.
-  //
-  // `renderHook` runs effects, so the assertion is on what the FIRST render
-  // returned rather than on the settled value: the flip is meant to happen, one
-  // commit later.
+  // renderHook runs effects, so assert on the first render, not the settled value.
   it("answers false on the render that hydrates, whatever the session says", () => {
     mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
     const seen: boolean[] = [];

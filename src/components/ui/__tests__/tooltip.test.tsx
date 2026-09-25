@@ -12,20 +12,12 @@ function withHost(visible: boolean, node: React.ReactNode) {
   );
 }
 
-/** The box itself — the portalled surface the label sits in. */
 const box = (label: string) =>
   screen.getByText(label).closest("div") as HTMLElement;
 
 describe("Tooltip", () => {
   afterEach(() => cleanup());
 
-  // The box is drawn at the VISITOR'S CURSOR, which is routinely outside
-  // whatever element it labels — the demo frame's replay/reset rail sits in a
-  // corner of a frame that is `overflow: hidden` over a `container-type`, and
-  // that containment makes the frame the containing block for a fixed child.
-  // Rendered in place the tooltip is then positioned perfectly and painted
-  // nowhere. So the escape belongs to the library, once, rather than to every
-  // host that might one day sit inside something that crops.
   it("renders on the body, out of reach of any ancestor's clip", () => {
     const { container } = render(
       withHost(
@@ -36,9 +28,7 @@ describe("Tooltip", () => {
       ),
     );
 
-    // Nothing left behind where the host rendered it...
     expect(container.childElementCount).toBe(0);
-    // ...because the whole box lives at the top of the document instead.
     expect(box("Delete").parentElement).toBe(document.body);
   });
 
@@ -65,7 +55,6 @@ describe("Tooltip", () => {
         </Tooltip>,
       ),
     );
-    // [label, divider, icon]
     expect(box("Delete").children.length).toBe(3);
   });
 
