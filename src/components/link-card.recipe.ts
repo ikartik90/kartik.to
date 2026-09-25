@@ -19,7 +19,7 @@ const CARD_WASH = cardWashGradient(
 export const linkCard = defineSlotRecipe({
   className: "link-card",
   description:
-    "A link rendered as one shaped tile — the card the homepage grid is made of. `root` is the whole card and the only box with a shape: it takes an `aspect` from the app's shared ratio map and CLIPS to it, since aspect-ratio alone is only a floor, and it carries `data-covered` when there is a picture. `cover` is out of flow and holds the whole stack, in paint order — a flat `bg.surface` plate, the `backgroundEffect` ground the author put behind the picture, the `media` in its positioned `mediaFrame`, all inside `cover`. The `scrim` is a SIBLING of that: the box the `caption` sits in, at least half the card tall and taller only where the words are, holding `ScrimBlur`'s progressive frosting with the `wash` over it — so the blur and the gradient are bounded by the same box and neither can reach past the other. `caption` is the name and, for a dated listing, the date, and it takes the theme's strongest ink wherever there is a picture under it. No hover state of its own beyond the press.",
+    "A link drawn as a shaped tile: a cover image or effect, a scrim and a caption, cropped to `aspect`; `tone` sets the caption colour.",
   slots: [
     "root",
     "cover",

@@ -2,7 +2,7 @@ import { defineRecipe } from "@pandacss/dev";
 
 export const dialogPanel = defineRecipe({
   className: "dialog-panel",
-  description: "Shared dialog panel shell.",
+  description: "A dialog's panel, in three `size`s.",
   base: {
     backgroundColor: "bg.surface",
     "--colors-field-bg-default":
@@ -42,8 +42,7 @@ export const dialogPanel = defineRecipe({
 
 export const dialogHeader = defineRecipe({
   className: "dialog-header",
-  description:
-    "Dialog title row with bottom divider. Insets its contents 8px — the panel's own `md` corner — so the trailing close chip and the leading title sit on the same margin the shell curves at.",
+  description: "A dialog's title row, with a divider under it.",
   base: {
     display: "flex",
     alignItems: "center",
@@ -60,7 +59,7 @@ export const dialogHeader = defineRecipe({
 
 export const dialogTitle = defineRecipe({
   className: "dialog-title",
-  description: "Insert-image dialog heading.",
+  description: "A dialog's title text.",
   base: {
     margin: "none",
     padding: "none",
@@ -73,8 +72,7 @@ export const dialogTitle = defineRecipe({
 
 export const dialogFooter = defineRecipe({
   className: "dialog-footer",
-  description:
-    "Dialog action row with top divider. Insets its buttons 8px, the same margin the header keeps, so the two rows bracketing the body agree.",
+  description: "A dialog's row of actions, with a divider above it.",
   base: {
     display: "flex",
     alignItems: "center",

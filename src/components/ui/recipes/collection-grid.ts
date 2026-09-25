@@ -11,7 +11,7 @@ const transparencyCheckerboard = {
 export const collectionGrid = defineSlotRecipe({
   className: "collection-grid",
   description:
-    "Collection tile grid — a 3×2 slot grid in the editor, and in the reader a featured 2×2 with two stacked tiles (3+ images), an equal pair (2), or a single natural-ratio tile (0–1). Figma 828:6837/826:6501 editor, 829:6911/828:6658 reader.",
+    "A grid of images: the editor's slots, or the reader's arrangement set by `layout` (uniform, featured, pair or single).",
   slots: [
     "root",
     "slot",

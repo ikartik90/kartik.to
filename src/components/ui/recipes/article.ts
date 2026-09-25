@@ -37,7 +37,7 @@ const markerAlignmentBox = {
 
 export const inlineCode = defineRecipe({
   className: "inline-code",
-  description: "Inline code mark inside article prose.",
+  description: "Inline code inside article text.",
   base: {
     textStyle: "inlineCode",
     background: "bg.surface",
@@ -50,7 +50,7 @@ export const inlineCode = defineRecipe({
 export const articleLink = defineRecipe({
   className: "article-link",
   description:
-    "Hyperlink inside article prose. The underline is drawn as two stacked background bars, not text-decoration, so the hover state can be the brand gradient (text-decoration-color can't be a gradient): a neutral color-mix bar (text.body @ 50%) with the brandedEmphasis gradient layered on top, hidden at rest and grown in on hover. box-decoration-break:clone repeats the bars on each line of a wrapped link.",
+    "A link inside article text, with an underline that turns into the brand gradient on hover.",
   base: {
     textDecorationLine: "none",
     color: "text.default",
@@ -73,7 +73,7 @@ export const articleLink = defineRecipe({
 
 export const articleUnderline = defineRecipe({
   className: "article-underline",
-  description: "Solid underline mark inside article prose.",
+  description: "Underlined text inside an article.",
   base: {
     textDecorationLine: "underline",
     textDecorationStyle: "solid",
@@ -83,7 +83,7 @@ export const articleUnderline = defineRecipe({
 
 export const articleStrikethrough = defineRecipe({
   className: "article-strikethrough",
-  description: "Strikethrough mark inside article prose.",
+  description: "Struck-through text inside an article.",
   base: {
     textDecorationLine: "line-through",
   },
@@ -92,7 +92,7 @@ export const articleStrikethrough = defineRecipe({
 export const articleHighlight = defineRecipe({
   className: "article-highlight",
   description:
-    "Highlight mark (<mark>) inside article prose — the brand accent at 15% behind the accent at full strength (pink in light, orange in dark). Flat colour, not the brand gradient, so the marked text stays legible as prose rather than reading as a badge.",
+    "Highlighted text inside an article, on a tint of the brand accent.",
   base: {
     backgroundColor: "bg.highlight",
     color: "text.highlight",
@@ -108,8 +108,7 @@ export const articleHighlight = defineRecipe({
 
 export const articleSidenote = defineRecipe({
   className: "article-sidenote",
-  description:
-    "Sidenote annotation mark — wraps the annotated run of prose plus its ordinal superscript. Carries an `anchor-name` (set inline, per note) the aside card positions against; the dotted underline lives on the inner articleSidenoteText span.",
+  description: "The annotated text and number that a margin note attaches to.",
   base: {
     cursor: "default",
     "& :is(strong, b, em, i, u, s, code, a)": { color: "inherit" },
@@ -118,8 +117,7 @@ export const articleSidenote = defineRecipe({
 
 export const articleSidenoteText = defineRecipe({
   className: "article-sidenote-text",
-  description:
-    "The annotated prose inside a sidenote mark — a dotted underline signals the margin note. The underline sits HERE rather than on the wrapper so it never runs beneath the ordinal superscript, which is a sibling of this span (see articleSidenoteRef).",
+  description: "The annotated words of a margin note, with a dotted underline.",
   base: {
     textDecorationLine: "underline",
     textDecorationStyle: "dotted",
@@ -133,7 +131,7 @@ export const articleSidenoteText = defineRecipe({
 export const articleSidenoteRef = defineRecipe({
   className: "article-sidenote-ref",
   description:
-    "Superscript ordinal after an annotated run. The digit is read from the `data-sidenote-number` attribute — assigned from the AST-derived ordinal (see collectSidenotes / SidenoteLayer + the reader). A CSS counter was avoided because Chromium doesn't re-resolve `counter()` generated content when a preceding counter-incrementing element is removed, so ordinals wouldn't decrement live. Painted in the brand gradient.",
+    "The superscript number after annotated text, read from `data-sidenote-number`.",
   base: {
     verticalAlign: "super",
     marginInlineStart: "3xs",
@@ -155,8 +153,7 @@ export const articleSidenoteRef = defineRecipe({
 
 export const codeBlock = defineRecipe({
   className: "code-block",
-  description:
-    "Code block container for article content. Inherited text styles cascade to <code> children; focus ring suppressed for contentEditable use.",
+  description: "A code block inside an article.",
   base: {
     textStyle: "code",
     background: "bg.surface",
@@ -172,7 +169,7 @@ export const codeBlock = defineRecipe({
 export const articleShowcase = defineRecipe({
   className: "article-showcase",
   description:
-    "Wide showcase container for figures and embeddable components inside article content. The block itself spans the article's full 960 column; its caption wraps at the 640 text column, since a caption is prose and reads at the measure the paragraphs around it do.",
+    "A full-width block for figures and embedded components in an article, with its caption at text width.",
   base: {
     width: "token(spacing.full)",
     display: "flex",
@@ -191,7 +188,7 @@ export const articleShowcase = defineRecipe({
 export const articleBlockquoteShell = defineRecipe({
   className: "article-blockquote-shell",
   description:
-    "Blockquote layout shell — quote mark and text in normal flow (Figma 358:20 light, 358:26 dark).",
+    "Layout of an article blockquote: the quote mark beside the quote.",
   base: {
     display: "flex",
     flexDirection: "row",
@@ -203,7 +200,7 @@ export const articleBlockquoteShell = defineRecipe({
 export const articleBlockquoteMark = defineRecipe({
   className: "article-blockquote-mark",
   description:
-    "Quote mark (52×52) — a `bg.brandedEmphasis` body at 15% with a 1px full-strength inner edge of that same gradient running inside its contour, each a mask off the same blockquote glyph path. Two layers because one mask can only reveal one colour, and both are PSEUDO-ELEMENTS rather than one being the element itself: a mask clips its element's descendants too, so a fill mask on the box would have cut away the outer half of the stroke drawn inside it. As siblings they clip independently, and ::after paints over ::before, putting the outline on top of the body. The glyph's lean is drawn into the artwork, so no CSS rotation here.",
+    "The large quote mark of an article blockquote, in the brand gradient.",
   base: {
     position: "relative",
     width: "token(sizes.quoteMark)",
@@ -241,7 +238,7 @@ export const articleBlockquoteMark = defineRecipe({
 
 export const articleBlockquote = defineRecipe({
   className: "article-blockquote",
-  description: "Blockquote typography inside article prose.",
+  description: "The text style of an article blockquote.",
   base: {
     textStyle: "quote",
     color: "text.default",
@@ -253,7 +250,7 @@ export const articleBlockquote = defineRecipe({
 export const articleHeadingShell = defineRecipe({
   className: "article-heading-shell",
   description:
-    "Column that stacks an optional eyebrow caption above a subheading.",
+    "Stacks an optional eyebrow caption above an article subheading.",
   base: {
     display: "flex",
     flexDirection: "column",
@@ -264,7 +261,7 @@ export const articleHeadingShell = defineRecipe({
 export const articleSubheadingCaption = defineRecipe({
   className: "article-subheading-caption",
   description:
-    "Eyebrow caption above a subheading — brand gradient text (same gradient as numbered-list ordinals) revealed via background-clip once populated.",
+    "The eyebrow caption above an article subheading, in brand gradient text.",
   base: {
     textStyle: "caption",
     width: "fit-content",
@@ -282,7 +279,7 @@ export const articleSubheadingCaption = defineRecipe({
 export const articleBlockquoteBody = defineRecipe({
   className: "article-blockquote-body",
   description:
-    "Column beside the quote mark that stacks the quote text and an optional citation.",
+    "The column beside the quote mark, holding the quote and its citation.",
   base: {
     flex: "1 1 auto",
     minWidth: 0,
@@ -294,8 +291,7 @@ export const articleBlockquoteBody = defineRecipe({
 
 export const articleBlockquoteCite = defineRecipe({
   className: "article-blockquote-cite",
-  description:
-    "Citation line beneath a blockquote — caption typography, upright (not italic).",
+  description: "The citation line under an article blockquote.",
   base: {
     textStyle: "caption",
     fontStyle: "normal",
@@ -306,8 +302,7 @@ export const articleBlockquoteCite = defineRecipe({
 
 export const articleListItemShell = defineRecipe({
   className: "article-list-item-shell",
-  description:
-    "Numbered-list item row — ordinal badge and text content in a flex row (Figma 413:684 light, 413:688 dark). No width: inherits the `article > *` content-column width (a recipe-layer width would beat the base-layer rule and align the marker with showcase blocks).",
+  description: "An article list item's row: the marker beside the item's text.",
   base: {
     display: "flex",
     flexDirection: "row",
@@ -318,8 +313,7 @@ export const articleListItemShell = defineRecipe({
 
 export const listMarkerBox = defineRecipe({
   className: "list-marker-box",
-  description:
-    "Alignment box for a numbered-list ordinal — the shared 24px marker column centring the `listMarker` pill inside it, exactly as `listBulletIcon` centres a `listBulletCircle`. The pill is narrower than the column and grows with its digit count, so it needs a fixed box around it or a numbered list's prose column would sit left of a bulleted one's. `width` is PINNED rather than left to `minWidth`: a 3+ digit pill outgrows 24px, and on min-width alone only that one item's column would widen, leaving the prose ragged down its own list. Pinned, such a pill overhangs the column instead — symmetrically, since it is centred — eating into the 8px gap rather than moving the text.",
+  description: "The fixed-width column that centres a numbered list's number.",
   base: {
     ...markerAlignmentBox,
     width: "token(sizes.listMarker)",
@@ -329,7 +323,7 @@ export const listMarkerBox = defineRecipe({
 export const listMarker = defineRecipe({
   className: "list-marker",
   description:
-    "Numbered-list ordinal badge — 16px gradient pill with theme-flipped caption digits; circular at a single digit, widening for zero-padded multi-digit ordinals. Sized off `spacing.xl` to match the 16px check/cross disc. Vertical placement belongs to its `listMarkerBox` wrapper, not here.",
+    "A numbered list's number: a small gradient pill holding the digits.",
   base: {
     flexShrink: 0,
     display: "inline-flex",
@@ -360,7 +354,7 @@ export const listMarker = defineRecipe({
 export const listBullet = defineRecipe({
   className: "list-bullet",
   description:
-    "Bulleted-list marker — 10px circular gradient dot centered on the first text line, within the shared `markerAlignmentBox` footprint every list style uses.",
+    "A bulleted list's marker: a small gradient dot beside the first line.",
   base: {
     ...markerAlignmentBox,
     "&::before": {
@@ -376,15 +370,14 @@ export const listBullet = defineRecipe({
 
 export const listBulletIcon = defineRecipe({
   className: "list-bullet-icon",
-  description:
-    "Check/cross bulleted-list marker — the shared `markerAlignmentBox` (matching the dot and the numbered ordinal, so content stays aligned across list styles) centring a `listBulletCircle` glyph.",
+  description: "The column that holds a check or cross list marker.",
   base: { ...markerAlignmentBox },
 });
 
 export const listBulletCircle = defineRecipe({
   className: "list-bullet-circle",
   description:
-    "The 16×16 circle inside a check/cross bullet marker (Figma 476:278 check, 474:38 cross) — a flat `bg.listMarker` chip holding a brand-gradient glyph, which overflows it slightly. The glyph is a masked pseudo-element rather than an inline SVG: those icons paint with `stroke=\"currentColor\"`, and currentColor can only ever be a flat colour, so a gradient has to arrive the way the blockquote mark's does — filling a box that the glyph's alpha masks to shape. Pick the shape with the `glyph` variant; the renderer and editor pass it instead of a child icon.",
+    "A check or cross list marker: a small circle holding the `glyph`.",
   base: {
     position: "relative",
     flexShrink: 0,
@@ -433,8 +426,7 @@ export const listBulletCircle = defineRecipe({
 
 export const articleListItemContent = defineRecipe({
   className: "article-list-item-content",
-  description:
-    "List item text column beside the ordinal badge or bullet dot.",
+  description: "The text column of an article list item.",
   base: {
     flex: "1 1 auto",
     minWidth: 0,
@@ -446,8 +438,7 @@ export const articleListItemContent = defineRecipe({
 
 export const articleMetric = defineRecipe({
   className: "article-metric",
-  description:
-    "Metric callout — a large brand-gradient value stacked over a descriptive label (Figma 456:979 light / 456:968 dark). No width: inherits the `article > *` content-column width so it aligns with prose.",
+  description: "A metric callout in an article: a large value above its label.",
   base: {
     display: "flex",
     flexDirection: "column",
@@ -459,8 +450,7 @@ export const articleMetric = defineRecipe({
 
 export const articleMetricCaption = defineRecipe({
   className: "article-metric-caption",
-  description:
-    "Metric caption — optional eyebrow above the value; same style as an image caption but left-aligned (the metric column is flush-left).",
+  description: "The optional caption above a metric's value.",
   base: {
     textStyle: "caption",
     color: "text.default",
@@ -471,8 +461,7 @@ export const articleMetricCaption = defineRecipe({
 
 export const articleMetricValue = defineRecipe({
   className: "article-metric-value",
-  description:
-    "Metric value — brand gradient display text (theme-directional gradient) revealed via background-clip once populated, mirroring the subheading eyebrow.",
+  description: "A metric's value, in large brand gradient text.",
   base: {
     textStyle: "title",
     width: "fit-content",
@@ -490,8 +479,7 @@ export const articleMetricValue = defineRecipe({
 
 export const articleMetricLabel = defineRecipe({
   className: "article-metric-label",
-  description:
-    "Metric label — descriptive line beneath the value; paragraph text style, standard text colour (neutral.600 light / neutral.200 dark per Figma).",
+  description: "The label under a metric's value.",
   base: {
     textStyle: "bodyLarge",
     color: "text.default",
@@ -502,7 +490,7 @@ export const articleMetricLabel = defineRecipe({
 export const horizontalRule = defineRecipe({
   className: "horizontal-rule",
   description:
-    "Horizontal rule rendered identically on both read-only and edit article surfaces.",
+    "A horizontal rule in an article, the same in the reader and the editor.",
   base: {
     border: "none",
     height: "token(spacing.3xs)",

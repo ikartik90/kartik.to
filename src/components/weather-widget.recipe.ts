@@ -5,7 +5,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const weatherWidget = defineSlotRecipe({
   className: "weather-widget",
   description:
-    "The weather graphic framed as a square home-screen card — the place, the drawing, and the temperature and condition beneath it, as one column centred on a single vertical axis. Sized entirely in container units so one composition scales across every column span the grid can give it.",
+    "A square weather card: the place, the weather illustration, the temperature and the condition; `available: false` fades the illustration.",
   slots: [
     "root",
     "place",

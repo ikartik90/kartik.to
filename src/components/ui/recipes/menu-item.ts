@@ -2,8 +2,7 @@ import { defineRecipe } from "@pandacss/dev";
 
 export const menuItem = defineRecipe({
   className: "menu-item",
-  description:
-    "Shared item row for the command palette (cmdk) and the slash menu.",
+  description: "A row in the command palette or the slash menu.",
   base: {
     display: "flex",
     alignItems: "center",

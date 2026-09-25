@@ -4,7 +4,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const testimonialCard = defineSlotRecipe({
   className: "testimonial-card",
   description:
-    "Testimonial card — one collected testimonial, composed as root > byline(avatar + identity(name, tagline) + profile) + quote + select. `select` is an empty control stretched over the whole card, and what it IS follows the surface: a button that opens the properties rail on the admin board (the `selected` variant marks which card the rail is on), and an anchor to the person's profile on the page. The board also draws the profile as a real link (the house social icon, shader and all) above that overlay at the byline's far edge — only possible because it is a SIBLING of the button rather than a child; the page does not, because there the card itself is that link.",
+    "A testimonial card: the quote and a byline of avatar, name, tagline and profile link. `surface` is the edit board or the public page; `selected` marks it chosen.",
   slots: [
     "root",
     "select",

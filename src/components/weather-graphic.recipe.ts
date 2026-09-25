@@ -5,7 +5,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const weatherGraphic = defineSlotRecipe({
   className: "weather-graphic",
   description:
-    "The weather illustration from Figma 1995:24 — eleven variants expressed as one scene of persistent layers whose arrangement is written by ~20 custom properties on the root, so any two conditions interpolate into each other. Each layer is its own absolutely-positioned root <svg>, because WebKit ignores CSS filter functions on SVG child elements and every blur in the drawing would otherwise be missing in Safari; blurs are sized in container units so they still scale with the graphic. `weather` places and tints the layers; `time` cross-fades the sun against the moon and re-colours the halo, independently, and keeps doing so while an overcast sky hides both. Cloud Big carries a PROGRESSIVE bottom blur (four gradient-masked copies added together, driven by a single variable) rather than a fixed one, so the cloud can dissolve into fog. Ambient motion — falling drops, drifting flakes, a turning corona, a striking bolt — lives on child nodes so it never contends with the state transitions on their parents, and is dropped outright under `prefers-reduced-motion` so each layer rests where Figma drew it.",
+    "The animated weather illustration: sun or moon, clouds, rain, snow and lightning layers, arranged by `weather` and `time`.",
   slots: [
     "root",
     "layer",

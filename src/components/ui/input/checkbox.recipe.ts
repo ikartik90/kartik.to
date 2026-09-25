@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const checkboxField = defineSlotRecipe({
   className: "checkbox-field",
   description:
-    "The box + check of a checkbox — the control slot of a `field`. Off = neutral, on = brand accent (keyed off `aria-checked` on the <button role=checkbox>), reusing the exact tokens the text input and the switch use. Unlike the switch it has no `size`: one geometry — a 20px hit frame around a 16px visual box, the 2px surround keeping the box optically centred on the label's cap-height. The check glyph is the shared 20px `check-small` icon overhanging the box by 2px a side (as drawn), revealed by opacity so it fades rather than pops.",
+    "A checkbox's box and check mark, the control of a `field`: neutral when off, brand accent when on.",
   slots: ["control", "box"],
   base: {
     control: {

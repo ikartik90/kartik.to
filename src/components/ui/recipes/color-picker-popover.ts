@@ -5,7 +5,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const colorPickerPopover = defineRecipe({
   className: "color-picker-popover",
   description:
-    "The colour picker's shell: docked 2px inside the properties rail's leading edge at the rail's own width, opening level with the swatch that opened it and then HOLDING there while the rail scrolls under it (the `top` comes from `usePickerPin`, which also keeps it clear of the viewport foot). On a phone, where the rail is a sheet along the BOTTOM edge, 'beside the rail' has no meaning and it centres over the canvas instead.",
+    "The popover holding the colour picker, docked inside the properties panel beside the swatch that opened it.",
   base: {
     position: "fixed",
     // Over the rail (50), which it opens from.

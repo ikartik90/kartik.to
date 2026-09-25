@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const calendar = defineSlotRecipe({
   className: "calendar",
   description:
-    "Calendar grid: a search field above a period list — one or more month columns, each a ‹ month year › label, the weekday header row and the day grid on a 24px cell / 4px gutter pitch (7 × 24 + 6 × 4 + 2 × 8 padding = 208px per month). The pair of nav chevrons is absolutely placed at the list's top corners, so they flank the whole range rather than a single month, and the list pages a full range at a time (Figma 715:912 — three months at 624px). A turn is a push: the list crops, the arriving page slides in from the side the range is travelling toward and the leaving one (the `outgoing` copy) is pushed out by the same `--calendar-push` — `step` month columns, signed by the direction. Day cells carry their state as attributes (aria-selected / data-state=today / data-outside / :disabled) plus data-weekday/data-weekend identity, so the look is fully re-skinnable off selectors. `fluid` lets the grid FILL a box wider than its months instead of hugging them, spending the surplus in the gutters between the seven columns so the day cell keeps its 24px square. `tone` swaps which half of the palette reads brand: `default` is a self-framed neutral surface with a brand today/selection (Figma 644:1678/644:1681); `onBrand` is the Date popover's inverse (Figma 631:893/631:897).",
+    "Date picker calendar: a search field, month columns with navigation, a weekday header and the day grid. `size`, `fluid`, `navPlacement` and `tone` set its scale, width, nav position and colours.",
   slots: [
     "root",
     "search",

@@ -27,7 +27,7 @@ const rampPadEnd = {
 export const colorPicker = defineSlotRecipe({
   className: "color-picker",
   description:
-    "The colour picker's innards — a title strip, a saturation/brightness map over a hue ramp and an alpha ramp, and a footer of format menu ∣ channel fields. The map is a live picture of the HSB solid at the current hue (`--color-picker-hue`) and the alpha ramp fades to the current colour (`--color-picker-alpha-to`) over the swatch's checkerboard, both handed in as custom properties because they change with the value. Slots are drawn to the docked properties rail's own metrics — a 40px header, a 12px body, a 48px footer carrying the property row's own 212px field column — since the picker opens 2px off that rail and the two read as one strip (Figma 1066:2338).",
+    "Colour picker panel: a header, a saturation/brightness map, hue and alpha sliders, and a footer of format menu and channel fields.",
   slots: [
     "root",
     "header",

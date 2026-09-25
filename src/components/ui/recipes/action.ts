@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const action = defineRecipe({
   className: "action",
   description:
-    "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above), `accent` (that chip in the brand pigment, label included — a button link's accent) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature. `size` is the third axis, and applies to the `text` chip: `md` is the 40px/`bodyLarge` default, `sm` a 32px/`bodySmall` chip on an 8px inline inset (the option row's pitch). An icon chip has ONE inset — a smaller icon is a smaller GLYPH in the same chip, which is the icon's business and not the chip's; see `SocialIconLink`.",
+    "The shared look of Button and Link: a filled chip, an icon button or an inline link (`variant`), with `emphasis` and `size`.",
   base: {
     cursor: "pointer",
     border: "none",

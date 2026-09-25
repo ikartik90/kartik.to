@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const field = defineSlotRecipe({
   className: "field",
   description:
-    "Text-input family field — a label, a framed input shell (leading icon + control + optional trailing), and a hint. The presentational frame owns no behavior; the assembly fills the control slot. The 'Active' state is CSS-driven off the control's engagement (`:focus-visible`, a slider's plain `:focus`, or an open trigger's `aria-expanded` — see the label slot) rather than a prop, so label, frame bg/border, control text and the leading icon all shift to the brand accent (pink in light, orange in dark) on focus while the hint stays muted (Figma 586:876). Built to be shared by the forthcoming Select/Date inputs. A `role=\"switch\"` or `role=\"checkbox\"` control flips the same root into a control ∣ label/hint grid (the toggle archetype, shared by Switch and Checkbox), detected via `:has` — no prop. Scope: default + active only.",
+    "A form field: a label, a framed control with optional icons, and a hint, in three `size`s. `labelFirst` puts a switch or checkbox after its label.",
   slots: ["root", "label", "frame", "control", "hint"],
   base: {
     root: {

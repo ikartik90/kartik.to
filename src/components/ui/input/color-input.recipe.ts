@@ -5,7 +5,7 @@ import { fieldValueBox } from "../recipes/shared";
 export const colorField = defineSlotRecipe({
   className: "color-field",
   description:
-    "Colour input — a live swatch, a six-digit hex input and a 0–100 opacity input, divided by hairlines inside the shared `field` frame (Figma 872:7296). The swatch composites the colour over a checkerboard so a partial opacity reads as partial rather than as a lighter colour.",
+    "Colour input inside a `field` frame: a swatch, a hex input and an opacity input, divided by hairlines.",
   slots: ["swatch", "swatchFill", "separator", "hex", "opacity"],
   base: {
     swatch: {

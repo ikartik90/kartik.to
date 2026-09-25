@@ -3,7 +3,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const mediaBlock = defineSlotRecipe({
   className: "media-block",
   description:
-    "The boxes a standalone media block is composed of, in the editor and in the reader alike: `root` is the box that does NOT clip, so the editor's control rail can straddle the picture's top edge with half of it outside; `frame` is the positioned box the ground fills and a clip's transport pins to; `tile` is the reader's hit target that opens the enlargement; `image` is the picture; `backgroundEffect` is the shader ground behind it. Mirrors `collectionGrid`'s slot/cell/tile/image/backgroundEffect for the same object standing in a numbered slot.",
+    "A standalone image or video block, the same in the reader and the editor.",
   slots: ["root", "frame", "tile", "image", "backgroundEffect"],
   base: {
     // Must not clip: the editor's control rail straddles the frame's top edge.

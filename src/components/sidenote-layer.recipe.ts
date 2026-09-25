@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const sidenoteCard = defineRecipe({
   className: "sidenote-card",
   description:
-    "Margin note, CSS-anchored via anchor() and revealed only when its annotation is active (caret in the editor; hover/click in the reader). `side` (default): 100px right of the text-content column (via the --sidenote-rail anchor) and 2px above the annotated line. `stacked` (no room): centred on the content column, 4px below/above the line with flip-block — like the slash menu. Vertical/default anchor is the annotation's --sn-<id> (set inline via --sn-anchor).",
+    "A margin note card, shown while its annotation is active: beside the text column, or under the annotated line with `placement: stacked`.",
   base: {
     // Fixed, not absolute, so the flip-block fallback measures against the viewport.
     position: "fixed",

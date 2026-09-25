@@ -4,7 +4,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const imageField = defineSlotRecipe({
   className: "image-field",
   description:
-    "Image input — a 16px thumbnail of the file, a hairline, and the file's name inside the shared `field` frame, with a replace chip in the properties row's action column beside it (Figma 1233:2639). The frame is a button: pressing it opens the media library. An empty slot draws a glyph in the cell and asks in the family's placeholder tone; it has nothing to replace, so no chip is drawn and the column simply stays empty.",
+    "Image input inside a `field` frame: a thumbnail, a hairline and the file name; the frame is a button that opens the media library.",
   slots: [
     "frame",
     "trigger",

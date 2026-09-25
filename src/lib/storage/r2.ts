@@ -20,41 +20,13 @@ const r2 = new S3Client({
 
 export const MEDIA_PREFIX = "media/";
 
-/**
- * The icon set's own corner of the bucket. Separate from the media library's
- * prefix rather than a folder inside it, and the separation is what every
- * guard in `actions/icon-set.ts` is written against: an icon key can never name a
- * media object, so approving or deleting an icon cannot reach a published
- * article's picture.
- */
+// Must stay outside MEDIA_PREFIX: the guards in `actions/icon-set.ts` rely on an icon key never naming media.
 export const ICON_PREFIX = "icons/";
 
-/**
- * Where a testimonial's profile picture goes. A sibling of {@link
- * MEDIA_PREFIX} rather than a folder inside it, so `listR2MediaKeys` on the
- * library never returns one and the two sets stay genuinely separate.
- */
+// Outside MEDIA_PREFIX so the media library never lists profile pictures.
 export const PROFILE_PREFIX = "profiles/";
 
-/**
- * What counts as a library object. The bucket is not exclusively the media
- * library's, so listing filters by extension rather than trusting the prefix.
- *
- * It covers everything the bucket will TAKE (`ALLOWED_UPLOAD_CONTENT_TYPES`),
- * documents included — the two halves of the picker are a filter the dialog
- * applies to this list, not two listings. While `pdf` was missing here the
- * document half was permanently empty: an uploaded CV landed in the bucket and
- * was never listed again, so it could not be inserted, renamed or deleted.
- *
- * This is the ONE remaining place an extension decides anything, and it decides
- * only whether an object belongs to the library — never what it is. The
- * renderer used to read the kind back off the same string, which made this list
- * and `VIDEO_EXTENSIONS` a pair that had to grow together; a media node now
- * records its `kind` outright and nothing renders off a filename, so adding a
- * format here is only a question of what the library will list. Note the
- * asymmetry it leaves: an object under a bare key is invisible to this filter
- * but perfectly renderable once it is in a document.
- */
+// Must cover every type in `ALLOWED_UPLOAD_CONTENT_TYPES`, or uploads of that type never list.
 const MEDIA_KEY_PATTERN = /\.(png|jpe?g|gif|webp|svg|mp4|pdf)$/i;
 
 export function publicUrlForKey(key: string): string | null {
@@ -106,11 +78,6 @@ export async function listR2MediaKeys(prefix = MEDIA_PREFIX): Promise<string[]> 
   return keys.sort((a, b) => b.localeCompare(a));
 }
 
-/**
- * Every icon in the set. An icon is an SVG and nothing else, so the filter is
- * the extension alone — and unlike the media library's, this one is a fact
- * about the format rather than a guess about the kind.
- */
 export async function listR2IconKeys(): Promise<string[]> {
   const keys: string[] = [];
   let continuationToken: string | undefined;
@@ -139,22 +106,12 @@ export async function listR2IconKeys(): Promise<string[]> {
 export interface R2ObjectHead {
   size: number;
   contentType: string;
-  /**
-   * Everything the object was stored with, as the map of strings S3 keeps it
-   * as. The named fields below are the media library's, read out for it; a
-   * caller storing its own facts (the icon set's grid, weight and review
-   * state) reads them from here and parses them itself.
-   */
+  /** All stored metadata, as strings; the named fields below are the media library's. */
   metadata: Record<string, string>;
   alt?: string;
-  /** The original upload name, editable independently of the immutable key. */
+  /** The original upload name; editable, unlike the key. */
   filename?: string;
-  /**
-   * The source's own pixel size, written at upload so a surface can reserve
-   * the box it will need before the bytes arrive. Object metadata is a map of
-   * STRINGS, so these arrive as strings and the caller parses them; absent for
-   * everything stored before the measurement existed.
-   */
+  /** Pixel size recorded at upload, as strings; absent on older objects. */
   width?: string;
   height?: string;
 }
@@ -178,27 +135,10 @@ export async function headR2Object(key: string): Promise<R2ObjectHead> {
   };
 }
 
-/**
- * How long a stored object may be held. Every key under this bucket carries a
- * uuid, so an object's bytes never change — a re-upload mints a new key — and
- * the public endpoint sends no cache header of its own. Without this, every
- * visit re-fetches every object: the icons playground was pulling all two
- * hundred of its files down again on each load, which at 568 bytes apiece is
- * entirely a cost in ROUND TRIPS rather than in bytes.
- *
- * Metadata edits (an alt text, a review state) rewrite the object without
- * touching its bytes, so a year is safe for those too.
- */
+// Safe because every key carries a uuid: an object's bytes never change.
 const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
-/**
- * Patch a subset of an object's user metadata in place. S3/R2 has no partial
- * metadata update — the only way is a self-copy with `MetadataDirective:
- * REPLACE`, which swaps the WHOLE metadata map and resets system headers. So
- * read the current state first and re-send it merged, carrying `ContentType`
- * across too; otherwise editing the alt text would drop the filename (and
- * re-serve the image as `application/octet-stream`).
- */
+// A self-copy with REPLACE resets the whole map and system headers, so the current metadata and ContentType are re-sent.
 export async function updateR2ObjectMetadata(
   key: string,
   patch: Record<string, string>,

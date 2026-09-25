@@ -114,8 +114,6 @@ describe("sitemapEntries", () => {
       );
     });
 
-    // The homepage shows the posts' cards, not the About page, so editing the
-    // About page is not a change to the homepage.
     it("does not date the homepage by it", () => {
       expect(withAbout[0].lastModified).toEqual(
         new Date("2026-09-13T00:00:00.000Z"),

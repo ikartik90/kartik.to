@@ -4,7 +4,7 @@ import { fieldValueBox } from "../recipes/shared";
 export const sliderField = defineSlotRecipe({
   className: "slider-field",
   description:
-    "The ruler + thumb + numeric readout of a slider — the control slot of a `field`, drawn inside the shared `frame` rather than bringing a surface of its own. `track` is the focusable `role=\"slider\"` element (full frame height, so the hit target is the whole strip, not the 4px rule); `tick` marks the evenly spaced stops as 1px hairlines on `field.border.*`; `thumb` is the 4×20 pill at the current value; `separator` is the 0.5px rule dividing the ruler from the `output` — the value as an editable numeric input, so the number can be typed as well as dragged. Thumb and readout paint in `currentColor` so the frame's resting → active colour shift carries them, exactly as it carries a leading icon. Like the checkbox, the geometry is drawn at ONE size (Figma 842:7179); `size` scales only the readout's type, so it keeps step with the field's label and hint.",
+    "A slider's track, ticks, thumb and numeric readout, the control of a `field`, in three `size`s.",
   slots: ["track", "tick", "thumb", "separator", "output"],
   base: {
     track: {

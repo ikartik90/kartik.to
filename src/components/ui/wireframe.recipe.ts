@@ -3,7 +3,7 @@ import { defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 export const wireframe = defineRecipe({
   className: "wireframe",
   description:
-    "The wireframe/skeleton scope. Wraps any subtree; the text-bearing primitives inside it read the matching React context and swap their text for a `skeleton` bar of the same line box. `mode` picks the intent: `placeholder` dims the block to 25% for demo layouts that present a shape rather than content (Figma 745:4375 / 745:4080), `loading` keeps it at full strength and shimmers while real content is pending. Interactivity and the aria semantics are set by the component, not here — a non-interactive scope is `inert`, a placeholder is `aria-hidden`, a loading scope is `aria-busy`.",
+    "Wraps content so its text shows as skeleton bars: `mode` is a dimmed placeholder or a loading shimmer, `opacity` the dimming.",
   base: {
     // The same box the scope renders when disabled, so toggling never shifts the layout.
     display: "block",
@@ -43,7 +43,7 @@ export const wireframe = defineRecipe({
 export const skeleton = defineSlotRecipe({
   className: "skeleton",
   description:
-    "A single skeleton bar standing in for a run of text. `root` reproduces the replaced text's line box (the string stays in the DOM under `text`, hidden with `visibility` so it still measures) and paints the bar as an ::after at `1cap` — the font's cap height, matching the Figma bars at every text style without a lookup table. The fill is `currentColor`, so the bar inherits the tone of the text it replaced: a muted `field.label` bar and a default-toned value bar come out two-tone exactly as drawn, in both themes, with no tokens of its own. `lines` stacks several for copy that has no text yet.",
+    "A skeleton bar standing in for a line of text, the same size as the text it replaces.",
   slots: ["root", "text", "lines"],
   base: {
     root: {

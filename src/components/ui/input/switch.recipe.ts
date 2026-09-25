@@ -4,7 +4,7 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const switchField = defineSlotRecipe({
   className: "switch-field",
   description:
-    "The track + thumb of a toggle switch — the control slot of a `field`. Off = neutral, on = brand accent (keyed off `aria-checked` on the <button role=switch>), reusing the field tokens the text input uses. `size` scales the track geometry and thumb travel (sm/lg); the label/hint and the control ∣ text layout come from the `field` recipe. Geometry derives from spacing tokens — track height = thumb + 2·inset, travel = width − 2·inset − thumb — so nothing is arbitrary.",
+    "A toggle switch's track and thumb, the control of a `field`: neutral when off, brand accent when on, in three `size`s.",
   slots: ["control", "thumb"],
   base: {
     control: {

@@ -21,8 +21,7 @@ const post = (id: string, gridIndex: number | null = null): GridCard => ({
   span: 1,
 });
 
-// Typed as the component variant rather than as the union, so a test can
-// override `logger` — a property only half the cards have.
+// The component variant, so a test can set `logger`.
 const comp = (
   id: string,
   gridIndex: number | null = null,
@@ -42,8 +41,7 @@ const comp = (
 const keys = (cards: GridCard[]) => cards.map((c) => c.key);
 
 describe("applyGridDraft", () => {
-  // Identity, on input that is ALREADY in grid order — which is what
-  // `getGridCards` hands over. Newest first, so "ccc" (Jan 3) leads.
+  // Input already in grid order (newest first), so nothing moves.
   it("changes nothing when nothing has been edited", () => {
     const cards = [post("ccc"), post("bb"), post("a")];
     expect(applyGridDraft(cards, emptyGridDraft())).toEqual(cards);
@@ -56,7 +54,6 @@ describe("applyGridDraft", () => {
       pins: { "post:a": 2 },
     });
     expect(keys(out).indexOf("post:a")).toBe(2);
-    // The input is the server's list and must survive for a discard.
     expect(cards[0].gridIndex).toBeNull();
   });
 
@@ -94,8 +91,6 @@ describe("applyGridDraft", () => {
     expect(out[1]).toMatchObject({ kind: "component", pending: true });
   });
 
-  // A pending card has no database row, so anything acting on it must be able
-  // to tell — sending its key to the server as an id would 500.
   it("marks only the unsaved cards as pending", () => {
     const out = applyGridDraft([comp("c1")], {
       ...emptyGridDraft(),
@@ -155,7 +150,6 @@ describe("applyGridDraft", () => {
       spans: { "post:a": 2 },
     });
     expect(out.find((c) => c.key === "post:a")?.span).toBe(2);
-    // The server's copy is what a discard restores, so it must be untouched.
     expect(cards[0].span).toBe(1);
   });
 
@@ -167,8 +161,6 @@ describe("applyGridDraft", () => {
     expect(out.find((c) => c.key === "post:bb")?.span).toBe(1);
   });
 
-  // A card can be widened and moved in the same session, and the two edits are
-  // recorded separately — applying one must not drop the other.
   it("keeps a pin and a span on the same card", () => {
     const out = applyGridDraft([post("a"), post("bb"), post("ccc")], {
       ...emptyGridDraft(),
@@ -198,9 +190,6 @@ describe("applyGridDraft", () => {
 });
 
 describe("applyGridDraft — aspect", () => {
-  // A shape is a property of the CARD, not of its seat, but it is edited in the
-  // same session as the seat and has to be discardable with it — so it buffers
-  // here alongside the placements and only parts ways at the write.
   it("reshapes a card the draft gave an aspect to", () => {
     const cards = [post("a"), post("bb")];
     const out = applyGridDraft(cards, {
@@ -232,9 +221,6 @@ describe("applyGridDraft — aspect", () => {
     expect(card?.aspect).toBe("2/1");
   });
 
-  // The registry hands an unsaved insert its default shape; overriding it
-  // before the row exists has to reach the card on screen, or the picker looks
-  // broken on exactly the card you just added.
   it("overrides the shape a pending insert arrived with", () => {
     const out = applyGridDraft([post("a")], {
       ...emptyGridDraft(),
@@ -274,8 +260,6 @@ describe("isGridDraftDirty", () => {
     expect(isGridDraftDirty(emptyGridDraft())).toBe(false);
   });
 
-  // Widening a card is an edit like any other: an exit that called this draft
-  // clean would throw the change away without saying it had.
   it("is dirty once a card has been widened", () => {
     expect(
       isGridDraftDirty({ ...emptyGridDraft(), spans: { "post:a": 2 } }),
@@ -289,9 +273,6 @@ describe("isGridDraftDirty", () => {
   });
 });
 
-// A card's log panel is shown or hidden from the same rail as its shape, so
-// the flag buffers here with the placements and is thrown away by the same
-// discard. Components only — a post has no log output to show.
 const loggerOf = (cards: ReturnType<typeof applyGridDraft>, key: string) => {
   const card = cards.find((c) => c.key === key);
   return card?.kind === "component" ? card.logger : undefined;
@@ -305,14 +286,9 @@ describe("applyGridDraft — logger", () => {
       loggers: { "component:c1": true },
     });
     expect(loggerOf(out, "component:c1")).toBe(true);
-    // The server's list is the copy a discard restores, so it must not have
-    // been touched.
     expect(cards[0].logger).toBe(false);
   });
 
-  // False is a value, not an absence: hiding the panel on a demo the registry
-  // logs by default is the whole point of the control, and a nullish merge is
-  // what would drop it.
   it("hides the log panel on a card the draft turned it off for", () => {
     const out = applyGridDraft([{ ...comp("c1"), logger: true }], {
       ...emptyGridDraft(),
@@ -372,14 +348,6 @@ describe("applyGridDraft — logger", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The card a publication CARRIES — the link card's picture, words and
-// destination, edited in the same rail and thrown away by the same discard.
-//
-// Not a placement and not an override of a registry default: this blob IS the
-// card, so a link card with nothing in the draft is a blank one rather than one
-// showing whatever the registry says.
-// ---------------------------------------------------------------------------
 describe("applyGridDraft — configuration", () => {
   const linkCard = (id: string): Extract<GridCard, { kind: "component" }> => ({
     ...comp(id),
@@ -397,9 +365,6 @@ describe("applyGridDraft — configuration", () => {
     expect(b.props).toEqual({});
   });
 
-  // The blob is REPLACED, never merged: the panel hands back the whole
-  // configuration on every keystroke, and a merge would make clearing a title
-  // impossible — the absent key would fall through to the stored one forever.
   it("replaces the stored configuration rather than merging into it", () => {
     const stored = linkCard("a");
     stored.props = { content: { title: "Old" }, link: undefined };
@@ -410,9 +375,6 @@ describe("applyGridDraft — configuration", () => {
     expect(out.props).toEqual({ content: { meta: "Playground" } });
   });
 
-  // A link card is placed and then filled in — the row does not exist while the
-  // first half of that is happening, so the edits have to reach the card on
-  // screen the same way a pending insert's shape does.
   it("configures a card that has not been published yet", () => {
     const [out] = applyGridDraft([], {
       ...emptyGridDraft(),
@@ -456,10 +418,6 @@ describe("applyGridDraft — configuration", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A post's card — the picture per theme and the ground the caption stands on,
-// which is the one thing about a post's tile the post itself does not decide.
-// ---------------------------------------------------------------------------
 describe("applyGridDraft — a post's card", () => {
   const dark = { type: "media" as const, kind: "image" as const, src: "/d.png" };
   const cardOf = (card: GridCard | undefined) =>
@@ -477,9 +435,6 @@ describe("applyGridDraft — a post's card", () => {
     expect(cardOf(out.find((c) => c.key === "post:bb"))).toEqual({});
   });
 
-  // The whole blob, replacing what is stored — the rule `props` follows, for
-  // the same reason: the rail hands back the complete card, so a section it
-  // removed arrives as an absent key and must land as one.
   it("replaces the stored card rather than merging into it", () => {
     const stored = post("a");
     if (stored.kind === "post") stored.card = { media: { dark }, tone: "dark" };
@@ -490,8 +445,6 @@ describe("applyGridDraft — a post's card", () => {
     expect(cardOf(out)).toEqual({ scrim: false });
   });
 
-  // A component's card is its `props`; a key here naming one is a stray, and
-  // is ignored rather than spread onto a card with no such property.
   it("ignores a key naming a component", () => {
     const [out] = applyGridDraft([comp("a")], {
       ...emptyGridDraft(),
@@ -510,10 +463,6 @@ describe("applyGridDraft — a post's card", () => {
   });
 });
 
-// The palette adds a widget with no seat in mind — it was chosen from a list,
-// not dropped into a hole — so the insert carries a null index and the card
-// takes whatever chronology gives it. Which is the front: an insert is dated
-// later than anything on the grid, so "unpinned" reads as "newest" here.
 describe("applyGridDraft — a widget added with no seat", () => {
   const post = (id: string, gridIndex: number | null = null): GridCard => ({
     kind: "post",
@@ -548,8 +497,6 @@ describe("applyGridDraft — a widget added with no seat", () => {
     expect(out[0].gridIndex).toBeNull();
   });
 
-  // The seat stays available: dragging the card after it was added pins it,
-  // exactly as it would a card that already had a row.
   it("still takes a pin made against it afterwards", () => {
     const out = applyGridDraft([post("a"), post("bb")], {
       ...emptyGridDraft(),
