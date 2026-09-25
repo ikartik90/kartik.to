@@ -18,7 +18,7 @@ describe("ButtonLink", () => {
   it("wears the shared button look, rounded into a pill", () => {
     render(<ButtonLink href="/about">About me</ButtonLink>);
     const link = screen.getByRole("link", { name: "About me" });
-    for (const name of buttonLinkClass.split(" ")) {
+    for (const name of buttonLinkClass().split(" ")) {
       expect(link.classList.contains(name)).toBe(true);
     }
   });
@@ -41,5 +41,19 @@ describe("ButtonLink", () => {
     const link = screen.getByRole("link", { name: "Book a call" });
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  // Neutral unless told otherwise; the accent is a look of its own.
+  it("wears the accent look when asked to", () => {
+    render(
+      <ButtonLink href="/about" color="accent">
+        About me
+      </ButtonLink>,
+    );
+    const link = screen.getByRole("link", { name: "About me" });
+    expect(buttonLinkClass("accent")).not.toBe(buttonLinkClass());
+    for (const name of buttonLinkClass("accent").split(" ")) {
+      expect(link.classList.contains(name)).toBe(true);
+    }
   });
 });

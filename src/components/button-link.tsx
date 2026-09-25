@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { css, cx } from "../../styled-system/css";
 import { action } from "../../styled-system/recipes";
 import { Link } from "./ui/link";
+import type { ActionEmphasis } from "./ui/action";
+import type { ButtonLinkColor } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // A button that goes somewhere — the `button_link` block, which is how the
@@ -16,15 +18,19 @@ import { Link } from "./ui/link";
 
 const pillStyle = css({ borderRadius: "full" });
 
+/** The `action` emphasis each colour of button is drawn in. */
+const emphasisFor = {
+  neutral: "secondary",
+  accent: "accent",
+} as const satisfies Record<ButtonLinkColor, ActionEmphasis>;
+
 /**
  * The button's classes, for the one place that draws it as something other
  * than a link: the article editor, whose button is a field to type its label
  * into and must not navigate when it is pressed.
  */
-export const buttonLinkClass = cx(
-  action({ variant: "text", emphasis: "secondary" }),
-  pillStyle,
-);
+export const buttonLinkClass = (color: ButtonLinkColor = "neutral") =>
+  cx(action({ variant: "text", emphasis: emphasisFor[color] }), pillStyle);
 
 /**
  * A button on a line of its own, centred in the reading column — the block's
@@ -56,11 +62,14 @@ export const buttonLinkStickyRowStyle = css({
 export function ButtonLink({
   href,
   newTab = false,
+  color = "neutral",
   children,
 }: {
   href: string;
   /** Open in a new tab; `Link` adds the `rel` that makes that safe. */
   newTab?: boolean;
+  /** The neutral chip, or the brand accent. */
+  color?: ButtonLinkColor;
   /**
    * A bare string, not `Link.Text`: this renders from Server Components, and
    * the compound sub-parts do not survive the client boundary.
@@ -70,6 +79,7 @@ export function ButtonLink({
   return (
     <Link
       href={href}
+      emphasis={emphasisFor[color]}
       className={pillStyle}
       target={newTab ? "_blank" : undefined}
     >

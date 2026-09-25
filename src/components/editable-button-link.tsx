@@ -19,7 +19,11 @@ import {
   buttonLinkStickyRowStyle,
 } from "@/components/button-link";
 import { LinkActions, LinkEditRow } from "@/components/link-toolbar";
-import { ButtonLinkHrefSchema, type ButtonLinkNode } from "@/domain/nodes";
+import {
+  ButtonLinkHrefSchema,
+  type ButtonLinkColor,
+  type ButtonLinkNode,
+} from "@/domain/nodes";
 import { normalizeLinkHref } from "@/utils/link-href";
 
 // ---------------------------------------------------------------------------
@@ -47,22 +51,19 @@ const toolbarClass = cx(toolbar(), selectionPopover());
 
 const anchorStyle = css({ display: "inline-flex" });
 
-const labelStyle = cx(
-  buttonLinkClass,
-  css({
-    // A field, not a control: the caret, not the hand, and no press-in.
-    cursor: "text",
-    _active: { transform: "none" },
-    whiteSpace: "pre",
-    focusVisibleRing: "none",
-    outline: "none",
-    "&[data-empty]::before": {
-      content: "attr(data-placeholder)",
-      color: "text.body/40",
-      pointerEvents: "none",
-    },
-  }),
-);
+const labelEditStyle = css({
+  // A field, not a control: the caret, not the hand, and no press-in.
+  cursor: "text",
+  _active: { transform: "none" },
+  whiteSpace: "pre",
+  focusVisibleRing: "none",
+  outline: "none",
+  "&[data-empty]::before": {
+    content: "attr(data-placeholder)",
+    color: "text.body/40",
+    pointerEvents: "none",
+  },
+});
 
 export interface EditableButtonLinkProps {
   block: ButtonLinkNode;
@@ -91,6 +92,15 @@ function withFlag(
 ): ButtonLinkNode {
   const { [flag]: _, ...rest } = block;
   return on ? { ...rest, [flag]: true } : rest;
+}
+
+/** `block` in `color`. Neutral is no field, as an off flag is. */
+function withColor(
+  block: ButtonLinkNode,
+  color: ButtonLinkColor,
+): ButtonLinkNode {
+  const { color: _, ...rest } = block;
+  return color === "neutral" ? rest : { ...rest, color };
 }
 
 /** Where the caret sits in `el`, in characters, or null if it is not there. */
@@ -296,7 +306,7 @@ export function EditableButtonLink({
           data-button-label=""
           data-placeholder="Button text"
           data-empty={block.text === "" ? "" : undefined}
-          className={labelStyle}
+          className={cx(buttonLinkClass(block.color), labelEditStyle)}
           style={{ anchorName } as CSSProperties}
           onInput={(event) =>
             onChange({ ...block, text: event.currentTarget.textContent ?? "" })
@@ -339,6 +349,8 @@ export function EditableButtonLink({
                 onToggleSticky={() =>
                   onChange(withFlag(block, "sticky", !block.sticky))
                 }
+                color={block.color}
+                onColorChange={(color) => onChange(withColor(block, color))}
                 onEdit={() => {
                   cancelGrace();
                   setEditing(true);
