@@ -1042,9 +1042,15 @@ export const ButtonLinkNodeSchema = z.object({
    * scrolls up to meet it, then at the head until the article runs out.
    */
   sticky: z.boolean().optional(),
+  /**
+   * The button's fill and label colour: the neutral chip, or the brand
+   * accent. Absent means neutral.
+   */
+  color: z.enum(["neutral", "accent"]).optional(),
 });
 
 export type ButtonLinkNode = z.infer<typeof ButtonLinkNodeSchema>;
+export type ButtonLinkColor = NonNullable<ButtonLinkNode["color"]>;
 
 // ---------------------------------------------------------------------------
 // Furniture — blocks that render a fixed piece of the site rather than content

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { inlineEditRow, menuIcon } from "../../styled-system/recipes";
+import { css } from "../../styled-system/css";
+import {
+  inlineEditRow,
+  menuIcon,
+  toolbarSwatch,
+} from "../../styled-system/recipes";
 import { OptionList } from "@/components/ui/input/option-list";
 import LinkIcon from "@/assets/icons/link.svg";
 import EditIcon from "@/assets/icons/edit.svg";
@@ -9,6 +14,7 @@ import GotoIcon from "@/assets/icons/goto.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 import NewTabIcon from "@/assets/icons/new-tab.svg";
 import StickyIcon from "@/assets/icons/sticky.svg";
+import type { ButtonLinkColor } from "@/domain/nodes";
 
 // ---------------------------------------------------------------------------
 // The link toolbar's two faces — what a link can have done to it, and the row
@@ -25,6 +31,15 @@ const iconStyle = menuIcon();
 // cell toolbar the same way.
 const editRow = inlineEditRow();
 
+// The swatches' group is only a name for the pair; the tiles are the toolbar's
+// own items, spaced by its gap.
+const swatchGroupStyle = css({ display: "contents" });
+
+const COLORS: { value: ButtonLinkColor; label: string }[] = [
+  { value: "neutral", label: "Neutral" },
+  { value: "accent", label: "Accent" },
+];
+
 export interface LinkActionsProps {
   onEdit: () => void;
   onOpen: () => void;
@@ -37,9 +52,16 @@ export interface LinkActionsProps {
   sticky?: boolean;
   /** Offers the sticky toggle; a host without it shows no toggle. */
   onToggleSticky?: () => void;
+  /** The button's colour. Only a button has one (Figma 425:940/425:905). */
+  color?: ButtonLinkColor;
+  /** Offers the colour swatches; a host without it shows none. */
+  onColorChange?: (color: ButtonLinkColor) => void;
 }
 
-/** Edit ∣ Open ∣ Remove — what can be done to a link that exists. */
+/**
+ * Edit ∣ Open ∣ Remove — what can be done to a link that exists — and, for a
+ * button, Sticky ∣ its colour.
+ */
 export function LinkActions({
   onEdit,
   onOpen,
@@ -48,6 +70,8 @@ export function LinkActions({
   canOpen = true,
   sticky = false,
   onToggleSticky,
+  color = "neutral",
+  onColorChange,
 }: LinkActionsProps) {
   return (
     <OptionList direction="inline">
@@ -75,6 +99,28 @@ export function LinkActions({
             >
               <StickyIcon aria-hidden />
             </OptionList.Option>
+          </>
+        )}
+        {onColorChange && (
+          <>
+            <OptionList.Divider />
+            <div
+              role="radiogroup"
+              aria-label="Button colour"
+              className={swatchGroupStyle}
+            >
+              {COLORS.map(({ value, label }) => (
+                <OptionList.Option
+                  key={value}
+                  role="radio"
+                  aria-label={label}
+                  aria-checked={color === value}
+                  onClick={() => onColorChange(value)}
+                >
+                  <span className={toolbarSwatch({ tone: value })} />
+                </OptionList.Option>
+              ))}
+            </div>
           </>
         )}
       </OptionList.Toolbar>

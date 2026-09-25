@@ -709,6 +709,27 @@ export default defineConfig({
                   },
                 },
               },
+              // The secondary chip in the brand pigment — a button link set to
+              // its accent (Figma 425:940/425:905). Same strengths as the
+              // neutral chip in light UI, where the pink needs no more; in dark
+              // UI the orange is already bright, so it stays at the light
+              // strengths rather than the neutral's 25/50.
+              accent: {
+                default: {
+                  value: {
+                    base: "color-mix(in srgb, var(--colors-brand-pink) 15%, transparent)",
+                    _dark:
+                      "color-mix(in srgb, var(--colors-brand-orange) 15%, transparent)",
+                  },
+                },
+                hover: {
+                  value: {
+                    base: "color-mix(in srgb, var(--colors-brand-pink) 25%, transparent)",
+                    _dark:
+                      "color-mix(in srgb, var(--colors-brand-orange) 25%, transparent)",
+                  },
+                },
+              },
             },
             // The chip behind a list marker's ink. Matches `surface` today but
             // kept separate: a dialog-surface retune should not resize the
@@ -1578,7 +1599,7 @@ export default defineConfig({
         action: defineRecipe({
           className: "action",
           description:
-            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature. `size` is the third axis, and applies to the `text` chip: `md` is the 40px/`bodyLarge` default, `sm` a 32px/`bodySmall` chip on an 8px inline inset (the option row's pitch). An icon chip has ONE inset — a smaller icon is a smaller GLYPH in the same chip, which is the icon's business and not the chip's; see `SocialIconLink`.",
+            "The one look shared by the two actionable primitives — Button (a <button> that ACTS) and Link (an <a>/next-link that NAVIGATES) — so their skin lives in the design system once and both consume it. `text` = the standalone CTA (filled secondary chip, 8px radius, fixed 40px height, hugs content with an 80px floor); `icon` = the compact 28px toolbar chip (`color: inherit` so the surface owns the glyph hue — the calendar chevrons and their onBrand retint); `link` = an inline underlined text link. Orthogonal to that shape axis, `emphasis` sets the fill prominence: `secondary` (the filled chip drawn above), `accent` (that chip in the brand pigment, label included — a button link's accent) or `tertiary` (no fill at rest, the neutral `field.bg.hover` on hover — the same wash icon buttons use). Icon buttons are tertiary by nature. `size` is the third axis, and applies to the `text` chip: `md` is the 40px/`bodyLarge` default, `sm` a 32px/`bodySmall` chip on an 8px inline inset (the option row's pitch). An icon chip has ONE inset — a smaller icon is a smaller GLYPH in the same chip, which is the icon's business and not the chip's; see `SocialIconLink`.",
           base: {
             cursor: "pointer",
             border: "none",
@@ -1693,6 +1714,7 @@ export default defineConfig({
               secondary: {},
               tertiary: {},
               glass: {},
+              accent: {},
             },
             // The chip's scale — the third axis, orthogonal to both of the
             // above. Empty for the same reason `emphasis` is: `md` is what
@@ -1706,6 +1728,18 @@ export default defineConfig({
             },
           },
           compoundVariants: [
+            {
+              variant: "text",
+              emphasis: "accent",
+              // The secondary chip in the brand's colours, fill and label
+              // alike — a button link set to its accent. Same override mechanic
+              // as the tertiary compound below.
+              css: {
+                backgroundColor: "bg.button.accent.default",
+                color: "field.text.active",
+                _hover: { backgroundColor: "bg.button.accent.hover" },
+              },
+            },
             {
               variant: "text",
               emphasis: "tertiary",
@@ -3533,6 +3567,38 @@ export default defineConfig({
           defaultVariants: { size: "md", tone: "surface", fit: "hug" },
           // Runtime variant values — force every branch to be emitted.
           staticCss: [{ size: ["*"], tone: ["*"], fit: ["*"] }],
+        }),
+
+        toolbarSwatch: defineRecipe({
+          className: "toolbar-swatch",
+          description:
+            "A colour choice in a toolbar, drawn as the colour itself: a 16px tile inside an option chip (Figma 425:940/425:905, the button link's neutral ∣ accent). Its 1px edge is the toolbar's own surface, so the tile reads as set into the rail; the chosen one wears a 1.25px ring in its own colour outside that edge. The chip marks the choice with `aria-checked` (a radio), not `aria-pressed`, so the option list's brand chip stays off — the ring is the selection.",
+          base: {
+            display: "block",
+            width: "token(spacing.xl)",
+            height: "token(spacing.xl)",
+            // Inset to the 20px box a glyph fills, so its chip is the
+            // toolbar's 28px like every icon beside it.
+            margin: "xs",
+            borderRadius: "xs",
+            borderWidth: "token(spacing.xxs)",
+            borderStyle: "solid",
+            borderColor: "bg.surface",
+            // The fill is `currentColor`, so the ring below can be too.
+            backgroundColor: "currentColor",
+            transition: "box-shadow 150ms ease",
+            "[aria-checked='true'] > &": {
+              boxShadow: "0 0 0 1.25px currentColor",
+            },
+          },
+          variants: {
+            tone: {
+              neutral: { color: "field.text.default" },
+              accent: { color: "field.text.active" },
+            },
+          },
+          defaultVariants: { tone: "neutral" },
+          staticCss: [{ tone: ["*"] }],
         }),
 
         selectionPopover: defineRecipe({

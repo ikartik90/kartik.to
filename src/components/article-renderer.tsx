@@ -361,7 +361,11 @@ function renderBlockNode(
             node.sticky && buttonLinkStickyRowStyle,
           )}
         >
-          <ButtonLink href={node.href} newTab={node.newTab}>
+          <ButtonLink
+            href={node.href}
+            newTab={node.newTab}
+            color={node.color}
+          >
             {label}
           </ButtonLink>
         </div>

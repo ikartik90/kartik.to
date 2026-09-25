@@ -957,6 +957,19 @@ describe("ButtonLinkNodeSchema", () => {
     ).toBe(false);
   });
 
+  it("may wear the accent colour, and only a colour the toolbar offers", () => {
+    const node = {
+      type: "button_link",
+      text: "Go",
+      href: "/",
+      color: "accent",
+    };
+    expect(ButtonLinkNodeSchema.parse(node)).toEqual(node);
+    expect(
+      ButtonLinkNodeSchema.safeParse({ ...node, color: "pink" }).success,
+    ).toBe(false);
+  });
+
   it("needs both fields to be present", () => {
     expect(
       BlockNodeSchema.safeParse({ type: "button_link", text: "Go" }).success,

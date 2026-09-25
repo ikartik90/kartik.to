@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ButtonLinkNode } from "@/domain/nodes";
+import { buttonLinkClass } from "../button-link";
 import { EditableButtonLink } from "../editable-button-link";
 
 function setup(block: Partial<ButtonLinkNode> = {}) {
@@ -219,6 +220,52 @@ describe("EditableButtonLink", () => {
           text: "Book a call",
           href: "/about",
         });
+      });
+    });
+
+    describe("its colour", () => {
+      const swatch = (name: string) => screen.getByRole("radio", { name });
+
+      it("offers neutral and accent, neutral when never chosen", () => {
+        setup();
+        hover(label());
+        expect(
+          screen.getByRole("radiogroup", { name: "Button colour" }),
+        ).toBeTruthy();
+        expect(swatch("Neutral").getAttribute("aria-checked")).toBe("true");
+        expect(swatch("Accent").getAttribute("aria-checked")).toBe("false");
+      });
+
+      it("turns the button accent", () => {
+        const { onChange } = setup();
+        hover(label());
+        fireEvent.click(swatch("Accent"));
+        expect(onChange).toHaveBeenCalledWith({
+          type: "button_link",
+          text: "Book a call",
+          href: "/about",
+          color: "accent",
+        });
+      });
+
+      it("turns it back to neutral, leaving no colour behind", () => {
+        const { onChange } = setup({ color: "accent" });
+        hover(label());
+        expect(swatch("Accent").getAttribute("aria-checked")).toBe("true");
+        fireEvent.click(swatch("Neutral"));
+        expect(onChange).toHaveBeenCalledWith({
+          type: "button_link",
+          text: "Book a call",
+          href: "/about",
+        });
+      });
+
+      // The canvas is the page: the button is drawn in its chosen colour.
+      it("draws the label in the chosen colour", () => {
+        setup({ color: "accent" });
+        for (const name of buttonLinkClass("accent").split(" ")) {
+          expect(label().classList.contains(name)).toBe(true);
+        }
       });
     });
 
