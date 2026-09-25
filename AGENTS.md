@@ -33,16 +33,16 @@ Project Root
 │ │ └── `edit/`: The hidden admin surface. Every page opens with `isAdmin()` + `notFound()`
 │ ├── `assets/`: Global static assets (Images, Fonts, SVGs)
 │ ├── `components/`: Global Shared Library (Flat structure; grouped by rationale only) with `__tests__/`
-│ │ └── `ui/`: Atomic Panda CSS Recipes & Primitives with `__tests__/`
+│ │ └── `ui/`: Primitives with `__tests__/`; `ui/recipes/` holds every shared recipe and the index that registers all recipes
 │ ├── `domain/`: The Core: Zod schemas, Prisma models, and types with `__tests__/`
 │ ├── `hooks/`: Shared React hooks with `__tests__/`
 │ ├── `lib/`: Server-side singletons (e.g., `prisma.ts`, `neon.ts`, `storage/r2.ts`)
 │ ├── `store/`: Zustand global state management with `__tests__/`
 │ ├── `utils/`: Pure utility functions with `__tests__/`
-│ ├── `data/`: Static content, constants, and theme tokens
+│ ├── `data/`: Static content, constants, and theme tokens (`theme/`: tokens, semantic tokens, text styles, keyframes)
 │ └── `proxy.ts`: Optimistic pre-filter for `/admin/*`. Reads the session cookie and `404`s (not `401`) anyone who is not the admin. It is NOT the security boundary — see Stealth Auth Strategy.
 ├── `prisma/`: Prisma schema and migrations
-├── `panda.config.ts`: Panda CSS design system configuration
+├── `panda.config.ts`: Conditions, breakpoints and global CSS. Imports the theme from `src/data/theme/` and recipes from `src/components/ui/recipes/`; defines no recipes
 └── `AGENTS.md`: This file (The architectural contract)
 
 ---
@@ -96,8 +96,16 @@ Project Root
 
 - **Token First**: All styling must give preference to theme tokens via the `css()` function or `stack`, `flex`, and `box` patterns.
 - **Zero Arbitrary Values**: Use design tokens from `DESIGN.md`. Avoid `css({ color: '#123456' })`. Prefer `css({ color: 'primary.500' })`.
-- **Recipes (CVA)**: Use Panda Recipes (`cva`) for complex component variants to maintain design system consistency.
-- **Recipes & Patterns**: For complex, reusable styles (like Buttons with variants), the agent must check `panda.config.ts` for existing Recipes. Do not recreate variant logic locally in a component.
+- **One definition per look.** A style block that repeats most of another block's declarations is a **near-copy**. Write the difference as a variant of the existing block, the way `action` carries `emphasis` and `size`.
+- **Before writing any style block**, search the recipes and other components' `css()` calls for its two or three most distinctive declarations. The search is done when you can name the closest existing block, or have confirmed there isn't one. Then:
+  - **It's a recipe:** add a variant (or compound variant) holding only what differs.
+  - **It's a `css()` block in another component:** it now has two users, so turn it into a recipe in `src/components/ui/recipes/`, then add your variant.
+  - **Nothing close:** `css()` in your component, or a recipe beside it if it needs variants.
+- **Where recipes live** follows who uses them, as with components. A recipe is a `defineRecipe` / `defineSlotRecipe` in its own file:
+  - **One component:** `<component>.recipe.ts` beside it.
+  - **Two or more:** `src/components/ui/recipes/<name>.ts`, moved in the same change that adds the second user.
+  - A shared recipe is named for the part it styles (`toolbar`, `menuIcon`). A bundle of properties is a `css()` call or a pattern.
+  - Every recipe is registered in `src/components/ui/recipes/index.ts`; `panda.config.ts` imports that index and defines none.
 
 ## Node.js Runtime & Prisma
 
@@ -158,7 +166,6 @@ Project Root
 - **DO** verify current Next.js documentation in `node_modules/next/dist/docs/` before implementing new patterns.
 - **DO** promote local components to the global library upon second use.
 - **DO** use Server Actions for all content mutations.
-- **DO** prefer writing global styles, `cva` recipes, and style definitions in `panda.config.ts` over inline `css` patches.
 
 ## Don'ts
 
