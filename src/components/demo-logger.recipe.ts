@@ -1,18 +1,5 @@
 import { defineRecipe } from "@pandacss/dev";
 
-export const demoLoggerSection = defineRecipe({
-  className: "demo-logger-section",
-  description: "Footer region for demo logger with inset padding.",
-  base: {
-    width: "token(spacing.full)",
-    flexShrink: 0,
-    padding: "md",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-  },
-});
-
 export const demoLoggerPanel = defineRecipe({
   className: "demo-logger-panel",
   description:

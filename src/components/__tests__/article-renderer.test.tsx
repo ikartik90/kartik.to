@@ -927,12 +927,12 @@ describe("ArticleRenderer", () => {
       const cards = container.querySelectorAll("aside");
       expect(cards.length).toBe(2);
       // Scope to this render's container — the file renders without cleanup.
-      expect(cards[0].querySelector(".sidenote-card-body")?.textContent).toBe(
-        "First note",
-      );
-      expect(cards[1].querySelector(".sidenote-card-body")?.textContent).toBe(
-        "Second note",
-      );
+      expect(
+        within(cards[0] as HTMLElement).getByText("First note"),
+      ).toBeDefined();
+      expect(
+        within(cards[1] as HTMLElement).getByText("Second note"),
+      ).toBeDefined();
       // Card is anchored to the annotation via --sn-anchor.
       expect(
         (cards[0] as HTMLElement).style.getPropertyValue("--sn-anchor"),

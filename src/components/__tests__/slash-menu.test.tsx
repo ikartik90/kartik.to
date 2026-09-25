@@ -104,12 +104,12 @@ describe("SlashMenu", () => {
 
   it("positions via CSS anchor() — no inline top/left from JavaScript", () => {
     const listbox = renderMenu().getByRole("listbox", { name: "Insert block" });
-    // The positioned element is the popover shell; the listbox is nested inside.
-    const menu = listbox.closest(".slash-menu-popover") as HTMLElement;
-
-    expect(menu.style.top).toBe("");
-    expect(menu.style.left).toBe("");
-    expect(menu.className).toContain("slash-menu-popover");
+    // The positioned element is the popover shell the listbox sits in; nothing
+    // on the way up to the document may carry a top/left set from JavaScript.
+    for (let el: HTMLElement | null = listbox; el; el = el.parentElement) {
+      expect(el.style.top).toBe("");
+      expect(el.style.left).toBe("");
+    }
   });
 
   // -------------------------------------------------------------------------

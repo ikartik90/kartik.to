@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { recipes, slotRecipes } from "..";
+
 // ---------------------------------------------------------------------------
 // Where a recipe lives is decided by who imports it, the same way the
 // Two-Page rule decides it for components (AGENTS.md, "Where recipes live"):
@@ -17,6 +19,31 @@ import path from "node:path";
 // ---------------------------------------------------------------------------
 
 const SHARED_DIR = "src/components/ui/recipes";
+
+// A recipe beside ONE component earns its file by having variants; without
+// them it is a `css()` block in the component (AGENTS.md, "Nothing close").
+// These seven are not, yet, because each shares an element with another
+// recipe's class or takes its caller's `className`: a recipe sits in Panda's
+// `recipes` layer and `css()` in `utilities`, so converting one flips which
+// rule wins on that element. Each converts when its component is next worked
+// on — with the tie rewritten and the screen checked — and leaves this list.
+const VARIANTLESS_EXCEPTIONS = [
+  "checkboxField",
+  "colorField",
+  "colorPicker",
+  "imageField",
+  "mediaTransport",
+  "notice",
+  "skeleton",
+];
+
+const registered: Record<string, { variants?: object }> = {
+  ...recipes,
+  ...slotRecipes,
+};
+
+const hasVariants = (name: string) =>
+  Object.keys(registered[name]?.variants ?? {}).length > 0;
 
 const read = (file: string) => readFileSync(file, "utf8");
 
@@ -98,6 +125,25 @@ describe("recipe placement", () => {
       );
 
     expect(misplaced).toEqual([]);
+  });
+
+  it("gives every recipe beside a component variants", () => {
+    const plain = [...defined]
+      .filter(([, [file]]) => file.endsWith(".recipe.ts"))
+      .map(([name]) => name)
+      .filter((name) => !hasVariants(name))
+      .filter((name) => !VARIANTLESS_EXCEPTIONS.includes(name));
+
+    expect(plain).toEqual([]);
+  });
+
+  it("lists only exceptions that are still variant-less recipes beside a component", () => {
+    const stale = VARIANTLESS_EXCEPTIONS.filter((name) => {
+      const [file] = defined.get(name) ?? [];
+      return !file?.endsWith(".recipe.ts") || hasVariants(name);
+    });
+
+    expect(stale).toEqual([]);
   });
 
   it("has a component using every recipe", () => {

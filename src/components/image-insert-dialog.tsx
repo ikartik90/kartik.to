@@ -8,17 +8,10 @@ import {
   dialogHeader,
   dialogTitle,
   dialogFooter,
-  dialogFooterGroup,
   uploadBody,
-  uploadBodySlot,
   libraryBody,
   mediaLibrarySidebar,
-  mediaPreview,
   mediaPreviewPane,
-  mediaMetadataRow,
-  mediaAltRow,
-  mediaDeleteRow,
-  mediaThumbnail,
   menuIcon,
 } from "../../styled-system/recipes";
 import { Dialog } from "@/components/ui/dialog";
@@ -248,6 +241,102 @@ export type ImageInsertDialogProps = ImageInsertDialogBaseProps &
       }
   );
 
+// Left-aligned button cluster in dialog footer.
+const dialogFooterGroupStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+});
+
+// Flex-grow region that centers the upload block in the dialog content area
+// (Figma y=156 in 480px shell).
+const uploadBodySlotStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: "1 1 0%",
+  width: "100%",
+  minHeight: 0,
+});
+
+// Large image preview in insert-image library view. HEIGHT is the only fixed
+// dimension (280px) — the width hugs the image's own aspect ratio and stretches
+// at most to the pane's content box (`maxWidth: 100%` resolves against the flex
+// container's content box, so the pane's padding is excluded). Fixed rather
+// than max height so the metadata rows below hold their position as you switch
+// images; `object-fit: contain` letterboxes anything the width clamp squeezes.
+// The library holds clips as well as pictures, so the inner rule names both
+// elements — a <video> is a replaced element with the same box model, and the
+// rule is about the BOX, not about what fills it.
+const mediaPreviewStyle = css({
+  height: "token(sizes.imagePreviewMax)",
+  width: "auto",
+  maxWidth: "token(spacing.full)",
+  flexShrink: 0,
+  margin: "none",
+  "& :is(img, video)": {
+    height: "100%",
+    width: "auto",
+    maxWidth: "token(spacing.full)",
+    objectFit: "contain",
+    display: "block",
+    borderRadius: "sm",
+    outline: "[none]",
+  },
+});
+
+// Filename and file-size row below preview.
+const mediaMetadataRowStyle = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "xl",
+  width: "100%",
+  maxWidth: "token(sizes.imagePreviewMax)",
+  minWidth: 0,
+  textStyle: "caption",
+});
+
+// Alt-text field row below metadata.
+const mediaAltRowStyle = css({
+  width: "100%",
+  maxWidth: "token(sizes.imagePreviewMax)",
+  minWidth: 0,
+  alignSelf: "center",
+});
+
+// Delete action row below alt text in media preview.
+const mediaDeleteRowStyle = css({
+  display: "flex",
+  justifyContent: "center",
+  width: "100%",
+  maxWidth: "token(sizes.imagePreviewMax)",
+  minWidth: 0,
+  alignSelf: "center",
+});
+
+// Small thumbnail in image library sidebar. Names <video> alongside <img> — a
+// clip's row shows a live thumbnail of itself, filling the same square.
+const mediaThumbnailStyle = css({
+  position: "relative",
+  flexShrink: 0,
+  width: "token(spacing.xxl)",
+  height: "token(spacing.xxl)",
+  borderRadius: "xs",
+  borderWidth: "token(spacing.3xs)",
+  borderStyle: "solid",
+  borderColor: "border.divider",
+  overflow: "hidden",
+  "& :is(img, video)": {
+    position: "absolute",
+    inset: "0",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+});
+
 export function ImageInsertDialog(props: ImageInsertDialogProps) {
   const {
     open,
@@ -415,7 +504,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     label={asset.filename}
                     disabled={isBusy}
                   >
-                    <span className={mediaThumbnail()}>
+                    <span className={mediaThumbnailStyle}>
                       {/* The row's own `label` is the accessible name, so the
                           thumbnail is decorative either way. */}
                       {isDocument ? (
@@ -450,7 +539,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     {selectedCount} of {maxSelection} selected
                   </p>
                 )}
-                <figure className={mediaPreview()}>
+                <figure className={mediaPreviewStyle}>
                   {/* Controls here and not on the thumbnail: this pane is
                       where you check what you are about to insert, and for a
                       clip that means being able to scrub it. */}
@@ -467,7 +556,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     />
                   )}
                 </figure>
-                <div className={mediaMetadataRow()}>
+                <div className={mediaMetadataRowStyle}>
                   {/* Click the name to rename it — display only; the object key
                       (and any URL already published) is untouched. */}
                   <input
@@ -488,7 +577,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     description to stand in for — alt text on one would be a
                     field with no reader. */}
                 {!isDocument && (
-                  <label className={mediaAltRow()}>
+                  <label className={mediaAltRowStyle}>
                     <span className={css({ srOnly: true })}>Alt text</span>
                     <textarea
                       ref={altFieldRef}
@@ -501,7 +590,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
                     />
                   </label>
                 )}
-                <div className={mediaDeleteRow()}>
+                <div className={mediaDeleteRowStyle}>
                   <Button
                     type="button"
                     variant="icon"
@@ -518,7 +607,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
           </div>
         </div>
       ) : (
-        <div className={uploadBodySlot()}>
+        <div className={uploadBodySlotStyle}>
           <div
             className={uploadBody({ dragOver: isDragOver })}
             onDragOver={(e) => {
@@ -606,7 +695,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
       )}
 
       <footer className={dialogFooter()}>
-        <div className={dialogFooterGroup()}>
+        <div className={dialogFooterGroupStyle}>
           <Button
             type="button"
             size="sm"

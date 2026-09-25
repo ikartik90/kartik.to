@@ -170,14 +170,3 @@ export const demoFrameDemoArea = defineRecipe({
     { aspectRatio: ["*"], logger: ["*"] },
   ],
 });
-
-export const demoFrameDemoMeasure = defineRecipe({
-  className: "demo-frame__demo-measure",
-  description:
-    "Intrinsic-size wrapper used to measure demo content without flex stretch.",
-  base: {
-    width: "fit-content",
-    maxWidth: "token(spacing.full)",
-    flexShrink: 0,
-  },
-});

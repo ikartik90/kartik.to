@@ -2,12 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
-import {
-  sidenoteCard,
-  sidenoteCardContent,
-  sidenoteCardMarker,
-  sidenoteCardBody,
-} from "../../styled-system/recipes";
+import { sidenoteCard } from "../../styled-system/recipes";
 import type { SidenoteEntry } from "@/utils/sidenotes";
 
 // ---------------------------------------------------------------------------
@@ -27,9 +22,44 @@ const cardClass = {
   side: sidenoteCard({ placement: "side" }),
   stacked: sidenoteCard({ placement: "stacked" }),
 } as const;
-const contentClass = sidenoteCardContent();
-const markerClass = sidenoteCardMarker();
-const bodyClass = sidenoteCardBody();
+// Text row of a margin-note card — the ordinal marker followed by the note
+// body.
+const contentClass = css({
+  display: "flex",
+  gap: "xs",
+  flex: "1 0 0",
+  minWidth: 0,
+  textStyle: "sidenote",
+  color: "text.default",
+});
+
+// Leading ordinal in a margin-note card (matches the annotation's superscript),
+// painted in the brand gradient.
+const markerClass = css({
+  fontWeight: "medium",
+  background: "bg.brandedEmphasis",
+  backgroundClip: "text",
+  color: "transparent",
+  WebkitTextFillColor: "transparent",
+  userSelect: "none",
+});
+
+// Editable/read note body inside a margin-note card. Paragraphs are block
+// children separated by 4px (Shift+Enter in the editor). Shows a placeholder
+// while empty and unfocused.
+const bodyClass = css({
+  // inline-block + a min width gives an EMPTY contentEditable a line
+  // box, so the caret is placeable on click.
+  display: "inline-block",
+  minWidth: "token(spacing.md)",
+  caretColor: "text.default",
+  focusVisibleRing: "none",
+  "& > * + *": { marginTop: "sm" },
+  "&[data-placeholder]:empty::after": {
+    content: "attr(data-placeholder)",
+    color: "text.default/40",
+  },
+});
 
 // "Esc to exit" hint below the note body — mirrors the link-input hint in the
 // selection toolbar (an Esc key-cap followed by a muted label).
