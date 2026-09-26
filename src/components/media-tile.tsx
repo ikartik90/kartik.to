@@ -28,6 +28,7 @@ export interface MediaTileProps {
   fallbackLabel: string;
   autoPlay?: boolean;
   onOpen: () => void;
+  transportCorner?: "start" | "end";
   children?: ReactNode;
   surfaceProps?: HTMLAttributes<HTMLDivElement> & {
     [state: `data-${string}`]: unknown;
@@ -40,6 +41,7 @@ export function MediaTile({
   fallbackLabel,
   autoPlay = true,
   onOpen,
+  transportCorner,
   children,
   surfaceProps,
 }: MediaTileProps) {
@@ -84,7 +86,7 @@ export function MediaTile({
         />
       </button>
       {children}
-      <MediaTransport clip={clip} />
+      <MediaTransport clip={clip} corner={transportCorner} />
     </div>
   );
 }

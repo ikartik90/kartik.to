@@ -46,6 +46,8 @@ export function CollectionShowcase({ items }: CollectionShowcaseProps) {
               fallbackLabel={`Image ${index + 1}`}
               autoPlay={index === 0}
               onOpen={() => setOpenIndex(index)}
+              // The badge takes the end corner.
+              transportCorner={carriesSurplus ? "start" : undefined}
               surfaceProps={{
                 "data-surplus": carriesSurplus ? "" : undefined,
               }}

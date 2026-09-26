@@ -16,14 +16,9 @@ import { sidenoteCard } from "../../sidenote-layer.recipe";
 import { weatherGraphic } from "../../weather-graphic.recipe";
 import { weatherWidget } from "../../weather-widget.recipe";
 import { calendar } from "../input/calendar.recipe";
-import { checkboxField } from "../input/checkbox.recipe";
-import { colorField } from "../input/color-input.recipe";
-import { colorPicker } from "../input/color-picker.recipe";
-import { imageField } from "../input/image-input.recipe";
 import { optionList } from "../input/option-list.recipe";
 import { sliderField } from "../input/slider.recipe";
 import { switchField } from "../input/switch.recipe";
-import { notice } from "../notice.recipe";
 import { wireframe, skeleton } from "../wireframe.recipe";
 import { action } from "./action";
 import {
@@ -58,6 +53,7 @@ import {
   horizontalRule,
 } from "./article";
 import { collectionGrid } from "./collection-grid";
+import { colorChannel } from "./color-channel";
 import { colorPickerPopover } from "./color-picker-popover";
 import { comboboxPopover } from "./combobox-popover";
 import { commandHeader, commandList, commandGroup } from "./command";
@@ -131,6 +127,7 @@ export const recipes = {
   horizontalRule,
   comboboxPopover,
   colorPickerPopover,
+  colorChannel,
   toolbar,
   toolbarSwatch,
   selectionPopover,
@@ -149,19 +146,14 @@ export const slotRecipes = {
   skeleton,
   field,
   switchField,
-  checkboxField,
   sliderField,
   calendar,
   inlineEditRow,
   mediaBlock,
   collectionGrid,
-  colorField,
-  imageField,
-  colorPicker,
   propertiesPanel,
   optionList,
   segmentedControl,
-  notice,
   linkCard,
   weatherGraphic,
   weatherWidget,

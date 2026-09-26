@@ -106,6 +106,7 @@ Project Root
   - **Two or more:** `src/components/ui/recipes/<name>.ts`, moved in the same change that adds the second user.
   - A shared recipe is named for the part it styles (`toolbar`, `menuIcon`). A bundle of properties is a `css()` call or a pattern.
   - Every recipe is registered in `src/components/ui/recipes/index.ts`; `panda.config.ts` imports that index and defines none.
+- **Restyling a component from outside:** a look the component offers is a variant its caller picks (`MediaTransport`'s `corner`). A caller's one-off goes in a `css` prop the component merges with `css(base, props.css)`, passed as a `css.raw()` (`Notice`). A caller's `className` only adds properties the component doesn't set: two `css()` classes setting one property have no dependable winner.
 
 ## Node.js Runtime & Prisma
 

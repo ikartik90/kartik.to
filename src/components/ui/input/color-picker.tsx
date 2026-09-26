@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { css, cx } from "../../../../styled-system/css";
-import { colorPicker } from "../../../../styled-system/recipes";
+import { colorChannel } from "../../../../styled-system/recipes";
 import {
   clampChannel,
   clampOpacity,
@@ -37,7 +37,158 @@ import { Slider } from "./slider";
 import CloseIcon from "@/assets/icons/cross.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
 
-type ColorPickerStyles = ReturnType<typeof colorPicker>;
+const ALPHA_CHECKERBOARD =
+  "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)";
+
+// End-caps filling the frame's inset past each end of a ramp. Outside the track, not by
+// insetting the gradient, so the colour under the thumb stays the one it names.
+const rampPad = {
+  content: '""',
+  position: "absolute",
+  insetBlock: 0,
+  width: "token(spacing.md)",
+  pointerEvents: "none",
+} as const;
+
+const rampPadStart = {
+  ...rampPad,
+  insetInlineStart: "calc(token(spacing.md) * -1)",
+} as const;
+
+const rampPadEnd = {
+  ...rampPad,
+  insetInlineEnd: "calc(token(spacing.md) * -1)",
+} as const;
+
+const pickerRootStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+});
+
+const pickerHeaderStyle = css({
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+  height: "token(spacing.4xl)",
+  paddingInline: "lg",
+  borderBottomWidth: "token(spacing.3xs)",
+  borderBottomStyle: "solid",
+  borderBottomColor: "border.divider",
+  color: "text.body",
+});
+
+const pickerTitleStyle = css({
+  flex: 1,
+  minWidth: 0,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+});
+
+const pickerActionsStyle = css({
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: "xs",
+});
+
+const pickerDividerStyle = css({
+  flexShrink: 0,
+  width: 0,
+  alignSelf: "stretch",
+  marginBlock: "xs",
+  borderLeftWidth: "token(spacing.3xs)",
+  borderLeftStyle: "solid",
+  borderLeftColor: "border.divider",
+});
+
+const pickerBodyStyle = css({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: "md",
+  padding: "lg",
+});
+
+// The map and ramps use literal white/black/sRGB primaries: they are the HSB axes, not theme colours.
+const pickerMapStyle = css({
+  position: "relative",
+  width: "token(spacing.full)",
+  aspectRatio: "1 / 1",
+  borderRadius: "sm",
+  cursor: "crosshair",
+  // Otherwise a touch drag scrolls the rail instead of picking.
+  touchAction: "none",
+  backgroundColor: "var(--color-picker-hue)",
+  backgroundImage:
+    "linear-gradient(to top, black, transparent), linear-gradient(to right, white, transparent)",
+  boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+  _disabled: { cursor: "not-allowed", opacity: 0.5 },
+});
+
+const pickerMapThumbStyle = css({
+  position: "absolute",
+  width: "token(spacing.xl)",
+  height: "token(spacing.xl)",
+  borderRadius: "full",
+  transform: "translate(-50%, -50%)",
+  boxShadow:
+    "inset 0 0 0 2px token(colors.neutral.100), 0 0 0 0.5px color-mix(in srgb, var(--colors-neutral-900) 40%, transparent), inset 0 0 0 2.5px color-mix(in srgb, var(--colors-neutral-900) 40%, transparent)",
+  pointerEvents: "none",
+});
+
+const pickerRampTrackStyle = css({
+  // Resting ink even on focus (an accent thumb is lost on a rainbow), above the end-caps.
+  "& [data-slider-thumb]": {
+    backgroundColor: "field.text.default",
+    zIndex: 1,
+  },
+});
+
+const pickerHueStyle = css({
+  backgroundImage:
+    "linear-gradient(to right, #FF0000 0%, #FFFF00 16.667%, #00FF00 33.333%, #00FFFF 50%, #0000FF 66.667%, #FF00FF 83.333%, #FF0000 100%)",
+  "&::before": { ...rampPadStart, backgroundColor: "#FF0000" },
+  "&::after": { ...rampPadEnd, backgroundColor: "#FF0000" },
+});
+
+const pickerAlphaStyle = css({
+  backgroundColor: "field.bg.default",
+  backgroundImage: `linear-gradient(to right, transparent, var(--color-picker-alpha-to)), ${ALPHA_CHECKERBOARD}`,
+  backgroundSize: "auto, token(spacing.md) token(spacing.md)",
+  "&::before": {
+    ...rampPadStart,
+    backgroundColor: "field.bg.default",
+    backgroundImage: ALPHA_CHECKERBOARD,
+    // Same tile size as the track's, so the pattern stays in phase across the seam.
+    backgroundSize: "token(spacing.md) token(spacing.md)",
+  },
+  "&::after": {
+    ...rampPadEnd,
+    backgroundColor: "var(--color-picker-alpha-to)",
+  },
+});
+
+const pickerFooterStyle = css({
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: "md",
+  height: "calc(token(spacing.4xl) + token(spacing.md))",
+  paddingInline: "lg",
+  borderTopWidth: "token(spacing.3xs)",
+  borderTopStyle: "solid",
+  borderTopColor: "border.divider",
+});
+
+const pickerFormatStyle = css({ flex: "1 1 0", minWidth: 0, width: "auto" });
+
+const pickerFieldsStyle = css({
+  flex: "0 0 auto",
+  width: "token(sizes.propertyRowField)",
+});
 
 type ColorPickerContextValue = {
   hex: string;
@@ -55,7 +206,6 @@ type ColorPickerContextValue = {
   onRemove?: () => void;
   title: string;
   autoFocus: boolean;
-  styles: ColorPickerStyles;
 };
 
 const ColorPickerContext = createContext<ColorPickerContextValue | null>(null);
@@ -94,7 +244,6 @@ function ColorPickerRoot({
   className,
   children,
 }: ColorPickerProps) {
-  const styles = colorPicker();
   const { hex, opacity } = parseColor(value);
 
   const [hsb, setHsb] = useState<Hsb>(() => rgbToHsb(hexToRgb(hex)));
@@ -137,13 +286,12 @@ function ColorPickerRoot({
     onRemove,
     title,
     autoFocus,
-    styles,
   };
 
   return (
     <ColorPickerContext.Provider value={ctx}>
       <div
-        className={cx(styles.root, className)}
+        className={cx(pickerRootStyle, className)}
         style={
           {
             "--color-picker-hue": `#${rgbToHex(hsbToRgb({ h: hsb.h, s: 100, b: 100 }))}`,
@@ -169,21 +317,26 @@ function ColorPickerRoot({
 
 /** Trash sits before close, so close stays last and the destructive chip is not where dismissal is. */
 function ColorPickerHeader() {
-  const { title, onClose, onRemove, styles } = usePicker("ColorPicker.Header");
+  const { title, onClose, onRemove } = usePicker("ColorPicker.Header");
   return (
-    <header className={styles.header}>
-      <Typography tag="p" type="bodySmall" className={styles.title}>
+    <header className={pickerHeaderStyle}>
+      <Typography
+        tag="p"
+        type="bodySmall"
+        wrap="nowrap"
+        className={pickerTitleStyle}
+      >
         {title}
       </Typography>
       {(onRemove || onClose) && (
-        <div className={styles.actions}>
+        <div className={pickerActionsStyle}>
           {onRemove && (
             <Button variant="icon" aria-label="Remove colour" onClick={onRemove}>
               <TrashIcon />
             </Button>
           )}
           {onRemove && onClose && (
-            <span aria-hidden className={styles.divider} />
+            <span aria-hidden className={pickerDividerStyle} />
           )}
           {onClose && (
             <Button variant="icon" aria-label="Close" onClick={onClose}>
@@ -197,8 +350,8 @@ function ColorPickerHeader() {
 }
 
 function ColorPickerBody({ children }: { children: ReactNode }) {
-  const { styles } = usePicker("ColorPicker.Body");
-  return <div className={styles.body}>{children}</div>;
+  usePicker("ColorPicker.Body");
+  return <div className={pickerBodyStyle}>{children}</div>;
 }
 
 const MAP_STEP = 1;
@@ -213,8 +366,7 @@ const clampPercent = (value: number) => Math.min(Math.max(value, 0), 100);
 
 /** One slider for both axes; `aria-valuetext` states both. */
 function ColorPickerMap() {
-  const { hsb, disabled, autoFocus, commitHsb, styles } =
-    usePicker("ColorPicker.Map");
+  const { hsb, disabled, autoFocus, commitHsb } = usePicker("ColorPicker.Map");
   const ref = useRef<HTMLDivElement>(null);
 
   // `autoFocus` only works on form controls, so it is done by hand.
@@ -245,7 +397,7 @@ function ColorPickerMap() {
       aria-valuetext={`Saturation ${hsb.s}%, brightness ${hsb.b}%`}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : 0}
-      className={styles.map}
+      className={pickerMapStyle}
       onPointerDown={(e) => {
         if (disabled || e.button !== 0) return;
         // Stops a mouse drag selecting text; `beginControlDrag` does the same for touch.
@@ -278,7 +430,7 @@ function ColorPickerMap() {
     >
       <span
         aria-hidden
-        className={styles.mapThumb}
+        className={pickerMapThumbStyle}
         style={{ left: `${hsb.s}%`, top: `${100 - hsb.b}%` }}
       />
     </div>
@@ -298,7 +450,7 @@ function Ramp({
   trackClass: string;
   onValueChange: (next: number) => void;
 }) {
-  const { disabled, styles } = usePicker("ColorPicker.Ramp");
+  const { disabled } = usePicker("ColorPicker.Ramp");
   return (
     <Field size="sm">
       <Slider
@@ -312,7 +464,7 @@ function Ramp({
       >
         <Slider.Track
           aria-label={label}
-          className={cx(trackClass, styles.sliderTrack)}
+          className={cx(trackClass, pickerRampTrackStyle)}
         />
         <Slider.Separator />
         <Slider.Output aria-label={label} />
@@ -322,37 +474,34 @@ function Ramp({
 }
 
 function ColorPickerHue() {
-  const { hsb, commitHsb, styles } = usePicker("ColorPicker.HueSlider");
+  const { hsb, commitHsb } = usePicker("ColorPicker.HueSlider");
   return (
     <Ramp
       label="Hue"
       max={360}
       value={hsb.h}
-      trackClass={styles.hue}
+      trackClass={pickerHueStyle}
       onValueChange={(h) => commitHsb({ h })}
     />
   );
 }
 
 function ColorPickerAlpha() {
-  const { opacity, commitOpacity, styles } = usePicker(
-    "ColorPicker.AlphaSlider",
-  );
+  const { opacity, commitOpacity } = usePicker("ColorPicker.AlphaSlider");
   return (
     <Ramp
       label="Opacity"
       max={100}
       value={opacity}
-      trackClass={styles.alpha}
+      trackClass={pickerAlphaStyle}
       onValueChange={commitOpacity}
     />
   );
 }
 
 function ColorPickerFooter() {
-  const { styles } = usePicker("ColorPicker.Footer");
   return (
-    <div className={styles.footer}>
+    <div className={pickerFooterStyle}>
       <ColorPickerFormat />
       <ColorPickerFields />
     </div>
@@ -366,9 +515,9 @@ const FORMATS: { value: ColorFormat; label: string }[] = [
 ];
 
 function ColorPickerFormat() {
-  const { format, setFormat, styles } = usePicker("ColorPicker.Format");
+  const { format, setFormat } = usePicker("ColorPicker.Format");
   return (
-    <Field size="sm" className={styles.format}>
+    <Field size="sm" className={pickerFormatStyle}>
       <Field.Label className={css({ srOnly: true })}>Colour format</Field.Label>
       <Combobox
         search={false}
@@ -406,7 +555,7 @@ function Channel({
   maxLength: number;
   className?: string;
 }) {
-  const { disabled, styles } = usePicker("ColorPicker.Channel");
+  const { disabled } = usePicker("ColorPicker.Channel");
   const { styles: fieldStyles } = useField("ColorPicker.Channel");
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -433,7 +582,7 @@ function Channel({
         {...shared}
         aria-label={label}
         inputMode={numeric ? "numeric" : "text"}
-        className={cx(styles.channel, className)}
+        className={cx(colorChannel(), className)}
       />
     );
   }
@@ -445,7 +594,7 @@ function Channel({
       data-control
       aria-label={label}
       inputMode={numeric ? "numeric" : "text"}
-      className={cx(fieldStyles.control, styles.channel, className)}
+      className={cx(fieldStyles.control, colorChannel(), className)}
     />
   );
 }
@@ -479,7 +628,7 @@ const opacityBoxStyle = css({
 });
 
 function ColorPickerFields() {
-  const { hex, opacity, hsb, format, commitHex, commitHsb, commitOpacity, styles } =
+  const { hex, opacity, hsb, format, commitHex, commitHsb, commitOpacity } =
     usePicker("ColorPicker.Fields");
 
   const rgb = hexToRgb(hex);
@@ -526,7 +675,7 @@ function ColorPickerFields() {
           }));
 
   return (
-    <Field size="sm" className={styles.fields}>
+    <Field size="sm" className={pickerFieldsStyle}>
       <Field.Frame>
         {channels.map((c, index) => (
           <Fragment key={c.key}>

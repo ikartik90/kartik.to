@@ -6,8 +6,8 @@ import { Notice } from "../notice";
 describe("Notice", () => {
   afterEach(() => cleanup());
 
-  it("composes an icon + label under the root's notice slots", () => {
-    const { container, getByText } = render(
+  it("sets the icon and the label side by side in the root", () => {
+    const { container, getByTestId, getByText } = render(
       <Notice>
         <Notice.Icon>
           <svg data-testid="glyph" />
@@ -17,9 +17,19 @@ describe("Notice", () => {
     );
 
     const root = container.firstChild as HTMLElement;
-    expect(root.className).toContain("notice__root");
-    expect(root.querySelector(".notice__icon")).not.toBeNull();
-    expect(getByText("Heads up").className).toContain("notice__label");
+    expect(getByTestId("glyph").parentElement!.parentElement).toBe(root);
+    expect(getByText("Heads up").closest("p")!.parentElement).toBe(root);
+  });
+
+  it("merges a caller's css over a part's own, so one value wins", () => {
+    const { getByText } = render(
+      <Notice>
+        <Notice.Label css={{ textStyle: "bodySmall" }}>Merged</Notice.Label>
+      </Notice>,
+    );
+    const classes = getByText("Merged").closest("p")!.className.split(" ");
+    expect(classes).toContain("textStyle_bodySmall");
+    expect(classes).not.toContain("textStyle_sidenote");
   });
 
   it("marks the icon decorative so the meaning stays on the label", () => {
@@ -31,7 +41,7 @@ describe("Notice", () => {
         <Notice.Label>Message</Notice.Label>
       </Notice>,
     );
-    const icon = container.querySelector(".notice__icon") as HTMLElement;
+    const icon = container.querySelector("svg")!.parentElement!;
     expect(icon.getAttribute("aria-hidden")).toBe("true");
   });
 

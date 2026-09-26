@@ -1,8 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { cx } from "../../../../styled-system/css";
-import { imageField } from "../../../../styled-system/recipes";
+import { css, cx } from "../../../../styled-system/css";
 import { Button } from "@/components/ui/button";
 import { Media } from "@/components/media";
 import { filenameFromMediaUrl } from "@/domain/media";
@@ -27,6 +26,55 @@ export interface ImageInputProps {
   className?: string;
 }
 
+// No grid of its own: the replace chip is a sibling that the properties row places.
+const imageFrameStyle = css({ cursor: "pointer" });
+
+// Fills the frame, so the separator can stretch to its full height.
+const imageTriggerStyle = css({
+  appearance: "none",
+  margin: "none",
+  padding: "none",
+  borderWidth: "0",
+  backgroundColor: "transparent",
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  alignSelf: "stretch",
+  gap: "md",
+  flex: "1 1 auto",
+  minWidth: 0,
+  textAlign: "start",
+  _disabled: { cursor: "not-allowed" },
+});
+
+const imageThumbnailStyle = css({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  "& svg": {
+    width: "token(spacing.lg)",
+    height: "token(spacing.lg)",
+    color: "field.text.muted",
+  },
+});
+
+const imageMediaStyle = css({
+  width: "token(spacing.full)",
+  height: "token(spacing.full)",
+  objectFit: "cover",
+});
+
+// Typography comes from the field's `control` slot, worn alongside; don't set it here.
+const imageNameStyle = css({
+  flex: "1 1 auto",
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
 export function ImageInput({
   src,
   kind = "image",
@@ -38,27 +86,26 @@ export function ImageInput({
 }: ImageInputProps) {
   // The name is not a `Field.Control`, so it borrows the `control` class.
   const { styles: fieldStyles } = useField("ImageInput");
-  const styles = imageField();
   const filename = src ? filenameFromMediaUrl(src) : undefined;
 
   return (
     <>
-      <Field.Frame className={cx(styles.frame, className)}>
+      <Field.Frame className={cx(imageFrameStyle, className)}>
         <button
           type="button"
           // Lights the frame while focused.
           data-control
           aria-label={`${filename ? "Change" : "Add"} ${noun}`}
           disabled={disabled}
-          className={styles.trigger}
+          className={imageTriggerStyle}
           onClick={onPick}
         >
-          <span className={styles.thumbnail}>
-            {thumbnailFor(src, kind, poster, styles.media)}
+          <span className={cx(fieldStyles.thumbnail, imageThumbnailStyle)}>
+            {thumbnailFor(src, kind, poster, imageMediaStyle)}
           </span>
-          <span className={styles.separator} aria-hidden />
+          <span className={fieldStyles.separator} aria-hidden />
           <span
-            className={cx(fieldStyles.control, styles.name)}
+            className={cx(fieldStyles.control, imageNameStyle)}
             data-placeholder={filename ? undefined : ""}
           >
             {filename ?? `Add ${noun}`}

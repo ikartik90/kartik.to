@@ -161,7 +161,7 @@ export function MediaLightbox({
     >
       {item && index !== null && (
         <figure className={lightboxFigureStyle}>
-          {/* `data-media-surface` is the box a clip's transport pins to; see the `mediaTransport` recipe. */}
+          {/* `data-media-surface` is the box a clip's transport pins to; see `MediaTransport`. */}
           <div data-media-surface="" className={lightboxFrameStyle}>
           {item.backgroundEffect && (
             <BackgroundEffectLayer

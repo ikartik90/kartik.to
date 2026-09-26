@@ -8,18 +8,6 @@ import { recipes, slotRecipes } from "..";
 
 const SHARED_DIR = "src/components/ui/recipes";
 
-// Variant-less, but each shares an element with another class: as css() (utilities layer) it would
-// flip which rule wins. Remove an entry once it is converted.
-const VARIANTLESS_EXCEPTIONS = [
-  "checkboxField",
-  "colorField",
-  "colorPicker",
-  "imageField",
-  "mediaTransport",
-  "notice",
-  "skeleton",
-];
-
 const registered: Record<string, { variants?: object }> = {
   ...recipes,
   ...slotRecipes,
@@ -110,19 +98,9 @@ describe("recipe placement", () => {
     const plain = [...defined]
       .filter(([, [file]]) => file.endsWith(".recipe.ts"))
       .map(([name]) => name)
-      .filter((name) => !hasVariants(name))
-      .filter((name) => !VARIANTLESS_EXCEPTIONS.includes(name));
+      .filter((name) => !hasVariants(name));
 
     expect(plain).toEqual([]);
-  });
-
-  it("lists only exceptions that are still variant-less recipes beside a component", () => {
-    const stale = VARIANTLESS_EXCEPTIONS.filter((name) => {
-      const [file] = defined.get(name) ?? [];
-      return !file?.endsWith(".recipe.ts") || hasVariants(name);
-    });
-
-    expect(stale).toEqual([]);
   });
 
   it("has a component using every recipe", () => {

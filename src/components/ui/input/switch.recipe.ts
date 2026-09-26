@@ -8,15 +8,12 @@ export const switchField = defineSlotRecipe({
   slots: ["control", "thumb"],
   base: {
     control: {
-      gridColumn: 1,
-      gridRow: 1,
       position: "relative",
       flexShrink: 0,
       display: "inline-block",
       padding: "none",
       margin: "none",
       appearance: "none",
-      cursor: "pointer",
       // At least half of every track height, so each size stays a pill.
       borderRadius: "lg",
       backgroundColor: "field.bg.default",
@@ -29,7 +26,7 @@ export const switchField = defineSlotRecipe({
         boxShadow:
           "inset 0 0 0 token(spacing.3xs) var(--colors-field-border-active)",
       },
-      _disabled: { cursor: "not-allowed", opacity: 0.5 },
+      _disabled: { opacity: 0.5 },
     },
     thumb: {
       position: "absolute",
