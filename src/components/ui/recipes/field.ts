@@ -3,8 +3,17 @@ import { defineSlotRecipe } from "@pandacss/dev";
 export const field = defineSlotRecipe({
   className: "field",
   description:
-    "A form field: a label, a framed control with optional icons, and a hint, in three `size`s. `labelFirst` puts a switch or checkbox after its label.",
-  slots: ["root", "label", "frame", "control", "hint"],
+    "A form field: a label, a framed control with optional icons, and a hint, in three `size`s. Inside the frame, `thumbnail` is the square before a value, `separator` the hairline between parts and `valueBox` a fixed-width readout. `labelFirst` puts a switch or checkbox after its label.",
+  slots: [
+    "root",
+    "label",
+    "frame",
+    "control",
+    "hint",
+    "separator",
+    "thumbnail",
+    "valueBox",
+  ],
   base: {
     root: {
       display: "flex",
@@ -21,7 +30,11 @@ export const field = defineSlotRecipe({
         columnGap: "md",
         width: "fit-content",
         "& > [role='switch'], & > [role='checkbox']": {
+          gridColumn: 1,
+          gridRow: 1,
+          cursor: "pointer",
           transform: "translateY(calc((1lh - 100%) / 2))",
+          _disabled: { cursor: "not-allowed" },
         },
       },
     },
@@ -130,6 +143,43 @@ export const field = defineSlotRecipe({
         gridRow: 2,
         width: "auto",
         marginTop: "none",
+      },
+    },
+    separator: {
+      alignSelf: "stretch",
+      flexShrink: 0,
+      width: "token(spacing.3xs)",
+      backgroundColor: "field.border.default",
+      transition: "background-color 150ms ease",
+      "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &":
+        {
+          backgroundColor: "field.border.active",
+        },
+    },
+    thumbnail: {
+      position: "relative",
+      flexShrink: 0,
+      width: "token(spacing.xl)",
+      height: "token(spacing.xl)",
+      borderRadius: "sm",
+      overflow: "hidden",
+      backgroundColor: "field.bg.default",
+      boxShadow: "inset 0 0 0 0.5px var(--colors-field-border-default)",
+    },
+    // Worn with `control`, which it must follow in the slot list to win the reset.
+    valueBox: {
+      flex: "0 0 auto",
+      width: "token(sizes.fieldValue)",
+      alignSelf: "stretch",
+      textAlign: "right",
+      fontVariantNumeric: "tabular-nums",
+      "&:not(:first-child)": {
+        marginInlineStart: "calc(token(spacing.md) * -1)",
+        paddingInlineStart: "md",
+      },
+      "&:last-child": {
+        marginInlineEnd: "calc(token(spacing.md) * -1)",
+        paddingInlineEnd: "md",
       },
     },
   },

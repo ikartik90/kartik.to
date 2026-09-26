@@ -38,7 +38,6 @@ export const tokens = defineTokens({
     // Matches the calendar's 208px pitch, so select and date popovers read as siblings.
     optionListWidth: { value: "208px" },
     dateField: { value: "140px" },
-    // The slider's readout and the colour input's opacity share this width (`fieldValueBox`).
     fieldValue: { value: "60px" },
     // 24px line + 2×4 inset.
     optionRow: { value: "32px" },

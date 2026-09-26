@@ -3,7 +3,7 @@ import { defineRecipe, defineSlotRecipe } from "@pandacss/dev";
 export const wireframe = defineRecipe({
   className: "wireframe",
   description:
-    "Wraps content so its text shows as skeleton bars: `mode` is a dimmed placeholder or a loading shimmer, `opacity` the dimming.",
+    "Wraps content so its text shows as skeleton bars, dimmed by `opacity`; `mode: placeholder` keeps the default cursor over it.",
   base: {
     // The same box the scope renders when disabled, so toggling never shifts the layout.
     display: "block",
@@ -20,19 +20,7 @@ export const wireframe = defineRecipe({
         cursor: "default",
         "& *": { cursor: "default" },
       },
-      loading: {
-        "& [data-skeleton]::after": {
-          // The flat fill must go, or it would back the translucent dip and hide it.
-          backgroundColor: "transparent",
-          backgroundImage:
-            "linear-gradient(90deg, currentColor 0%, currentColor 35%, color-mix(in srgb, currentColor 30%, transparent) 50%, currentColor 65%, currentColor 100%)",
-          backgroundSize: "200% 100%",
-          animation: "wireframeShimmer 1.6s ease-in-out infinite",
-        },
-        "@media (prefers-reduced-motion: reduce)": {
-          "& [data-skeleton]::after": { animation: "none" },
-        },
-      },
+      loading: {},
     },
   },
   defaultVariants: { mode: "placeholder", opacity: 50 },
@@ -43,7 +31,7 @@ export const wireframe = defineRecipe({
 export const skeleton = defineSlotRecipe({
   className: "skeleton",
   description:
-    "A skeleton bar standing in for a line of text, the same size as the text it replaces.",
+    "A skeleton bar standing in for a line of text, the same size as the text it replaces; `mode: loading` shimmers it.",
   slots: ["root", "text", "lines"],
   base: {
     root: {
@@ -83,4 +71,26 @@ export const skeleton = defineSlotRecipe({
       },
     },
   },
+  variants: {
+    mode: {
+      placeholder: {},
+      loading: {
+        root: {
+          "&::after": {
+            // The flat fill must go, or it would back the translucent dip and hide it.
+            backgroundColor: "transparent",
+            backgroundImage:
+              "linear-gradient(90deg, currentColor 0%, currentColor 35%, color-mix(in srgb, currentColor 30%, transparent) 50%, currentColor 65%, currentColor 100%)",
+            backgroundSize: "200% 100%",
+            animation: "wireframeShimmer 1.6s ease-in-out infinite",
+          },
+          "@media (prefers-reduced-motion: reduce)": {
+            "&::after": { animation: "none" },
+          },
+        },
+      },
+    },
+  },
+  // The mode comes from the enclosing scope at runtime.
+  staticCss: [{ mode: ["*"] }],
 });

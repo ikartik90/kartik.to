@@ -45,7 +45,7 @@ function SkeletonBar({
   style,
   ...rest
 }: SkeletonProps) {
-  const styles = skeleton();
+  const styles = skeleton({ mode: useWireframe()?.mode });
   return (
     <span
       data-skeleton

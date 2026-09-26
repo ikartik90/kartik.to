@@ -66,6 +66,9 @@ export const typographyStyles = cva({
       balance: {
         textWrap: "balance",
       },
+      nowrap: {
+        textWrap: "nowrap",
+      },
     },
   },
 });
@@ -74,8 +77,8 @@ export interface TypographyProps
   extends React.HTMLAttributes<HTMLElement> {
   tag: TypographyTag;
   type: TypographyType;
-  /** Even out the lines instead of the type's own wrapping. */
-  wrap?: "balance";
+  /** `balance` evens out the lines; `nowrap` keeps one line. */
+  wrap?: "balance" | "nowrap";
   children: React.ReactNode;
   className?: string;
 }

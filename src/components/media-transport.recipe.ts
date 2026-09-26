@@ -3,10 +3,9 @@ import { defineRecipe } from "@pandacss/dev";
 export const mediaTransport = defineRecipe({
   className: "media-transport",
   description:
-    "The play/pause chip pinned to the bottom-right corner of a video.",
+    "The play/pause chip pinned to a bottom corner of a video, the one `corner` names.",
   base: {
     position: "absolute",
-    right: "lg",
     bottom: "lg",
     // Above the clip, which sits at 1 over its ground.
     zIndex: 2,
@@ -16,4 +15,12 @@ export const mediaTransport = defineRecipe({
       { opacity: 1 },
     "@media (hover: none)": { opacity: 1 },
   },
+  variants: {
+    corner: {
+      start: { left: "lg" },
+      end: { right: "lg" },
+    },
+  },
+  defaultVariants: { corner: "end" },
+  staticCss: [{ corner: ["*"] }],
 });

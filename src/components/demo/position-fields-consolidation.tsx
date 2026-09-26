@@ -47,12 +47,12 @@ const beforePaneStyle = css({
   "&[data-presented=false]": { transform: "translateY(-12px)" },
 });
 
-const noticeHeadingStyle = css({
+const noticeHeadingStyle = css.raw({
   textStyle: "bodySmall",
 });
 
 // One heading line tall (`1lh`), so the glyph centres on the heading.
-const noticeIconStyle = css({
+const noticeIconStyle = css.raw({
   display: "flex",
   alignItems: "center",
   textStyle: "bodySmall",
@@ -336,10 +336,10 @@ export function PositionFieldsConsolidation({
         children: (
           <>
             <Notice>
-              <Notice.Icon className={noticeIconStyle}>
+              <Notice.Icon css={noticeIconStyle}>
                 <InfoIcon />
               </Notice.Icon>
-              <Notice.Label className={noticeHeadingStyle}>
+              <Notice.Label css={noticeHeadingStyle}>
                 <strong>Default Job Position</strong>
                 <span className={noticeHintStyle}>
                   <Skeleton width="97%" />

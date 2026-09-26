@@ -30,6 +30,28 @@ describe("Skeleton", () => {
   });
 });
 
+describe("Skeleton shimmer", () => {
+  it("shimmers a bar only inside a loading scope", () => {
+    const { container: loading } = render(
+      <Wireframe mode="loading">
+        <Typography tag="p" type="bodySmall">
+          Shift role
+        </Typography>
+      </Wireframe>,
+    );
+    expect(bars(loading)[0].className).toContain("mode_loading");
+
+    const { container: placeholder } = render(
+      <Wireframe>
+        <Typography tag="p" type="bodySmall">
+          Shift role
+        </Typography>
+      </Wireframe>,
+    );
+    expect(bars(placeholder)[0].className).not.toContain("mode_loading");
+  });
+});
+
 describe("Wireframe scope", () => {
   it("leaves components untouched outside it", () => {
     const { container } = render(

@@ -1,11 +1,10 @@
 import { defineSlotRecipe } from "@pandacss/dev";
-import { fieldValueBox } from "../recipes/shared";
 
 export const sliderField = defineSlotRecipe({
   className: "slider-field",
   description:
     "A slider's track, ticks, thumb and numeric readout, the control of a `field`, in three `size`s.",
-  slots: ["track", "tick", "thumb", "separator", "output"],
+  slots: ["track", "tick", "thumb", "output"],
   base: {
     track: {
       position: "relative",
@@ -43,19 +42,7 @@ export const sliderField = defineSlotRecipe({
       backgroundColor: "currentColor",
       pointerEvents: "none",
     },
-    separator: {
-      alignSelf: "stretch",
-      flexShrink: 0,
-      width: "token(spacing.3xs)",
-      backgroundColor: "field.border.default",
-      transition: "background-color 150ms ease",
-      "[data-field]:has([data-control]:focus-visible, [data-control][role='slider']:focus) &":
-        {
-          backgroundColor: "field.border.active",
-        },
-    },
     output: {
-      ...fieldValueBox,
       color: "inherit",
       // The value sits outside the track, so the track's own dimming can't reach it.
       "[data-field]:has([role='slider'][aria-disabled='true']) &": {

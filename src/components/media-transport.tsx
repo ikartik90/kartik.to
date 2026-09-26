@@ -11,10 +11,16 @@ import PauseIcon from "@/assets/icons/pause.svg";
 export interface MediaTransportProps {
   /** Hold it as state, not a ref: the chip must re-render when a new clip mounts. */
   clip: HTMLVideoElement | null;
+  /** The bottom corner it sits in. */
+  corner?: "start" | "end";
   className?: string;
 }
 
-export function MediaTransport({ clip, className }: MediaTransportProps) {
+export function MediaTransport({
+  clip,
+  corner = "end",
+  className,
+}: MediaTransportProps) {
   // Read from the element, not mirrored in state: a clip that starts before mount would leave a stale flag.
   const subscribe = useCallback(
     (onChange: () => void) => {
@@ -46,7 +52,7 @@ export function MediaTransport({ clip, className }: MediaTransportProps) {
 
   // The wrapper holds the corner: `action`'s icon variant is `position: relative` and would win on the button.
   return (
-    <span data-media-transport="" className={cx(mediaTransport(), className)}>
+    <span className={cx(mediaTransport({ corner }), className)}>
       <Button
         variant="icon"
         emphasis="glass"

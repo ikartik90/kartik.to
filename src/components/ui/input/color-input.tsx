@@ -1,9 +1,9 @@
 "use client";
 
 import { useId, useRef, useState, type ChangeEvent } from "react";
-import { cx } from "../../../../styled-system/css";
+import { css, cx } from "../../../../styled-system/css";
 import {
-  colorField,
+  colorChannel,
   colorPickerPopover,
   comboboxPopover,
 } from "../../../../styled-system/recipes";
@@ -27,6 +27,20 @@ export interface ColorInputProps {
   className?: string;
 }
 
+const colorSwatchStyle = css({
+  appearance: "none",
+  margin: "none",
+  padding: "none",
+  borderWidth: "0",
+  cursor: "pointer",
+  backgroundImage:
+    "conic-gradient(var(--colors-border-divider) 0deg 90deg, transparent 90deg 180deg, var(--colors-border-divider) 180deg 270deg, transparent 270deg 360deg)",
+  backgroundSize: "token(spacing.md) token(spacing.md)",
+});
+
+// A separate layer: the checkerboard occupies the swatch's background.
+const colorSwatchFillStyle = css({ position: "absolute", inset: 0 });
+
 export function ColorInput({
   value,
   onValueChange,
@@ -35,7 +49,6 @@ export function ColorInput({
 }: ColorInputProps) {
   // Only the hex may be `Field.Control` (it takes the id), so the opacity input borrows its styles.
   const { styles: fieldStyles } = useField("ColorInput");
-  const styles = colorField();
   const committed = parseColor(value);
 
   // Drafts, because both inputs are lossy: deriving from `value` would pad `FF` mid-keystroke.
@@ -92,7 +105,7 @@ export function ColorInput({
         aria-expanded={open}
         aria-label="Edit colour"
         disabled={disabled}
-        className={styles.swatch}
+        className={cx(fieldStyles.thumbnail, colorSwatchStyle)}
         onClick={() => {
           setOpen((wasOpen) => {
             // Read before the panel exists, off the swatch as it stands.
@@ -103,16 +116,16 @@ export function ColorInput({
         }}
       >
         <span
-          className={styles.swatchFill}
+          className={colorSwatchFillStyle}
           style={{ backgroundColor: value }}
         />
       </button>
-      <span className={styles.separator} aria-hidden />
+      <span className={fieldStyles.separator} aria-hidden />
       <Field.Control
         value={hex}
         onChange={commitHex}
         disabled={disabled}
-        className={styles.hex}
+        className={colorChannel()}
         placeholder="000000"
         spellCheck={false}
         autoComplete="off"
@@ -120,7 +133,7 @@ export function ColorInput({
         maxLength={7}
         onBlur={() => setHexDraft(null)}
       />
-      <span className={styles.separator} aria-hidden />
+      <span className={fieldStyles.separator} aria-hidden />
       <input
         type="text"
         // Lights the frame too; no `id`, since the label points at the hex alone.
@@ -129,7 +142,7 @@ export function ColorInput({
         value={opacity}
         onChange={commitOpacity}
         disabled={disabled}
-        className={cx(fieldStyles.control, styles.opacity)}
+        className={cx(fieldStyles.control, fieldStyles.valueBox)}
         spellCheck={false}
         autoComplete="off"
         inputMode="numeric"

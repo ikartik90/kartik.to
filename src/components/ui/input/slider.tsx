@@ -280,7 +280,7 @@ export type SliderSeparatorProps = Omit<
 >;
 
 function SliderSeparator({ className, ...rest }: SliderSeparatorProps) {
-  const { styles } = useSlider("Slider.Separator");
+  const { styles } = useField("Slider.Separator");
   return (
     <span aria-hidden className={cx(styles.separator, className)} {...rest} />
   );
@@ -315,7 +315,10 @@ function SliderOutput({
   // An <input> can hold no placeholder bar, so a static readout takes over.
   if (isWireframe) {
     return (
-      <span aria-hidden className={cx(styles.output, className)}>
+      <span
+        aria-hidden
+        className={cx(fieldStyles.valueBox, styles.output, className)}
+      >
         <WireframeText>{text}</WireframeText>
       </span>
     );
@@ -333,7 +336,12 @@ function SliderOutput({
       inputMode="decimal"
       spellCheck={false}
       autoComplete="off"
-      className={cx(fieldStyles.control, styles.output, className)}
+      className={cx(
+        fieldStyles.control,
+        fieldStyles.valueBox,
+        styles.output,
+        className,
+      )}
       onChange={(e) => {
         onChange?.(e);
         const next = e.currentTarget.value.replace(/[^0-9.-]/g, "");

@@ -88,7 +88,6 @@ export const collectionGrid = defineSlotRecipe({
           position: "absolute",
           inset: 0,
         },
-        "& [data-media-transport]": { right: "auto", left: "lg" },
       },
     },
     tile: {
