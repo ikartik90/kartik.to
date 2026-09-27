@@ -225,9 +225,6 @@ export type MediaNode = z.infer<typeof MediaNodeSchema>;
 
 export type MediaKind = MediaNode["kind"];
 
-// The editor's 3×2 grid of slots. Index 0 is the featured item; featuring is a move to the front.
-export const COLLECTION_MAX_ITEMS = 6;
-
 /**
  * Backfills `kind` on legacy media. Runs as a preprocess because the discriminated
  * union routes on the raw `kind`; unrecognised sources default to `"image"`.
@@ -300,28 +297,22 @@ export function mediaInsetPx(
   return ((media.padding ?? 0) / MEDIA_PADDING_REFERENCE) * width;
 }
 
-/** The picture's share of its box's width once both bands are taken out. */
-export function mediaPictureShare(media: MediaLayout): number {
-  return 1 - (2 * (media.padding ?? 0)) / MEDIA_PADDING_REFERENCE;
-}
-
-/** Divides a height budget to leave room for the top and bottom bands; `aspect` is the file's. */
-export function mediaHeightBudgetFactor(
+/**
+ * The lightbox frame as a ratio, the picture plus its inset band on every side, and the widest
+ * it may grow before the picture passes its natural width. `shape` is the source's pixel size.
+ */
+export function lightboxFrameShape(
+  shape: MediaShape,
   media: MediaLayout,
-  aspect: number = 1,
-): number {
-  const padding = media.padding ?? 0;
-  if (!padding) return 1;
-  const share = (padding / MEDIA_PADDING_REFERENCE) * aspect;
-  return 1 + (2 * share) / mediaPictureShare(media);
-}
-
-/** The lightbox frame width implied by the picture's measured width (the reverse would loop). */
-export function mediaContainerWidth(
-  media: MediaLayout,
-  pictureWidth: number,
-): number {
-  return pictureWidth / mediaPictureShare(media);
+): { aspect: number; maxWidth: number | null } {
+  const { width, height } = shape;
+  const band = (media.padding ?? 0) / MEDIA_PADDING_REFERENCE;
+  const picture = 1 - 2 * band;
+  const ratio = width && height ? width / height : 3 / 2;
+  return {
+    aspect: 1 / (picture / ratio + 2 * band),
+    maxWidth: width ? width / picture : null,
+  };
 }
 
 /**
@@ -396,7 +387,7 @@ export function mediaReservationStyle(
 // `items` may be empty: removing items one by one passes through zero.
 export const CollectionNodeSchema = z.object({
   type: z.literal("collection"),
-  items: z.array(CollectionItemSchema).max(COLLECTION_MAX_ITEMS),
+  items: z.array(CollectionItemSchema),
   caption: z.string().optional(),
 });
 

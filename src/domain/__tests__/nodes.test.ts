@@ -20,11 +20,9 @@ import {
   hasMediaLayout,
   mediaBoxStyle,
   mediaFrameStyle,
-  mediaContainerWidth,
-  mediaHeightBudgetFactor,
+  lightboxFrameShape,
   mediaInsetPx,
   mediaObjectStyle,
-  mediaPictureShare,
   mediaRadiusPx,
   mediaReservedAspect,
   mediaReservationStyle,
@@ -317,45 +315,37 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
     expect(mediaInsetPx({})).toBe(0);
   });
 
-  it("reports the share of the box the picture itself takes", () => {
-    expect(mediaPictureShare({})).toBe(1);
-    // 40 of 640 a side, so the picture is 640 − 80 of it.
-    expect(mediaPictureShare({ padding: 40 })).toBe(0.875);
-    expect(mediaPictureShare({ padding: MEDIA_PADDING_MAX })).toBe(0.75);
+  it("shapes the lightbox frame as the picture itself when it has no inset", () => {
+    expect(
+      lightboxFrameShape({ width: 2160, height: 1350 }, { padding: undefined }),
+    ).toEqual({ aspect: 1.6, maxWidth: 2160 });
   });
 
-  it("takes the height budget through the shape of the picture", () => {
-    expect(mediaHeightBudgetFactor({}, 1.778)).toBe(1);
-    expect(mediaHeightBudgetFactor({ padding: 40 }, 1)).toBeCloseTo(
-      1 / mediaPictureShare({ padding: 40 }),
-      10,
+  it("adds the inset band to every side of the lightbox frame", () => {
+    // 40 of 640 a side: the picture is 0.875 of the frame's width, and the band adds
+    // 2 × 40/640 of the width to its height.
+    const { aspect, maxWidth } = lightboxFrameShape(
+      { width: 2160, height: 1350 },
+      { padding: 40 },
     );
-    expect(mediaHeightBudgetFactor({ padding: 40 }, 16 / 9)).toBeGreaterThan(
-      mediaHeightBudgetFactor({ padding: 40 }, 1),
-    );
-    expect(mediaHeightBudgetFactor({ padding: 40 }, 9 / 16)).toBeLessThan(
-      mediaHeightBudgetFactor({ padding: 40 }, 1),
-    );
+    expect(aspect).toBeCloseTo(1 / (0.875 / 1.6 + 0.125), 10);
+    // Grows until the picture reaches its own 2160px.
+    expect(maxWidth).toBeCloseTo(2160 / 0.875, 10);
   });
 
-  it("spends the whole height budget and no more", () => {
+  it("fits the picture exactly inside the frame's band", () => {
     const media = { padding: MEDIA_PADDING_MAX };
-    for (const aspect of [16 / 9, 1, 9 / 16, 3]) {
-      const budget = 800;
-      const height = budget / mediaHeightBudgetFactor(media, aspect);
-      const box = mediaContainerWidth(media, height * aspect);
-      expect(height + 2 * mediaInsetPx(media, box)).toBeCloseTo(budget, 10);
+    for (const [width, height] of [[1600, 900], [900, 1600], [1000, 1000]]) {
+      const { aspect } = lightboxFrameShape({ width, height }, media);
+      const frame = 1000;
+      const band = (MEDIA_PADDING_MAX / MEDIA_PADDING_REFERENCE) * frame;
+      const picture = frame - 2 * band;
+      expect(frame / aspect).toBeCloseTo((picture * height) / width + 2 * band, 10);
     }
   });
 
-  it("recovers the container width an enlarged picture implies", () => {
-    expect(mediaContainerWidth({}, 640)).toBe(640);
-    // A 560px picture with a 40px-per-640 band: 560 / 0.875.
-    expect(mediaContainerWidth({ padding: 40 }, 560)).toBe(640);
-
-    const media = { padding: MEDIA_PADDING_MAX };
-    const box = mediaContainerWidth(media, 1200);
-    expect(1200 + 2 * mediaInsetPx(media, box)).toBeCloseTo(box, 10);
+  it("falls back to the placeholder shape, uncapped, for a source of unknown size", () => {
+    expect(lightboxFrameShape({}, {})).toEqual({ aspect: 1.5, maxWidth: null });
   });
 
   it("sizes a laid-out `contain` object to its content, so the corner rounds the picture", () => {
@@ -510,6 +500,19 @@ describe("MediaNodeSchema", () => {
     expect(() =>
       MediaNodeSchema.parse({ kind: "image", src: "/a.png" }),
     ).toThrow();
+  });
+});
+
+describe("CollectionNodeSchema", () => {
+  it("holds any number of items", () => {
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      type: "media",
+      kind: "image",
+      src: `/${i}.png`,
+    }));
+    expect(
+      CollectionNodeSchema.parse({ type: "collection", items }).items,
+    ).toHaveLength(12);
   });
 });
 

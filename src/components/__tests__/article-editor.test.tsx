@@ -3826,7 +3826,7 @@ describe("ArticleEditor collection block", () => {
 
     const dialog = screen.getByTestId("image-dialog");
     expect(dialog.getAttribute("data-selection-mode")).toBe("multiple");
-    expect(dialog.getAttribute("data-max-selection")).toBe("6");
+    expect(dialog.hasAttribute("data-max-selection")).toBe(false);
     expect(blocks()[0].type).toBe("paragraph");
     expect(block.textContent).toBe("");
   });
@@ -3848,13 +3848,16 @@ describe("ArticleEditor collection block", () => {
     expect(blocks()[1].type).toBe("paragraph");
   });
 
-  it("shows every slot, filled or not", () => {
-    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
-    expect(screen.getAllByRole("toolbar")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Add Media" })).toHaveLength(5);
+  it("shows the images as a carousel with one add tile after them", () => {
+    render(
+      <ArticleEditor initialPost={collectionPost([slot("a"), slot("b")])} />,
+    );
+    expect(document.querySelector("[data-carousel]")).not.toBeNull();
+    expect(screen.getAllByRole("toolbar")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Add image" })).toHaveLength(1);
   });
 
-  it("swaps a featured image with the one it replaces", () => {
+  it("moves a featured image to the front, the rest keeping their order", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
@@ -3863,15 +3866,15 @@ describe("ArticleEditor collection block", () => {
     fireEvent.click(
       within(toolbarFor(2)).getByRole("button", { name: "Feature image" }),
     );
-    expect(collection().items.map((i) => i.src)).toEqual(["c", "b", "a"]);
+    expect(collection().items.map((i) => i.src)).toEqual(["c", "a", "b"]);
   });
 
-  // Reordering hit-tests the cells' rects, which jsdom must be given: a row of 100px cells.
+  // Reordering measures the slides, which jsdom must be given: a row of 100px slides, no gap.
   function dragCell(from: number, to: number) {
-    const cells = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-media-cell]"),
+    const slides = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-carousel-slide]"),
     );
-    cells.forEach((cell, index) => {
+    slides.forEach((slide, index) => {
       const left = index * 100;
       const at = () =>
         ({
@@ -3885,12 +3888,29 @@ describe("ArticleEditor collection block", () => {
           y: 0,
           toJSON: () => "",
         }) as DOMRect;
-      cell.getBoundingClientRect = at;
-      cell.querySelector("img")!.getBoundingClientRect = at;
+      Object.defineProperty(slide, "offsetLeft", { value: left });
+      Object.defineProperty(slide, "offsetWidth", { value: 100 });
+      slide.getBoundingClientRect = at;
+      slide.querySelectorAll<HTMLElement>("*").forEach((inside) => {
+        inside.getBoundingClientRect = at;
+      });
     });
+    const cells = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-media-cell]"),
+    );
 
+    // Pressed at its middle and nudged 20px, so its place counts from 20px left of the pointer:
+    // past the middle of the slide at `to`, from either side.
     const at = (index: number) => ({ clientX: index * 100 + 50, clientY: 50 });
-    const send = (type: string, target: Element, point: ReturnType<typeof at>) => {
+    const past = (index: number) => ({
+      clientX: index * 100 + (to > from ? 80 : 60),
+      clientY: 50,
+    });
+    const send = (
+      type: string,
+      target: Element,
+      point: { clientX: number; clientY: number },
+    ) => {
       // jsdom has no PointerEvent; a MouseEvent carrying the pointer fields reaches the handlers.
       const event = new MouseEvent(type, {
         bubbles: true,
@@ -3903,21 +3923,25 @@ describe("ArticleEditor collection block", () => {
     };
 
     send("pointerdown", cells[from].querySelector("img")!, at(from));
-    send("pointermove", cells[from], at(to));
-    send("pointerup", cells[from], at(to));
+    send("pointermove", cells[from], {
+      clientX: at(from).clientX + 20,
+      clientY: 50,
+    });
+    send("pointermove", cells[from], past(to));
+    send("pointerup", cells[from], past(to));
   }
 
-  it("swaps two slots when a tile is dragged onto another", () => {
+  it("moves an image to where it is dragged, the rest shifting over", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
       />,
     );
-    dragCell(1, 2);
-    expect(collection().items.map((i) => i.src)).toEqual(["a", "c", "b"]);
+    dragCell(0, 2);
+    expect(collection().items.map((i) => i.src)).toEqual(["b", "c", "a"]);
   });
 
-  it("features an image dragged into the first cell", () => {
+  it("features an image dragged to the front", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
@@ -3925,7 +3949,7 @@ describe("ArticleEditor collection block", () => {
     );
     dragCell(2, 0);
 
-    expect(collection().items.map((i) => i.src)).toEqual(["c", "b", "a"]);
+    expect(collection().items.map((i) => i.src)).toEqual(["c", "a", "b"]);
     expect(
       within(toolbarFor(0))
         .getByRole("button", { name: "Feature image" })
@@ -3961,30 +3985,27 @@ describe("ArticleEditor collection block", () => {
     expect(mediaActions.deleteMedia).not.toHaveBeenCalled();
   });
 
-  it("caps the picker at the remaining capacity when adding", () => {
+  it("opens the picker with no cap when adding", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([slot("a"), slot("b"), slot("c")])}
       />,
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Add Media" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Add image" }));
     expect(
-      screen.getByTestId("image-dialog").getAttribute("data-max-selection"),
-    ).toBe("3");
+      screen.getByTestId("image-dialog").hasAttribute("data-max-selection"),
+    ).toBe(false);
   });
 
-  it("appends without passing the cap", () => {
+  it("appends every picked image to the end, however many there are", () => {
     render(
       <ArticleEditor
-        initialPost={collectionPost([
-          slot("a"),
-          slot("b"),
-          slot("c"),
-          slot("d"),
-        ])}
+        initialPost={collectionPost(
+          ["a", "b", "c", "d", "e", "f"].map((src) => slot(src)),
+        )}
       />,
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Add Media" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Add image" }));
     fireEvent.click(screen.getByText("insert"));
 
     expect(collection().items.map((i) => i.src)).toEqual([
@@ -3992,8 +4013,12 @@ describe("ArticleEditor collection block", () => {
       "b",
       "c",
       "d",
+      "e",
+      "f",
       "https://cdn/1.png",
       "https://cdn/2.png",
+      "https://cdn/3.png",
+      "https://cdn/4.png",
     ]);
   });
 

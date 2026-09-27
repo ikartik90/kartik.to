@@ -560,13 +560,13 @@ describe("ArticleRenderer", () => {
       expect(screen.getByText("Collection caption text")).toBeDefined();
     });
 
-    it("folds a collection past three images into a surplus badge", () => {
+    it("shows every image of a collection as a slide in a carousel", () => {
       const { container } = render(
         <ArticleRenderer
           content={doc([
             {
               type: "collection",
-              items: Array.from({ length: 5 }, (_, i) => ({
+              items: Array.from({ length: 8 }, (_, i) => ({
                 type: "media",
                 kind: "image",
                 src: `https://example.com/${i}.png`,
@@ -577,8 +577,8 @@ describe("ArticleRenderer", () => {
         />,
       );
       // Scoped: this file renders without cleanup.
-      expect(within(container).getAllByRole("img")).toHaveLength(3);
-      expect(within(container).getByText("+2 Images")).toBeDefined();
+      expect(container.querySelector("[data-carousel]")).not.toBeNull();
+      expect(within(container).getAllByRole("img")).toHaveLength(8);
     });
 
     it("renders nothing for a collection with no images", () => {

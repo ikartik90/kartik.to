@@ -187,7 +187,7 @@ export type ImageInsertDialogProps = ImageInsertDialogBaseProps &
       }
     | {
         selectionMode: "multiple";
-        /** How many more images the target will take. */
+        /** How many more images the target will take; none means no limit. */
         maxSelection?: number;
         onInsert: (payloads: ImageInsertPayload[]) => void;
       }
@@ -284,7 +284,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
   } = props;
   const isMultiple = selectionMode === "multiple";
   const isDocument = accepts === "document";
-  const maxSelection = (isMultiple ? props.maxSelection : undefined) ?? 6;
+  const maxSelection = isMultiple ? props.maxSelection : undefined;
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -322,7 +322,7 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
     selectionMode,
     accepts,
     folder,
-    ...(isMultiple ? { maxSelection } : {}),
+    ...(maxSelection !== undefined ? { maxSelection } : {}),
   });
 
   const selectedCount = selectedKeys.length;
@@ -455,7 +455,9 @@ export function ImageInsertDialog(props: ImageInsertDialogProps) {
               <>
                 {isMultiple && (
                   <p className={selectionCountStyle} aria-live="polite">
-                    {selectedCount} of {maxSelection} selected
+                    {maxSelection === undefined
+                      ? `${selectedCount} selected`
+                      : `${selectedCount} of ${maxSelection} selected`}
                   </p>
                 )}
                 <figure className={mediaPreviewStyle}>

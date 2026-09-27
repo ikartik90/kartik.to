@@ -73,7 +73,7 @@ import {
   type ImageDialogMode,
 } from "@/components/image-insert-dialog";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
-import { CollectionGrid } from "@/components/collection-grid";
+import { EditableCarousel } from "@/components/editable-carousel";
 import { MediaObject } from "@/components/media-object";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
 import { useMediaProperties } from "@/hooks/use-media-properties";
@@ -109,12 +109,12 @@ import type {
   CodeLanguage,
   MediaNode,
 } from "@/domain/nodes";
-import { CodeLanguageSchema, COLLECTION_MAX_ITEMS } from "@/domain/nodes";
+import { CodeLanguageSchema } from "@/domain/nodes";
 import {
   appendItems,
   featureItem,
+  moveItem,
   removeItem,
-  swapItems,
   replaceItem,
 } from "@/utils/collection-items";
 import { CODE_LANGUAGE_LABELS } from "@/utils/syntax-highlight";
@@ -1104,7 +1104,7 @@ interface EditableBlockProps {
   /** Move a collection item to the front, making it the featured image. */
   onCollectionFeature?: (itemIndex: number) => void;
   onCollectionRemove?: (itemIndex: number) => void;
-  /** Swaps two collection slots. */
+  /** Moves one collection item to another place. */
   onCollectionReorder?: (from: number, to: number) => void;
   onChangeComponent?: () => void;
   onInsertParagraphBefore?: () => void;
@@ -2312,7 +2312,7 @@ function EditableBlock({
     );
   }
 
-  // The grid root takes the showcase-media contract, so a collection navigates like a single image.
+  // The carousel root takes the showcase-media contract, so a collection navigates like a single image.
   if (block.type === "collection") {
     const showcaseMediaProps = {
       tabIndex: 0 as const,
@@ -2328,7 +2328,7 @@ function EditableBlock({
         data-block-index={blockIndex}
         data-showcase-block=""
       >
-        <CollectionGrid
+        <EditableCarousel
           items={block.items}
           rootProps={showcaseMediaProps}
           onFeature={(i) => onCollectionFeature?.(i)}
@@ -3709,14 +3709,6 @@ export function ArticleEditor({
   }
 
   // Feature, remove and replace bypass the debounced `updateBlock`, so each is one clean undo step.
-  function collectionCapacity(index: number | null): number {
-    if (index === null) return COLLECTION_MAX_ITEMS;
-    const block = blocks[index];
-    return block?.type === "collection"
-      ? COLLECTION_MAX_ITEMS - block.items.length
-      : COLLECTION_MAX_ITEMS;
-  }
-
   function updateCollection(blockIndex: number, items: CollectionItem[]) {
     const block = blocks[blockIndex];
     if (block?.type !== "collection") return;
@@ -3749,7 +3741,7 @@ export function ArticleEditor({
     if (existing?.type !== "collection") {
       next[blockIndex] = {
         type: "collection",
-        items: payloads.slice(0, COLLECTION_MAX_ITEMS).map(mediaNodeFrom),
+        items: payloads.map(mediaNodeFrom),
       };
     } else if (collectionDialogTarget === null) {
       next[blockIndex] = {
@@ -4680,7 +4672,7 @@ export function ArticleEditor({
           onCollectionReorder={
             block.type === "collection"
               ? (from, to) =>
-                  updateCollection(i, swapItems(block.items, from, to))
+                  updateCollection(i, moveItem(block.items, from, to))
               : undefined
           }
           onChangeComponent={
@@ -4831,11 +4823,7 @@ export function ArticleEditor({
         mode={collectionDialogTarget === null ? "insert" : "change"}
         initialPhase="library"
         selectionMode="multiple"
-        maxSelection={
-          collectionDialogTarget === null
-            ? collectionCapacity(collectionDialogBlockIndex)
-            : 1
-        }
+        maxSelection={collectionDialogTarget === null ? undefined : 1}
         onClose={handleCollectionDialogClose}
         onInsert={handleCollectionInsert}
       />

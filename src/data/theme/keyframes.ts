@@ -5,10 +5,6 @@ export const keyframes = defineKeyframes({
     from: { backgroundPosition: "200% 0" },
     to: { backgroundPosition: "-200% 0" },
   },
-  collectionArrive: {
-    from: { opacity: 0 },
-    to: { opacity: 1 },
-  },
   // Travels its own width (`100%`), via `translate` so `transform` stays free.
   propertiesPanelIn: {
     from: { translate: "100% 0", opacity: 0 },

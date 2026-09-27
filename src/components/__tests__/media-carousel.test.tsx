@@ -2,15 +2,16 @@
 import { StrictMode } from "react";
 import {
   act,
-  render,
-  screen,
   cleanup,
   fireEvent,
+  render,
+  screen,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_BACKGROUND_EFFECT, type CollectionItem } from "@/domain/nodes";
+import { DEFAULT_BACKGROUND_EFFECT, type MediaNode } from "@/domain/nodes";
+
 // StaticMeshGradient is WebGL, which jsdom can't run: a marker element carries its colours.
 vi.mock("@paper-design/shaders-react", () => ({
   StaticMeshGradient: ({
@@ -34,14 +35,24 @@ vi.mock("@paper-design/shaders-react", () => ({
   ),
 }));
 
-import { CollectionShowcase } from "../collection-showcase";
+import { MediaCarousel } from "../media-carousel";
 
-// jsdom has no <dialog> behaviour. The stubs mirror the platform: `close()` fires `close`
-// (what `Dialog` maps `onClose` to) and `showModal()` throws on an already-open dialog.
+const SCROLLER = "[data-carousel-scroller]";
+
+// jsdom does no layout, so each test states the geometry the browser would measure.
+let geometry = {
+  clientWidth: 1440,
+  scrollWidth: 3100,
+  slideStarts: [240, 900, 1560, 2220],
+  inset: "400px",
+};
+
+const originalGetComputedStyle = window.getComputedStyle;
+
 beforeEach(() => {
-  // jsdom has no media stack: `play()` returns nothing where a browser returns a promise.
   HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
   HTMLMediaElement.prototype.pause = vi.fn();
+  // As the platform: `close()` fires `close`, and `showModal()` throws on an open dialog.
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
   ) {
@@ -55,11 +66,189 @@ beforeEach(() => {
     this.removeAttribute("open");
     this.dispatchEvent(new Event("close"));
   });
+  Element.prototype.scrollTo = vi.fn();
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
+
+  Object.defineProperties(HTMLElement.prototype, {
+    clientWidth: {
+      configurable: true,
+      get() {
+        return this.matches(SCROLLER) ? geometry.clientWidth : 0;
+      },
+    },
+    scrollWidth: {
+      configurable: true,
+      get() {
+        return this.matches(SCROLLER) ? geometry.scrollWidth : 0;
+      },
+    },
+    offsetLeft: {
+      configurable: true,
+      get() {
+        if (!this.matches("[data-carousel-slide]")) return 0;
+        const index = Array.from(this.parentElement!.children).indexOf(this);
+        return geometry.slideStarts[index] ?? 0;
+      },
+    },
+  });
+
+  vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+    const style = originalGetComputedStyle(element, pseudo);
+    if (!element.matches(SCROLLER)) return style;
+    return new Proxy(style, {
+      get: (target, key) =>
+        key === "scrollPaddingInlineStart"
+          ? geometry.inset
+          : Reflect.get(target, key, target),
+    });
+  });
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  geometry = {
+    clientWidth: 1440,
+    scrollWidth: 3100,
+    slideStarts: [240, 900, 1560, 2220],
+    inset: "400px",
+  };
+});
 
-const items = (count: number): CollectionItem[] =>
+const items = (count: number): MediaNode[] =>
+  Array.from({ length: count }, (_, i) => ({
+    type: "media",
+    kind: "image",
+    src: `/img/${i}.jpg`,
+    alt: `Image ${i + 1}`,
+    width: 1600,
+    height: 1000,
+  }));
+
+const scroller = () => document.querySelector<HTMLElement>(SCROLLER)!;
+
+function scrollTo(left: number) {
+  Object.defineProperty(scroller(), "scrollLeft", {
+    configurable: true,
+    value: left,
+  });
+  act(() => {
+    fireEvent.scroll(scroller());
+  });
+}
+
+describe("MediaCarousel", () => {
+  it("renders nothing without items", () => {
+    const { container } = render(<MediaCarousel items={[]} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("shows every item as a slide, named by its alt text", () => {
+    render(<MediaCarousel items={items(4)} />);
+    for (const name of ["Image 1", "Image 2", "Image 3", "Image 4"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  it("gives each slide its media's shape", () => {
+    render(<MediaCarousel items={items(1)} />);
+    const slide = document.querySelector<HTMLElement>("[data-media-surface]")!;
+    expect(slide.style.aspectRatio).toBe("1600 / 1000");
+  });
+
+  it("opens the lightbox on the slide pressed", async () => {
+    const user = userEvent.setup();
+    render(<MediaCarousel items={items(4)} />);
+    await user.click(screen.getByRole("button", { name: "Image 3" }));
+    const dialog = screen.getByRole("dialog", { name: "Image 3" });
+    expect(dialog.hasAttribute("open")).toBe(true);
+  });
+
+  describe("pinching", () => {
+    const pinch = (deltaY: number) =>
+      act(() => {
+        scroller().dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: true,
+            deltaY,
+            clientX: 1000,
+            clientY: 200,
+          }),
+        );
+      });
+
+    const layOut = () =>
+      document
+        .querySelectorAll<HTMLElement>("[data-carousel-slide]")
+        .forEach((slide, i) => {
+          slide.getBoundingClientRect = () => new DOMRect(i * 700, 0, 640, 400);
+        });
+
+    it("opens the lightbox on the slide a pinch spreads", () => {
+      render(<MediaCarousel items={items(4)} />);
+      layOut();
+      pinch(-10);
+      expect(screen.getByRole("dialog", { name: "Image 2" })).toBeTruthy();
+    });
+
+    it("leaves a pinch in alone", () => {
+      render(<MediaCarousel items={items(4)} />);
+      layOut();
+      pinch(10);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  describe("stepping", () => {
+    it("holds Previous at the start and steps Next to the next slide", async () => {
+      const user = userEvent.setup();
+      render(<MediaCarousel items={items(4)} />);
+      const previous = screen.getByRole("button", { name: "Previous" });
+      expect(previous.getAttribute("aria-disabled")).toBe("true");
+
+      await user.click(screen.getByRole("button", { name: "Next" }));
+      expect(scroller().scrollTo).toHaveBeenCalledWith(
+        expect.objectContaining({ left: 500 }),
+      );
+    });
+
+    it("steps Previous back to the slide before", async () => {
+      const user = userEvent.setup();
+      render(<MediaCarousel items={items(4)} />);
+      scrollTo(1160);
+
+      const previous = screen.getByRole("button", { name: "Previous" });
+      expect(previous.getAttribute("aria-disabled")).toBeNull();
+      await user.click(previous);
+      expect(scroller().scrollTo).toHaveBeenCalledWith(
+        expect.objectContaining({ left: 500 }),
+      );
+    });
+
+    it("holds Next once the last slide has arrived", async () => {
+      const user = userEvent.setup();
+      render(<MediaCarousel items={items(4)} />);
+      scrollTo(1660);
+
+      const next = screen.getByRole("button", { name: "Next" });
+      expect(next.getAttribute("aria-disabled")).toBe("true");
+      await user.click(next);
+      expect(scroller().scrollTo).not.toHaveBeenCalled();
+    });
+
+    it("offers no stepping when every slide fits", () => {
+      geometry = { ...geometry, scrollWidth: 1440 };
+      render(<MediaCarousel items={items(2)} />);
+      expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Previous" })).toBeNull();
+    });
+  });
+});
+
+// Alt text "Image 0", "Image 1"… as the lightbox tests expect.
+const named = (count: number): MediaNode[] =>
   Array.from({ length: count }, (_, i) => ({
     type: "media",
     kind: "image",
@@ -67,42 +256,16 @@ const items = (count: number): CollectionItem[] =>
     alt: `Image ${i}`,
   }));
 
+const frame = () =>
+  screen.getByRole("dialog").querySelector<HTMLElement>("[data-lightbox-frame]")!;
+
 const tiles = () =>
   screen.queryAllByRole("button").filter((el) => el.querySelector("img"));
 
-describe("CollectionShowcase layout", () => {
-  it("renders nothing for an empty collection", () => {
-    const { container } = render(<CollectionShowcase items={[]} />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it("shows one tile for one image and two for two", () => {
-    const { rerender } = render(<CollectionShowcase items={items(1)} />);
-    expect(tiles()).toHaveLength(1);
-    rerender(<CollectionShowcase items={items(2)} />);
-    expect(tiles()).toHaveLength(2);
-  });
-
-  it("shows exactly three tiles from three images up", () => {
-    const { rerender } = render(<CollectionShowcase items={items(3)} />);
-    expect(tiles()).toHaveLength(3);
-    rerender(<CollectionShowcase items={items(6)} />);
-    expect(tiles()).toHaveLength(3);
-  });
-
-  it("folds the images it cannot show into a surplus count", () => {
-    render(<CollectionShowcase items={items(5)} />);
-    expect(screen.getByText("+2 Images")).toBeDefined();
-  });
-
-  it("shows no surplus badge when everything fits", () => {
-    render(<CollectionShowcase items={items(3)} />);
-    expect(screen.queryByText(/Images$/)).toBeNull();
-  });
-
+describe("MediaCarousel slides", () => {
   it("falls back to the caption for alt text", () => {
     render(
-      <CollectionShowcase
+      <MediaCarousel
         items={[
           { type: "media", kind: "image", src: "/a.jpg", caption: "A caption" },
         ]}
@@ -111,9 +274,9 @@ describe("CollectionShowcase layout", () => {
     expect(screen.getByAltText("A caption")).toBeDefined();
   });
 
-  it("hands the tile and its ground no corner off the picture", () => {
+  it("hands the slide and its ground no corner off the picture", () => {
     render(
-      <CollectionShowcase
+      <MediaCarousel
         items={[
           {
             type: "media",
@@ -125,19 +288,19 @@ describe("CollectionShowcase layout", () => {
         ]}
       />,
     );
-    const cell = tiles()[0].parentElement!;
-    expect(cell.getAttribute("style")).toBeNull();
+    const slide = tiles()[0].parentElement!;
+    expect(slide.style.borderRadius).toBe("");
     expect(
-      cell.querySelector<HTMLElement>("[data-background-effect]")!.style
+      slide.querySelector<HTMLElement>("[data-background-effect]")!.style
         .borderRadius,
     ).toBe("");
   });
 });
 
-describe("CollectionShowcase lightbox", () => {
+describe("MediaCarousel lightbox", () => {
   const openLightbox = async (count: number, tileIndex = 0) => {
     const user = userEvent.setup();
-    render(<CollectionShowcase items={items(count)} />);
+    render(<MediaCarousel items={named(count)} />);
     await user.click(tiles()[tileIndex]);
     return user;
   };
@@ -146,15 +309,6 @@ describe("CollectionShowcase lightbox", () => {
     await openLightbox(5, 1);
     const dialog = screen.getByRole("dialog");
     expect(dialog.querySelector("img")?.getAttribute("alt")).toBe("Image 1");
-  });
-
-  it("opens on the fourth image from the surplus badge", async () => {
-    const user = userEvent.setup();
-    render(<CollectionShowcase items={items(5)} />);
-    await user.click(screen.getByRole("button", { name: /2 more images/i }));
-    expect(
-      screen.getByRole("dialog").querySelector("img")?.getAttribute("alt"),
-    ).toBe("Image 3");
   });
 
   it("steps through every image with the arrow keys, not just the tiles", async () => {
@@ -176,7 +330,7 @@ describe("CollectionShowcase lightbox", () => {
   it("shows the open image's own caption", async () => {
     const user = userEvent.setup();
     render(
-      <CollectionShowcase
+      <MediaCarousel
         items={[
           { type: "media", kind: "image", src: "/a.jpg", alt: "A", caption: "First" },
           { type: "media", kind: "image", src: "/b.jpg", alt: "B", caption: "Second" },
@@ -198,19 +352,19 @@ describe("CollectionShowcase lightbox", () => {
     Object.defineProperty(img, "naturalWidth", { value: 640, configurable: true });
     Object.defineProperty(img, "naturalHeight", { value: 480, configurable: true });
     fireEvent.load(img);
-    expect(img.style.maxWidth).toBe("min(640px, 85vw)");
-    expect(img.style.width).toBe("");
+    expect(frame().style.getPropertyValue("--frame-max")).toBe("640px");
   });
 
-  it("does not inherit the previous image's box when you navigate", async () => {
+  it("does not inherit the previous image's shape when you navigate", async () => {
     await openLightbox(2, 0);
     const dialog = screen.getByRole("dialog");
     const first = dialog.querySelector("img")!;
     Object.defineProperty(first, "naturalWidth", { value: 640, configurable: true });
+    Object.defineProperty(first, "naturalHeight", { value: 480, configurable: true });
     fireEvent.load(first);
 
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
-    expect(dialog.querySelector("img")!.style.maxWidth).toBe("");
+    expect(frame().style.getPropertyValue("--frame-max")).toBe("");
   });
 
   it("closes on Escape", async () => {
@@ -230,7 +384,7 @@ describe("CollectionShowcase lightbox", () => {
     const user = userEvent.setup();
     render(
       <StrictMode>
-        <CollectionShowcase items={items(3)} />
+        <MediaCarousel items={named(3)} />
       </StrictMode>,
     );
     await user.click(tiles()[0]);
@@ -238,37 +392,11 @@ describe("CollectionShowcase lightbox", () => {
   });
 });
 
-describe("CollectionShowcase lightbox corner", () => {
-  let resizePictureTo: ((width: number) => void) | null = null;
-
-  beforeEach(() => {
-    resizePictureTo = null;
-    // jsdom has no layout or ResizeObserver: the picture's width is whatever this stub reports.
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        constructor(callback: ResizeObserverCallback) {
-          resizePictureTo = (width: number) =>
-            act(() =>
-              callback(
-                [{ contentRect: { width } } as ResizeObserverEntry],
-                this as unknown as ResizeObserver,
-              ),
-            );
-        }
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
-  });
-
-  afterEach(() => vi.unstubAllGlobals());
-
-  const openRounded = async (item: Partial<CollectionItem> = {}) => {
+describe("MediaCarousel lightbox picture", () => {
+  const openRounded = async (item: Partial<MediaNode> = {}) => {
     const user = userEvent.setup();
     render(
-      <CollectionShowcase
+      <MediaCarousel
         items={[
           { type: "media", kind: "image", src: "/a.jpg", alt: "A", borderRadius: 20, ...item },
           { type: "media", kind: "image", src: "/b.jpg", alt: "B", borderRadius: 8 },
@@ -279,104 +407,51 @@ describe("CollectionShowcase lightbox corner", () => {
     return screen.getByRole("dialog");
   };
 
-  it("grows the corner with the picture it is enlarging", async () => {
+  it("rounds the picture as its tile does, in shares of the frame's width", async () => {
     const dialog = await openRounded();
-    const img = dialog.querySelector("img")!;
-
-    expect(img.style.borderRadius).toBe("20px");
-
-    resizePictureTo!(1280);
-    expect(img.style.borderRadius).toBe("40px");
-  });
-
-  it("shrinks it on a viewport too narrow for the authored size", async () => {
-    const dialog = await openRounded();
-    resizePictureTo!(320);
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("10px");
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("3.125cqw");
   });
 
   it("leaves the card behind it alone", async () => {
     const dialog = await openRounded({
       backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
     });
-    resizePictureTo!(1280);
-
     const ground = dialog.querySelector<HTMLElement>("[data-background-effect]")!;
     expect(ground.style.borderRadius).toBe("");
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("40px");
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("3.125cqw");
   });
 
-  it("does not carry the previous image's box across a step", async () => {
+  it("does not carry the previous image's corner across a step", async () => {
     const dialog = await openRounded();
-    resizePictureTo!(1280);
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("40px");
-
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("8px");
+    expect(dialog.querySelector("img")!.style.borderRadius).toBe("1.25cqw");
   });
 
   it("leaves a square picture square at any size", async () => {
     const dialog = await openRounded({ borderRadius: undefined });
-    resizePictureTo!(1280);
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("0px");
+    expect(dialog.querySelector("img")!.style.borderRadius).toMatch(/^0(px)?$/);
   });
 
-  it("grows the band with the picture it is enlarging", async () => {
+  it("insets the picture by its band, a share of the frame's width", async () => {
     const dialog = await openRounded({ padding: 40 });
-    const img = dialog.querySelector("img")!;
-
-    expect(img.style.margin).toBe("40px");
-
-    // A 1120px picture with a 40-per-640 band each side implies a 1280px box, so the band is 80.
-    resizePictureTo!(1120);
-    expect(img.style.margin).toBe("80px");
-    // The corner is a share of that same box: 20 of 640 is 40 at 1280.
-    expect(img.style.borderRadius).toBe("40px");
+    const band = dialog.querySelector<HTMLElement>("[data-media-box]")!;
+    expect(band.style.padding).toBe("6.25%");
   });
 
-  it("settles the band in one measurement", async () => {
+  it("sizes the frame for the picture and its band together", async () => {
     const dialog = await openRounded({ padding: 40 });
     const img = dialog.querySelector("img")!;
-
-    resizePictureTo!(1120);
-    expect(img.style.margin).toBe("80px");
-    resizePictureTo!(1120);
-    expect(img.style.margin).toBe("80px");
-  });
-
-  it("leaves the band room inside the viewport caps", async () => {
-    const dialog = await openRounded({ padding: 40 });
-    const img = dialog.querySelector("img")!;
-    // The CSSOM folds the multiplication into one number.
-    expect(img.style.maxWidth).toBe(`calc(${85 * 0.875}vw)`);
-    expect(img.style.maxHeight).toBe(
-      `calc((85vh - var(--spacing-4xl)) / ${1 / 0.875})`,
-    );
-
-    Object.defineProperty(img, "naturalWidth", {
-      value: 640,
-      configurable: true,
-    });
-    Object.defineProperty(img, "naturalHeight", {
-      value: 480,
-      configurable: true,
-    });
+    Object.defineProperty(img, "naturalWidth", { value: 640 });
+    Object.defineProperty(img, "naturalHeight", { value: 480 });
     fireEvent.load(img);
-    expect(img.style.maxWidth).toBe("min(640px, calc(85vw * 0.875))");
-    expect(img.style.maxHeight).toBe(
-      `calc((85vh - var(--spacing-4xl)) / ${1 + (2 * (40 / 640) * (640 / 480)) / 0.875})`,
+    expect(frame().style.getPropertyValue("--frame-aspect")).toBe(
+      String(1 / (0.875 / (640 / 480) + 0.125)),
     );
-  });
-
-  it("leaves an uninset picture's caps alone", async () => {
-    const img = (await openRounded()).querySelector("img")!;
-    expect(img.style.maxWidth).toBe("");
-    expect(img.style.maxHeight).toBe("");
-    expect(img.style.margin).toBe("0px");
+    expect(frame().style.getPropertyValue("--frame-max")).toBe(`${640 / 0.875}px`);
   });
 });
 
-describe("CollectionShowcase clips", () => {
+describe("MediaCarousel clips", () => {
   const clip = {
     type: "media" as const,
     kind: "video" as const,
@@ -386,7 +461,7 @@ describe("CollectionShowcase clips", () => {
 
   it("plays an mp4 tile as a video, still under the tile's own button", async () => {
     const user = userEvent.setup();
-    render(<CollectionShowcase items={[clip]} />);
+    render(<MediaCarousel items={[clip]} />);
 
     const tile = screen.getByRole("button", { name: "A demo" });
     expect(tile.querySelector("video")).not.toBeNull();
@@ -397,7 +472,7 @@ describe("CollectionShowcase clips", () => {
 
   it("gives a clip tile a chip outside the button that opens the lightbox", async () => {
     const user = userEvent.setup();
-    render(<CollectionShowcase items={[clip]} />);
+    render(<MediaCarousel items={[clip]} />);
 
     const tile = screen.getByRole("button", { name: "A demo" });
     const chip = screen.getByRole("button", { name: /video$/ });
@@ -417,27 +492,6 @@ describe("CollectionShowcase clips", () => {
     ).toBeTruthy();
   });
 
-  it("plays the featured clip in the grid and holds the rest still", () => {
-    render(
-      <CollectionShowcase
-        items={[
-          { type: "media", kind: "video", src: "/a.mp4", alt: "A" },
-          { type: "media", kind: "video", src: "/b.mp4", alt: "B" },
-          { type: "media", kind: "video", src: "/c.mp4", alt: "C" },
-        ]}
-      />,
-    );
-
-    const tiles = Array.from(document.querySelectorAll("video"));
-    expect(tiles).toHaveLength(3);
-    expect(tiles.map((v) => v.hasAttribute("autoplay"))).toEqual([
-      true,
-      false,
-      false,
-    ]);
-    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
-  });
-
   it("shows a clip stored under an extensionless key, in the tile and enlarged", async () => {
     const user = userEvent.setup();
     const keyed = {
@@ -446,7 +500,7 @@ describe("CollectionShowcase clips", () => {
       src: "media/8f2c-4b1e-key",
       alt: "A demo",
     };
-    render(<CollectionShowcase items={[keyed]} />);
+    render(<MediaCarousel items={[keyed]} />);
 
     const tile = screen.getByRole("button", { name: "A demo" });
     expect(tile.querySelector("video")).not.toBeNull();
@@ -458,7 +512,7 @@ describe("CollectionShowcase clips", () => {
   it("plays whichever clip the lightbox opens", async () => {
     const user = userEvent.setup();
     render(
-      <CollectionShowcase
+      <MediaCarousel
         items={[
           { type: "media", kind: "video", src: "/a.mp4", alt: "A" },
           { type: "media", kind: "video", src: "/b.mp4", alt: "B" },
@@ -473,13 +527,14 @@ describe("CollectionShowcase clips", () => {
 
   it("caps the lightbox at the clip's own width", async () => {
     const user = userEvent.setup();
-    render(<CollectionShowcase items={[clip]} />);
+    render(<MediaCarousel items={[clip]} />);
     await user.click(screen.getByRole("button", { name: "A demo" }));
 
     const opened = screen.getByRole("dialog").querySelector("video")!;
     Object.defineProperty(opened, "videoWidth", { value: 1280 });
+    Object.defineProperty(opened, "videoHeight", { value: 720 });
     fireEvent.loadedMetadata(opened);
 
-    expect(opened.style.maxWidth).toBe("min(1280px, 85vw)");
+    expect(frame().style.getPropertyValue("--frame-max")).toBe("1280px");
   });
 });

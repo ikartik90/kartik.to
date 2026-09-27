@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { SUMMARY_MAX_CHARS } from "@/utils/post-summary";
 import {
   BlockNodeSchema,
-  COLLECTION_MAX_ITEMS,
   MarkSchema,
   TextNodeSchema,
 } from "../nodes";
@@ -331,15 +330,15 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  it("rejects a collection node past COLLECTION_MAX_ITEMS", () => {
+  it("accepts a collection node of any length", () => {
     expect(
       BlockNodeSchema.safeParse({
         type: "collection",
-        items: Array.from({ length: COLLECTION_MAX_ITEMS + 1 }, (_, i) => ({
+        items: Array.from({ length: 30 }, (_, i) => ({
           src: `/uploads/${i}.jpg`,
         })),
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("accepts a collection node holding a clip beside a picture", () => {

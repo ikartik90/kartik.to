@@ -131,6 +131,26 @@ describe("Dialog", () => {
     expect(dialog.close).toHaveBeenCalled();
   });
 
+  it("hands Escape and a backdrop press to onRequestClose instead of closing", () => {
+    const ref = createRef<HTMLDialogElement>();
+    const onRequestClose = vi.fn();
+    render(
+      <Dialog ref={ref} onRequestClose={onRequestClose}>
+        <p>inner</p>
+      </Dialog>,
+    );
+    ref.current?.showModal();
+    const dialog = ref.current!;
+
+    const notPrevented = fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(notPrevented).toBe(false);
+    fireEvent.click(dialog, { target: dialog });
+
+    expect(onRequestClose).toHaveBeenCalledTimes(2);
+    expect(dialog.close).not.toHaveBeenCalled();
+    expect(dialog.open).toBe(true);
+  });
+
   it("does not close when clicking inner content", () => {
     const ref = createRef<HTMLDialogElement>();
     render(

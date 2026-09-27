@@ -5,6 +5,7 @@ import {
   useState,
   type HTMLAttributes,
   type ReactNode,
+  type Ref,
 } from "react";
 import { Media } from "@/components/media";
 import { MediaTransport } from "@/components/media-transport";
@@ -28,9 +29,9 @@ export interface MediaTileProps {
   fallbackLabel: string;
   autoPlay?: boolean;
   onOpen: () => void;
-  transportCorner?: "start" | "end";
   children?: ReactNode;
   surfaceProps?: HTMLAttributes<HTMLDivElement> & {
+    ref?: Ref<HTMLDivElement>;
     [state: `data-${string}`]: unknown;
   };
 }
@@ -41,7 +42,6 @@ export function MediaTile({
   fallbackLabel,
   autoPlay = true,
   onOpen,
-  transportCorner,
   children,
   surfaceProps,
 }: MediaTileProps) {
@@ -65,8 +65,6 @@ export function MediaTile({
       )}
       <button
         type="button"
-        // The hook the surplus badge's quadrant layout keys on — the photo's
-        // button leaves the flow so the grid positions nothing but the badge.
         data-media-tile=""
         className={classes.tile}
         aria-label={collectionItemAlt(item) || fallbackLabel}
@@ -86,7 +84,7 @@ export function MediaTile({
         />
       </button>
       {children}
-      <MediaTransport clip={clip} corner={transportCorner} />
+      <MediaTransport clip={clip} />
     </div>
   );
 }

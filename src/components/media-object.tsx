@@ -36,6 +36,10 @@ export interface MediaObjectProps {
   /** Names what the trash does here: empty a slot, or delete a block. */
   removeLabel?: string;
   checkered?: boolean;
+  rootProps?: HTMLAttributes<HTMLDivElement> & {
+    ref?: Ref<HTMLDivElement>;
+    [state: `data-${string}`]: unknown;
+  };
   frameProps?: HTMLAttributes<HTMLDivElement> & {
     ref?: Ref<HTMLDivElement>;
     [state: `data-${string}`]: unknown;
@@ -70,12 +74,13 @@ export function MediaObject({
   onRemove,
   removeLabel = "Remove image",
   checkered = false,
+  rootProps,
   frameProps,
   mediaProps,
   placeholder,
 }: MediaObjectProps) {
   return (
-    <div className={classes.root}>
+    <div {...rootProps} className={classes.root}>
       <div
         className={classes.frame}
         // The hook the rail's reveal rule keys on.
