@@ -295,11 +295,6 @@ function renderBlockNode(
       return (
         <figure key={index} className={articleShowcase()}>
           <MediaCarousel items={node.items} />
-          {node.caption && (
-            <Typography tag="figcaption" type="caption">
-              {node.caption}
-            </Typography>
-          )}
         </figure>
       );
 

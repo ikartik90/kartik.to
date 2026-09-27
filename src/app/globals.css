@@ -310,10 +310,6 @@ body[data-properties-panel-instant] {
     color: var(--colors-text-default);
   }
 
-  [data-slash-anchor] {
-    anchor-name: --slash-menu;
-  }
-
   /* Measured by SidenoteLayer in JS: WebKit resolves only an element's default position-anchor. */
   [data-sidenote-rail] {
     position: absolute;
@@ -395,6 +391,15 @@ html[data-control-dragging],
 html[data-control-dragging] * {
   -webkit-user-select: none !important;
   user-select: none !important;
+}
+
+/* Set by BlockReorder while a block is carried: every element under the pointer, text included. */
+html[data-block-dragging] * {
+  cursor: grabbing !important;
+}
+
+article > [data-reorder-source] {
+  opacity: 0.4;
 }
 
 /* A 16px floor on touch: iOS Safari zooms into any focused field below it. */

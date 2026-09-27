@@ -7,14 +7,14 @@ import {
 // Index 0 is the featured item; there is no flag. Out-of-range indices are
 // no-ops, since a removal can land between a render and a click.
 
-const inRange = (items: readonly MediaNode[], index: number) =>
+const inRange = (items: readonly unknown[], index: number) =>
   Number.isInteger(index) && index >= 0 && index < items.length;
 
-export function moveItem(
-  items: readonly MediaNode[],
+export function moveItem<T>(
+  items: readonly T[],
   from: number,
   to: number,
-): MediaNode[] {
+): T[] {
   const next = [...items];
   if (!inRange(items, from) || !inRange(items, to) || from === to) return next;
   const [moved] = next.splice(from, 1);

@@ -392,11 +392,10 @@ export function mediaReservationStyle(
     : reserved;
 }
 
-// `items` may be empty: removing items one by one passes through zero.
+// `items` may be empty: removing items one by one passes through zero. Captions are per item.
 export const CollectionNodeSchema = z.object({
   type: z.literal("collection"),
   items: z.array(CollectionItemSchema),
-  caption: z.string().optional(),
 });
 
 export const ComponentNodeSchema = z.object({

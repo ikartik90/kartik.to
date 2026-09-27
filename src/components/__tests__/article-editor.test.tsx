@@ -64,13 +64,15 @@ vi.mock("@/assets/icons/trash.svg", () => ({ default: () => null }));
 
 vi.mock("@/components/slash-menu", () => ({
   SlashMenu: ({
+    rect,
     onSelect,
     onDismiss,
   }: {
+    rect: { left: number; top: number; width: number; height: number };
     onSelect: (t: string) => void;
     onDismiss: () => void;
   }) => (
-    <div data-testid="slash-menu">
+    <div data-testid="slash-menu" data-rect={JSON.stringify(rect)}>
       <button onClick={() => onSelect("heading")}>heading</button>
       <button onClick={() => onSelect("paragraph")}>paragraph</button>
       <button onClick={() => onSelect("media")}>media</button>
@@ -1715,6 +1717,36 @@ describe("ArticleEditor", () => {
     fireEvent.click(screen.getByText("dismiss"));
     expect(screen.queryByTestId("slash-menu")).toBeNull();
     expect(block.textContent).toBe("/");
+  });
+
+  it("opens the slash menu under the typed slash, not under the whole block", () => {
+    render(<ArticleEditor />);
+    const block = document.querySelector(
+      "[data-block-index='0']",
+    ) as HTMLElement;
+    // jsdom's Range has no geometry: only the "/" reports a box here.
+    const glyph = { left: 140, top: 60, width: 6, height: 28 };
+    Object.defineProperty(Range.prototype, "getClientRects", {
+      configurable: true,
+      value(this: Range) {
+        return this.toString() === "/" ? [glyph] : [];
+      },
+    });
+    try {
+      block.focus();
+      block.textContent = "/A paragraph long enough to wrap onto a second line";
+      const range = document.createRange();
+      range.setStart(block.firstChild!, 1);
+      range.collapse(true);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      fireEvent.keyUp(block, { key: "/" });
+
+      const menu = screen.getByTestId("slash-menu");
+      expect(JSON.parse(menu.dataset.rect!)).toEqual(glyph);
+    } finally {
+      delete (Range.prototype as { getClientRects?: unknown }).getClientRects;
+    }
   });
 
   it("Backspace at the start of a non-empty heading downgrades it to a paragraph", () => {
@@ -4060,17 +4092,14 @@ describe("ArticleEditor collection block", () => {
     expect(collection().items[0].caption).toBe("A view");
   });
 
-  it("stores the block's own caption separately from the images'", () => {
+  it("gives the collection no caption of its own, only its images", () => {
     render(
       <ArticleEditor
         initialPost={collectionPost([slot("a", { caption: "Per image" })])}
       />,
     );
-    const figcaption = document.querySelector("figcaption") as HTMLElement;
-    figcaption.textContent = "Whole set";
-    fireEvent.input(figcaption);
 
-    expect(collection().caption).toBe("Whole set");
+    expect(document.querySelector("figcaption")).toBeNull();
     expect(collection().items[0].caption).toBe("Per image");
   });
 
@@ -4095,13 +4124,28 @@ describe("ArticleEditor collection block", () => {
     expect(blocks()).toHaveLength(2);
   });
 
-  it("navigates from the grid into the block caption with ArrowDown", () => {
+  it("moves from the grid to the next block with ArrowDown and ArrowRight", () => {
     render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
     const grid = document.querySelector("[data-showcase-media]") as HTMLElement;
-    grid.focus();
-    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    const next = document.querySelector("[data-block-index='1']");
+    for (const key of ["ArrowDown", "ArrowRight"]) {
+      act(() => grid.focus());
+      fireEvent.keyDown(grid, { key });
+      expect(document.activeElement).toBe(next);
+    }
+  });
 
-    expect(document.activeElement?.tagName.toLowerCase()).toBe("figcaption");
+  it("lands on the grid with ArrowUp from the next block", () => {
+    render(<ArticleEditor initialPost={collectionPost([slot("a")])} />);
+    const next = document.querySelector(
+      "[data-block-index='1']",
+    ) as HTMLElement;
+    act(() => next.focus());
+    fireEvent.keyDown(next, { key: "ArrowUp" });
+
+    expect(document.activeElement).toBe(
+      document.querySelector("[data-showcase-media]"),
+    );
   });
 });
 
@@ -4163,5 +4207,176 @@ describe("ArticleEditor — furniture slots", () => {
       expect(event.defaultPrevented).toBe(false);
     }
     expect(grid()).not.toBeNull();
+  });
+});
+
+describe("ArticleEditor block reorder", () => {
+  // jsdom lays nothing out, so the geometry is stated: blocks 100px tall and 20px apart in a
+  // column from x 100, in document order.
+  const topOf = (index: number) => index * 120;
+  const outers = () => {
+    const layer = document.querySelector("[data-block-reorder]");
+    return Array.from(layer?.parentElement?.children ?? []).filter(
+      (element) =>
+        element.matches("[data-block-index]") ||
+        element.querySelector("[data-block-index]") !== null,
+    );
+  };
+
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        const index = outers().indexOf(this);
+        const top = index < 0 ? 0 : topOf(index);
+        const [left, width, height] = index < 0 ? [0, 0, 0] : [100, 640, 100];
+        return {
+          left,
+          top,
+          width,
+          height,
+          right: left + width,
+          bottom: top + height,
+          x: left,
+          y: top,
+          toJSON: () => "",
+        } as DOMRect;
+      },
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    useEditorStore.getState().reset();
+  });
+
+  const post = (...texts: string[]) => ({
+    id: "reorder-post",
+    slug: "reorder-post",
+    title: "Reorder Post",
+    category: "ARTICLE" as const,
+    content: {
+      type: "doc" as const,
+      content: texts.map((text) => ({
+        type: "paragraph" as const,
+        children: [{ type: "text" as const, text }],
+      })),
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const texts = () =>
+    useEditorStore
+      .getState()
+      .document.content.map((block) =>
+        "children" in block
+          ? block.children.map((child) => child.text).join("")
+          : block.type,
+      );
+
+  function pointer(
+    type: "pointerdown" | "pointermove" | "pointerup",
+    target: Node,
+    clientX: number,
+    clientY: number,
+  ) {
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX,
+      clientY,
+    });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    fireEvent(target, event);
+  }
+
+  /** Carries block `from`'s handle down to `y` and lets go. */
+  function drop(from: number, y: number) {
+    pointer("pointermove", document, 120, topOf(from) + 50);
+    const handle = screen
+      .getAllByRole("button", { name: "Reorder block" })
+      .find((each) => each.style.top === `${topOf(from)}px`)!;
+    pointer("pointerdown", handle, 80, topOf(from) + 10);
+    pointer("pointermove", handle, 80, y);
+    pointer("pointerup", handle, 80, y);
+  }
+
+  it("moves a block to where its handle drops it, as one undo step", () => {
+    render(<ArticleEditor initialPost={post("one", "two", "three")} />);
+    drop(0, topOf(2) + 10);
+
+    expect(texts()).toEqual(["two", "one", "three"]);
+    expect(
+      Array.from(document.querySelectorAll("[data-block-index]")).map(
+        (block) => block.textContent,
+      ),
+    ).toEqual(["two", "one", "three"]);
+
+    act(() => useEditorStore.getState().undo());
+    expect(texts()).toEqual(["one", "two", "three"]);
+  });
+
+  it("keeps the trailing empty paragraph last", () => {
+    render(<ArticleEditor initialPost={post("one", "two", "")} />);
+    drop(0, topOf(2) + 90);
+
+    expect(texts()).toEqual(["two", "one", ""]);
+  });
+
+  const paragraphs = () =>
+    Array.from(document.querySelectorAll<HTMLElement>("[data-block-index]"));
+  const caretIn = (element: HTMLElement, offset: number) => {
+    act(() => element.focus());
+    const range = document.createRange();
+    range.setStart(element.firstChild!, offset);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+  };
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+  it("leaves the dropped block unfocused, so its handle goes with the pointer", async () => {
+    render(<ArticleEditor initialPost={post("one", "two", "three")} />);
+    caretIn(paragraphs()[0], 1);
+    drop(0, topOf(2) + 10);
+    await settle();
+
+    expect(paragraphs().includes(document.activeElement as HTMLElement)).toBe(
+      false,
+    );
+    pointer("pointermove", document, 900, topOf(1) + 50);
+    expect(screen.queryAllByRole("button", { name: "Reorder block" })).toEqual(
+      [],
+    );
+  });
+
+  it("keeps the caret in a block the move shifts along", async () => {
+    render(<ArticleEditor initialPost={post("one", "two", "three")} />);
+    caretIn(paragraphs()[1], 2);
+    drop(0, topOf(2) + 10);
+    await settle();
+
+    const moved = paragraphs()[0];
+    expect(moved.textContent).toBe("two");
+    expect(document.activeElement).toBe(moved);
+    expect(window.getSelection()!.anchorOffset).toBe(2);
+  });
+
+  it("leaves the focus alone in a block the move doesn't reach", async () => {
+    render(<ArticleEditor initialPost={post("one", "two", "three")} />);
+    const third = paragraphs()[2];
+    caretIn(third, 3);
+    drop(0, topOf(2) + 10);
+    await settle();
+
+    expect(document.activeElement).toBe(third);
+    expect(window.getSelection()!.anchorOffset).toBe(3);
   });
 });
