@@ -4,7 +4,10 @@ import {
   Children,
   createContext,
   isValidElement,
+  useCallback,
   useContext,
+  useLayoutEffect,
+  useRef,
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
@@ -17,18 +20,26 @@ import {
   type TooltipVariantProps,
 } from "../../../styled-system/recipes";
 
-// Position and visibility come from the host (Button/Link) via context. Always portalled to the
-// body: an ancestor with `overflow: hidden` or containment would clip a fixed box at the cursor.
+// Position and visibility come from the host (Button/Link) via context. Portalled to the body: an
+// ancestor with `overflow: hidden` or containment would clip a fixed box at the cursor. Except in a
+// <dialog>: a modal leaves the page inert and beneath it, so the box goes in the dialog as a popover.
 
 const subscribeNever = () => () => {};
 const onClient = () => true;
 const onServer = () => false;
+
+function setRef<T>(ref: Ref<T> | undefined, node: T | null) {
+  if (typeof ref === "function") ref(node);
+  else if (ref) ref.current = node;
+}
 
 type TooltipHost = {
   ref: Ref<HTMLElement>;
   visible: boolean;
   /** For a device with no cursor: the recipe's `&[data-docked]` rule places it instead. */
   docked?: boolean;
+  /** The element it labels, when the host knows it; the tooltip renders in its dialog. */
+  trigger?: HTMLElement | null;
 };
 
 /** Set by Button/Link so a Tooltip rendered as their sibling reads its ref + state. */
@@ -70,13 +81,35 @@ function TooltipRoot({ children, className, ...variants }: TooltipProps) {
   const label = items.find(isTooltipText);
   const rest = items.filter((child) => !isTooltipText(child));
 
+  const layer = host?.trigger?.closest("dialog") ?? null;
+  const visible = Boolean(host?.visible);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const hostRef = host?.ref;
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      boxRef.current = node;
+      setRef(hostRef, node);
+    },
+    [hostRef],
+  );
+
+  // Raised on every show, or whatever opened since it last showed (a reopened dialog) covers it.
+  // Optional calls: jsdom has no popover API.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!layer || !visible || !box) return;
+    box.hidePopover?.();
+    box.showPopover?.();
+  }, [layer, visible]);
+
   if (!hydrated) return null;
 
   return createPortal(
     <div
-      ref={host?.ref as Ref<HTMLDivElement>}
+      ref={ref}
+      popover={layer ? "manual" : undefined}
       className={cx(tooltip(variants), className)}
-      data-visible={host?.visible ? "" : undefined}
+      data-visible={visible ? "" : undefined}
       data-docked={host?.docked ? "" : undefined}
       aria-hidden
     >
@@ -84,7 +117,7 @@ function TooltipRoot({ children, className, ...variants }: TooltipProps) {
       {rest.length > 0 && <span className={dividerStyle} aria-hidden />}
       {rest}
     </div>,
-    document.body,
+    layer ?? document.body,
   );
 }
 

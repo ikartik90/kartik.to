@@ -49,12 +49,14 @@ export function useActionTooltip(children: ReactNode) {
   const hasText = content.some(isActionText);
 
   const [hovered, setHovered] = useState(false);
+  const [trigger, setTrigger] = useState<HTMLElement | null>(null);
   const { ref, seed } = useCursorTooltip(hovered);
 
   // Touch never opens the label. Checked per event, not per device: touchscreen laptops also hover.
   const show = useCallback(
-    (event: ReactPointerEvent) => {
+    (event: ReactPointerEvent<HTMLElement>) => {
       if (event.pointerType === "touch") return;
+      setTrigger(event.currentTarget);
       seed(event.clientX, event.clientY);
       setHovered(true);
     },
@@ -63,7 +65,7 @@ export function useActionTooltip(children: ReactNode) {
   const hide = useCallback(() => setHovered(false), []);
 
   const tooltipNode = tooltip ? (
-    <TooltipHostContext.Provider value={{ ref, visible: hovered }}>
+    <TooltipHostContext.Provider value={{ ref, visible: hovered, trigger }}>
       {tooltip}
     </TooltipHostContext.Provider>
   ) : null;

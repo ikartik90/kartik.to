@@ -17,6 +17,7 @@ import { Media } from "@/components/media";
 import { MediaTransport } from "@/components/media-transport";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Typography } from "@/components/ui/typography";
 import {
   MEDIA_PADDING_REFERENCE,
@@ -587,6 +588,9 @@ export function MediaLightbox({
                   onClick={() => go(index - 1)}
                 >
                   <ChevronLeftIcon aria-hidden />
+                  <Button.Tooltip>
+                    <Tooltip.Text>Previous</Tooltip.Text>
+                  </Button.Tooltip>
                 </Button>
                 <Button
                   variant="icon"
@@ -596,6 +600,9 @@ export function MediaLightbox({
                   onClick={() => go(index + 1)}
                 >
                   <ChevronRightIcon aria-hidden />
+                  <Button.Tooltip>
+                    <Tooltip.Text>Next</Tooltip.Text>
+                  </Button.Tooltip>
                 </Button>
               </div>
               <div
