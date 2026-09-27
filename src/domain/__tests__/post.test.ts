@@ -311,17 +311,19 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
-  it("accepts a collection node with items and a block caption", () => {
-    expect(
-      BlockNodeSchema.safeParse({
-        type: "collection",
-        items: [
-          { src: "/uploads/a.jpg", alt: "A", caption: "First" },
-          { src: "/uploads/b.jpg" },
-        ],
-        caption: "Field notes",
-      }).success,
-    ).toBe(true);
+  it("keeps each item's caption and drops one stored on the collection itself", () => {
+    const parsed = BlockNodeSchema.parse({
+      type: "collection",
+      items: [
+        { src: "/uploads/a.jpg", alt: "A", caption: "First" },
+        { src: "/uploads/b.jpg" },
+      ],
+      caption: "Field notes",
+    });
+    expect(parsed).not.toHaveProperty("caption");
+    expect(parsed.type === "collection" && parsed.items[0].caption).toBe(
+      "First",
+    );
   });
 
   it("accepts a collection node with no items", () => {

@@ -180,7 +180,7 @@ describe("documentToMarkdown", () => {
     ).toBe("![A](https://kartik.to/assets/a.png)\n");
   });
 
-  it("lists every picture in a collection, then its caption", () => {
+  it("lists every picture in a collection", () => {
     expect(
       md(
         doc({
@@ -189,11 +189,10 @@ describe("documentToMarkdown", () => {
             { type: "media", kind: "image", src: "/1.png", alt: "One" },
             { type: "media", kind: "image", src: "/2.png", alt: "Two" },
           ],
-          caption: "Both states",
         }),
       ),
     ).toBe(
-      "![One](https://kartik.to/1.png)\n\n![Two](https://kartik.to/2.png)\n\n_Both states_\n",
+      "![One](https://kartik.to/1.png)\n\n![Two](https://kartik.to/2.png)\n",
     );
   });
 

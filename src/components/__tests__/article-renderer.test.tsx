@@ -530,8 +530,8 @@ describe("ArticleRenderer", () => {
       ).not.toBeNull();
     });
 
-    it("renders a collection with the block's own caption", () => {
-      render(
+    it("draws no caption under a collection, even one stored before they were dropped", () => {
+      const { container } = render(
         <ArticleRenderer
           content={doc([
             {
@@ -551,13 +551,14 @@ describe("ArticleRenderer", () => {
                 },
               ],
               caption: "Collection caption text",
-            },
+            } as never,
           ])}
         />,
       );
       expect(screen.getByRole("img", { name: "First" })).toBeDefined();
       expect(screen.getByRole("img", { name: "Second" })).toBeDefined();
-      expect(screen.getByText("Collection caption text")).toBeDefined();
+      expect(screen.queryByText("Collection caption text")).toBeNull();
+      expect(container.querySelector("figcaption")).toBeNull();
     });
 
     it("shows every image of a collection as a slide in a carousel", () => {

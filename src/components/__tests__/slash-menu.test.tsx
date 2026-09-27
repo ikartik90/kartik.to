@@ -58,36 +58,106 @@ vi.mock("@/assets/icons/component.svg", () => ({
   ),
 }));
 
-function setSlashAnchorOnBody() {
-  const el = document.createElement("p");
-  el.setAttribute("data-slash-anchor", "");
-  document.body.appendChild(el);
-  return el;
-}
+const SLASH = { left: 140, top: 60, width: 6, height: 28 };
 
 describe("SlashMenu", () => {
   let onSelect: Mock<(type: SlashMenuBlockType) => void>;
   let onDismiss: Mock<() => void>;
-  let anchorEl: HTMLElement;
 
   beforeEach(() => {
     onSelect = vi.fn<(type: SlashMenuBlockType) => void>();
     onDismiss = vi.fn<() => void>();
-    anchorEl = setSlashAnchorOnBody();
   });
 
   afterEach(() => {
     cleanup();
-    anchorEl.remove();
     // Input modality is module-level: an arrow key in one test would suppress the next one's hover.
     resetInputModality();
   });
 
   function renderMenu(props: Partial<React.ComponentProps<typeof SlashMenu>> = {}) {
     return render(
-      <SlashMenu onSelect={onSelect} onDismiss={onDismiss} {...props} />,
+      <SlashMenu
+        rect={SLASH}
+        onSelect={onSelect}
+        onDismiss={onDismiss}
+        {...props}
+      />,
     );
   }
+
+  it("anchors under the typed slash, wherever it sits in its block", () => {
+    renderMenu();
+    const anchor = document.querySelector<HTMLElement>("[data-popover-anchor]");
+    expect(anchor?.style.left).toBe("140px");
+    expect(anchor?.style.top).toBe("60px");
+    expect(anchor?.style.height).toBe("28px");
+  });
+
+  describe("in a 700px viewport, with the menu 363px tall", () => {
+    const originalRect = Element.prototype.getBoundingClientRect;
+    const originalHeight = window.innerHeight;
+    // CSS places the menu 2px under the slash; jsdom lays nothing out, so both boxes are stated.
+    function layout(slash: { top: number; bottom: number }) {
+      window.innerHeight = 700;
+      Element.prototype.getBoundingClientRect = function (this: Element) {
+        const box = (top: number, height: number) =>
+          ({
+            top,
+            bottom: top + height,
+            height,
+            left: 140,
+            right: 340,
+            width: 200,
+          }) as DOMRect;
+        if (this.matches("[data-popover-anchor]")) {
+          return box(slash.top, slash.bottom - slash.top);
+        }
+        if (this.previousElementSibling?.matches("[data-popover-anchor]")) {
+          return box(slash.bottom + 2, 363);
+        }
+        return originalRect.call(this);
+      };
+    }
+    const menu = () =>
+      document.querySelector("[data-popover-anchor]")!
+        .nextElementSibling as HTMLElement;
+
+    afterEach(() => {
+      Element.prototype.getBoundingClientRect = originalRect;
+      window.innerHeight = originalHeight;
+    });
+
+    it("leaves the menu where CSS put it when a side of the slash fits it", () => {
+      layout({ top: 100, bottom: 120 });
+      renderMenu();
+      expect(menu().style.translate).toBe("");
+    });
+
+    it("slides it up into view when neither side fits and below has more room", () => {
+      layout({ top: 328, bottom: 348 });
+      renderMenu();
+      // Its foot 2px off the viewport's: 700 - 2 - 363 = 335, from 350.
+      expect(menu().style.translate).toBe("0px -15px");
+    });
+
+    it("pins it to the top when neither side fits and above has more room", () => {
+      layout({ top: 350, bottom: 370 });
+      renderMenu();
+      // 2px from the top, from 372.
+      expect(menu().style.translate).toBe("0px -370px");
+    });
+
+    it("fits it again when the window resizes", () => {
+      layout({ top: 100, bottom: 120 });
+      renderMenu();
+      layout({ top: 328, bottom: 348 });
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(menu().style.translate).toBe("0px -15px");
+    });
+  });
 
   it("positions via CSS anchor() — no inline top/left from JavaScript", () => {
     const listbox = renderMenu().getByRole("listbox", { name: "Insert block" });
@@ -320,7 +390,12 @@ describe("SlashMenu", () => {
     fireEvent.keyDown(document, { key: "ArrowDown" });
     act(() => {
       rerender(
-        <SlashMenu query="p" onSelect={onSelect} onDismiss={onDismiss} />,
+        <SlashMenu
+          rect={SLASH}
+          query="p"
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
     });
     const items = screen.getAllByRole("option");

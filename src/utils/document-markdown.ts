@@ -118,10 +118,7 @@ function block(
     case "media":
       return [media(node, origin), ...caption(node.caption)];
     case "collection":
-      return [
-        ...node.items.map((item) => media(item, origin)),
-        ...caption(node.caption),
-      ];
+      return node.items.map((item) => media(item, origin));
     case "metric": {
       const value = `**${inline(node.children, footnotes)}**`;
       const parts = [value, node.caption, node.subtext && `(${node.subtext})`];

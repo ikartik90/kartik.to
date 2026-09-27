@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { css } from "../../styled-system/css";
-import { Popover } from "@/components/ui/popover";
+import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { OptionList } from "@/components/ui/input/option-list";
 import SubheadingIcon from "@/assets/icons/subheading.svg";
 import ParagraphIcon from "@/assets/icons/paragraph.svg";
@@ -39,7 +40,11 @@ export interface SlashMenuEntry {
   Icon: React.FC<React.SVGProps<SVGSVGElement>>;
 }
 
+const slashAnchor = "--slash-menu";
+
 interface SlashMenuProps {
+  /** The typed "/", relative to the article. */
+  rect: PopoverRect;
   query?: string;
   allowedTypes?: ReadonlyArray<SlashMenuBlockType>;
   /** The type of the block being edited, hidden from the list. */
@@ -93,7 +98,7 @@ const slashMenuPopoverStyle = css({
   position: "fixed",
   zIndex: 50,
   width: "200px",
-  positionAnchor: "--slash-menu",
+  positionAnchor: slashAnchor,
   top: "anchor(bottom)",
   left: "anchor(left)",
   marginTop: "xs",
@@ -112,7 +117,29 @@ const slashMenuPopoverStyle = css({
     "0 4px 16px color-mix(in srgb, var(--colors-neutral-900) 12%, transparent)",
 });
 
+/**
+ * Anchor positioning flips the menu to whichever side of the slash fits it, but can't shift it.
+ * When neither side has room, this slides it from the roomier side just far enough to show it whole.
+ */
+function fitIntoView(menu: HTMLElement | null) {
+  if (!menu) return;
+  menu.style.translate = "";
+  const slash = menu.previousElementSibling?.getBoundingClientRect();
+  if (!slash) return;
+  const box = menu.getBoundingClientRect();
+  const gap = Math.max(box.top - slash.bottom, slash.top - box.bottom, 0);
+  const view = window.innerHeight;
+  const below = view - slash.bottom - gap;
+  const above = slash.top - gap;
+  if (box.height <= below || box.height <= above) return;
+  const top =
+    below >= above ? slash.bottom + gap : slash.top - gap - box.height;
+  const fitted = Math.max(Math.min(top, view - gap - box.height), gap);
+  menu.style.translate = `0px ${fitted - box.top}px`;
+}
+
 export function SlashMenu({
+  rect,
   query = "",
   allowedTypes,
   excludeType,
@@ -120,9 +147,31 @@ export function SlashMenu({
   onDismiss,
 }: SlashMenuProps) {
   const entries = getFilteredSlashMenu(query, allowedTypes, excludeType);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Every render: the query changes the menu's height.
+  useLayoutEffect(() => fitIntoView(menuRef.current));
+
+  useEffect(() => {
+    const fit = () => fitIntoView(menuRef.current);
+    window.addEventListener("resize", fit);
+    document.addEventListener("scroll", fit, true);
+    return () => {
+      window.removeEventListener("resize", fit);
+      document.removeEventListener("scroll", fit, true);
+    };
+  }, []);
 
   return (
-    <Popover className={slashMenuPopoverStyle} onDismiss={onDismiss}>
+    <Popover
+      rect={rect}
+      anchorName={slashAnchor}
+      className={slashMenuPopoverStyle}
+      containerRef={(node) => {
+        menuRef.current = node;
+      }}
+      onDismiss={onDismiss}
+    >
       <OptionList
         tone="plain"
         fit="content"

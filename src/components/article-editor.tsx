@@ -74,6 +74,7 @@ import {
 } from "@/components/image-insert-dialog";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import { EditableCarousel } from "@/components/editable-carousel";
+import { BlockReorder } from "@/components/block-reorder";
 import { MediaObject } from "@/components/media-object";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
 import { useMediaProperties } from "@/hooks/use-media-properties";
@@ -1162,8 +1163,6 @@ function EditableBlock({
       ? "Tell your story..."
       : undefined;
 
-  const slashAnchorProps = isSlashActive ? { "data-slash-anchor": "" } : {};
-
   const contentRef = useRef<HTMLElement | null>(null);
   const captionRef = useRef<HTMLElement | null>(null);
   const subtextRef = useRef<HTMLElement | null>(null);
@@ -1328,7 +1327,8 @@ function EditableBlock({
         case "ArrowDown":
           if (!e.shiftKey) {
             e.preventDefault();
-            focusCaption("start");
+            if (captionRef.current) focusCaption("start");
+            else onArrowDown?.();
           }
           break;
         case "Enter":
@@ -1346,7 +1346,8 @@ function EditableBlock({
         case "ArrowRight":
           if (!e.shiftKey) {
             e.preventDefault();
-            focusCaption("start");
+            if (captionRef.current) focusCaption("start");
+            else onArrowRight?.();
           }
           break;
         case "Tab":
@@ -1359,7 +1360,15 @@ function EditableBlock({
           break;
       }
     },
-    [onArrowUp, onArrowLeft, onDelete, focusCaption, onInsertParagraphBefore],
+    [
+      onArrowUp,
+      onArrowDown,
+      onArrowLeft,
+      onArrowRight,
+      onDelete,
+      focusCaption,
+      onInsertParagraphBefore,
+    ],
   );
 
   // Syncs external content changes; skipped while focused (it would reset the caret) and for non-editable blocks.
@@ -1389,7 +1398,6 @@ function EditableBlock({
   useEffect(() => {
     if (
       block.type !== "media" &&
-      block.type !== "collection" &&
       block.type !== "component" &&
       block.type !== "blockquote" &&
       block.type !== "heading" &&
@@ -1820,7 +1828,6 @@ function EditableBlock({
     (e: React.FormEvent<HTMLElement>) => {
       if (
         block.type !== "media" &&
-        block.type !== "collection" &&
         block.type !== "component" &&
         block.type !== "blockquote" &&
         block.type !== "heading" &&
@@ -2163,7 +2170,6 @@ function EditableBlock({
           onInput={handleInput}
           onPaste={handlePaste}
           data-block-index={blockIndex}
-          {...slashAnchorProps}
         />
       </div>
     );
@@ -2200,7 +2206,6 @@ function EditableBlock({
           data-placeholder={placeholder}
           data-block-index={blockIndex}
           data-empty={isBlockEmpty(block) ? "" : undefined}
-          {...slashAnchorProps}
         />
       </div>
     );
@@ -2226,7 +2231,6 @@ function EditableBlock({
             data-placeholder={placeholder}
             data-block-index={blockIndex}
             data-empty={isBlockEmpty(block) ? "" : undefined}
-            {...slashAnchorProps}
           />
           <cite
             ref={captionRef}
@@ -2337,17 +2341,6 @@ function EditableBlock({
           onReorder={(from, to) => onCollectionReorder?.(from, to)}
           onAddImage={() => onCollectionAdd?.()}
           onItemsChange={(items) => onChange({ ...block, items })}
-        />
-        <figcaption
-          ref={captionRef}
-          className={editorCaptionStyle}
-          contentEditable
-          suppressContentEditableWarning
-          data-placeholder="Add caption..."
-          data-block-index={blockIndex}
-          data-empty={!block.caption?.trim() ? "" : undefined}
-          onInput={handleCaptionInput}
-          onKeyDown={handleCaptionKeyDown}
         />
       </figure>
     );
@@ -2472,7 +2465,6 @@ function EditableBlock({
           onPaste={handlePaste}
           data-block-index={blockIndex}
           data-empty={isBlockEmpty(block) ? "" : undefined}
-          {...slashAnchorProps}
         />
       </div>
     );
@@ -2505,7 +2497,6 @@ function EditableBlock({
           onPaste={handlePaste}
           data-block-index={blockIndex}
           data-empty={isBlockEmpty(block) ? "" : undefined}
-          {...slashAnchorProps}
         />
         <span
           ref={subtextRef}
@@ -2546,7 +2537,6 @@ function EditableBlock({
       data-empty={isBlockEmpty(block) ? "" : undefined}
       data-indented={(block as { indent?: boolean }).indent ? "" : undefined}
       data-align={align}
-      {...slashAnchorProps}
     />
   );
 }
@@ -2572,6 +2562,14 @@ function withTrailingParagraph(blocks: BlockNode[]): BlockNode[] {
     ];
   }
   return blocks;
+}
+
+/** The trailing empty paragraph stays last. */
+function lastDropSlot(blocks: BlockNode[]): number {
+  const last = blocks[blocks.length - 1];
+  return last?.type === "paragraph" && isBlockEmpty(last)
+    ? blocks.length - 1
+    : blocks.length;
 }
 
 function ensureBlocks(doc: Document): BlockNode[] {
@@ -2990,6 +2988,8 @@ export function ArticleEditor({
     index: number;
     /** The block had text beyond the "/", so its content isn't the query. */
     hasExistingContent: boolean;
+    /** The "/" itself: the menu opens under it, not under the whole block. */
+    rect: ToolbarRect;
   } | null>(null);
   const [slashQuery, setSlashQuery] = useState("");
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
@@ -3050,7 +3050,10 @@ export function ArticleEditor({
       const caption = el.querySelector(
         "figcaption[contenteditable]",
       ) as HTMLElement | null;
-      if (!caption) return;
+      if (!caption) {
+        el.querySelector<HTMLElement>("[data-showcase-media]")?.focus();
+        return;
+      }
       caption.focus();
       if (!caption.isContentEditable) return;
       const sel = window.getSelection();
@@ -3590,7 +3593,19 @@ export function ArticleEditor({
 
   function handleSlash(el: HTMLElement, index: number) {
     const hasExistingContent = (el.innerText ?? "").trim().length > 1;
-    setSlashAnchor({ el, index, hasExistingContent });
+    // The menu opens only when the "/" is all that precedes the caret.
+    const sel = window.getSelection();
+    const range =
+      sel && sel.rangeCount > 0
+        ? sel.getRangeAt(0).cloneRange()
+        : document.createRange();
+    range.setStart(el, 0);
+    setSlashAnchor({
+      el,
+      index,
+      hasExistingContent,
+      rect: rectFromRange(range),
+    });
     setSlashQuery("");
   }
 
@@ -3706,6 +3721,39 @@ export function ArticleEditor({
     setComponentDialogOpen(false);
     setComponentDialogBlockIndex(null);
     setComponentDialogMode("insert");
+  }
+
+  function moveBlock(from: number, to: number) {
+    const active =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const at = blockRefs.current.findIndex(
+      (el) =>
+        el && active && (el.closest("article > *") ?? el).contains(active),
+    );
+    const shifted = at >= Math.min(from, to) && at <= Math.max(from, to);
+    const caret =
+      shifted &&
+      active &&
+      active === blockRefs.current[at] &&
+      active.matches("[contenteditable='true']")
+        ? getTextBeforeCursor(active).length
+        : null;
+    // Blur first: React reuses this focused node for the next block, and the focus-guarded sync would leave stale text.
+    if (shifted) active?.blur();
+    updateBlocks(moveItem(blocks, from, to));
+    cancelHistoryDebounce();
+    pushHistoryNow();
+    // Not the moved block: a focused one keeps its handle after the pointer has left.
+    if (!shifted || at === from) return;
+    const landed = from < to ? at - 1 : at + 1;
+    setTimeout(() => {
+      const el = blockRefs.current[landed];
+      if (!el) return;
+      if (caret === null) focusBlockAtStart(el);
+      else setCursorAtTextOffset(el, caret);
+    }, 0);
   }
 
   // Feature, remove and replace bypass the debounced `updateBlock`, so each is one clean undo step.
@@ -4703,8 +4751,15 @@ export function ArticleEditor({
         />
       ))}
 
+      <BlockReorder
+        blocks={() => blockRefs.current.slice(0, blocks.length)}
+        lastSlot={lastDropSlot(blocks)}
+        onMove={moveBlock}
+      />
+
       {slashAnchor && (
         <SlashMenu
+          rect={slashAnchor.rect}
           query={slashQuery}
           // Text on the line limits the menu to types that can hold it; furniture needs `slots` to render.
           allowedTypes={

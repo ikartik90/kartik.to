@@ -59,8 +59,8 @@ describe("reorderTarget", () => {
 });
 
 describe("edgeScrollSpeed", () => {
-  const speed = (x: number) =>
-    edgeScrollSpeed({ x, left: 0, right: 1000, zone: 100, max: 2 });
+  const speed = (at: number) =>
+    edgeScrollSpeed({ at, start: 0, end: 1000, zone: 100, max: 2 });
 
   it("is still away from the edges", () => {
     expect(speed(500)).toBe(0);
@@ -68,7 +68,7 @@ describe("edgeScrollSpeed", () => {
     expect(speed(900)).toBe(0);
   });
 
-  it("scrolls back near the left edge and on near the right", () => {
+  it("scrolls back near the start edge and on near the end", () => {
     expect(speed(50)).toBeLessThan(0);
     expect(speed(950)).toBeGreaterThan(0);
   });

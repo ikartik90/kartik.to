@@ -278,9 +278,9 @@ export function EditableCarousel({
     if (!state || !scroller) return;
     const frame = scroller.getBoundingClientRect();
     const speed = edgeScrollSpeed({
-      x: state.pointerX,
-      left: Math.max(frame.left, 0),
-      right: Math.min(frame.right, window.innerWidth),
+      at: state.pointerX,
+      start: Math.max(frame.left, 0),
+      end: Math.min(frame.right, window.innerWidth),
       zone: state.zone,
       max: EDGE_SPEED,
     });

@@ -63,24 +63,24 @@ export function reorderTarget({
   }
 }
 
-/** px/ms: negative towards the left edge, positive towards the right, ramping up across `zone`. */
+/** px/ms along one axis: negative towards the start edge, positive towards the end, ramping up across `zone`. */
 export function edgeScrollSpeed({
-  x,
-  left,
-  right,
+  at,
+  start,
+  end,
   zone,
   max,
 }: {
-  x: number;
-  left: number;
-  right: number;
+  at: number;
+  start: number;
+  end: number;
   zone: number;
   max: number;
 }): number {
   const ramp = (distance: number) =>
     Math.min(Math.max((zone - distance) / zone, 0), 1) ** 2 * max;
-  const back = ramp(x - left);
-  const on = ramp(right - x);
+  const back = ramp(at - start);
+  const on = ramp(end - at);
   if (back > 0) return -back;
   return on > 0 ? on : 0;
 }
