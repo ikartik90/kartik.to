@@ -14,7 +14,7 @@ import { WireframeText } from "./wireframe";
 
 export type ActionVariant = "text" | "icon" | "link";
 
-/** `secondary` is filled, `tertiary` unfilled, `glass` sits on a picture, `accent` is brand-tinted. */
+/** `secondary` is filled (on an icon, a 40px circle), `tertiary` unfilled, `glass` sits on a picture, `accent` is brand-tinted. */
 export type ActionEmphasis = "secondary" | "tertiary" | "glass" | "accent";
 
 /** `md` is the 40px chip, `sm` the 32px one; only the `text` variant has both. */

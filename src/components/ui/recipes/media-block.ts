@@ -33,7 +33,7 @@ export const mediaBlock = defineSlotRecipe({
       background: "none",
       appearance: "none",
       cursor: "zoom-in",
-      // Rung 1, over the ground, as in `collectionGrid`.
+      // Rung 1, over the ground, as in `carousel`.
       position: "relative",
       zIndex: 1,
       "html[data-keyboard-focus] &:focus-visible": {

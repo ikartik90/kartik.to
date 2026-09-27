@@ -162,6 +162,37 @@ describe("ImageInsertDialog (multi-select)", () => {
     expect(hookOptions?.maxSelection).toBe(6);
   });
 
+  it("asks the hook for an unlimited selection when given no cap", () => {
+    render(
+      <ImageInsertDialog
+        open
+        initialPhase="library"
+        selectionMode="multiple"
+        onClose={vi.fn()}
+        onInsert={vi.fn()}
+      />,
+    );
+    expect(hookOptions?.selectionMode).toBe("multiple");
+    expect(hookOptions?.maxSelection).toBeUndefined();
+  });
+
+  it("counts an uncapped selection without a limit", () => {
+    hookState = {
+      assets: [asset("a"), asset("b")],
+      selectedKeys: ["media/a.png", "media/b.png"],
+    };
+    render(
+      <ImageInsertDialog
+        open
+        initialPhase="library"
+        selectionMode="multiple"
+        onClose={vi.fn()}
+        onInsert={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("2 selected")).toBeDefined();
+  });
+
   it("titles itself for the batch", () => {
     renderMultiple();
     expect(screen.getByRole("heading", { name: "Insert Media" })).toBeDefined();

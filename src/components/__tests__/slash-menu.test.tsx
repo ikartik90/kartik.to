@@ -198,6 +198,12 @@ describe("SlashMenu", () => {
     expect(onSelect).toHaveBeenCalledWith("metric");
   });
 
+  it("offers a collection as a Carousel", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("option", { name: "Carousel" }));
+    expect(onSelect).toHaveBeenCalledWith("collection");
+  });
+
   it("calls onSelect with 'code_block' when Code Block is clicked", () => {
     renderMenu();
     fireEvent.click(screen.getByText("Code Block"));

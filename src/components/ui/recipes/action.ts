@@ -119,6 +119,26 @@ export const action = defineRecipe({
     },
     {
       variant: "icon",
+      emphasis: "secondary",
+      // The button link's look as a 40px circle.
+      css: {
+        width: "token(spacing.4xl)",
+        height: "token(spacing.4xl)",
+        padding: "none",
+        borderRadius: "full",
+        backgroundColor: "bg.button.secondary.default",
+        color: "text.body",
+        "&:not([aria-pressed='true']):is(:hover, [data-hover])": {
+          backgroundColor: "bg.button.secondary.hover",
+        },
+        _active: {
+          transform: "scale(0.97)",
+          backgroundColor: "bg.button.secondary.hover",
+        },
+      },
+    },
+    {
+      variant: "icon",
       emphasis: "glass",
       css: {
         backgroundColor: "bg.surfaceGlass",

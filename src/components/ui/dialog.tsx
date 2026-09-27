@@ -21,29 +21,29 @@ export type DialogAlign =
 
 export type DialogJustify = "start" | "center" | "end" | "stretch";
 
+export type DialogMotion = "scale" | "zoom";
+
 export interface DialogProps
   extends Omit<HTMLAttributes<HTMLDialogElement>, "onClose"> {
   align?: DialogAlign;
   justify?: DialogJustify;
+  motion?: DialogMotion;
   onClose?: () => void;
+  /** Takes Escape and a backdrop press instead of closing, for a caller that animates out first. */
+  onRequestClose?: () => void;
   children: ReactNode;
 }
 
 const dialogRecipe = cva({
   base: {
-    opacity: 0,
     display: "none",
-    transform: "scale(0.95)",
     transitionProperty: "opacity, transform, display, overlay",
-    transitionDuration: "80ms",
     transitionTimingFunction: "ease-out",
     transitionDelay: "0s",
     transitionBehavior: "allow-discrete",
 
     // Flex column: panel footers (`marginTop: auto`) and bodies (`flex: 1`) rely on it.
     "&[open]": {
-      opacity: 1,
-      transform: "scale(1)",
       display: "flex",
       flexDirection: "column",
     },
@@ -53,7 +53,6 @@ const dialogRecipe = cva({
       // No blur here: Panda emits only `-webkit-backdrop-filter`; globals.css sets both.
       backgroundColor: "bg.canvas/50",
       transitionProperty: "opacity, display, overlay",
-      transitionDuration: "80ms",
       transitionTimingFunction: "ease-out",
       transitionDelay: "0s",
       transitionBehavior: "allow-discrete",
@@ -65,10 +64,6 @@ const dialogRecipe = cva({
 
     // Must be a sibling of "&[open]", not nested inside it.
     _starting: {
-      "&[open]": {
-        opacity: 0,
-        transform: "scale(0.95)",
-      },
       "&[open]::backdrop": {
         opacity: 0,
       },
@@ -120,24 +115,57 @@ const dialogRecipe = cva({
         width: "calc(100% - token(spacing.xl) * 2)",
       },
     },
+
+    // `zoom`: the caller moves the contents itself, so only the backdrop fades, over its motion.
+    motion: {
+      scale: {
+        opacity: 0,
+        transform: "scale(0.95)",
+        transitionDuration: "80ms",
+        "&::backdrop": { transitionDuration: "80ms" },
+        "&[open]": { opacity: 1, transform: "scale(1)" },
+        _starting: {
+          "&[open]": { opacity: 0, transform: "scale(0.95)" },
+        },
+      },
+      zoom: {
+        // `ZOOM_MS` in utils/lightbox-motion.
+        "&::backdrop": { transitionDuration: "300ms" },
+        "&[open][data-closing]::backdrop": { opacity: 0 },
+      },
+    },
   },
 
   defaultVariants: {
     align: "center",
     justify: "center",
+    motion: "scale",
   },
 });
 
 export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
   function Dialog(
-    { align, justify, onClose, children, className, onClick, ...rest },
+    {
+      align,
+      justify,
+      motion,
+      onClose,
+      onRequestClose,
+      children,
+      className,
+      onClick,
+      ...rest
+    },
     ref,
   ) {
+    function requestClose(dialog: HTMLDialogElement) {
+      if (onRequestClose) onRequestClose();
+      else dialog.close();
+    }
+
     function handleClick(e: MouseEvent<HTMLDialogElement>) {
       // A click on the dialog element itself is a click on its backdrop.
-      if (e.target === e.currentTarget) {
-        (e.currentTarget as HTMLDialogElement).close();
-      }
+      if (e.target === e.currentTarget) requestClose(e.currentTarget);
       onClick?.(e);
     }
 
@@ -145,7 +173,7 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
     function handleKeyDownCapture(e: KeyboardEvent<HTMLDialogElement>) {
       if (e.key === "Escape" && e.currentTarget.open) {
         e.preventDefault();
-        e.currentTarget.close();
+        requestClose(e.currentTarget);
       }
     }
 
@@ -159,7 +187,7 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
       <dialog
         ref={ref}
         {...scrollBoundary}
-        className={cx(dialogRecipe({ align, justify }), className)}
+        className={cx(dialogRecipe({ align, justify, motion }), className)}
         onClose={handleClose}
         onClick={handleClick}
         onKeyDownCapture={handleKeyDownCapture}

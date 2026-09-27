@@ -29,6 +29,8 @@ export default defineConfig({
       demoFrameCompact: "@container demoFrame (max-width: 535px)",
       // 2 × the calendar's 208px + the 32px gap: where the form's columns already wrap.
       shiftFormStacked: "@container shiftForm (max-width: 448px)",
+      // The 640px text column + 2 × (84px of buttons + 20px clear): narrower, floating buttons would reach the text.
+      carouselStacked: "@container carousel (max-width: 847px)",
     },
   },
 
@@ -40,7 +42,7 @@ export default defineConfig({
 
     extend: {
       tokens,
-      containerNames: ["demoFrame", "projectsGrid", "shiftForm"],
+      containerNames: ["demoFrame", "projectsGrid", "shiftForm", "carousel"],
       semanticTokens,
       keyframes,
       recipes,

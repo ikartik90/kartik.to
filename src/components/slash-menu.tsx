@@ -52,7 +52,7 @@ const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "heading", label: "Sub-heading", Icon: SubheadingIcon },
   { type: "paragraph", label: "Paragraph", Icon: ParagraphIcon },
   { type: "media", label: "Media", Icon: MediaIcon },
-  { type: "collection", label: "Collection", Icon: CollectionIcon },
+  { type: "collection", label: "Carousel", Icon: CollectionIcon },
   { type: "component", label: "Component", Icon: ComponentIcon },
   { type: "blockquote", label: "Quote", Icon: QuoteIcon },
   { type: "list_item", label: "Numbered List", Icon: NumberedListIcon },

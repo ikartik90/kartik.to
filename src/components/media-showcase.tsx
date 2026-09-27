@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { mediaBlock } from "../../styled-system/recipes";
 import { MediaLightbox } from "@/components/media-lightbox";
 import { MediaTile } from "@/components/media-tile";
@@ -14,6 +14,7 @@ export interface MediaShowcaseProps {
 
 export function MediaShowcase({ item }: MediaShowcaseProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   // Memoized: a new array restarts the lightbox's measurement.
   const items = useMemo(() => [item], [item]);
 
@@ -29,12 +30,14 @@ export function MediaShowcase({ item }: MediaShowcaseProps) {
         }}
         fallbackLabel="Image"
         onOpen={() => setOpenIndex(0)}
+        surfaceProps={{ ref: surfaceRef }}
       />
       <MediaLightbox
         items={items}
         index={openIndex}
         onIndexChange={setOpenIndex}
         onClose={() => setOpenIndex(null)}
+        sourceFor={() => surfaceRef.current}
       />
     </>
   );

@@ -43,7 +43,7 @@ import {
   buttonLinkRowStyle,
   buttonLinkStickyRowStyle,
 } from "@/components/button-link";
-import { CollectionShowcase } from "@/components/collection-showcase";
+import { MediaCarousel } from "@/components/media-carousel";
 import { MediaShowcase } from "@/components/media-showcase";
 import {
   computeListNumbering,
@@ -294,7 +294,7 @@ function renderBlockNode(
       if (node.items.length === 0) return null;
       return (
         <figure key={index} className={articleShowcase()}>
-          <CollectionShowcase items={node.items} />
+          <MediaCarousel items={node.items} />
           {node.caption && (
             <Typography tag="figcaption" type="caption">
               {node.caption}

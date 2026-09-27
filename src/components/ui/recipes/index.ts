@@ -52,7 +52,7 @@ import {
   articleMetricLabel,
   horizontalRule,
 } from "./article";
-import { collectionGrid } from "./collection-grid";
+import { carousel } from "./carousel";
 import { colorChannel } from "./color-channel";
 import { colorPickerPopover } from "./color-picker-popover";
 import { comboboxPopover } from "./combobox-popover";
@@ -150,7 +150,7 @@ export const slotRecipes = {
   calendar,
   inlineEditRow,
   mediaBlock,
-  collectionGrid,
+  carousel,
   propertiesPanel,
   optionList,
   segmentedControl,

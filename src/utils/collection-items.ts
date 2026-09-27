@@ -1,5 +1,4 @@
 import {
-  COLLECTION_MAX_ITEMS,
   DEFAULT_MEDIA_FIT,
   type BackgroundEffect,
   type MediaNode,
@@ -8,27 +7,36 @@ import {
 // Index 0 is the featured item; there is no flag. Out-of-range indices are
 // no-ops, since a removal can land between a render and a click.
 
-const READER_VISIBLE_TILES = 3;
-
 const inRange = (items: readonly MediaNode[], index: number) =>
   Number.isInteger(index) && index >= 0 && index < items.length;
 
-export function swapItems(
+export function moveItem(
   items: readonly MediaNode[],
-  a: number,
-  b: number,
+  from: number,
+  to: number,
 ): MediaNode[] {
   const next = [...items];
-  if (!inRange(items, a) || !inRange(items, b) || a === b) return next;
-  [next[a], next[b]] = [next[b], next[a]];
+  if (!inRange(items, from) || !inRange(items, to) || from === to) return next;
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
   return next;
+}
+
+/** Keys that follow each item as it moves, so its element (and a playing clip) moves with it. */
+export function itemKeys(items: readonly MediaNode[]): string[] {
+  const seen = new Map<string, number>();
+  return items.map(({ src }) => {
+    const turn = (seen.get(src) ?? 0) + 1;
+    seen.set(src, turn);
+    return turn === 1 ? src : `${src}#${turn}`;
+  });
 }
 
 export function featureItem(
   items: readonly MediaNode[],
   index: number,
 ): MediaNode[] {
-  return swapItems(items, index, 0);
+  return moveItem(items, index, 0);
 }
 
 export function removeItem(
@@ -100,7 +108,7 @@ export function appendItems(
   items: readonly MediaNode[],
   added: readonly MediaNode[],
 ): MediaNode[] {
-  return [...items, ...added].slice(0, COLLECTION_MAX_ITEMS);
+  return [...items, ...added];
 }
 
 // Slot-owned, so they survive a replace. Never add `kind`: it describes the file,
@@ -136,19 +144,4 @@ export function replaceItem(
 /** Falls back to the caption, then "" (decorative), never the filename. */
 export function collectionItemAlt(item: MediaNode): string {
   return item.alt ?? item.caption ?? "";
-}
-
-export function collectionSurplusCount(count: number): number {
-  return Math.max(0, count - READER_VISIBLE_TILES);
-}
-
-export type CollectionLayout = "uniform" | "single" | "pair" | "featured";
-
-export function collectionLayout(
-  count: number,
-  context: "editor" | "reader",
-): CollectionLayout {
-  if (context === "editor") return "uniform";
-  if (count >= READER_VISIBLE_TILES) return "featured";
-  return count === 2 ? "pair" : "single";
 }

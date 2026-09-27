@@ -5,14 +5,14 @@ import { defineRecipe } from "@pandacss/dev";
 export const mediaObjectToolbar = defineRecipe({
   className: "media-object-toolbar",
   description:
-    "The control pill shown over an image, collection slot or demo in the editor on hover or focus.",
+    "The control pill shown over an image, carousel slide or demo in the editor on hover or focus.",
   base: {
     position: "absolute",
-    // Centred on the cell's top edge; the grid's 20px gap swallows the overhang.
+    // Centred on the cell's top edge; a carousel's `editing` track makes room for the overhang.
     insetBlockStart: 0,
     insetInlineStart: "half",
     transform: "translate(-50%, -50%)",
-    // Rung 3 of the cell's paint ladder (see `collectionGrid`'s `backgroundEffect`).
+    // Rung 3 of the cell's paint ladder (see `carousel`'s `backgroundEffect`).
     zIndex: 3,
     borderWidth: "token(spacing.3xs)",
     borderStyle: "solid",
@@ -31,20 +31,26 @@ export const mediaObjectToolbar = defineRecipe({
         opacity: 1,
         pointerEvents: "auto",
       },
-    // Down at once for the whole reorder. The extra `[data-media-cell]` breaks the tie with the reveal rule.
-    "[data-collection-grid][data-reordering] [data-media-cell] + &": {
+    // Down at once from the press through the whole reorder. The extra `[data-media-cell]` breaks
+    // the tie with the reveal rule.
+    "[data-carousel][data-reordering] [data-media-cell] + &": {
       opacity: 0,
       pointerEvents: "none",
       transition: "none",
     },
-    // Stays down after a drop until the pointer moves; see `pointerIdle` in collection-grid.tsx.
-    "[data-collection-grid][data-pointer-idle] [data-media-cell] + &": {
+    "[data-carousel] [data-media-cell][data-pressed] + &": {
+      opacity: 0,
+      pointerEvents: "none",
+      transition: "none",
+    },
+    // Stays down after a drop until the pointer moves; see `pointerIdle` in editable-carousel.tsx.
+    "[data-carousel][data-pointer-idle] [data-media-cell] + &": {
       opacity: 0,
       pointerEvents: "none",
     },
-    // Fades back over the landing flight; matches LANDING_MS / LANDING_EASE in collection-grid.tsx.
+    // Fades back over the landing flight; matches REORDER_MS in editable-carousel.tsx.
     "[data-media-cell][data-landing] + &": {
-      transition: "opacity 100ms ease-out",
+      transition: "opacity 200ms ease-out",
     },
   },
 });

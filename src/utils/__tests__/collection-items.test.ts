@@ -1,21 +1,16 @@
 import { describe, expect, it } from "vitest";
-import {
-  COLLECTION_MAX_ITEMS,
-  DEFAULT_BACKGROUND_EFFECT,
-  type MediaNode,
-} from "@/domain/nodes";
+import { DEFAULT_BACKGROUND_EFFECT, type MediaNode } from "@/domain/nodes";
 import {
   appendItems,
   collectionItemAlt,
-  collectionLayout,
-  collectionSurplusCount,
   featureItem,
+  itemKeys,
+  moveItem,
   removeItem,
   replaceItem,
   setItemBackgroundEffect,
   setItemCaption,
   setItemLayout,
-  swapItems,
 } from "../collection-items";
 
 /** A media node without `type` and `kind`, which fixtures add only where they matter. */
@@ -38,54 +33,68 @@ const items = (...srcs: string[]): MediaNode[] =>
 
 const srcs = (list: MediaNode[]) => list.map((item) => item.src);
 
-describe("swapItems", () => {
-  it("exchanges two slots and leaves the rest alone", () => {
-    expect(srcs(swapItems(items("a", "b", "c", "d"), 1, 3))).toEqual([
+describe("moveItem", () => {
+  it("moves an item forward, shifting the ones it passes back a place", () => {
+    expect(srcs(moveItem(items("a", "b", "c", "d"), 0, 2))).toEqual([
+      "b",
+      "c",
       "a",
       "d",
-      "c",
-      "b",
     ]);
   });
 
-  it("is symmetric", () => {
-    const list = items("a", "b", "c");
-    expect(srcs(swapItems(list, 0, 2))).toEqual(srcs(swapItems(list, 2, 0)));
+  it("moves an item back, shifting the ones it passes on a place", () => {
+    expect(srcs(moveItem(items("a", "b", "c", "d"), 3, 1))).toEqual([
+      "a",
+      "d",
+      "b",
+      "c",
+    ]);
   });
 
   it("is a no-op onto itself", () => {
-    expect(srcs(swapItems(items("a", "b"), 1, 1))).toEqual(["a", "b"]);
+    expect(srcs(moveItem(items("a", "b"), 1, 1))).toEqual(["a", "b"]);
   });
 
   it("ignores an out-of-range index on either side", () => {
-    expect(srcs(swapItems(items("a", "b"), 0, 9))).toEqual(["a", "b"]);
-    expect(srcs(swapItems(items("a", "b"), -1, 1))).toEqual(["a", "b"]);
+    expect(srcs(moveItem(items("a", "b"), 0, 9))).toEqual(["a", "b"]);
+    expect(srcs(moveItem(items("a", "b"), -1, 1))).toEqual(["a", "b"]);
   });
 
   it("does not mutate its input", () => {
     const original = items("a", "b", "c");
-    swapItems(original, 0, 2);
+    moveItem(original, 0, 2);
     expect(srcs(original)).toEqual(["a", "b", "c"]);
   });
 });
 
-describe("featureItem", () => {
-  it("exchanges the item with whatever is currently featured", () => {
-    expect(srcs(featureItem(items("a", "b", "c", "d"), 3))).toEqual([
-      "d",
-      "b",
-      "c",
+describe("itemKeys", () => {
+  it("names each item by its source", () => {
+    expect(itemKeys(items("a", "b"))).toEqual(["a", "b"]);
+  });
+
+  it("tells repeats of one source apart by their turn", () => {
+    expect(itemKeys(items("a", "b", "a", "a"))).toEqual([
       "a",
+      "b",
+      "a#2",
+      "a#3",
     ]);
   });
 
-  it("leaves every slot it did not touch exactly where it was", () => {
-    expect(srcs(featureItem(items("a", "b", "c", "d", "e"), 2))).toEqual([
+  it("follows an item that moves", () => {
+    const list = items("a", "b", "c");
+    expect(itemKeys(moveItem(list, 0, 2))).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("featureItem", () => {
+  it("moves the item to the front, the rest keeping their order", () => {
+    expect(srcs(featureItem(items("a", "b", "c", "d"), 2))).toEqual([
       "c",
-      "b",
       "a",
+      "b",
       "d",
-      "e",
     ]);
   });
 
@@ -96,12 +105,6 @@ describe("featureItem", () => {
   it("ignores an out-of-range index", () => {
     expect(srcs(featureItem(items("a", "b"), 5))).toEqual(["a", "b"]);
     expect(srcs(featureItem(items("a", "b"), -1))).toEqual(["a", "b"]);
-  });
-
-  it("does not mutate its input", () => {
-    const original = items("a", "b", "c");
-    featureItem(original, 2);
-    expect(srcs(original)).toEqual(["a", "b", "c"]);
   });
 });
 
@@ -151,16 +154,9 @@ describe("appendItems", () => {
     ]);
   });
 
-  it("caps at COLLECTION_MAX_ITEMS and drops the overflow", () => {
-    const added = items("d", "e", "f", "g", "h");
-    const next = appendItems(items("a", "b", "c"), added);
-    expect(next).toHaveLength(COLLECTION_MAX_ITEMS);
-    expect(srcs(next)).toEqual(["a", "b", "c", "d", "e", "f"]);
-  });
-
-  it("is a no-op when already full", () => {
-    const full = items("a", "b", "c", "d", "e", "f");
-    expect(srcs(appendItems(full, items("g")))).toEqual(srcs(full));
+  it("takes any number of items", () => {
+    const many = items(...Array.from({ length: 20 }, (_, i) => `${i}`));
+    expect(appendItems(many, items("x", "y"))).toHaveLength(22);
   });
 });
 
@@ -256,41 +252,6 @@ describe("collectionItemAlt", () => {
 
   it("falls back to an empty string, marking the image decorative", () => {
     expect(collectionItemAlt(picture({ src: "a" }))).toBe("");
-  });
-});
-
-describe("collectionSurplusCount", () => {
-  it("counts the items the reader grid cannot show", () => {
-    expect(collectionSurplusCount(5)).toBe(2);
-    expect(collectionSurplusCount(COLLECTION_MAX_ITEMS)).toBe(3);
-  });
-
-  it("is zero at or below the three visible tiles", () => {
-    for (const count of [0, 1, 2, 3]) {
-      expect(collectionSurplusCount(count)).toBe(0);
-    }
-  });
-});
-
-describe("collectionLayout", () => {
-  it("always gives the editor the full 3×2 slot grid", () => {
-    for (let count = 0; count <= COLLECTION_MAX_ITEMS; count += 1) {
-      expect(collectionLayout(count, "editor")).toBe("uniform");
-    }
-  });
-
-  it("splits the reader grid evenly below three images", () => {
-    expect(collectionLayout(1, "reader")).toBe("single");
-    expect(collectionLayout(2, "reader")).toBe("pair");
-  });
-
-  it("uses the featured skeleton from three images up", () => {
-    expect(collectionLayout(3, "reader")).toBe("featured");
-    expect(collectionLayout(COLLECTION_MAX_ITEMS, "reader")).toBe("featured");
-  });
-
-  it("treats an empty reader collection as a single tile", () => {
-    expect(collectionLayout(0, "reader")).toBe("single");
   });
 });
 
