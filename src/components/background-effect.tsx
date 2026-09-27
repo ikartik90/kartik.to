@@ -6,6 +6,10 @@ import type { BackgroundEffect } from "@/domain/nodes";
 
 const MAX_PIXELS = 1280 * 1280;
 
+// One object, not a literal per render: the shader redraws whenever a prop is a new value.
+// `preserveDrawingBuffer` keeps its frame readable for the copies the drag and lightbox draw.
+const CONTEXT_ATTRIBUTES: WebGLContextAttributes = { preserveDrawingBuffer: true };
+
 export interface BackgroundEffectLayerProps {
   effect: BackgroundEffect;
   className?: string;
@@ -39,8 +43,7 @@ export function BackgroundEffectLayer({
       fit="cover"
       speed={0}
       maxPixelCount={MAX_PIXELS}
-      // Needed so the drag preview can snapshot the canvas with `toDataURL`.
-      webGlContextAttributes={{ preserveDrawingBuffer: true }}
+      webGlContextAttributes={CONTEXT_ATTRIBUTES}
     />
   );
 }

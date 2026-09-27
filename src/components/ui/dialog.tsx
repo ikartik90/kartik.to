@@ -3,6 +3,7 @@
 import {
   forwardRef,
   type HTMLAttributes,
+  type SyntheticEvent,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -29,7 +30,7 @@ export interface DialogProps
   justify?: DialogJustify;
   motion?: DialogMotion;
   onClose?: () => void;
-  /** Takes Escape and a backdrop press instead of closing, for a caller that animates out first. */
+  /** Takes Escape, the platform's cancel and a backdrop press instead of closing, for a caller that animates out first. */
   onRequestClose?: () => void;
   children: ReactNode;
 }
@@ -177,6 +178,14 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
       }
     }
 
+    // Safari cancels on Escape even when its keydown was prevented, and would shut the dialog at
+    // once. Only the dialog's own: React hands a nested dialog's `cancel` up the component tree.
+    function handleCancel(e: SyntheticEvent<HTMLDialogElement>) {
+      if (e.target !== e.currentTarget) return;
+      e.preventDefault();
+      requestClose(e.currentTarget);
+    }
+
     // Safari loses the page scroll a few frames after a modal closes; it is still intact here.
     function handleClose() {
       preservePageScroll();
@@ -189,6 +198,7 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
         {...scrollBoundary}
         className={cx(dialogRecipe({ align, justify, motion }), className)}
         onClose={handleClose}
+        onCancel={handleCancel}
         onClick={handleClick}
         onKeyDownCapture={handleKeyDownCapture}
         {...rest}

@@ -231,6 +231,14 @@ describe("EditableCarousel", () => {
     expect(slides().at(-1)).toBe(add[0]);
   });
 
+  it("shapes an inset slide as the lightbox frames it, band on every side", () => {
+    setup([{ ...items("a")[0], width: 1600, height: 1000, padding: 40 }]);
+    expect(parseFloat(slides()[0].style.aspectRatio)).toBeCloseTo(
+      1 / (0.875 / 1.6 + 0.125),
+      10,
+    );
+  });
+
   it("offers only the add tile before there are any images", () => {
     setup([]);
     expect(screen.queryAllByRole("toolbar")).toHaveLength(0);

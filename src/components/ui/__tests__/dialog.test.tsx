@@ -151,6 +151,37 @@ describe("Dialog", () => {
     expect(dialog.open).toBe(true);
   });
 
+  // Safari fires `cancel` on Escape even when the keydown was prevented, and shuts the dialog
+  // at once unless the `cancel` is prevented too.
+  it("hands the platform's cancel to onRequestClose instead of letting it shut the dialog", () => {
+    const ref = createRef<HTMLDialogElement>();
+    const onRequestClose = vi.fn();
+    render(
+      <Dialog ref={ref} onRequestClose={onRequestClose}>
+        <p>inner</p>
+      </Dialog>,
+    );
+    ref.current?.showModal();
+
+    const notPrevented = fireEvent(
+      ref.current!,
+      new Event("cancel", { cancelable: true }),
+    );
+    expect(notPrevented).toBe(false);
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a nested dialog's cancel to that dialog", () => {
+    const onRequestClose = vi.fn();
+    render(
+      <Dialog onRequestClose={onRequestClose}>
+        <dialog data-testid="inner" />
+      </Dialog>,
+    );
+    fireEvent(screen.getByTestId("inner"), new Event("cancel", { cancelable: true }));
+    expect(onRequestClose).not.toHaveBeenCalled();
+  });
+
   it("does not close when clicking inner content", () => {
     const ref = createRef<HTMLDialogElement>();
     render(

@@ -14,11 +14,13 @@ const gestures = () => handle.current!;
 function Harness({
   shown = 0,
   onStep,
+  onRest = () => {},
   onClose,
   source,
 }: {
   shown?: number;
-  onStep: (step: 1 | -1, enterFrom: DOMRect) => void;
+  onStep: (step: 1 | -1) => void;
+  onRest?: () => void;
   onClose: () => void;
   source: HTMLElement | null;
 }) {
@@ -31,23 +33,27 @@ function Harness({
     band: 0,
     source: () => source,
     onStep,
+    onRest,
     onClose,
     closing: () => false,
   });
-  const { frameRef, zoomRef } = api;
+  const { stripRef, frameRef, zoomRef } = api;
   useEffect(() => {
     handle.current = api;
   });
   return (
     <dialog ref={dialogRef} open>
-      <div ref={frameRef} data-frame="">
-        <div ref={zoomRef} data-zoom="" />
+      <div ref={stripRef} data-strip="">
+        <div ref={frameRef} data-frame="">
+          <div ref={zoomRef} data-zoom="" />
+        </div>
       </div>
     </dialog>
   );
 }
 
 const dialog = () => document.querySelector("dialog")!;
+const strip = () => document.querySelector<HTMLElement>("[data-strip]")!;
 const frame = () => document.querySelector<HTMLElement>("[data-frame]")!;
 const zoom = () => document.querySelector<HTMLElement>("[data-zoom]")!;
 
@@ -71,14 +77,21 @@ const quiet = () => act(() => vi.advanceTimersByTime(1000));
 
 function setup(shown = 0) {
   const onStep = vi.fn();
+  const onRest = vi.fn();
   const onClose = vi.fn();
   const source = document.createElement("div");
   source.getBoundingClientRect = () => SLIDE;
   const view = render(
-    <Harness shown={shown} onStep={onStep} onClose={onClose} source={source} />,
+    <Harness
+      shown={shown}
+      onStep={onStep}
+      onRest={onRest}
+      onClose={onClose}
+      source={source}
+    />,
   );
   frame().getBoundingClientRect = () => REST;
-  return { onStep, onClose, source, view };
+  return { onStep, onRest, onClose, source, view };
 }
 
 const handedOver = (scale: number): GestureFrame => ({
@@ -119,16 +132,61 @@ describe("useLightboxGestures", () => {
   it("moves on once a swipe travels a quarter of the frame", () => {
     const { onStep } = setup();
     wheel({ deltaX: 250 });
-    expect(onStep).toHaveBeenCalledWith(1, expect.any(DOMRect));
+    expect(onStep).toHaveBeenCalledWith(1);
+  });
+
+  it("drags the whole strip, so the neighbours come along with the frame", () => {
+    setup();
+    wheel({ deltaX: 100 });
+    expect(strip().style.translate).toBe("-100px 0px");
+    expect(frame().style.translate).toBe("");
   });
 
   it("springs back from a short swipe", () => {
-    const { onStep } = setup();
+    const { onStep, onRest } = setup();
     wheel({ deltaX: 100 });
-    expect(frame().style.translate).toBe("-100px 0px");
     quiet();
     expect(onStep).not.toHaveBeenCalled();
-    expect(frame().style.translate).toBe("");
+    expect(strip().style.translate).toBe("");
+    expect(onRest).toHaveBeenCalled();
+  });
+
+  it("glides the strip in from a screen along once the step has painted, and reports when it rests", async () => {
+    const { onRest } = setup();
+    let finish!: () => void;
+    const animation = {
+      finished: new Promise<void>((done) => (finish = done)),
+      playState: "running",
+      pause: vi.fn(),
+      play: vi.fn(),
+    };
+    const glide = vi.fn(() => animation);
+    strip().animate = glide as unknown as HTMLElement["animate"];
+
+    act(() => gestures().glide(1));
+    expect(glide).toHaveBeenCalledWith(
+      [{ translate: "calc(100vw + 0px) 0px" }, { translate: "0px 0px" }],
+      expect.anything(),
+    );
+    expect(animation.pause).toHaveBeenCalled();
+    expect(onRest).not.toHaveBeenCalled();
+    await act(async () => finish());
+    expect(onRest).toHaveBeenCalled();
+  });
+
+  it("waits a pair's other item on the side the swipe heads for", () => {
+    setup();
+    wheel({ deltaX: 100 });
+    expect(strip().style.getPropertyValue("--toward")).toBe("1");
+    wheel({ deltaX: -250 });
+    expect(strip().style.getPropertyValue("--toward")).toBe("-1");
+  });
+
+  it("picks a swipe up from wherever the strip is gliding", () => {
+    setup();
+    strip().style.translate = "300px 0px";
+    wheel({ deltaX: 100 });
+    expect(strip().style.translate).toBe("200px 0px");
   });
 
   it("closes when pinched in towards its slide", () => {
@@ -141,10 +199,10 @@ describe("useLightboxGestures", () => {
   it("settles back to fitted from a slight pinch in", () => {
     const { onClose } = setup();
     wheel({ ctrlKey: true, deltaY: 5 });
-    expect(frame().style.width).not.toBe("");
+    expect(frame().style.scale).not.toBe("");
     quiet();
     expect(onClose).not.toHaveBeenCalled();
-    expect(frame().style.width).toBe("");
+    expect(frame().style.scale).toBe("");
   });
 
   it("opens fully when a pinch handed over from the slide keeps growing", () => {
@@ -156,6 +214,25 @@ describe("useLightboxGestures", () => {
     });
     expect(onClose).not.toHaveBeenCalled();
     expect(frame().style.width).toBe("");
+  });
+
+  it("reports rest once a handed-over pinch has opened the lightbox", () => {
+    const { onRest, onClose } = setup();
+    act(() => {
+      gestures().adopt(handedOver(1.05));
+      gestures().move(handedOver(1.6));
+      gestures().end(handedOver(1.6));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onRest).toHaveBeenCalled();
+  });
+
+  it("places a pinched frame by its corners, with no change to its layout", () => {
+    setup();
+    wheel({ ctrlKey: true, deltaY: 5 });
+    expect(frame().style.scale).not.toBe("");
+    expect(frame().style.width).toBe("");
+    expect(frame().style.height).toBe("");
   });
 
   it("falls back into the slide when a handed-over pinch barely grows", () => {
@@ -173,7 +250,7 @@ describe("useLightboxGestures", () => {
       gestures().adopt(handedOver(1.05));
       gestures().move(handedOver(5));
     });
-    expect(frame().style.width).toBe("");
+    expect(frame().style.scale).toBe("");
     expect(zoom().style.transform).toBe("");
   });
 
@@ -183,7 +260,7 @@ describe("useLightboxGestures", () => {
     quiet();
 
     wheel({ ctrlKey: true, deltaY: 150 });
-    expect(frame().style.width).toBe("");
+    expect(frame().style.scale).toBe("");
     quiet();
     expect(onClose).not.toHaveBeenCalled();
     expect(zoom().style.transform).toBe("");

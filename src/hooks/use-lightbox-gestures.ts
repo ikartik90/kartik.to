@@ -20,10 +20,13 @@ import {
 } from "@/utils/lightbox-gesture";
 import {
   animate,
+  animateBox,
   boxKeyframe,
   clearBox,
+  cornerRadius,
   sameBox,
   settle,
+  translationX,
 } from "@/utils/lightbox-motion";
 
 const FIT: Zoom = { scale: 1, x: 0, y: 0 };
@@ -41,8 +44,6 @@ const ZOOM_STRETCH = 1.25;
 // With no slide on the page to shrink into, the frame shrinks about its centre towards this scale.
 const UNSOURCED_SCALE = 0.5;
 
-const EXIT_MS = 180;
-
 export interface LightboxGestureOptions {
   dialogRef: RefObject<HTMLDialogElement | null>;
   /** The item on show; each starts unzoomed. */
@@ -52,15 +53,21 @@ export interface LightboxGestureOptions {
   naturalWidth: number | undefined;
   band: number;
   source: () => HTMLElement | null;
-  /** `enterFrom` is where the next item's frame slides in from. */
-  onStep: (step: 1 | -1, enterFrom: DOMRect) => void;
+  /** A swipe has gone far enough to move on; `glide` then brings the item in. */
+  onStep: (step: 1 | -1) => void;
+  /** The strip, or the pinch that opened the lightbox, has come to rest. */
+  onRest: () => void;
   /** Closes from wherever the frame stands. */
   onClose: () => void;
   closing: () => boolean;
 }
 
 export interface LightboxGestures {
-  /** For the frame, which a pinch below the fitted size shrinks and a swipe moves. */
+  /** For the row of items a swipe drags, which sets `--toward` to the side it heads for. */
+  stripRef: RefObject<HTMLDivElement | null>;
+  /** Brings the strip to rest from where it stands, starting `screens` further along. */
+  glide: (screens: number) => void;
+  /** For the frame, which a pinch below the fitted size shrinks. */
   frameRef: RefObject<HTMLDivElement | null>;
   /** For the layer inside the frame that a pinch zooms and a drag pans. */
   zoomRef: RefObject<HTMLDivElement | null>;
@@ -74,6 +81,7 @@ export interface LightboxGestures {
 interface Pinch {
   type: "pinch";
   rest: DOMRect;
+  radius: number;
   source: Box | null;
   sourceScale: number;
   from: Zoom;
@@ -91,6 +99,8 @@ interface Swipe {
   type: "swipe";
   rest: DOMRect;
   axis: "x" | "y" | null;
+  /** Where the strip stood as the swipe began, partway through a glide perhaps. */
+  base: number;
   offset: number;
   committed: boolean;
 }
@@ -119,6 +129,7 @@ function scaledAbout(box: Box, scale: number): Box {
 export function useLightboxGestures(
   options: LightboxGestureOptions,
 ): LightboxGestures {
+  const stripRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<HTMLDivElement>(null);
   const zoom = useRef<Zoom>(FIT);
@@ -166,6 +177,7 @@ export function useLightboxGestures(
     return {
       type: "pinch",
       rest,
+      radius: cornerRadius(frame),
       source,
       sourceScale,
       from,
@@ -220,6 +232,7 @@ export function useLightboxGestures(
       boxKeyframe(
         { ...box, left: box.left + drift.x, top: box.top + drift.y },
         pinch.rest,
+        pinch.radius,
       ),
     );
   };
@@ -237,13 +250,16 @@ export function useLightboxGestures(
     if (outcome === "fit") {
       const from = element.getBoundingClientRect();
       clearBox(element);
-      if (!sameBox(from, pinch.rest)) {
-        animate(element, [
-          boxKeyframe(from, pinch.rest),
-          boxKeyframe(pinch.rest, pinch.rest),
-        ]);
-      }
+      const settling = sameBox(from, pinch.rest)
+        ? null
+        : animateBox(element, [
+            boxKeyframe(from, pinch.rest, pinch.radius),
+            boxKeyframe(pinch.rest, pinch.rest, pinch.radius),
+          ]);
       if (zoom.current !== FIT) easeZoom(FIT);
+      if (!pinch.opening) return;
+      if (settling) settling.finished.then(options.onRest, () => {});
+      else options.onRest();
       return;
     }
 
@@ -253,38 +269,40 @@ export function useLightboxGestures(
         clampPan(zoomAbout(zoom.current, limit, { x: 0, y: 0 }), pinch.rest),
       );
     }
+    if (pinch.opening) options.onRest();
   };
 
-  const commit = (swipe: Swipe, step: 1 | -1) => {
-    const element = frameRef.current;
-    if (!element) return;
+  const glide = (screens: number) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const offset = translationX(strip);
+    settle(strip);
+    clearBox(strip);
+    const motion =
+      screens || offset
+        ? animate(
+            strip,
+            [
+              { translate: `calc(${screens * 100}vw + ${offset}px) 0px` },
+              { translate: "0px 0px" },
+            ],
+            // A step's first paint of the new items is slow in Safari.
+            { afterPaint: screens !== 0 },
+          )
+        : null;
+    if (motion) motion.finished.then(options.onRest, () => {});
+    else options.onRest();
+  };
+
+  const release = (swipe: Swipe, step: -1 | 0 | 1) => {
     swipe.committed = true;
-    const { rest } = swipe;
-    // Fully off the screen on the side the swipe leaves by; the next item enters from the other.
-    const exitX = step === 1 ? -rest.right : window.innerWidth - rest.left;
-    element.style.translate = "";
-    const exit = animate(
-      element,
-      [
-        { translate: `${swipe.offset}px 0px`, opacity: 1 },
-        { translate: `${exitX}px 0px`, opacity: 0 },
-      ],
-      { fill: "forwards", duration: EXIT_MS },
-    );
-    const enterFrom = new DOMRect(
-      rest.left - exitX,
-      rest.top,
-      rest.width,
-      rest.height,
-    );
-    const next = () => options.onStep(step, enterFrom);
-    if (exit) exit.finished.then(next, () => {});
-    else next();
+    if (step) options.onStep(step);
+    else glide(0);
   };
 
   const swipeMove = (swipe: Swipe, frame: GestureFrame) => {
-    const element = frameRef.current;
-    if (!element || swipe.committed) return;
+    const strip = stripRef.current;
+    if (!strip || swipe.committed) return;
     const dx = frame.center.x - frame.start.x;
     const dy = frame.center.y - frame.start.y;
     if (!swipe.axis) {
@@ -293,29 +311,28 @@ export function useLightboxGestures(
     }
     if (swipe.axis !== "x") return;
     swipe.offset = dx;
-    element.style.translate = `${dx}px 0px`;
+    strip.style.translate = `${swipe.base + dx}px 0px`;
+    if (dx) strip.style.setProperty("--toward", dx < 0 ? "1" : "-1");
     if (
       frame.kind === "trackpad" &&
       Math.abs(dx) >= swipe.rest.width * TRACKPAD_COMMIT
     ) {
-      commit(swipe, dx < 0 ? 1 : -1);
+      release(swipe, dx < 0 ? 1 : -1);
     }
   };
 
   const swipeEnd = (swipe: Swipe, frame: GestureFrame) => {
-    const element = frameRef.current;
-    if (!element || swipe.committed || swipe.axis !== "x") return;
-    const step = swipeRelease({
-      offset: swipe.offset,
-      width: swipe.rest.width,
-      speed: frame.velocity.x,
-    });
-    if (step) return commit(swipe, step);
-    element.style.translate = "";
-    animate(element, [
-      { translate: `${swipe.offset}px 0px` },
-      { translate: "0px 0px" },
-    ]);
+    if (swipe.committed) return;
+    release(
+      swipe,
+      swipe.axis === "x"
+        ? swipeRelease({
+            offset: swipe.offset,
+            width: swipe.rest.width,
+            speed: frame.velocity.x,
+          })
+        : 0,
+    );
   };
 
   const move = (frame: GestureFrame) => {
@@ -357,11 +374,16 @@ export function useLightboxGestures(
         return true;
       }
       // Only a zoomed picture follows the mouse; at its fitted size a drag is left to the page.
-      if (frame.kind === "mouse" || options.count < 2) return false;
+      const strip = stripRef.current;
+      if (frame.kind === "mouse" || options.count < 2 || !strip) return false;
+      const base = translationX(strip);
+      settle(strip);
+      strip.style.translate = base ? `${base}px 0px` : "";
       session.current = {
         type: "swipe",
         rest,
         axis: null,
+        base,
         offset: 0,
         committed: false,
       };
@@ -381,6 +403,8 @@ export function useLightboxGestures(
   useLayoutEffect(() => unzoom(), [options.shown]);
 
   return {
+    stripRef,
+    glide,
     frameRef,
     zoomRef,
     adopt: (frame) => {

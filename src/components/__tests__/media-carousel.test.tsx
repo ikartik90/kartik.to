@@ -153,7 +153,13 @@ describe("MediaCarousel", () => {
   it("gives each slide its media's shape", () => {
     render(<MediaCarousel items={items(1)} />);
     const slide = document.querySelector<HTMLElement>("[data-media-surface]")!;
-    expect(slide.style.aspectRatio).toBe("1600 / 1000");
+    expect(parseFloat(slide.style.aspectRatio)).toBe(1.6);
+  });
+
+  it("shapes an inset slide as the lightbox frames it, band on every side", () => {
+    render(<MediaCarousel items={[{ ...items(1)[0], padding: 40 }]} />);
+    const slide = document.querySelector<HTMLElement>("[data-media-surface]")!;
+    expect(parseFloat(slide.style.aspectRatio)).toBeCloseTo(1 / (0.875 / 1.6 + 0.125), 10);
   });
 
   it("opens the lightbox on the slide pressed", async () => {
@@ -256,8 +262,13 @@ const named = (count: number): MediaNode[] =>
     alt: `Image ${i}`,
   }));
 
-const frame = () =>
-  screen.getByRole("dialog").querySelector<HTMLElement>("[data-lightbox-frame]")!;
+// The lightbox's current item; its neighbours wait beside it, inert.
+const current = () =>
+  screen
+    .getByRole("dialog")
+    .querySelector<HTMLElement>("[data-lightbox-slide]:not([inert])")!;
+
+const frame = () => current().querySelector<HTMLElement>("[data-lightbox-frame]")!;
 
 const tiles = () =>
   screen.queryAllByRole("button").filter((el) => el.querySelector("img"));
@@ -307,24 +318,23 @@ describe("MediaCarousel lightbox", () => {
 
   it("opens on the tile that was clicked", async () => {
     await openLightbox(5, 1);
-    const dialog = screen.getByRole("dialog");
-    expect(dialog.querySelector("img")?.getAttribute("alt")).toBe("Image 1");
+    expect(current().querySelector("img")?.getAttribute("alt")).toBe("Image 1");
   });
 
   it("steps through every image with the arrow keys, not just the tiles", async () => {
     await openLightbox(5, 2);
     const dialog = screen.getByRole("dialog");
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
-    expect(dialog.querySelector("img")?.getAttribute("alt")).toBe("Image 3");
+    expect(current().querySelector("img")?.getAttribute("alt")).toBe("Image 3");
   });
 
   it("wraps at both ends", async () => {
     await openLightbox(3, 0);
     const dialog = screen.getByRole("dialog");
     fireEvent.keyDown(dialog, { key: "ArrowLeft" });
-    expect(dialog.querySelector("img")?.getAttribute("alt")).toBe("Image 2");
+    expect(current().querySelector("img")?.getAttribute("alt")).toBe("Image 2");
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
-    expect(dialog.querySelector("img")?.getAttribute("alt")).toBe("Image 0");
+    expect(current().querySelector("img")?.getAttribute("alt")).toBe("Image 0");
   });
 
   it("shows the open image's own caption", async () => {
@@ -339,16 +349,16 @@ describe("MediaCarousel lightbox", () => {
     );
     await user.click(tiles()[0]);
     const dialog = screen.getByRole("dialog");
-    expect(dialog.textContent).toContain("First");
+    expect(current().textContent).toContain("First");
 
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
-    expect(dialog.textContent).toContain("Second");
-    expect(dialog.textContent).not.toContain("First");
+    expect(current().textContent).toContain("Second");
+    expect(current().textContent).not.toContain("First");
   });
 
   it("caps at the image's natural width once it has loaded", async () => {
     await openLightbox(2, 0);
-    const img = screen.getByRole("dialog").querySelector("img")!;
+    const img = current().querySelector("img")!;
     Object.defineProperty(img, "naturalWidth", { value: 640, configurable: true });
     Object.defineProperty(img, "naturalHeight", { value: 480, configurable: true });
     fireEvent.load(img);
@@ -358,7 +368,7 @@ describe("MediaCarousel lightbox", () => {
   it("does not inherit the previous image's shape when you navigate", async () => {
     await openLightbox(2, 0);
     const dialog = screen.getByRole("dialog");
-    const first = dialog.querySelector("img")!;
+    const first = current().querySelector("img")!;
     Object.defineProperty(first, "naturalWidth", { value: 640, configurable: true });
     Object.defineProperty(first, "naturalHeight", { value: 480, configurable: true });
     fireEvent.load(first);
@@ -408,39 +418,39 @@ describe("MediaCarousel lightbox picture", () => {
   };
 
   it("rounds the picture as its tile does, in shares of the frame's width", async () => {
-    const dialog = await openRounded();
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("3.125cqw");
+    await openRounded();
+    expect(current().querySelector("img")!.style.borderRadius).toBe("3.125cqw");
   });
 
   it("leaves the card behind it alone", async () => {
-    const dialog = await openRounded({
+    await openRounded({
       backgroundEffect: DEFAULT_BACKGROUND_EFFECT,
     });
-    const ground = dialog.querySelector<HTMLElement>("[data-background-effect]")!;
+    const ground = current().querySelector<HTMLElement>("[data-background-effect]")!;
     expect(ground.style.borderRadius).toBe("");
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("3.125cqw");
+    expect(current().querySelector("img")!.style.borderRadius).toBe("3.125cqw");
   });
 
   it("does not carry the previous image's corner across a step", async () => {
     const dialog = await openRounded();
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
-    expect(dialog.querySelector("img")!.style.borderRadius).toBe("1.25cqw");
+    expect(current().querySelector("img")!.style.borderRadius).toBe("1.25cqw");
   });
 
   it("leaves a square picture square at any size", async () => {
-    const dialog = await openRounded({ borderRadius: undefined });
-    expect(dialog.querySelector("img")!.style.borderRadius).toMatch(/^0(px)?$/);
+    await openRounded({ borderRadius: undefined });
+    expect(current().querySelector("img")!.style.borderRadius).toMatch(/^0(px)?$/);
   });
 
   it("insets the picture by its band, a share of the frame's width", async () => {
-    const dialog = await openRounded({ padding: 40 });
-    const band = dialog.querySelector<HTMLElement>("[data-media-box]")!;
+    await openRounded({ padding: 40 });
+    const band = current().querySelector<HTMLElement>("[data-media-box]")!;
     expect(band.style.padding).toBe("6.25%");
   });
 
   it("sizes the frame for the picture and its band together", async () => {
-    const dialog = await openRounded({ padding: 40 });
-    const img = dialog.querySelector("img")!;
+    await openRounded({ padding: 40 });
+    const img = current().querySelector("img")!;
     Object.defineProperty(img, "naturalWidth", { value: 640 });
     Object.defineProperty(img, "naturalHeight", { value: 480 });
     fireEvent.load(img);

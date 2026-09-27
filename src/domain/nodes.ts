@@ -298,20 +298,28 @@ export function mediaInsetPx(
 }
 
 /**
- * The lightbox frame as a ratio, the picture plus its inset band on every side, and the widest
- * it may grow before the picture passes its natural width. `shape` is the source's pixel size.
+ * A surface's ratio: the picture plus its inset band on every side. Every surface that opens
+ * into the lightbox shares it, so the picture sits alike in each as one zooms into the other.
+ */
+export function mediaSurfaceAspect(shape: MediaShape, media: MediaLayout): number {
+  const { width, height } = shape;
+  const band = (media.padding ?? 0) / MEDIA_PADDING_REFERENCE;
+  const ratio = width && height ? width / height : 3 / 2;
+  return 1 / ((1 - 2 * band) / ratio + 2 * band);
+}
+
+/**
+ * The lightbox frame as a ratio (`mediaSurfaceAspect`), and the widest it may grow before the
+ * picture passes its natural width. `shape` is the source's pixel size.
  */
 export function lightboxFrameShape(
   shape: MediaShape,
   media: MediaLayout,
 ): { aspect: number; maxWidth: number | null } {
-  const { width, height } = shape;
-  const band = (media.padding ?? 0) / MEDIA_PADDING_REFERENCE;
-  const picture = 1 - 2 * band;
-  const ratio = width && height ? width / height : 3 / 2;
+  const picture = 1 - (2 * (media.padding ?? 0)) / MEDIA_PADDING_REFERENCE;
   return {
-    aspect: 1 / (picture / ratio + 2 * band),
-    maxWidth: width ? width / picture : null,
+    aspect: mediaSurfaceAspect(shape, media),
+    maxWidth: shape.width ? shape.width / picture : null,
   };
 }
 
