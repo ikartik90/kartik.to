@@ -9,6 +9,10 @@ export const tooltip = defineRecipe({
     zIndex: 50,
     top: 0,
     left: 0,
+    // Undo the UA's `[popover]` centring (`inset: 0`, `margin: auto`) for the box shown in a dialog.
+    right: "auto",
+    bottom: "auto",
+    margin: "none",
     display: "flex",
     alignItems: "center",
     gap: "sm",

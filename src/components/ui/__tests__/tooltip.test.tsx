@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { createRef } from "react";
-import { render, cleanup, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { render, cleanup, screen, fireEvent } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { Button } from "../button";
+import { Link } from "../link";
 import { Tooltip, TooltipHostContext } from "../tooltip";
 
 function withHost(visible: boolean, node: React.ReactNode) {
@@ -90,5 +92,108 @@ describe("Tooltip", () => {
       ),
     );
     expect(box("Delete").hasAttribute("data-visible")).toBe(false);
+  });
+
+  describe("for a trigger inside a dialog", () => {
+    // jsdom has no top layer or popover API; this stands in, topmost last.
+    let topLayer: Element[] = [];
+    const { showPopover: nativeShow, hidePopover: nativeHide } =
+      HTMLElement.prototype;
+    beforeEach(() => {
+      topLayer = [];
+      HTMLElement.prototype.showPopover = function (this: HTMLElement) {
+        if (!topLayer.includes(this)) topLayer.push(this);
+      };
+      HTMLElement.prototype.hidePopover = function (this: HTMLElement) {
+        topLayer = topLayer.filter((el) => el !== this);
+      };
+    });
+    afterEach(() => {
+      HTMLElement.prototype.showPopover = nativeShow;
+      HTMLElement.prototype.hidePopover = nativeHide;
+    });
+
+    const hover = (el: HTMLElement) =>
+      fireEvent.pointerEnter(el, { pointerType: "mouse", clientX: 10, clientY: 10 });
+    const leave = (el: HTMLElement) =>
+      fireEvent.pointerLeave(el, { pointerType: "mouse" });
+
+    function renderInDialog(trigger: React.ReactNode) {
+      render(<dialog open>{trigger}</dialog>);
+      return document.querySelector("dialog") as HTMLDialogElement;
+    }
+
+    const nextButton = (
+      <Button aria-label="Next">
+        <svg />
+        <Button.Tooltip>
+          <Tooltip.Text>Next</Tooltip.Text>
+        </Button.Tooltip>
+      </Button>
+    );
+
+    it("renders in the dialog as a popover, above the modal, once hovered", () => {
+      const dialog = renderInDialog(nextButton);
+      topLayer.push(dialog);
+
+      hover(screen.getByRole("button", { name: "Next" }));
+
+      expect(box("Next").parentElement).toBe(dialog);
+      expect(box("Next").getAttribute("popover")).toBe("manual");
+      expect(box("Next").hasAttribute("data-visible")).toBe(true);
+      expect(topLayer.at(-1)).toBe(box("Next"));
+    });
+
+    it("comes back above anything opened since it last showed", () => {
+      const dialog = renderInDialog(nextButton);
+      topLayer.push(dialog);
+      const button = screen.getByRole("button", { name: "Next" });
+
+      hover(button);
+      leave(button);
+      const reopened = document.createElement("div");
+      topLayer.push(reopened);
+      hover(button);
+
+      expect(topLayer.at(-1)).toBe(box("Next"));
+    });
+
+    it("still shows, in the dialog, where there is no popover API", () => {
+      HTMLElement.prototype.showPopover = nativeShow;
+      HTMLElement.prototype.hidePopover = nativeHide;
+      const dialog = renderInDialog(nextButton);
+
+      hover(screen.getByRole("button", { name: "Next" }));
+
+      expect(box("Next").parentElement).toBe(dialog);
+      expect(box("Next").hasAttribute("data-visible")).toBe(true);
+    });
+
+    it("does the same for a Link", () => {
+      const dialog = renderInDialog(
+        <Link href="/next" aria-label="Next">
+          <svg />
+          <Link.Tooltip>
+            <Tooltip.Text>Next</Tooltip.Text>
+          </Link.Tooltip>
+        </Link>,
+      );
+
+      hover(screen.getByRole("link", { name: "Next" }));
+
+      expect(box("Next").parentElement).toBe(dialog);
+      expect(topLayer.at(-1)).toBe(box("Next"));
+    });
+
+    it("stays on the body, and out of the top layer, for a trigger outside any dialog", () => {
+      render(nextButton);
+
+      hover(screen.getByRole("button", { name: "Next" }));
+
+      expect(box("Next").parentElement).toBe(document.body);
+      expect(box("Next").hasAttribute("popover")).toBe(false);
+      expect(box("Next").hasAttribute("data-visible")).toBe(true);
+      expect(topLayer).toEqual([]);
+    });
   });
 });

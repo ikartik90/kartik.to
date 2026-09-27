@@ -102,6 +102,15 @@ describe("MediaLightbox", () => {
     expect(shown()).toBe("Picture 2");
   });
 
+  it("labels Previous and Next with tooltips that show above the modal", () => {
+    render(<Harness items={[picture(0), picture(1)]} />);
+    const next = screen.getByRole("button", { name: "Next" });
+    fireEvent.pointerEnter(next, { pointerType: "mouse", clientX: 10, clientY: 10 });
+
+    const label = screen.getByText("Next").closest("[data-visible]");
+    expect(label?.closest("dialog")).toBe(screen.getByRole("dialog"));
+  });
+
   it("steps with the arrow keys", () => {
     render(<Harness items={[picture(0), picture(1), picture(2)]} />);
     fireEvent.keyDown(dialog(), { key: "ArrowRight" });
