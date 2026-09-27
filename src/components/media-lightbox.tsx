@@ -33,11 +33,20 @@ import { useLightboxGestures } from "@/hooks/use-lightbox-gestures";
 import { collectionItemAlt } from "@/utils/collection-items";
 import {
   animate,
+  animateBox,
   boxKeyframe,
   clearBox,
+  cornerRadius,
   sameBox,
   settle,
 } from "@/utils/lightbox-motion";
+import {
+  OPENING,
+  stepTransit,
+  stripSlots,
+  type StripSlot,
+  type Transit,
+} from "@/utils/lightbox-strip";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 
@@ -57,12 +66,23 @@ const panelStyle = css({
   "&::backdrop": { touchAction: "none" },
 });
 
+// Clicks beside the item fall through to the dialog, which takes them as the backdrop's.
+const stripStyle = css({
+  display: "grid",
+  placeItems: "center",
+  pointerEvents: "none",
+});
+
+// A screen apart, so the next item enters as the current one leaves.
 const figureStyle = css({
+  gridArea: "1 / 1",
+  translate: "calc(var(--slot) * 100vw) 0",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   gap: "md",
   margin: "none",
+  "&:not([inert])": { pointerEvents: "auto" },
 });
 
 // Sized before anything loads (`lightboxFrameShape`); the 40px under the height cap is the caption's.
@@ -95,7 +115,8 @@ const chromeStyle = css({
   "[data-closing] &": { opacity: 0 },
 });
 
-// Loads and plays underneath, and shows once it can take over from the copy.
+// A picture loads hidden under its copy, which a see-through one would double up with. A clip
+// stays in sight there, or WebKit shows a blank frame while its layer comes up.
 const UNDER_COPY: CSSProperties = { visibility: "hidden" };
 
 const captionStyle = css({
@@ -192,6 +213,25 @@ function standInsFrom(item: MediaNode, source: HTMLElement | null) {
   };
 }
 
+// A paused clip may draw no new frame to report.
+const REDRAW_WAIT_MS = 200;
+
+/**
+ * Once a clip has put a frame on screen. Ready is not yet drawn: a clip that has just loaded,
+ * seeked or come out of hiding paints blank until then.
+ */
+function whenDrawn(clip: HTMLVideoElement | null | undefined, then: () => void) {
+  if (!clip || typeof clip.requestVideoFrameCallback !== "function") return then();
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    then();
+  };
+  clip.requestVideoFrameCallback(once);
+  setTimeout(once, REDRAW_WAIT_MS);
+}
+
 function copyInto(
   canvas: HTMLCanvasElement | null,
   from: CanvasImageSource,
@@ -203,18 +243,32 @@ function copyInto(
   canvas.getContext("2d")?.drawImage(from, 0, 0, width, height);
 }
 
-interface StageProps {
+interface SlideProps {
   item: MediaNode;
+  /** Screens from the centre; null holds it out of sight. */
+  slot: StripSlot | null;
+  current: boolean;
+  frameRef?: Ref<HTMLDivElement>;
+  zoomRef?: Ref<HTMLDivElement>;
   source: HTMLElement | null;
+  measured: MediaShape | undefined;
   onMeasure: (width: number, height: number) => void;
-  /** Must be stable: it is a dependency of the element's ref. */
-  onClip: (clip: HTMLVideoElement | null) => void;
 }
 
-/** One item's contents; keyed per item, so a step starts from fresh copies. */
-function LightboxStage({ item, source, onMeasure, onClip }: StageProps) {
+/** One item, mounted while it neighbours the current one, so it arrives loaded. */
+function LightboxSlide({
+  item,
+  slot,
+  current,
+  frameRef,
+  zoomRef,
+  source,
+  measured,
+  onMeasure,
+}: SlideProps) {
   const [standIns] = useState(() => standInsFrom(item, source));
   const [live, setLive] = useState(false);
+  const [clip, setClip] = useState<HTMLVideoElement | null>(null);
   const groundRef = useRef<HTMLCanvasElement>(null);
   const pictureRef = useRef<HTMLCanvasElement>(null);
   const detach = useRef<(() => void) | null>(null);
@@ -232,7 +286,7 @@ function LightboxStage({ item, source, onMeasure, onClip }: StageProps) {
     (node: HTMLElement | null) => {
       detach.current?.();
       detach.current = null;
-      onClip(node instanceof HTMLVideoElement ? node : null);
+      setClip(node instanceof HTMLVideoElement ? node : null);
       const origin = standIns.picture;
       if (!node || !origin) return;
 
@@ -241,78 +295,129 @@ function LightboxStage({ item, source, onMeasure, onClip }: StageProps) {
         const at = origin instanceof HTMLVideoElement ? origin.currentTime : 0;
         const seek = () => {
           if (at > 0) node.currentTime = at;
-          else show();
         };
-        const seeked = () => {
-          if (canShow(node)) show();
+        const ready = () => {
+          if (canShow(node) && !node.seeking) whenDrawn(node, show);
         };
         if (node.readyState >= HTMLMediaElement.HAVE_METADATA) seek();
+        ready();
         node.addEventListener("loadedmetadata", seek);
-        node.addEventListener("seeked", seeked);
+        node.addEventListener("loadeddata", ready);
+        node.addEventListener("seeked", ready);
         node.addEventListener("error", show);
         detach.current = () => {
           node.removeEventListener("loadedmetadata", seek);
-          node.removeEventListener("seeked", seeked);
+          node.removeEventListener("loadeddata", ready);
+          node.removeEventListener("seeked", ready);
           node.removeEventListener("error", show);
         };
         return;
       }
       if (node instanceof HTMLImageElement) {
-        if (canShow(node)) return show();
-        node.addEventListener("load", show);
+        // Loaded is not yet decoded, and an undecoded picture can paint blank.
+        const decoded = () => {
+          if (typeof node.decode !== "function") return show();
+          node.decode().then(show, show);
+        };
+        if (canShow(node)) return decoded();
+        node.addEventListener("load", decoded);
         node.addEventListener("error", show);
         detach.current = () => {
-          node.removeEventListener("load", show);
+          node.removeEventListener("load", decoded);
           node.removeEventListener("error", show);
         };
       }
     },
-    [standIns, onClip],
+    [standIns],
   );
 
+  const shape = item.width && item.height ? item : measured ?? {};
+  const frameShape = lightboxFrameShape(shape, item);
+  const frameVars = {
+    "--frame-aspect": String(frameShape.aspect),
+    ...(frameShape.maxWidth ? { "--frame-max": `${frameShape.maxWidth}px` } : {}),
+  } as CSSProperties;
+
   return (
-    <>
-      {item.backgroundEffect &&
-        (standIns.ground ? (
-          <canvas
-            ref={groundRef}
-            aria-hidden
-            data-background-effect=""
-            className={cx(cell.backgroundEffect, groundCopyStyle)}
-          />
-        ) : (
-          <BackgroundEffectLayer
-            effect={item.backgroundEffect}
-            className={cell.backgroundEffect}
-          />
-        ))}
-      <Media
-        src={item.src}
-        kind={item.kind}
-        alt={collectionItemAlt(item)}
-        className={cell.image}
-        layout={item}
-        width={item.width}
-        height={item.height}
-        elementRef={hold}
-        onMeasure={onMeasure}
-        style={standIns.picture && !live ? UNDER_COPY : undefined}
-      />
-      {standIns.picture && !live && (
-        // Laid out exactly as `Media` lays out the picture it covers.
-        <span data-lightbox-stand-in="" aria-hidden className={standInStyle}>
-          <span style={mediaFrameStyle(item)}>
-            <span style={mediaBoxStyle(item)}>
+    <figure
+      data-lightbox-slide=""
+      inert={!current}
+      className={figureStyle}
+      style={
+        {
+          "--slot": slot === "toward" ? "var(--toward, 1)" : (slot ?? 0),
+          visibility: slot === null ? "hidden" : undefined,
+        } as CSSProperties
+      }
+    >
+      <div
+        ref={frameRef}
+        data-lightbox-frame=""
+        // The box a clip's transport pins to.
+        data-media-surface=""
+        className={cx(cell.cell, frameStyle)}
+        style={frameVars}
+      >
+        <div ref={zoomRef} data-lightbox-zoom="" className={zoomStyle}>
+          {item.backgroundEffect &&
+            (standIns.ground ? (
               <canvas
-                ref={pictureRef}
-                className={cell.image}
-                style={mediaObjectStyle(item)}
+                ref={groundRef}
+                aria-hidden
+                data-background-effect=""
+                className={cx(cell.backgroundEffect, groundCopyStyle)}
               />
+            ) : (
+              <BackgroundEffectLayer
+                effect={item.backgroundEffect}
+                className={cell.backgroundEffect}
+              />
+            ))}
+          <Media
+            src={item.src}
+            kind={item.kind}
+            alt={collectionItemAlt(item)}
+            className={cell.image}
+            layout={item}
+            width={item.width}
+            height={item.height}
+            loading="eager"
+            elementRef={hold}
+            onMeasure={onMeasure}
+            style={
+              standIns.picture && !live && item.kind !== "video"
+                ? UNDER_COPY
+                : undefined
+            }
+          />
+          {standIns.picture && !live && (
+            // Laid out exactly as `Media` lays out the picture it covers.
+            <span data-lightbox-stand-in="" aria-hidden className={standInStyle}>
+              <span style={mediaFrameStyle(item)}>
+                <span style={mediaBoxStyle(item)}>
+                  <canvas
+                    ref={pictureRef}
+                    className={cell.image}
+                    style={mediaObjectStyle(item)}
+                  />
+                </span>
+              </span>
             </span>
-          </span>
-        </span>
+          )}
+        </div>
+        <MediaTransport clip={clip} />
+      </div>
+      {item.caption && (
+        <Typography
+          tag="figcaption"
+          type="caption"
+          className={cx(captionStyle, chromeStyle)}
+          data-lightbox-chrome=""
+        >
+          {item.caption}
+        </Typography>
       )}
-    </>
+    </figure>
   );
 }
 
@@ -346,16 +451,13 @@ export function MediaLightbox({
   const dialogRef = useRef<HTMLDialogElement>(null);
   // A pinch from the page that is opening the lightbox, until the frame is there to take it.
   const handoff = useRef<GestureFrame | null>(null);
-  const [clip, setClip] = useState<HTMLVideoElement | null>(null);
-  // Where the frame stood when a step began, for the next item's frame to grow from.
-  const stepFrom = useRef<DOMRect | null>(null);
+  // The way the strip glides once a step has placed the items.
+  const heading = useRef<1 | -1 | null>(null);
+  const [transit, setTransit] = useState<Transit | null>(OPENING);
   const concealed = useRef<HTMLElement | null>(null);
   const closing = useRef(false);
-  const [measured, setMeasured] = useState<
-    ({ index: number } & MediaShape) | null
-  >(null);
+  const [measured, setMeasured] = useState<Record<string, MediaShape>>({});
   const item = index === null ? null : items[index];
-  const measuredHere = measured?.index === index ? measured : null;
 
   const reveal = () => {
     if (concealed.current) concealed.current.style.visibility = "";
@@ -374,16 +476,17 @@ export function MediaLightbox({
     dialogRef,
     shown: index,
     count: items.length,
-    naturalWidth: item?.width ?? measuredHere?.width,
+    naturalWidth: item ? (item.width ?? measured[item.src]?.width) : undefined,
     band: (item?.padding ?? 0) / MEDIA_PADDING_REFERENCE,
     source: () => (index === null ? null : sourceFor?.(index) ?? null),
-    onStep: (step, enterFrom) => {
-      if (index !== null) go(index + step, enterFrom);
+    onStep: (step) => {
+      if (index !== null) go(index + step, step);
     },
+    onRest: () => setTransit(null),
     onClose: () => requestClose(),
     closing: () => closing.current,
   });
-  const { frameRef, zoomRef } = gestures;
+  const { stripRef, frameRef, zoomRef } = gestures;
 
   useImperativeHandle(ref, () => ({
     pinch: {
@@ -402,6 +505,10 @@ export function MediaLightbox({
     },
   }));
 
+  // A step taken while it opened leaves the neighbours to its glide's rest.
+  const opened = () =>
+    setTransit((was) => (was?.leaving.length ? was : null));
+
   const show = useEffectEvent((shown: number | null) => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -413,43 +520,67 @@ export function MediaLightbox({
     if (!frame) return;
 
     const source = sourceFor?.(shown) ?? null;
-    const opening = !dialog.open;
-    const from = opening ? source?.getBoundingClientRect() : stepFrom.current;
-    const pinch = opening ? handoff.current : null;
-    stepFrom.current = null;
+    const pinch = handoff.current;
     handoff.current = null;
     conceal(source);
-    if (opening) dialog.showModal();
+    if (dialog.open) {
+      const step = heading.current;
+      heading.current = null;
+      if (step) gestures.glide(step);
+      return;
+    }
 
+    const from = source?.getBoundingClientRect();
+    dialog.showModal();
     settle(frame);
     clearBox(frame);
     const rest = frame.getBoundingClientRect();
-    if (pinch) {
-      gestures.adopt(pinch);
-    } else if (from && !sameBox(from, rest)) {
-      animate(frame, [boxKeyframe(from, rest), boxKeyframe(rest, rest)]);
-    } else if (!from && opening) {
-      animate(frame, [
-        { opacity: 0, scale: "0.95" },
-        { opacity: 1, scale: "1" },
-      ]);
-    }
-    if (opening) {
-      dialog
-        .querySelectorAll<HTMLElement>("[data-lightbox-chrome]")
-        .forEach((chrome) => animate(chrome, [{ opacity: 0 }, { opacity: 1 }]));
-    }
+    const radius = cornerRadius(frame);
+    dialog
+      .querySelectorAll<HTMLElement>("[data-lightbox-chrome]")
+      .forEach((chrome) =>
+        animate(chrome, [{ opacity: 0 }, { opacity: 1 }], { afterPaint: true }),
+      );
+    // Its rest is reported by the gestures once the pinch ends.
+    if (pinch) return gestures.adopt(pinch);
+
+    const growing =
+      from && rest.width && !sameBox(from, rest)
+        ? animateBox(
+            frame,
+            [
+              boxKeyframe(from, rest, cornerRadius(source!)),
+              boxKeyframe(rest, rest, radius),
+            ],
+            { afterPaint: true },
+          )
+        : !from
+          ? animate(
+              frame,
+              [
+                { opacity: 0, scale: "0.95" },
+                { opacity: 1, scale: "1" },
+              ],
+              { afterPaint: true },
+            )
+          : null;
+    if (growing) growing.finished.then(opened, () => {});
+    else opened();
   });
+
 
   // Must stay driven by `index` with no cleanup: a cleanup calling close() fires onClose,
   // which dismisses the lightbox under React's dev double-run.
   useLayoutEffect(() => show(index), [index]);
 
-  const go = (next: number, from?: DOMRect) => {
+  const go = (next: number, step: 1 | -1) => {
     if (index === null || closing.current) return;
-    stepFrom.current =
-      from ?? frameRef.current?.getBoundingClientRect() ?? null;
-    onIndexChange((next + items.length) % items.length);
+    const target = (next + items.length) % items.length;
+    if (target === index) return;
+    heading.current = step;
+    gestures.resetZoom();
+    setTransit((was) => stepTransit(was, index, target, step));
+    onIndexChange(target);
   };
 
   const requestClose = () => {
@@ -464,23 +595,32 @@ export function MediaLightbox({
     let animation: Animation | null = null;
     if (frame) {
       const from = frame.getBoundingClientRect();
+      const strip = stripRef.current;
+      if (strip) {
+        settle(strip);
+        clearBox(strip);
+      }
       settle(frame);
       clearBox(frame);
       const rest = frame.getBoundingClientRect();
-      if (source) {
+      if (source && rest.width) {
         // The page's copy picks up where the lightbox's left off.
         const live = frame.querySelector("video");
         const origin = source.querySelector("video");
         if (live && origin) origin.currentTime = live.currentTime;
-        animation = animate(
+        animation = animateBox(
           frame,
           [
-            boxKeyframe(from, rest),
-            boxKeyframe(source.getBoundingClientRect(), rest),
+            boxKeyframe(from, rest, cornerRadius(frame)),
+            boxKeyframe(
+              source.getBoundingClientRect(),
+              rest,
+              cornerRadius(source),
+            ),
           ],
           { fill: "forwards" },
         );
-      } else {
+      } else if (!source) {
         animation = animate(
           frame,
           [
@@ -492,10 +632,11 @@ export function MediaLightbox({
       }
     }
 
-    // Revealed in the same task as close(), whose `close` event only arrives a frame later.
+    // Revealed before close(), whose `close` event only arrives a frame later; the frame covers
+    // the source until it draws.
     const finish = () => {
       reveal();
-      dialog.close();
+      whenDrawn(source?.querySelector("video"), () => dialog.close());
     };
     if (animation) animation.finished.then(finish, () => {});
     else finish();
@@ -504,20 +645,10 @@ export function MediaLightbox({
   const handleClosed = () => {
     closing.current = false;
     dialogRef.current?.removeAttribute("data-closing");
+    setTransit(OPENING);
     reveal();
     onClose();
   };
-
-  const shape = item && (item.width && item.height ? item : measuredHere ?? {});
-  const frameShape = item && shape ? lightboxFrameShape(shape, item) : null;
-  const frameVars = frameShape
-    ? ({
-        "--frame-aspect": String(frameShape.aspect),
-        ...(frameShape.maxWidth
-          ? { "--frame-max": `${frameShape.maxWidth}px` }
-          : {}),
-      } as CSSProperties)
-    : undefined;
 
   return (
     <Dialog
@@ -535,44 +666,32 @@ export function MediaLightbox({
         if (index === null) return;
         if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
         event.preventDefault();
-        go(index + (event.key === "ArrowRight" ? 1 : -1));
+        const step = event.key === "ArrowRight" ? 1 : -1;
+        go(index + step, step);
       }}
     >
       {item && index !== null && (
         <>
-          <figure className={figureStyle}>
-            <div
-              ref={frameRef}
-              data-lightbox-frame=""
-              // The box a clip's transport pins to.
-              data-media-surface=""
-              className={cx(cell.cell, frameStyle)}
-              style={frameVars}
-            >
-              <div ref={zoomRef} data-lightbox-zoom="" className={zoomStyle}>
-                <LightboxStage
-                  key={index}
-                  item={item}
-                  source={sourceFor?.(index) ?? null}
+          <div ref={stripRef} data-lightbox-strip="" className={stripStyle}>
+            {stripSlots(index, items.length, transit).map(({ index: at, slot }) => {
+              const shown = items[at];
+              return (
+                <LightboxSlide
+                  key={at}
+                  item={shown}
+                  slot={slot}
+                  current={at === index}
+                  frameRef={at === index ? frameRef : undefined}
+                  zoomRef={at === index ? zoomRef : undefined}
+                  source={sourceFor?.(at) ?? null}
+                  measured={measured[shown.src]}
                   onMeasure={(width, height) =>
-                    setMeasured({ index, width, height })
+                    setMeasured((was) => ({ ...was, [shown.src]: { width, height } }))
                   }
-                  onClip={setClip}
                 />
-              </div>
-              <MediaTransport clip={clip} />
-            </div>
-            {item.caption && (
-              <Typography
-                tag="figcaption"
-                type="caption"
-                className={cx(captionStyle, chromeStyle)}
-                data-lightbox-chrome=""
-              >
-                {item.caption}
-              </Typography>
-            )}
-          </figure>
+              );
+            })}
+          </div>
 
           {items.length > 1 && (
             <>
@@ -585,7 +704,7 @@ export function MediaLightbox({
                   emphasis="secondary"
                   aria-label="Previous"
                   className={cx(navButtonStyle, previousStyle)}
-                  onClick={() => go(index - 1)}
+                  onClick={() => go(index - 1, -1)}
                 >
                   <ChevronLeftIcon aria-hidden />
                   <Button.Tooltip>
@@ -597,7 +716,7 @@ export function MediaLightbox({
                   emphasis="secondary"
                   aria-label="Next"
                   className={cx(navButtonStyle, nextStyle)}
-                  onClick={() => go(index + 1)}
+                  onClick={() => go(index + 1, 1)}
                 >
                   <ChevronRightIcon aria-hidden />
                   <Button.Tooltip>
@@ -616,7 +735,7 @@ export function MediaLightbox({
                     className={dotStyle}
                     aria-label={`Show image ${dot + 1}`}
                     aria-current={dot === index || undefined}
-                    onClick={() => go(dot)}
+                    onClick={() => go(dot, dot > index ? 1 : -1)}
                   />
                 ))}
               </div>

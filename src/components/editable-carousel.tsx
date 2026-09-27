@@ -19,7 +19,7 @@ import {
 } from "@/components/carousel";
 import { MediaObject } from "@/components/media-object";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
-import { mediaReservedAspect, type MediaNode } from "@/domain/nodes";
+import { mediaSurfaceAspect, type MediaNode } from "@/domain/nodes";
 import { useImageTransparency } from "@/hooks/use-image-transparency";
 import { useMediaProperties } from "@/hooks/use-media-properties";
 import {
@@ -545,7 +545,7 @@ export function EditableCarousel({
                 },
                 "data-carousel-slide": "",
                 style: {
-                  aspectRatio: mediaReservedAspect(item),
+                  aspectRatio: String(mediaSurfaceAspect(item, item)),
                   translate: shift ? `${shift}px 0px` : undefined,
                 },
               }}

@@ -21,6 +21,7 @@ import {
   mediaBoxStyle,
   mediaFrameStyle,
   lightboxFrameShape,
+  mediaSurfaceAspect,
   mediaInsetPx,
   mediaObjectStyle,
   mediaRadiusPx,
@@ -346,6 +347,15 @@ describe("mediaFrameStyle / mediaObjectStyle", () => {
 
   it("falls back to the placeholder shape, uncapped, for a source of unknown size", () => {
     expect(lightboxFrameShape({}, {})).toEqual({ aspect: 1.5, maxWidth: null });
+  });
+
+  it("shapes every surface as the lightbox frames it, so the picture sits alike in both", () => {
+    const shape = { width: 2160, height: 1350 };
+    expect(mediaSurfaceAspect(shape, { padding: 40 })).toBe(
+      lightboxFrameShape(shape, { padding: 40 }).aspect,
+    );
+    expect(mediaSurfaceAspect(shape, {})).toBe(1.6);
+    expect(mediaSurfaceAspect({}, {})).toBe(1.5);
   });
 
   it("sizes a laid-out `contain` object to its content, so the corner rounds the picture", () => {

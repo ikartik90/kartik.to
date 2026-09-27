@@ -13,7 +13,7 @@ import {
   type MediaLightboxHandle,
 } from "@/components/media-lightbox";
 import { MediaTile } from "@/components/media-tile";
-import { mediaReservedAspect, type MediaNode } from "@/domain/nodes";
+import { mediaSurfaceAspect, type MediaNode } from "@/domain/nodes";
 import { useGestureInput } from "@/hooks/use-gesture-input";
 import type { Point } from "@/utils/lightbox-gesture";
 
@@ -96,7 +96,7 @@ export function MediaCarousel({ items }: MediaCarouselProps) {
             onOpen={() => setOpenIndex(index)}
             surfaceProps={{
               "data-carousel-slide": "",
-              style: { aspectRatio: mediaReservedAspect(item) },
+              style: { aspectRatio: String(mediaSurfaceAspect(item, item)) },
             }}
           />
         ))}
