@@ -33,6 +33,8 @@ const VIEW = 1000;
 const PAD = 240;
 const GAP = 20;
 const FULL = 200;
+/** The strip with its captions, as laid out before a drag. */
+const TRACK_HEIGHT = 460;
 
 const SLIDE = "[data-carousel-slide]";
 const reordering = (element: Element) =>
@@ -117,7 +119,11 @@ beforeEach(() => {
     )
       ? { scrollPaddingInlineStart: "400px" }
       : element.parentElement?.matches("[data-carousel-scroller]")
-        ? { columnGap: `${GAP}px`, paddingInlineStart: `${PAD}px` }
+        ? {
+            columnGap: `${GAP}px`,
+            paddingInlineStart: `${PAD}px`,
+            height: `${TRACK_HEIGHT}px`,
+          }
         : {};
     return new Proxy(style, {
       get: (target, key) =>
@@ -233,7 +239,9 @@ describe("EditableCarousel", () => {
 
   it("shapes an inset slide as the lightbox frames it, band on every side", () => {
     setup([{ ...items("a")[0], width: 1600, height: 1000, padding: 40 }]);
-    expect(parseFloat(slides()[0].style.aspectRatio)).toBeCloseTo(
+    expect(
+      parseFloat(slides()[0].style.getPropertyValue("--slide-aspect")),
+    ).toBeCloseTo(
       1 / (0.875 / 1.6 + 0.125),
       10,
     );
@@ -268,6 +276,54 @@ describe("EditableCarousel", () => {
     expect(on.onFeature).toHaveBeenCalledWith(2);
     expect(on.onReplace).toHaveBeenCalledWith(1);
     expect(on.onRemove).toHaveBeenCalledWith(0);
+  });
+
+  it("leaves a slide's caption style to its carousel", async () => {
+    setup([{ type: "media", kind: "image", src: "a", caption: "A note" }]);
+    await userEvent.setup().click(
+      within(toolbarFor(0)).getByRole("button", { name: "Image properties" }),
+    );
+    expect(screen.getByRole("textbox", { name: "Image caption" })).toBeDefined();
+    expect(screen.queryByRole("listbox", { name: "Caption style" })).toBeNull();
+  });
+
+  describe("its slides' captions", () => {
+    const captioned: MediaNode[] = [
+      { type: "media", kind: "image", src: "a", caption: "A note" },
+      { type: "media", kind: "image", src: "b" },
+    ];
+    const slideCaptions = () =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(`${SLIDE} > figcaption`),
+      );
+
+    it("are not shown unless asked", () => {
+      render(<EditableCarousel items={captioned} {...handlers()} />);
+      expect(slideCaptions()).toHaveLength(0);
+    });
+
+    it("sit beneath their pictures in the carousel's style", () => {
+      render(
+        <EditableCarousel
+          items={captioned}
+          {...handlers()}
+          showCaptions
+          captionStyle="subheading"
+        />,
+      );
+      const [caption, ...rest] = slideCaptions();
+      expect(rest).toHaveLength(0);
+      expect(caption.textContent).toBe("A note");
+      expect(
+        caption.previousElementSibling!.querySelector("[data-media-cell]"),
+      ).not.toBeNull();
+      expect(caption.classList.contains("textStyle_subheading")).toBe(true);
+    });
+  });
+
+  it("draws its slides at the size it is given", () => {
+    render(<EditableCarousel items={items("a")} {...handlers()} size="small" />);
+    expect(root().className).toMatch(/size_small/);
   });
 
   it("opens the properties panel without touching the picture", async () => {
@@ -305,6 +361,15 @@ describe("EditableCarousel reordering", () => {
     setup(items("a", "b", "c"));
     pickUp(0);
     expect(root().hasAttribute("data-reordering")).toBe(true);
+  });
+
+  it("holds the strip's height while the captions are gone, letting go on the drop", () => {
+    setup(items("a", "b"));
+    const track = scroller().firstElementChild as HTMLElement;
+    const cell = pickUp(0);
+    expect(track.style.minHeight).toBe(`${TRACK_HEIGHT}px`);
+    pointer("pointerup", cell, centreOf(1));
+    expect(track.style.minHeight).toBe("");
   });
 
   it("leaves the carried slide's place empty, where it will land", () => {

@@ -24,8 +24,13 @@ import { beginControlDrag, endControlDrag } from "@/utils/control-drag";
 import { animate } from "@/utils/lightbox-motion";
 import ReorderIcon from "@/assets/icons/reorder.svg";
 
-/** The handle (`sizes.toolbarButton`) and its gap to the block (`spacing.lg`). */
-const HANDLE_REACH = 28 + 12;
+/** `sizes.toolbarButton`. */
+const HANDLE_SIZE = 28;
+
+/** The handle and its gap to the block (`spacing.lg`). */
+const HANDLE_REACH = HANDLE_SIZE + 12;
+
+const TEXT_HOST = '[contenteditable]:not([contenteditable="false"])';
 
 /** Pixels a press must travel to count as a drag. */
 const DRAG_THRESHOLD = 4;
@@ -97,14 +102,45 @@ function scrollParent(element: Element): Element | null {
   return document.scrollingElement;
 }
 
-/** Where a block shows from: an editing carousel's track keeps room above its slides for their toolbars. */
-function visibleTop(block: HTMLElement, box: BlockBox): number {
-  const track = block.querySelector(
-    "[data-carousel-scroller]",
-  )?.firstElementChild;
-  if (!track) return box.top;
-  const { paddingTop } = getComputedStyle(track);
-  return track.getBoundingClientRect().top + (parseFloat(paddingTop) || 0);
+/** The middle of an element's first line: its first character's, or an empty field's placeholder's. */
+function firstLineMiddle(element: HTMLElement): number {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const at = node.textContent?.search(/\S/) ?? -1;
+    if (at < 0) continue;
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(node, at + 1);
+    // jsdom's Range has no rects.
+    const [line] =
+      typeof range.getClientRects === "function" ? range.getClientRects() : [];
+    if (line) return (line.top + line.bottom) / 2;
+  }
+  const style = getComputedStyle(element);
+  const px = (value: string) => parseFloat(value) || 0;
+  const box = element.getBoundingClientRect();
+  const top = box.top + px(style.borderTopWidth) + px(style.paddingTop);
+  const bottom =
+    box.bottom - px(style.borderBottomWidth) - px(style.paddingBottom);
+  return (top + bottom) / 2;
+}
+
+/** Level with a block's first line of text, an eyebrow's where one sits above it; a figure's caption doesn't count. */
+function handleTop(
+  element: HTMLElement,
+  outer: HTMLElement,
+  box: BlockBox,
+): number {
+  const text = element.matches(TEXT_HOST)
+    ? element
+    : element.matches("figure")
+      ? null
+      : element.querySelector<HTMLElement>(TEXT_HOST);
+  if (!text) return box.top;
+  const line = outer.matches(TEXT_HOST)
+    ? outer
+    : outer.querySelector<HTMLElement>(TEXT_HOST) ?? text;
+  return firstLineMiddle(line) - HANDLE_SIZE / 2;
 }
 
 export interface BlockReorderProps {
@@ -113,10 +149,17 @@ export interface BlockReorderProps {
   /** The furthest slot a block may drop into; slot `n` is past the last block. */
   lastSlot: number;
   onMove: (from: number, to: number) => void;
+  /** A press on a block's handle that never became a drag. */
+  onPress: (index: number, handle: HTMLElement) => void;
 }
 
 /** A reorder handle beside each hovered or focused block, drawn over the article it sits in. */
-export function BlockReorder({ blocks, lastSlot, onMove }: BlockReorderProps) {
+export function BlockReorder({
+  blocks,
+  lastSlot,
+  onMove,
+  onPress,
+}: BlockReorderProps) {
   const layerRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
@@ -170,13 +213,15 @@ export function BlockReorder({ blocks, lastSlot, onMove }: BlockReorderProps) {
     const root = article();
     if (!root) return;
     const frame = root.getBoundingClientRect();
+    const own = blocks();
     const elements = outers();
     const all = boxes(elements);
     for (const [index, handle] of handleRefs.current) {
-      const element = elements[index];
+      const element = own[index];
+      const outer = elements[index];
       const box = all[index];
-      if (!element || !box) continue;
-      handle.style.top = `${visibleTop(element, box) - frame.top}px`;
+      if (!element || !outer || !box) continue;
+      handle.style.top = `${handleTop(element, outer, box) - frame.top}px`;
       handle.style.left = `${box.left - frame.left}px`;
     }
     const line = lineRef.current;
@@ -328,7 +373,11 @@ export function BlockReorder({ blocks, lastSlot, onMove }: BlockReorderProps) {
     gesture.current = null;
     if (!held) return;
     if (held.frame !== null) cancelAnimationFrame(held.frame);
-    if (!held.dragging) return;
+    if (!held.dragging) {
+      const handle = handleRefs.current.get(held.from);
+      if (commit && handle) onPress(held.from, handle);
+      return;
+    }
 
     endControlDrag(held.pointerId);
     document.documentElement.removeAttribute(DRAGGING_ATTR);

@@ -17,9 +17,14 @@ import {
   carouselSlides,
   restOffsets,
 } from "@/components/carousel";
+import { MediaCaption } from "@/components/media-caption";
 import { MediaObject } from "@/components/media-object";
 import { MediaPropertiesPanel } from "@/components/media-properties-panel";
-import { mediaSurfaceAspect, type MediaNode } from "@/domain/nodes";
+import {
+  mediaSurfaceAspect,
+  type CollectionNode,
+  type MediaNode,
+} from "@/domain/nodes";
 import { useImageTransparency } from "@/hooks/use-image-transparency";
 import { useMediaProperties } from "@/hooks/use-media-properties";
 import {
@@ -144,7 +149,8 @@ function slideCopy(held: Press) {
   return node;
 }
 
-export interface EditableCarouselProps {
+export interface EditableCarouselProps
+  extends Pick<CollectionNode, "size" | "showCaptions" | "captionStyle"> {
   items: MediaNode[];
   /** The editor's showcase-media contract, so a collection navigates like an image block. */
   rootProps?: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> };
@@ -160,6 +166,9 @@ export interface EditableCarouselProps {
 
 export function EditableCarousel({
   items,
+  size,
+  showCaptions = false,
+  captionStyle,
   rootProps,
   onFeature,
   onReplace,
@@ -308,6 +317,9 @@ export function EditableCarousel({
 
     carry(held, clientX, clientY);
     const before = measureSlides();
+    // Its captions go while the slides are halved; the page below mustn't rise into their place.
+    const strip = scroller.firstElementChild as HTMLElement | null;
+    if (strip) strip.style.minHeight = getComputedStyle(strip).height;
     flushSync(() => setDrag({ from: held.index, shifts: [] }));
 
     // Halved, the slides would slip out from under the pointer: keep the carried one's place there.
@@ -435,6 +447,9 @@ export function EditableCarousel({
       setPointerIdle(true);
       setLanding(key);
     });
+    (scroller.firstElementChild as HTMLElement | null)?.style.removeProperty(
+      "min-height",
+    );
 
     // Rest at the snap stop nearest where the drop left things, with the dropped slide in view.
     const dropped = slideNodes.current.get(key);
@@ -508,6 +523,7 @@ export function EditableCarousel({
       <Carousel
         scrollerRef={scrollerRef}
         editing
+        size={size}
         rootProps={{
           ...rootProps,
           "data-reordering": dragging ? "" : undefined,
@@ -519,97 +535,108 @@ export function EditableCarousel({
           const key = keys[index];
           const shift = drag?.shifts[index];
           return (
-            <MediaObject
+            <figure
               key={key}
-              item={item}
-              classes={{
-                root: cx(styles.slide, styles.slot),
-                frame: styles.cell,
-                image: styles.image,
-                backgroundEffect: styles.backgroundEffect,
+              ref={(node: HTMLElement | null) => {
+                if (node) slideNodes.current.set(key, node);
+                else slideNodes.current.delete(key);
               }}
-              label={`Image ${index + 1}`}
-              featured={index === 0}
-              onFeature={() => onFeature(index)}
-              propertiesOpen={properties.isOpen(index)}
-              onToggleProperties={() => properties.toggle(index)}
-              onReplace={() => onReplace(index)}
-              onRemove={() => onRemove(index)}
-              checkered={
-                !item.backgroundEffect && transparentSrcs.has(item.src)
-              }
-              rootProps={{
-                ref: (node: HTMLDivElement | null) => {
-                  if (node) slideNodes.current.set(key, node);
-                  else slideNodes.current.delete(key);
-                },
-                "data-carousel-slide": "",
-                style: {
-                  aspectRatio: String(mediaSurfaceAspect(item, item)),
+              className={cx(styles.slide, styles.stack)}
+              data-carousel-slide=""
+              style={
+                {
+                  "--slide-aspect": String(mediaSurfaceAspect(item, item)),
                   translate: shift ? `${shift}px 0px` : undefined,
-                },
-              }}
-              // Native image drag would hijack the pointer gesture.
-              mediaProps={{ draggable: false }}
-              frameProps={{
-                "data-pressed": pressed?.index === index ? "" : undefined,
-                style:
-                  pressed?.index === index
-                    ? ({ "--press-origin": pressed.origin } as CSSProperties)
+                } as CSSProperties
+              }
+            >
+              <MediaObject
+                item={item}
+                classes={{
+                  root: cx(styles.picture, styles.slot),
+                  frame: styles.cell,
+                  image: styles.image,
+                  backgroundEffect: styles.backgroundEffect,
+                }}
+                label={`Image ${index + 1}`}
+                featured={index === 0}
+                onFeature={() => onFeature(index)}
+                propertiesOpen={properties.isOpen(index)}
+                onToggleProperties={() => properties.toggle(index)}
+                onReplace={() => onReplace(index)}
+                onRemove={() => onRemove(index)}
+                checkered={
+                  !item.backgroundEffect && transparentSrcs.has(item.src)
+                }
+                // Native image drag would hijack the pointer gesture.
+                mediaProps={{ draggable: false }}
+                frameProps={{
+                  "data-pressed": pressed?.index === index ? "" : undefined,
+                  style:
+                    pressed?.index === index
+                      ? ({ "--press-origin": pressed.origin } as CSSProperties)
+                      : undefined,
+                  "data-dragging": drag?.from === index ? "" : undefined,
+                  "data-landing": landing === key ? "" : undefined,
+                  "data-properties-open": properties.isOpen(index)
+                    ? ""
                     : undefined,
-                "data-dragging": drag?.from === index ? "" : undefined,
-                "data-landing": landing === key ? "" : undefined,
-                "data-properties-open": properties.isOpen(index)
-                  ? ""
-                  : undefined,
-                onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
-                  if (event.button !== 0 || press.current) return;
-                  const cell = event.currentTarget;
-                  const media = cell.querySelector<HTMLElement>(MEDIA_TAGS);
-                  const slide = slideNodes.current.get(key);
-                  if (!media || !slide) return;
-                  // Measured before the press scales it.
-                  const rect = cell.getBoundingClientRect();
-                  const box = slide.getBoundingClientRect();
-                  press.current = {
-                    index,
-                    pointerId: event.pointerId,
-                    originX: event.clientX,
-                    originY: event.clientY,
-                    media,
-                    cell,
-                    rect,
-                    picture: media.getBoundingClientRect(),
-                    share: box.width ? (event.clientX - box.left) / box.width : 0.5,
-                  };
-                  setPressed({
-                    index,
-                    origin: `${event.clientX - rect.left}px ${event.clientY - rect.top}px`,
-                  });
-                  // After recording the grab: this throws for a pointer that isn't live (synthetic events).
-                  cell.setPointerCapture?.(event.pointerId);
-                },
-                onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
-                  const held = press.current;
-                  if (!held || held.pointerId !== event.pointerId) return;
-                  if (!reorder.current) {
-                    const travelled = Math.hypot(
-                      event.clientX - held.originX,
-                      event.clientY - held.originY,
-                    );
-                    if (travelled < DRAG_THRESHOLD) return;
-                    beginDrag(event.clientX, event.clientY);
-                  }
-                  moveDrag(event.clientX, event.clientY);
-                },
-                onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => {
-                  const held = press.current;
-                  if (!held || held.pointerId !== event.pointerId) return;
-                  finish(true);
-                },
-                onPointerCancel: () => finish(false),
-              }}
-            />
+                  onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
+                    if (event.button !== 0 || press.current) return;
+                    const cell = event.currentTarget;
+                    const media = cell.querySelector<HTMLElement>(MEDIA_TAGS);
+                    const slide = slideNodes.current.get(key);
+                    if (!media || !slide) return;
+                    // Measured before the press scales it.
+                    const rect = cell.getBoundingClientRect();
+                    const box = slide.getBoundingClientRect();
+                    press.current = {
+                      index,
+                      pointerId: event.pointerId,
+                      originX: event.clientX,
+                      originY: event.clientY,
+                      media,
+                      cell,
+                      rect,
+                      picture: media.getBoundingClientRect(),
+                      share: box.width ? (event.clientX - box.left) / box.width : 0.5,
+                    };
+                    setPressed({
+                      index,
+                      origin: `${event.clientX - rect.left}px ${event.clientY - rect.top}px`,
+                    });
+                    // After recording the grab: this throws for a pointer that isn't live (synthetic events).
+                    cell.setPointerCapture?.(event.pointerId);
+                  },
+                  onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
+                    const held = press.current;
+                    if (!held || held.pointerId !== event.pointerId) return;
+                    if (!reorder.current) {
+                      const travelled = Math.hypot(
+                        event.clientX - held.originX,
+                        event.clientY - held.originY,
+                      );
+                      if (travelled < DRAG_THRESHOLD) return;
+                      beginDrag(event.clientX, event.clientY);
+                    }
+                    moveDrag(event.clientX, event.clientY);
+                  },
+                  onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => {
+                    const held = press.current;
+                    if (!held || held.pointerId !== event.pointerId) return;
+                    finish(true);
+                  },
+                  onPointerCancel: () => finish(false),
+                }}
+              />
+              {showCaptions && (
+                <MediaCaption
+                  caption={item.caption}
+                  captionStyle={captionStyle}
+                  className={styles.caption}
+                />
+              )}
+            </figure>
           );
         })}
         <button

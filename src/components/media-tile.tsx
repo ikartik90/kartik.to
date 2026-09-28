@@ -28,7 +28,8 @@ export interface MediaTileProps {
   classes: MediaTileClasses;
   fallbackLabel: string;
   autoPlay?: boolean;
-  onOpen: () => void;
+  /** Absent, the picture is shown but opens nothing. */
+  onOpen?: () => void;
   children?: ReactNode;
   surfaceProps?: HTMLAttributes<HTMLDivElement> & {
     ref?: Ref<HTMLDivElement>;
@@ -50,6 +51,21 @@ export function MediaTile({
     setClip(node instanceof HTMLVideoElement ? node : null);
   }, []);
 
+  const media = (
+    <Media
+      src={item.src}
+      kind={item.kind}
+      alt={collectionItemAlt(item)}
+      className={classes.image}
+      layout={item}
+      width={item.width}
+      height={item.height}
+      loading="lazy"
+      autoPlay={autoPlay}
+      elementRef={holdClip}
+    />
+  );
+
   return (
     <div
       className={classes.surface}
@@ -63,26 +79,19 @@ export function MediaTile({
           className={classes.backgroundEffect}
         />
       )}
-      <button
-        type="button"
-        data-media-tile=""
-        className={classes.tile}
-        aria-label={collectionItemAlt(item) || fallbackLabel}
-        onClick={onOpen}
-      >
-        <Media
-          src={item.src}
-          kind={item.kind}
-          alt={collectionItemAlt(item)}
-          className={classes.image}
-          layout={item}
-          width={item.width}
-          height={item.height}
-          loading="lazy"
-          autoPlay={autoPlay}
-          elementRef={holdClip}
-        />
-      </button>
+      {onOpen ? (
+        <button
+          type="button"
+          data-media-tile=""
+          className={classes.tile}
+          aria-label={collectionItemAlt(item) || fallbackLabel}
+          onClick={onOpen}
+        >
+          {media}
+        </button>
+      ) : (
+        media
+      )}
       {children}
       <MediaTransport clip={clip} />
     </div>

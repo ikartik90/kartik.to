@@ -165,6 +165,51 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector(".article-subheading-caption")).toBeNull();
     });
 
+    it("omits an eyebrow that was turned on but never written", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "heading",
+              level: 2,
+              children: [{ type: "text", text: "Section title" }],
+              caption: "",
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector(".article-subheading-caption")).toBeNull();
+    });
+
+    it("marks a heading's left and right indents on its outermost element", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "heading",
+              level: 2,
+              indentLeft: true,
+              children: [{ type: "text", text: "Left only" }],
+            },
+            {
+              type: "heading",
+              level: 2,
+              indentLeft: true,
+              indentRight: true,
+              caption: "Part two",
+              children: [{ type: "text", text: "Both" }],
+            },
+          ])}
+        />,
+      );
+      const left = screen.getByRole("heading", { name: "Left only" });
+      expect(left.hasAttribute("data-indent-left")).toBe(true);
+      expect(left.hasAttribute("data-indent-right")).toBe(false);
+      const shell = container.querySelector(".article-heading-shell")!;
+      expect(shell.hasAttribute("data-indent-left")).toBe(true);
+      expect(shell.hasAttribute("data-indent-right")).toBe(true);
+    });
+
     it("marks indented blocks with data-indented and leaves others unmarked", () => {
       const { container } = render(
         <ArticleRenderer
@@ -461,6 +506,35 @@ describe("ArticleRenderer", () => {
       expect(screen.getByText("Image caption text")).toBeDefined();
     });
 
+    it.each([
+      [undefined, "textStyle_caption"],
+      ["paragraph", "textStyle_bodyLarge"],
+      ["subheading", "textStyle_subheading"],
+    ] as const)(
+      "draws a %s caption in the type it names",
+      (captionStyle, typeClass) => {
+        const { container } = render(
+          <ArticleRenderer
+            content={doc([
+              {
+                type: "media",
+                kind: "image",
+                src: "https://example.com/img.png",
+                caption: "Styled caption",
+                ...(captionStyle && { captionStyle }),
+              },
+            ])}
+          />,
+        );
+        const caption = within(container).getByText("Styled caption");
+        expect(caption.tagName).toBe("FIGCAPTION");
+        expect(caption.classList.contains(typeClass)).toBe(true);
+        expect(caption.getAttribute("data-caption-style")).toBe(
+          captionStyle ?? null,
+        );
+      },
+    );
+
     it("renders a media block without caption", () => {
       const { container } = render(
         <ArticleRenderer
@@ -580,6 +654,40 @@ describe("ArticleRenderer", () => {
       // Scoped: this file renders without cleanup.
       expect(container.querySelector("[data-carousel]")).not.toBeNull();
       expect(within(container).getAllByRole("img")).toHaveLength(8);
+    });
+
+    it("draws a collection at its size, captioned in its style, opening nothing once its lightbox is off", () => {
+      const { container } = render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "collection",
+              items: [
+                {
+                  type: "media",
+                  kind: "image",
+                  src: "https://example.com/1.png",
+                  alt: "First",
+                  caption: "Under the first",
+                },
+              ],
+              size: "small",
+              lightbox: false,
+              showCaptions: true,
+              captionStyle: "subheading",
+            },
+          ])}
+        />,
+      );
+      expect(container.querySelector("[data-carousel]")!.className).toMatch(
+        /size_small/,
+      );
+      const caption = container.querySelector(
+        "[data-carousel-slide] > figcaption",
+      )!;
+      expect(caption.textContent).toBe("Under the first");
+      expect(caption.classList.contains("textStyle_subheading")).toBe(true);
+      expect(container.querySelector("[data-media-tile]")).toBeNull();
     });
 
     it("renders nothing for a collection with no images", () => {

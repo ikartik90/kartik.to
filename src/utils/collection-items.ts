@@ -1,6 +1,7 @@
 import {
   DEFAULT_MEDIA_FIT,
   type BackgroundEffect,
+  type MediaCaptionStyle,
   type MediaNode,
 } from "@/domain/nodes";
 
@@ -58,6 +59,19 @@ export function setItemCaption(
     if (i !== index) return item;
     const { caption: _dropped, ...rest } = item;
     return trimmed ? { ...rest, caption: trimmed } : rest;
+  });
+}
+
+export function setItemCaptionStyle(
+  items: readonly MediaNode[],
+  index: number,
+  style: MediaCaptionStyle,
+): MediaNode[] {
+  if (!inRange(items, index)) return [...items];
+  return items.map((item, i) => {
+    if (i !== index) return item;
+    const { captionStyle: _dropped, ...rest } = item;
+    return style === "caption" ? rest : { ...rest, captionStyle: style };
   });
 }
 

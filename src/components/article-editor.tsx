@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import { css, cx } from "../../styled-system/css";
 import {
   horizontalRule,
@@ -48,6 +49,10 @@ import { normalizeLinkHref } from "@/utils/link-href";
 import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { PostMetadataPanel } from "@/components/post-metadata-panel";
 import { EditableButtonLink } from "@/components/editable-button-link";
+import { ButtonLinkToolbar } from "@/components/button-link-toolbar";
+import { HeadingToolbar } from "@/components/heading-toolbar";
+import { CarouselToolbar } from "@/components/carousel-toolbar";
+import { CarouselPropertiesPanel } from "@/components/carousel-properties-panel";
 import {
   autosaveKey,
   clearAutosave,
@@ -68,6 +73,7 @@ import { DemoFrame } from "@/components/demo-frame";
 import { DemoComponent } from "@/components/demo-component";
 import { getDemoComponent } from "@/components/demo/registry";
 import type { FurnitureSlots } from "@/components/article-renderer";
+import { CAPTION_TYPE } from "@/components/media-caption";
 import {
   ImageInsertDialog,
   type ImageDialogMode,
@@ -105,12 +111,15 @@ import type { Post, Document, PostCategory } from "@/domain/post";
 import type {
   BlockNode,
   CollectionItem,
+  CollectionNode,
   InlineNode,
   Mark,
   CodeLanguage,
+  HeadingNode,
+  MediaCaptionStyle,
   MediaNode,
 } from "@/domain/nodes";
-import { CodeLanguageSchema } from "@/domain/nodes";
+import { CodeLanguageSchema, MEDIA_CAPTION_STYLES } from "@/domain/nodes";
 import {
   appendItems,
   featureItem,
@@ -940,19 +949,32 @@ const editorImageOverlayActionsStyle = css({
 
 const editorOverlayIconStyle = menuIcon();
 
+const editorCaptionFieldStyle = css({
+  width: "token(spacing.full)",
+  minHeight: "1.5em",
+  "&:empty::before, &[data-empty]::before": {
+    content: "attr(data-placeholder)",
+    color: "text.default/40",
+    pointerEvents: "none",
+  },
+});
+
 const editorCaptionStyle = cx(
   editableBaseStyle,
   typographyStyles({ type: "caption" }),
-  css({
-    width: "token(spacing.full)",
-    minHeight: "1.5em",
-    "&:empty::before, &[data-empty]::before": {
-      content: "attr(data-placeholder)",
-      color: "text.default/40",
-      pointerEvents: "none",
-    },
-  }),
+  editorCaptionFieldStyle,
 );
+
+const editorMediaCaptionStyle = Object.fromEntries(
+  MEDIA_CAPTION_STYLES.map((style) => [
+    style,
+    cx(
+      editableBaseStyle,
+      typographyStyles({ type: CAPTION_TYPE[style] }),
+      editorCaptionFieldStyle,
+    ),
+  ]),
+) as Record<MediaCaptionStyle, string>;
 
 const editorBlockquoteCaptionStyle = cx(
   editableBaseStyle,
@@ -1037,19 +1059,10 @@ const editorListItemContentStyle = cx(
   editableBaseStyle,
   articleListItemContent(),
 );
-// Markers are buttons here; re-enable the pointer events the read-only recipes disable.
-const bulletButtonReset = css({
-  appearance: "none",
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  pointerEvents: "auto",
-  cursor: "pointer",
-});
-const editorListMarkerButtonStyle = cx(listMarkerBox(), bulletButtonReset);
+const editorListMarkerBoxStyle = listMarkerBox();
 const editorListMarkerPillStyle = listMarker();
-const editorListBulletButtonStyle = cx(listBullet(), bulletButtonReset);
-const editorListBulletIconButtonStyle = cx(listBulletIcon(), bulletButtonReset);
+const editorListBulletStyle = listBullet();
+const editorListBulletIconStyle = listBulletIcon();
 // Resolved statically: Panda only extracts literal call sites.
 const editorBulletCircleClass = {
   check: listBulletCircle({ glyph: "check" }),
@@ -1115,7 +1128,6 @@ interface EditableBlockProps {
   onInsertListItemAfter?: () => void;
   /** Precomputed marker text for this numbered-list item (zero-padded or a→z). */
   listLabel?: string;
-  onMarkerClick?: (rect: DOMRect) => void;
   elRef: (el: HTMLElement | null) => void;
 }
 
@@ -1155,7 +1167,6 @@ function EditableBlock({
   onInsertListItemBefore,
   onInsertListItemAfter,
   listLabel,
-  onMarkerClick,
   elRef,
 }: EditableBlockProps) {
   const placeholder =
@@ -1188,10 +1199,14 @@ function EditableBlock({
     () => (block.type === "media" ? [block] : []),
     [block],
   );
-  const mediaProperties = useMediaProperties(mediaItems, ([next]) => {
-    // Debounced via onChange: a slider emits a value per frame.
-    if (next) onChange(next);
-  });
+  const mediaProperties = useMediaProperties(
+    mediaItems,
+    ([next]) => {
+      // Debounced via onChange: a slider emits a value per frame.
+      if (next) onChange(next);
+    },
+    { captionStyles: true },
+  );
 
   const handleNonTextKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
@@ -1520,10 +1535,14 @@ function EditableBlock({
         }
       }
 
+      const hasEyebrow =
+        block.type === "metric" ||
+        (block.type === "heading" && block.caption !== undefined);
+
       if (
         e.key === "ArrowUp" &&
         !e.shiftKey &&
-        (block.type === "heading" || block.type === "metric") &&
+        hasEyebrow &&
         isCaretAtFirstLine(e.currentTarget)
       ) {
         e.preventDefault();
@@ -1568,7 +1587,7 @@ function EditableBlock({
       if (
         e.key === "ArrowLeft" &&
         !e.shiftKey &&
-        (block.type === "heading" || block.type === "metric") &&
+        hasEyebrow &&
         isCaretAtStart(e.currentTarget)
       ) {
         e.preventDefault();
@@ -1839,9 +1858,11 @@ function EditableBlock({
       if (text.trim().length === 0) {
         el.innerHTML = "";
       }
+      // A heading's eyebrow stays on until its toolbar turns it off.
+      const emptied = block.type === "heading" ? "" : undefined;
       onChange({
         ...block,
-        caption: text.trim().length > 0 ? text : undefined,
+        caption: text.trim().length > 0 ? text : emptied,
       });
     },
     [block, onChange],
@@ -2180,17 +2201,21 @@ function EditableBlock({
       <div
         className={articleHeadingShell()}
         data-indented={block.indent ? "" : undefined}
+        data-indent-left={block.indentLeft ? "" : undefined}
+        data-indent-right={block.indentRight ? "" : undefined}
       >
-        <span
-          ref={captionRef}
-          className={editorSubheadingCaptionStyle}
-          contentEditable
-          suppressContentEditableWarning
-          data-placeholder="Add caption..."
-          data-empty={!block.caption?.trim() ? "" : undefined}
-          onInput={handleCaptionInput}
-          onKeyDown={handleHeadingCaptionKeyDown}
-        />
+        {block.caption !== undefined && (
+          <span
+            ref={captionRef}
+            className={editorSubheadingCaptionStyle}
+            contentEditable
+            suppressContentEditableWarning
+            data-placeholder="Add caption..."
+            data-empty={!block.caption.trim() ? "" : undefined}
+            onInput={handleCaptionInput}
+            onKeyDown={handleHeadingCaptionKeyDown}
+          />
+        )}
         <h2
           ref={combinedRef as React.RefCallback<HTMLHeadingElement>}
           className={cx(
@@ -2303,11 +2328,12 @@ function EditableBlock({
         )}
         <figcaption
           ref={captionRef}
-          className={editorCaptionStyle}
+          className={editorMediaCaptionStyle[block.captionStyle ?? "caption"]}
           contentEditable
           suppressContentEditableWarning
           data-placeholder="Add caption..."
           data-block-index={blockIndex}
+          data-caption-style={block.captionStyle}
           data-empty={!block.caption?.trim() ? "" : undefined}
           onInput={handleCaptionInput}
           onKeyDown={handleCaptionKeyDown}
@@ -2334,6 +2360,9 @@ function EditableBlock({
       >
         <EditableCarousel
           items={block.items}
+          size={block.size}
+          showCaptions={block.showCaptions}
+          captionStyle={block.captionStyle}
           rootProps={showcaseMediaProps}
           onFeature={(i) => onCollectionFeature?.(i)}
           onReplace={(i) => onCollectionReplace?.(i)}
@@ -2421,38 +2450,27 @@ function EditableBlock({
     return (
       <div className={editorListItemShellStyle} data-list-item="">
         {block.type === "list_item" ? (
-          <button
-            type="button"
-            className={editorListMarkerButtonStyle}
+          <span
+            className={editorListMarkerBoxStyle}
             data-numbering-marker=""
-            aria-label="List numbering options"
-            // Keep the caret in the editor when opening the popover.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={(e) =>
-              onMarkerClick?.(e.currentTarget.getBoundingClientRect())
-            }
+            aria-hidden
           >
             <span className={editorListMarkerPillStyle}>{markerLabel}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={
-              block.type === "bullet_list_item" && block.marker
-                ? editorListBulletIconButtonStyle
-                : editorListBulletButtonStyle
-            }
+          </span>
+        ) : block.type === "bullet_list_item" && block.marker ? (
+          <span
+            className={editorListBulletIconStyle}
             data-bullet-marker=""
-            aria-label="List bullet options"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={(e) =>
-              onMarkerClick?.(e.currentTarget.getBoundingClientRect())
-            }
+            aria-hidden
           >
-            {block.type === "bullet_list_item" && block.marker && (
-              <span className={editorBulletCircleClass[block.marker]} />
-            )}
-          </button>
+            <span className={editorBulletCircleClass[block.marker]} />
+          </span>
+        ) : (
+          <span
+            className={editorListBulletStyle}
+            data-bullet-marker=""
+            aria-hidden
+          />
         )}
         <p
           ref={combinedRef as React.RefCallback<HTMLParagraphElement>}
@@ -3021,14 +3039,13 @@ export function ArticleEditor({
   const [editingSidenoteId, setEditingSidenoteId] = useState<string | null>(
     null,
   );
-  const [numbering, setNumbering] = useState<{
+  /** Opened from a block's reorder handle. */
+  const [nodeToolbar, setNodeToolbar] = useState<{
     index: number;
     rect: ToolbarRect;
   } | null>(null);
-  const [bullet, setBullet] = useState<{
-    index: number;
-    rect: ToolbarRect;
-  } | null>(null);
+  /** The carousel whose properties panel is open, opened from its toolbar. */
+  const [carouselPanel, setCarouselPanel] = useState<number | null>(null);
   const trackSelectionRef = useRef<(force?: boolean) => void>(() => {});
 
   function isShowcaseFigure(el: HTMLElement): boolean {
@@ -3404,12 +3421,42 @@ export function ArticleEditor({
     setBulletRunStyle(index, "dot");
   }
 
-  function handleMarkerClick(index: number, rect: DOMRect) {
-    const b = blocks[index];
-    // Article-relative, so the anchor rides the scrolling article (see toArticleRect).
-    const rel = toArticleRect(rect, blockRefs.current[index]);
-    if (b?.type === "list_item") setNumbering({ index, rect: rel });
-    else if (b?.type === "bullet_list_item") setBullet({ index, rect: rel });
+  function openNodeToolbar(index: number, handle: HTMLElement) {
+    const type = blocks[index]?.type;
+    if (
+      type !== "list_item" &&
+      type !== "bullet_list_item" &&
+      type !== "button_link" &&
+      type !== "heading" &&
+      type !== "collection"
+    ) {
+      return;
+    }
+    setNodeToolbar({
+      index,
+      rect: toArticleRect(handle.getBoundingClientRect(), handle),
+    });
+  }
+
+  /** An indent moves the heading sideways, so the open toolbar moves with it. */
+  function changeHeading(index: number, heading: HeadingNode) {
+    const element = blockRefs.current[index];
+    const before = element?.getBoundingClientRect().left ?? 0;
+    flushSync(() => {
+      const next = [...blocks];
+      next[index] = heading;
+      updateBlocks(next);
+    });
+    cancelHistoryDebounce();
+    pushHistoryNow();
+    const shift = (element?.getBoundingClientRect().left ?? before) - before;
+    setNodeToolbar(
+      (open) =>
+        open && {
+          ...open,
+          rect: { ...open.rect, left: open.rect.left + shift },
+        },
+    );
   }
 
   function insertListItemAfter(index: number) {
@@ -3757,6 +3804,15 @@ export function ArticleEditor({
   }
 
   // Feature, remove and replace bypass the debounced `updateBlock`, so each is one clean undo step.
+  /** Each setting is one undo step. */
+  function updateCarousel(blockIndex: number, carousel: CollectionNode) {
+    const next = [...blocks];
+    next[blockIndex] = carousel;
+    updateBlocks(next);
+    cancelHistoryDebounce();
+    pushHistoryNow();
+  }
+
   function updateCollection(blockIndex: number, items: CollectionItem[]) {
     const block = blocks[blockIndex];
     if (block?.type !== "collection") return;
@@ -3936,7 +3992,12 @@ export function ArticleEditor({
       ...mediaNodeFrom(payload),
       // The caption belongs to the block's position, not the file in it.
       ...(existing.type === "media" && existing.caption
-        ? { caption: existing.caption }
+        ? {
+            caption: existing.caption,
+            ...(existing.captionStyle && {
+              captionStyle: existing.captionStyle,
+            }),
+          }
         : {}),
     };
     updateBlocks(next);
@@ -4568,6 +4629,10 @@ export function ArticleEditor({
   });
 
   const listNumbering = computeListNumbering(blocks);
+  const nodeBlock = nodeToolbar ? blocks[nodeToolbar.index] : undefined;
+  const panelBlock = carouselPanel === null ? undefined : blocks[carouselPanel];
+  const carouselBlock =
+    panelBlock?.type === "collection" ? panelBlock : undefined;
 
   return (
     <>
@@ -4744,7 +4809,6 @@ export function ArticleEditor({
           onInsertListItemBefore={() => insertListItemBefore(i)}
           onInsertListItemAfter={() => insertListItemAfter(i)}
           listLabel={listNumbering[i]?.label}
-          onMarkerClick={(rect) => handleMarkerClick(i, rect)}
           elRef={(el) => {
             blockRefs.current[i] = el;
           }}
@@ -4755,6 +4819,7 @@ export function ArticleEditor({
         blocks={() => blockRefs.current.slice(0, blocks.length)}
         lastSlot={lastDropSlot(blocks)}
         onMove={moveBlock}
+        onPress={openNodeToolbar}
       />
 
       {slashAnchor && (
@@ -4823,44 +4888,94 @@ export function ArticleEditor({
         onChangeText={handleSidenoteTextChange}
       />
 
-      {numbering && (
+      {nodeToolbar && nodeBlock?.type === "list_item" && (
         <NumberToolbar
-          rect={numbering.rect}
-          marker={listNumbering[numbering.index]?.marker ?? "decimal"}
-          continueActive={isContinueActive(numbering.index)}
+          rect={nodeToolbar.rect}
+          marker={listNumbering[nodeToolbar.index]?.marker ?? "decimal"}
+          continueActive={isContinueActive(nodeToolbar.index)}
           onContinue={() => {
-            toggleContinueNumbering(numbering.index);
-            setNumbering(null);
+            toggleContinueNumbering(nodeToolbar.index);
+            setNodeToolbar(null);
           }}
           onReset={() => {
-            resetNumbering(numbering.index);
-            setNumbering(null);
+            resetNumbering(nodeToolbar.index);
+            setNodeToolbar(null);
           }}
           onSwapStyle={() => {
-            swapListStyle(numbering.index);
-            setNumbering(null);
+            swapListStyle(nodeToolbar.index);
+            setNodeToolbar(null);
           }}
-          onDismiss={() => setNumbering(null)}
+          onDismiss={() => setNodeToolbar(null)}
         />
       )}
 
-      {bullet && (
+      {nodeToolbar && nodeBlock?.type === "bullet_list_item" && (
         <BulletToolbar
-          rect={bullet.rect}
-          style={bulletStyleOf(bullet.index)}
+          rect={nodeToolbar.rect}
+          style={bulletStyleOf(nodeToolbar.index)}
           onSelect={(style) => {
-            setBulletStyle(bullet.index, style);
-            setBullet(null);
+            setBulletStyle(nodeToolbar.index, style);
+            setNodeToolbar(null);
           }}
           onContinue={() => {
-            continueBulleting(bullet.index);
-            setBullet(null);
+            continueBulleting(nodeToolbar.index);
+            setNodeToolbar(null);
           }}
           onReset={() => {
-            resetBulleting(bullet.index);
-            setBullet(null);
+            resetBulleting(nodeToolbar.index);
+            setNodeToolbar(null);
           }}
-          onDismiss={() => setBullet(null)}
+          onDismiss={() => setNodeToolbar(null)}
+        />
+      )}
+
+      {nodeToolbar && nodeBlock?.type === "button_link" && (
+        <ButtonLinkToolbar
+          key={nodeToolbar.index}
+          rect={nodeToolbar.rect}
+          block={nodeBlock}
+          onChange={(updated) => updateBlock(nodeToolbar.index, updated)}
+          onDelete={() => {
+            setNodeToolbar(null);
+            deleteBlock(nodeToolbar.index);
+          }}
+          onEditEnd={() => blockRefs.current[nodeToolbar.index]?.focus()}
+          onDismiss={() => setNodeToolbar(null)}
+        />
+      )}
+
+      {nodeToolbar && nodeBlock?.type === "collection" && (
+        <CarouselToolbar
+          rect={nodeToolbar.rect}
+          onOpenProperties={() => {
+            setNodeToolbar(null);
+            setCarouselPanel(nodeToolbar.index);
+          }}
+          onDelete={() => {
+            setNodeToolbar(null);
+            setCarouselPanel(null);
+            deleteBlock(nodeToolbar.index);
+          }}
+          onDismiss={() => setNodeToolbar(null)}
+        />
+      )}
+
+      {carouselBlock && (
+        // Keyed per carousel, as a media panel is per picture.
+        <CarouselPropertiesPanel
+          key={carouselPanel}
+          block={carouselBlock}
+          onChange={(carousel) => updateCarousel(carouselPanel!, carousel)}
+          onDismiss={() => setCarouselPanel(null)}
+        />
+      )}
+
+      {nodeToolbar && nodeBlock?.type === "heading" && (
+        <HeadingToolbar
+          rect={nodeToolbar.rect}
+          block={nodeBlock}
+          onChange={(heading) => changeHeading(nodeToolbar.index, heading)}
+          onDismiss={() => setNodeToolbar(null)}
         />
       )}
 

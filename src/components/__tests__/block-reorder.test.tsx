@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   act,
   cleanup,
@@ -12,7 +12,8 @@ import { moveItem } from "@/utils/collection-items";
 import { BlockReorder } from "../block-reorder";
 
 // jsdom lays nothing out, so the geometry is stated: blocks 100px tall and 20px apart in a column
-// running from x 100 to 740, the first at the article's top.
+// running from x 100 to 740, the first at the article's top. Anything in a block shares its box,
+// but for a `data-height` of its own.
 const LEFT = 100;
 const WIDTH = 640;
 const HEIGHT = 100;
@@ -43,7 +44,8 @@ beforeEach(() => {
     if (this.matches("article")) return box(0, 0, 1000, 1000);
     const block = this.closest("[data-block]");
     const index = block ? blocks().indexOf(block as HTMLElement) : -1;
-    return index < 0 ? box(0, 0, 0, 0) : box(LEFT, topOf(index), WIDTH, HEIGHT);
+    const height = Number((this as HTMLElement).dataset.height) || HEIGHT;
+    return index < 0 ? box(0, 0, 0, 0) : box(LEFT, topOf(index), WIDTH, height);
   };
   vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
     const style = originalGetComputedStyle(element, pseudo);
@@ -60,7 +62,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup(ids: string[], lastSlot?: number) {
+function setup(ids: string[], lastSlot?: number, onPress = vi.fn()) {
   const onMove = vi.fn();
   function Harness() {
     const [order, setOrder] = useState(ids);
@@ -86,6 +88,7 @@ function setup(ids: string[], lastSlot?: number) {
             onMove(from, to);
             setOrder((was) => moveItem(was, from, to));
           }}
+          onPress={onPress}
         />
       </article>
     );
@@ -144,14 +147,125 @@ describe("BlockReorder", () => {
     expect(handle.style.left).toBe(`${LEFT}px`);
   });
 
-  it("levels a carousel's handle with its slides, below the room kept for their toolbars", () => {
-    setup(["a", "b", "c"]);
-    blocks()[1].innerHTML =
-      '<div data-carousel-scroller><div style="padding-top: 20px"></div></div>';
-    hover(1);
-    const [handle] = handles();
-    expect(handle.style.top).toBe(`${topOf(1) + 20}px`);
-    expect(handle.style.left).toBe(`${LEFT}px`);
+  describe("beside a text block", () => {
+    // jsdom's ranges have no rects: a character's line box is the `data-line-top` of its element, 20px tall.
+    beforeEach(() => {
+      Object.defineProperty(Range.prototype, "getClientRects", {
+        configurable: true,
+        value(this: Range) {
+          const element = this.startContainer.parentElement!;
+          return [box(LEFT, topOf(1) + Number(element.dataset.lineTop), 8, 20)];
+        },
+      });
+    });
+    afterEach(() => {
+      delete (Range.prototype as { getClientRects?: unknown }).getClientRects;
+    });
+
+    /** Block 1 is `second`, drawn with a ref for the block's own element. */
+    function setupSecond(
+      second: (ref: (element: HTMLElement | null) => void) => ReactNode,
+    ) {
+      function Harness() {
+        const refs = useRef<(HTMLElement | null)[]>([]);
+        return (
+          <article>
+            <p
+              data-block=""
+              ref={(element) => {
+                refs.current[0] = element;
+              }}
+            >
+              a
+            </p>
+            {second((element) => {
+              refs.current[1] = element;
+            })}
+            <BlockReorder
+              blocks={() => refs.current.slice(0, 2)}
+              lastSlot={2}
+              onMove={vi.fn()}
+              onPress={vi.fn()}
+            />
+          </article>
+        );
+      }
+      render(<Harness />);
+      hover(1);
+      return handles()[0].style.top;
+    }
+
+    it("centres the 28px handle on the block's first line", () => {
+      const top = setupSecond((ref) => (
+        <p data-block="" contentEditable data-line-top="16" ref={ref}>
+          A paragraph long enough to wrap
+        </p>
+      ));
+      expect(top).toBe(`${topOf(1) + 26 - 14}px`);
+    });
+
+    it("centres it on the eyebrow's line when one sits above the text", () => {
+      const top = setupSecond((ref) => (
+        <div data-block="">
+          <span contentEditable data-line-top="0">
+            Part one
+          </span>
+          <h2 contentEditable data-line-top="40" ref={ref}>
+            A heading
+          </h2>
+        </div>
+      ));
+      expect(top).toBe(`${topOf(1) + 10 - 14}px`);
+    });
+
+    it("centres it on an empty eyebrow, whose one line is its placeholder", () => {
+      const top = setupSecond((ref) => (
+        <div data-block="">
+          <span contentEditable data-height="20" />
+          <h2 contentEditable data-line-top="40" ref={ref}>
+            A heading
+          </h2>
+        </div>
+      ));
+      expect(top).toBe(`${topOf(1) + 10 - 14}px`);
+    });
+
+    it("centres it on a button's label, which its row holds", () => {
+      const top = setupSecond((ref) => (
+        <div data-block="" ref={ref}>
+          <span contentEditable="plaintext-only" data-line-top="10">
+            Book a call
+          </span>
+        </div>
+      ));
+      expect(top).toBe(`${topOf(1) + 20 - 14}px`);
+    });
+
+    it("centres it on an empty field's box inside its padding", () => {
+      const top = setupSecond((ref) => (
+        <div data-block="">
+          <p
+            contentEditable
+            data-height="40"
+            style={{ paddingTop: "8px" }}
+            ref={ref}
+          />
+        </div>
+      ));
+      expect(top).toBe(`${topOf(1) + 24 - 14}px`);
+    });
+
+    it("keeps a figure's at its top, level with the picture, not the caption", () => {
+      const top = setupSecond((ref) => (
+        <figure data-block="" ref={ref}>
+          <div data-picture="" />
+          <figcaption contentEditable data-line-top="200">
+            A caption
+          </figcaption>
+        </figure>
+      ));
+      expect(top).toBe(`${topOf(1)}px`);
+    });
   });
 
   it("keeps the handle while the pointer crosses the gap to it", () => {
@@ -237,6 +351,34 @@ describe("BlockReorder", () => {
     pointer("pointerdown", handle, LEFT - 20, topOf(0) + 10);
     pointer("pointerup", handle, LEFT - 20, topOf(0) + 10);
     expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("hands a press that doesn't travel on, with the handle pressed", () => {
+    const onPress = vi.fn();
+    setup(["a", "b", "c"], undefined, onPress);
+    hover(1);
+    const handle = handles()[0];
+    pointer("pointerdown", handle, LEFT - 20, topOf(1) + 10);
+    pointer("pointerup", handle, LEFT - 20, topOf(1) + 12);
+    expect(onPress).toHaveBeenCalledExactlyOnceWith(1, handle);
+  });
+
+  it("hands on no press that became a drag", () => {
+    const onPress = vi.fn();
+    setup(["a", "b", "c"], undefined, onPress);
+    const handle = carry(0, topOf(2) + 10);
+    pointer("pointerup", handle, LEFT - 20, topOf(2) + 10);
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("hands on no press the system cancelled", () => {
+    const onPress = vi.fn();
+    setup(["a", "b", "c"], undefined, onPress);
+    hover(0);
+    const handle = handles()[0];
+    pointer("pointerdown", handle, LEFT - 20, topOf(0) + 10);
+    pointer("pointercancel", handle, LEFT - 20, topOf(0) + 10);
+    expect(onPress).not.toHaveBeenCalled();
   });
 
   it("shows the handle of the block under the pointer once the dropped block lands", async () => {

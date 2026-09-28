@@ -137,6 +137,12 @@ function scrollTo(left: number) {
   });
 }
 
+const firstSlide = () =>
+  document.querySelector<HTMLElement>("[data-carousel-slide]")!;
+
+const aspectOf = (slide: HTMLElement) =>
+  parseFloat(slide.style.getPropertyValue("--slide-aspect"));
+
 describe("MediaCarousel", () => {
   it("renders nothing without items", () => {
     const { container } = render(<MediaCarousel items={[]} />);
@@ -152,14 +158,12 @@ describe("MediaCarousel", () => {
 
   it("gives each slide its media's shape", () => {
     render(<MediaCarousel items={items(1)} />);
-    const slide = document.querySelector<HTMLElement>("[data-media-surface]")!;
-    expect(parseFloat(slide.style.aspectRatio)).toBe(1.6);
+    expect(aspectOf(firstSlide())).toBe(1.6);
   });
 
   it("shapes an inset slide as the lightbox frames it, band on every side", () => {
     render(<MediaCarousel items={[{ ...items(1)[0], padding: 40 }]} />);
-    const slide = document.querySelector<HTMLElement>("[data-media-surface]")!;
-    expect(parseFloat(slide.style.aspectRatio)).toBeCloseTo(1 / (0.875 / 1.6 + 0.125), 10);
+    expect(aspectOf(firstSlide())).toBeCloseTo(1 / (0.875 / 1.6 + 0.125), 10);
   });
 
   it("opens the lightbox on the slide pressed", async () => {
@@ -308,6 +312,69 @@ describe("MediaCarousel slides", () => {
   });
 });
 
+describe("MediaCarousel settings", () => {
+  const captioned = (): MediaNode[] => [
+    { type: "media", kind: "image", src: "/a.jpg", alt: "A", caption: "First" },
+    { type: "media", kind: "image", src: "/b.jpg", alt: "B" },
+  ];
+
+  const slideCaptions = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        "[data-carousel-slide] > figcaption",
+      ),
+    );
+
+  it("draws its slides at the size it is given", () => {
+    render(<MediaCarousel items={items(2)} size="large" />);
+    expect(
+      document.querySelector("[data-carousel]")!.className,
+    ).toMatch(/size_large/);
+  });
+
+  it("shows no captions beneath its slides unless asked", () => {
+    render(<MediaCarousel items={captioned()} />);
+    expect(slideCaptions()).toHaveLength(0);
+  });
+
+  it("shows each slide's caption beneath its picture, as a caption by default", () => {
+    render(<MediaCarousel items={captioned()} showCaptions />);
+    const [caption, ...rest] = slideCaptions();
+    expect(rest).toHaveLength(0);
+    expect(caption.textContent).toBe("First");
+    expect(caption.previousElementSibling!.matches("[data-media-surface]")).toBe(
+      true,
+    );
+    expect(caption.classList.contains("textStyle_caption")).toBe(true);
+  });
+
+  it("draws every slide's caption in the carousel's style, not the slide's own", () => {
+    render(
+      <MediaCarousel
+        items={[{ ...captioned()[0], captionStyle: "subheading" }]}
+        showCaptions
+        captionStyle="paragraph"
+      />,
+    );
+    expect(slideCaptions()[0].classList.contains("textStyle_bodyLarge")).toBe(
+      true,
+    );
+  });
+
+  describe("with its lightbox off", () => {
+    it("shows its slides without making them buttons", () => {
+      render(<MediaCarousel items={captioned()} lightbox={false} />);
+      expect(screen.getByAltText("A")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "A" })).toBeNull();
+    });
+
+    it("has no lightbox to open", () => {
+      render(<MediaCarousel items={captioned()} lightbox={false} />);
+      expect(document.querySelector("dialog")).toBeNull();
+    });
+  });
+});
+
 describe("MediaCarousel lightbox", () => {
   const openLightbox = async (count: number, tileIndex = 0) => {
     const user = userEvent.setup();
@@ -354,6 +421,29 @@ describe("MediaCarousel lightbox", () => {
     fireEvent.keyDown(dialog, { key: "ArrowRight" });
     expect(current().textContent).toContain("Second");
     expect(current().textContent).not.toContain("First");
+  });
+
+  it("draws the open image's caption as a caption, whatever the carousel's style", async () => {
+    const user = userEvent.setup();
+    render(
+      <MediaCarousel
+        items={[
+          {
+            type: "media",
+            kind: "image",
+            src: "/a.jpg",
+            alt: "A",
+            caption: "First",
+            captionStyle: "subheading",
+          },
+        ]}
+        showCaptions
+        captionStyle="subheading"
+      />,
+    );
+    await user.click(tiles()[0]);
+    const caption = current().querySelector("figcaption")!;
+    expect(caption.classList.contains("textStyle_caption")).toBe(true);
   });
 
   it("caps at the image's natural width once it has loaded", async () => {

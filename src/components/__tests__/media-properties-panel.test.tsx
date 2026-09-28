@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_BACKGROUND_EFFECT,
   type BackgroundEffect,
+  type MediaCaptionStyle,
   type MediaFit,
 } from "@/domain/nodes";
 import { MediaPropertiesPanel } from "../media-properties-panel";
@@ -17,6 +18,8 @@ function setup(
     objectFit: MediaFit | undefined;
     padding: number | undefined;
     borderRadius: number | undefined;
+    captionStyle: MediaCaptionStyle;
+    styled: boolean;
   }> = {},
 ) {
   const onCaptionChange = vi.fn();
@@ -25,6 +28,7 @@ function setup(
   const onPaddingChange = vi.fn();
   const onBorderRadiusChange = vi.fn();
   const onDismiss = vi.fn();
+  const onCaptionStyleChange = vi.fn();
   render(
     <MediaPropertiesPanel
       caption={props.caption}
@@ -33,6 +37,10 @@ function setup(
       padding={props.padding}
       borderRadius={props.borderRadius}
       onCaptionChange={onCaptionChange}
+      {...(props.styled !== false && {
+        captionStyle: props.captionStyle ?? "caption",
+        onCaptionStyleChange,
+      })}
       onEffectChange={onEffectChange}
       onObjectFitChange={onObjectFitChange}
       onPaddingChange={onPaddingChange}
@@ -47,6 +55,7 @@ function setup(
     onPaddingChange,
     onBorderRadiusChange,
     onDismiss,
+    onCaptionStyleChange,
     user: userEvent.setup(),
   };
 }
@@ -120,6 +129,54 @@ describe("MediaPropertiesPanel caption section", () => {
 
     expect(onCaptionChange).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(captionField()).toBeNull();
+  });
+
+  it("holds the caption in a field", () => {
+    setup({ caption: "Existing" });
+    expect(captionField()!.closest("[data-field]")).not.toBeNull();
+  });
+
+  describe("its style", () => {
+    const styles = () =>
+      screen.queryByRole("listbox", { name: "Caption style" });
+
+    it("offers caption, paragraph and subheading, above the field", () => {
+      setup({ caption: "Existing" });
+      expect(
+        within(styles()!)
+          .getAllByRole("option")
+          .map((option) => option.getAttribute("aria-label")),
+      ).toEqual(["Caption", "Paragraph", "Subheading"]);
+      expect(
+        styles()!.compareDocumentPosition(captionField()!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it("shows the style the caption has", () => {
+      setup({ caption: "Existing", captionStyle: "paragraph" });
+      expect(
+        screen
+          .getByRole("option", { name: "Paragraph" })
+          .getAttribute("aria-selected"),
+      ).toBe("true");
+    });
+
+    it("hands on the style picked", async () => {
+      const { user, onCaptionStyleChange } = setup({
+        caption: "Existing",
+      });
+      await user.click(screen.getByRole("option", { name: "Subheading" }));
+      expect(onCaptionStyleChange).toHaveBeenCalledExactlyOnceWith(
+        "subheading",
+      );
+    });
+
+    it("is not offered where the caption's style is set elsewhere", () => {
+      setup({ caption: "Existing", styled: false });
+      expect(styles()).toBeNull();
+      expect(captionField()).not.toBeNull();
+    });
   });
 
   it("comes back empty after being removed and re-added", async () => {
@@ -242,7 +299,9 @@ describe("MediaPropertiesPanel layout section", () => {
 
   it("comes before the caption, since it is about the picture itself", () => {
     setup({ caption: "A shot" });
-    const groups = screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"));
+    const groups = screen
+      .getAllByRole("group")
+      .map((g) => g.getAttribute("aria-label"));
     expect(groups[0]).toBe("Media layout");
   });
 
@@ -265,13 +324,17 @@ describe("MediaPropertiesPanel layout section", () => {
 
   it("reports the fit that was picked", async () => {
     const { user, onObjectFitChange } = setup();
-    await user.click(within(layoutPanel()).getByRole("option", { name: "Contain" }));
+    await user.click(
+      within(layoutPanel()).getByRole("option", { name: "Contain" }),
+    );
     expect(onObjectFitChange).toHaveBeenCalledExactlyOnceWith("contain");
   });
 
   it("steps padding by 8, which is the grid the schema stores", async () => {
     const { user, onPaddingChange } = setup({ padding: 16 });
-    const track = within(layoutPanel()).getByRole("slider", { name: "Padding" });
+    const track = within(layoutPanel()).getByRole("slider", {
+      name: "Padding",
+    });
     track.focus();
     await user.keyboard("{ArrowRight}");
     expect(onPaddingChange).toHaveBeenCalledExactlyOnceWith(24);
@@ -279,7 +342,9 @@ describe("MediaPropertiesPanel layout section", () => {
 
   it("reads a padding-less picture as zero rather than as blank", () => {
     setup();
-    const track = within(layoutPanel()).getByRole("slider", { name: "Padding" });
+    const track = within(layoutPanel()).getByRole("slider", {
+      name: "Padding",
+    });
     expect(track.getAttribute("aria-valuenow")).toBe("0");
   });
 });
@@ -310,14 +375,18 @@ describe("MediaPropertiesPanel radius control", () => {
   it("reads zero for a picture that has never set a corner", () => {
     setup();
     expect(
-      within(layoutPanel()).getAllByRole("slider")[1].getAttribute("aria-valuenow"),
+      within(layoutPanel())
+        .getAllByRole("slider")[1]
+        .getAttribute("aria-valuenow"),
     ).toBe("0");
   });
 
   it("shows the corner the picture actually carries", () => {
     setup({ borderRadius: 12 });
     expect(
-      within(layoutPanel()).getAllByRole("slider")[1].getAttribute("aria-valuenow"),
+      within(layoutPanel())
+        .getAllByRole("slider")[1]
+        .getAttribute("aria-valuenow"),
     ).toBe("12");
   });
 });

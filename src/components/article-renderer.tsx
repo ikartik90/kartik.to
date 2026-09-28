@@ -43,6 +43,7 @@ import {
   buttonLinkRowStyle,
   buttonLinkStickyRowStyle,
 } from "@/components/button-link";
+import { MediaCaption } from "@/components/media-caption";
 import { MediaCarousel } from "@/components/media-carousel";
 import { MediaShowcase } from "@/components/media-showcase";
 import {
@@ -220,24 +221,20 @@ function renderBlockNode(
 
     case "heading": {
       const { tag, type } = HEADING_MAP[node.level] ?? HEADING_MAP[2];
-      // The indent marker goes on the outer element: the heading, or the caption shell.
+      // The indent markers go on the outer element: the heading, or the caption shell.
+      const layout = {
+        "data-indented": node.indent ? "" : undefined,
+        "data-indent-left": node.indentLeft ? "" : undefined,
+        "data-indent-right": node.indentRight ? "" : undefined,
+      };
       if (!node.caption)
         return (
-          <Typography
-            key={index}
-            tag={tag}
-            type={type}
-            data-indented={node.indent ? "" : undefined}
-          >
+          <Typography key={index} tag={tag} type={type} {...layout}>
             {renderInlineNodes(node.children, numberOf)}
           </Typography>
         );
       return (
-        <div
-          key={index}
-          className={articleHeadingShell()}
-          data-indented={node.indent ? "" : undefined}
-        >
+        <div key={index} className={articleHeadingShell()} {...layout}>
           <span className={articleSubheadingCaption()}>{node.caption}</span>
           <Typography tag={tag} type={type}>
             {renderInlineNodes(node.children, numberOf)}
@@ -282,11 +279,10 @@ function renderBlockNode(
       return (
         <figure key={index} className={articleShowcase()}>
           <MediaShowcase item={node} />
-          {node.caption && (
-            <Typography tag="figcaption" type="caption">
-              {node.caption}
-            </Typography>
-          )}
+          <MediaCaption
+            caption={node.caption}
+            captionStyle={node.captionStyle}
+          />
         </figure>
       );
 
@@ -294,7 +290,13 @@ function renderBlockNode(
       if (node.items.length === 0) return null;
       return (
         <figure key={index} className={articleShowcase()}>
-          <MediaCarousel items={node.items} />
+          <MediaCarousel
+            items={node.items}
+            size={node.size}
+            lightbox={node.lightbox}
+            showCaptions={node.showCaptions}
+            captionStyle={node.captionStyle}
+          />
         </figure>
       );
 

@@ -3,7 +3,7 @@ import { defineRecipe } from "@pandacss/dev";
 export const selectionPopover = defineRecipe({
   className: "selection-popover",
   description:
-    "The floating toolbar over selected text, a link or a list marker; `align` centres it or aligns it to the start.",
+    "The floating toolbar over selected text, a link or a block's reorder handle; `align` centres it or aligns it to the start.",
   base: {
     position: "fixed",
     zIndex: 50,

@@ -56,9 +56,15 @@ export const HeadingNodeSchema = z.object({
     z.literal(6),
   ]),
   children: z.array(InlineNodeSchema),
+  // The eyebrow; present, even empty, while it is turned on.
   caption: z.string().optional(),
   indent: z.boolean().optional(),
+  // Either alone moves the 640px heading to that edge of the showcase; both span from its left edge to the text's right.
+  indentLeft: z.boolean().optional(),
+  indentRight: z.boolean().optional(),
 });
+
+export type HeadingNode = z.infer<typeof HeadingNodeSchema>;
 
 export const BlockquoteNodeSchema = z.object({
   type: z.literal("blockquote"),
@@ -181,11 +187,22 @@ export const MEDIA_RADIUS_MAX = 20;
 
 export const DEFAULT_MEDIA_RADIUS = 0;
 
+/** How a caption is drawn; `caption` is the absence of the field. */
+export const MEDIA_CAPTION_STYLES = [
+  "caption",
+  "paragraph",
+  "subheading",
+] as const;
+export type MediaCaptionStyle = (typeof MEDIA_CAPTION_STYLES)[number];
+
+const MediaCaptionStyleSchema = z.enum(["paragraph", "subheading"]);
+
 const BaseMediaSchema = z.object({
   type: z.literal("media"),
   src: z.string(),
   alt: z.string().optional(),
   caption: z.string().optional(),
+  captionStyle: MediaCaptionStyleSchema.optional(),
   backgroundEffect: BackgroundEffectSchema.optional(),
   // Absent-means-default, not `.default()`: a default would make the parsed type require it.
   objectFit: MediaFitSchema.optional(),
@@ -392,11 +409,22 @@ export function mediaReservationStyle(
     : reserved;
 }
 
-// `items` may be empty: removing items one by one passes through zero. Captions are per item.
+/** A carousel's slide height; `medium` is the absence of the field. */
+export const CAROUSEL_SIZES = ["small", "medium", "large"] as const;
+export type CarouselSize = (typeof CAROUSEL_SIZES)[number];
+
+// `items` may be empty: removing items one by one passes through zero. Captions are per item, their
+// style the carousel's. Each setting is absent at its default.
 export const CollectionNodeSchema = z.object({
   type: z.literal("collection"),
   items: z.array(CollectionItemSchema),
+  size: z.enum(["small", "large"]).optional(),
+  lightbox: z.boolean().optional(),
+  showCaptions: z.boolean().optional(),
+  captionStyle: MediaCaptionStyleSchema.optional(),
 });
+
+export type CollectionNode = z.infer<typeof CollectionNodeSchema>;
 
 export const ComponentNodeSchema = z.object({
   type: z.literal("component"),
@@ -455,7 +483,7 @@ export type BlockNode =
   | z.infer<typeof CodeBlockNodeSchema>
   | z.infer<typeof HorizontalRuleNodeSchema>
   | MediaNode
-  | z.infer<typeof CollectionNodeSchema>
+  | CollectionNode
   | z.infer<typeof ComponentNodeSchema>
   | z.infer<typeof MetricNodeSchema>
   | ButtonLinkNode

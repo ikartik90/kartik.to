@@ -11,6 +11,13 @@ export const tokens = defineTokens({
     articleShowcase: { value: "960px" },
     // The carousel's slide height: a 16:10 slide spans the text column; a phone keeps the next one in view.
     carouselSlide: { value: "min(calc({sizes.articleContent} * 10 / 16), 50vw)" },
+    // The small and large carousels, at 0.7 and 1.4 of it, the phone cap scaled alike.
+    carouselSlideSmall: {
+      value: "min(calc({sizes.articleContent} * 7 / 16), 35vw)",
+    },
+    carouselSlideLarge: {
+      value: "min(calc({sizes.articleContent} * 14 / 16), 70vw)",
+    },
     // Floored so a phone gets a skyline, capped so it never becomes the page; the drawing crops `xMidYMax slice`.
     siteFooter: { value: "clamp(280px, 35vw, 600px)" },
     // The CN Tower's antenna tip: y 17.9 of the skyline's 600-unit viewBox, scaled by the footer's height.

@@ -69,4 +69,19 @@ export const segmentedControl = defineSlotRecipe({
         },
     },
   },
+  variants: {
+    // Pairs with `toolbar`'s `fit`. `hug` squares each segment to the rail's height, for icons.
+    fit: {
+      fill: {},
+      hug: {
+        list: { flexGrow: 0, flexBasis: "auto" },
+        option: {
+          flexGrow: 0,
+          flexBasis: "auto",
+          width: "token(sizes.toolbarButton)",
+        },
+      },
+    },
+  },
+  defaultVariants: { fit: "fill" },
 });
