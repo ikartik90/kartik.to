@@ -3,10 +3,11 @@
 import { useRef, useState } from "react";
 import type { MediaPropertiesPanelProps } from "@/components/media-properties-panel";
 import type { PropertiesPanelHandle } from "@/components/ui/properties-panel";
-import type { MediaNode } from "@/domain/nodes";
+import type { MediaCaptionStyle, MediaNode } from "@/domain/nodes";
 import {
   setItemBackgroundEffect,
   setItemCaption,
+  setItemCaptionStyle,
   setItemLayout,
 } from "@/utils/collection-items";
 
@@ -22,6 +23,8 @@ export interface MediaPropertiesController {
 export function useMediaProperties(
   items: readonly MediaNode[],
   onItemsChange: (next: MediaNode[]) => void,
+  /** `captionStyles` offers the caption's style, which a slide takes from its carousel instead. */
+  { captionStyles = false }: { captionStyles?: boolean } = {},
 ): MediaPropertiesController {
   // Keyed on the object's src, not its index, which shifts as items move or are removed.
   const [openSrc, setOpenSrc] = useState<string | null>(null);
@@ -64,6 +67,11 @@ export function useMediaProperties(
             caption: item.caption,
             onCaptionChange: (caption) =>
               onItemsChange(setItemCaption(items, openIndex, caption)),
+            ...(captionStyles && {
+              captionStyle: item.captionStyle ?? "caption",
+              onCaptionStyleChange: (style: MediaCaptionStyle) =>
+                onItemsChange(setItemCaptionStyle(items, openIndex, style)),
+            }),
             effect: item.backgroundEffect,
             onEffectChange: (effect) =>
               onItemsChange(

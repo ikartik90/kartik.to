@@ -182,6 +182,12 @@ export const articleShowcase = defineRecipe({
       maxWidth: "token(sizes.articleContent)",
       textAlign: "center",
     },
+    // A caption styled as a paragraph or subheading sits as the next block would, across the column.
+    "& > figcaption[data-caption-style]": {
+      width: "token(spacing.full)",
+      textAlign: "start",
+      marginBlockStart: "calc(token(spacing.xl) - token(spacing.md))",
+    },
   },
 });
 

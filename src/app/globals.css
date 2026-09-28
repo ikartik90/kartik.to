@@ -292,6 +292,20 @@ body[data-properties-panel-instant] {
     padding-inline-start: var(--spacing-3xl);
   }
 
+  /* Either keeps the column's width at that showcase edge; both run from the showcase's left edge to the column's right. */
+  article > [data-indent-left] {
+    align-self: flex-start;
+  }
+
+  article > [data-indent-right] {
+    align-self: flex-end;
+  }
+
+  article > [data-indent-left][data-indent-right] {
+    align-self: flex-start;
+    width: calc((100% + min(100%, var(--sizes-article-content))) / 2);
+  }
+
   article [data-align="center"] {
     text-align: center;
   }

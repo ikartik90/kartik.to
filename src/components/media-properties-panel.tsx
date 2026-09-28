@@ -6,7 +6,10 @@ import {
   type PropertiesPanelHandle,
 } from "@/components/ui/properties-panel";
 import { ColorInput } from "@/components/ui/input/color-input";
-import { SegmentedControl } from "@/components/ui/input/segmented-control";
+import {
+  SegmentedControl,
+  type SegmentedControlOption,
+} from "@/components/ui/input/segmented-control";
 import { Slider } from "@/components/ui/input/slider";
 import {
   ROTATION_MAX,
@@ -23,9 +26,13 @@ import {
   MEDIA_RADIUS_MAX,
   MEDIA_RADIUS_STEP,
   type BackgroundEffect,
+  type MediaCaptionStyle,
   type MediaFit,
 } from "@/domain/nodes";
 import EditIcon from "@/assets/icons/edit.svg";
+import ImageCaptionIcon from "@/assets/icons/image-caption.svg";
+import ParagraphIcon from "@/assets/icons/paragraph.svg";
+import SubheadingIcon from "@/assets/icons/subheading.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
 
 /** Each slider with the shader's documented range; `step` also sets the readout's precision. */
@@ -56,6 +63,50 @@ const FITS: { value: MediaFit; label: string }[] = [
   { value: "contain", label: "Contain" },
 ];
 
+const CAPTION_STYLES: (SegmentedControlOption & {
+  value: MediaCaptionStyle;
+})[] = [
+  {
+    value: "caption",
+    label: "Caption",
+    icon: <ImageCaptionIcon aria-hidden />,
+  },
+  {
+    value: "paragraph",
+    label: "Paragraph",
+    icon: <ParagraphIcon aria-hidden />,
+  },
+  {
+    value: "subheading",
+    label: "Subheading",
+    icon: <SubheadingIcon aria-hidden />,
+  },
+];
+
+export function CaptionStyleControl({
+  value,
+  onValueChange,
+  ariaLabel,
+  className,
+}: {
+  value: MediaCaptionStyle;
+  onValueChange: (style: MediaCaptionStyle) => void;
+  /** Only outside a labelled `Field`. */
+  ariaLabel?: string;
+  className?: string;
+}) {
+  return (
+    <SegmentedControl
+      ariaLabel={ariaLabel}
+      className={className}
+      fit="hug"
+      options={CAPTION_STYLES}
+      value={value}
+      onValueChange={(style) => onValueChange(style as MediaCaptionStyle)}
+    />
+  );
+}
+
 export interface MediaPropertiesPanelProps {
   objectFit: MediaFit | undefined;
   onObjectFitChange: (fit: MediaFit) => void;
@@ -65,6 +116,9 @@ export interface MediaPropertiesPanelProps {
   onBorderRadiusChange: (radius: number) => void;
   caption: string | undefined;
   onCaptionChange: (caption: string | undefined) => void;
+  /** Absent where the caption's style is set elsewhere, as a slide's is by its carousel. */
+  captionStyle?: MediaCaptionStyle;
+  onCaptionStyleChange?: (style: MediaCaptionStyle) => void;
   effect: BackgroundEffect | undefined;
   onEffectChange: (effect: BackgroundEffect | undefined) => void;
   /** Fired once the panel has finished sliding out. */
@@ -81,6 +135,8 @@ export function MediaPropertiesPanel({
   onBorderRadiusChange,
   caption,
   onCaptionChange,
+  captionStyle,
+  onCaptionStyleChange,
   effect,
   onEffectChange,
   onDismiss,
@@ -160,7 +216,15 @@ export function MediaPropertiesPanel({
           Caption
         </PropertiesPanel.SectionHeader>
         <PropertiesPanel.ControlPanel>
+          {onCaptionStyleChange && (
+            <CaptionStyleControl
+              ariaLabel="Caption style"
+              value={captionStyle ?? "caption"}
+              onValueChange={onCaptionStyleChange}
+            />
+          )}
           <PropertiesPanel.Text
+            framed
             ariaLabel="Image caption"
             placeholder="Describe this image…"
             value={draft}

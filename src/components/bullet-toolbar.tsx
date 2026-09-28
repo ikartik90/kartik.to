@@ -13,7 +13,7 @@ import CrossedListIcon from "@/assets/icons/crossed-list.svg";
 export type BulletStyle = "dot" | "check" | "cross";
 
 interface BulletToolbarProps {
-  /** Viewport-relative rect of the clicked bullet marker. */
+  /** The pressed reorder handle, relative to the article. */
   rect: PopoverRect;
   style: BulletStyle;
   onSelect: (style: BulletStyle) => void;

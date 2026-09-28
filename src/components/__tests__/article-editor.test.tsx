@@ -24,7 +24,7 @@ import {
   findSidenoteRangeAt,
   mergeAdjacentInlineNodes,
 } from "../article-editor";
-import type { InlineNode, Mark, MediaNode } from "@/domain/nodes";
+import type { HeadingNode, InlineNode, Mark, MediaNode } from "@/domain/nodes";
 import { DEFAULT_BACKGROUND_EFFECT } from "@/domain/nodes";
 import type { Document } from "@/domain/post";
 import { useEditorStore } from "@/store/editor";
@@ -624,6 +624,25 @@ function openSlashMenuOnBlock(block: HTMLElement) {
   sel.addRange(range);
   fireEvent.keyUp(block, { key: "/" });
 }
+
+/** Focuses `element`, which brings up its block's reorder handle, and presses the handle in place. */
+function pressHandleOf(element: HTMLElement) {
+  act(() => element.focus());
+  const handle = screen.getByRole("button", { name: "Reorder block" });
+  for (const type of ["pointerdown", "pointerup"]) {
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    fireEvent(handle, event);
+  }
+}
+
+const blockAt = (index: number) =>
+  document.querySelector<HTMLElement>(`[data-block-index='${index}']`)!;
 
 describe("ArticleEditor", () => {
   beforeEach(() => {
@@ -1524,6 +1543,51 @@ describe("ArticleEditor", () => {
     expect(document.querySelector("[data-background-effect]")).not.toBeNull();
   });
 
+  describe("its caption's style", () => {
+    const inlineCaption = () =>
+      document.querySelector<HTMLElement>("figcaption[data-placeholder='Add caption...']")!;
+
+    it("draws the caption field in the style it has", () => {
+      render(
+        <ArticleEditor
+          initialPost={mediaPost({ caption: "A note", captionStyle: "subheading" })}
+        />,
+      );
+      expect(inlineCaption().getAttribute("data-caption-style")).toBe("subheading");
+      expect(inlineCaption().classList.contains("textStyle_subheading")).toBe(true);
+    });
+
+    it("takes a style picked in the properties panel", async () => {
+      const user = userEvent.setup();
+      render(<ArticleEditor initialPost={mediaPost({ caption: "A note" })} />);
+
+      await user.click(screen.getByRole("button", { name: "Image properties" }));
+      await user.click(screen.getByRole("option", { name: "Paragraph" }));
+
+      expect(useEditorStore.getState().document.content[0]).toMatchObject({
+        caption: "A note",
+        captionStyle: "paragraph",
+      });
+      expect(inlineCaption().getAttribute("data-caption-style")).toBe("paragraph");
+    });
+
+    it("keeps it with the caption when the picture is replaced", () => {
+      render(
+        <ArticleEditor
+          initialPost={mediaPost({ caption: "A note", captionStyle: "paragraph" })}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Replace image" }));
+      fireEvent.click(screen.getByText("insert"));
+
+      expect(useEditorStore.getState().document.content[0]).toMatchObject({
+        src: "https://cdn/1.png",
+        caption: "A note",
+        captionStyle: "paragraph",
+      });
+    });
+  });
+
   it("wears the layout its own properties state", () => {
     render(
       <ArticleEditor initialPost={mediaPost({ padding: 16, borderRadius: 8 })} />,
@@ -1985,7 +2049,27 @@ describe("ArticleEditor", () => {
     expect(blocks[1].type).toBe("paragraph");
   });
 
-  it("renders a subheading eyebrow caption with an 'Add caption...' placeholder", () => {
+  it("draws no eyebrow on a heading that has none", () => {
+    const post = {
+      id: "h-cap0",
+      slug: "h-cap0",
+      title: "Test",
+      category: "ARTICLE" as const,
+      content: {
+        type: "doc" as const,
+        content: [
+          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }] },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    render(<ArticleEditor initialPost={post} />);
+
+    expect(document.querySelector(".article-subheading-caption")).toBeNull();
+  });
+
+  it("renders a turned-on subheading eyebrow with an 'Add caption...' placeholder", () => {
     const post = {
       id: "h-cap1",
       slug: "h-cap1",
@@ -1994,7 +2078,7 @@ describe("ArticleEditor", () => {
       content: {
         type: "doc" as const,
         content: [
-          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }] },
+          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }], caption: "" },
         ],
       },
       createdAt: new Date(),
@@ -2017,7 +2101,7 @@ describe("ArticleEditor", () => {
       content: {
         type: "doc" as const,
         content: [
-          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }] },
+          { type: "heading" as const, level: 2 as const, children: [{ type: "text" as const, text: "Section" }], caption: "" },
         ],
       },
       createdAt: new Date(),
@@ -2038,7 +2122,7 @@ describe("ArticleEditor", () => {
     }
   });
 
-  it("clears the heading caption from the store when the eyebrow is emptied", () => {
+  it("keeps an emptied eyebrow turned on", () => {
     const post = {
       id: "h-cap3",
       slug: "h-cap3",
@@ -2071,8 +2155,9 @@ describe("ArticleEditor", () => {
     const block = useEditorStore.getState().document.content[0];
     expect(block.type).toBe("heading");
     if (block.type === "heading") {
-      expect(block.caption).toBeUndefined();
+      expect(block.caption).toBe("");
     }
+    expect(document.querySelector(".article-subheading-caption")).not.toBeNull();
   });
 
   it("renders a blockquote citation caption with an 'Add citation...' placeholder", () => {
@@ -2471,6 +2556,16 @@ describe("ArticleEditor", () => {
 
     const label = await screen.findByRole("textbox", { name: "Button text" });
     await waitFor(() => expect(document.activeElement).toBe(label));
+  });
+
+  it("opens a button's toolbar from its reorder handle, not the button", () => {
+    render(<ArticleEditor initialPost={buttonPost()} />);
+    const label = screen.getByRole("textbox", { name: "Button text" });
+    fireEvent.pointerEnter(label, { pointerType: "mouse" });
+    act(() => label.focus());
+    expect(screen.queryByRole("toolbar", { name: "Link actions" })).toBeNull();
+
+    pressHandleOf(label);
     expect(
       screen.getByRole("toolbar", { name: "Link actions" }),
     ).toBeDefined();
@@ -2519,20 +2614,20 @@ describe("ArticleEditor", () => {
     );
   });
 
-  it("deletes the button from its toolbar", () => {
+  it("deletes the button from its toolbar, and the toolbar with it", () => {
     render(<ArticleEditor initialPost={buttonPost()} />);
-    const label = screen.getByRole("textbox", { name: "Button text" });
-    fireEvent.pointerEnter(label, { pointerType: "mouse" });
+    pressHandleOf(screen.getByRole("textbox", { name: "Button text" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete button link" }));
     expect(
       useEditorStore.getState().document.content.map((b) => b.type),
     ).toEqual(["paragraph", "paragraph"]);
+    expect(screen.queryByRole("toolbar", { name: "Link actions" })).toBeNull();
   });
 
-  it("links a button from its toolbar", () => {
+  it("links a button from its toolbar, handing the caret back to its label", () => {
     render(<ArticleEditor initialPost={buttonPost()} />);
     const label = screen.getByRole("textbox", { name: "Button text" });
-    fireEvent.pointerEnter(label, { pointerType: "mouse" });
+    pressHandleOf(label);
     fireEvent.click(screen.getByRole("button", { name: "Edit link" }));
     const input = screen.getByLabelText("Link URL");
     fireEvent.change(input, { target: { value: "/work/shift" } });
@@ -2542,6 +2637,7 @@ describe("ArticleEditor", () => {
       text: "Book a call",
       href: "/work/shift",
     });
+    expect(document.activeElement).toBe(label);
   });
 
   it("Enter at the end of a bullet item appends a new bullet item (same type)", () => {
@@ -2613,8 +2709,7 @@ describe("ArticleEditor", () => {
         ])}
       />,
     );
-    const marker = document.querySelectorAll("[data-bullet-marker]")[0] as HTMLElement;
-    fireEvent.click(marker);
+    pressHandleOf(blockAt(0));
     fireEvent.click(screen.getByLabelText("Reset bullets to the default style"));
 
     const blocks = useEditorStore.getState().document.content;
@@ -2652,8 +2747,7 @@ describe("ArticleEditor", () => {
       updatedAt: new Date(),
     };
     render(<ArticleEditor initialPost={post} />);
-    const markers = document.querySelectorAll("[data-bullet-marker]");
-    fireEvent.click(markers[markers.length - 1] as HTMLElement);
+    pressHandleOf(blockAt(2));
     fireEvent.click(screen.getByLabelText("Continue bullets from previous list"));
 
     const blocks = useEditorStore.getState().document.content;
@@ -3332,29 +3426,47 @@ describe("ArticleEditor numbering popover", () => {
       (el) => el.textContent,
     );
 
-  const openPopoverForMarker = (i: number) => {
-    const marker = document.querySelectorAll("[data-numbering-marker]")[i];
-    fireEvent.click(marker);
-  };
+  const openPopoverForBlock = (i: number) => pressHandleOf(blockAt(i));
 
-  it("opens the numbering popover when a marker is clicked", () => {
+  it("opens the numbering popover from the item's reorder handle", () => {
     seed([listItem("one"), listItem("two")]);
     expect(
       screen.queryByRole("toolbar", { name: "List numbering options" }),
     ).toBeNull();
 
-    openPopoverForMarker(0);
+    openPopoverForBlock(0);
 
     expect(
       screen.getByRole("toolbar", { name: "List numbering options" }),
     ).toBeDefined();
   });
 
+  it("opens nothing from a paragraph's reorder handle", () => {
+    seed([
+      listItem("one"),
+      { type: "paragraph", children: [{ type: "text", text: "two" }] },
+    ]);
+    pressHandleOf(blockAt(1));
+    expect(screen.queryByRole("toolbar")).toBeNull();
+  });
+
+  it("draws the number as the reader does, not as a button", () => {
+    seed([listItem("one")]);
+    const marker = document.querySelector<HTMLElement>(
+      "[data-numbering-marker]",
+    )!;
+    expect(marker.closest("button")).toBeNull();
+    fireEvent.click(marker);
+    expect(
+      screen.queryByRole("toolbar", { name: "List numbering options" }),
+    ).toBeNull();
+  });
+
   it("reset numbering restarts the counter at the clicked item", () => {
     seed([listItem("one"), listItem("two"), listItem("three")]);
     expect(markers()).toEqual(["1", "2", "3"]);
 
-    openPopoverForMarker(2);
+    openPopoverForBlock(2);
     fireEvent.click(screen.getByLabelText("Reset numbering at this item"));
 
     const block = useEditorStore.getState().document.content[2];
@@ -3365,14 +3477,14 @@ describe("ArticleEditor numbering popover", () => {
   it("swaps the run to lettered markers and back", () => {
     seed([listItem("one"), listItem("two"), listItem("three")]);
 
-    openPopoverForMarker(0);
+    openPopoverForBlock(0);
     fireEvent.click(screen.getByLabelText("Switch to lettered list"));
 
     expect(markers()).toEqual(["a", "b", "c"]);
     const head = useEditorStore.getState().document.content[0];
     expect(head.type === "list_item" && head.marker).toBe("alpha");
 
-    openPopoverForMarker(1);
+    openPopoverForBlock(1);
     fireEvent.click(screen.getByLabelText("Switch to numbered list"));
     expect(markers()).toEqual(["1", "2", "3"]);
   });
@@ -3388,7 +3500,7 @@ describe("ArticleEditor numbering popover", () => {
     ]);
     expect(markers()).toEqual(["1", "2", "3", "1", "2"]);
 
-    openPopoverForMarker(3); // head of the second list
+    openPopoverForBlock(4); // head of the second list
     fireEvent.click(
       screen.getByLabelText("Continue numbering from previous list"),
     );
@@ -3401,7 +3513,7 @@ describe("ArticleEditor numbering popover", () => {
   it("continue numbering is a no-op when no list precedes it", () => {
     seed([listItem("only"), listItem("list")]);
 
-    openPopoverForMarker(0);
+    openPopoverForBlock(0);
     fireEvent.click(
       screen.getByLabelText("Continue numbering from previous list"),
     );
@@ -3706,6 +3818,143 @@ describe("ArticleEditor block indent", () => {
   });
 });
 
+describe("ArticleEditor heading toolbar", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    useEditorStore.getState().reset();
+  });
+
+  const heading = (fields: Partial<HeadingNode> = {}): HeadingNode => ({
+    type: "heading",
+    level: 2,
+    children: [{ type: "text", text: "Section" }],
+    ...fields,
+  });
+
+  function seed(content: Document["content"]) {
+    render(
+      <ArticleEditor
+        initialPost={{
+          id: "h-bar",
+          slug: "h-bar",
+          title: "T",
+          category: "ARTICLE" as const,
+          content: { type: "doc" as const, content },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }}
+      />,
+    );
+  }
+
+  const toolbar = () =>
+    screen.queryByRole("toolbar", { name: "Heading options" });
+  const stored = () => useEditorStore.getState().document.content;
+  const eyebrow = () => document.querySelector(".article-subheading-caption");
+  /** The heading's outermost element, which the layout attributes go on. */
+  const headingRoot = (index: number) =>
+    blockAt(index).closest(".article-heading-shell")!;
+
+  it("opens from the heading's reorder handle", () => {
+    seed([heading()]);
+    expect(toolbar()).toBeNull();
+    pressHandleOf(blockAt(0));
+    expect(toolbar()).not.toBeNull();
+  });
+
+  it("turns the eyebrow on, then off again", () => {
+    seed([heading()]);
+    pressHandleOf(blockAt(0));
+
+    fireEvent.click(screen.getByRole("button", { name: "Eyebrow" }));
+    expect(stored()[0]).toMatchObject({ caption: "" });
+    expect(eyebrow()).not.toBeNull();
+    expect(toolbar()).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Eyebrow" }));
+    expect(stored()[0]).not.toHaveProperty("caption");
+    expect(eyebrow()).toBeNull();
+  });
+
+  it.each([
+    ["Indent left", "indentLeft", "data-indent-left"],
+    ["Indent right", "indentRight", "data-indent-right"],
+  ] as const)("%s marks the heading's outermost element", (label, field, attr) => {
+    seed([heading()]);
+    pressHandleOf(blockAt(0));
+
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(stored()[0]).toMatchObject({ [field]: true });
+    expect(headingRoot(0).hasAttribute(attr)).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(stored()[0]).not.toHaveProperty(field);
+    expect(headingRoot(0).hasAttribute(attr)).toBe(false);
+  });
+
+  it("marks the outermost element of a heading with an eyebrow too", () => {
+    seed([heading({ caption: "Part one", indentLeft: true })]);
+    expect(headingRoot(0).hasAttribute("data-indent-left")).toBe(true);
+    expect(headingRoot(0).contains(eyebrow())).toBe(true);
+  });
+
+  it("follows the heading when an indent moves it", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        const left = this.closest("[data-indent-left]") ? -160 : 0;
+        return new DOMRect(left, 0, 28, 28);
+      },
+    );
+    seed([heading()]);
+    pressHandleOf(blockAt(0));
+    const anchor = () =>
+      document.querySelector<HTMLElement>("[data-popover-anchor]")!.style.left;
+    const before = parseFloat(anchor());
+
+    fireEvent.click(screen.getByRole("button", { name: "Indent left" }));
+    expect(parseFloat(anchor())).toBe(before - 160);
+  });
+
+  describe("going up", () => {
+    // jsdom's ranges have no rect; a zero-height one reads as the first line.
+    beforeEach(() => {
+      Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+        configurable: true,
+        value: () => new DOMRect(),
+      });
+    });
+    afterEach(() => {
+      delete (Range.prototype as { getBoundingClientRect?: unknown })
+        .getBoundingClientRect;
+    });
+
+  it("goes up to the block above from a heading without an eyebrow", () => {
+    seed([
+      { type: "paragraph", children: [{ type: "text", text: "Above" }] },
+      heading(),
+    ]);
+    act(() => blockAt(1).focus());
+    fireEvent.keyDown(blockAt(1), { key: "ArrowUp" });
+    expect(document.activeElement).toBe(blockAt(0));
+  });
+
+  it("goes up into its eyebrow from a heading with one", () => {
+    seed([
+      { type: "paragraph", children: [{ type: "text", text: "Above" }] },
+      heading({ caption: "Part one" }),
+    ]);
+    act(() => blockAt(1).focus());
+    fireEvent.keyDown(blockAt(1), { key: "ArrowUp" });
+    expect(document.activeElement).toBe(eyebrow());
+  });
+  });
+});
+
 describe("ArticleEditor bullet popover", () => {
   beforeEach(() => {
     useEditorStore.getState().reset();
@@ -3742,17 +3991,24 @@ describe("ArticleEditor bullet popover", () => {
     children: [{ type: "text", text }],
   });
 
-  const openPopover = (i: number) => {
-    const marker = document.querySelectorAll("[data-bullet-marker]")[i];
-    fireEvent.click(marker);
-  };
+  const openPopover = (i: number) => pressHandleOf(blockAt(i));
 
   const markerOf = (i: number) => {
     const b = useEditorStore.getState().document.content[i];
     return b.type === "bullet_list_item" ? b.marker : undefined;
   };
 
-  it("opens the bullet popover when a bullet is clicked", () => {
+  it("draws the bullet as the reader does, not as a button", () => {
+    seed([bullet("one", "check")]);
+    const marker = document.querySelector<HTMLElement>("[data-bullet-marker]")!;
+    expect(marker.closest("button")).toBeNull();
+    fireEvent.click(marker);
+    expect(
+      screen.queryByRole("toolbar", { name: "List bullet options" }),
+    ).toBeNull();
+  });
+
+  it("opens the bullet popover from the item's reorder handle", () => {
     seed([bullet("one"), bullet("two")]);
     expect(
       screen.queryByRole("toolbar", { name: "List bullet options" }),
@@ -4149,6 +4405,110 @@ describe("ArticleEditor collection block", () => {
   });
 });
 
+describe("ArticleEditor carousel toolbar", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    useEditorStore.getState().reset();
+  });
+
+  const items: MediaNode[] = [
+    { type: "media", kind: "image", src: "a", caption: "A note" },
+    { type: "media", kind: "image", src: "b" },
+  ];
+
+  function seed() {
+    render(
+      <ArticleEditor
+        initialPost={{
+          id: "c-bar",
+          slug: "c-bar",
+          title: "T",
+          category: "ARTICLE" as const,
+          content: {
+            type: "doc" as const,
+            content: [
+              {
+                type: "paragraph",
+                children: [{ type: "text", text: "Above" }],
+              },
+              { type: "collection", items },
+            ],
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }}
+      />,
+    );
+  }
+
+  const stored = () => useEditorStore.getState().document.content;
+  const carousel = () =>
+    blockAt(1).querySelector<HTMLElement>("[data-showcase-media]")!;
+  const toolbar = () =>
+    screen.queryByRole("toolbar", { name: "Carousel options" });
+
+  it("opens from the carousel's reorder handle", () => {
+    seed();
+    expect(toolbar()).toBeNull();
+    pressHandleOf(carousel());
+    expect(
+      within(toolbar()!)
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Carousel properties", "Delete carousel"]);
+  });
+
+  it("deletes the carousel", () => {
+    seed();
+    pressHandleOf(carousel());
+    fireEvent.click(screen.getByRole("button", { name: "Delete carousel" }));
+    expect(stored().some((block) => block.type === "collection")).toBe(false);
+    expect(toolbar()).toBeNull();
+  });
+
+  it("opens the carousel's properties in place of the toolbar", () => {
+    seed();
+    pressHandleOf(carousel());
+    fireEvent.click(
+      screen.getByRole("button", { name: "Carousel properties" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Carousel properties" }),
+    ).toBeDefined();
+    expect(toolbar()).toBeNull();
+  });
+
+  it("writes the panel's settings to the carousel and draws them", () => {
+    seed();
+    pressHandleOf(carousel());
+    fireEvent.click(
+      screen.getByRole("button", { name: "Carousel properties" }),
+    );
+
+    fireEvent.click(screen.getByRole("option", { name: "Large" }));
+    expect(stored()[1]).toMatchObject({ type: "collection", size: "large" });
+    expect(
+      blockAt(1).querySelector("[data-carousel]")!.className,
+    ).toMatch(/size_large/);
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Show captions on carousel slides" }),
+    );
+    expect(stored()[1]).toMatchObject({ showCaptions: true });
+    fireEvent.click(screen.getByRole("option", { name: "Paragraph" }));
+    expect(stored()[1]).toMatchObject({ captionStyle: "paragraph" });
+    const caption = blockAt(1).querySelector(
+      "[data-carousel-slide] > figcaption",
+    )!;
+    expect(caption.textContent).toBe("A note");
+    expect(caption.classList.contains("textStyle_bodyLarge")).toBe(true);
+  });
+});
+
 describe("ArticleEditor — furniture slots", () => {
   beforeEach(() => {
     useEditorStore.getState().reset();
@@ -4297,9 +4657,13 @@ describe("ArticleEditor block reorder", () => {
   /** Carries block `from`'s handle down to `y` and lets go. */
   function drop(from: number, y: number) {
     pointer("pointermove", document, 120, topOf(from) + 50);
+    // Level with the block's first line, somewhere within its box.
     const handle = screen
       .getAllByRole("button", { name: "Reorder block" })
-      .find((each) => each.style.top === `${topOf(from)}px`)!;
+      .find((each) => {
+        const top = parseFloat(each.style.top);
+        return top >= topOf(from) && top < topOf(from) + 100;
+      })!;
     pointer("pointerdown", handle, 80, topOf(from) + 10);
     pointer("pointermove", handle, 80, y);
     pointer("pointerup", handle, 80, y);

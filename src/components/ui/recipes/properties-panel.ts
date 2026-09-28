@@ -13,6 +13,7 @@ export const propertiesPanel = defineSlotRecipe({
     "sectionTitle",
     "controlPanel",
     "text",
+    "framedText",
     "footer",
     // Must stay last: slot order sets CSS order, so its `animation` beats `root`'s.
     "exiting",
@@ -244,6 +245,10 @@ export const propertiesPanel = defineSlotRecipe({
       fieldSizing: "content",
       overflow: "hidden",
       _placeholder: { color: "text.body/40" },
+    },
+    // The field draws the rest; this only lets the box grow with its content instead of scrolling.
+    framedText: {
+      fieldSizing: "content",
     },
     // A class because `className` is the only hook onto the shared Popover's element.
     // `forwards` holds it off-screen until React unmounts it.

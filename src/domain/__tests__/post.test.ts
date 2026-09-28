@@ -136,6 +136,18 @@ describe("BlockNodeSchema", () => {
     ).toBe(true);
   });
 
+  it("keeps a heading's left and right indents", () => {
+    expect(
+      BlockNodeSchema.parse({
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", text: "Title" }],
+        indentLeft: true,
+        indentRight: true,
+      })
+    ).toMatchObject({ indentLeft: true, indentRight: true });
+  });
+
   it("accepts a blockquote node", () => {
     expect(
       BlockNodeSchema.safeParse({
@@ -203,6 +215,29 @@ describe("BlockNodeSchema", () => {
     expect(
       BlockNodeSchema.safeParse({ type: "horizontal_rule" }).success
     ).toBe(true);
+  });
+
+  it("keeps a media node's caption style", () => {
+    expect(
+      BlockNodeSchema.parse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        caption: "A note",
+        captionStyle: "subheading",
+      })
+    ).toMatchObject({ captionStyle: "subheading" });
+  });
+
+  it("rejects a caption style it doesn't draw", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "media",
+        kind: "image",
+        src: "/a.png",
+        captionStyle: "title",
+      }).success
+    ).toBe(false);
   });
 
   it("accepts a media node", () => {
@@ -324,6 +359,34 @@ describe("BlockNodeSchema", () => {
     expect(parsed.type === "collection" && parsed.items[0].caption).toBe(
       "First",
     );
+  });
+
+  it("keeps a collection's size, lightbox, slide captions and caption style", () => {
+    expect(
+      BlockNodeSchema.parse({
+        type: "collection",
+        items: [],
+        size: "large",
+        lightbox: false,
+        showCaptions: true,
+        captionStyle: "paragraph",
+      }),
+    ).toMatchObject({
+      size: "large",
+      lightbox: false,
+      showCaptions: true,
+      captionStyle: "paragraph",
+    });
+  });
+
+  it("rejects a collection size it has no slides for", () => {
+    expect(
+      BlockNodeSchema.safeParse({
+        type: "collection",
+        items: [],
+        size: "huge",
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts a collection node with no items", () => {

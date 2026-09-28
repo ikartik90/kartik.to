@@ -10,11 +10,11 @@ import {
 const item = (src: string, over: Partial<MediaNode> = {}): MediaNode =>
   ({ type: "media", kind: "image", src, ...over }) as MediaNode;
 
-function setup(items: MediaNode[]) {
+function setup(items: MediaNode[], options?: { captionStyles?: boolean }) {
   const onItemsChange = vi.fn<(next: MediaNode[]) => void>();
   const view = renderHook(
     ({ list }: { list: MediaNode[] }) =>
-      useMediaProperties(list, onItemsChange),
+      useMediaProperties(list, onItemsChange, options),
     { initialProps: { list: items } },
   );
   return { ...view, onItemsChange };
@@ -106,5 +106,32 @@ describe("useMediaProperties", () => {
     const { result } = setup([item("a"), item("b")]);
     act(() => result.current.toggle(1));
     expect(result.current.panel!.key).toBe("b");
+  });
+
+  describe("caption styles", () => {
+    it("offers none unless asked, as for a slide, whose carousel sets it", () => {
+      const { result } = setup([item("a", { caption: "A note" })]);
+      act(() => result.current.toggle(0));
+      expect(result.current.panel!.props).not.toHaveProperty("captionStyle");
+      expect(result.current.panel!.props).not.toHaveProperty(
+        "onCaptionStyleChange",
+      );
+    });
+
+    it("hands the panel the object's style and writes a new one", () => {
+      const { result, onItemsChange } = setup(
+        [item("a", { caption: "A note", captionStyle: "paragraph" })],
+        { captionStyles: true },
+      );
+      act(() => result.current.toggle(0));
+      expect(result.current.panel!.props.captionStyle).toBe("paragraph");
+
+      act(() =>
+        result.current.panel!.props.onCaptionStyleChange!("subheading"),
+      );
+      expect(onItemsChange).toHaveBeenLastCalledWith([
+        item("a", { caption: "A note", captionStyle: "subheading" }),
+      ]);
+    });
   });
 });

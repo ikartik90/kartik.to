@@ -10,6 +10,8 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ChangeEvent,
+  type KeyboardEvent,
   type ReactNode,
   type Ref,
 } from "react";
@@ -398,6 +400,8 @@ export interface PropertiesPanelTextProps {
   /** Lines the box starts at where `field-sizing: content` is unsupported. */
   rows?: number;
   maxLength?: number;
+  /** In a field frame, like the panel's other controls; otherwise bare prose. */
+  framed?: boolean;
   className?: string;
 }
 
@@ -409,22 +413,31 @@ function PropertiesPanelText({
   placeholder,
   rows = 3,
   maxLength,
+  framed = false,
   className,
 }: PropertiesPanelTextProps) {
   const { styles } = usePanel("PropertiesPanel.Text");
+  const box = {
+    "aria-label": ariaLabel,
+    placeholder,
+    rows,
+    maxLength,
+    value,
+    onChange: (event: ChangeEvent<HTMLTextAreaElement>) =>
+      onValueChange(event.target.value),
+    onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Enter") event.preventDefault();
+    },
+  };
+  if (!framed) {
+    return <textarea {...box} className={cx(styles.text, className)} />;
+  }
   return (
-    <textarea
-      aria-label={ariaLabel}
-      placeholder={placeholder}
-      rows={rows}
-      maxLength={maxLength}
-      value={value}
-      className={cx(styles.text, className)}
-      onChange={(event) => onValueChange(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.preventDefault();
-      }}
-    />
+    <Field size="sm" data-property-block className={className}>
+      <Field.Frame>
+        <Field.TextArea {...box} className={styles.framedText} />
+      </Field.Frame>
+    </Field>
   );
 }
 

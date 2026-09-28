@@ -12,6 +12,7 @@ import {
 import { carousel } from "../../styled-system/recipes";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import type { CarouselSize } from "@/domain/nodes";
 import { carouselRestOffsets, carouselStep } from "@/utils/carousel-snap";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
@@ -42,6 +43,7 @@ interface Reach {
 export interface CarouselProps {
   scrollerRef: RefObject<HTMLDivElement | null>;
   editing?: boolean;
+  size?: CarouselSize;
   rootProps?: HTMLAttributes<HTMLDivElement> & {
     ref?: Ref<HTMLDivElement>;
     [state: `data-${string}`]: unknown;
@@ -53,10 +55,11 @@ export interface CarouselProps {
 export function Carousel({
   scrollerRef,
   editing = false,
+  size,
   rootProps,
   children,
 }: CarouselProps) {
-  const styles = carousel({ editing });
+  const styles = carousel({ editing, size });
   const [reach, setReach] = useState<Reach>({
     scrollable: true,
     back: false,

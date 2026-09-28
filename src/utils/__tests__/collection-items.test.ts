@@ -10,6 +10,7 @@ import {
   replaceItem,
   setItemBackgroundEffect,
   setItemCaption,
+  setItemCaptionStyle,
   setItemLayout,
 } from "../collection-items";
 
@@ -119,6 +120,25 @@ describe("removeItem", () => {
 
   it("ignores an out-of-range index", () => {
     expect(srcs(removeItem(items("a", "b"), 9))).toEqual(["a", "b"]);
+  });
+});
+
+describe("setItemCaptionStyle", () => {
+  it("styles the addressed item's caption only", () => {
+    const next = setItemCaptionStyle(items("a", "b"), 1, "subheading");
+    expect(next[0].captionStyle).toBeUndefined();
+    expect(next[1].captionStyle).toBe("subheading");
+  });
+
+  it("leaves no field behind for the caption style, which is the default", () => {
+    const seeded = [picture({ src: "a", captionStyle: "paragraph" })];
+    expect(setItemCaptionStyle(seeded, 0, "caption")[0]).toEqual(
+      picture({ src: "a" }),
+    );
+  });
+
+  it("changes nothing out of range", () => {
+    expect(setItemCaptionStyle(items("a"), 3, "paragraph")).toEqual(items("a"));
   });
 });
 

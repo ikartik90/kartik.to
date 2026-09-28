@@ -11,7 +11,7 @@ import AlphabetedListIcon from "@/assets/icons/alphabeted-list.svg";
 import NumberedListIcon from "@/assets/icons/numbered-list.svg";
 
 interface NumberToolbarProps {
-  /** Viewport-relative rect of the clicked ordinal marker. */
+  /** The pressed reorder handle, relative to the article. */
   rect: PopoverRect;
   /** Current run style — decides whether the swap button offers a→z or 1→n. */
   marker: ListMarkerStyle;

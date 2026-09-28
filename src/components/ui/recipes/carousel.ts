@@ -11,13 +11,16 @@ const transparencyCheckerboard = {
 export const carousel = defineSlotRecipe({
   className: "carousel",
   description:
-    "A full-bleed, snapping row of slides at one height: a collection in the reader and the editor, whose `cell` also frames the lightbox.",
+    "A full-bleed, snapping row of slides at one of three heights, each captioned beneath if asked: a collection in the reader and the editor, whose `cell` also frames the lightbox.",
   slots: [
     "root",
     "scroller",
     "track",
     "controls",
     "slide",
+    "stack",
+    "picture",
+    "caption",
     "slot",
     "cell",
     "tile",
@@ -56,44 +59,71 @@ export const carousel = defineSlotRecipe({
       "[data-reordering] &, [data-settling] &": { scrollSnapType: "none" },
     },
     // Padding on the track, not the scroller: a scroller's end padding isn't scrollable everywhere.
-    // Its height holds while a reorder halves the slides.
+    // Its height holds while a reorder halves the slides; captions it holds from script.
     track: {
+      "--slide-height": "var(--carousel-slide)",
+      "[data-reordering] &": {
+        "--slide-height": "calc(var(--carousel-slide) / 2)",
+      },
       display: "flex",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: "xxl",
       mdDown: { gap: "md" },
       width: "max-content",
       boxSizing: "content-box",
-      height: "token(sizes.carouselSlide)",
+      minHeight: "var(--carousel-slide)",
       paddingInline:
         "max(token(spacing.xxl), calc(var(--carousel-half) - token(sizes.articleShowcase) / 2))",
     },
     // Out of flow, so the page lays out as though they weren't there, until they'd reach the text.
     controls: {
       position: "absolute",
+      // Over the editing scroller, whose raised top reaches them.
+      zIndex: 1,
       insetInlineEnd: 0,
-      bottom: "calc(100% + token(spacing.xxl))",
+      bottom: "calc(100% + token(spacing.xl))",
       display: "none",
       _hasCursor: { display: "flex" },
       gap: "sm",
       _carouselStacked: {
-        position: "static",
+        position: "relative",
+        insetInlineEnd: "auto",
+        bottom: "auto",
         width: "min(token(spacing.full), token(sizes.articleContent))",
         marginInline: "auto",
-        marginBlockEnd: "xxl",
+        marginBlockEnd: "xl",
       },
     },
-    // Width follows from the height and the inline `aspect-ratio`.
+    // Halved by a reorder, a slide keeps its middle where the whole one's was.
     slide: {
       position: "relative",
       flexShrink: 0,
-      height: "token(sizes.carouselSlide)",
       scrollSnapAlign: "start",
       _last: { scrollSnapAlign: "end" },
       "[data-reordering] &": {
-        height: "calc(token(sizes.carouselSlide) / 2)",
+        marginBlockStart: "calc(var(--carousel-slide) / 4)",
         transition: "translate 200ms cubic-bezier(0.2, 0, 0, 1)",
       },
+    },
+    // A picture and its caption; the width follows from the height and the inline `--slide-aspect`,
+    // so a caption wraps within it.
+    stack: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "md",
+      width: "calc(var(--slide-height) * var(--slide-aspect))",
+    },
+    picture: {
+      position: "relative",
+      width: "token(spacing.full)",
+      height: "var(--slide-height)",
+    },
+    caption: {
+      textAlign: "start",
+      "&[data-caption-style]": {
+        marginBlockStart: "calc(token(spacing.xl) - token(spacing.md))",
+      },
+      "[data-reordering] &": { display: "none" },
     },
     // A cell and its control rail as siblings: the cell clips, and the rail overhangs its top edge.
     slot: { display: "grid" },
@@ -188,6 +218,7 @@ export const carousel = defineSlotRecipe({
       alignItems: "center",
       justifyContent: "center",
       gap: "sm",
+      height: "var(--slide-height)",
       aspectRatio: "1",
       borderRadius: "xl",
       borderWidth: "token(spacing.3xs)",
@@ -222,9 +253,25 @@ export const carousel = defineSlotRecipe({
     },
   },
   variants: {
-    // The editor's control rail is centred on a slide's top edge, so half of it needs room above.
+    size: {
+      small: {
+        root: { "--carousel-slide": "token(sizes.carouselSlideSmall)" },
+      },
+      medium: { root: { "--carousel-slide": "token(sizes.carouselSlide)" } },
+      large: {
+        root: { "--carousel-slide": "token(sizes.carouselSlideLarge)" },
+      },
+    },
+    // The editor's control rail is centred on a slide's top edge, so half of it needs room above,
+    // taken from the gap over the carousel so the slides sit where the reader's do.
     editing: {
-      true: { track: { paddingBlockStart: "xxl" } },
+      true: {
+        scroller: { marginBlockStart: "calc(-1 * token(spacing.xxl))" },
+        track: { paddingBlockStart: "xxl" },
+      },
     },
   },
+  defaultVariants: { size: "medium" },
+  // Chosen at runtime, so emit every branch.
+  staticCss: [{ size: ["*"] }],
 });

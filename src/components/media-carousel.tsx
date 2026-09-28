@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { cx } from "../../styled-system/css";
 import { carousel } from "../../styled-system/recipes";
 import {
@@ -12,8 +12,13 @@ import {
   MediaLightbox,
   type MediaLightboxHandle,
 } from "@/components/media-lightbox";
+import { MediaCaption } from "@/components/media-caption";
 import { MediaTile } from "@/components/media-tile";
-import { mediaSurfaceAspect, type MediaNode } from "@/domain/nodes";
+import {
+  mediaSurfaceAspect,
+  type CollectionNode,
+  type MediaNode,
+} from "@/domain/nodes";
 import { useGestureInput } from "@/hooks/use-gesture-input";
 import type { Point } from "@/utils/lightbox-gesture";
 
@@ -22,11 +27,21 @@ const styles = carousel();
 // A pinch on a slide opens it in the lightbox once it has spread this much.
 const PINCH_OPENS_AT = 1.05;
 
-export interface MediaCarouselProps {
+export interface MediaCarouselProps
+  extends Pick<
+    CollectionNode,
+    "size" | "lightbox" | "showCaptions" | "captionStyle"
+  > {
   items: MediaNode[];
 }
 
-export function MediaCarousel({ items }: MediaCarouselProps) {
+export function MediaCarousel({
+  items,
+  size,
+  lightbox = true,
+  showCaptions = false,
+  captionStyle,
+}: MediaCarouselProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -45,7 +60,7 @@ export function MediaCarousel({ items }: MediaCarouselProps) {
   // Only a pinch over a slide: a drag or a plain wheel stays the scroller's own.
   useGestureInput(scrollerRef, {
     start: (frame) => {
-      if (!frame.pinch || openIndex !== null) return false;
+      if (!lightbox || !frame.pinch || openIndex !== null) return false;
       const index = slideAt(frame.start);
       if (index < 0) return false;
       pinching.current = { index, opened: false };
@@ -67,7 +82,9 @@ export function MediaCarousel({ items }: MediaCarouselProps) {
     },
   });
 
-  const slide = (index: number) => slides()[index] ?? null;
+  // The picture, not its caption: the lightbox zooms out of it.
+  const slide = (index: number) =>
+    slides()[index]?.querySelector<HTMLElement>("[data-media-surface]") ?? null;
 
   // Behind the lightbox, so closing it zooms back into the slide it ends on.
   const bringIntoView = (index: number) => {
@@ -81,39 +98,54 @@ export function MediaCarousel({ items }: MediaCarouselProps) {
 
   return (
     <>
-      <Carousel scrollerRef={scrollerRef}>
+      <Carousel scrollerRef={scrollerRef} size={size}>
         {items.map((item, index) => (
-          <MediaTile
+          <figure
             key={`${index}-${item.src}`}
-            item={item}
-            classes={{
-              surface: cx(styles.slide, styles.cell),
-              tile: styles.tile,
-              image: styles.image,
-              backgroundEffect: styles.backgroundEffect,
-            }}
-            fallbackLabel={`Image ${index + 1}`}
-            onOpen={() => setOpenIndex(index)}
-            surfaceProps={{
-              "data-carousel-slide": "",
-              style: { aspectRatio: String(mediaSurfaceAspect(item, item)) },
-            }}
-          />
+            className={cx(styles.slide, styles.stack)}
+            data-carousel-slide=""
+            style={
+              {
+                "--slide-aspect": String(mediaSurfaceAspect(item, item)),
+              } as CSSProperties
+            }
+          >
+            <MediaTile
+              item={item}
+              classes={{
+                surface: cx(styles.picture, styles.cell),
+                tile: styles.tile,
+                image: styles.image,
+                backgroundEffect: styles.backgroundEffect,
+              }}
+              fallbackLabel={`Image ${index + 1}`}
+              onOpen={lightbox ? () => setOpenIndex(index) : undefined}
+            />
+            {showCaptions && (
+              <MediaCaption
+                caption={item.caption}
+                captionStyle={captionStyle}
+                className={styles.caption}
+              />
+            )}
+          </figure>
         ))}
       </Carousel>
 
-      {/* Must stay mounted; see the effect in MediaLightbox. */}
-      <MediaLightbox
-        ref={lightboxRef}
-        items={items}
-        index={openIndex}
-        onIndexChange={(index) => {
-          setOpenIndex(index);
-          bringIntoView(index);
-        }}
-        onClose={() => setOpenIndex(null)}
-        sourceFor={slide}
-      />
+      {/* Must stay mounted while it can open; see the effect in MediaLightbox. */}
+      {lightbox && (
+        <MediaLightbox
+          ref={lightboxRef}
+          items={items}
+          index={openIndex}
+          onIndexChange={(index) => {
+            setOpenIndex(index);
+            bringIntoView(index);
+          }}
+          onClose={() => setOpenIndex(null)}
+          sourceFor={slide}
+        />
+      )}
     </>
   );
 }
