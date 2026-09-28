@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { carouselRestOffsets, carouselStep } from "../carousel-snap";
 
 describe("carouselRestOffsets", () => {
-  it("rests each slide `inset` from the start, and the last flush with the end", () => {
+  it("rests each slide `inset` from the start, as far as the scroll reaches", () => {
     expect(carouselRestOffsets([240, 900, 1560, 2220], 400, 1660)).toEqual([
       0, 500, 1160, 1660,
     ]);
   });
 
   it("rests a slide that starts inside the inset at the very start", () => {
-    expect(carouselRestOffsets([240, 900], 400, 1000)).toEqual([0, 1000]);
+    expect(carouselRestOffsets([240, 900], 400, 1000)).toEqual([0, 500]);
   });
 
-  it("rests the last slide at the end even where its start would rest earlier", () => {
-    expect(carouselRestOffsets([0, 500], 100, 800)).toEqual([0, 800]);
+  it("rests the last slide at its start like the others, short of the end", () => {
+    expect(carouselRestOffsets([0, 500], 100, 800)).toEqual([0, 400]);
   });
 
   it("rests every slide that can't reach its place at the end, one offset per slide", () => {

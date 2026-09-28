@@ -287,6 +287,56 @@ describe("EditableCarousel", () => {
     expect(screen.queryByRole("listbox", { name: "Caption style" })).toBeNull();
   });
 
+  it("plays a slide's clip only while the whole slide is on screen", () => {
+    const callbacks: IntersectionObserverCallback[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    const report = (slide: Element, ratio: number) =>
+      act(() =>
+        callbacks.at(-1)!(
+          [
+            {
+              target: slide,
+              intersectionRatio: ratio,
+              isIntersecting: ratio > 0,
+              boundingClientRect: { height: 400 } as DOMRectReadOnly,
+              rootBounds: { height: 900 } as DOMRectReadOnly,
+            } as IntersectionObserverEntry,
+          ],
+          {} as IntersectionObserver,
+        ),
+      );
+    setup([
+      { type: "media", kind: "video", src: "/a.mp4" },
+      { type: "media", kind: "video", src: "/b.mp4" },
+    ]);
+    const clipOf = (index: number) => slides()[index].querySelector("video")!;
+    const play = vi.mocked(HTMLMediaElement.prototype.play);
+    expect(play).not.toHaveBeenCalled();
+
+    report(slides()[1], 1);
+    report(slides()[0], 0.5);
+    expect(play.mock.contexts).toEqual([clipOf(1)]);
+
+    report(slides()[1], 0.8);
+    expect(vi.mocked(HTMLMediaElement.prototype.pause).mock.contexts).toEqual([
+      clipOf(1),
+    ]);
+    vi.unstubAllGlobals();
+  });
+
   describe("its slides' captions", () => {
     const captioned: MediaNode[] = [
       { type: "media", kind: "image", src: "a", caption: "A note" },

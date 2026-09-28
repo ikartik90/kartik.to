@@ -209,6 +209,45 @@ describe("MediaCarousel", () => {
       pinch(10);
       expect(screen.queryByRole("dialog")).toBeNull();
     });
+
+    describe("in Safari, whose trackpad pinches are gesture events", () => {
+      const gesture = (type: string, scale: number) =>
+        act(() => {
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          Object.assign(event, { scale, clientX: 1000, clientY: 200 });
+          scroller().dispatchEvent(event);
+        });
+
+      beforeEach(() => vi.stubGlobal("GestureEvent", class {}));
+      afterEach(() => vi.unstubAllGlobals());
+
+      it("leaves every wheel to the scroller, so snapping survives a swipe that could go back", () => {
+        render(<MediaCarousel items={items(4)} />);
+        layOut();
+        const wheel = new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: true,
+          deltaY: -10,
+          clientX: 1000,
+          clientY: 200,
+        });
+        act(() => {
+          scroller().dispatchEvent(wheel);
+        });
+        expect(wheel.defaultPrevented).toBe(false);
+      });
+
+      it("still opens the lightbox on the slide a pinch spreads", () => {
+        render(<MediaCarousel items={items(4)} />);
+        layOut();
+        gesture("gesturestart", 1);
+        gesture("gesturechange", 1.2);
+        expect(
+          screen.getByRole("dialog", { name: "Image 2" }).hasAttribute("open"),
+        ).toBe(true);
+      });
+    });
   });
 
   describe("stepping", () => {
@@ -558,6 +597,69 @@ describe("MediaCarousel clips", () => {
     src: "/demo.mp4",
     alt: "A demo",
   };
+
+  describe("on screen", () => {
+    let report: (slide: Element, ratio: number) => void;
+
+    beforeEach(() => {
+      const callbacks: IntersectionObserverCallback[] = [];
+      vi.stubGlobal(
+        "IntersectionObserver",
+        class {
+          constructor(callback: IntersectionObserverCallback) {
+            callbacks.push(callback);
+          }
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+          takeRecords() {
+            return [];
+          }
+        },
+      );
+      report = (slide, ratio) =>
+        act(() =>
+          callbacks.at(-1)!(
+            [
+              {
+                target: slide,
+                intersectionRatio: ratio,
+                isIntersecting: ratio > 0,
+                boundingClientRect: { height: 400 } as DOMRectReadOnly,
+                rootBounds: { height: 900 } as DOMRectReadOnly,
+              } as IntersectionObserverEntry,
+            ],
+            {} as IntersectionObserver,
+          ),
+        );
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("plays a slide's clip only while the whole slide is on screen", () => {
+      render(
+        <MediaCarousel
+          items={[clip, { ...clip, src: "/b.mp4", alt: "B" }]}
+        />,
+      );
+      const [first, second] = document.querySelectorAll<HTMLElement>(
+        "[data-carousel-slide]",
+      );
+      const clipOf = (slide: HTMLElement) => slide.querySelector("video")!;
+      const play = vi.mocked(HTMLMediaElement.prototype.play);
+      const pause = vi.mocked(HTMLMediaElement.prototype.pause);
+      expect(play).not.toHaveBeenCalled();
+
+      report(first, 1);
+      report(second, 0.3);
+      expect(play.mock.contexts).toEqual([clipOf(first)]);
+
+      report(first, 0.9);
+      report(second, 1);
+      expect(pause.mock.contexts).toEqual([clipOf(first)]);
+      expect(play.mock.contexts).toEqual([clipOf(first), clipOf(second)]);
+    });
+  });
 
   it("plays an mp4 tile as a video, still under the tile's own button", async () => {
     const user = userEvent.setup();

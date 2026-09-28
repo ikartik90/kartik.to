@@ -41,7 +41,7 @@ export interface MediaProps {
   controls?: boolean;
   /** Clips only: one play/pause chip, pinned to the surface's positioned box. */
   transport?: boolean;
-  /** Clips only. False leaves the clip on its first frame without ever asking it to play. */
+  /** Clips only. False holds the clip still, on its first frame if it never played; a change plays or pauses it. */
   autoPlay?: boolean;
   "data-checkered"?: string;
   /** Handed through to whichever element renders, for the editor's focusable media block. */
@@ -54,6 +54,15 @@ export interface MediaProps {
   onMeasure?: (width: number, height: number) => void;
   /** Must be stable (a state setter or useCallback), or the element remounts every render. */
   elementRef?: (node: HTMLElement | null) => void;
+}
+
+const prefersReducedMotion = () =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/** A held clip paints nothing until a frame decodes, so seek a hair in unless a poster covers it. */
+function seekToFirstFrame(node: HTMLVideoElement) {
+  if (node.poster || node.currentTime !== 0) return;
+  node.currentTime = Math.min(FIRST_FRAME_SEEK_S, node.duration || 0);
 }
 
 function hasSomethingToShow(
@@ -111,11 +120,19 @@ export function Media({
     [elementRef],
   );
 
-  // A ref, so a changed autoPlay never re-runs the ref callback and loses the playhead.
+  // A ref, so a changed autoPlay never re-runs the ref callback and loses the playhead. Only a
+  // change plays or pauses, so a clip the visitor paused stays paused across other renders.
   const autoPlayRef = useRef(autoPlay);
+  // Kept still: told not to play, or the visitor asked for less motion.
+  const isHeld = () => !autoPlayRef.current || prefersReducedMotion();
   useEffect(() => {
+    if (autoPlayRef.current === autoPlay) return;
     autoPlayRef.current = autoPlay;
-  }, [autoPlay]);
+    if (!clip) return;
+    // A pause, even of a still clip, stops the browser acting on the `autoplay` attribute.
+    if (isHeld()) clip.pause();
+    else void clip.play()?.catch(() => {});
+  }, [autoPlay, clip]);
 
   // React never renders the `muted` attribute, so an SSR clip arrives un-muted and autoplay declines;
   // setting it here and calling play() starts it. Reduced motion leaves it on its first frame.
@@ -126,12 +143,13 @@ export function Media({
     node.muted = true;
     node.setAttribute("muted", "");
 
-    if (!autoPlayRef.current) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      node.pause();
+    if (!isHeld()) {
+      void node.play()?.catch(() => {});
       return;
     }
-    void node.play()?.catch(() => {});
+    if (autoPlayRef.current) node.pause();
+    // A server-rendered clip may have its metadata before this runs, and missed the event.
+    if (node.readyState >= HTMLMediaElement.HAVE_METADATA) seekToFirstFrame(node);
   }, [hold]);
 
   // Layout, then the pending reservation, then the caller's caps, which win.
@@ -199,10 +217,7 @@ export function Media({
       onLoadedMetadata={(event) => {
         const node = event.currentTarget;
         onMeasure?.(node.videoWidth, node.videoHeight);
-        // A held clip paints nothing until a frame decodes, so seek a hair in unless a poster covers it.
-        if (!poster && !autoPlayRef.current && node.currentTime === 0) {
-          node.currentTime = Math.min(FIRST_FRAME_SEEK_S, node.duration || 0);
-        }
+        if (isHeld()) seekToFirstFrame(node);
       }}
     />
   );

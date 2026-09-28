@@ -20,6 +20,7 @@ import {
   type MediaNode,
 } from "@/domain/nodes";
 import { useGestureInput } from "@/hooks/use-gesture-input";
+import { useWholeSlides } from "@/hooks/use-whole-slides";
 import type { Point } from "@/utils/lightbox-gesture";
 
 const styles = carousel();
@@ -44,6 +45,7 @@ export function MediaCarousel({
 }: MediaCarouselProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const whole = useWholeSlides(scrollerRef, items);
 
   const lightboxRef = useRef<MediaLightboxHandle>(null);
   const pinching = useRef<{ index: number; opened: boolean } | null>(null);
@@ -58,29 +60,33 @@ export function MediaCarousel({
     });
 
   // Only a pinch over a slide: a drag or a plain wheel stays the scroller's own.
-  useGestureInput(scrollerRef, {
-    start: (frame) => {
-      if (!lightbox || !frame.pinch || openIndex !== null) return false;
-      const index = slideAt(frame.start);
-      if (index < 0) return false;
-      pinching.current = { index, opened: false };
-      return true;
+  useGestureInput(
+    scrollerRef,
+    {
+      start: (frame) => {
+        if (!lightbox || !frame.pinch || openIndex !== null) return false;
+        const index = slideAt(frame.start);
+        if (index < 0) return false;
+        pinching.current = { index, opened: false };
+        return true;
+      },
+      move: (frame) => {
+        const pinch = pinching.current;
+        if (!pinch) return;
+        if (pinch.opened) return lightboxRef.current?.pinch.move(frame);
+        if (frame.scale < PINCH_OPENS_AT) return;
+        pinch.opened = true;
+        lightboxRef.current?.pinch.begin(frame);
+        setOpenIndex(pinch.index);
+      },
+      end: (frame) => {
+        const pinch = pinching.current;
+        pinching.current = null;
+        if (pinch?.opened) lightboxRef.current?.pinch.end(frame);
+      },
     },
-    move: (frame) => {
-      const pinch = pinching.current;
-      if (!pinch) return;
-      if (pinch.opened) return lightboxRef.current?.pinch.move(frame);
-      if (frame.scale < PINCH_OPENS_AT) return;
-      pinch.opened = true;
-      lightboxRef.current?.pinch.begin(frame);
-      setOpenIndex(pinch.index);
-    },
-    end: (frame) => {
-      const pinch = pinching.current;
-      pinching.current = null;
-      if (pinch?.opened) lightboxRef.current?.pinch.end(frame);
-    },
-  });
+    { pinchOnly: true },
+  );
 
   // The picture, not its caption: the lightbox zooms out of it.
   const slide = (index: number) =>
@@ -119,6 +125,7 @@ export function MediaCarousel({
                 backgroundEffect: styles.backgroundEffect,
               }}
               fallbackLabel={`Image ${index + 1}`}
+              autoPlay={whole.has(index)}
               onOpen={lightbox ? () => setOpenIndex(index) : undefined}
             />
             {showCaptions && (

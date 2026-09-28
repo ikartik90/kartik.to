@@ -83,6 +83,16 @@ function wheelDelta(event: WheelEvent): Point {
   return { x: event.deltaX * unit, y: event.deltaY * unit };
 }
 
+export interface GestureInputOptions {
+  enabled?: boolean;
+  /**
+   * The caller takes only pinches. Where a trackpad pinch arrives as Safari's gesture events, no
+   * wheel listener is added: a blocking one breaks Safari's scroll snapping on a swipe that could
+   * go back in history.
+   */
+  pinchOnly?: boolean;
+}
+
 /**
  * Turns touch, Safari's gesture events, trackpad wheels and mouse drags on `ref` into one stream
  * of frames. A gesture keeps reporting after it begins wherever its events land, so it can outlive
@@ -91,7 +101,7 @@ function wheelDelta(event: WheelEvent): Point {
 export function useGestureInput(
   ref: RefObject<HTMLElement | null>,
   handlers: GestureHandlers,
-  enabled = true,
+  { enabled = true, pinchOnly = false }: GestureInputOptions = {},
 ) {
   const onStart = useEffectEvent((frame: GestureFrame) =>
     handlers.start(frame),
@@ -329,7 +339,9 @@ export function useGestureInput(
     target.addEventListener("touchend", onTouchEnd);
     target.addEventListener("touchcancel", onTouchEnd);
     target.addEventListener("gesturestart", onGestureStart, blocking);
-    target.addEventListener("wheel", onWheel, blocking);
+    if (!(pinchOnly && "GestureEvent" in window)) {
+      target.addEventListener("wheel", onWheel, blocking);
+    }
     target.addEventListener("pointerdown", onPointerDown);
     target.addEventListener("pointermove", onPointerMove);
     target.addEventListener("pointerup", onPointerUp);
@@ -350,5 +362,5 @@ export function useGestureInput(
       target.removeEventListener("pointercancel", onPointerUp);
       target.removeEventListener("click", onClickCapture, true);
     };
-  }, [ref, enabled]);
+  }, [ref, enabled, pinchOnly]);
 }

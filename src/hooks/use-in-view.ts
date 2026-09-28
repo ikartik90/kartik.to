@@ -4,7 +4,7 @@ import { useEffect, useState, type RefObject } from "react";
 
 // A visibility gate with hysteresis (on at `enter`, off under `exit`), so scroll jitter can't flicker it.
 
-const THRESHOLD_STEPS = Array.from({ length: 21 }, (_, index) => index / 20);
+export const THRESHOLD_STEPS = Array.from({ length: 21 }, (_, index) => index / 20);
 
 /** Below 1 so a fast wheel can't step over the exact fill-the-viewport position. */
 const CEILING_SLACK = 0.9;

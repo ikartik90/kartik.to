@@ -3,17 +3,15 @@ const TOLERANCE_PX = 1;
 
 /**
  * Where each slide comes to rest, one offset per slide: its start `inset` from the scroller's
- * start, the last flush with the end. Mirrors the CSS snap alignment.
+ * start, as far as the scroll reaches. Mirrors the CSS snap alignment.
  */
 export function carouselRestOffsets(
   slideStarts: readonly number[],
   inset: number,
   maxScroll: number,
 ): number[] {
-  return slideStarts.map((start, index) =>
-    index === slideStarts.length - 1
-      ? maxScroll
-      : Math.min(Math.max(start - inset, 0), maxScroll),
+  return slideStarts.map((start) =>
+    Math.min(Math.max(start - inset, 0), maxScroll),
   );
 }
 
