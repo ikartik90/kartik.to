@@ -26,6 +26,7 @@ import {
   type MediaNode,
 } from "@/domain/nodes";
 import { useImageTransparency } from "@/hooks/use-image-transparency";
+import { useWholeSlides } from "@/hooks/use-whole-slides";
 import { useMediaProperties } from "@/hooks/use-media-properties";
 import {
   edgeScrollSpeed,
@@ -186,6 +187,7 @@ export function EditableCarousel({
   );
 
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const whole = useWholeSlides(scrollerRef, items);
   const slideNodes = useRef(new Map<string, HTMLElement>());
   // Pointer events, not HTML5 drag-and-drop, whose bitmap and fly-back can't be controlled. The
   // gesture lives in refs: handlers can't rely on React committing between events.
@@ -569,7 +571,7 @@ export function EditableCarousel({
                   !item.backgroundEffect && transparentSrcs.has(item.src)
                 }
                 // Native image drag would hijack the pointer gesture.
-                mediaProps={{ draggable: false }}
+                mediaProps={{ draggable: false, autoPlay: whole.has(index) }}
                 frameProps={{
                   "data-pressed": pressed?.index === index ? "" : undefined,
                   style:

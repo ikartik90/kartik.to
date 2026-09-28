@@ -91,6 +91,109 @@ describe("Media", () => {
     expect(pause).toHaveBeenCalled();
   });
 
+  it("starts a held clip when the caller lets it play, and stops it when they take that back", () => {
+    const { rerender } = render(
+      <Media src="/media/demo.mp4" alt="A demo" autoPlay={false} kind="video" />,
+    );
+    expect(play).not.toHaveBeenCalled();
+
+    rerender(<Media src="/media/demo.mp4" alt="A demo" autoPlay kind="video" />);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(video()!.paused).toBe(false);
+
+    rerender(
+      <Media src="/media/demo.mp4" alt="A demo" autoPlay={false} kind="video" />,
+    );
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(video()!.paused).toBe(true);
+  });
+
+  describe("a held clip's first frame", () => {
+    let seeks: number[];
+
+    beforeEach(() => {
+      seeks = [];
+      Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
+        configurable: true,
+        get: () => seeks.at(-1) ?? 0,
+        set: (time: number) => void seeks.push(time),
+      });
+      Object.defineProperty(HTMLMediaElement.prototype, "duration", {
+        configurable: true,
+        get: () => 14,
+      });
+    });
+
+    afterEach(() => {
+      delete (HTMLMediaElement.prototype as { currentTime?: number }).currentTime;
+      delete (HTMLMediaElement.prototype as { duration?: number }).duration;
+      delete (HTMLMediaElement.prototype as { readyState?: number }).readyState;
+    });
+
+    it("is sought a hair in once the clip's details arrive, so it has a frame to show", () => {
+      render(<Media src="/media/demo.mp4" alt="A demo" autoPlay={false} kind="video" />);
+      fireEvent.loadedMetadata(video()!);
+      expect(seeks).toEqual([0.05]);
+    });
+
+    it("is sought too when the details arrived before the page took the clip over", () => {
+      Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+        configurable: true,
+        get: () => HTMLMediaElement.HAVE_METADATA,
+      });
+      render(<Media src="/media/demo.mp4" alt="A demo" autoPlay={false} kind="video" />);
+      expect(seeks).toEqual([0.05]);
+      expect(play).not.toHaveBeenCalled();
+    });
+
+    describe("for a visitor who asked for less motion", () => {
+      beforeEach(() => {
+        window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+      });
+
+      it("is sought a hair in once the clip's details arrive", () => {
+        render(<Media src="/media/demo.mp4" alt="A demo" kind="video" />);
+        fireEvent.loadedMetadata(video()!);
+        expect(seeks).toEqual([0.05]);
+        expect(play).not.toHaveBeenCalled();
+      });
+
+      it("is sought too when the details arrived before the page took the clip over", () => {
+        Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+          configurable: true,
+          get: () => HTMLMediaElement.HAVE_METADATA,
+        });
+        render(<Media src="/media/demo.mp4" alt="A demo" kind="video" />);
+        expect(seeks).toEqual([0.05]);
+        expect(play).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  it("keeps a clip still when it's let play for a visitor who asked for less motion", () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    const { rerender } = render(
+      <Media src="/media/demo.mp4" alt="A demo" autoPlay={false} kind="video" />,
+    );
+    rerender(<Media src="/media/demo.mp4" alt="A demo" autoPlay kind="video" />);
+    expect(play).not.toHaveBeenCalled();
+    // Only a pause keeps the browser from starting it on the `autoplay` attribute that arrives.
+    expect(pause).toHaveBeenCalled();
+  });
+
+  it("leaves a clip the visitor paused alone while the caller's say is unchanged", () => {
+    const { rerender } = render(
+      <Media src="/media/demo.mp4" alt="A demo" transport kind="video" />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
+
+    rerender(
+      <Media src="/media/demo.mp4" alt="A demo" transport className="moved" kind="video" />,
+    );
+    expect(video()!.paused).toBe(true);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
   it("gives a clip its transport only where it is asked for", () => {
     const { rerender } = render(<Media src="/media/demo.mp4" alt="A demo" kind="video" />);
     expect(video()?.hasAttribute("controls")).toBe(false);

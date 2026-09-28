@@ -44,6 +44,12 @@ export const carousel = defineSlotRecipe({
     // `carouselRestOffsets`.
     scroller: {
       "--carousel-half": "calc((100vw - var(--page-inset-end, 0px)) / 2)",
+      "--carousel-inset":
+        "max(token(spacing.xxl), calc(var(--carousel-half) - token(sizes.articleContent) / 2))",
+      // The snapport's width. A slide wider than it may rest anywhere across its overflow, which a
+      // swipe back must cross before it reaches the slide before.
+      "--carousel-fit":
+        "calc(var(--carousel-half) * 2 - var(--carousel-inset) - token(spacing.xxl))",
       position: "relative",
       width: "calc(var(--carousel-half) * 2)",
       marginInline: "calc(50% - var(--carousel-half))",
@@ -51,15 +57,13 @@ export const carousel = defineSlotRecipe({
       overscrollBehaviorInline: "contain",
       scrollbarWidth: "none",
       scrollSnapType: "inline mandatory",
-      scrollPaddingInlineStart:
-        "max(token(spacing.xxl), calc(var(--carousel-half) - token(sizes.articleContent) / 2))",
-      scrollPaddingInlineEnd:
-        "max(token(spacing.xxl), calc(var(--carousel-half) - token(sizes.articleShowcase) / 2))",
+      scrollPaddingInlineStart: "var(--carousel-inset)",
+      scrollPaddingInlineEnd: "xxl",
       // Off until the slides have glided back too: WebKit snaps to their transformed boxes.
       "[data-reordering] &, [data-settling] &": { scrollSnapType: "none" },
     },
     // Padding on the track, not the scroller: a scroller's end padding isn't scrollable everywhere.
-    // Its height holds while a reorder halves the slides; captions it holds from script.
+    // Its height holds from script while a reorder halves the slides.
     track: {
       "--slide-height": "var(--carousel-slide)",
       "[data-reordering] &": {
@@ -71,7 +75,6 @@ export const carousel = defineSlotRecipe({
       mdDown: { gap: "md" },
       width: "max-content",
       boxSizing: "content-box",
-      minHeight: "var(--carousel-slide)",
       paddingInline:
         "max(token(spacing.xxl), calc(var(--carousel-half) - token(sizes.articleShowcase) / 2))",
     },
@@ -99,24 +102,25 @@ export const carousel = defineSlotRecipe({
       position: "relative",
       flexShrink: 0,
       scrollSnapAlign: "start",
-      _last: { scrollSnapAlign: "end" },
       "[data-reordering] &": {
         marginBlockStart: "calc(var(--carousel-slide) / 4)",
         transition: "translate 200ms cubic-bezier(0.2, 0, 0, 1)",
       },
     },
     // A picture and its caption; the width follows from the height and the inline `--slide-aspect`,
-    // so a caption wraps within it.
+    // so a caption wraps within it. Too wide to fit, the picture is shortened instead.
     stack: {
       display: "flex",
       flexDirection: "column",
       gap: "md",
-      width: "calc(var(--slide-height) * var(--slide-aspect))",
+      width:
+        "min(calc(var(--slide-height) * var(--slide-aspect)), var(--carousel-fit))",
     },
     picture: {
       position: "relative",
       width: "token(spacing.full)",
-      height: "var(--slide-height)",
+      height:
+        "min(var(--slide-height), calc(var(--carousel-fit) / var(--slide-aspect)))",
     },
     caption: {
       textAlign: "start",

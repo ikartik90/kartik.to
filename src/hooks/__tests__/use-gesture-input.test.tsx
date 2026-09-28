@@ -183,4 +183,39 @@ describe("useGestureInput", () => {
     render(<Target handlers={handlers} />);
     expect(wheel({ deltaX: 30 }).defaultPrevented).toBe(false);
   });
+
+  describe("for a caller that takes only pinches", () => {
+    function PinchTarget({ handlers }: { handlers: GestureHandlers }) {
+      const ref = useRef<HTMLDivElement>(null);
+      useGestureInput(ref, handlers, { pinchOnly: true });
+      return <div ref={ref} data-testid="target" />;
+    }
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("listens for no wheel where a trackpad pinch arrives as Safari's gesture events", () => {
+      vi.stubGlobal("GestureEvent", class {});
+      const listen = vi.spyOn(HTMLElement.prototype, "addEventListener");
+      const { handlers, frames } = spy();
+      render(<PinchTarget handlers={handlers} />);
+
+      const wheelsOnTarget = listen.mock.calls.filter(
+        ([type], index) =>
+          type === "wheel" && listen.mock.contexts[index] === target(),
+      );
+      expect(wheelsOnTarget).toEqual([]);
+      expect(wheel({ ctrlKey: true, deltaY: -10 }).defaultPrevented).toBe(false);
+
+      gesture("gesturestart", 1);
+      gesture("gesturechange", 1.5);
+      expect(frames.map((f) => f.phase)).toEqual(["start", "move"]);
+    });
+
+    it("still takes a ctrl-wheel pinch where there are no gesture events", () => {
+      const { handlers, frames } = spy();
+      render(<PinchTarget handlers={handlers} />);
+      expect(wheel({ ctrlKey: true, deltaY: -10 }).defaultPrevented).toBe(true);
+      expect(frames[0].frame.pinch).toBe(true);
+    });
+  });
 });
