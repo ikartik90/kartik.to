@@ -3897,6 +3897,24 @@ describe("ArticleEditor heading toolbar", () => {
     expect(headingRoot(0).hasAttribute(attr)).toBe(false);
   });
 
+  it("switches the heading to the large size, then back", () => {
+    seed([heading()]);
+    pressHandleOf(blockAt(0));
+    const large = () =>
+      blockAt(0).classList.contains("textStyle_subheadingLarge");
+    expect(large()).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Large" }));
+    expect(stored()[0]).toMatchObject({ large: true });
+    expect(large()).toBe(true);
+    expect(blockAt(0).classList.contains("textStyle_subheading")).toBe(false);
+    expect(toolbar()).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Large" }));
+    expect(stored()[0]).not.toHaveProperty("large");
+    expect(large()).toBe(false);
+  });
+
   it("marks the outermost element of a heading with an eyebrow too", () => {
     seed([heading({ caption: "Part one", indentLeft: true })]);
     expect(headingRoot(0).hasAttribute("data-indent-left")).toBe(true);

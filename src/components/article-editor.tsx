@@ -2220,7 +2220,9 @@ function EditableBlock({
           ref={combinedRef as React.RefCallback<HTMLHeadingElement>}
           className={cx(
             editableBaseStyle,
-            typographyStyles({ type: "subheading" }),
+            typographyStyles({
+              type: block.large ? "subheadingLarge" : "subheading",
+            }),
           )}
           contentEditable
           suppressContentEditableWarning

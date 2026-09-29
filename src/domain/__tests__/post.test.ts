@@ -148,6 +148,17 @@ describe("BlockNodeSchema", () => {
     ).toMatchObject({ indentLeft: true, indentRight: true });
   });
 
+  it("keeps a heading's large size", () => {
+    expect(
+      BlockNodeSchema.parse({
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", text: "Title" }],
+        large: true,
+      })
+    ).toMatchObject({ large: true });
+  });
+
   it("accepts a blockquote node", () => {
     expect(
       BlockNodeSchema.safeParse({

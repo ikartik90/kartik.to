@@ -37,14 +37,14 @@ describe("HeadingToolbar", () => {
     expect([anchor.style.left, anchor.style.top]).toEqual(["60px", "240px"]);
   });
 
-  it("offers the eyebrow, then a separator, then the two indents", () => {
+  it("offers the eyebrow and size, then a separator, then the two indents", () => {
     setup();
     const toolbar = screen.getByRole("toolbar", { name: "Heading options" });
     expect(
       [...toolbar.children].map(
         (item) => item.getAttribute("aria-label") ?? item.tagName,
       ),
-    ).toEqual(["Eyebrow", "SPAN", "Indent left", "Indent right"]);
+    ).toEqual(["Eyebrow", "Large", "SPAN", "Indent left", "Indent right"]);
   });
 
   it("goes on Escape", () => {
@@ -99,6 +99,7 @@ describe("HeadingToolbar", () => {
   });
 
   describe.each([
+    ["Large", "large"],
     ["Indent left", "indentLeft"],
     ["Indent right", "indentRight"],
   ] as const)("%s", (label, field) => {

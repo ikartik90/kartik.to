@@ -220,7 +220,9 @@ function renderBlockNode(
       );
 
     case "heading": {
-      const { tag, type } = HEADING_MAP[node.level] ?? HEADING_MAP[2];
+      const { tag, type: levelType } =
+        HEADING_MAP[node.level] ?? HEADING_MAP[2];
+      const type = node.large ? "subheadingLarge" : levelType;
       // The indent markers go on the outer element: the heading, or the caption shell.
       const layout = {
         "data-indented": node.indent ? "" : undefined,

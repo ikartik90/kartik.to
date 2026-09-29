@@ -58,6 +58,7 @@ export const HeadingNodeSchema = z.object({
   children: z.array(InlineNodeSchema),
   // The eyebrow; present, even empty, while it is turned on.
   caption: z.string().optional(),
+  large: z.boolean().optional(),
   indent: z.boolean().optional(),
   // Either alone moves the 640px heading to that edge of the showcase; both span from its left edge to the text's right.
   indentLeft: z.boolean().optional(),
