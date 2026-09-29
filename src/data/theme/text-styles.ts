@@ -1,37 +1,48 @@
 import { defineTextStyles } from "@pandacss/dev";
+import { fluidFontSize, fluidLineHeight } from "../../utils/fluid-type";
+import { TYPE_SIZES, TYPE_VIEWPORTS } from "./type-sizes";
+
+// Line heights between the two viewports round to the 4px grid.
+const fluidType = (name: keyof typeof TYPE_SIZES) => ({
+  fontSize: fluidFontSize(TYPE_SIZES[name], TYPE_VIEWPORTS),
+  lineHeight: fluidLineHeight(TYPE_SIZES[name], TYPE_VIEWPORTS, "{spacing.sm}"),
+});
 
 export const textStyles = defineTextStyles({
   title: {
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "2rem",
-      lineHeight: "1.5",
+      ...fluidType("title"),
       letterSpacing: "-1.5%",
+    },
+  },
+  subheadingLarge: {
+    value: {
+      fontFamily: "{fonts.switzer}",
+      fontWeight: "{fontWeights.base}",
+      ...fluidType("subheadingLarge"),
     },
   },
   subheading: {
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "1.25rem",
-      lineHeight: "1.8",
+      ...fluidType("subheading"),
     },
   },
   bodyLarge: {
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "1rem",
-      lineHeight: "1.75",
+      ...fluidType("bodyLarge"),
     },
   },
   quote: {
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "1.25rem",
-      lineHeight: "1.8",
+      ...fluidType("quote"),
       letterSpacing: "-1%",
     },
   },
@@ -39,8 +50,7 @@ export const textStyles = defineTextStyles({
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "0.75rem",
-      lineHeight: "2",
+      ...fluidType("caption"),
       letterSpacing: "0.5%",
     },
   },
@@ -48,8 +58,7 @@ export const textStyles = defineTextStyles({
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "0.75rem",
-      lineHeight: "1.67",
+      ...fluidType("sidenote"),
       letterSpacing: "0.5%",
     },
   },
@@ -57,17 +66,14 @@ export const textStyles = defineTextStyles({
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "0.875rem",
-      lineHeight: "1.72",
+      ...fluidType("bodySmall"),
     },
   },
-  // 10/16, for the small field's hint.
   fineprint: {
     value: {
       fontFamily: "{fonts.switzer}",
       fontWeight: "{fontWeights.base}",
-      fontSize: "0.625rem",
-      lineHeight: "1.6",
+      ...fluidType("fineprint"),
       letterSpacing: "0.5%",
     },
   },
@@ -80,8 +86,7 @@ export const textStyles = defineTextStyles({
   code: {
     value: {
       fontFamily: "{fonts.jetbrainsMono}",
-      fontSize: "0.875rem",
-      lineHeight: "1.72",
+      ...fluidType("code"),
     },
   },
 });
