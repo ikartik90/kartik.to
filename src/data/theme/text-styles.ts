@@ -1,11 +1,14 @@
 import { defineTextStyles } from "@pandacss/dev";
 import { fluidFontSize, fluidLineHeight } from "../../utils/fluid-type";
+import { tokens } from "./tokens";
 import { TYPE_SIZES, TYPE_VIEWPORTS } from "./type-sizes";
 
-// Line heights between the two viewports round to the 4px grid.
+// Line heights between the two viewports round to the grid's smallest step.
+const grid = { px: parseFloat(tokens.spacing.sm.value), css: "{spacing.sm}" };
+
 const fluidType = (name: keyof typeof TYPE_SIZES) => ({
   fontSize: fluidFontSize(TYPE_SIZES[name], TYPE_VIEWPORTS),
-  lineHeight: fluidLineHeight(TYPE_SIZES[name], TYPE_VIEWPORTS, "{spacing.sm}"),
+  lineHeight: fluidLineHeight(TYPE_SIZES[name], TYPE_VIEWPORTS, grid),
 });
 
 export const textStyles = defineTextStyles({
