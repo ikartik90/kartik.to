@@ -3,6 +3,7 @@ import { WireframeText } from "./wireframe";
 
 export type TypographyType =
   | "title"
+  | "subheadingLarge"
   | "subheading"
   | "bodyLarge"
   | "bodySmall"
@@ -36,6 +37,10 @@ export const typographyStyles = cva({
       title: {
         textStyle: "title",
         color: "text.title",
+        textWrap: "balance",
+      },
+      subheadingLarge: {
+        textStyle: "subheadingLarge",
         textWrap: "balance",
       },
       subheading: {

@@ -6,6 +6,7 @@ import {
   mediaInsetPx,
   mediaRadiusPx,
 } from "@/domain/nodes";
+import { TYPE_SIZES } from "@/data/theme/type-sizes";
 import { CARD_SCRIM_MIN_SHARE, cardWashGradient } from "@/utils/card-scrim";
 import { containedSize } from "@/utils/contained-size";
 import { effectStyle } from "@/utils/effect-gradient";
@@ -26,12 +27,13 @@ const TYPE_SCALE = OG_SIZE.width / 400;
 const CAPTION_PADDING = 16 * TYPE_SCALE;
 const CAPTION_GAP = 4 * TYPE_SCALE;
 
-/** `textStyles.caption` and `textStyles.bodyLarge`, at this card's size. */
-const META_SIZE = 12 * TYPE_SCALE;
-const META_LINE_HEIGHT = 2;
+/** `caption` and `bodyLarge` at the mobile width, where the card is one column, at this card's size. */
+const { caption, bodyLarge } = TYPE_SIZES;
+const META_SIZE = caption.mobile.size * TYPE_SCALE;
+const META_LINE_HEIGHT = caption.mobile.lineHeight / caption.mobile.size;
 const META_TRACKING = 0.005;
-const TITLE_SIZE = 16 * TYPE_SCALE;
-const TITLE_LINE_HEIGHT = 1.75;
+const TITLE_SIZE = bodyLarge.mobile.size * TYPE_SCALE;
+const TITLE_LINE_HEIGHT = bodyLarge.mobile.lineHeight / bodyLarge.mobile.size;
 
 /** The `linkCard` tones as literals: there is no stylesheet here to resolve tokens against. */
 const TONES: Record<LinkCardTone, { surface: string; ink: string; rgb: string }> = {
