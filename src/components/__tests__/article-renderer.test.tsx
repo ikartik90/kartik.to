@@ -181,6 +181,40 @@ describe("ArticleRenderer", () => {
       expect(container.querySelector(".article-subheading-caption")).toBeNull();
     });
 
+    it("draws a large subheading in the larger style, with or without an eyebrow", () => {
+      render(
+        <ArticleRenderer
+          content={doc([
+            {
+              type: "heading",
+              level: 2,
+              large: true,
+              children: [{ type: "text", text: "Plain" }],
+            },
+            {
+              type: "heading",
+              level: 2,
+              large: true,
+              caption: "Part two",
+              children: [{ type: "text", text: "With eyebrow" }],
+            },
+            {
+              type: "heading",
+              level: 2,
+              children: [{ type: "text", text: "Small" }],
+            },
+          ])}
+        />,
+      );
+      const style = (name: string) =>
+        [...screen.getByRole("heading", { name }).classList].filter((c) =>
+          c.startsWith("textStyle_"),
+        );
+      expect(style("Plain")).toEqual(["textStyle_subheadingLarge"]);
+      expect(style("With eyebrow")).toEqual(["textStyle_subheadingLarge"]);
+      expect(style("Small")).toEqual(["textStyle_subheading"]);
+    });
+
     it("marks a heading's left and right indents on its outermost element", () => {
       const { container } = render(
         <ArticleRenderer

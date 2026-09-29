@@ -5,6 +5,7 @@ import { selectionPopover, toolbar } from "../../styled-system/recipes";
 import { Popover, type PopoverRect } from "@/components/ui/popover";
 import { OptionList } from "@/components/ui/input/option-list";
 import type { HeadingNode } from "@/domain/nodes";
+import FontSizeIcon from "@/assets/icons/font-size.svg";
 import HeadingEyebrowIcon from "@/assets/icons/heading-eyebrow.svg";
 import IndentLeftIcon from "@/assets/icons/indent-left.svg";
 import IndentRightIcon from "@/assets/icons/indent-right.svg";
@@ -14,13 +15,13 @@ const toolbarClass = cx(toolbar(), selectionPopover({ align: "start" }));
 const selectionAnchor = "--selection-popover";
 
 /** Off removes the field, so an untouched heading saves exactly as before. */
-function withIndent(
+function withFlag(
   block: HeadingNode,
-  side: "indentLeft" | "indentRight",
+  field: "large" | "indentLeft" | "indentRight",
   on: boolean,
 ): HeadingNode {
-  const { [side]: _, ...rest } = block;
-  return on ? { ...rest, [side]: true } : rest;
+  const { [field]: _, ...rest } = block;
+  return on ? { ...rest, [field]: true } : rest;
 }
 
 function withEyebrow(block: HeadingNode, on: boolean): HeadingNode {
@@ -43,6 +44,7 @@ export function HeadingToolbar({
   onDismiss,
 }: HeadingToolbarProps) {
   const eyebrow = block.caption !== undefined;
+  const large = block.large === true;
   const indentLeft = block.indentLeft === true;
   const indentRight = block.indentRight === true;
 
@@ -63,13 +65,18 @@ export function HeadingToolbar({
           >
             <HeadingEyebrowIcon aria-hidden />
           </OptionList.Option>
+          <OptionList.Option
+            aria-label="Large"
+            pressed={large}
+            onClick={() => onChange(withFlag(block, "large", !large))}
+          >
+            <FontSizeIcon aria-hidden />
+          </OptionList.Option>
           <OptionList.Divider />
           <OptionList.Option
             aria-label="Indent left"
             pressed={indentLeft}
-            onClick={() =>
-              onChange(withIndent(block, "indentLeft", !indentLeft))
-            }
+            onClick={() => onChange(withFlag(block, "indentLeft", !indentLeft))}
           >
             <IndentLeftIcon aria-hidden />
           </OptionList.Option>
@@ -77,7 +84,7 @@ export function HeadingToolbar({
             aria-label="Indent right"
             pressed={indentRight}
             onClick={() =>
-              onChange(withIndent(block, "indentRight", !indentRight))
+              onChange(withFlag(block, "indentRight", !indentRight))
             }
           >
             <IndentRightIcon aria-hidden />
