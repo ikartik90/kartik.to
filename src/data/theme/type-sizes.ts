@@ -6,19 +6,19 @@ export const TYPE_VIEWPORTS: TypeViewports = { mobile: 375, desktop: 1920 };
 export const TYPE_SIZES = {
   title: {
     mobile: { size: 28, lineHeight: 40 },
-    desktop: { size: 42, lineHeight: 56 },
+    desktop: { size: 42, lineHeight: 52 },
   },
   subheadingLarge: {
     mobile: { size: 24, lineHeight: 32 },
-    desktop: { size: 32, lineHeight: 48 },
+    desktop: { size: 32, lineHeight: 44 },
   },
   subheading: {
-    mobile: { size: 18, lineHeight: 28 },
-    desktop: { size: 25, lineHeight: 42 },
+    mobile: { size: 20, lineHeight: 28 },
+    desktop: { size: 25, lineHeight: 38 },
   },
   quote: {
-    mobile: { size: 18, lineHeight: 32 },
-    desktop: { size: 22, lineHeight: 36 },
+    mobile: { size: 18, lineHeight: 26 },
+    desktop: { size: 22, lineHeight: 32 },
   },
   bodyLarge: {
     mobile: { size: 13, lineHeight: 24 },
