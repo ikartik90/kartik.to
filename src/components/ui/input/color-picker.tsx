@@ -238,7 +238,7 @@ function ColorPickerRoot({
   onValueChange,
   onClose,
   onRemove,
-  title = "Color Picker",
+  title = "Color picker",
   disabled = false,
   autoFocus = false,
   className,

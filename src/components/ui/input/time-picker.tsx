@@ -106,7 +106,7 @@ export function TimePicker({
   format = DEFAULT_TIME_FORMAT,
   placeholder = "Select time",
   searchPlaceholder = "Type a time…",
-  nextDayLabel = "Next Day",
+  nextDayLabel = "Next day",
   emptyLabel,
   portal = true,
 }: TimePickerProps) {

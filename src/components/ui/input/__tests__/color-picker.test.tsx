@@ -46,6 +46,11 @@ describe("opening", () => {
     expect(channel("Hex").value).toBe("FFAB6F");
     expect(channel("Opacity, percent").value).toBe("50");
   });
+
+  it("titles itself in sentence case by default", () => {
+    render(<Host />);
+    expect(screen.getByText("Color picker")).toBeTruthy();
+  });
 });
 
 describe("colour format", () => {

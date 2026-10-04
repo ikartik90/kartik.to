@@ -140,7 +140,7 @@ describe("the day's slots", () => {
     renderTimePicker();
     fireEvent.click(trigger());
     expect(screen.queryByText(/hours?$/)).toBeNull();
-    expect(screen.queryByText("Next Day")).toBeNull();
+    expect(screen.queryByText("Next day")).toBeNull();
   });
 });
 
@@ -170,21 +170,21 @@ describe("the time difference", () => {
 
   it("rules the crossing into the next day exactly once, before midnight's row", () => {
     openAnchored();
-    const rule = screen.getByText("Next Day");
-    expect(screen.getAllByText("Next Day")).toHaveLength(1);
+    const rule = screen.getByText("Next day");
+    expect(screen.getAllByText("Next day")).toHaveLength(1);
     expect(rule.nextElementSibling?.textContent).toBe("12:00 AM+9 hours");
   });
 
   it("lets the rule be renamed for the deployment", () => {
     openAnchored({ nextDayLabel: "Tomorrow" });
     expect(screen.getByText("Tomorrow")).toBeTruthy();
-    expect(screen.queryByText("Next Day")).toBeNull();
+    expect(screen.queryByText("Next day")).toBeNull();
   });
 
   it("carries the day and the duration into the row's accessible name", () => {
     openAnchored();
     expect(
-      screen.getByRole("option", { name: "12:00 AM, Next Day, +9 hours" }),
+      screen.getByRole("option", { name: "12:00 AM, Next day, +9 hours" }),
     ).toBeTruthy();
     expect(
       screen.getByRole("option", { name: "11:00 PM, +8 hours" }),
@@ -259,12 +259,12 @@ describe("type-ahead", () => {
   it("drops the day rule when no row past midnight survives", () => {
     openAndType("11:00 pm", { differenceFrom: at("15:00") });
     expect(rowNames()).toEqual(["11:00 PM+8 hours"]);
-    expect(screen.queryByText("Next Day")).toBeNull();
+    expect(screen.queryByText("Next day")).toBeNull();
   });
 
   it("keeps the day rule when a row past midnight survives", () => {
     openAndType("12:00", { differenceFrom: at("15:00") });
-    expect(screen.getByText("Next Day")).toBeTruthy();
+    expect(screen.getByText("Next day")).toBeTruthy();
   });
 });
 
