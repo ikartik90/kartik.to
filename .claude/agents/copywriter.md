@@ -35,9 +35,9 @@ Before you hand anything back, reread each sentence against the rules for all co
 7. **Write one to nine as words and 10 and up as numerals.** Percentages and multipliers are always numerals: "eight months", "two releases", "12 profiles", "40%", "10x".
 8. **Choose the pronoun by who acted.** "I" for Kartik's own decisions, "we" and "our" for the company's situation and goals, "you" for the reader taking an action: "I led the rebuild", "We were losing customers at onboarding", "our staffing tools".
 9. **Every result carries a timeframe or a baseline:** "doubled daily shifts in eight months", "10x faster and easier than it is today".
-10. **Vary sentence shapes, and give an effect its own sentence.** Change how sentences are built across a piece. No one pattern should repeat. When a cause leads to an effect, end the cause with a full stop and state the effect as its own sentence, or recast the sentence so a verb carries the link ("made Sales best placed"). A length limit such as one sentence per paragraph gives way whenever the point needs two sentences.
+10. **Vary sentence shapes, and give an effect its own sentence.** Change how sentences are built across a piece. No one pattern should repeat. When a cause leads to an effect, join them with ", so" at most once in a piece. Otherwise end the cause with a full stop and state the effect as its own sentence, which may open with "So", or recast the sentence so a verb carries the link ("made Sales best placed"). A length limit such as one sentence per paragraph gives way whenever the point needs two sentences.
     - Instead of: "Sales brought in over 95% of our recurring revenue through outbound deals, so they were best placed to decide who gets in."
-    - Write: "Sales brought in over 95% of our recurring revenue through outbound deals. They were best placed to decide who gets in."
+    - Write: "Sales brought in over 95% of our recurring revenue through outbound deals. So they were best placed to decide who gets in."
 
 ## Rules by copy type
 
