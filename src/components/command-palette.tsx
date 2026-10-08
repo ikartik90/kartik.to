@@ -173,8 +173,8 @@ export function CommandPalette() {
     isPublished,
     editCategory,
     drafts,
+    sheets,
     projects,
-    labPages,
     currentDraft,
     backTarget,
     handleBack,
@@ -200,7 +200,7 @@ export function CommandPalette() {
     handleNewPost,
     handleOpenDraft,
     handleOpenProject,
-    handleOpenLabPage,
+    handleOpenSheet,
     handlePublish,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
@@ -473,32 +473,31 @@ export function CommandPalette() {
                   </>
                 )}
 
-                {offersDestinations &&
-                  projects.length + labPages.length > 0 && (
-                    <Command.Group className={groupStyle}>
-                      <div className={groupHeadingStyle}>Projects</div>
-                      {projects.map((project) => (
-                        <Command.Item
-                          key={project.slug}
-                          className={itemStyle}
-                          onSelect={() => handleOpenProject(project)}
-                        >
-                          <WorkIcon className={iconStyle} />
-                          {project.title ?? "Untitled"}
-                        </Command.Item>
-                      ))}
-                      {labPages.map((page) => (
-                        <Command.Item
-                          key={page.path}
-                          className={itemStyle}
-                          onSelect={() => handleOpenLabPage(page)}
-                        >
-                          <WorkIcon className={iconStyle} />
-                          {page.title}
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
-                  )}
+                {offersDestinations && sheets.length + projects.length > 0 && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Projects</div>
+                    {sheets.map((card) => (
+                      <Command.Item
+                        key={card.id}
+                        className={itemStyle}
+                        onSelect={() => handleOpenSheet(card)}
+                      >
+                        <WorkIcon className={iconStyle} />
+                        {card.title}
+                      </Command.Item>
+                    ))}
+                    {projects.map((project) => (
+                      <Command.Item
+                        key={project.slug}
+                        className={itemStyle}
+                        onSelect={() => handleOpenProject(project)}
+                      >
+                        <WorkIcon className={iconStyle} />
+                        {project.title ?? "Untitled"}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
 
                 {isAdmin && offersDestinations && !isTestimonials && (
                   <Command.Group className={groupStyle}>

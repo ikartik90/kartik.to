@@ -5,6 +5,7 @@ import { css, cx } from "../../../styled-system/css";
 import { pageOpening, sectionHeadline } from "../../../styled-system/recipes";
 import { Carousel } from "@/components/carousel";
 import { HERO_OPENING_LINES, HERO_OPENING_STEPS, openingStepDelay } from "@/data/page-opening";
+import { subscribeProjectSheet } from "@/utils/project-sheet-channel";
 import { OPEN_CARDS, SPOTWORK } from "./data";
 import { joinOpening, riseIn } from "./opening";
 import { ProjectSheet, type SheetHandle } from "./project-sheet";
@@ -68,6 +69,8 @@ export function ProjectStacks({ id, sheet }: { id?: string; sheet?: string }) {
   const section = SPOTWORK;
   const sheetRef = useRef<SheetHandle>(null);
   const { openId, open, switchTo, closed } = useSheetAddress(sheet, sheetRef);
+  // The command palette's projects open here while the page is on screen, rather than loading it again.
+  useEffect(() => subscribeProjectSheet((to) => (openId ? sheetRef.current?.go(to) : open(to))));
   const scrollerRef = useRef<HTMLDivElement>(null);
   const entering = useCardsEnter(scrollerRef);
 

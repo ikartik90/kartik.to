@@ -706,33 +706,50 @@ describe("CommandPalette", () => {
       ).toBeTruthy();
     });
 
-    it("lists the review-criteria prototype, even with nothing published", async () => {
+    it("lists the homepage's project sheets first, even with nothing published", async () => {
       const { getPublishedProjects } = await import("@/app/actions/post");
       (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([]);
       render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
       await act(async () => {});
-      expect(list().getByText("Projects")).toBeDefined();
-      expect(list().getByText("AI application review criteria")).toBeDefined();
+      const group = list().getByText("Projects").parentElement!;
+      expect(
+        within(group)
+          .getAllByRole("option")
+          .map((row) => row.textContent),
+      ).toEqual(["Shift scheduling", "Company onboarding"]);
     });
 
-    it("goes to the prototype and closes the palette", async () => {
+    it("no longer lists the review-criteria prototype, or the post a sheet stands in for", async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          slug: "redesigning-shift-scheduling",
+          title: "Redesigning shift scheduling",
+        },
+      ]);
+      render(<CommandPalette />);
+      await act(async () => {});
+      expect(list().queryByText("Redesigning shift scheduling")).toBeNull();
+      expect(list().queryByText("AI application review criteria")).toBeNull();
+    });
+
+    it("goes to a sheet's address and closes the palette", async () => {
       render(<CommandPalette />);
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(list().getByText("AI application review criteria"));
+      fireEvent.click(list().getByText("Company onboarding"));
 
-      expect(mockPush).toHaveBeenCalledWith(
-        "/lab/ai-application-review-criteria",
-      );
+      expect(mockPush).toHaveBeenCalledWith("/projects/onboarding");
       expect(dialog.close).toHaveBeenCalledOnce();
     });
 
-    it("leaves out the prototype while standing on it", async () => {
-      mockPathname.mockReturnValue("/lab/ai-application-review-criteria");
+    it("leaves out the sheet on screen", async () => {
+      mockPathname.mockReturnValue("/projects/onboarding");
       render(<CommandPalette />);
-      expect(await list().findByText("Shift Scheduling")).toBeDefined();
-      expect(list().queryByText("AI application review criteria")).toBeNull();
+      expect(await list().findByText("Shift scheduling")).toBeDefined();
+      expect(list().queryByText("Company onboarding")).toBeNull();
     });
 
     it("is withheld while editing, as every destination is", async () => {
@@ -744,7 +761,7 @@ describe("CommandPalette", () => {
       await act(async () => {});
       expect(list().queryByText("Projects")).toBeNull();
       expect(list().queryByText("Shift Scheduling")).toBeNull();
-      expect(list().queryByText("AI application review criteria")).toBeNull();
+      expect(list().queryByText("Company onboarding")).toBeNull();
     });
   });
 

@@ -38,7 +38,12 @@ import {
   useShaderPresetDraftStore,
 } from "@/store/shader-preset-draft";
 import { useIsAdmin } from "@/hooks/use-is-admin";
-import { LAB_PAGES, type LabPage } from "@/data/lab-pages";
+import { openProjectSheet } from "@/utils/project-sheet-channel";
+import {
+  OPEN_CARDS,
+  projectPath,
+  type ProjectCard,
+} from "@/app/_project-stacks/data";
 
 /** The open editor; one Save, Discard and unsaved-work check serve all three. */
 export type EditorKind = "shaderPreset" | "grid" | "document" | null;
@@ -54,10 +59,10 @@ export interface CommandPaletteHandlers {
   isPublished: boolean;
   editCategory: Post["category"];
   drafts: Post[];
-  /** Published projects, minus the one being read. */
+  /** The homepage's project sheets, minus the one on screen. */
+  sheets: ProjectCard[];
+  /** Published projects, minus the one being read and those a sheet stands in for. */
   projects: PostLink[];
-  /** Lab prototypes, minus the one being read. */
-  labPages: LabPage[];
   currentDraft: Post | null;
   backTarget: BackTarget | null;
   /** Leave for `backTarget` — asking first if that would lose unsaved work. */
@@ -90,7 +95,8 @@ export interface CommandPaletteHandlers {
   handleNewPost: (category: PostCategory) => void;
   handleOpenDraft: (draft: Post) => void;
   handleOpenProject: (project: PostLink) => void;
-  handleOpenLabPage: (page: LabPage) => void;
+  /** Opens over the homepage when it's on screen; otherwise goes to the sheet's address. */
+  handleOpenSheet: (card: ProjectCard) => void;
   handlePublish: () => Promise<void>;
   handleDiscardDraft: () => Promise<void>;
 }
@@ -187,15 +193,17 @@ export function useCommandPalette(
 
   const listableProjects = useMemo(
     () =>
-      projects.filter(
-        (project) => getPostReadUrl("WORK", project.slug) !== pathname,
-      ),
+      projects.filter((project) => {
+        const path = getPostReadUrl("WORK", project.slug);
+        return (
+          path !== pathname &&
+          !OPEN_CARDS.some((card) => card.replaces === path)
+        );
+      }),
     [projects, pathname],
   );
 
-  const labPages = Object.values(LAB_PAGES).filter(
-    (page) => page.path !== pathname,
-  );
+  const sheets = OPEN_CARDS.filter((card) => projectPath(card.id) !== pathname);
 
   // The unpublished post being read here, if any.
   const currentDraft = useMemo(() => {
@@ -437,9 +445,10 @@ export function useCommandPalette(
     router.push(getPostReadUrl("WORK", project.slug));
   };
 
-  const handleOpenLabPage = (page: LabPage) => {
+  // Closed first: closing the palette hands focus back, which would take it off the sheet.
+  const handleOpenSheet = (card: ProjectCard) => {
     close();
-    router.push(page.path);
+    if (!openProjectSheet(card.id)) router.push(projectPath(card.id));
   };
 
   /**
@@ -698,8 +707,8 @@ export function useCommandPalette(
     isPublished,
     editCategory,
     drafts,
+    sheets,
     projects: listableProjects,
-    labPages,
     currentDraft,
     backTarget,
     handleBack,
@@ -725,7 +734,7 @@ export function useCommandPalette(
     handleNewPost,
     handleOpenDraft,
     handleOpenProject,
-    handleOpenLabPage,
+    handleOpenSheet,
     handlePublish,
     handleDiscardDraft,
   };

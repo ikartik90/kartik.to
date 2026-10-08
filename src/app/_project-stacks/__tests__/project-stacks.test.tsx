@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,7 @@ vi.mock("../card-figures", () => {
   };
 });
 
+import { openProjectSheet } from "@/utils/project-sheet-channel";
 import { SPOTWORK } from "../data";
 import { ProjectStacks } from "../project-stacks";
 
@@ -180,6 +181,18 @@ describe("ProjectStacks", () => {
     fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
     expect(sheet()).toBeNull();
     expect(window.location.pathname).toBe("/");
+  });
+
+  it("opens the sheet the command palette asks for, at its address, and goes to it from another's", () => {
+    render(<ProjectStacks />);
+
+    act(() => void expect(openProjectSheet("onboarding")).toBe(true));
+    expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding");
+    expect(window.location.pathname).toBe("/projects/onboarding");
+
+    act(() => void openProjectSheet("shift-scheduling"));
+    expect(within(sheet()!).getByText("Shift scheduling sheet")).toBeDefined();
+    expect(window.location.pathname).toBe("/projects/shift-scheduling");
   });
 
   it("closes from its Close button", () => {

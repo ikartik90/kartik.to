@@ -310,6 +310,8 @@ function fitFace(hero: HTMLElement, source: HTMLElement | null) {
 export interface SheetHandle {
   /** As the Close button does. */
   close: () => void;
+  /** To another card's sheet, as the links at its foot go. */
+  go: (id: string) => void;
 }
 
 export function ProjectSheet({
@@ -508,7 +510,15 @@ export function ProjectSheet({
     slidOut.current.finished.then(go, () => (switching.current = null));
   };
 
-  useImperativeHandle(ref, () => ({ close: () => requestClose() }));
+  useImperativeHandle(ref, () => ({
+    close: () => requestClose(),
+    go: (id) => {
+      const from = cards.findIndex((c) => c.id === openId);
+      const to = cards.findIndex((c) => c.id === id);
+      // Not to the one showing: its id wouldn't change, so it would never slide back in.
+      if (to !== -1 && to !== from) switchTo(id, to > from ? 1 : -1);
+    },
+  }));
 
   return (
     <Dialog
