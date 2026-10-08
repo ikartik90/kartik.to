@@ -86,10 +86,11 @@ test.describe("public routes", () => {
     expect(llms.status()).toBe(200);
     expect(await llms.text()).toMatch(/^# Kartik Iyer\n/);
 
-    // The sitemap names the production host; the post's path is what the preview serves.
-    const post = urls.match(/<loc>[^<]*?(\/(?:work|writing)\/[^<]+)<\/loc>/)?.[1];
-    expect(post, "a published post in the sitemap").toBeDefined();
-    const markdown = await request.get(`${post}.md`);
+    // The sitemap names the production host; the page's path is what the preview serves. A homepage project comes
+    // first, and is there whatever is published.
+    const page = urls.match(/<loc>[^<]*?(\/(?:projects|work|writing|prototype)\/[^<]+)<\/loc>/)?.[1];
+    expect(page, "a page with a Markdown copy in the sitemap").toBeDefined();
+    const markdown = await request.get(`${page}.md`);
     expect(markdown.status()).toBe(200);
     expect(markdown.headers()["content-type"]).toContain("text/markdown");
     expect((await markdown.text()).trim()).not.toBe("");
