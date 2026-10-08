@@ -65,10 +65,10 @@ function useCardsEnter(scrollerRef: RefObject<HTMLDivElement | null>) {
 }
 
 /** `sheet`: the card whose sheet the page opens with, served at its address. */
-export function ProjectStacks({ id, sheet }: { id?: string; sheet?: string }) {
+export function ProjectStacks({ id, sheet, base }: { id?: string; sheet?: string; base?: string }) {
   const section = SPOTWORK;
   const sheetRef = useRef<SheetHandle>(null);
-  const { openId, open, switchTo, closed } = useSheetAddress(sheet, sheetRef);
+  const { openId, open, switchTo, closed } = useSheetAddress(sheet, sheetRef, base);
   // The command palette's projects open here while the page is on screen, rather than loading it again.
   useEffect(() => subscribeProjectSheet((to) => (openId ? sheetRef.current?.go(to) : open(to))));
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -94,12 +94,20 @@ export function ProjectStacks({ id, sheet }: { id?: string; sheet?: string }) {
           <SheetCard
             key={card.id}
             card={card}
+            base={base}
             onOpen={OPEN_CARDS.includes(card) ? (opened) => open(opened.id) : undefined}
           />
         ))}
       </Carousel>
 
-      <ProjectSheet ref={sheetRef} cards={OPEN_CARDS} openId={openId} onClosed={closed} onSwitch={switchTo} />
+      <ProjectSheet
+        ref={sheetRef}
+        cards={OPEN_CARDS}
+        openId={openId}
+        base={base}
+        onClosed={closed}
+        onSwitch={switchTo}
+      />
     </section>
   );
 }

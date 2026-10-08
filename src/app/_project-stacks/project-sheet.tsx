@@ -188,7 +188,17 @@ const navNameStyle = css({ textStyle: "bodyLarge", color: "text.title", textWrap
 type Direction = 1 | -1;
 
 /** Links to the projects either side of `card`: only the next from the first, only the previous from the last. */
-function SheetNav({ cards, card, onGo }: { cards: ProjectCard[]; card: ProjectCard; onGo: (id: string, by: Direction) => void }) {
+function SheetNav({
+  cards,
+  card,
+  base,
+  onGo,
+}: {
+  cards: ProjectCard[];
+  card: ProjectCard;
+  base?: string;
+  onGo: (id: string, by: Direction) => void;
+}) {
   const at = cards.indexOf(card);
   if (cards.length < 2 || at === -1) return null;
   const sides = [
@@ -200,7 +210,7 @@ function SheetNav({ cards, card, onGo }: { cards: ProjectCard[]; card: ProjectCa
       {sides.map(({ by, label, to }) => (
         <a
           key={label}
-          href={projectPath(to.id)}
+          href={projectPath(to.id, base)}
           className={navLinkStyle}
           data-sheet-nav={by === 1 ? "next" : "previous"}
           onClick={(event) => {
@@ -318,12 +328,15 @@ export function ProjectSheet({
   ref,
   cards,
   openId,
+  base,
   onClosed,
   onSwitch,
 }: {
   ref?: Ref<SheetHandle>;
   cards: ProjectCard[];
   openId: string | null;
+  /** As for `projectPath`. */
+  base?: string;
   onClosed: () => void;
   /** Asks for another card's sheet in place of this one, the sheet staying open. */
   onSwitch: (id: string) => void;
@@ -553,7 +566,7 @@ export function ProjectSheet({
 
           <div ref={contentRef} className={contentStyle}>
             {card && SHEETS[card.id]}
-            {card && <SheetNav cards={cards} card={card} onGo={switchTo} />}
+            {card && <SheetNav cards={cards} card={card} base={base} onGo={switchTo} />}
           </div>
         </div>
 

@@ -90,6 +90,17 @@ describe("Header", () => {
     expect(tip.hasAttribute("data-visible")).toBe(false);
   });
 
+  it("shows on the review copy of the home page, and not over its project pages", () => {
+    mockPathname.mockReturnValue("/dive");
+    render(<Header />);
+    expect(screen.getByRole("banner")).toBeDefined();
+    cleanup();
+
+    mockPathname.mockReturnValue("/dive/projects/onboarding");
+    const { container } = render(<Header />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it("renders nothing on non-home pages", () => {
     mockPathname.mockReturnValue("/writing/my-article");
     const { container } = render(<Header />);

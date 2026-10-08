@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { LISTED_CATEGORIES, POST_CATEGORIES } from "./src/data/post-categories";
+import { REVIEW_BASE } from "./src/utils/review-path";
 
 const svgrOptions = {
   // SVGO turns colour names into hex before this runs, so match the hex.
@@ -30,6 +31,16 @@ const nextConfig: NextConfig = {
         has: [{ type: "host", value: "www\\.(?<domain>.+)" }],
         destination: "https://:domain/:path*",
         permanent: true,
+      },
+    ];
+  },
+
+  // A header as well as the pages' meta tag, which can stream in after the head.
+  async headers() {
+    return [
+      {
+        source: `${REVIEW_BASE}/:path*`,
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
     ];
   },

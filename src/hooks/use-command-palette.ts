@@ -39,6 +39,7 @@ import {
 } from "@/store/shader-preset-draft";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { openProjectSheet } from "@/utils/project-sheet-channel";
+import { reviewBase } from "@/utils/review-path";
 import {
   OPEN_CARDS,
   projectPath,
@@ -203,7 +204,7 @@ export function useCommandPalette(
     [projects, pathname],
   );
 
-  const sheets = OPEN_CARDS.filter((card) => projectPath(card.id) !== pathname);
+  const sheets = OPEN_CARDS.filter((card) => projectPath(card.id, reviewBase(pathname)) !== pathname);
 
   // The unpublished post being read here, if any.
   const currentDraft = useMemo(() => {

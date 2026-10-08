@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { css } from "../../styled-system/css";
+import { REVIEW_BASE } from "@/utils/review-path";
 import { MenuButton } from "./menu-button";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -11,7 +12,7 @@ const headerStyle = css({ zIndex: 1 });
 export function Header() {
   const pathname = usePathname();
   // `/edit/home` is the homepage being edited, and keeps the header's furniture.
-  const isHome = pathname === "/" || pathname === "/edit/home";
+  const isHome = pathname === "/" || pathname === REVIEW_BASE || pathname === "/edit/home";
 
   if (!isHome) return null;
 

@@ -39,6 +39,15 @@ describe("getBackTarget", () => {
     expect(getBackTarget("/edit/new")).toEqual({ href: "/", label: "index" });
   });
 
+  it("keeps the review copy's pages inside it", () => {
+    expect(getBackTarget("/dive")).toBeNull();
+    expect(getBackTarget("/dive/")).toBeNull();
+    expect(getBackTarget("/dive/projects/onboarding")).toEqual({
+      href: "/dive",
+      label: "index",
+    });
+  });
+
   it("reads a trailing slash as the same page", () => {
     expect(getBackTarget("/writing/my-post/")).toEqual({
       href: "/",

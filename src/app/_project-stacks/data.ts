@@ -59,7 +59,8 @@ export const NORTH_STAR = "North Star";
 /** The cards whose sheets are ready, each opening at `/projects/<id>`. */
 export const OPEN_CARDS = SPOTWORK.cards.filter((card) => !card.soon);
 
-export const projectPath = (id: string) => `/projects/${id}`;
+/** `base`: the path the homepage is served under, as `/dive` serves the review copy. */
+export const projectPath = (id: string, base = "") => `${base}/projects/${id}`;
 
 /** Its card as a link preview, baked by `scripts/bake-project-previews.ts` into `public/`. */
 export const projectPreviewPath = (id: string) => `/og/projects/${id}.png`;

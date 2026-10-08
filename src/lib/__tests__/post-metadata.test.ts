@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Post } from "@/domain/post";
 import { SITE_TITLE } from "@/data/site";
-import { homeMetadata, postMetadata, projectMetadata, siteCard } from "../post-metadata";
+import { homeMetadata, postMetadata, projectMetadata, reviewMetadata, siteCard } from "../post-metadata";
 
 const NOW = new Date("2026-09-10T00:00:00.000Z");
 
@@ -169,5 +169,33 @@ describe("homeMetadata", () => {
     expect(metadata.description).toBe("Written for search.");
     expect(metadata).toMatchObject(siteCard("Written for search."));
     expect(metadata.alternates).toEqual({ canonical: "/" });
+  });
+});
+
+describe("reviewMetadata", () => {
+  const copied = projectMetadata(
+    "Shift scheduling",
+    "Made posted schedules extendable",
+    "/projects/shift-scheduling",
+    "/og/projects/shift-scheduling.png",
+  );
+  const metadata = reviewMetadata(copied);
+
+  it("keeps the review copy out of search", () => {
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  // A noindex beside a canonical can be carried over to the canonical page.
+  it("names no canonical or Markdown copy, which are the public page's", () => {
+    expect(metadata.alternates).toBeNull();
+  });
+
+  it("keeps the public page's title, description and card", () => {
+    expect(metadata).toMatchObject({
+      title: copied.title,
+      description: copied.description,
+      openGraph: copied.openGraph,
+      twitter: copied.twitter,
+    });
   });
 });
