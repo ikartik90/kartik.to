@@ -21,7 +21,7 @@ test.describe("public routes", () => {
       "Kartik Iyer: Product Designer, Engineer, Builder",
     );
     await expect(
-      page.getByRole("heading", { level: 1, name: /Founding designer\s*who ships/ }),
+      page.getByRole("heading", { level: 1, name: /Designer\s*who ships/ }),
     ).toBeVisible();
     await expect(page.getByRole("region", { name: /^At Spotwork/ })).toBeVisible();
 
