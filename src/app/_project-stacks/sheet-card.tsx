@@ -4,8 +4,9 @@ import { Fragment, useEffect, useRef, type CSSProperties, type HTMLAttributes } 
 import { css, cx } from "../../../styled-system/css";
 import { carousel } from "../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
+import { isPlainClick } from "@/utils/plain-click";
 import { CheckInsFigure, DesignSystemFigure, OnboardingFigure, ShiftSchedulingFigure } from "./card-figures";
-import type { ProjectCard } from "./data";
+import { projectPath, type ProjectCard } from "./data";
 import { figureHost } from "./figure";
 
 // One card per project, which opens its sheet. `data-sheet-source` marks the card's surface. Its face's text
@@ -136,7 +137,7 @@ const FIGURES = {
   onboarding: { Figure: OnboardingFigure, host: figureHost({ play: true, hoverInk: "both", hoverHeading: true }) },
 };
 
-// The card is the button, so the icon is drawn, not a button: a ring at rest, the brand fill while the card is
+// The card is the link, so the icon is drawn, not a button: a ring at rest, the brand fill while the card is
 // hovered.
 const lit = { backgroundColor: "bg.button.accent.hover", color: "field.text.active", boxShadow: "none" };
 const soonLit = { backgroundColor: "text.highlight", color: "text.brandedEmphasis", boxShadow: "none" };
@@ -297,7 +298,7 @@ export function CardFace({ card, place }: { card: ProjectCard; place: "card" | "
   );
 }
 
-/** Without `onOpen` the card doesn't open: it's no longer a button. */
+/** A link to its sheet's address, which `onOpen` opens in place. Without `onOpen` the card doesn't open. */
 export function SheetCard({ card, onOpen }: { card: ProjectCard; onOpen?: (card: ProjectCard) => void }) {
   useEffect(() => {
     for (const name of ["--ride-x", "--ride-y"]) {
@@ -329,17 +330,21 @@ export function SheetCard({ card, onOpen }: { card: ProjectCard; onOpen?: (card:
   return (
     <div className={cx(carouselStyles.slide, slideStyle)} data-carousel-slide="">
       {onOpen ? (
-        <button
-          type="button"
+        <a
+          href={projectPath(card.id)}
           className={cardStyle}
           data-sheet-card={card.id}
           {...host}
           aria-label={`${card.title}: ${card.sentence}`}
           aria-haspopup="dialog"
-          onClick={() => onOpen(card)}
+          onClick={(event) => {
+            if (!isPlainClick(event)) return;
+            event.preventDefault();
+            onOpen(card);
+          }}
         >
           {surface}
-        </button>
+        </a>
       ) : (
         <div className={cardStyle} data-sheet-card={card.id} data-closed="" {...host}>
           {surface}

@@ -10,6 +10,8 @@ export interface ProjectCard {
   figure: CardFigure;
   /** Its sheet isn't ready: the card says "Coming this week" and doesn't open. */
   soon?: boolean;
+  /** A post's address the sheet stands in for: canonical at the project's, and replaced in llms.txt and the sitemap. */
+  replaces?: string;
 }
 
 export interface ProjectSection {
@@ -26,6 +28,7 @@ export const SPOTWORK: ProjectSection = {
       title: "Shift scheduling",
       sentence: "Made posted schedules extendable and cut scheduling clicks by 81%",
       figure: "shift-scheduling",
+      replaces: "/work/redesigning-shift-scheduling",
     },
     {
       id: "onboarding",
@@ -49,3 +52,30 @@ export const SPOTWORK: ProjectSection = {
     },
   ],
 };
+
+/** The caption over each sheet's North Star. */
+export const NORTH_STAR = "North Star";
+
+/** The cards whose sheets are ready, each opening at `/projects/<id>`. */
+export const OPEN_CARDS = SPOTWORK.cards.filter((card) => !card.soon);
+
+export const projectPath = (id: string) => `/projects/${id}`;
+
+/** Its card as a link preview, baked by `scripts/bake-project-previews.ts` into `public/`. */
+export const projectPreviewPath = (id: string) => `/og/projects/${id}.png`;
+
+export const openCard = (id: string) => OPEN_CARDS.find((card) => card.id === id);
+
+/** A post's canonical address: the project's, for a post its sheet replaces. */
+export const canonicalPath = (path: string) => {
+  const card = OPEN_CARDS.find((c) => c.replaces === path);
+  return card ? projectPath(card.id) : path;
+};
+
+/** The open cards as llms.txt and the sitemap list them. */
+export const LISTED_PROJECTS = OPEN_CARDS.map(({ id, title, sentence, replaces }) => ({
+  title,
+  summary: sentence,
+  path: projectPath(id),
+  replaces,
+}));

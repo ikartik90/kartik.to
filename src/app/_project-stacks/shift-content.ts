@@ -3,7 +3,7 @@ import CopyIcon from "@/assets/icons/copy.svg";
 import MetricIcon from "@/assets/icons/metric.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import type { MediaNode } from "@/domain/nodes";
-import { clipGround, walkthroughClip } from "./clips-carousel";
+import { clipGround, walkthroughClip } from "./clips";
 import type { Feature } from "./feature-grid";
 import type { Metric } from "./metric-card";
 
@@ -164,3 +164,10 @@ export const SHIFT = {
     ],
   },
 };
+
+/** Which of a row's results take the fewest clicks: the lowest number; words ("Not possible") never. */
+export function fewest(cells: string[]) {
+  const counts = cells.map(Number);
+  const least = Math.min(...counts.filter(Number.isFinite));
+  return counts.map((count) => count === least);
+}

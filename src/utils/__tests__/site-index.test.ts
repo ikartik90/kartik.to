@@ -86,6 +86,24 @@ describe("sitemapEntries", () => {
     expect(entries[2]).not.toHaveProperty("images");
   });
 
+  it("lists each homepage project's own address after the homepage, in place of a post it replaces", () => {
+    const withProjects = sitemapEntries([home, project, essay], SITE, [
+      {
+        title: "Shift scheduling",
+        summary: "Made posted schedules extendable",
+        path: "/projects/shift-scheduling",
+        replaces: "/work/scheduling-extensions",
+      },
+      { title: "Company onboarding", summary: "Redesigned company onboarding", path: "/projects/onboarding" },
+    ]);
+    expect(withProjects.slice(0, 4).map((entry) => entry.url)).toEqual([
+      SITE,
+      `${SITE}/projects/shift-scheduling`,
+      `${SITE}/projects/onboarding`,
+      `${SITE}/writing/on-craft`,
+    ]);
+  });
+
   it("leaves out anything unpublished", () => {
     const draft = post({ slug: "draft", publishedAt: null });
     expect(
@@ -202,5 +220,36 @@ describe("llmsTxt", () => {
 
   it("ends with a newline", () => {
     expect(text.endsWith("\n")).toBe(true);
+  });
+
+  describe("with the homepage's projects", () => {
+    const projects = [
+      {
+        title: "Shift scheduling",
+        summary: "Made posted schedules extendable",
+        path: "/projects/shift-scheduling",
+        replaces: "/work/scheduling-extensions",
+      },
+      { title: "Company onboarding", summary: "Redesigned company onboarding", path: "/projects/onboarding" },
+    ];
+    const withProjects = llmsTxt([home, about, project, essay], SITE, projects);
+
+    it("links each project's Markdown copy with its sentence, after the pages", () => {
+      expect(withProjects).toContain(
+        [
+          "## Projects",
+          "",
+          "- [Shift scheduling](https://kartik.to/projects/shift-scheduling.md): Made posted schedules extendable",
+          "- [Company onboarding](https://kartik.to/projects/onboarding.md): Redesigned company onboarding",
+        ].join("\n"),
+      );
+      expect(withProjects.indexOf("## Pages")).toBeLessThan(withProjects.indexOf("## Projects"));
+      expect(withProjects.indexOf("## Projects")).toBeLessThan(withProjects.indexOf("## Writing"));
+    });
+
+    it("leaves out a post whose project's copy replaces it", () => {
+      expect(withProjects).not.toContain("scheduling-extensions");
+      expect(withProjects).not.toContain("## Work");
+    });
   });
 });

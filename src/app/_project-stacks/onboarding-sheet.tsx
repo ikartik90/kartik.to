@@ -3,6 +3,7 @@
 import { cx } from "../../../styled-system/css";
 import { ClipsCarousel } from "./clips-carousel";
 import { FeatureGrid } from "./feature-grid";
+import { NORTH_STAR } from "./data";
 import { HeadedCards } from "./headed-cards";
 import { OnboardingGap } from "./onboarding-gap";
 import { ONBOARDING } from "./onboarding-content";
@@ -36,7 +37,7 @@ export function OnboardingSheet() {
       </section>
 
       <section className={bandStyle} data-sheet-step="">
-        <Head caption="North Star" large>
+        <Head caption={NORTH_STAR} large>
           {northStar}
         </Head>
       </section>

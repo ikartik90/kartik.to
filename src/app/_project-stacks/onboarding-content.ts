@@ -2,7 +2,7 @@ import ClockIcon from "@/assets/icons/clock.svg";
 import EmailIcon from "@/assets/icons/email.svg";
 import PauseIcon from "@/assets/icons/pause.svg";
 import type { MediaNode } from "@/domain/nodes";
-import { clipGround, walkthroughClip } from "./clips-carousel";
+import { clipGround, walkthroughClip } from "./clips";
 import type { Feature } from "./feature-grid";
 import type { Metric } from "./metric-card";
 

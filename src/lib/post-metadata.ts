@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AUTHOR, SITE_LOCALE, SITE_NAME, SITE_TITLE } from "@/data/site";
+import { OG_SIZE } from "@/lib/og/card";
 import { SITE_URL } from "@/lib/site-url";
 import { postDescription } from "@/utils/post-summary";
 import type { Post } from "@/domain/post";
@@ -9,12 +10,13 @@ import type { Post } from "@/domain/post";
 /**
  * A bare title when `post` is null: generateMetadata runs before notFound(), and a throw
  * would be a 500. `searchTitle` replaces the title everywhere, skipping the layout template.
+ * `canonical`, another address search engines should index in its place.
  */
 export function postMetadata(
   post: Post | null,
   path: string,
   fallbackTitle: string,
-  { searchTitle }: { searchTitle?: string } = {},
+  { searchTitle, canonical = path }: { searchTitle?: string; canonical?: string } = {},
 ): Metadata {
   if (!post) return { title: fallbackTitle };
 
@@ -26,7 +28,7 @@ export function postMetadata(
     title: searchTitle ? { absolute: searchTitle } : title,
     description,
     alternates: {
-      canonical: path,
+      canonical,
       types: { "text/markdown": `${path}.md` },
     },
     openGraph: {
@@ -68,6 +70,37 @@ export function siteCard(
       title: SITE_TITLE,
       description,
       creator: AUTHOR.twitterHandle,
+    },
+  };
+}
+
+/** A homepage project's own address, where its sheet opens over the homepage; `image`, its card as a link preview. */
+export function projectMetadata(
+  title: string,
+  description: string,
+  path: string,
+  image: string,
+): Metadata {
+  const images = [{ url: image, ...OG_SIZE, alt: `${title}: ${description}` }];
+  return {
+    title,
+    description,
+    alternates: { canonical: path, types: { "text/markdown": `${path}.md` } },
+    openGraph: {
+      type: "website",
+      siteName: SITE_NAME,
+      locale: SITE_LOCALE,
+      url: path,
+      title,
+      description,
+      images,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      creator: AUTHOR.twitterHandle,
+      images,
     },
   };
 }

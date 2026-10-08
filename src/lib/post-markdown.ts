@@ -1,10 +1,11 @@
+import { canonicalPath } from "@/app/_project-stacks/data";
 import type { PostCategory } from "@/domain/post";
 import { findMovedPostPath, getPublishedPostBySlug } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
 import { documentToMarkdown } from "@/utils/document-markdown";
 import { getPostReadUrl } from "@/utils/post-urls";
 
-/** A published post as Markdown for `/work|writing/<slug>.md`; `Link` names the HTML page as canonical. */
+/** A published post as Markdown for `/work|writing/<slug>.md`; `Link` names its canonical page. */
 export async function postMarkdownResponse(
   slug: string,
   category: PostCategory,
@@ -28,7 +29,7 @@ export async function postMarkdownResponse(
   return new Response(body, {
     headers: {
       "Content-Type": "text/markdown; charset=utf-8",
-      Link: `<${SITE_URL}${getPostReadUrl(category, slug)}>; rel="canonical"`,
+      Link: `<${SITE_URL}${canonicalPath(getPostReadUrl(category, slug))}>; rel="canonical"`,
     },
   });
 }
