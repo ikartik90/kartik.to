@@ -9,13 +9,20 @@ vi.mock("@/lib/auth/client", () => ({
 
 type Props = { beforeSend?: (event: { url: string }) => unknown };
 const received: Record<string, Props> = {};
+let referrerAtInject: string | undefined;
 
-vi.mock("@vercel/analytics/next", () => ({
-  Analytics: (props: Props) => {
-    received.analytics = props;
-    return null;
-  },
-}));
+vi.mock("@vercel/analytics/next", async () => {
+  const { useEffect } = await import("react");
+  return {
+    Analytics: (props: Props) => {
+      received.analytics = props;
+      useEffect(() => {
+        referrerAtInject = document.referrer;
+      }, []);
+      return null;
+    },
+  };
+});
 
 vi.mock("@vercel/speed-insights/next", () => ({
   SpeedInsights: (props: Props) => {
@@ -29,6 +36,7 @@ import {
   ANALYTICS_OPT_OUT_KEY,
   isAnalyticsOptedOut,
 } from "@/utils/analytics-opt-out";
+import { UNKNOWN_REFERRER } from "@/utils/analytics-referrer";
 
 const signedInAsAuthor = () =>
   mockUseSession.mockReturnValue({ data: { user: { email: "a@b.c" } } });
@@ -37,6 +45,8 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   mockUseSession.mockReturnValue({ data: null });
+  Reflect.deleteProperty(document, "referrer");
+  referrerAtInject = undefined;
 });
 
 describe("Analytics", () => {
@@ -57,6 +67,12 @@ describe("Analytics", () => {
       expect(client.beforeSend?.(published)).toBe(published);
     }
   });
+  it("fills in a missing referrer before Vercel's client starts", () => {
+    render(<Analytics />);
+
+    expect(referrerAtInject).toBe(UNKNOWN_REFERRER);
+  });
+
   it("marks the browser once the author is seen signed in", async () => {
     signedInAsAuthor();
     render(<Analytics />);
