@@ -40,10 +40,15 @@ afterEach(() => {
 
 const live = () => observers.filter((each) => !each.disconnected);
 
+// Slides are reported cut by the screen's top or foot: the part shown is `shown` px of `height`.
 function report(
   slide: Element,
   ratio: number,
-  { height = 400, rootHeight = 900 } = {},
+  {
+    height = 400,
+    rootHeight = 900,
+    shown = height * ratio,
+  }: { height?: number; rootHeight?: number; shown?: number } = {},
 ) {
   const [observer] = live();
   act(() =>
@@ -53,7 +58,11 @@ function report(
           target: slide,
           intersectionRatio: ratio,
           isIntersecting: ratio > 0,
-          boundingClientRect: { height } as DOMRectReadOnly,
+          boundingClientRect: { height, width: 300 } as DOMRectReadOnly,
+          intersectionRect: {
+            height: shown,
+            width: ratio > 0 ? 300 : 0,
+          } as DOMRectReadOnly,
           rootBounds: { height: rootHeight } as DOMRectReadOnly,
         } as IntersectionObserverEntry,
       ],
@@ -115,6 +124,13 @@ describe("useWholeSlides", () => {
   it("counts a slide taller than the screen whole once it fills the screen", () => {
     render(<Strip slides={["a"]} />);
     report(slide("a"), 450 / 500, { height: 500, rootHeight: 450 });
+    expect(wholeIndices()).toEqual([0]);
+  });
+
+  it("counts a slide whole when the browser rounds the part shown to whole pixels", () => {
+    render(<Strip slides={["a"]} />);
+    // WebKit's report for a 358.39px slide in full view.
+    report(slide("a"), 358 / 358.390625, { height: 358.390625, shown: 358 });
     expect(wholeIndices()).toEqual([0]);
   });
 

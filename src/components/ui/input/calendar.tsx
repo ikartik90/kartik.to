@@ -89,7 +89,7 @@ type CalendarContextValue = {
   anchorFocus: (date: Temporal.PlainDate) => void;
   /** Moves the tabstop and DOM focus, paging if needed; `extend` also toggles the date. */
   moveFocus: (date: Temporal.PlainDate, extend?: boolean) => void;
-  dragStart: (x: number, y: number, listRect: DOMRect) => void;
+  dragStart: (x: number, y: number, listRect: DOMRect, pointer: CalendarPointer) => void;
   band: CalendarBand | null;
   /** Guards the trailing click after a real drag. */
   dragMoved: () => boolean;
@@ -136,6 +136,9 @@ const ARROW_DAYS: Record<string, number> = {
   ArrowDown: 7,
 };
 
+/** Which pointer a drag belongs to; a scripted one (a demo's tour) is told apart from the visitor's by `isTrusted`. */
+type CalendarPointer = { pointerId: number; isTrusted: boolean };
+
 /** A marquee drag: each frame is `base` XOR the covered `cells`, so retreating off a cell reverts it. */
 type CalendarGesture = {
   originX: number;
@@ -145,6 +148,7 @@ type CalendarGesture = {
   base: string[];
   moved: boolean;
   active: boolean;
+  pointer: CalendarPointer;
 };
 
 export type CalendarBand = {
@@ -156,7 +160,7 @@ export type CalendarBand = {
 
 const DRAG_THRESHOLD = 3;
 
-/** Must match the 200ms page-turn animation in calendar.recipe.ts. */
+/** Must match the 200ms page-turn animation in the `calendar` recipe (recipes/calendar.ts). */
 const PUSH_MS = 200;
 
 /** Strict overlap: touching edges don't count. */
@@ -359,7 +363,12 @@ function CalendarRoot({
   const [dragging, setDragging] = useState(false);
   const [band, setBand] = useState<CalendarBand | null>(null);
 
-  const dragStart = (x: number, y: number, listRect: DOMRect) => {
+  const dragStart = (
+    x: number,
+    y: number,
+    listRect: DOMRect,
+    pointer: CalendarPointer,
+  ) => {
     keyRun.current = false;
     const cells = [
       ...(rootRef.current?.querySelectorAll<HTMLButtonElement>(
@@ -380,6 +389,7 @@ function CalendarRoot({
       base: selectionKeys,
       moved: false,
       active: true,
+      pointer,
     };
     setDragging(true);
   };
@@ -423,12 +433,22 @@ function CalendarRoot({
     dragToRef.current = dragTo;
   });
 
-  // On `window`, not the cells: the band follows the pointer anywhere until release.
+  // On `window`, not the cells: the band follows the pointer anywhere until release. Only the pointer that opened it:
+  // another passing over (the visitor's mouse during a demo's scripted drag) neither moves nor ends it.
   useEffect(() => {
     if (!dragging) return;
-    const move = (event: PointerEvent) =>
-      dragToRef.current(event.clientX, event.clientY);
-    const end = () => {
+    const owns = (event: PointerEvent) => {
+      const pointer = gesture.current?.pointer;
+      return (
+        event.pointerId === pointer?.pointerId &&
+        event.isTrusted === pointer.isTrusted
+      );
+    };
+    const move = (event: PointerEvent) => {
+      if (owns(event)) dragToRef.current(event.clientX, event.clientY);
+    };
+    const end = (event: PointerEvent) => {
+      if (!owns(event)) return;
       if (gesture.current) gesture.current.active = false;
       setDragging(false);
       setBand(null);
@@ -705,6 +725,7 @@ function CalendarPeriodList({
           event.clientX,
           event.clientY,
           event.currentTarget.getBoundingClientRect(),
+          { pointerId: event.pointerId, isTrusted: event.isTrusted },
         );
       }}
       onMouseEnter={(event: ReactMouseEvent<HTMLDivElement>) => {

@@ -28,6 +28,26 @@ describe("Button", () => {
     ).toBe("-1");
   });
 
+  it("marks itself floating over a sticky row's scrolled content, so it can blur it", () => {
+    render(
+      <div style={{ position: "sticky", top: 0 }}>
+        <Button aria-label="Close" />
+      </div>,
+    );
+    expect(screen.getByRole("button", { name: "Close" }).hasAttribute("data-floating")).toBe(true);
+  });
+
+  it("isn't floating in the page's flow", () => {
+    render(<Button aria-label="Save" />);
+    expect(screen.getByRole("button", { name: "Save" }).hasAttribute("data-floating")).toBe(false);
+  });
+
+  it("still hands its element to the caller's ref", () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(<Button ref={ref} aria-label="Save" />);
+    expect(ref.current).toBe(screen.getByRole("button", { name: "Save" }));
+  });
+
   it("renders link variant", () => {
     render(<Button variant="link">browse to upload</Button>);
     expect(
@@ -169,6 +189,43 @@ describe("Button", () => {
 
       fireEvent.pointerLeave(btn, { pointerType: "mouse" });
       expect(tip.hasAttribute("data-visible")).toBe(false);
+    });
+
+    // React reuses one Button for another in the same place (Approve, then Revert): its tooltip
+    // comes and goes with its children, and must follow where the cursor really is.
+    it("stays down when it gains a tooltip after the cursor left without one", () => {
+      const { rerender } = render(iconButton());
+      const btn = screen.getByRole("button", { name: "Delete" });
+      fireEvent.pointerEnter(btn, {
+        pointerType: "mouse",
+        clientX: 10,
+        clientY: 10,
+      });
+
+      rerender(<Button aria-label="Delete">Approve</Button>);
+      fireEvent.pointerLeave(btn, { pointerType: "mouse" });
+      rerender(iconButton());
+
+      const tip = screen.getByText("Delete").parentElement as HTMLElement;
+      expect(tip.hasAttribute("data-visible")).toBe(false);
+    });
+
+    it("places a tooltip it gains under a cursor that stayed on it", () => {
+      const { rerender } = render(iconButton());
+      const btn = screen.getByRole("button", { name: "Delete" });
+      fireEvent.pointerEnter(btn, {
+        pointerType: "mouse",
+        clientX: 10,
+        clientY: 10,
+      });
+
+      rerender(<Button aria-label="Delete">Approve</Button>);
+      rerender(iconButton());
+
+      const tip = screen.getByText("Delete").parentElement as HTMLElement;
+      expect(tip.hasAttribute("data-visible")).toBe(true);
+      expect(tip.style.left).not.toBe("");
+      expect(tip.style.top).not.toBe("");
     });
 
     it("stays down for a finger, which has no cursor to label", () => {

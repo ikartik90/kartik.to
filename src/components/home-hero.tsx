@@ -1,10 +1,24 @@
 import type { CSSProperties } from "react";
-import { css } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
+import { pageOpening } from "../../styled-system/recipes";
 import MapPinIcon from "@/assets/icons/map-pin.svg";
 import { ButtonLink } from "./button-link";
 import { DitherGround } from "./shaders/dither-ground";
 import { HOME_HERO } from "@/data/home-hero";
+import { HERO_OPENING_LINES, openingLineDelay, openingStepDelay } from "@/data/page-opening";
 import { easedFadeOut } from "@/utils/eased-fade";
+
+// The page's opening starts here: the pills and each heading line, then the buttons, then the lede.
+const lineOpening = pageOpening({ part: "line" });
+const stepOpening = pageOpening({ part: "step" });
+const openingLine = (i: number) => ({
+  "data-opening-line": "",
+  style: { "--opening-delay": `${openingLineDelay(i)}ms` } as CSSProperties,
+});
+const openingStep = (i: number) => ({
+  "data-opening-step": "",
+  style: { "--opening-delay": `${openingStepDelay(HERO_OPENING_LINES, i)}ms` } as CSSProperties,
+});
 
 // Edge to edge across `main`'s gutters and up to the page top, so the dithering fills it; the words keep to 960.
 const heroStyle = css({
@@ -129,7 +143,7 @@ export function HomeHero() {
         style={groundFade}
       />
       <div className={wordsStyle}>
-        <div className={pillsStyle}>
+        <div className={cx(pillsStyle, lineOpening)} {...openingLine(0)}>
           <span className={pillStyle}>
             <span className={dotStyle} aria-hidden />
             {HOME_HERO.status.available}
@@ -140,13 +154,13 @@ export function HomeHero() {
           </span>
         </div>
         <h1 className={headingStyle}>
-          {HOME_HERO.heading.map((line) => (
-            <span key={line} className={lineStyle}>
+          {HOME_HERO.heading.map((line, i) => (
+            <span key={line} className={cx(lineStyle, lineOpening)} {...openingLine(i + 1)}>
               {line}
             </span>
           ))}
         </h1>
-        <div className={ledeStyle}>
+        <div className={cx(ledeStyle, stepOpening)} {...openingStep(1)}>
           <div aria-hidden className={ledeGaugeStyle}>
             x
           </div>
@@ -158,7 +172,7 @@ export function HomeHero() {
             ))}
           </div>
         </div>
-        <div className={ctasStyle}>
+        <div className={cx(ctasStyle, stepOpening)} {...openingStep(0)}>
           <ButtonLink href={HOME_HERO.work.href} color="accent">
             {HOME_HERO.work.text}
           </ButtonLink>

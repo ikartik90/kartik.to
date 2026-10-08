@@ -8,7 +8,7 @@ import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import { LinkCardConfigSchema, type LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import type { Post, PostCardConfig } from "@/domain/post";
-import { LISTED_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
+import { GRID_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
 import { getPostReadUrl } from "@/utils/post-urls";
 
 // The homepage feed: published posts and components as one list in grid order, so a pin's seat counts across all.
@@ -82,10 +82,9 @@ export async function getGridCards(): Promise<GridCard[]> {
     async () =>
       (
         await prisma.post.findMany({
-          // Listed categories only: the homepage is itself a PAGE post and would list itself.
           where: {
             publishedAt: { not: null },
-            category: { in: LISTED_CATEGORIES },
+            category: { in: GRID_CATEGORIES },
           },
           orderBy: { publishedAt: "desc" },
         })

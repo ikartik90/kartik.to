@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { DemoControls } from "../demo-controls";
+import { DemoControls, DemoControlsLabels } from "../demo-controls";
 
 afterEach(cleanup);
 
@@ -103,5 +103,48 @@ describe("DemoControls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stop Demo" }));
     expect(onStop).toHaveBeenCalledTimes(1);
     expect(onPlay).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DemoControls with labels", () => {
+  const labels = {
+    play: "Replay demo",
+    stop: "Stop demo",
+    hint: "or try it yourself",
+  };
+  const renderLabelled = (props: Partial<typeof controls> = {}) =>
+    render(
+      <DemoControlsLabels.Provider value={labels}>
+        <DemoControls {...controls} {...props} />
+      </DemoControlsLabels.Provider>,
+    );
+
+  it("says play in words, named by them, with the hint after it", () => {
+    const onPlay = vi.fn();
+    renderLabelled({ onPlay });
+    const play = screen.getByRole("button", { name: "Replay demo" });
+    expect(play.textContent).toBe("Replay demo");
+    const toolbar = screen.getByRole("toolbar", { name: "Demo controls" });
+    expect(toolbar.lastElementChild?.textContent).toBe("or try it yourself");
+    fireEvent.click(play);
+    expect(onPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("says stop in words while a run is in flight", () => {
+    const onStop = vi.fn();
+    renderLabelled({ running: true, onStop });
+    const stop = screen.getByRole("button", { name: "Stop Demo" });
+    expect(stop.textContent).toBe("Stop demo");
+    fireEvent.click(stop);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps reset an icon button ahead of the transport", () => {
+    renderLabelled();
+    const toolbar = screen.getByRole("toolbar", { name: "Demo controls" });
+    const [reset, play] = within(toolbar).getAllByRole("button");
+    expect(reset.getAttribute("aria-label")).toBe("Reset Demo");
+    expect(reset.textContent).toBe("");
+    expect(play.textContent).toBe("Replay demo");
   });
 });

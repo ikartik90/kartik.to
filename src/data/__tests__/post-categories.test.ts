@@ -2,7 +2,11 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PostCategorySchema } from "@/domain/post";
-import { LISTED_CATEGORIES, POST_CATEGORIES } from "../post-categories";
+import {
+  GRID_CATEGORIES,
+  LISTED_CATEGORIES,
+  POST_CATEGORIES,
+} from "../post-categories";
 
 describe("POST_CATEGORIES", () => {
   it("describes every category the schema allows", () => {
@@ -13,6 +17,10 @@ describe("POST_CATEGORIES", () => {
 
   it("lists the categories a post can be filed under, and not pages", () => {
     expect(LISTED_CATEGORIES).toEqual(["WORK", "ARTICLE", "PROTOTYPE"]);
+  });
+
+  it("keeps projects and prototypes out of the homepage grid", () => {
+    expect(GRID_CATEGORIES).toEqual(["ARTICLE"]);
   });
 
   it.each(LISTED_CATEGORIES)(

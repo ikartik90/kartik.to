@@ -1029,6 +1029,26 @@ describe("marquee drag", () => {
     fireEvent.pointerUp(window);
   });
 
+  it("follows only the pointer that started the drag", () => {
+    renderMulti();
+    layoutGrids();
+    const a = centre("December 7, 2026");
+    const near = centre("December 8, 2026");
+    const far = centre("December 9, 2026");
+    const elsewhere = centre("December 23, 2026");
+    fireEvent.pointerDown(cell("December 7, 2026"), {
+      pointerType: "mouse", button: 0, pointerId: 7, clientX: a.x, clientY: a.y,
+    });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: far.x, clientY: far.y });
+    // Another pointer passing over, unpressed, and its release: neither moves nor ends the band.
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: elsewhere.x, clientY: elsewhere.y });
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08", "2026-12-09"]);
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: near.x, clientY: near.y });
+    expect(selected()).toEqual(["2026-12-07", "2026-12-08"]);
+    fireEvent.pointerUp(window, { pointerId: 7 });
+  });
+
   it("toggles AGAINST the selection the drag started from", () => {
     renderMulti({
       defaultValues: [

@@ -28,13 +28,13 @@ export function useWholeSlides(
           const next = new Set(was);
           for (const entry of entries) {
             const index = order.indexOf(entry.target as HTMLElement);
+            const box = entry.boundingClientRect;
+            const shown = entry.intersectionRect;
+            // WebKit rounds the part shown to whole pixels, short of a box at a fraction of one.
             const fits =
+              (box.width - shown.width < 1 && box.height - shown.height < 1) ||
               entry.intersectionRatio + 1e-6 >=
-              inViewThreshold(
-                1,
-                entry.boundingClientRect.height,
-                entry.rootBounds?.height ?? 0,
-              );
+                inViewThreshold(1, box.height, entry.rootBounds?.height ?? 0);
             if (fits) next.add(index);
             else next.delete(index);
           }

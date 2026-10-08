@@ -3,6 +3,7 @@ tokens:
   breakpoint:
     md: 820px
     lg: 1200px
+    xl: 1280px
 
   spacing:
     none: 0px

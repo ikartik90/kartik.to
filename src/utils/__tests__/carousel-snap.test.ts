@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { carouselRestOffsets, carouselStep } from "../carousel-snap";
+import {
+  carouselAlignedStart,
+  carouselRestOffsets,
+  carouselStep,
+  inlineSnapAlign,
+} from "../carousel-snap";
 
 describe("carouselRestOffsets", () => {
   it("rests each slide `inset` from the start, as far as the scroll reaches", () => {
@@ -24,6 +29,39 @@ describe("carouselRestOffsets", () => {
 
   it("has nowhere to rest without slides", () => {
     expect(carouselRestOffsets([], 400, 0)).toEqual([]);
+  });
+});
+
+describe("carouselAlignedStart", () => {
+  it("leaves a start-aligned slide where it starts", () => {
+    expect(carouselAlignedStart(900, 600, "start", 896)).toBe(900);
+  });
+
+  it("moves a centred slide back by half the room beside it, so it rests in the middle", () => {
+    expect(carouselAlignedStart(900, 600, "center", 896)).toBe(752);
+    expect(
+      carouselRestOffsets([carouselAlignedStart(900, 600, "center", 896)], 32, 2000),
+    ).toEqual([720]);
+  });
+
+  it("moves an end-aligned slide back by all the room beside it, so it rests on the end", () => {
+    expect(carouselAlignedStart(900, 600, "end", 896)).toBe(604);
+  });
+});
+
+describe("inlineSnapAlign", () => {
+  it("reads a single keyword as the inline alignment", () => {
+    expect(inlineSnapAlign("center")).toBe("center");
+    expect(inlineSnapAlign("end")).toBe("end");
+  });
+
+  it("reads the second of two keywords, the inline axis's", () => {
+    expect(inlineSnapAlign("start center")).toBe("center");
+  });
+
+  it("rests a slide with no alignment on its start", () => {
+    expect(inlineSnapAlign("none")).toBe("start");
+    expect(inlineSnapAlign("")).toBe("start");
   });
 });
 

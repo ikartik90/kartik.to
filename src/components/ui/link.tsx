@@ -54,7 +54,7 @@ function LinkRoot(
   }: LinkProps,
   ref: Ref<HTMLAnchorElement>,
 ) {
-  const { content, hasText, tooltipNode, hasTooltip, show, hide } =
+  const { content, hasText, tooltipNode, show, hide } =
     useActionTooltip(children);
   const resolvedVariant = variant ?? (hasText ? "text" : "icon");
   const resolvedEmphasis =
@@ -70,11 +70,11 @@ function LinkRoot(
 
   const handleEnter = (event: PointerEvent<HTMLAnchorElement>) => {
     onPointerEnter?.(event);
-    if (hasTooltip) show(event);
+    show(event);
   };
   const handleLeave = (event: PointerEvent<HTMLAnchorElement>) => {
     onPointerLeave?.(event);
-    if (hasTooltip) hide();
+    hide();
   };
 
   return (

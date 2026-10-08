@@ -6,11 +6,11 @@ import {
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 
-const POST_CARDS = (page: Page) =>
-  page.locator(`a[href^="/work/"], a[href^="/writing/"]`);
+const GRID_CARDS = (page: Page) =>
+  page.getByRole("region", { name: "Work", exact: true }).getByRole("link");
 
 test.describe("public routes", () => {
-  test("the home page renders the listing grid", async ({
+  test("the home page renders the project stack and the listing grid", async ({
     page,
     pageFailures,
   }) => {
@@ -22,28 +22,29 @@ test.describe("public routes", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: /Founding designer\s*who ships/ }),
     ).toBeVisible();
-    await expect(page.getByRole("region", { name: "Work" })).toBeVisible();
+    await expect(page.getByRole("region", { name: /^At Spotwork/ })).toBeVisible();
 
-    await expect(POST_CARDS(page).first()).toBeVisible();
+    await expect(GRID_CARDS(page).first()).toBeVisible();
 
     expect(pageFailures).toEqual([]);
   });
 
   test("a card on the listing leads to a page that renders", async ({
     page,
+    request,
     pageFailures,
   }) => {
     await page.goto("/");
 
-    const card = POST_CARDS(page).first();
-    const href = await card.getAttribute("href");
+    const card = GRID_CARDS(page).first();
+    const href = (await card.getAttribute("href"))!;
+    expect((await request.get(href)).status(), href).toBe(200);
     await card.click();
 
-    await expect(page).toHaveURL(new RegExp(`${href}$`));
-    const heading = page.getByRole("heading", { level: 1 });
-    await expect(heading).toBeVisible();
-    // The 404 page renders an `h1` too.
-    await expect(heading).not.toHaveText("404");
+    // The shader playground moves on to its newest preset's address.
+    await expect(page).toHaveURL(new RegExp(href));
+    await expect(page.getByRole("main")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "404" })).toHaveCount(0);
 
     expect(pageFailures).toEqual([]);
   });
@@ -63,28 +64,31 @@ test.describe("public routes", () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("Waveform Studio — Kartik Iyer");
     // Rules out a 200 interstitial such as Vercel's deployment-protection login.
+    // CI draws WebGL in software, so the first frame can take about nine seconds.
     await expect(
       page.getByRole("complementary", { name: "Properties" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 20_000 });
     expect(pageFailures).toEqual([]);
   });
 
-  test("crawlers and agents can read the site", async ({ page, request }) => {
+  test("crawlers and agents can read the site", async ({ request }) => {
     const robots = await request.get("/robots.txt");
     expect(robots.status()).toBe(200);
     expect(await robots.text()).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
 
     const sitemap = await request.get("/sitemap.xml");
     expect(sitemap.status()).toBe(200);
-    expect(await sitemap.text()).toContain("<urlset");
+    const urls = await sitemap.text();
+    expect(urls).toContain("<urlset");
 
     const llms = await request.get("/llms.txt");
     expect(llms.status()).toBe(200);
     expect(await llms.text()).toMatch(/^# Kartik Iyer\n/);
 
-    await page.goto("/");
-    const href = await POST_CARDS(page).first().getAttribute("href");
-    const markdown = await request.get(`${href}.md`);
+    // The sitemap names the production host; the post's path is what the preview serves.
+    const post = urls.match(/<loc>[^<]*?(\/(?:work|writing)\/[^<]+)<\/loc>/)?.[1];
+    expect(post, "a published post in the sitemap").toBeDefined();
+    const markdown = await request.get(`${post}.md`);
     expect(markdown.status()).toBe(200);
     expect(markdown.headers()["content-type"]).toContain("text/markdown");
     expect((await markdown.text()).trim()).not.toBe("");

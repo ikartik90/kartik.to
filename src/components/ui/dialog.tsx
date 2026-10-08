@@ -1,7 +1,10 @@
 "use client";
 
 import {
+  createContext,
   forwardRef,
+  useCallback,
+  useState,
   type HTMLAttributes,
   type SyntheticEvent,
   type KeyboardEvent,
@@ -23,6 +26,9 @@ export type DialogAlign =
 export type DialogJustify = "start" | "center" | "end" | "stretch";
 
 export type DialogMotion = "scale" | "zoom";
+
+/** The dialog its content renders in: a modal leaves the page beneath it inert, so a portal goes here instead. */
+export const DialogLayer = createContext<HTMLDialogElement | null>(null);
 
 export interface DialogProps
   extends Omit<HTMLAttributes<HTMLDialogElement>, "onClose"> {
@@ -159,6 +165,16 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
     },
     ref,
   ) {
+    const [layer, setLayer] = useState<HTMLDialogElement | null>(null);
+    const setRefs = useCallback(
+      (node: HTMLDialogElement | null) => {
+        setLayer(node);
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      },
+      [ref],
+    );
+
     function requestClose(dialog: HTMLDialogElement) {
       if (onRequestClose) onRequestClose();
       else dialog.close();
@@ -194,7 +210,7 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
 
     return (
       <dialog
-        ref={ref}
+        ref={setRefs}
         {...scrollBoundary}
         className={cx(dialogRecipe({ align, justify, motion }), className)}
         onClose={handleClose}
@@ -203,7 +219,7 @@ export const Dialog = forwardRef<HTMLDialogElement, DialogProps>(
         onKeyDownCapture={handleKeyDownCapture}
         {...rest}
       >
-        {children}
+        <DialogLayer.Provider value={layer}>{children}</DialogLayer.Provider>
       </dialog>
     );
   },

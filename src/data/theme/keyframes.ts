@@ -40,6 +40,15 @@ export const keyframes = defineKeyframes({
     from: { opacity: 0.6, transform: "scale(0.35)" },
     to: { opacity: 0, transform: "scale(1)" },
   },
+  // The page's opening (`pageOpening`): a line rises a fifth of its height, its blur in proportion to its type.
+  openingLine: {
+    from: { opacity: 0, translate: "0 20%", filter: "blur(0.16em)" },
+    to: { opacity: 1, translate: "0 0", filter: "blur(0px)" },
+  },
+  openingStep: {
+    from: { opacity: 0, translate: "0 var(--spacing-3xl)", filter: "blur(var(--spacing-md))" },
+    to: { opacity: 1, translate: "0 0", filter: "blur(0px)" },
+  },
 
   // Weather keyframes are ambient only; state changes are transitions on the parent node.
   weatherPlasmaSpin: {

@@ -32,6 +32,7 @@ afterAll(() => vi.useRealTimers());
 
 const TODAY = Temporal.Now.plainDateISO();
 const FIRST_SHIFT = TODAY.add({ days: 1 });
+const OPENING_UNTIL = FIRST_SHIFT.add({ days: 6 });
 
 const repeatSwitch = () =>
   screen.getByRole("switch", { name: /repeat this shift on other days/i });
@@ -240,7 +241,7 @@ describe("ShiftSchedulingV1 — repeat toggle", () => {
     render(<ShiftSchedulingV1 />);
     expect(notice()).toBe(
       `This shift will repeat every ${weekdayName(FIRST_SHIFT)} between ` +
-        `${longDate(FIRST_SHIFT)} and ${longDate(TODAY.add({ days: 8 }))}.`,
+        `${longDate(FIRST_SHIFT)} and ${longDate(OPENING_UNTIL)}.`,
     );
   });
 
@@ -317,15 +318,15 @@ describe("ShiftSchedulingV1 — default date range", () => {
     expect(screen.getByText(format(FIRST_SHIFT))).toBeTruthy();
   });
 
-  it("ends the run a week after that", () => {
+  it("ends the run six days after that", () => {
     render(<ShiftSchedulingV1 />);
-    expect(screen.getByText(format(TODAY.add({ days: 8 })))).toBeTruthy();
+    expect(screen.getByText(format(OPENING_UNTIL))).toBeTruthy();
   });
 
   it("describes that range in the Notice", () => {
     render(<ShiftSchedulingV1 />);
     expect(notice()).toContain(longDate(FIRST_SHIFT));
-    expect(notice()).toContain(longDate(TODAY.add({ days: 8 })));
+    expect(notice()).toContain(longDate(OPENING_UNTIL));
   });
 });
 
@@ -386,7 +387,7 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
 
     await play();
     expect(pressedWeekdays()).toEqual([weekdayName(FIRST_SHIFT)]);
-    expect(notice()).toContain(longDate(TODAY.add({ days: 8 })));
+    expect(notice()).toContain(longDate(OPENING_UNTIL));
   });
 
   it("leaves the card OPEN when it hands the form over", async () => {
@@ -515,7 +516,7 @@ describe("ShiftSchedulingV1 — walkthrough", () => {
 
     const frames = await play();
     expect(peak(frames).weekdays).toEqual([weekdayName(FIRST_SHIFT)]);
-    expect(notice()).toContain(longDate(TODAY.add({ days: 8 })));
+    expect(notice()).toContain(longDate(OPENING_UNTIL));
   });
 
   it("clears a run the visitor built themselves, card and all left open", async () => {

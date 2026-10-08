@@ -38,6 +38,7 @@ export default defineConfig({
     breakpoints: {
       md: "820px",
       lg: "1200px",
+      xl: "1280px",
     },
 
     extend: {

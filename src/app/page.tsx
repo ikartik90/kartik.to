@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { css } from "../../styled-system/css";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
@@ -15,13 +14,11 @@ import { getHomeDescription, getHomeDocument } from "@/lib/home";
 import { homeMetadata } from "@/lib/post-metadata";
 import { SITE_URL } from "@/lib/site-url";
 import { homeJsonLd } from "@/utils/structured-data";
+import { ProjectStacks } from "./_project-stacks/project-stacks";
 
 export async function generateMetadata(): Promise<Metadata> {
   return homeMetadata(await getHomeDescription());
 }
-
-// The hero's "See my work" lands here, clear of the page top.
-const workStyle = css({ scrollMarginBlockStart: "5xl" });
 
 export default async function Home() {
   const [document, cards, testimonials] = await Promise.all([
@@ -35,8 +32,9 @@ export default async function Home() {
       <main>
         <JsonLd data={homeJsonLd(SITE_URL)} />
         <HomeHero />
+        <ProjectStacks id="work" />
         {/* Must be an `article`: the renderer's block styles are scoped to one. */}
-        <article data-home id="work" className={workStyle}>
+        <article data-home>
           <ArticleRenderer
             content={document ?? DEFAULT_HOME_DOCUMENT}
             slots={{

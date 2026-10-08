@@ -46,6 +46,20 @@ export const toolbar = defineRecipe({
         // the option list's own rule.
         "& :is([role='toolbar'], [role='listbox'])": { gap: "none" },
         "& :is(button, [role='button'])": { borderRadius: 0 },
+        // The rail's corner, whatever a caller makes it, down a nested `OptionList` to the outer corners of
+        // its end segments (over the squared buttons above), so their rings curve where the rail clips them
+        // (`segmentedControl`).
+        "& > :has(> [role='listbox']), & [role='listbox']": {
+          borderRadius: "inherit",
+        },
+        "& [role='listbox'] > :first-child": {
+          borderStartStartRadius: "inherit",
+          borderEndStartRadius: "inherit",
+        },
+        "& [role='listbox'] > :last-child": {
+          borderStartEndRadius: "inherit",
+          borderEndEndRadius: "inherit",
+        },
         // Load-bearing: the square end chips would otherwise square off the rail's corner.
         overflow: "hidden",
       },

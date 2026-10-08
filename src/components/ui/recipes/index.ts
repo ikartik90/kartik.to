@@ -15,7 +15,6 @@ import { mediaTransport } from "../../media-transport.recipe";
 import { sidenoteCard } from "../../sidenote-layer.recipe";
 import { weatherGraphic } from "../../weather-graphic.recipe";
 import { weatherWidget } from "../../weather-widget.recipe";
-import { calendar } from "../input/calendar.recipe";
 import { optionList } from "../input/option-list.recipe";
 import { sliderField } from "../input/slider.recipe";
 import { switchField } from "../input/switch.recipe";
@@ -52,6 +51,7 @@ import {
   articleMetricLabel,
   horizontalRule,
 } from "./article";
+import { calendar } from "./calendar";
 import { carousel } from "./carousel";
 import { colorChannel } from "./color-channel";
 import { colorPickerPopover } from "./color-picker-popover";
@@ -70,6 +70,7 @@ import {
 import { mediaObjectToolbar } from "./media-object-toolbar";
 import { menuIcon } from "./menu-icon";
 import { menuItem } from "./menu-item";
+import { pageOpening } from "./page-opening";
 import { propertiesPanel } from "./properties-panel";
 import { segmentedControl } from "./segmented-control";
 import { selectionPopover } from "./selection-popover";
@@ -140,6 +141,7 @@ export const recipes = {
   commandList,
   commandGroup,
   mediaObjectToolbar,
+  pageOpening,
 };
 
 export const slotRecipes = {
