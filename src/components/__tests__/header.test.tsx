@@ -34,19 +34,12 @@ describe("Header", () => {
     delete (navigator as { userAgentData?: unknown }).userAgentData;
   });
 
-  it("renders the circular logo and its tagline on the home page", () => {
+  it("holds only the menu and the theme toggle on the home page, no logo", () => {
     render(<Header />);
     expect(screen.getByRole("banner")).toBeDefined();
-    expect(
-      document.querySelector('img[src*="kartik-iyer-logo"]'),
-    ).not.toBeNull();
-    expect(screen.getByText("DESIGNER • BUILDER • ENGINEER •")).toBeDefined();
-  });
-
-  it("leaves the name to the logo rather than setting it beside it", () => {
-    render(<Header />);
-    expect(screen.queryByText("Kartik Iyer")).toBeNull();
-    expect(screen.getByAltText("Kartik Iyer")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Menu" })).toBeDefined();
+    expect(document.querySelector("img")).toBeNull();
+    expect(screen.queryByText("DESIGNER • BUILDER • ENGINEER •")).toBeNull();
   });
 
   it("asks for the command palette when the menu button is pressed", () => {

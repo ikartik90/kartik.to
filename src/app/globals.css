@@ -161,11 +161,6 @@ body[data-properties-panel-instant] {
     );
   }
 
-  [data-site-brand] {
-    width: min(100%, var(--sizes-article-content));
-    margin-inline: auto;
-  }
-
   /* `left` or `right`, never both: a full-width box would cover the other control and swallow its clicks. */
   [data-site-menu],
   [data-theme-toggle] {
@@ -333,40 +328,6 @@ body[data-properties-panel-instant] {
     width: min(100%, var(--sizes-article-content));
     pointer-events: none;
     visibility: hidden;
-  }
-
-  [data-brand-avatar] {
-    display: block;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  [data-brand-orbit] text {
-    fill: var(--colors-text-default);
-    font-family: var(--fonts-jetbrains-mono);
-    font-size: 0.5rem;
-    letter-spacing: 0.08em;
-  }
-
-  [data-brand-orbit-text-group] {
-    transform: rotate(var(--brand-orbit-initial-angle, 0deg));
-  }
-
-  /* An HTML wrapper, not an SVG node: Blink does not composite transform animations on SVG. */
-  [data-brand-orbit-spinner] {
-    animation: brand-orbit-spin 50s linear infinite;
-    will-change: transform;
-  }
-}
-
-@keyframes brand-orbit-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 
