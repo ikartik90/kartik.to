@@ -4,7 +4,7 @@ import { tokens } from "./tokens";
 import { TYPE_SIZES, TYPE_VIEWPORTS } from "./type-sizes";
 
 // Line heights between the two viewports round to the grid's smallest step.
-const grid = { px: parseFloat(tokens.spacing.sm.value), css: "{spacing.sm}" };
+const grid = parseFloat(tokens.spacing.sm.value);
 
 const fluidType = (name: keyof typeof TYPE_SIZES) => ({
   fontSize: fluidFontSize(TYPE_SIZES[name], TYPE_VIEWPORTS),

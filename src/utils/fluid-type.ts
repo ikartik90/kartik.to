@@ -24,8 +24,8 @@ const rem = (px: number) => `${round(px / ROOT_PX)}rem`;
 export interface FluidOptions {
   /** The viewport unit; `cqi` measures a container instead. */
   unit?: string;
-  /** Rounds values between the ends to multiples of `px`, written as `css`. */
-  grid?: { px: number; css: string };
+  /** Rounds values between the ends to multiples of this many px. */
+  grid?: number;
 }
 
 /** A straight line from `from` px at the mobile width to `to` px at the desktop width, held beyond both. */
@@ -39,7 +39,7 @@ export function fluid(
   if (span === 0 || Math.abs(to - from) < 0.005) return rem(to);
   // Aimed half a step past each end, so at the end widths rounding can't fall short of an end
   // that sits off the grid, or on a midpoint by float noise.
-  const reach = grid ? (Math.sign(to - from) * grid.px) / 2 : 0;
+  const reach = grid ? (Math.sign(to - from) * grid) / 2 : 0;
   const slope = (to - from + 2 * reach) / span;
   const intercept = from - reach - slope * viewports.mobile;
   const perViewport = `${round(Math.abs(slope) * 100)}${unit}`;
@@ -49,7 +49,9 @@ export function fluid(
       : intercept < 0
         ? `${perViewport} - ${rem(-intercept)}`
         : `${rem(intercept)} + ${perViewport}`;
-  const between = grid ? `round(${preferred}, ${grid.css})` : preferred;
+  // A literal step: Safari 18 drops a `round()` whose step is a `var()` while its element transitions a registered
+  // custom property, and the line height falls back to the parent's.
+  const between = grid ? `round(${preferred}, ${grid}px)` : preferred;
   return `clamp(${rem(Math.min(from, to))}, ${between}, ${rem(Math.max(from, to))})`;
 }
 

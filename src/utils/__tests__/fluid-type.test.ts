@@ -57,7 +57,7 @@ function evaluate(css: string, width: number): number {
   return Math.min(rem(high), Math.max(rem(low), value));
 }
 
-const grid = { px: 4, css: "4px" };
+const grid = 4;
 const widths = Array.from({ length: 107 }, (_, i) => 375 + i * 10);
 
 describe("fluidLineHeight", () => {
@@ -96,9 +96,9 @@ describe("fluidLineHeight", () => {
     expect([...seen].sort((a, b) => a - b)).toEqual([28, 32, 36, 40, 42]);
   });
 
-  it("writes the grid's own value into the rounding", () => {
-    expect(fluidLineHeight(size, viewports, { px: 4, css: "{spacing.sm}" })).toMatch(
-      /^clamp\(1\.5rem, round\(.+, \{spacing\.sm\}\), 2rem\)$/,
+  it("rounds to the grid as a literal length, never a variable", () => {
+    expect(fluidLineHeight(size, viewports, grid)).toMatch(
+      /^clamp\(1\.5rem, round\([^,]+, 4px\), 2rem\)$/,
     );
   });
 
