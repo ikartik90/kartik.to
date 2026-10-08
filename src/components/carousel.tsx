@@ -9,11 +9,17 @@ import {
   type Ref,
   type RefObject,
 } from "react";
+import { cx } from "../../styled-system/css";
 import { carousel } from "../../styled-system/recipes";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { CarouselSize } from "@/domain/nodes";
-import { carouselRestOffsets, carouselStep } from "@/utils/carousel-snap";
+import {
+  carouselAlignedStart,
+  carouselRestOffsets,
+  carouselStep,
+  inlineSnapAlign,
+} from "@/utils/carousel-snap";
 import ChevronLeftIcon from "@/assets/icons/chevron-left.svg";
 import ChevronRightIcon from "@/assets/icons/chevron-right.svg";
 
@@ -25,10 +31,19 @@ export function carouselSlides(scroller: HTMLElement) {
 
 /** Where the scroller rests with each slide in place; a slide's `offsetLeft` is measured in the scroller. */
 export function restOffsets(scroller: HTMLElement): number[] {
-  const inset =
-    parseFloat(getComputedStyle(scroller).scrollPaddingInlineStart) || 0;
+  const style = getComputedStyle(scroller);
+  const inset = parseFloat(style.scrollPaddingInlineStart) || 0;
+  const snapport =
+    scroller.clientWidth - inset - (parseFloat(style.scrollPaddingInlineEnd) || 0);
   return carouselRestOffsets(
-    carouselSlides(scroller).map((slide) => slide.offsetLeft),
+    carouselSlides(scroller).map((slide) =>
+      carouselAlignedStart(
+        slide.offsetLeft,
+        slide.offsetWidth,
+        inlineSnapAlign(getComputedStyle(slide).scrollSnapAlign),
+        snapport,
+      ),
+    ),
     inset,
     scroller.scrollWidth - scroller.clientWidth,
   );
@@ -43,9 +58,15 @@ interface Reach {
 export interface CarouselProps {
   scrollerRef: RefObject<HTMLDivElement | null>;
   editing?: boolean;
+  /** In a box narrower than the page, such as a sheet; see the recipe's `contained`. */
+  contained?: boolean;
   size?: CarouselSize;
   rootProps?: HTMLAttributes<HTMLDivElement> & {
     ref?: Ref<HTMLDivElement>;
+    [state: `data-${string}`]: unknown;
+  };
+  /** On the arrows' row; its `className` is added to the recipe's. */
+  controlsProps?: HTMLAttributes<HTMLDivElement> & {
     [state: `data-${string}`]: unknown;
   };
   /** The slides, each marked `data-carousel-slide`. */
@@ -55,11 +76,13 @@ export interface CarouselProps {
 export function Carousel({
   scrollerRef,
   editing = false,
+  contained = false,
   size,
   rootProps,
+  controlsProps,
   children,
 }: CarouselProps) {
-  const styles = carousel({ editing, size });
+  const styles = carousel({ editing, contained, size });
   const [reach, setReach] = useState<Reach>({
     scrollable: true,
     back: false,
@@ -116,7 +139,7 @@ export function Carousel({
   return (
     <div {...rootProps} className={styles.root} data-carousel="">
       {reach.scrollable && (
-        <div className={styles.controls}>
+        <div {...controlsProps} className={cx(styles.controls, controlsProps?.className)}>
           <Button
             variant="icon"
             emphasis="secondary"

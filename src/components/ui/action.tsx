@@ -48,9 +48,12 @@ export function useActionTooltip(children: ReactNode) {
   const content = items.filter((child) => !isActionTooltip(child));
   const hasText = content.some(isActionText);
 
+  // Hover is kept with or without a tooltip: React can reuse one action for another in its place, its
+  // tooltip coming and going with its children, and one gained under the cursor shows (and is placed) then.
   const [hovered, setHovered] = useState(false);
+  const visible = hovered && Boolean(tooltip);
   const [trigger, setTrigger] = useState<HTMLElement | null>(null);
-  const { ref, seed } = useCursorTooltip(hovered);
+  const { ref, seed } = useCursorTooltip(visible);
 
   // Touch never opens the label. Checked per event, not per device: touchscreen laptops also hover.
   const show = useCallback(
@@ -65,7 +68,7 @@ export function useActionTooltip(children: ReactNode) {
   const hide = useCallback(() => setHovered(false), []);
 
   const tooltipNode = tooltip ? (
-    <TooltipHostContext.Provider value={{ ref, visible: hovered, trigger }}>
+    <TooltipHostContext.Provider value={{ ref, visible, trigger }}>
       {tooltip}
     </TooltipHostContext.Provider>
   ) : null;
@@ -74,9 +77,9 @@ export function useActionTooltip(children: ReactNode) {
     content,
     hasText,
     tooltipNode,
-    hasTooltip: Boolean(tooltip),
     /** Drive anything drawn instead of the tooltip off this, not `:hover`; the two drift apart. */
-    visible: hovered,
+    visible,
+    /** Call on every enter and leave, tooltip or not. */
     show,
     hide,
   };

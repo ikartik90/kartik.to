@@ -60,8 +60,7 @@ export const articleLink = defineRecipe({
     backgroundRepeat: "no-repeat",
     backgroundPosition: "0 100%",
     backgroundSize: "100% 0, 100% token(spacing.xxs)",
-    WebkitBoxDecorationBreak: "clone",
-    boxDecorationBreak: "clone",
+    // Not `box-decoration-break: clone`, as `articleHighlight`.
     transition: "color 150ms ease, background-size 150ms ease",
     _hover: {
       color: "text.title",
@@ -98,8 +97,7 @@ export const articleHighlight = defineRecipe({
     color: "text.highlight",
     paddingInline: "xxs",
     paddingBlock: "xxs",
-    boxDecorationBreak: "clone",
-    WebkitBoxDecorationBreak: "clone",
+    // Not `box-decoration-break: clone`: WebKit and Chromium won't wrap a paragraph holding it pretty or balanced.
     "& :is(strong, b, em, i, u, s, code, a)": {
       color: "inherit",
     },

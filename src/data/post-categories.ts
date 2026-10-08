@@ -13,6 +13,8 @@ export interface PostCategoryInfo {
   dated: boolean;
   /** Offered in the metadata sidebar's category choice. */
   listed: boolean;
+  /** Shown in the homepage grid. */
+  inGrid: boolean;
 }
 
 export const POST_CATEGORIES: Record<PostCategory, PostCategoryInfo> = {
@@ -23,6 +25,7 @@ export const POST_CATEGORIES: Record<PostCategory, PostCategoryInfo> = {
     schemaType: "Article",
     dated: false,
     listed: true,
+    inGrid: false,
   },
   ARTICLE: {
     label: "Article",
@@ -31,6 +34,7 @@ export const POST_CATEGORIES: Record<PostCategory, PostCategoryInfo> = {
     schemaType: "BlogPosting",
     dated: true,
     listed: true,
+    inGrid: true,
   },
   PROTOTYPE: {
     label: "Prototype",
@@ -39,6 +43,7 @@ export const POST_CATEGORIES: Record<PostCategory, PostCategoryInfo> = {
     schemaType: "CreativeWork",
     dated: false,
     listed: true,
+    inGrid: false,
   },
   PAGE: {
     label: "Page",
@@ -47,6 +52,7 @@ export const POST_CATEGORIES: Record<PostCategory, PostCategoryInfo> = {
     schemaType: "WebPage",
     dated: false,
     listed: false,
+    inGrid: false,
   },
 };
 
@@ -54,3 +60,7 @@ export const POST_CATEGORIES: Record<PostCategory, PostCategoryInfo> = {
 export const LISTED_CATEGORIES = (
   Object.keys(POST_CATEGORIES) as PostCategory[]
 ).filter((category) => POST_CATEGORIES[category].listed);
+
+export const GRID_CATEGORIES = (
+  Object.keys(POST_CATEGORIES) as PostCategory[]
+).filter((category) => POST_CATEGORIES[category].inGrid);

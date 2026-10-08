@@ -274,8 +274,45 @@ export const carousel = defineSlotRecipe({
         track: { paddingBlockStart: "xxl" },
       },
     },
+    // In a box narrower than the page (a sheet): the strip spans the box, past the carousel's own
+    // edges by the box's padding (`--carousel-gutter`). `cqw` is the root's, the nearest container
+    // to every slot that reads these.
+    contained: {
+      true: {
+        scroller: {
+          "--carousel-half":
+            "calc(50cqw + var(--carousel-gutter, token(spacing.xxl)))",
+          "--carousel-inset": "var(--carousel-gutter, token(spacing.xxl))",
+          "--carousel-fit": "100cqw",
+          scrollPaddingInlineEnd: "var(--carousel-gutter, token(spacing.xxl))",
+        },
+        // The first slide rests on the start, the last on the end, and any between in the middle.
+        // `--carousel-slide-height` sets the slides' height in place of the size's.
+        track: {
+          "--slide-height": "var(--carousel-slide-height, var(--carousel-slide))",
+          "[data-reordering] &": {
+            "--slide-height":
+              "calc(var(--carousel-slide-height, var(--carousel-slide)) / 2)",
+          },
+          paddingInline: "var(--carousel-gutter, token(spacing.xxl))",
+          "& > [data-carousel-slide]": { scrollSnapAlign: "center" },
+          "& > [data-carousel-slide]:first-child": { scrollSnapAlign: "start" },
+          "& > [data-carousel-slide]:last-child": { scrollSnapAlign: "end" },
+        },
+        // Centred on the last line of the heading `--carousel-heading-gap` above: a box of no height
+        // on that line's middle. `lh` is the line height the root inherits, so the caller gives it
+        // the heading's text style.
+        controls: {
+          bottom:
+            "calc(100% + var(--carousel-heading-gap, token(spacing.xl)) + 0.5lh)",
+          height: "0",
+          alignItems: "center",
+          _carouselStacked: { bottom: "auto", height: "auto" },
+        },
+      },
+    },
   },
   defaultVariants: { size: "medium" },
   // Chosen at runtime, so emit every branch.
-  staticCss: [{ size: ["*"] }],
+  staticCss: [{ size: ["*"], contained: ["*"] }],
 });

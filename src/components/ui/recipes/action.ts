@@ -1,5 +1,12 @@
 import { defineRecipe } from "@pandacss/dev";
 
+// Panda's `backdropFilter` emits only the -webkit- form; the raw key is what Chromium reads.
+const frosted = {
+  backdropFilter: "blur(token(spacing.md))",
+  "-webkit-backdrop-filter": "blur(token(spacing.md))",
+  "backdrop-filter": "blur(token(spacing.md))",
+};
+
 export const action = defineRecipe({
   className: "action",
   description:
@@ -27,6 +34,8 @@ export const action = defineRecipe({
     },
     "& svg path[stroke]": { stroke: "currentColor" },
     "& svg path[fill]": { fill: "currentColor" },
+    // Out of the flow over content (set by Button), so what passes under it can't show through.
+    "&[data-floating]": frosted,
   },
   variants: {
     variant: {
@@ -119,7 +128,7 @@ export const action = defineRecipe({
     },
     {
       variant: "icon",
-      emphasis: "secondary",
+      emphasis: ["secondary", "accent"],
       // The button link's look as a 40px circle.
       css: {
         width: "token(spacing.4xl)",
@@ -128,13 +137,29 @@ export const action = defineRecipe({
         borderRadius: "full",
         backgroundColor: "bg.button.secondary.default",
         color: "text.body",
+        _active: { transform: "scale(0.97)" },
+      },
+    },
+    {
+      variant: "icon",
+      emphasis: "secondary",
+      css: {
         "&:not([aria-pressed='true']):is(:hover, [data-hover])": {
           backgroundColor: "bg.button.secondary.hover",
         },
-        _active: {
-          transform: "scale(0.97)",
-          backgroundColor: "bg.button.secondary.hover",
+        _active: { backgroundColor: "bg.button.secondary.hover" },
+      },
+    },
+    {
+      variant: "icon",
+      emphasis: "accent",
+      // The secondary circle, filled with the brand colour under the pointer.
+      css: {
+        "&:not([aria-pressed='true']):is(:hover, [data-hover])": {
+          backgroundColor: "bg.button.accent.hover",
+          color: "field.text.active",
         },
+        _active: { backgroundColor: "bg.button.accent.hover", color: "field.text.active" },
       },
     },
     {
@@ -142,10 +167,7 @@ export const action = defineRecipe({
       emphasis: "glass",
       css: {
         backgroundColor: "bg.surfaceGlass",
-        // Panda's `backdropFilter` emits only the -webkit- form; the raw key is what Chromium reads.
-        backdropFilter: "blur(token(spacing.md))",
-        "-webkit-backdrop-filter": "blur(token(spacing.md))",
-        "backdrop-filter": "blur(token(spacing.md))",
+        ...frosted,
         color: "text.body",
         _hover: { backgroundColor: "bg.surface" },
       },

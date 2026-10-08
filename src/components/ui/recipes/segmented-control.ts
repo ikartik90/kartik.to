@@ -49,18 +49,19 @@ export const segmentedControl = defineSlotRecipe({
         borderColor: "field.border.active",
         borderWidth: "token(spacing.3xs)",
       },
-      // Carries the rail's corner so the border curves inside the clip instead of being sliced.
+      // The end segments carry the rail's corner (`toolbar` passes it down), and their rings take it from
+      // them, so a ring curves inside the clip instead of being sliced, a pill's included.
       '&[aria-selected="true"]:first-child::after, &[aria-pressed="true"]:first-child::after':
         {
           borderInlineStartWidth: "token(spacing.3xs)",
-          borderStartStartRadius: "sm",
-          borderEndStartRadius: "sm",
+          borderStartStartRadius: "inherit",
+          borderEndStartRadius: "inherit",
         },
       '&[aria-selected="true"]:last-child::after, &[aria-pressed="true"]:last-child::after':
         {
           borderInlineEndWidth: "token(spacing.3xs)",
-          borderStartEndRadius: "sm",
-          borderEndEndRadius: "sm",
+          borderStartEndRadius: "inherit",
+          borderEndEndRadius: "inherit",
         },
       // Abutting chips: the right one drops its leading edge, leaving a single hairline.
       '&[aria-selected="true"] + [aria-selected="true"]::after, &[aria-pressed="true"] + [aria-pressed="true"]::after':

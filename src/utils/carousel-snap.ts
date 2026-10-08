@@ -15,6 +15,28 @@ export function carouselRestOffsets(
   );
 }
 
+export type CarouselSnapAlign = "start" | "center" | "end";
+
+/**
+ * Where a slide aligned `align` in a snapport `snapport` wide would start were it aligned to its
+ * start, so `carouselRestOffsets` rests it as the CSS snaps it.
+ */
+export function carouselAlignedStart(
+  start: number,
+  width: number,
+  align: CarouselSnapAlign,
+  snapport: number,
+): number {
+  const room = snapport - width;
+  return start - (align === "center" ? room / 2 : align === "end" ? room : 0);
+}
+
+/** The inline axis's alignment in a computed `scroll-snap-align`, whose second keyword, if any, is it. */
+export function inlineSnapAlign(value: string): CarouselSnapAlign {
+  const inline = value.trim().split(/\s+/).pop();
+  return inline === "center" || inline === "end" ? inline : "start";
+}
+
 /** The rest offset one step from `current` in `step`'s direction, or null past either end. */
 export function carouselStep(
   offsets: readonly number[],

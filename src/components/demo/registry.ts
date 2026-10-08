@@ -46,36 +46,14 @@ const registry: Record<string, DemoRegistryEntry> = {
   "shift-scheduling-v0": {
     load: async () => (await import("./shift-scheduling-v0")).ShiftSchedulingV0,
     aspectRatio: "3/2",
-    // Decoded before the tour's cursor fades in.
-    assets: [
-      {
-        id: "cursor-selection",
-        kind: "image",
-        src: "/cursors/cursor-selection.svg",
-      },
-    ],
   },
   "shift-scheduling-v1": {
     load: async () => (await import("./shift-scheduling-v1")).ShiftSchedulingV1,
     aspectRatio: "3/2",
-    assets: [
-      {
-        id: "cursor-selection",
-        kind: "image",
-        src: "/cursors/cursor-selection.svg",
-      },
-    ],
   },
   "shift-scheduling-v2": {
     load: async () => (await import("./shift-scheduling-v2")).ShiftSchedulingV2,
     aspectRatio: "3/2",
-    assets: [
-      {
-        id: "cursor-selection",
-        kind: "image",
-        src: "/cursors/cursor-selection.svg",
-      },
-    ],
   },
   "scheduling-layout-redesign": {
     load: async () =>

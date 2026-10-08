@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef } from "react";
+import { useContext, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { scrollBoundary } from "@/hooks/use-scroll-handoff";
+import { DialogLayer } from "./dialog";
 
 export interface PopoverRect {
   /** Relative to the editor's `<article>`, so the anchor scrolls with its content. */
@@ -24,7 +25,7 @@ type PopoverProps = {
   ignoreSelector?: string;
   /** Default true; off for a surface that is only closed deliberately. */
   dismissOnOutsidePointer?: boolean;
-  /** Escape ancestor clipping via a body portal. Element-anchored only; ignored with `rect`. */
+  /** Escape ancestor clipping via a portal to the body, or to the dialog it opens in. Element-anchored only; ignored with `rect`. */
   portal?: boolean;
   /** For a position measured at open time, which a recipe can't state. */
   style?: React.CSSProperties;
@@ -56,6 +57,7 @@ export function Popover({
   children,
 }: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const layer = useContext(DialogLayer);
   useDismiss({
     ref: containerRef,
     onDismiss,
@@ -100,7 +102,7 @@ export function Popover({
         />
       )}
       {portal && !rect && typeof document !== "undefined"
-        ? createPortal(container, document.body)
+        ? createPortal(container, layer ?? document.body)
         : container}
     </>
   );

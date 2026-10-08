@@ -326,12 +326,12 @@ const WEEKDAY_NAMES_BY_KEY = new Map(
 /** A constant render anchor: reading the clock while rendering breaks hydration (#418) on prerendered pages. */
 const SEED_TODAY = Temporal.PlainDate.from("2026-01-01");
 
-/** Tomorrow through a week later, on the first shift's weekday; what every reset restores. */
+/** Tomorrow through six days after it, on the first shift's weekday; what every reset restores. */
 function openingFrom(today: Temporal.PlainDate) {
   const firstShift = today.add({ days: 1 });
   return {
     firstShift,
-    lastShift: today.add({ days: 8 }),
+    lastShift: firstShift.add({ days: 6 }),
     days: [weekdayOf(firstShift)] as WeekdayKey[],
   };
 }

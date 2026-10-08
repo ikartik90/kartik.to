@@ -22,7 +22,7 @@ const row = (over: Record<string, unknown>) => ({
   id: "post-1",
   title: "Atlas",
   slug: "atlas",
-  category: "WORK",
+  category: "ARTICLE",
   content: { type: "doc", content: [] },
   coverImageKey: null,
   aspect: null,
@@ -45,10 +45,18 @@ describe("getGridCards", () => {
     mockComponentFindMany.mockReset().mockResolvedValue([]);
   });
 
-  it("gives a PROJECT a cover too, not only an article", async () => {
+  it("asks for no projects or prototypes: the project sections show the work", async () => {
+    await getGridCards();
+    expect(mockPostFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ category: { in: ["ARTICLE"] } }),
+      }),
+    );
+  });
+
+  it("takes a post's cover from the first picture in a collection", async () => {
     mockPostFindMany.mockResolvedValue([
       row({
-        category: "WORK",
         content: {
           type: "doc",
           content: [
@@ -79,7 +87,7 @@ describe("getGridCards", () => {
 
     const hrefs = postCards(await getGridCards()).map((card) => card.href);
 
-    expect(hrefs).toEqual(["/work/atlas"]);
+    expect(hrefs).toEqual(["/writing/atlas"]);
     for (const { slug } of [...staticArticles, ...staticProjects]) {
       expect(hrefs).not.toContain(`/writing/${slug}`);
       expect(hrefs).not.toContain(`/work/${slug}`);

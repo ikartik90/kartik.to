@@ -1,5 +1,6 @@
 "use client";
 
+import { createContext, useContext } from "react";
 import { css } from "../../../styled-system/css";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -18,6 +19,18 @@ export interface DemoControlsProps {
   /** The demo carries work and nothing is performing. */
   resettable: boolean;
 }
+
+export interface DemoControlsLabels {
+  play: string;
+  stop: string;
+  /** Said after the transport. */
+  hint?: string;
+}
+
+/** Words for Play and Stop, for a page that shows the controls in the open; without it they're icons in the corner. */
+export const DemoControlsLabels = createContext<DemoControlsLabels | null>(
+  null,
+);
 
 const demoFrameControlsStyle = css({
   position: "absolute",
@@ -47,6 +60,7 @@ export function DemoControls({
   running,
   resettable,
 }: DemoControlsProps) {
+  const labels = useContext(DemoControlsLabels);
   return (
     <div
       role="toolbar"
@@ -55,14 +69,40 @@ export function DemoControls({
     >
       {/* Reset sits inboard: the row is pinned by its right edge, so Reset comes and goes without moving the transport. */}
       {resettable ? (
-        <Button variant="icon" aria-label="Reset Demo" onClick={onReset}>
+        <Button
+          variant="icon"
+          emphasis={labels ? "accent" : undefined}
+          aria-label="Reset Demo"
+          onClick={onReset}
+          data-control="reset"
+        >
           <ResetIcon />
           <Button.Tooltip>
             <Tooltip.Text>Reset Demo</Tooltip.Text>
           </Button.Tooltip>
         </Button>
       ) : null}
-      {running ? (
+      {labels ? (
+        <>
+          {running ? (
+            <Button
+              variant="text"
+              aria-label="Stop Demo"
+              onClick={onStop}
+              data-control="transport"
+            >
+              <StopIcon aria-hidden />
+              {labels.stop}
+            </Button>
+          ) : (
+            <Button variant="text" onClick={onPlay} data-control="transport">
+              <PlayIcon aria-hidden />
+              {labels.play}
+            </Button>
+          )}
+          {labels.hint ? <span data-control="hint">{labels.hint}</span> : null}
+        </>
+      ) : running ? (
         <Button variant="icon" aria-label="Stop Demo" onClick={onStop}>
           <StopIcon />
           <Button.Tooltip>

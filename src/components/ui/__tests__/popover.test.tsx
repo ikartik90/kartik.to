@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Dialog } from "../dialog";
 import { Popover } from "../popover";
 
 afterEach(cleanup);
@@ -75,5 +76,28 @@ describe("Popover", () => {
     );
     fireEvent.scroll(window);
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("portals to the body outside a dialog", () => {
+    render(
+      <Popover className="box" ariaLabel="Picker" portal onDismiss={vi.fn()}>
+        <button>Item</button>
+      </Popover>,
+    );
+    expect(screen.getByText("Item").closest("dialog")).toBeNull();
+  });
+
+  it("portals into the dialog it opens in, which a modal leaves the only reachable layer", () => {
+    render(
+      <Dialog aria-label="Sheet">
+        <div style={{ overflow: "auto" }}>
+          <Popover className="box" ariaLabel="Picker" portal onDismiss={vi.fn()}>
+            <button>Item</button>
+          </Popover>
+        </div>
+      </Dialog>,
+    );
+    const container = screen.getByText("Item").parentElement;
+    expect(container?.parentElement?.tagName).toBe("DIALOG");
   });
 });
