@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { Analytics as WebAnalytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { dropPrivateEvents } from "@/utils/analytics-event";
 import { setAnalyticsOptOut } from "@/utils/analytics-opt-out";
+import { fillMissingReferrer } from "@/utils/analytics-referrer";
 
 // Must stay a client component: beforeSend is a function and cannot cross the RSC boundary.
 
@@ -18,6 +19,9 @@ declare global {
 
 export function Analytics() {
   const isAdmin = useIsAdmin();
+
+  // A layout effect, so it lands before the children's passive effects inject Vercel's script.
+  useLayoutEffect(fillMissingReferrer, []);
 
   useEffect(() => {
     if (isAdmin) setAnalyticsOptOut(true);
