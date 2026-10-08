@@ -13,7 +13,7 @@ describe("HomeHero", () => {
   it("is the page's one heading, on two lines", () => {
     render(<HomeHero />);
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.textContent).toBe("Founding designerwho ships");
+    expect(heading.textContent).toBe("Designerwho ships");
     expect(heading.children).toHaveLength(2);
   });
 
@@ -60,7 +60,7 @@ describe("HomeHero", () => {
     const lines = [...container.querySelectorAll("[data-opening-line]")];
     expect(lines.map((line) => line.textContent)).toEqual([
       "Available for workToronto, ON",
-      "Founding designer",
+      "Designer",
       "who ships",
     ]);
     expect(lines.map(delay)).toEqual(["0ms", "100ms", "200ms"]);
@@ -76,7 +76,7 @@ describe("HomeHero", () => {
     const section = screen.getByRole("region", { name: "Introduction" });
     const hidden = section.querySelectorAll("[aria-hidden='true']");
     const text = [...hidden].map((el) => el.textContent).join("");
-    expect(text).not.toMatch(/Kartik|Founding/);
+    expect(text).not.toMatch(/Kartik|Designer/);
     expect(within(section).getAllByRole("heading")).toHaveLength(1);
   });
 });
