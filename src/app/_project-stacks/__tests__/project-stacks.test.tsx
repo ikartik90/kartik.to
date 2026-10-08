@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,28 +77,56 @@ describe("ProjectStacks", () => {
     expect(container.querySelector("section")?.id).toBe("work");
   });
 
-  it("opens shift scheduling and onboarding, and says the rest are coming this week", () => {
+  it("links shift scheduling and onboarding to their sheets' addresses, and says the rest are coming this week", () => {
     render(<ProjectStacks />);
-    const openers = screen.getAllByRole("button", { name: /:/ });
-    expect(openers.map((button) => button.getAttribute("data-sheet-card"))).toEqual(["shift-scheduling", "onboarding"]);
-    for (const button of openers) expect(button.getAttribute("aria-haspopup")).toBe("dialog");
+    const openers = screen.getAllByRole("link", { name: /:/ });
+    expect(openers.map((link) => link.getAttribute("href"))).toEqual([
+      "/projects/shift-scheduling",
+      "/projects/onboarding",
+    ]);
+    for (const link of openers) expect(link.getAttribute("aria-haspopup")).toBe("dialog");
     expect(screen.getAllByText("Coming this week")).toHaveLength(2);
     for (const id of ["check-ins", "design-system"]) {
       expect(document.querySelector(`[data-sheet-card="${id}"]`)?.tagName).toBe("DIV");
     }
   });
 
-  it("opens a card's sheet over the page, named for its project", () => {
+  it("opens a card's sheet over the page, named for its project, at the project's address", () => {
     render(<ProjectStacks />);
-    fireEvent.click(screen.getByRole("button", { name: /^Company onboarding:/ }));
+    fireEvent.click(screen.getByRole("link", { name: /^Company onboarding:/ }));
     expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding");
     expect(within(sheet()!).getByText("Onboarding sheet")).toBeDefined();
+    expect(window.location.pathname).toBe("/projects/onboarding");
   });
 
-  it("opens the sheet the address names, but not one that isn't ready", () => {
+  it("leaves a card clicked with a key held to the browser, to open in a new tab", () => {
+    render(<ProjectStacks />);
+    let prevented: boolean | undefined;
+    document.addEventListener(
+      "click",
+      (event) => {
+        prevented = event.defaultPrevented;
+        // jsdom can't follow the link.
+        event.preventDefault();
+      },
+      { once: true },
+    );
+    fireEvent.click(screen.getByRole("link", { name: /^Company onboarding:/ }), { metaKey: true });
+    expect(prevented).toBe(false);
+    expect(sheet()).toBeNull();
+  });
+
+  it("opens with the sheet the page was served for", () => {
+    window.history.replaceState(null, "", "/projects/shift-scheduling");
+    render(<ProjectStacks sheet="shift-scheduling" />);
+    expect(within(sheet()!).getByText("Shift scheduling sheet")).toBeDefined();
+  });
+
+  it("moves an old link's sheet (`?sheet=`) to its project's address, but not one that isn't ready", () => {
     window.history.replaceState(null, "", "/?sheet=shift-scheduling");
     const { unmount } = render(<ProjectStacks />);
     expect(within(sheet()!).getByText("Shift scheduling sheet")).toBeDefined();
+    expect(window.location.pathname + window.location.search).toBe("/projects/shift-scheduling");
     unmount();
 
     window.history.replaceState(null, "", "/?sheet=check-ins");
@@ -106,23 +134,57 @@ describe("ProjectStacks", () => {
     expect(sheet()).toBeNull();
   });
 
-  it("offers only the next project from the first sheet, and only the previous from the last", () => {
+  it("offers only the next project from the first sheet, and only the previous from the last, the address following", () => {
     render(<ProjectStacks />);
     const nav = () => within(sheet()!).getByRole("navigation", { name: "More projects" });
-    const offered = () => within(nav()).getAllByRole("button").map((button) => button.textContent);
+    const offered = () => within(nav()).getAllByRole("link").map((link) => link.textContent);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Shift scheduling:/ }));
+    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
     expect(offered()).toEqual(["NextCompany onboarding"]);
+    expect(within(nav()).getByRole("link", { name: /^Next/ }).getAttribute("href")).toBe("/projects/onboarding");
 
-    fireEvent.click(within(nav()).getByRole("button", { name: /^Next/ }));
+    fireEvent.click(within(nav()).getByRole("link", { name: /^Next/ }));
     expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding");
     expect(within(sheet()!).getByText("Onboarding sheet")).toBeDefined();
+    expect(window.location.pathname).toBe("/projects/onboarding");
     expect(offered()).toEqual(["PreviousShift scheduling"]);
+  });
+
+  // Another project's sheet replaces the address rather than adding one, so Back leaves the sheet at once.
+  it("closes when Back takes its address off, and opens again on Forward", async () => {
+    render(<ProjectStacks />);
+    fireEvent.click(screen.getByRole("link", { name: /^Company onboarding:/ }));
+    fireEvent.click(within(sheet()!).getByRole("link", { name: /^Previous/ }));
+
+    window.history.back();
+    await waitFor(() => expect(sheet()).toBeNull());
+    expect(window.location.pathname).toBe("/");
+
+    window.history.forward();
+    await waitFor(() => expect(sheet()?.getAttribute("aria-label")).toBe("Shift scheduling"));
+  });
+
+  it("returns to the address it opened from as it closes", async () => {
+    window.history.replaceState(null, "", "/?from=here#work");
+    render(<ProjectStacks />);
+    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
+    fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
+    expect(sheet()).toBeNull();
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/?from=here"));
+    expect(window.location.hash).toBe("#work");
+  });
+
+  it("opened at its own address, leaves the homepage's in its place as it closes", () => {
+    window.history.replaceState(null, "", "/projects/onboarding");
+    render(<ProjectStacks sheet="onboarding" />);
+    fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
+    expect(sheet()).toBeNull();
+    expect(window.location.pathname).toBe("/");
   });
 
   it("closes from its Close button", () => {
     render(<ProjectStacks />);
-    fireEvent.click(screen.getByRole("button", { name: /^Shift scheduling:/ }));
+    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
     fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
     expect(sheet()).toBeNull();
   });

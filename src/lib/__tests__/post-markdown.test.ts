@@ -62,6 +62,14 @@ describe("postMarkdownResponse", () => {
     );
   });
 
+  it("points search engines at the project page for the article its sheet replaces", async () => {
+    mockGetPublished.mockResolvedValue({ ...PROJECT, slug: "redesigning-shift-scheduling" });
+    const response = await postMarkdownResponse("redesigning-shift-scheduling", "WORK");
+    expect(response.headers.get("link")).toBe(
+      '<https://kartik.to/projects/shift-scheduling>; rel="canonical"',
+    );
+  });
+
   it("is a 404 for anything unpublished or missing", async () => {
     mockGetPublished.mockResolvedValue(null);
     const response = await postMarkdownResponse("draft", "ARTICLE");

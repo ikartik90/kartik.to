@@ -1,14 +1,15 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 import { css } from "../../../styled-system/css";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import CrossIcon from "@/assets/icons/cross.svg";
 import { isBottomSheetLayout } from "@/data/media-queries";
 import { cubicBezier } from "@/utils/eased-fade";
+import { isPlainClick } from "@/utils/plain-click";
 import { ZOOM_MS } from "@/utils/lightbox-motion";
-import type { ProjectCard } from "./data";
+import { projectPath, type ProjectCard } from "./data";
 import { focusIn, reducedMotion, RISE_CURVE, RISE_MS } from "./opening";
 import { OnboardingSheet } from "./onboarding-sheet";
 import { CardFace, Frame } from "./sheet-card";
@@ -197,18 +198,22 @@ function SheetNav({ cards, card, onGo }: { cards: ProjectCard[]; card: ProjectCa
   return (
     <nav className={navStyle} aria-label="More projects" data-sheet-step="">
       {sides.map(({ by, label, to }) => (
-        <button
+        <a
           key={label}
-          type="button"
+          href={projectPath(to.id)}
           className={navLinkStyle}
           data-sheet-nav={by === 1 ? "next" : "previous"}
-          onClick={() => onGo(to.id, by)}
+          onClick={(event) => {
+            if (!isPlainClick(event)) return;
+            event.preventDefault();
+            onGo(to.id, by);
+          }}
         >
           <span className={navLabelStyle}>{label}</span>
           <span className={navNameStyle} data-nav-name="">
             {to.title}
           </span>
-        </button>
+        </a>
       ))}
     </nav>
   );
@@ -302,12 +307,19 @@ function fitFace(hero: HTMLElement, source: HTMLElement | null) {
   hero.style.setProperty("--face-text-width", `${(measure * fontSize(sheetHeading)) / fontSize(heading)}px`);
 }
 
+export interface SheetHandle {
+  /** As the Close button does. */
+  close: () => void;
+}
+
 export function ProjectSheet({
+  ref,
   cards,
   openId,
   onClosed,
   onSwitch,
 }: {
+  ref?: Ref<SheetHandle>;
   cards: ProjectCard[];
   openId: string | null;
   onClosed: () => void;
@@ -495,6 +507,8 @@ export function ProjectSheet({
     );
     slidOut.current.finished.then(go, () => (switching.current = null));
   };
+
+  useImperativeHandle(ref, () => ({ close: () => requestClose() }));
 
   return (
     <Dialog

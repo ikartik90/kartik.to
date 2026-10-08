@@ -5,10 +5,11 @@ import { css, cx } from "../../../styled-system/css";
 import { pageOpening, sectionHeadline } from "../../../styled-system/recipes";
 import { Carousel } from "@/components/carousel";
 import { HERO_OPENING_LINES, HERO_OPENING_STEPS, openingStepDelay } from "@/data/page-opening";
-import { SPOTWORK } from "./data";
+import { OPEN_CARDS, SPOTWORK } from "./data";
 import { joinOpening, riseIn } from "./opening";
-import { ProjectSheet } from "./project-sheet";
+import { ProjectSheet, type SheetHandle } from "./project-sheet";
 import { SheetCard } from "./sheet-card";
+import { useSheetAddress } from "./use-sheet-address";
 
 // At the showcase's width, so the headline starts at the edge the cards start at. The hero's "See my work" lands
 // here, clear of the page top.
@@ -62,18 +63,11 @@ function useCardsEnter(scrollerRef: RefObject<HTMLDivElement | null>) {
   return entering;
 }
 
-/** `?sheet=<card id>` opens that card's sheet on load. */
-export function ProjectStacks({ id }: { id?: string }) {
+/** `sheet`: the card whose sheet the page opens with, served at its address. */
+export function ProjectStacks({ id, sheet }: { id?: string; sheet?: string }) {
   const section = SPOTWORK;
-  const opens = section.cards.filter((card) => !card.soon);
-  const [openSheet, setOpenSheet] = useState<string | null>(null);
-  useEffect(() => {
-    const sheet = new URLSearchParams(window.location.search).get("sheet");
-    // Read once on mount: the address isn't known on the server.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (sheet && opens.some((card) => card.id === sheet)) setOpenSheet(sheet);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const sheetRef = useRef<SheetHandle>(null);
+  const { openId, open, switchTo, closed } = useSheetAddress(sheet, sheetRef);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const entering = useCardsEnter(scrollerRef);
 
@@ -97,12 +91,12 @@ export function ProjectStacks({ id }: { id?: string }) {
           <SheetCard
             key={card.id}
             card={card}
-            onOpen={opens.includes(card) ? (opened) => setOpenSheet(opened.id) : undefined}
+            onOpen={OPEN_CARDS.includes(card) ? (opened) => open(opened.id) : undefined}
           />
         ))}
       </Carousel>
 
-      <ProjectSheet cards={opens} openId={openSheet} onClosed={() => setOpenSheet(null)} onSwitch={setOpenSheet} />
+      <ProjectSheet ref={sheetRef} cards={OPEN_CARDS} openId={openId} onClosed={closed} onSwitch={switchTo} />
     </section>
   );
 }

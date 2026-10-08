@@ -18,8 +18,9 @@ import {
   roomBelowStyle,
   wideSectionStyle,
 } from "./sheet-article";
+import { NORTH_STAR } from "./data";
 import { ConceptsSplit } from "./shift-concepts";
-import { SHIFT } from "./shift-content";
+import { fewest, SHIFT } from "./shift-content";
 import { footnoteStyle, ShiftGap } from "./shift-gap";
 import { EditScheduleWireframe, PositionsWireframe, StepsWireframe } from "./shift-wireframes";
 
@@ -100,13 +101,6 @@ const noneStyle = css({
   "& svg path[stroke]": { stroke: "currentColor" },
   "& svg path[fill]": { fill: "currentColor" },
 });
-
-/** Which of a row's results take the fewest clicks: the lowest number; words ("Not possible") never. */
-export function fewest(cells: string[]) {
-  const counts = cells.map(Number);
-  const least = Math.min(...counts.filter(Number.isFinite));
-  return counts.map((count) => count === least);
-}
 
 /**
  * The three schedulers, counted: the old calendar, the recurrence that was tested, and drag to select. `rowsRef`, its
@@ -202,7 +196,7 @@ export function ShiftSheet() {
       </section>
 
       <section className={bandStyle} data-sheet-step="">
-        <Head caption="North Star" large>
+        <Head caption={NORTH_STAR} large>
           {northStar}
         </Head>
       </section>

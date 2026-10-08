@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SHIFT } from "../shift-content";
-import { fewest } from "../shift-sheet";
+import { fewest, SHIFT } from "../shift-content";
 
 describe("fewest", () => {
   it("marks the lowest count in a row, every one that ties", () => {

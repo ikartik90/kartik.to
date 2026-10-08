@@ -11,9 +11,19 @@ import { getPostMarkdownUrl, getPostReadUrl } from "@/utils/post-urls";
 // Drafts, `/edit` and `/vouch` are never named: the admin surface must not be advertised,
 // and `/vouch` is reached only by a link handed out by hand.
 
-function listedPosts(posts: Post[]): Post[] {
+export interface ListedProject {
+  title: string;
+  summary: string;
+  path: string;
+  /** A post's address that this project's copy stands in for. */
+  replaces?: string;
+}
+
+function listedPosts(posts: Post[], projects: ListedProject[] = []): Post[] {
+  const replaced = new Set(projects.map((project) => project.replaces));
   return posts
     .filter((post) => post.publishedAt && POST_CATEGORIES[post.category].listed)
+    .filter((post) => !replaced.has(getPostReadUrl(post.category, post.slug)))
     .sort((a, b) => b.publishedAt!.getTime() - a.publishedAt!.getTime());
 }
 
@@ -25,9 +35,11 @@ function listedPages(posts: Post[]): Post[] {
   );
 }
 
+/** `projects`: the homepage's, each with an address of its own where its sheet opens. */
 export function sitemapEntries(
   posts: Post[],
   siteUrl: string,
+  projects: ListedProject[] = [],
 ): MetadataRoute.Sitemap {
   const pages = listedPages(posts);
   // Any post's edit changes the homepage, where its card is; a page like About has none.
@@ -50,8 +62,9 @@ export function sitemapEntries(
 
   return [
     { url: siteUrl, ...(homeModified ? { lastModified: homeModified } : {}) },
+    ...projects.map(({ path }) => ({ url: `${siteUrl}${path}` })),
     ...pages.map(entry),
-    ...listedPosts(posts).reverse().map(entry),
+    ...listedPosts(posts, projects).reverse().map(entry),
     ...SITE_PATHS.map(({ path }) => ({ url: `${siteUrl}${path}` })),
   ];
 }
@@ -63,9 +76,9 @@ const PROFILE_LABELS: Record<keyof typeof SOCIAL_PROFILES, string> = {
 };
 
 /** https://llmstxt.org */
-export function llmsTxt(posts: Post[], siteUrl: string): string {
+export function llmsTxt(posts: Post[], siteUrl: string, projects: ListedProject[] = []): string {
   const { locality, region, country } = AUTHOR.location;
-  const listed = listedPosts(posts);
+  const listed = listedPosts(posts, projects);
 
   const postLink = (post: Post) => {
     const summary = postDescription(post);
@@ -90,6 +103,10 @@ export function llmsTxt(posts: Post[], siteUrl: string): string {
       `- Website: ${siteUrl}`,
     ].join("\n"),
     ...section(POST_CATEGORIES.PAGE.section, listedPages(posts).map(postLink)),
+    ...section(
+      "Projects",
+      projects.map(({ title, summary, path }) => `- [${title}](${siteUrl}${path}.md): ${summary}`),
+    ),
     ...LISTED_CATEGORIES.flatMap((category) =>
       section(POST_CATEGORIES[category].section, postLinks(category)),
     ),

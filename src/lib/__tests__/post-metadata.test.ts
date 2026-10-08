@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Post } from "@/domain/post";
 import { SITE_TITLE } from "@/data/site";
-import { homeMetadata, postMetadata, siteCard } from "../post-metadata";
+import { homeMetadata, postMetadata, projectMetadata, siteCard } from "../post-metadata";
 
 const NOW = new Date("2026-09-10T00:00:00.000Z");
 
@@ -54,6 +54,14 @@ describe("postMetadata", () => {
     expect(about.twitter).toMatchObject({ title: searchTitle });
   });
 
+  it("can name another address as canonical, keeping its own on its card", () => {
+    const replaced = postMetadata(PROJECT, "/work/scheduling-extensions", "Project", {
+      canonical: "/projects/shift-scheduling",
+    });
+    expect(replaced.alternates?.canonical).toBe("/projects/shift-scheduling");
+    expect(replaced.openGraph).toMatchObject({ url: "/work/scheduling-extensions" });
+  });
+
   it("is a bare title for a post that does not exist", () => {
     expect(postMetadata(null, "/work/nope", "Project")).toEqual({
       title: "Project",
@@ -103,6 +111,51 @@ describe("siteCard", () => {
       description: "A line.",
       creator: "@ikartik90",
     });
+  });
+});
+
+describe("projectMetadata", () => {
+  const metadata = projectMetadata(
+    "Shift scheduling",
+    "Made posted schedules extendable",
+    "/projects/shift-scheduling",
+    "/og/projects/shift-scheduling.png",
+  );
+
+  it("names the project's address as its own, and points agents at its Markdown copy", () => {
+    expect(metadata.alternates).toEqual({
+      canonical: "/projects/shift-scheduling",
+      types: { "text/markdown": "/projects/shift-scheduling.md" },
+    });
+  });
+
+  it("titles and describes the page and its card with the project's", () => {
+    expect(metadata.title).toBe("Shift scheduling");
+    expect(metadata.description).toBe("Made posted schedules extendable");
+    expect(metadata.openGraph).toMatchObject({
+      type: "website",
+      url: "/projects/shift-scheduling",
+      siteName: "kartik.to",
+      title: "Shift scheduling",
+      description: "Made posted schedules extendable",
+    });
+    expect(metadata.twitter).toMatchObject({
+      card: "summary_large_image",
+      title: "Shift scheduling",
+      description: "Made posted schedules extendable",
+      creator: "@ikartik90",
+    });
+  });
+
+  it("previews the link with the project's card, named as the card is", () => {
+    const image = {
+      url: "/og/projects/shift-scheduling.png",
+      width: 1200,
+      height: 630,
+      alt: "Shift scheduling: Made posted schedules extendable",
+    };
+    expect(metadata.openGraph).toMatchObject({ images: [image] });
+    expect(metadata.twitter).toMatchObject({ images: [image] });
   });
 });
 
