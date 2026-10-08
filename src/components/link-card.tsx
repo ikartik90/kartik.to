@@ -34,6 +34,8 @@ export interface LinkCardProps {
   newTab?: boolean;
   /** False also takes the link out of the tab order. */
   interactive?: boolean;
+  /** Fills its container's height instead of holding `aspect`, for a container that holds the shape. */
+  stretch?: boolean;
 }
 
 export function LinkCard({
@@ -49,8 +51,9 @@ export function LinkCard({
   tone,
   newTab = false,
   interactive = true,
+  stretch = false,
 }: LinkCardProps) {
-  const styles = linkCard({ aspect, tone });
+  const styles = linkCard({ aspect, tone, stretch });
 
   const covered = Boolean(cover || coverDark);
   const captioned = Boolean(title || meta);

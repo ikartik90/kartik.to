@@ -20,6 +20,9 @@ export type ActionEmphasis = "secondary" | "tertiary" | "glass" | "accent";
 /** `md` is the 40px chip, `sm` the 32px one; only the `text` variant has both. */
 export type ActionSize = "md" | "sm";
 
+/** An icon button's corners: `circle` is the 40px circle secondary icons always are. */
+export type ActionShape = "square" | "circle";
+
 export interface ActionTextProps {
   children: ReactNode;
   className?: string;

@@ -144,6 +144,29 @@ describe("HomeGrid", () => {
     expect(screen.queryByRole("button", { name: /pin/i })).toBeNull();
   });
 
+  it("is named for the heading over its cards", () => {
+    render(<HomeGrid cards={[post("a")]} heading="Ideas I build on the side." />);
+    const region = screen.getByRole("region", { name: "Ideas I build on the side." });
+    expect(
+      within(region).getByRole("heading", { level: 2, name: "Ideas I build on the side." }),
+    ).toBeDefined();
+  });
+
+  it("is the Work region when it has no heading", () => {
+    render(<HomeGrid cards={[post("a")]} />);
+    expect(screen.getByRole("region", { name: "Work" })).toBeDefined();
+  });
+
+  // The cell holds the shape, gaps included, so shapes line up across columns and rows.
+  it("stretches its link cards to their cells instead of letting them hold their own shape", () => {
+    const { container } = render(
+      <HomeGrid cards={[post("a"), linkCard("l1", { content: { title: "Icons" } })]} />,
+    );
+    const cards = [...container.querySelectorAll('[class*="link-card__root"]')];
+    expect(cards).toHaveLength(2);
+    for (const card of cards) expect(card.className).toContain("link-card__root--stretch_true");
+  });
+
   it("mounts no editing dialogs when not editable", () => {
     const { container } = render(
       <HomeGrid cards={[post("a"), component("c1")]} />,

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { css, cx } from "../../../styled-system/css";
-import { pageOpening } from "../../../styled-system/recipes";
+import { pageOpening, sectionHeadline } from "../../../styled-system/recipes";
 import { Carousel } from "@/components/carousel";
 import { HERO_OPENING_LINES, HERO_OPENING_STEPS, openingStepDelay } from "@/data/page-opening";
 import { SPOTWORK } from "./data";
@@ -19,13 +19,6 @@ const sectionStyle = css({
   flexDirection: "column",
   gap: "xl",
   scrollMarginBlockStart: "5xl",
-});
-
-const headlineStyle = css({
-  maxWidth: "articleContent",
-  textStyle: "subheadingLarge",
-  textWrap: "balance",
-  color: "text.title",
 });
 
 // The headline, then the carousel's arrows, are the page opening's steps after the hero's, on screen or not: off it,
@@ -91,7 +84,7 @@ export function ProjectStacks({ id }: { id?: string }) {
       aria-labelledby="spotwork-headline"
       data-entering={entering ? "" : undefined}
     >
-      <h2 id="spotwork-headline" className={cx(headlineStyle, stepOpening)} {...openingStep(0)}>
+      <h2 id="spotwork-headline" className={cx(sectionHeadline(), stepOpening)} {...openingStep(0)}>
         {section.headline}
       </h2>
 

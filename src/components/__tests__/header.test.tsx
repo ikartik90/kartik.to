@@ -42,6 +42,15 @@ describe("Header", () => {
     expect(screen.queryByText("DESIGNER • BUILDER • ENGINEER •")).toBeNull();
   });
 
+  it("draws the menu and the theme toggle as tertiary circles", () => {
+    render(<Header />);
+    for (const name of ["Menu", "Dark theme"]) {
+      const cls = screen.getByRole("button", { name }).className;
+      expect(cls).toContain("shape_circle");
+      expect(cls).toContain("emphasis_tertiary");
+    }
+  });
+
   it("asks for the command palette when the menu button is pressed", () => {
     const open = vi.fn();
     const stop = subscribeCommandPalette(open);

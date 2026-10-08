@@ -4,7 +4,7 @@ import DarkIcon from "@/assets/icons/dark.svg";
 import LightIcon from "@/assets/icons/light.svg";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import { css } from "../../styled-system/css";
-import { Button } from "./ui/button";
+import { Button, type ActionShape } from "./ui/button";
 import { Tooltip } from "./ui/tooltip";
 
 // Names the theme it offers, not the one in force. The command palette reads this too.
@@ -18,12 +18,12 @@ const glyphForDark = css({ display: "block", _dark: { display: "none" } });
 const glyphForLight = css({ display: "none", _dark: { display: "block" } });
 
 /** The bare control, for consumers that place it themselves. */
-export function ThemeToggleButton() {
+export function ThemeToggleButton({ shape }: { shape?: ActionShape }) {
   const { isDark, toggle } = useThemeToggle();
   const label = isDark ? OFFER.light : OFFER.dark;
 
   return (
-    <Button variant="icon" aria-label={label} onClick={toggle}>
+    <Button variant="icon" shape={shape} aria-label={label} onClick={toggle}>
       <DarkIcon className={glyphForDark} data-theme-glyph="dark" />
       <LightIcon className={glyphForLight} data-theme-glyph="light" />
       <Button.Tooltip>
@@ -34,10 +34,10 @@ export function ThemeToggleButton() {
 }
 
 /** In the `[data-theme-toggle]` slot that globals.css positions. */
-export function ThemeToggle() {
+export function ThemeToggle({ shape }: { shape?: ActionShape }) {
   return (
     <div data-theme-toggle>
-      <ThemeToggleButton />
+      <ThemeToggleButton shape={shape} />
     </div>
   );
 }

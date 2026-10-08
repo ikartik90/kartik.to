@@ -5,7 +5,7 @@ import { hotkey } from "../../styled-system/recipes";
 import MenuIcon from "@/assets/icons/menu.svg";
 import { useShortcutLabel } from "@/hooks/use-shortcut-label";
 import { openCommandPalette } from "@/utils/command-palette-channel";
-import { Button } from "./ui/button";
+import { Button, type ActionShape } from "./ui/button";
 import { Tooltip } from "./ui/tooltip";
 
 // Hidden while the tooltip is up, keyed off its state rather than :hover. The 150ms return delay
@@ -31,12 +31,12 @@ const rowStyle = css({
   gap: "xs",
 });
 
-export function MenuButton() {
+export function MenuButton({ shape }: { shape?: ActionShape }) {
   const shortcut = useShortcutLabel("K");
 
   return (
     <div className={rowStyle}>
-      <Button variant="icon" aria-label="Menu" onClick={openCommandPalette}>
+      <Button variant="icon" shape={shape} aria-label="Menu" onClick={openCommandPalette}>
         <MenuIcon />
         <Button.Tooltip>
           <Tooltip.Text>Menu</Tooltip.Text>

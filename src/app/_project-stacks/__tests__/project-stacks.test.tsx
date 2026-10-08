@@ -106,17 +106,18 @@ describe("ProjectStacks", () => {
     expect(sheet()).toBeNull();
   });
 
-  it("goes on to the next project from the sheet's foot, round the ends", () => {
+  it("offers only the next project from the first sheet, and only the previous from the last", () => {
     render(<ProjectStacks />);
-    fireEvent.click(screen.getByRole("button", { name: /^Company onboarding:/ }));
-    const nav = within(sheet()!).getByRole("navigation", { name: "More projects" });
-    expect(within(nav).getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "PreviousShift scheduling",
-      "NextShift scheduling",
-    ]);
-    fireEvent.click(within(nav).getByRole("button", { name: /^Next/ }));
-    expect(sheet()?.getAttribute("aria-label")).toBe("Shift scheduling");
-    expect(within(sheet()!).getByText("Shift scheduling sheet")).toBeDefined();
+    const nav = () => within(sheet()!).getByRole("navigation", { name: "More projects" });
+    const offered = () => within(nav()).getAllByRole("button").map((button) => button.textContent);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Shift scheduling:/ }));
+    expect(offered()).toEqual(["NextCompany onboarding"]);
+
+    fireEvent.click(within(nav()).getByRole("button", { name: /^Next/ }));
+    expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding");
+    expect(within(sheet()!).getByText("Onboarding sheet")).toBeDefined();
+    expect(offered()).toEqual(["PreviousShift scheduling"]);
   });
 
   it("closes from its Close button", () => {

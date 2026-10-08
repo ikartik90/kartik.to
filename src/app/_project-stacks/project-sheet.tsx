@@ -174,6 +174,8 @@ const navLinkStyle = css({
   textAlign: "start",
   cursor: "pointer",
   "&[data-sheet-nav='next']": { gridColumn: "2", alignItems: "flex-end", textAlign: "end" },
+  // At the first or last project, the one link left sits in the middle of the frame.
+  "&[data-sheet-nav]:only-child": { gridColumn: "1 / -1", justifySelf: "center", alignItems: "center", textAlign: "center" },
   "&:hover > [data-nav-name]": { color: "text.highlight" },
   "html[data-keyboard-focus] &": {
     "&:focus-visible": { outline: "1.5px solid var(--colors-border-focus-ring)", outlineOffset: "token(spacing.sm)", borderRadius: "sm" },
@@ -184,14 +186,14 @@ const navNameStyle = css({ textStyle: "bodyLarge", color: "text.title", textWrap
 
 type Direction = 1 | -1;
 
-/** Links to the projects either side of `card`, wrapping round at the ends. */
+/** Links to the projects either side of `card`: only the next from the first, only the previous from the last. */
 function SheetNav({ cards, card, onGo }: { cards: ProjectCard[]; card: ProjectCard; onGo: (id: string, by: Direction) => void }) {
   const at = cards.indexOf(card);
   if (cards.length < 2 || at === -1) return null;
   const sides = [
-    { by: -1 as const, label: "Previous", to: cards[(at - 1 + cards.length) % cards.length] },
-    { by: 1 as const, label: "Next", to: cards[(at + 1) % cards.length] },
-  ];
+    { by: -1 as const, label: "Previous", to: cards[at - 1] },
+    { by: 1 as const, label: "Next", to: cards[at + 1] },
+  ].filter((side) => side.to);
   return (
     <nav className={navStyle} aria-label="More projects" data-sheet-step="">
       {sides.map(({ by, label, to }) => (

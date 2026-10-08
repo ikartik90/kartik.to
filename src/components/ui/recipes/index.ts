@@ -72,6 +72,7 @@ import { menuIcon } from "./menu-icon";
 import { menuItem } from "./menu-item";
 import { pageOpening } from "./page-opening";
 import { propertiesPanel } from "./properties-panel";
+import { sectionHeadline } from "./section-headline";
 import { segmentedControl } from "./segmented-control";
 import { selectionPopover } from "./selection-popover";
 import { testimonialCard } from "./testimonial-card";
@@ -142,6 +143,7 @@ export const recipes = {
   commandGroup,
   mediaObjectToolbar,
   pageOpening,
+  sectionHeadline,
 };
 
 export const slotRecipes = {
