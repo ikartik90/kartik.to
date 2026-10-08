@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { flushSync } from "react-dom";
 import { OPEN_CARDS, openCard, projectPath } from "./data";
 import type { SheetHandle } from "./project-sheet";
 
@@ -16,6 +17,8 @@ export function useSheetAddress(initial: string | undefined, sheet: RefObject<Sh
   const shown = useRef(openId);
   // The entry behind this one is the page without the sheet.
   const added = useRef(false);
+  // It is closing because the history took its address off, and then follows the address wherever that is by then.
+  const leaving = useRef(false);
 
   const show = (id: string | null) => {
     shown.current = id;
@@ -38,6 +41,7 @@ export function useSheetAddress(initial: string | undefined, sheet: RefObject<Sh
       const id = sheetAt(window.location.pathname, base);
       if (shown.current && !id) {
         added.current = false;
+        leaving.current = true;
         sheet.current?.close();
       } else if (!shown.current && id) {
         added.current = true;
@@ -62,6 +66,15 @@ export function useSheetAddress(initial: string | undefined, sheet: RefObject<Sh
     },
     /** After the sheet has closed, by any means. */
     closed: () => {
+      if (leaving.current) {
+        leaving.current = false;
+        const id = sheetAt(window.location.pathname, base);
+        if (!id) return show(null);
+        // Forward again as it closed. The sheet has to see itself closed, or it won't open again.
+        flushSync(() => show(null));
+        added.current = true;
+        return show(id);
+      }
       show(null);
       if (sheetAt(window.location.pathname, base)) {
         if (added.current) window.history.back();

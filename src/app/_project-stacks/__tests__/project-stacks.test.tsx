@@ -203,6 +203,124 @@ describe("ProjectStacks", () => {
   });
 });
 
+describe("ProjectStacks while its sheet moves", () => {
+  // Stand-ins for the sheet's animations, each under way until the test ends it.
+  let moving: Animation[] = [];
+
+  const animate = function (this: Element) {
+    let state: AnimationPlayState = "running";
+    let end!: () => void;
+    let abort!: () => void;
+    const finished = new Promise<Animation>((resolve, reject) => {
+      end = () => resolve(animation);
+      abort = () => reject(new DOMException("Aborted", "AbortError"));
+    });
+    finished.catch(() => {});
+    const animation = {
+      effect: { target: this },
+      finished,
+      startTime: null,
+      get playState() {
+        return state;
+      },
+      pause: () => void (state === "running" && (state = "paused")),
+      finish: () => void (state !== "idle" && ((state = "finished"), end())),
+      cancel: () => void ((state = "idle"), abort()),
+    } as unknown as Animation;
+    moving.push(animation);
+    return animation;
+  };
+
+  /** Ends the animations under way, and with `all`, those they start in turn, until the sheet is still. */
+  async function end({ all = true } = {}) {
+    do {
+      const now = moving.splice(0);
+      if (!now.length) return;
+      await act(async () => now.forEach((animation) => animation.finish()));
+    } while (all);
+  }
+
+  /** Back or Forward, once the page has heard it. */
+  const step = (go: () => void) =>
+    act(
+      () =>
+        new Promise<void>((resolve) => {
+          window.addEventListener("popstate", () => resolve(), { once: true });
+          go();
+        }),
+    );
+
+  const openShift = async () => {
+    render(<ProjectStacks />);
+    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
+    await end();
+  };
+  const next = () => fireEvent.click(within(sheet()!).getByRole("link", { name: /^Next/ }));
+  const shown = () => ({ path: window.location.pathname, sheet: sheet()?.getAttribute("aria-label") ?? null });
+
+  beforeEach(() => {
+    moving = [];
+    window.matchMedia = ((query: string) => ({ ...matchMedia(query), matches: false })) as typeof window.matchMedia;
+    HTMLElement.prototype.animate = animate as unknown as HTMLElement["animate"];
+    Object.defineProperty(document, "timeline", { configurable: true, value: { currentTime: 0 } });
+    // jsdom can't style the backdrop, and says so.
+    const styleOf = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation((el) => styleOf(el));
+  });
+
+  afterEach(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+    Reflect.deleteProperty(document, "timeline");
+  });
+
+  it("closes on Back taken as it goes to the next project, and opens where it was on Forward", async () => {
+    await openShift();
+    next();
+    await step(() => window.history.back());
+    await end();
+    expect(shown()).toEqual({ path: "/", sheet: null });
+
+    await step(() => window.history.forward());
+    await end();
+    expect(shown()).toEqual({ path: "/projects/shift-scheduling", sheet: "Shift scheduling" });
+  });
+
+  it("closes on Back taken as the next project slides in, and opens on it on Forward", async () => {
+    await openShift();
+    next();
+    await end({ all: false });
+    expect(window.location.pathname).toBe("/projects/onboarding");
+    await step(() => window.history.back());
+    await end();
+    expect(shown()).toEqual({ path: "/", sheet: null });
+
+    await step(() => window.history.forward());
+    await end();
+    expect(shown()).toEqual({ path: "/projects/onboarding", sheet: "Company onboarding" });
+  });
+
+  it("closes from its Close button pressed as it goes to the next project", async () => {
+    await openShift();
+    next();
+    fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
+    await end();
+    expect(sheet()).toBeNull();
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+  });
+
+  it("opens again on Forward taken as Back closes it, and closes again on Back", async () => {
+    await openShift();
+    await step(() => window.history.back());
+    await step(() => window.history.forward());
+    await end();
+    expect(shown()).toEqual({ path: "/projects/shift-scheduling", sheet: "Shift scheduling" });
+
+    await step(() => window.history.back());
+    await end();
+    expect(shown()).toEqual({ path: "/", sheet: null });
+  });
+});
+
 describe("ProjectStacks under a base", () => {
   beforeEach(() => window.history.replaceState(null, "", "/dive"));
 
