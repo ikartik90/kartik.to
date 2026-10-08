@@ -9,6 +9,8 @@ import { useGridDraftStore } from "@/store/grid-draft";
 import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { autosaveKey } from "@/utils/editor-autosave";
 import { isGridDraftDirty } from "@/utils/grid-draft";
+import { subscribeProjectSheet } from "@/utils/project-sheet-channel";
+import { OPEN_CARDS } from "@/app/_project-stacks/data";
 
 const mockUseSession = vi.fn().mockReturnValue({ data: null });
 vi.mock("@/lib/auth/client", () => ({
@@ -1400,6 +1402,47 @@ describe("useCommandPalette", () => {
     });
   });
 
+  describe("sheets", () => {
+    const onboarding = OPEN_CARDS.find((card) => card.id === "onboarding")!;
+
+    it("are the homepage's projects whose sheets are ready", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.sheets).toEqual(OPEN_CARDS);
+    });
+
+    it("leave out the one on screen", () => {
+      mockPathname.mockReturnValue("/projects/onboarding");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.sheets).toEqual(
+        OPEN_CARDS.filter((card) => card !== onboarding),
+      );
+    });
+
+    it("handleOpenSheet opens it over the homepage on screen, once the palette has closed", () => {
+      const sheet = vi.fn();
+      const stop = subscribeProjectSheet(sheet);
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      act(() => result.current.handleOpenSheet(onboarding));
+      stop();
+
+      expect(sheet).toHaveBeenCalledExactlyOnceWith("onboarding");
+      expect(close.mock.invocationCallOrder[0]).toBeLessThan(
+        sheet.mock.invocationCallOrder[0],
+      );
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("handleOpenSheet goes to its address from any other page", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      act(() => result.current.handleOpenSheet(onboarding));
+
+      expect(mockPush).toHaveBeenCalledWith("/projects/onboarding");
+      expect(close).toHaveBeenCalledOnce();
+    });
+  });
+
   describe("projects", () => {
     const projects = [
       { slug: "shift-scheduling", title: "Shift Scheduling" },
@@ -1423,6 +1466,20 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(async () => {});
       expect(result.current.projects).toEqual([projects[1]]);
+    });
+
+    it("leave out a post a project's sheet stands in for", async () => {
+      const { getPublishedProjects } = await import("@/app/actions/post");
+      (getPublishedProjects as Mock).mockResolvedValue([
+        {
+          slug: "redesigning-shift-scheduling",
+          title: "Redesigning shift scheduling",
+        },
+        ...projects,
+      ]);
+      const { result } = renderHook(() => useCommandPalette(close));
+      await act(async () => {});
+      expect(result.current.projects).toEqual(projects);
     });
 
     it("are looked up again each time the palette opens", async () => {
