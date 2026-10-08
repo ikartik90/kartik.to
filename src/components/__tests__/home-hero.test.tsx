@@ -36,6 +36,11 @@ describe("HomeHero", () => {
     expect(screen.getByText("Toronto, ON")).toBeDefined();
   });
 
+  it("names the place in words alone, with no map pin", () => {
+    render(<HomeHero />);
+    expect(screen.getByText("Toronto, ON").querySelector("svg")).toBeNull();
+  });
+
   it("leads to the work on the page and opens the resume in a new tab", () => {
     render(<HomeHero />);
     expect(screen.getByRole("link", { name: "See my work" }).getAttribute("href")).toBe("#work");
