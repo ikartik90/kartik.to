@@ -299,7 +299,15 @@ export function CardFace({ card, place }: { card: ProjectCard; place: "card" | "
 }
 
 /** A link to its sheet's address, which `onOpen` opens in place. Without `onOpen` the card doesn't open. */
-export function SheetCard({ card, onOpen }: { card: ProjectCard; onOpen?: (card: ProjectCard) => void }) {
+export function SheetCard({
+  card,
+  base,
+  onOpen,
+}: {
+  card: ProjectCard;
+  base?: string;
+  onOpen?: (card: ProjectCard) => void;
+}) {
   useEffect(() => {
     for (const name of ["--ride-x", "--ride-y"]) {
       try {
@@ -331,7 +339,7 @@ export function SheetCard({ card, onOpen }: { card: ProjectCard; onOpen?: (card:
     <div className={cx(carouselStyles.slide, slideStyle)} data-carousel-slide="">
       {onOpen ? (
         <a
-          href={projectPath(card.id)}
+          href={projectPath(card.id, base)}
           className={cardStyle}
           data-sheet-card={card.id}
           {...host}

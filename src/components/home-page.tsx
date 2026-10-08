@@ -15,8 +15,8 @@ import { getHomeDocument } from "@/lib/home";
 import { SITE_URL } from "@/lib/site-url";
 import { homeJsonLd } from "@/utils/structured-data";
 
-/** `sheet`: a project whose sheet opens over the page, at its own address. */
-export async function HomePage({ sheet }: { sheet?: string }) {
+/** `sheet`: a project whose sheet opens over the page, at its own address. `base`: as for `projectPath`. */
+export async function HomePage({ sheet, base }: { sheet?: string; base?: string }) {
   const [document, cards, testimonials] = await Promise.all([
     getHomeDocument(),
     getGridCards(),
@@ -28,7 +28,7 @@ export async function HomePage({ sheet }: { sheet?: string }) {
       <main>
         <JsonLd data={homeJsonLd(SITE_URL)} />
         <HomeHero />
-        <ProjectStacks id="work" sheet={sheet} />
+        <ProjectStacks id="work" sheet={sheet} base={base} />
         {/* Must be an `article`: the renderer's block styles are scoped to one. */}
         <article data-home>
           <ArticleRenderer

@@ -112,3 +112,8 @@ export function homeMetadata(description: string | null): Metadata {
     ? { ...canonical, description, ...siteCard(description) }
     : canonical;
 }
+
+/** A review copy of a public page: noindex, and without its canonical, which the noindex could be carried over to. */
+export function reviewMetadata(metadata: Metadata): Metadata {
+  return { ...metadata, alternates: null, robots: { index: false, follow: false } };
+}

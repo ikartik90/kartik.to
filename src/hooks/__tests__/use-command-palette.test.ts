@@ -1418,6 +1418,14 @@ describe("useCommandPalette", () => {
       );
     });
 
+    it("leave out the one on screen in the review copy", () => {
+      mockPathname.mockReturnValue("/dive/projects/onboarding");
+      const { result } = renderHook(() => useCommandPalette(close));
+      expect(result.current.sheets).toEqual(
+        OPEN_CARDS.filter((card) => card !== onboarding),
+      );
+    });
+
     it("handleOpenSheet opens it over the homepage on screen, once the palette has closed", () => {
       const sheet = vi.fn();
       const stop = subscribeProjectSheet(sheet);

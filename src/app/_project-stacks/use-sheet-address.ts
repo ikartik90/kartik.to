@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { openCard, projectPath } from "./data";
+import { OPEN_CARDS, openCard, projectPath } from "./data";
 import type { SheetHandle } from "./project-sheet";
 
-const sheetAt = (pathname: string) => openCard(/^\/projects\/([^/]+)\/?$/.exec(pathname)?.[1] ?? "")?.id ?? null;
+const sheetAt = (pathname: string, base: string) =>
+  OPEN_CARDS.find((card) => projectPath(card.id, base) === pathname.replace(/\/$/, ""))?.id ?? null;
 
 /**
- * The open sheet, kept in the address as `/projects/<id>`. Opening one adds an entry that closing takes back off, so
- * Back closes it and Forward opens it again; another card's sheet in its place replaces the entry. A sheet opened at
- * its own address leaves the homepage's in its place as it closes.
+ * The open sheet, kept in the address as `<base>/projects/<id>`. Opening one adds an entry that closing takes back
+ * off, so Back closes it and Forward opens it again; another card's sheet in its place replaces the entry. A sheet
+ * opened at its own address leaves the homepage's in its place as it closes.
  */
-export function useSheetAddress(initial: string | undefined, sheet: RefObject<SheetHandle | null>) {
+export function useSheetAddress(initial: string | undefined, sheet: RefObject<SheetHandle | null>, base = "") {
   const [openId, setOpenId] = useState(initial ?? null);
   // For the history's events, which can come before a render.
   const shown = useRef(openId);
@@ -25,7 +26,7 @@ export function useSheetAddress(initial: string | undefined, sheet: RefObject<Sh
     // A link from before sheets had addresses of their own.
     const legacy = new URLSearchParams(window.location.search).get("sheet");
     if (initial || !legacy || !openCard(legacy)) return;
-    window.history.replaceState(null, "", projectPath(legacy));
+    window.history.replaceState(null, "", projectPath(legacy, base));
     shown.current = legacy;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenId(legacy);
@@ -34,7 +35,7 @@ export function useSheetAddress(initial: string | undefined, sheet: RefObject<Sh
 
   useEffect(() => {
     const onPopState = () => {
-      const id = sheetAt(window.location.pathname);
+      const id = sheetAt(window.location.pathname, base);
       if (shown.current && !id) {
         added.current = false;
         sheet.current?.close();
@@ -46,25 +47,25 @@ export function useSheetAddress(initial: string | undefined, sheet: RefObject<Sh
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [sheet]);
+  }, [sheet, base]);
 
   return {
     openId,
     open: (id: string) => {
-      window.history.pushState(null, "", projectPath(id));
+      window.history.pushState(null, "", projectPath(id, base));
       added.current = true;
       show(id);
     },
     switchTo: (id: string) => {
-      window.history.replaceState(null, "", projectPath(id));
+      window.history.replaceState(null, "", projectPath(id, base));
       show(id);
     },
     /** After the sheet has closed, by any means. */
     closed: () => {
       show(null);
-      if (sheetAt(window.location.pathname)) {
+      if (sheetAt(window.location.pathname, base)) {
         if (added.current) window.history.back();
-        else window.history.replaceState(null, "", "/");
+        else window.history.replaceState(null, "", base || "/");
       }
       added.current = false;
     },

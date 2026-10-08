@@ -202,3 +202,49 @@ describe("ProjectStacks", () => {
     expect(sheet()).toBeNull();
   });
 });
+
+describe("ProjectStacks under a base", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/dive"));
+
+  it("links its cards and its sheets' next and previous to the project addresses under it", () => {
+    render(<ProjectStacks base="/dive" />);
+    expect(screen.getAllByRole("link", { name: /:/ }).map((link) => link.getAttribute("href"))).toEqual([
+      "/dive/projects/shift-scheduling",
+      "/dive/projects/onboarding",
+    ]);
+
+    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
+    expect(window.location.pathname).toBe("/dive/projects/shift-scheduling");
+    const next = within(sheet()!).getByRole("link", { name: /^Next/ });
+    expect(next.getAttribute("href")).toBe("/dive/projects/onboarding");
+
+    fireEvent.click(next);
+    expect(window.location.pathname).toBe("/dive/projects/onboarding");
+  });
+
+  it("closes when Back returns to the page under it, and opens again on Forward", async () => {
+    render(<ProjectStacks base="/dive" />);
+    fireEvent.click(screen.getByRole("link", { name: /^Company onboarding:/ }));
+    expect(window.location.pathname).toBe("/dive/projects/onboarding");
+
+    window.history.back();
+    await waitFor(() => expect(sheet()).toBeNull());
+    expect(window.location.pathname).toBe("/dive");
+
+    window.history.forward();
+    await waitFor(() => expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding"));
+  });
+
+  it("opened at its own address, leaves the page under it in its place as it closes", () => {
+    window.history.replaceState(null, "", "/dive/projects/onboarding");
+    render(<ProjectStacks base="/dive" sheet="onboarding" />);
+    fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
+    expect(window.location.pathname).toBe("/dive");
+  });
+
+  it("opens the sheet the command palette asks for at its address under it", () => {
+    render(<ProjectStacks base="/dive" />);
+    act(() => void openProjectSheet("shift-scheduling"));
+    expect(window.location.pathname).toBe("/dive/projects/shift-scheduling");
+  });
+});
