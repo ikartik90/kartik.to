@@ -7,17 +7,8 @@ describe("DEFAULT_HOME_DOCUMENT", () => {
     expect(DocumentSchema.safeParse(DEFAULT_HOME_DOCUMENT).success).toBe(true);
   });
 
-  it("offers the About page from the intro, above the icon row", () => {
-    expect(DEFAULT_HOME_DOCUMENT.content.map((block) => block.type)).toEqual([
-      "paragraph",
-      "button_link",
-      "social_links",
-      "project_grid",
-    ]);
-    expect(DEFAULT_HOME_DOCUMENT.content[1]).toEqual({
-      type: "button_link",
-      text: "About me",
-      href: "/about",
-    });
+  // The intro is the hero, drawn above the document.
+  it("holds only the project grid", () => {
+    expect(DEFAULT_HOME_DOCUMENT.content).toEqual([{ type: "project_grid" }]);
   });
 });

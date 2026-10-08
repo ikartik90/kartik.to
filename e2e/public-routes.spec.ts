@@ -19,7 +19,9 @@ test.describe("public routes", () => {
     await expect(page).toHaveTitle(
       "Kartik Iyer: Product Designer, Engineer, Builder",
     );
-    await expect(page.getByAltText("Kartik Iyer")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Founding designer\s*who ships/ }),
+    ).toBeVisible();
     await expect(page.getByRole("region", { name: "Work" })).toBeVisible();
 
     await expect(POST_CARDS(page).first()).toBeVisible();
