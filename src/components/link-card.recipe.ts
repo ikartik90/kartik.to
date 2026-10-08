@@ -124,7 +124,18 @@ export const linkCard = defineSlotRecipe({
         },
       },
     },
+    // Empty: drawn by the compound below, which lands after `aspect` and so beats its `aspectRatio`.
+    stretch: {
+      true: {},
+    },
   },
+  compoundVariants: [
+    {
+      // Its container (the home grid's cell) holds the shape, so it fills that height instead.
+      stretch: true,
+      css: { root: { aspectRatio: "auto" } },
+    },
+  ],
   // Chosen at runtime, so the extractor needs them listed; separate entries avoid a cross product.
-  staticCss: [{ aspect: ["*"] }, { tone: ["*"] }],
+  staticCss: [{ aspect: ["*"] }, { tone: ["*"] }, { stretch: ["*"] }],
 });

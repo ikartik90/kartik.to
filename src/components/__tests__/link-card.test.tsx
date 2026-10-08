@@ -49,6 +49,15 @@ describe("LinkCard", () => {
     expect(link.querySelector("h2")?.textContent).toBe("Atlas");
   });
 
+  it("holds its own shape unless told to stretch to its container's height", () => {
+    const { rerender } = render(<LinkCard href="/work/atlas" title="Atlas" aspect="3/2" />);
+    const link = () => screen.getByRole("link", { name: "Atlas" });
+    expect(link().className).not.toContain("stretch_true");
+
+    rerender(<LinkCard href="/work/atlas" title="Atlas" aspect="3/2" stretch />);
+    expect(link().className).toContain("link-card__root--stretch_true");
+  });
+
   it("carries a meta line over the cover when it is given one", () => {
     render(
       <LinkCard

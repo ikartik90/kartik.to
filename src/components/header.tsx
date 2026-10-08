@@ -18,9 +18,9 @@ export function Header() {
   return (
     <header data-site-header className={headerStyle}>
       <div data-site-menu>
-        <MenuButton />
+        <MenuButton shape="circle" />
       </div>
-      <ThemeToggle />
+      <ThemeToggle shape="circle" />
     </header>
   );
 }

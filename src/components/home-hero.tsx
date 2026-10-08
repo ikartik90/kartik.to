@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import { css, cx } from "../../styled-system/css";
 import { pageOpening } from "../../styled-system/recipes";
-import MapPinIcon from "@/assets/icons/map-pin.svg";
 import { ButtonLink } from "./button-link";
 import { DitherGround } from "./shaders/dither-ground";
 import { HOME_HERO } from "@/data/home-hero";
@@ -91,8 +90,6 @@ const pillStyle = css({
   color: "text.body",
   whiteSpace: "nowrap",
   ...pillFrost,
-  "& svg": { width: "token(spacing.xl)", height: "token(spacing.xl)", flexShrink: 0 },
-  "& path": { stroke: "currentColor" },
 });
 const dotStyle = css({ width: "listBullet", height: "listBullet", borderRadius: "full", backgroundColor: "text.highlight" });
 
@@ -148,10 +145,7 @@ export function HomeHero() {
             <span className={dotStyle} aria-hidden />
             {HOME_HERO.status.available}
           </span>
-          <span className={pillStyle}>
-            <MapPinIcon aria-hidden />
-            {HOME_HERO.status.location}
-          </span>
+          <span className={pillStyle}>{HOME_HERO.status.location}</span>
         </div>
         <h1 className={headingStyle}>
           {HOME_HERO.heading.map((line, i) => (

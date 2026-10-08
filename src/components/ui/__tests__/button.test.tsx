@@ -127,6 +127,30 @@ describe("Button", () => {
     });
   });
 
+  describe("shape", () => {
+    it("keeps an icon button's square corners by default", () => {
+      render(
+        <Button variant="icon" aria-label="Close">
+          <svg />
+        </Button>,
+      );
+      const cls = screen.getByRole("button", { name: "Close" }).className;
+      expect(cls).toContain("shape_square");
+      expect(cls).not.toContain("shape_circle");
+    });
+
+    it("draws a tertiary icon button as a circle when asked", () => {
+      render(
+        <Button variant="icon" shape="circle" aria-label="Close">
+          <svg />
+        </Button>,
+      );
+      const cls = screen.getByRole("button", { name: "Close" }).className;
+      expect(cls).toContain("shape_circle");
+      expect(cls).toContain("emphasis_tertiary");
+    });
+  });
+
   describe("size", () => {
     it("defaults a text button to md (the 40px chip)", () => {
       render(<Button>Save</Button>);

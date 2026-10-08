@@ -5,9 +5,10 @@ import {
   FIXTURE_ONLY_PROJECT_SLUG,
 } from "./fixtures";
 import type { Page } from "@playwright/test";
+import { HOME_GRID } from "../src/data/home-grid";
 
 const GRID_CARDS = (page: Page) =>
-  page.getByRole("region", { name: "Work", exact: true }).getByRole("link");
+  page.getByRole("region", { name: HOME_GRID.heading }).getByRole("link");
 
 test.describe("public routes", () => {
   test("the home page renders the project stack and the listing grid", async ({

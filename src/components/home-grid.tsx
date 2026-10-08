@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -8,7 +9,8 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { css } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
+import { sectionHeadline } from "../../styled-system/recipes";
 import {
   CardPropertiesPanel,
   type CardMediaSlot,
@@ -36,6 +38,8 @@ const containerStyle = css({
   containerType: "inline-size",
   containerName: "projectsGrid",
 });
+
+const headingStyle = css({ marginBlockEnd: "xl" });
 
 // In flow so the cell can measure the card; `flexGrow` fills it, since a % height resolves to nothing here.
 const fillStyle = css({
@@ -114,6 +118,8 @@ interface HomeGridProps {
   editable?: boolean;
   /** Server-rendered demos by card key; a missing key falls back to the browser loader. */
   demos?: Record<string, ReactNode>;
+  /** Heads the cards and names their region, which is "Work" without it. */
+  heading?: string;
 }
 
 // Masonry: `grid-lanes` where supported, else 1px rows with spans computed via `tan(atan2())`,
@@ -142,8 +148,10 @@ const masonryGridStyle = css({
       "calc((var(--grid-width, 100cqw) - (var(--columns) - 1) * var(--grid-gap)) / var(--columns))",
     "--cell-width":
       "calc(var(--col-width) * var(--span-clamped) + (var(--span-clamped) - 1) * var(--grid-gap))",
+    // The ratio holds for the cell plus one gutter, so shapes tile across gutters: a 2-column 1:1 is as tall as a
+    // 1:2, or as two stacked 1:1s, beside it.
     "--aspect-height":
-      "calc(var(--cell-width) * var(--aspect-h, 9) / var(--aspect-w, 16))",
+      "calc((var(--cell-width) + var(--grid-gap)) * var(--aspect-h, 9) / var(--aspect-w, 16) - var(--grid-gap))",
     // `start`, not `stretch`, which fills the gutter rows and feeds the card's height back into its span.
     alignSelf: "start",
   },
@@ -182,7 +190,8 @@ const masonryGridStyle = css({
   },
 });
 
-export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
+export function HomeGrid({ cards, editable = false, demos, heading }: HomeGridProps) {
+  const headingId = useId();
   const draft = useGridDraftStore();
   const [insert, setInsert] = useState<PendingInsert | null>(null);
   const [pick, setPick] = useState<PendingPick | null>(null);
@@ -296,7 +305,16 @@ export function HomeGrid({ cards, editable = false, demos }: HomeGridProps) {
   }
 
   return (
-    <section aria-label="Work" className={containerStyle}>
+    <section
+      aria-label={heading ? undefined : "Work"}
+      aria-labelledby={heading ? headingId : undefined}
+      className={containerStyle}
+    >
+      {heading && (
+        <h2 id={headingId} className={cx(sectionHeadline(), headingStyle)}>
+          {heading}
+        </h2>
+      )}
       {/* `data-measured` is set by the observer, never rendered: only layout can know it. */}
       <div ref={gridRef} className={masonryGridStyle} data-columns={columns}>
         {shown.map((card, index) => (
@@ -439,6 +457,7 @@ function PostCard({
       scrim={card.card.scrim}
       tone={card.card.tone}
       interactive={!editable}
+      stretch
     />
   );
 }
@@ -470,6 +489,7 @@ function ComponentCard({
         scrim={config.content?.scrim}
         tone={config.content?.tone}
         newTab={config.link?.newTab}
+        stretch
         interactive={!editable}
       />
     );

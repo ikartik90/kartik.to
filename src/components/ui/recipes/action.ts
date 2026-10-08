@@ -7,6 +7,14 @@ const frosted = {
   "backdrop-filter": "blur(token(spacing.md))",
 };
 
+// The button link's look as a 40px circle.
+const circle = {
+  width: "token(spacing.4xl)",
+  height: "token(spacing.4xl)",
+  padding: "none",
+  borderRadius: "full",
+};
+
 export const action = defineRecipe({
   className: "action",
   description:
@@ -106,6 +114,11 @@ export const action = defineRecipe({
       md: {},
       sm: {},
     },
+    // Empty: `circle` is a compound. Inert for `text` and `link`; secondary and accent icons are always circles.
+    shape: {
+      square: {},
+      circle: {},
+    },
   },
   compoundVariants: [
     {
@@ -129,12 +142,8 @@ export const action = defineRecipe({
     {
       variant: "icon",
       emphasis: ["secondary", "accent"],
-      // The button link's look as a 40px circle.
       css: {
-        width: "token(spacing.4xl)",
-        height: "token(spacing.4xl)",
-        padding: "none",
-        borderRadius: "full",
+        ...circle,
         backgroundColor: "bg.button.secondary.default",
         color: "text.body",
         _active: { transform: "scale(0.97)" },
@@ -164,6 +173,11 @@ export const action = defineRecipe({
     },
     {
       variant: "icon",
+      shape: "circle",
+      css: circle,
+    },
+    {
+      variant: "icon",
       emphasis: "glass",
       css: {
         backgroundColor: "bg.surfaceGlass",
@@ -186,7 +200,8 @@ export const action = defineRecipe({
     variant: "text",
     emphasis: "secondary",
     size: "md",
+    shape: "square",
   },
   // Variants are chosen at runtime, so emit every branch.
-  staticCss: [{ variant: ["*"], emphasis: ["*"], size: ["*"] }],
+  staticCss: [{ variant: ["*"], emphasis: ["*"], size: ["*"], shape: ["*"] }],
 });

@@ -7,6 +7,7 @@ import { HomeGrid } from "@/components/home-grid";
 import { HomeHero } from "@/components/home-hero";
 import { IntroLinks } from "@/components/intro-links";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
+import { HOME_GRID } from "@/data/home-grid";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { getGridCards } from "@/lib/grid";
@@ -39,7 +40,11 @@ export default async function Home() {
             content={document ?? DEFAULT_HOME_DOCUMENT}
             slots={{
               project_grid: (
-                <HomeGrid cards={cards} demos={serverDemoSlots(cards)} />
+                <HomeGrid
+                  cards={cards}
+                  demos={serverDemoSlots(cards)}
+                  heading={HOME_GRID.heading}
+                />
               ),
               social_links: <IntroLinks />,
             }}

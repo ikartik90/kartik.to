@@ -15,13 +15,14 @@ import {
   useActionTooltip,
   type ActionVariant,
   type ActionEmphasis,
+  type ActionShape,
   type ActionSize,
 } from "./action";
 import { Tooltip } from "./tooltip";
 import { WireframeContent } from "./wireframe";
 import { floatsOverContent } from "@/utils/floats-over-content";
 
-export type { ActionVariant, ActionEmphasis, ActionSize };
+export type { ActionVariant, ActionEmphasis, ActionShape, ActionSize };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Inferred when unset: a text label ⇒ `text`, an icon alone ⇒ `icon`. */
@@ -30,6 +31,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   emphasis?: ActionEmphasis;
   /** Applies to the `text` variant only. */
   size?: ActionSize;
+  /** Applies to the `icon` variant only. */
+  shape?: ActionShape;
 }
 
 function ButtonRoot(
@@ -37,6 +40,7 @@ function ButtonRoot(
     variant,
     emphasis,
     size = "md",
+    shape = "square",
     className,
     type = "button",
     children,
@@ -78,6 +82,7 @@ function ButtonRoot(
             variant: resolvedVariant,
             emphasis: resolvedEmphasis,
             size,
+            shape,
           }),
           className,
         )}
