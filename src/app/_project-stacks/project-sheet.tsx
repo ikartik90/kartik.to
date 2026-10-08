@@ -398,6 +398,8 @@ export function ProjectSheet({
       slideIn.finished.then(done, done);
       return;
     }
+    // A switch a close took over from: its content arrives under the closing sheet.
+    if (dialog.open) return;
 
     sheet.current = isBottomSheetLayout();
     dialog.setAttribute("autofocus", "");
@@ -452,21 +454,26 @@ export function ProjectSheet({
   const requestClose = (swiped = false) => {
     const dialog = dialogRef.current;
     const panel = panelRef.current;
-    if (!dialog || !panel || !openId || closing.current || switching.current) return;
+    if (!dialog || !panel || !openId || closing.current) return;
     closing.current = true;
+    // A switch under way gives way: its content goes on as it was going, and no other card's sheet follows.
+    switching.current = null;
+    slidOut.current = null;
     // Not a bottom sheet's: its backdrop clears with it.
     if (!sheet.current) dialog.setAttribute("data-closing", "");
 
     // One task: the dialog goes and the page has it gone in the same frame. The panel's last frame is let go only
-    // after, or Safari can paint the sheet back in place for a frame; `fade`, the backdrop's, too.
+    // after, or Safari can paint the sheet back in place for a frame; `fade`, the backdrop's, too. Only what it
+    // closed with: the address can open it again before then.
     const finish = (fade?: Animation) => {
       dialog.removeAttribute("data-closing");
       closing.current = false;
+      const spent = [fade, ...panel.getAnimations(), ...(trackRef.current?.getAnimations() ?? [])];
       dialog.close();
       onClosed();
       requestAnimationFrame(() => {
-        fade?.cancel();
-        panel.getAnimations().forEach((a) => a.cancel());
+        spent.forEach((a) => a?.cancel());
+        if (dialog.open) return;
         panel.style.removeProperty("translate");
         dialog.style.removeProperty("--sheet-shown");
         dialog.style.removeProperty("scroll-snap-type");
@@ -513,14 +520,15 @@ export function ProjectSheet({
     switching.current = by;
     const go = () => onSwitch(id);
     if (reducedMotion()) return go();
-    slidOut.current = track.animate(
+    const out = track.animate(
       [
         { opacity: 1, translate: "0px 0px" },
         { opacity: 0, translate: `${-by * slideOf(track)}px 0px` },
       ],
       { duration: SLIDE_OUT_MS, easing: "cubic-bezier(0.4, 0, 1, 1)", fill: "forwards" },
     );
-    slidOut.current.finished.then(go, () => (switching.current = null));
+    slidOut.current = out;
+    out.finished.then(() => slidOut.current === out && go(), () => (switching.current = null));
   };
 
   useImperativeHandle(ref, () => ({
