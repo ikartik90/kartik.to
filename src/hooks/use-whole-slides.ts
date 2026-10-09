@@ -7,6 +7,13 @@ import { inViewThreshold, THRESHOLD_STEPS } from "@/hooks/use-in-view";
 const sameSet = (a: ReadonlySet<number>, b: ReadonlySet<number>) =>
   a.size === b.size && [...a].every((index) => b.has(index));
 
+// The rounded report below (`fits`) can stop short of 1, 99.9% for a card in full view on an iPhone, which a
+// threshold of 1 never hears: fine steps under it.
+const THRESHOLDS = [
+  ...THRESHOLD_STEPS,
+  ...Array.from({ length: 10 }, (_, index) => 0.99 + index / 1000),
+];
+
 /**
  * The indices of the slides the screen shows whole: one cut off by the scroller's edge or the
  * screen's is not among them. `slides` must change whenever a slide is added, removed or moved.
@@ -40,7 +47,7 @@ export function useWholeSlides(
           }
           return sameSet(was, next) ? was : next;
         }),
-      { threshold: THRESHOLD_STEPS },
+      { threshold: THRESHOLDS },
     );
     order.forEach((slide) => observer.observe(slide));
     return () => observer.disconnect();

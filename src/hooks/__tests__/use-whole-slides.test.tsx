@@ -7,6 +7,7 @@ import { useWholeSlides } from "../use-whole-slides";
 // jsdom has no IntersectionObserver; the stub keeps each observer so a case can report any slide.
 interface Observer {
   callback: IntersectionObserverCallback;
+  options?: IntersectionObserverInit;
   targets: Element[];
   disconnected: boolean;
 }
@@ -15,8 +16,8 @@ const observers: Observer[] = [];
 
 class MockObserver {
   private own: Observer;
-  constructor(callback: IntersectionObserverCallback) {
-    this.own = { callback, targets: [], disconnected: false };
+  constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+    this.own = { callback, options, targets: [], disconnected: false };
     observers.push(this.own);
   }
   observe(target: Element) {
@@ -132,6 +133,15 @@ describe("useWholeSlides", () => {
     // WebKit's report for a 358.39px slide in full view.
     report(slide("a"), 358 / 358.390625, { height: 358.390625, shown: 358 });
     expect(wholeIndices()).toEqual([0]);
+  });
+
+  // The observer only reports at its thresholds, and the rounded report never reaches 1.
+  it("is told when a slide whose part shown is rounded down comes into full view", () => {
+    render(<Strip slides={["a"]} />);
+    // WebKit on an iPhone: a 548.34px card in full view, shown as 548px.
+    const [height, shown] = [548.34375, 548];
+    const thresholds = [live()[0].options?.threshold ?? []].flat();
+    expect(thresholds.some((t) => t > (height - 1) / height && t <= shown / height)).toBe(true);
   });
 
   it("re-reads which slide is where once they're reordered", () => {

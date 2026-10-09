@@ -4,7 +4,6 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { css } from "../../../styled-system/css";
 import {
   FigureFrame,
-  centerOffset,
   edgeStroke,
   floor,
   groundFill,
@@ -12,6 +11,8 @@ import {
   innerStroke,
   inkFill,
   labelText,
+  phoneZoom,
+  placeIn,
   slab,
   softText,
   type Curve,
@@ -59,7 +60,8 @@ export const tintFill = css({ fill: "color-mix(in srgb, var(--ink) 12%, token(co
 
 /** Isometric at `scale`. */
 export type Projection = { scale: number };
-export type Drawing = { bounds: Point[]; node: ReactNode };
+/** `notes`: left out zoomed in on a phone, where the cut takes their labels off the card. */
+export type Drawing = { bounds: Point[]; node: ReactNode; notes?: ReactNode };
 
 /** A point `h` above the floor's (`u`, `v`). */
 export const at = ({ scale: s }: Projection, u: number, v: number, h = 0): Point => [
@@ -181,7 +183,7 @@ export type PlayedProps = {
 
 /** The frame a played figure's drawing sits in the middle of, below its heading. */
 export function PlayedFigure({
-  drawing: { bounds, node },
+  drawing: { bounds, node, notes },
   line,
   dots,
   shift,
@@ -191,15 +193,16 @@ export function PlayedFigure({
   label,
 }: Omit<PlayedProps, "scale"> & { drawing: Drawing }) {
   return (
-    <FigureFrame line={line} dots={dots} fade={fade} headingRef={headingRef} label={label}>
+    <FigureFrame line={line} dots={dots} fade={fade} headingRef={headingRef} zoomTo={phoneZoom(bounds, shift)} label={label}>
       {(frame) => {
-        const [dx, dy] = centerOffset(bounds, frame.top, frame.width, frame.height);
+        const [dx, dy] = placeIn(frame, bounds);
         return (
           <g
             transform={`translate(${dx} ${dy + shift})`}
             style={{ "--back-ms": msOf(clock.back), "--back-ease": cubic(clock.ease) } as CSSProperties}
           >
             {node}
+            {frame.left === undefined && notes}
           </g>
         );
       }}
