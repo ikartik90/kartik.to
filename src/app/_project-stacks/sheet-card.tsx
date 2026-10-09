@@ -4,10 +4,12 @@ import { Fragment, useEffect, useRef, type CSSProperties, type HTMLAttributes } 
 import { css, cx } from "../../../styled-system/css";
 import { carousel } from "../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
+import { useInView } from "@/hooks/use-in-view";
 import { isPlainClick } from "@/utils/plain-click";
 import { CheckInsFigure, DesignSystemFigure, OnboardingFigure, ShiftSchedulingFigure } from "./card-figures";
 import { projectPath, type ProjectCard } from "./data";
 import { figureHost } from "./figure";
+import { useShownHover } from "./use-shown-hover";
 
 // One card per project, which opens its sheet. `data-sheet-source` marks the card's surface. Its face's text
 // (`CardFace`) is also the top of the sheet.
@@ -172,7 +174,8 @@ const expandStyle = css({
     textStyle: "caption",
     whiteSpace: "nowrap",
   },
-  "[data-sheet-card]:hover &": { ...RODE, "&:not([data-soon])": lit, "&[data-soon]": soonLit },
+  // On the figure's hook, not the card, so a touch can't light it (`SheetCard`).
+  "[data-hover-heading]:is(:hover, [data-figure-held]) &": { ...RODE, "&:not([data-soon])": lit, "&[data-soon]": soonLit },
   "html[data-keyboard-focus] [data-sheet-card]:focus-visible &": {
     ...RODE,
     "&:not([data-soon])": lit,
@@ -262,8 +265,11 @@ const sheetHeadingStyle = css({ textStyle: "subheadingLarge" });
 // Each word its own box, so the sheet can bring the heading in a line at a time.
 const sheetWordStyle = css({ display: "inline-block" });
 
-/** On the card (`place="card"`), its text over its figure, or at the top of the sheet, larger and alone. */
-export function CardFace({ card, place }: { card: ProjectCard; place: "card" | "sheet" }) {
+/**
+ * On the card (`place="card"`), its text over its figure, or at the top of the sheet, larger and alone. Each change of
+ * `resets` draws the figure afresh, at rest.
+ */
+export function CardFace({ card, place, resets }: { card: ProjectCard; place: "card" | "sheet"; resets?: number }) {
   const textRef = useRef<HTMLSpanElement>(null);
   const onCard = place === "card";
   const text = (
@@ -291,23 +297,37 @@ export function CardFace({ card, place }: { card: ProjectCard; place: "card" | "
   return (
     <span className={faceStyle}>
       <span className={figureLayerStyle} data-face-picture="">
-        <Figure headingRef={textRef} />
+        <Figure key={resets} headingRef={textRef} />
       </span>
       <span className={faceCardStyle}>{text}</span>
     </span>
   );
 }
 
-/** A link to its sheet's address, which `onOpen` opens in place. Without `onOpen` the card doesn't open. */
+// How long a card waits, once `shown`, before playing as if hovered.
+const SHOWN_HOVER_DELAY = 100;
+// More of it on screen than the sliver a neighbour shows, peeking past the card in view.
+const IN_SIGHT = { enter: 0.1, exit: 0.1 };
+
+/**
+ * A link to its sheet's address, which `onOpen` opens in place. Without `onOpen` the card doesn't open. `shown` is for
+ * a screen without a cursor: whether the card is whole on screen. It plays as if hovered `SHOWN_HOVER_DELAY` after,
+ * until it is out of sight.
+ */
 export function SheetCard({
   card,
   base,
+  shown,
   onOpen,
 }: {
   card: ProjectCard;
   base?: string;
+  shown?: boolean;
   onOpen?: (card: ProjectCard) => void;
 }) {
+  const slideRef = useRef<HTMLDivElement>(null);
+  const inSight = useInView(slideRef, IN_SIGHT);
+  const { on: held, resets } = useShownHover(shown ?? false, inSight, SHOWN_HOVER_DELAY);
   useEffect(() => {
     for (const name of ["--ride-x", "--ride-y"]) {
       try {
@@ -320,7 +340,7 @@ export function SheetCard({
 
   const surface = (
     <span className={surfaceStyle} data-sheet-source="">
-      <CardFace card={card} place="card" />
+      <CardFace card={card} place="card" resets={resets} />
       <Frame crop />
       {card.soon ? (
         <span className={expandStyle} data-soon="">
@@ -333,10 +353,13 @@ export function SheetCard({
       )}
     </span>
   );
-  const { host } = FIGURES[card.figure];
+  // Without a cursor, iOS keeps the card a finger last touched hovered, on screen or off: the card offers its hover
+  // hooks only while it plays.
+  const host =
+    shown === undefined || held ? { ...FIGURES[card.figure].host, "data-figure-held": held ? "" : undefined } : {};
 
   return (
-    <div className={cx(carouselStyles.slide, slideStyle)} data-carousel-slide="">
+    <div ref={slideRef} className={cx(carouselStyles.slide, slideStyle)} data-carousel-slide="">
       {onOpen ? (
         <a
           href={projectPath(card.id, base)}

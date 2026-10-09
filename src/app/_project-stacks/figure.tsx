@@ -32,6 +32,58 @@ export function centerOffset(points: Point[], top: number, width: number, height
 /** The frame a drawing lays out in, in its units: `top` is the heading's foot; zoomed in, `left` is its left edge. */
 type Frame = { width: number; height: number; top: number; left?: number };
 
+/** The face in px: `foot` is the heading's foot, `left` its inset. */
+type Box = { width: number; height: number; foot: number; left: number };
+
+// On a phone, how much of a drawing runs off the card's right.
+export const PHONE_CUT = 1 / 3;
+
+/** A drawing `width` wide, from the heading's left edge with `cut` of it off the right; no taller than `height` fits under the heading, its inset clear above and below. */
+export type ZoomTo = { width: number; cut: number; height?: number };
+
+/** A drawing spanning `bounds`, moved `shift` down from the middle, zoomed in on a phone no taller than fits. */
+export function phoneZoom(bounds: Point[], shift: number): ZoomTo {
+  const span = (values: number[]) => Math.max(...values) - Math.min(...values);
+  return {
+    width: span(bounds.map(([x]) => x)),
+    cut: PHONE_CUT,
+    height: span(bounds.map(([, y]) => y)) + 2 * Math.abs(shift),
+  };
+}
+
+/** The scale `zoom` draws at on `box`, in px a unit. */
+export function zoomScale({ width, cut, height }: ZoomTo, box: Box) {
+  const across = (box.width - box.left) / ((1 - cut) * width);
+  return height ? Math.min(across, (box.height - box.foot - 2 * box.left) / height) : across;
+}
+
+/** Where the outline through `points` reaches across `from`–`to`: the heights of every line between them there. */
+export function heightsAcross(points: Point[], from: number, to: number) {
+  const ys: number[] = [];
+  const xs = [from, to, ...points.map(([px]) => px).filter((px) => px > from && px < to)];
+  points.forEach(([x1, y1], a) =>
+    points.slice(a + 1).forEach(([x2, y2]) =>
+      xs.forEach((x) => {
+        if (x1 !== x2 && (x - x1) * (x - x2) <= 0) ys.push(y1 + ((x - x1) / (x2 - x1)) * (y2 - y1));
+      }),
+    ),
+  );
+  return ys;
+}
+
+/**
+ * How far a drawing spanning `bounds` moves in `frame`: to the middle of the space under the heading or, zoomed in,
+ * to start at the heading's edge (centred across, if it fits) with what shows of it in the middle of that space.
+ */
+export function placeIn(frame: Frame, bounds: Point[]): Point {
+  const [centered, center] = centerOffset(bounds, frame.top, frame.width, frame.height);
+  if (frame.left === undefined) return [centered, center];
+  const left = Math.min(...bounds.map(([x]) => x));
+  const dx = Math.max(centered, frame.left - left);
+  const ys = heightsAcross(bounds, left, frame.width - dx);
+  return [dx, (frame.top + frame.height - Math.min(...ys) - Math.max(...ys)) / 2];
+}
+
 export type Curve = [number, number, number, number];
 /** The dots' fade below the heading: `start` and `length` in px from its foot, eased by `amount` (0 linear, 1 `curve`). */
 export type Fade = { start: number; length: number; amount: number; curve: Curve };
@@ -259,13 +311,13 @@ export function FigureFrame({
   explode?: Explode;
   fade: Fade;
   headingRef?: RefObject<HTMLElement | null>;
-  /** On a face narrower than 4:3, the drawing (`width` wide) zooms in, its left edge at the heading's and `cut` of it off the right. */
-  zoomTo?: { width: number; cut: number };
+  /** On a face narrower than 4:3, the drawing zooms in (`zoomScale`). */
+  zoomTo?: ZoomTo;
   label: string;
   children: (frame: Frame) => ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ width: 0, height: 0, foot: 0, left: 0 });
+  const [box, setBox] = useState<Box>({ width: 0, height: 0, foot: 0, left: 0 });
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -286,18 +338,16 @@ export function FigureFrame({
 
   // The face's scale against a full-size card, and the frame the drawing lays out in.
   const k = box.width / VIEW_W;
-  const zoomed = !!zoomTo && box.height > 0 && box.width / box.height < VIEW_W / VIEW_H - 0.01;
-  const frame: Frame =
-    zoomed && zoomTo
-      ? (() => {
-          const z = (box.width - box.left) / ((1 - zoomTo.cut) * zoomTo.width);
-          return { width: box.width / z, height: box.height / z, top: box.foot / z, left: box.left / z };
-        })()
-      : {
-          width: VIEW_W,
-          height: VIEW_H,
-          top: k ? Math.max(0, box.foot - (box.height - (box.width * VIEW_H) / VIEW_W)) / k : 0,
-        };
+  const narrow = box.height > 0 && box.width / box.height < VIEW_W / VIEW_H - 0.01;
+  const z = narrow && zoomTo ? zoomScale(zoomTo, box) : 0;
+  const zoomed = z > 0;
+  const frame: Frame = zoomed
+    ? { width: box.width / z, height: box.height / z, top: box.foot / z, left: box.left / z }
+    : {
+        width: VIEW_W,
+        height: VIEW_H,
+        top: k ? Math.max(0, box.foot - (box.height - (box.width * VIEW_H) / VIEW_W)) / k : 0,
+      };
 
   return (
     <div

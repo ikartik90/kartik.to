@@ -5,6 +5,8 @@ import { ButtonLink } from "./button-link";
 import { DitherGround } from "./shaders/dither-ground";
 import { HOME_HERO } from "@/data/home-hero";
 import { HERO_OPENING_LINES, openingLineDelay, openingStepDelay } from "@/data/page-opening";
+import { tokens } from "@/data/theme/tokens";
+import { TYPE_SIZES } from "@/data/theme/type-sizes";
 import { easedFadeOut } from "@/utils/eased-fade";
 
 // The page's opening starts here: the pills and each heading line, then the buttons, then the lede.
@@ -110,7 +112,10 @@ const paragraphsStyle = css({
   rowGap: "xl",
   md: { "& > p:first-child": { textBox: "trim-start cap alphabetic" } },
 });
-const paragraphStyle = css({ textStyle: "bodyLarge", color: "text.body", margin: 0, maxWidth: "articleContent" });
+const paragraphStyle = css({ textStyle: "bodyLarge", color: "text.body", margin: 0, maxWidth: "var(--measure)" });
+// The lede's md column at full width in ems of its desktop size, so smaller type breaks its lines in the same places.
+const ledeColumn = ((parseFloat(tokens.sizes.articleShowcase.value) - parseFloat(tokens.spacing["3xl"].value)) * 5) / 12;
+const ledeMeasure = { "--measure": `${ledeColumn / TYPE_SIZES.bodyLarge.desktop.size}em` } as CSSProperties;
 
 // `3xl` below the words above them in one column; `4xl` below the heading from md.
 const ctasStyle = css({
@@ -158,7 +163,7 @@ export function HomeHero() {
           <div aria-hidden className={ledeGaugeStyle}>
             x
           </div>
-          <div className={paragraphsStyle}>
+          <div className={paragraphsStyle} style={ledeMeasure}>
             {HOME_HERO.lede.map((paragraph) => (
               <p key={paragraph} className={paragraphStyle}>
                 {paragraph}

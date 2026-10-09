@@ -4,6 +4,7 @@ import { useId, useRef, type CSSProperties, type ReactNode, type RefObject } fro
 import { css, cx } from "../../../styled-system/css";
 import {
   FigureFrame,
+  PHONE_CUT,
   centerOffset,
   edgeStroke,
   floor,
@@ -11,6 +12,7 @@ import {
   groundFill,
   guideStroke,
   hatchStroke,
+  heightsAcross,
   innerStroke,
   inkFill,
   labelText,
@@ -298,21 +300,9 @@ export function SpecFigure({
   outline.push(...outline.map(([x, y]): Point => [x, y + THICKNESS]));
   const cardLeft = Math.min(...outline.map(([x]) => x));
   const cardWidth = Math.max(...outline.map(([x]) => x)) - cardLeft;
-  // Where the card's outline reaches across `from`–`to`: its highest top and lowest foot there.
-  const reach = (from: number, to: number) => {
-    const ys: number[] = [];
-    const xs = [from, to, ...outline.map(([px]) => px).filter((px) => px > from && px < to)];
-    outline.forEach(([x1, y1], a) =>
-      outline.slice(a + 1).forEach(([x2, y2]) =>
-        xs.forEach((x) => {
-          if (x1 !== x2 && (x - x1) * (x - x2) <= 0) ys.push(y1 + ((x - x1) / (x2 - x1)) * (y2 - y1));
-        }),
-      ),
-    );
-    return ys;
-  };
-  const cardTop = (from: number, to: number) => Math.min(...reach(from, to));
-  const cardBottom = (from: number, to: number) => Math.max(...reach(from, to));
+  // The card's highest top and lowest foot across `from`–`to`.
+  const cardTop = (from: number, to: number) => Math.min(...heightsAcross(outline, from, to));
+  const cardBottom = (from: number, to: number) => Math.max(...heightsAcross(outline, from, to));
 
   const notesSpec: { at: Point; property: string; token: string; marker?: ReactNode }[] = [
     {
@@ -377,7 +367,7 @@ export function SpecFigure({
       explode={explode}
       fade={fade}
       headingRef={headingRef}
-      zoomTo={{ width: cardWidth, cut: 1 / 3 }}
+      zoomTo={{ width: cardWidth, cut: PHONE_CUT }}
       label={label}
     >
       {(frame) => {

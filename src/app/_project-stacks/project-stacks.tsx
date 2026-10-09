@@ -5,6 +5,8 @@ import { css, cx } from "../../../styled-system/css";
 import { pageOpening, sectionHeadline } from "../../../styled-system/recipes";
 import { Carousel } from "@/components/carousel";
 import { HERO_OPENING_LINES, HERO_OPENING_STEPS, openingStepDelay } from "@/data/page-opening";
+import { useHasCursor } from "@/hooks/use-has-cursor";
+import { useWholeSlides } from "@/hooks/use-whole-slides";
 import { subscribeProjectSheet } from "@/utils/project-sheet-channel";
 import { OPEN_CARDS, SPOTWORK } from "./data";
 import { joinOpening, riseIn } from "./opening";
@@ -73,6 +75,9 @@ export function ProjectStacks({ id, sheet, base }: { id?: string; sheet?: string
   useEffect(() => subscribeProjectSheet((to) => (openId ? sheetRef.current?.go(to) : open(to))));
   const scrollerRef = useRef<HTMLDivElement>(null);
   const entering = useCardsEnter(scrollerRef);
+  // Without a cursor to hover them, the cards whole on screen play as if hovered.
+  const hasCursor = useHasCursor();
+  const whole = useWholeSlides(scrollerRef, section.cards);
 
   return (
     <section
@@ -90,11 +95,12 @@ export function ProjectStacks({ id, sheet, base }: { id?: string; sheet?: string
         size="medium"
         controlsProps={{ className: stepOpening, ...openingStep(1) }}
       >
-        {section.cards.map((card) => (
+        {section.cards.map((card, i) => (
           <SheetCard
             key={card.id}
             card={card}
             base={base}
+            shown={hasCursor ? undefined : whole.has(i)}
             onOpen={OPEN_CARDS.includes(card) ? (opened) => open(opened.id) : undefined}
           />
         ))}

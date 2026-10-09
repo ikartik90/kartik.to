@@ -129,21 +129,19 @@ function dial(p: Projection, { ms, ease, back }: Clock, id: string): Drawing {
   return {
     // Centred on the dial alone; the labels sit either side without moving it.
     bounds: [...extent, ...rim.map((point) => onFloor(point, 0))],
-    node: (
-      <>
-        <Block p={p} u={-r} v={-r} w={2 * r} d={2 * r} t={thick} r={r} fill={groundFill} face={face} />
-        <g className={labelsStyle}>
-          {notes.map(({ delay, shown, note }) =>
-            shown ? (
-              <NoteMark key={note.name} {...note} />
-            ) : (
-              <g key={note.name} className={showStyle} style={timed(delay)}>
-                <NoteMark {...note} />
-              </g>
-            ),
-          )}
-        </g>
-      </>
+    node: <Block p={p} u={-r} v={-r} w={2 * r} d={2 * r} t={thick} r={r} fill={groundFill} face={face} />,
+    notes: (
+      <g className={labelsStyle}>
+        {notes.map(({ delay, shown, note }) =>
+          shown ? (
+            <NoteMark key={note.name} {...note} />
+          ) : (
+            <g key={note.name} className={showStyle} style={timed(delay)}>
+              <NoteMark {...note} />
+            </g>
+          ),
+        )}
+      </g>
     ),
   };
 }

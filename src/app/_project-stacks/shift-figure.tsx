@@ -5,7 +5,6 @@ import { cubicBezier } from "@/utils/eased-fade";
 import { css } from "../../../styled-system/css";
 import {
   FigureFrame,
-  centerOffset,
   edgeStroke,
   floor,
   floorPoint,
@@ -15,6 +14,8 @@ import {
   innerStroke,
   inkFill,
   labelText,
+  phoneZoom,
+  placeIn,
   slab,
   softText,
   type Curve,
@@ -373,9 +374,9 @@ export function ShiftFigure({
   const { bounds, node } = extend({ scale }, play, clipId, track);
 
   return (
-    <FigureFrame line={line} dots={dots} fade={fade} headingRef={headingRef} label={label}>
+    <FigureFrame line={line} dots={dots} fade={fade} headingRef={headingRef} zoomTo={phoneZoom(bounds, shift)} label={label}>
       {(frame) => {
-        const [dx, centered] = centerOffset(bounds, frame.top, frame.width, frame.height);
+        const [dx, centered] = placeIn(frame, bounds);
         const dy = centered + shift;
         const timings = {
           "--play-ms": `${play.ms}ms`,

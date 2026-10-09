@@ -366,3 +366,117 @@ describe("ProjectStacks under a base", () => {
     expect(window.location.pathname).toBe("/dive/projects/shift-scheduling");
   });
 });
+
+describe("ProjectStacks without a cursor", () => {
+  // Each observer with what it watches, so a case can show a slide whole on screen, part of it, or none.
+  let observers: { callback: IntersectionObserverCallback; targets: Element[] }[] = [];
+  // `peek`: the sliver of a neighbour showing past the card in view.
+  const shownWidth = { whole: 300, part: 150, peek: 9, gone: 0 };
+  const show = (slide: Element, how: keyof typeof shownWidth) =>
+    act(() =>
+      observers
+        .filter(({ targets }) => targets.includes(slide))
+        .forEach(({ callback }) =>
+          callback(
+            [
+              {
+                target: slide,
+                boundingClientRect: { width: 300, height: 400 },
+                intersectionRect: { width: shownWidth[how], height: how === "gone" ? 0 : 400 },
+                intersectionRatio: shownWidth[how] / 300,
+                isIntersecting: how !== "gone",
+                rootBounds: { height: 800 },
+              } as unknown as IntersectionObserverEntry,
+            ],
+            {} as IntersectionObserver,
+          ),
+        ),
+    );
+  const slides = () => [...document.querySelectorAll("[data-carousel-slide]")];
+  const cards = () => [...document.querySelectorAll("[data-sheet-card]")];
+  const held = () => cards().map((card) => card.hasAttribute("data-figure-held"));
+  const figure = (i: number) => cards()[i].querySelector("svg[aria-label='Figure']");
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    observers = [];
+    globalThis.IntersectionObserver = class {
+      targets: Element[] = [];
+      constructor(callback: IntersectionObserverCallback) {
+        observers.push({ callback, targets: this.targets });
+      }
+      observe(target: Element) {
+        this.targets.push(target);
+      }
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("plays a card's hover 100ms after the card is whole on screen", () => {
+    render(<ProjectStacks />);
+    show(slides()[0], "whole");
+    show(slides()[1], "part");
+    act(() => vi.advanceTimersByTime(99));
+    expect(held()).toEqual([false, false, false, false]);
+    act(() => vi.advanceTimersByTime(1));
+    expect(held()).toEqual([true, false, false, false]);
+  });
+
+  it("keeps the hover while any of the card shows, and resets it once the card is out of sight", () => {
+    render(<ProjectStacks />);
+    show(slides()[0], "whole");
+    act(() => vi.advanceTimersByTime(100));
+
+    show(slides()[0], "part");
+    expect(held()).toEqual([true, false, false, false]);
+
+    show(slides()[0], "gone");
+    expect(held()).toEqual([false, false, false, false]);
+
+    show(slides()[0], "whole");
+    expect(held()).toEqual([false, false, false, false]);
+    act(() => vi.advanceTimersByTime(100));
+    expect(held()).toEqual([true, false, false, false]);
+  });
+
+  it("counts a card peeking past the one in view as out of sight", () => {
+    render(<ProjectStacks />);
+    show(slides()[0], "whole");
+    act(() => vi.advanceTimersByTime(100));
+    show(slides()[0], "peek");
+    expect(held()).toEqual([false, false, false, false]);
+  });
+
+  // Winding the hover back takes up to two seconds; a card brought back sooner would come in still winding.
+  it("draws the figure afresh, at rest, while the card is out of sight", () => {
+    render(<ProjectStacks />);
+    show(slides()[0], "whole");
+    act(() => vi.advanceTimersByTime(100));
+    const drawn = figure(0);
+
+    show(slides()[0], "gone");
+    expect(figure(0)).not.toBe(drawn);
+  });
+
+  // iOS keeps the card a finger last touched hovered, on screen or off.
+  it("gives a touch nothing to hover: the card carries its figure's hover hooks only while it plays", () => {
+    render(<ProjectStacks />);
+    expect(cards()[0].hasAttribute("data-play")).toBe(false);
+    show(slides()[0], "whole");
+    act(() => vi.advanceTimersByTime(100));
+    expect(cards()[0].hasAttribute("data-play")).toBe(true);
+  });
+
+  it("leaves a card shown with a cursor to the cursor", () => {
+    window.matchMedia = ((query: string) => ({
+      ...matchMedia(query),
+      matches: query.includes("reduce") || query.includes("hover: hover"),
+    })) as typeof window.matchMedia;
+    render(<ProjectStacks />);
+    show(slides()[0], "whole");
+    act(() => vi.advanceTimersByTime(100));
+    expect(held()).toEqual([false, false, false, false]);
+    expect(cards()[0].hasAttribute("data-play")).toBe(true);
+  });
+});
