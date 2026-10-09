@@ -2,7 +2,11 @@
 export const UNKNOWN_REFERRER = "https://unknown.referrer/";
 
 /** Apps that send no referrer, keyed by the `?ref=` tag on links shared in them. */
-const TAGGED_SOURCES = new Map([["discord", "https://discord.com/"]]);
+const TAGGED_SOURCES = new Map([
+  ["discord", "https://discord.com/"],
+  ["telegram", "https://telegram.org/"],
+  ["whatsapp", "https://whatsapp.com/"],
+]);
 
 /** `null` keeps the browser's own referrer. */
 export function fallbackReferrer(
