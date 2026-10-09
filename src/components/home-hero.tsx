@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { css, cx } from "../../styled-system/css";
 import { pageOpening } from "../../styled-system/recipes";
 import { ButtonLink } from "./button-link";
@@ -9,16 +9,24 @@ import { tokens } from "@/data/theme/tokens";
 import { TYPE_SIZES } from "@/data/theme/type-sizes";
 import { easedFadeOut } from "@/utils/eased-fade";
 
-// The page's opening starts here: the pills and each heading line, then the buttons, then the lede.
+// The page's opening starts here: the pills and each heading line, then the lede and the buttons in the order they
+// stand, `stacked` in one column or `beside` from md.
 const lineOpening = pageOpening({ part: "line" });
 const stepOpening = pageOpening({ part: "step" });
 const openingLine = (i: number) => ({
   "data-opening-line": "",
   style: { "--opening-delay": `${openingLineDelay(i)}ms` } as CSSProperties,
 });
-const openingStep = (i: number) => ({
+const openingStep = ({ stacked, beside }: { stacked: number; beside: number }) => ({
   "data-opening-step": "",
-  style: { "--opening-delay": `${openingStepDelay(HERO_OPENING_LINES, i)}ms` } as CSSProperties,
+  style: {
+    "--opening-delay-stacked": `${openingStepDelay(HERO_OPENING_LINES, stacked)}ms`,
+    "--opening-delay-beside": `${openingStepDelay(HERO_OPENING_LINES, beside)}ms`,
+  } as CSSProperties,
+});
+const stepDelay = css({
+  "--opening-delay": "var(--opening-delay-stacked)",
+  md: { "--opening-delay": "var(--opening-delay-beside)" },
 });
 
 // Edge to edge across `main`'s gutters and up to the page top, so the dithering fills it; the words keep to 960.
@@ -96,7 +104,9 @@ const pillStyle = css({
 const dotStyle = css({ width: "listBullet", height: "listBullet", borderRadius: "full", backgroundColor: "text.highlight" });
 
 const headingStyle = css({ gridArea: "heading", textStyle: "title", color: "text.title", textWrap: "balance", margin: 0 });
-const lineStyle = css({ display: "block" });
+// One line in one column, where the lede comes between the heading and the buttons; not `inline`, which its opening's
+// `translate` can't move.
+const lineStyle = css({ display: "inline-block", md: { display: "block" } });
 
 // From md the first paragraph's cap height lines up with the heading's x-height. The hidden line, in the heading's
 // type, trimmed to its baseline and pulled up by its `1ex`, is as tall as the heading's top-to-x-height; the first
@@ -154,12 +164,15 @@ export function HomeHero() {
         </div>
         <h1 className={headingStyle}>
           {HOME_HERO.heading.map((line, i) => (
-            <span key={line} className={cx(lineStyle, lineOpening)} {...openingLine(i + 1)}>
-              {line}
-            </span>
+            <Fragment key={line}>
+              {i > 0 && " "}
+              <span className={cx(lineStyle, lineOpening)} {...openingLine(i + 1)}>
+                {line}
+              </span>
+            </Fragment>
           ))}
         </h1>
-        <div className={cx(ledeStyle, stepOpening)} {...openingStep(1)}>
+        <div className={cx(ledeStyle, stepOpening, stepDelay)} {...openingStep({ stacked: 0, beside: 1 })}>
           <div aria-hidden className={ledeGaugeStyle}>
             x
           </div>
@@ -171,7 +184,7 @@ export function HomeHero() {
             ))}
           </div>
         </div>
-        <div className={cx(ctasStyle, stepOpening)} {...openingStep(0)}>
+        <div className={cx(ctasStyle, stepOpening, stepDelay)} {...openingStep({ stacked: 1, beside: 0 })}>
           <ButtonLink href={HOME_HERO.work.href} color="accent">
             {HOME_HERO.work.text}
           </ButtonLink>
