@@ -25,6 +25,16 @@ describe("fallbackReferrer", () => {
     expect(fallbackReferrer("", "?ref=discord")).toBe("https://discord.com/");
   });
 
+  it("credits Telegram for a link tagged ?ref=telegram", () => {
+    expect(fallbackReferrer("", "?ref=telegram")).toBe("https://telegram.org/");
+  });
+
+  it("credits WhatsApp for a link tagged ?ref=whatsapp", () => {
+    expect(fallbackReferrer("", "?ref=whatsapp")).toBe(
+      "https://whatsapp.com/",
+    );
+  });
+
   it("reads the tag in any case", () => {
     expect(fallbackReferrer("", "?ref=Discord")).toBe("https://discord.com/");
   });
