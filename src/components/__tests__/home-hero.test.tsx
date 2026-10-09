@@ -10,10 +10,10 @@ import { HomeHero } from "../home-hero";
 afterEach(() => cleanup());
 
 describe("HomeHero", () => {
-  it("is the page's one heading, on two lines", () => {
+  it("is the page's one heading, in two lines spaced apart", () => {
     render(<HomeHero />);
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.textContent).toBe("Designerwho ships");
+    expect(heading.textContent).toBe("Designer who ships");
     expect(heading.children).toHaveLength(2);
   });
 
@@ -54,21 +54,23 @@ describe("HomeHero", () => {
     expect(container.querySelector("[data-dither-ground]")).not.toBeNull();
   });
 
-  it("opens the page: the pills and each heading line a line apart, then the buttons, then the lede", () => {
+  it("opens the page: the pills and each heading line a line apart, then the lede and the buttons as they stand", () => {
     const { container } = render(<HomeHero />);
-    const delay = (el: Element) => (el as HTMLElement).style.getPropertyValue("--opening-delay");
+    const delay = (el: Element, name = "--opening-delay") => (el as HTMLElement).style.getPropertyValue(name);
     const lines = [...container.querySelectorAll("[data-opening-line]")];
     expect(lines.map((line) => line.textContent)).toEqual([
       "Available for workToronto, ON",
       "Designer",
       "who ships",
     ]);
-    expect(lines.map(delay)).toEqual(["0ms", "100ms", "200ms"]);
+    expect(lines.map((line) => delay(line))).toEqual(["0ms", "100ms", "200ms"]);
     const steps = [...container.querySelectorAll("[data-opening-step]")];
     const ctas = screen.getByRole("link", { name: "See my work" }).parentElement!;
     const lede = screen.getByText("I'm Kartik Iyer, a Toronto-based designer and builder.").closest("[data-opening-step]")!;
     expect(steps).toEqual([lede, ctas]);
-    expect([ctas, lede].map(delay)).toEqual(["350ms", "500ms"]);
+    // In one column the lede stands above the buttons; side by side, beside the heading and the buttons below it.
+    expect([lede, ctas].map((step) => delay(step, "--opening-delay-stacked"))).toEqual(["350ms", "500ms"]);
+    expect([ctas, lede].map((step) => delay(step, "--opening-delay-beside"))).toEqual(["350ms", "500ms"]);
   });
 
   it("keeps the line the lede measures against out of the accessibility tree", () => {

@@ -15,7 +15,7 @@ export const PAGE_OPENING = {
 
 /** The hero's pills, then each line of its heading. */
 export const HERO_OPENING_LINES = HOME_HERO.heading.length + 1;
-/** Its buttons, then its lede. */
+/** Its lede and its buttons. */
 export const HERO_OPENING_STEPS = 2;
 
 /** When the opening's `i`th line starts, in ms. */
