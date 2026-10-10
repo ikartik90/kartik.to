@@ -717,7 +717,7 @@ describe("CommandPalette", () => {
         within(group)
           .getAllByRole("option")
           .map((row) => row.textContent),
-      ).toEqual(["Shift scheduling", "Company onboarding"]);
+      ).toEqual(["Shift scheduling", "Company onboarding", "Check-ins and time tracking"]);
     });
 
     it("no longer lists the review-criteria prototype, or the post a sheet stands in for", async () => {

@@ -41,7 +41,6 @@ export const SPOTWORK: ProjectSection = {
       title: "Check-ins and time tracking",
       sentence: "Rebuilt check-ins and time tracking, cutting attendance disputes by 65%",
       figure: "check-ins",
-      soon: true,
     },
     {
       id: "design-system",

@@ -1,4 +1,5 @@
 import type { MediaNode } from "@/domain/nodes";
+import { CHECK_INS } from "./check-ins-content";
 import { NORTH_STAR, openCard, SPOTWORK } from "./data";
 import type { Feature } from "./feature-grid";
 import type { Metric } from "./metric-card";
@@ -90,9 +91,31 @@ function onboardingBlocks() {
   ];
 }
 
+function checkInsBlocks() {
+  const { clips, stakes, gap, northStar, cards, signals, traceability, outcome, takeaway } = CHECK_INS;
+  return [
+    ...clips.map(clip),
+    ...head(stakes.eyebrow, stakes.heading),
+    strong(stakes.body),
+    points(stakes.reasons),
+    ...head(gap.eyebrow, gap.heading),
+    list(gap.stages.map(({ stage, title, body }) => ({ title: `${stage}: ${title}`, body }))),
+    ...head(NORTH_STAR, northStar),
+    ...card(cards.checkIns),
+    ...card(cards.timecards),
+    ...card(cards.offApp),
+    ...head(signals.eyebrow, signals.heading),
+    DEMO,
+    ...head(traceability.eyebrow, traceability.heading),
+    ...card(cards.dashboard),
+    ...closing(outcome, takeaway),
+  ];
+}
+
 const SHEETS: Record<string, () => string[]> = {
   "shift-scheduling": shiftBlocks,
   onboarding: onboardingBlocks,
+  "check-ins": checkInsBlocks,
 };
 
 /** The Markdown copy of a project's sheet (`/projects/<id>.md`); none for a project without one. */

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // The sheets' content and the covers' drawings are tested by rendering the page; here they only stand in.
 vi.mock("../onboarding-sheet", () => ({ OnboardingSheet: () => <p>Onboarding sheet</p> }));
 vi.mock("../shift-sheet", () => ({ ShiftSheet: () => <p>Shift scheduling sheet</p> }));
+vi.mock("../check-ins-sheet", () => ({ CheckInsSheet: () => <p>Check-ins sheet</p> }));
 vi.mock("../card-figures", () => {
   const Figure = () => <svg role="img" aria-label="Figure" />;
   return {
@@ -78,18 +79,25 @@ describe("ProjectStacks", () => {
     expect(container.querySelector("section")?.id).toBe("work");
   });
 
-  it("links shift scheduling and onboarding to their sheets' addresses, and says the rest are coming this week", () => {
+  it("links shift scheduling, onboarding and check-ins to their sheets' addresses, and says the design system is coming this week", () => {
     render(<ProjectStacks />);
     const openers = screen.getAllByRole("link", { name: /:/ });
     expect(openers.map((link) => link.getAttribute("href"))).toEqual([
       "/projects/shift-scheduling",
       "/projects/onboarding",
+      "/projects/check-ins",
     ]);
     for (const link of openers) expect(link.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(screen.getAllByText("Coming this week")).toHaveLength(2);
-    for (const id of ["check-ins", "design-system"]) {
-      expect(document.querySelector(`[data-sheet-card="${id}"]`)?.tagName).toBe("DIV");
-    }
+    expect(screen.getAllByText("Coming this week")).toHaveLength(1);
+    expect(document.querySelector('[data-sheet-card="design-system"]')?.tagName).toBe("DIV");
+  });
+
+  it("opens the check-ins sheet from its card", () => {
+    render(<ProjectStacks />);
+    fireEvent.click(screen.getByRole("link", { name: /^Check-ins and time tracking:/ }));
+    expect(sheet()?.getAttribute("aria-label")).toBe("Check-ins and time tracking");
+    expect(within(sheet()!).getByText("Check-ins sheet")).toBeDefined();
+    expect(window.location.pathname).toBe("/projects/check-ins");
   });
 
   it("opens a card's sheet over the page, named for its project, at the project's address", () => {
@@ -130,7 +138,7 @@ describe("ProjectStacks", () => {
     expect(window.location.pathname + window.location.search).toBe("/projects/shift-scheduling");
     unmount();
 
-    window.history.replaceState(null, "", "/?sheet=check-ins");
+    window.history.replaceState(null, "", "/?sheet=design-system");
     render(<ProjectStacks />);
     expect(sheet()).toBeNull();
   });
@@ -148,7 +156,12 @@ describe("ProjectStacks", () => {
     expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding");
     expect(within(sheet()!).getByText("Onboarding sheet")).toBeDefined();
     expect(window.location.pathname).toBe("/projects/onboarding");
-    expect(offered()).toEqual(["PreviousShift scheduling"]);
+    expect(offered()).toEqual(["PreviousShift scheduling", "NextCheck-ins and time tracking"]);
+
+    fireEvent.click(within(nav()).getByRole("link", { name: /^Next/ }));
+    expect(sheet()?.getAttribute("aria-label")).toBe("Check-ins and time tracking");
+    expect(window.location.pathname).toBe("/projects/check-ins");
+    expect(offered()).toEqual(["PreviousCompany onboarding"]);
   });
 
   // Another project's sheet replaces the address rather than adding one, so Back leaves the sheet at once.
@@ -329,6 +342,7 @@ describe("ProjectStacks under a base", () => {
     expect(screen.getAllByRole("link", { name: /:/ }).map((link) => link.getAttribute("href"))).toEqual([
       "/dive/projects/shift-scheduling",
       "/dive/projects/onboarding",
+      "/dive/projects/check-ins",
     ]);
 
     fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));

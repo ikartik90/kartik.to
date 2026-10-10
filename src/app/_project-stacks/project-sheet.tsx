@@ -9,6 +9,7 @@ import { isBottomSheetLayout } from "@/data/media-queries";
 import { cubicBezier } from "@/utils/eased-fade";
 import { isPlainClick } from "@/utils/plain-click";
 import { ZOOM_MS } from "@/utils/lightbox-motion";
+import { CheckInsSheet } from "./check-ins-sheet";
 import { projectPath, type ProjectCard } from "./data";
 import { focusIn, reducedMotion, RISE_CURVE, RISE_MS } from "./opening";
 import { OnboardingSheet } from "./onboarding-sheet";
@@ -21,6 +22,7 @@ import { ShiftSheet } from "./shift-sheet";
 const SHEETS: Record<string, ReactNode> = {
   onboarding: <OnboardingSheet />,
   "shift-scheduling": <ShiftSheet />,
+  "check-ins": <CheckInsSheet />,
 };
 
 const dialogStyle = css({
