@@ -68,8 +68,42 @@ describe("projectMarkdown", () => {
     expect(onboarding).toContain("_Figure on the page: A two-by-two grid of allowed above blocked");
   });
 
+  describe("check-ins and time tracking", () => {
+    const checkIns = projectMarkdown("check-ins")!;
+
+    it("opens with the card and links each walkthrough clip", () => {
+      expect(checkIns).toMatch(
+        /^# Check-ins and time tracking\n\n## Rebuilt check-ins and time tracking, cutting attendance disputes by 65%\n\n/,
+      );
+      expect(checkIns).toContain(
+        "[Video: A video of a floor manager on the Check-ins page checking in one worker and marking another absent, adding a note to each.](https://pub-3f00bf1204d54dbe88e07be7288fe49c.r2.dev/media/6c9661a5-42e5-4c1b-ab70-5302cd606ecd-check-ins-1-check-ins-page.mp4)",
+      );
+    });
+
+    it("lists the UX gap's stages in a shift's order, each with its gap", () => {
+      expect(checkIns).toContain(
+        "## UX gap\n\n### The timesheet worked until a shift went off plan\n\n- **Shift begins: Check-in needed mobile data**: At remote sites with poor signal",
+      );
+      expect(checkIns).toContain("- **Invoicing: Off-app shifts missed the invoice**: Companies booked extra workers");
+    });
+
+    it("gives the cards, the risk signals and the dashboard in the sheet's order", () => {
+      const order = [
+        "## Let floor managers fix attendance while the shift runs",
+        "## Keep the worker app's times and worker-submitted times apart on every timecard",
+        "## Give finance sole control of off-app shifts",
+        "## Risk signals\n\n### Six signals added up to a worker's no-show risk\n\n_Interactive demo on the page_",
+        "## Traceability\n\n### I built a dashboard where our operations team used these risk signals to monitor likely no-shows",
+        "## Watch new workers and new teams more closely",
+        "## 65% fewer attendance disputes",
+      ].map((text) => checkIns.indexOf(text));
+      expect(order.every((at) => at > 0)).toBe(true);
+      expect(order).toEqual([...order].sort((a, b) => a - b));
+    });
+  });
+
   it("is none for a project whose sheet isn't ready, or no project", () => {
-    expect(projectMarkdown("check-ins")).toBeNull();
+    expect(projectMarkdown("design-system")).toBeNull();
     expect(projectMarkdown("nope")).toBeNull();
   });
 

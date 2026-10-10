@@ -90,6 +90,6 @@ test.describe("review copy", () => {
   });
 
   test("a project whose sheet isn't ready is a 404 there too", async ({ page }) => {
-    expect((await page.goto("/dive/projects/check-ins"))?.status()).toBe(404);
+    expect((await page.goto("/dive/projects/design-system"))?.status()).toBe(404);
   });
 });
