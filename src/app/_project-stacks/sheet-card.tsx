@@ -142,7 +142,7 @@ const FIGURES = {
 // The card is the link, so the icon is drawn, not a button: a ring at rest, the brand fill while the card is
 // hovered.
 const lit = { backgroundColor: "bg.button.accent.hover", color: "field.text.active", boxShadow: "none" };
-const soonLit = { backgroundColor: "text.highlight", color: "text.brandedEmphasis", boxShadow: "none" };
+const soonLit = { backgroundColor: "text.highlight", color: "bg.canvas", boxShadow: "none" };
 
 const expandStyle = css({
   position: "absolute",

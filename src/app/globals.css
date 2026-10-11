@@ -377,15 +377,6 @@ article > [data-reorder-source] {
   opacity: 0.4;
 }
 
-/* A 16px floor on touch: iOS Safari zooms into any focused field below it. */
-@media (pointer: coarse) {
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
-  textarea,
-  select {
-    font-size: 1rem;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
