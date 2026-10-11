@@ -57,7 +57,6 @@ const inputStyle = css({
   flex: "1 0 0",
   background: "none",
   border: "none",
-  // 16px on touch: Mobile Safari zooms into any focused field under 16px.
   textStyle: "bodyLarge",
   _hasCursor: { textStyle: "bodySmall" },
   color: "text.body",

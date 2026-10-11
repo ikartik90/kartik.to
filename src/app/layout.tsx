@@ -6,6 +6,7 @@ import { Analytics } from "@/components/analytics";
 import { ContentSyncProvider } from "@/components/content-sync-provider";
 import { Header } from "@/components/header";
 import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
+import { IosFocusZoomGuard } from "@/components/ios-focus-zoom-guard";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -71,6 +72,7 @@ export default function RootLayout({
         <ThemeProvider />
         <ContentSyncProvider />
         <KeyboardFocusProvider />
+        <IosFocusZoomGuard />
         <AdminLoginBootstrap />
         <CommandPalette />
         <Header />
