@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from "vitest";
-import { dropPrivateEvents } from "../analytics-event";
+import { dropPrivateEvents, isRecordedPage } from "../analytics-event";
 import { setAnalyticsOptOut } from "../analytics-opt-out";
 
 const at = (url: string) => ({ type: "pageview" as const, url });
@@ -116,5 +116,31 @@ describe("dropPrivateEvents", () => {
     expect(dropPrivateEvents(event)).toBe(event);
     setAnalyticsOptOut(true);
     expect(dropPrivateEvents(event)).toBeNull();
+  });
+});
+
+describe("isRecordedPage", () => {
+  it("records a public page on the live site", () => {
+    expect(isRecordedPage("https://kartik.to/")).toBe(true);
+    expect(isRecordedPage("https://kartik.to/writing/some-post")).toBe(true);
+  });
+
+  it("leaves out dev, previews and e2e runs", () => {
+    expect(isRecordedPage("http://localhost:3000/")).toBe(false);
+    expect(isRecordedPage("https://kartik-to-git-x.vercel.app/")).toBe(false);
+    expect(isRecordedPage("https://kartik.to.evil.com/")).toBe(false);
+  });
+
+  it("leaves out the editor", () => {
+    expect(isRecordedPage("https://kartik.to/edit/new")).toBe(false);
+  });
+
+  it("leaves out the author's browser", () => {
+    setAnalyticsOptOut(true);
+    expect(isRecordedPage("https://kartik.to/")).toBe(false);
+  });
+
+  it("leaves out anything that isn't a URL", () => {
+    expect(isRecordedPage("not a url")).toBe(false);
   });
 });

@@ -31,6 +31,21 @@ vi.mock("@vercel/speed-insights/next", () => ({
   },
 }));
 
+type ScriptProps = { id?: string; dangerouslySetInnerHTML?: { __html: string } };
+let hotjar: ScriptProps | undefined;
+vi.mock("next/script", () => ({
+  default: (props: ScriptProps) => {
+    hotjar = props;
+    return null;
+  },
+}));
+
+const recorded = vi.fn().mockReturnValue(false);
+vi.mock("@/utils/analytics-event", async (original) => ({
+  ...(await original<typeof import("@/utils/analytics-event")>()),
+  isRecordedPage: () => recorded(),
+}));
+
 import { Analytics } from "../analytics";
 import {
   ANALYTICS_OPT_OUT_KEY,
@@ -47,6 +62,8 @@ afterEach(() => {
   mockUseSession.mockReturnValue({ data: null });
   Reflect.deleteProperty(document, "referrer");
   referrerAtInject = undefined;
+  hotjar = undefined;
+  recorded.mockReturnValue(false);
 });
 
 describe("Analytics", () => {
@@ -107,6 +124,21 @@ describe("Analytics", () => {
 
     window.analyticsOptIn?.();
     expect(isAnalyticsOptedOut()).toBe(false);
+  });
+
+  it("loads Hotjar on a recorded page", async () => {
+    recorded.mockReturnValue(true);
+    render(<Analytics />);
+
+    await waitFor(() => expect(hotjar?.id).toBe("hotjar"));
+    expect(hotjar?.dangerouslySetInnerHTML?.__html).toContain("hjid:6438248");
+  });
+
+  it("leaves Hotjar off any other page", async () => {
+    render(<Analytics />);
+
+    await waitFor(() => expect(received.analytics).toBeDefined());
+    expect(hotjar).toBeUndefined();
   });
 
   it("takes the console handles back down with it", async () => {
