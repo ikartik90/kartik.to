@@ -39,6 +39,9 @@ export const action = defineRecipe({
       height: "token(spacing.xxl)",
       flexShrink: 0,
       display: "block",
+      // WebKit places an inline SVG on whole CSS px but snaps the button's fill to device px, so at a
+      // fractional y the glyph sat a device pixel off the circle's centre. A transform snaps both alike.
+      transform: "translate(0)",
     },
     "& svg path[stroke]": { stroke: "currentColor" },
     "& svg path[fill]": { fill: "currentColor" },
