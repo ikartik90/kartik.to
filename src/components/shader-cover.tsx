@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useRef, type CSSProperties } from "react";
 import { css } from "../../styled-system/css";
 import { SHADER_SPECS } from "@/data/shader-specs";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/domain/shader-preset";
 import { ShaderStage } from "@/components/shaders/shader-stage";
 import { useReducedMotion } from "@/components/shaders/use-shader-policy";
+import { useNearView } from "@/hooks/use-near-view";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
@@ -27,8 +28,13 @@ export interface ShaderCoverProps {
   aspect: DemoFrameAspectRatio;
 }
 
-/** A shader preset playing across its positioned parent. */
+/**
+ * A shader preset playing across its positioned parent. Mounted only near the screen: offscreen, the library still
+ * compiles and draws a few frames, which cost whole seconds on a software renderer.
+ */
 export function ShaderCover({ preset, aspect }: ShaderCoverProps) {
+  const groundRef = useRef<HTMLDivElement>(null);
+  const near = useNearView(groundRef);
   const { isDark } = useThemeToggle();
   const reducedMotion = useReducedMotion();
   const { settings } = preset;
@@ -37,6 +43,7 @@ export function ShaderCover({ preset, aspect }: ShaderCoverProps) {
 
   return (
     <div
+      ref={groundRef}
       className={groundStyle}
       style={
         {
@@ -45,13 +52,15 @@ export function ShaderCover({ preset, aspect }: ShaderCoverProps) {
         } as CSSProperties
       }
     >
-      <ShaderStage
-        spec={SHADER_SPECS[preset.shaderId]}
-        params={reducedMotion ? { ...params, speed: 0 } : params}
-        colors={palette.colors}
-        colorBack={palette.colorBack}
-        extraColors={palette.extraColors}
-      />
+      {near && (
+        <ShaderStage
+          spec={SHADER_SPECS[preset.shaderId]}
+          params={reducedMotion ? { ...params, speed: 0 } : params}
+          colors={palette.colors}
+          colorBack={palette.colorBack}
+          extraColors={palette.extraColors}
+        />
+      )}
     </div>
   );
 }

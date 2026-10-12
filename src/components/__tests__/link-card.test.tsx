@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // StaticMeshGradient is WebGL, which jsdom can't run; the stand-in keeps `data-background-effect`.
@@ -384,6 +384,41 @@ describe("LinkCard", () => {
     );
     vi.unstubAllGlobals();
     expect(container.querySelector("canvas")?.getAttribute("data-speed")).toBe("0");
+  });
+
+  it("starts the shader only once the card comes near the screen", () => {
+    let reveal: () => void = () => undefined;
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          reveal = () =>
+            callback(
+              [{ isIntersecting: true } as IntersectionObserverEntry],
+              this as unknown as IntersectionObserver,
+            );
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader/comets"
+        title="Comets"
+        aspect="3/2"
+        shader={shaderPresetContentFor("pixelComets")}
+      />,
+    );
+    expect(container.querySelector("canvas")).toBeNull();
+
+    act(() => reveal());
+    vi.unstubAllGlobals();
+    expect(container.querySelector("canvas")).not.toBeNull();
   });
 
   it("keeps the shader out of the link's name", () => {
