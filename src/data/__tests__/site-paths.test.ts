@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SITE_PAGES, SITE_PATHS, sitePathTitle } from "../site-paths";
+import { SITE_PAGES, SITE_PATHS, shaderPresetPath, sitePathTitle } from "../site-paths";
 
 describe("SITE_PAGES", () => {
   it("gives each page its public name", () => {
@@ -36,5 +36,11 @@ describe("sitePathTitle", () => {
 
   it("is nothing for a path the list does not hold", () => {
     expect(sitePathTitle("/vouch")).toBeUndefined();
+  });
+});
+
+describe("shaderPresetPath", () => {
+  it("opens the playground on the preset", () => {
+    expect(shaderPresetPath("preset-1")).toBe("/playground/shader/preset-1");
   });
 });

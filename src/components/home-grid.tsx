@@ -29,6 +29,7 @@ import { useGridDraftStore } from "@/store/grid-draft";
 import { applyGridDraft } from "@/utils/grid-draft";
 import { linkCardHref, linkCardTitle, type LinkCardConfig } from "@/domain/link-card";
 import { postCardMedia, type PostCardConfig } from "@/domain/post";
+import type { ShownShaderPreset } from "@/domain/shader-preset";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import type { MediaNode } from "@/domain/nodes";
 import type { GridCard } from "@/lib/grid";
@@ -39,7 +40,14 @@ const containerStyle = css({
   containerName: "projectsGrid",
 });
 
-const headingStyle = css({ marginBlockEnd: "xl" });
+// As far from its cards as the project carousel's headline is from its: the section's `xl` gap, the slide's `md`
+// padding and, with a cursor, the card's `sm` resting crop (`project-stacks.tsx`, `sheet-card.tsx`).
+const headingStyle = css({
+  marginBlockEnd: "calc(token(spacing.xl) + token(spacing.md))",
+  _hasCursor: {
+    marginBlockEnd: "calc(token(spacing.xl) + token(spacing.md) + token(spacing.sm))",
+  },
+});
 
 // In flow so the cell can measure the card; `flexGrow` fills it, since a % height resolves to nothing here.
 const fillStyle = css({
@@ -120,6 +128,8 @@ interface HomeGridProps {
   demos?: Record<string, ReactNode>;
   /** Heads the cards and names their region, which is "Work" without it. */
   heading?: string;
+  /** Published presets, by id; a card naming any other plays its pictures. */
+  shaderPresets?: ShownShaderPreset[];
 }
 
 // Masonry: `grid-lanes` where supported, else 1px rows with spans computed via `tan(atan2())`,
@@ -190,7 +200,13 @@ const masonryGridStyle = css({
   },
 });
 
-export function HomeGrid({ cards, editable = false, demos, heading }: HomeGridProps) {
+export function HomeGrid({
+  cards,
+  editable = false,
+  demos,
+  heading,
+  shaderPresets = [],
+}: HomeGridProps) {
   const headingId = useId();
   const draft = useGridDraftStore();
   const [insert, setInsert] = useState<PendingInsert | null>(null);
@@ -245,6 +261,7 @@ export function HomeGrid({ cards, editable = false, demos, heading }: HomeGridPr
           onPickMedia: (slot: CardMediaSlot) =>
             setPick({ key: propertiesCard.key, slot }),
           onPickDocument: () => setPick({ key: propertiesCard.key }),
+          shaderPresets,
         }
       : undefined;
 
@@ -370,6 +387,7 @@ export function HomeGrid({ cards, editable = false, demos, heading }: HomeGridPr
                   card={card}
                   demo={demos?.[card.key]}
                   editable={editable}
+                  shaderPresets={shaderPresets}
                 />
               )}
             </div>
@@ -467,10 +485,12 @@ function ComponentCard({
   card,
   demo,
   editable,
+  shaderPresets,
 }: {
   card: Extract<GridCard, { kind: "component" }>;
   demo?: ReactNode;
   editable: boolean;
+  shaderPresets: ShownShaderPreset[];
 }) {
   const entry = getDemoComponent(card.componentId);
   if (!entry) return null;
@@ -486,6 +506,7 @@ function ComponentCard({
         aspect={card.aspect}
         cover={config.media?.light}
         coverDark={config.media?.dark}
+        shader={shaderPresets.find((preset) => preset.id === config.media?.shader)}
         scrim={config.content?.scrim}
         tone={config.content?.tone}
         newTab={config.link?.newTab}

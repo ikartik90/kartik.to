@@ -95,6 +95,18 @@ describe("LinkCardConfigSchema", () => {
     });
   });
 
+  it("names a shader preset to play in place of the pictures", () => {
+    expect(
+      LinkCardConfigSchema.parse({ media: { light: image, shader: "preset-1" } }),
+    ).toEqual({ media: { light: image, shader: "preset-1" } });
+  });
+
+  it("refuses a shader that names no preset", () => {
+    expect(
+      LinkCardConfigSchema.safeParse({ media: { shader: "" } }).success,
+    ).toBe(false);
+  });
+
   it("carries the words and the ground they stand on", () => {
     const parsed = LinkCardConfigSchema.parse({
       content: { title: "Shader Playground", meta: "Playground", scrim: true, tone: "dark" },

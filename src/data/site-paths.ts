@@ -32,3 +32,7 @@ export const SITE_PATHS: SitePath[] = Object.values(SITE_PAGES);
 export function sitePathTitle(path: string): string | undefined {
   return SITE_PATHS.find((entry) => entry.path === path)?.title;
 }
+
+export function shaderPresetPath(id: string): string {
+  return `${SITE_PAGES.shader.path}/${id}`;
+}

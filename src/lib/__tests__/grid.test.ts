@@ -12,7 +12,13 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { getGridCards, type GridPostCard } from "@/lib/grid";
+const mockPublishedPresets = vi.fn();
+vi.mock("@/app/actions/shader-preset", () => ({
+  getPublishedShaderPresets: () => mockPublishedPresets(),
+}));
+
+import { getGridCards, getGridShaderPresets, type GridPostCard } from "@/lib/grid";
+import { shaderPresetContentFor } from "@/domain/shader-preset";
 import { articles as staticArticles } from "@/data/articles";
 import { projects as staticProjects } from "@/data/projects";
 
@@ -189,5 +195,34 @@ describe("getGridCards — a post's card", () => {
       src: "/first.png",
     });
     expect(card.card.media).toEqual({ dark });
+  });
+});
+
+describe("getGridShaderPresets", () => {
+  beforeEach(() => {
+    mockPublishedPresets.mockReset();
+  });
+
+  it("names each published preset and keeps only what a card plays", async () => {
+    const content = shaderPresetContentFor("pixelComets");
+    mockPublishedPresets.mockResolvedValue([
+      {
+        id: "p1",
+        title: null,
+        untitledIndex: 5,
+        ...content,
+        publishedAt: NOW,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ]);
+    expect(await getGridShaderPresets()).toEqual([
+      { id: "p1", name: "Untitled 5", ...content },
+    ]);
+  });
+
+  it("is empty rather than failing the page when the presets can't be read", async () => {
+    mockPublishedPresets.mockRejectedValue(new Error("down"));
+    expect(await getGridShaderPresets()).toEqual([]);
   });
 });

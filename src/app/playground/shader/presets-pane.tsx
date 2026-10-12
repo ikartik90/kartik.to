@@ -15,7 +15,7 @@ import {
   useShaderPresetDraftStore,
 } from "@/store/shader-preset-draft";
 import { shaderPresetSwatch } from "@/utils/shader-preset-swatch";
-import { paletteFor } from "@/domain/shader-preset";
+import { paletteFor, shaderPresetName } from "@/domain/shader-preset";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import type { ShaderPreset, ShaderPresetContent } from "@/domain/shader-preset";
 import {
@@ -108,12 +108,6 @@ const tileMarkStyle = css({
 });
 
 const addIconStyle = menuIcon();
-
-function presetName(preset: Preset): string {
-  return (
-    preset.title?.trim() || `Untitled ${preset.untitledIndex ?? ""}`.trim()
-  );
-}
 
 /** Loads a preset into the draft and updates the URL via `replaceState`: a navigation would remount the playground. */
 function adoptPreset(preset: Preset, committed = false) {
@@ -280,7 +274,7 @@ export function PresetsPane({ onSettled }: PresetsPaneProps = {}) {
                 <button
                   type="button"
                   className={tileStyle}
-                  aria-label={presetName(preset)}
+                  aria-label={shaderPresetName(preset)}
                   aria-current={
                     preset.id === shaderPresetId ? "true" : undefined
                   }

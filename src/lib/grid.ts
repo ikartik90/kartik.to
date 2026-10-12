@@ -8,6 +8,8 @@ import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import { LinkCardConfigSchema, type LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import type { Post, PostCardConfig } from "@/domain/post";
+import { shaderPresetName, type ShownShaderPreset } from "@/domain/shader-preset";
+import { getPublishedShaderPresets } from "@/app/actions/shader-preset";
 import { GRID_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
 import { getPostReadUrl } from "@/utils/post-urls";
 
@@ -125,4 +127,18 @@ export async function getGridCards(): Promise<GridCard[]> {
   });
 
   return orderGridItems([...dbPosts.map(postToCard), ...componentCards]);
+}
+
+/** The presets a link card may play, which its panel also lists. */
+export async function getGridShaderPresets(): Promise<ShownShaderPreset[]> {
+  return safely(
+    async () =>
+      (await getPublishedShaderPresets()).map((preset) => ({
+        id: preset.id,
+        name: shaderPresetName(preset),
+        shaderId: preset.shaderId,
+        settings: preset.settings,
+      })),
+    [],
+  );
 }

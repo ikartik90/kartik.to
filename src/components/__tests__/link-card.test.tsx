@@ -9,10 +9,24 @@ vi.mock("@paper-design/shaders-react", () => ({
   ),
 }));
 
+// jsdom has no webgl2; the marker carries which shader plays and the speed it was handed.
+vi.mock("@/components/shaders/shader-stage", () => ({
+  MAX_PIXELS: 1,
+  layerStyle: "",
+  ShaderStage: ({
+    spec,
+    params,
+  }: {
+    spec: { id: string };
+    params: Record<string, number>;
+  }) => <canvas data-shader={spec.id} data-speed={String(params.speed)} />,
+}));
+
 import { linkCard } from "../../../styled-system/recipes";
 import { LinkCard } from "../link-card";
 import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 import { DEFAULT_BACKGROUND_EFFECT, type MediaNode } from "@/domain/nodes";
+import { shaderPresetContentFor } from "@/domain/shader-preset";
 
 const picture = (src: string, over: Partial<MediaNode> = {}): MediaNode => ({
   type: "media",
@@ -298,6 +312,90 @@ describe("LinkCard", () => {
       />,
     );
     expect(screen.getByRole("link").hasAttribute("data-covered")).toBe(true);
+  });
+
+  it("plays a shader preset in place of its pictures", () => {
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader/comets"
+        title="Comets"
+        aspect="3/2"
+        cover={picture("/light.png")}
+        shader={shaderPresetContentFor("pixelComets")}
+      />,
+    );
+    expect(container.querySelector("canvas")?.getAttribute("data-shader")).toBe(
+      "pixelComets",
+    );
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("grounds its words over a shader as over a picture", () => {
+    render(
+      <LinkCard
+        href="/playground/shader/comets"
+        title="Comets"
+        aspect="3/2"
+        shader={shaderPresetContentFor("pixelComets")}
+      />,
+    );
+    expect(screen.getByRole("link").hasAttribute("data-covered")).toBe(true);
+  });
+
+  it("plays the shader at the speed its preset was saved with", () => {
+    const preset = shaderPresetContentFor("cosmicTrack");
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader/track"
+        title="Track"
+        aspect="3/2"
+        shader={{
+          ...preset,
+          settings: {
+            ...preset.settings,
+            params: { ...preset.settings.params, speed: 2 },
+          },
+        }}
+      />,
+    );
+    expect(container.querySelector("canvas")?.getAttribute("data-speed")).toBe("2");
+  });
+
+  it("holds the shader still for a reader who asks for less motion", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("reduce"),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    const preset = shaderPresetContentFor("cosmicTrack");
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader/track"
+        title="Track"
+        aspect="3/2"
+        shader={{
+          ...preset,
+          settings: {
+            ...preset.settings,
+            params: { ...preset.settings.params, speed: 2 },
+          },
+        }}
+      />,
+    );
+    vi.unstubAllGlobals();
+    expect(container.querySelector("canvas")?.getAttribute("data-speed")).toBe("0");
+  });
+
+  it("keeps the shader out of the link's name", () => {
+    render(
+      <LinkCard
+        href="/playground/shader/comets"
+        title="Comets"
+        aspect="3/2"
+        shader={shaderPresetContentFor("pixelComets")}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Comets" })).toBeTruthy();
   });
 
   it("opens away from here when it is told to", () => {
