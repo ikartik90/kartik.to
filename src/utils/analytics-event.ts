@@ -31,3 +31,13 @@ export function dropPrivateEvents<T extends { url: string }>(
 
   return STEALTH_PATHS.some((stealth) => stealth.test(path)) ? null : event;
 }
+
+/** Hotjar records the live site only, so dev, previews and e2e runs stay out of its session quota. */
+export function isRecordedPage(url: string): boolean {
+  try {
+    if (new URL(url).hostname !== "kartik.to") return false;
+  } catch {
+    return false;
+  }
+  return dropPrivateEvents({ url }) !== null;
+}
