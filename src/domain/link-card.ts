@@ -30,6 +30,13 @@ export const LinkCardMediaSchema = z.object({
 
 export type LinkCardMedia = z.infer<typeof LinkCardMediaSchema>;
 
+/** `shader` is a published shader preset's id; it plays in place of the pictures, which are kept. */
+export const LinkCardCoverSchema = LinkCardMediaSchema.extend({
+  shader: z.string().min(1).optional(),
+});
+
+export type LinkCardCover = z.infer<typeof LinkCardCoverSchema>;
+
 /** `tone` pins the caption to one theme: the picture under it doesn't follow the page's. */
 export const LinkCardContentSchema = z.object({
   title: z.string().optional(),
@@ -59,7 +66,7 @@ export const LinkCardLinkSchema = z.discriminatedUnion("kind", [
 export type LinkCardLink = z.infer<typeof LinkCardLinkSchema>;
 
 export const LinkCardConfigSchema = z.object({
-  media: LinkCardMediaSchema.optional(),
+  media: LinkCardCoverSchema.optional(),
   content: LinkCardContentSchema.optional(),
   link: LinkCardLinkSchema.optional(),
 });

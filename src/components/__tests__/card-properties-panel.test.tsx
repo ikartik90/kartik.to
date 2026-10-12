@@ -7,6 +7,10 @@ import { CardPropertiesPanel } from "../card-properties-panel";
 import type { LinkCardConfig } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import type { PostCardConfig } from "@/domain/post";
+import {
+  shaderPresetContentFor,
+  type ShownShaderPreset,
+} from "@/domain/shader-preset";
 
 afterEach(cleanup);
 
@@ -86,12 +90,21 @@ describe("CardPropertiesPanel", () => {
   });
 });
 
-const linkCardProps = (config: LinkCardConfig = {}) => ({
+const linkCardProps = (
+  config: LinkCardConfig = {},
+  shaderPresets?: ShownShaderPreset[],
+) => ({
   config,
   onChange: vi.fn(),
   onPickMedia: vi.fn(),
   onPickDocument: vi.fn(),
+  ...(shaderPresets ? { shaderPresets } : {}),
 });
+
+const presets: ShownShaderPreset[] = [
+  { id: "comets", name: "Untitled 5", ...shaderPresetContentFor("pixelComets") },
+  { id: "track", name: "Untitled 4", ...shaderPresetContentFor("cosmicTrack") },
+];
 
 const section = (name: string) => screen.queryByRole("group", { name });
 
@@ -186,6 +199,77 @@ describe("CardPropertiesPanel — link card", () => {
       expect(props.onPickMedia).toHaveBeenCalledWith("dark");
     });
 
+
+    it("offers the published shader presets in place of the pictures", async () => {
+      const user = userEvent.setup();
+      render(
+        <CardPropertiesPanel
+          linkCard={linkCardProps({ media: {} }, presets)}
+          onDismiss={vi.fn()}
+        />,
+      );
+      await user.click(screen.getByRole("option", { name: "Shader" }));
+
+      expect(
+        within(section("Media")!)
+          .getAllByRole("option")
+          .map((o) => o.textContent),
+      ).toEqual([
+        "Files",
+        "Shader",
+        "Pixel Comets · Untitled 5",
+        "Cosmic Track · Untitled 4",
+      ]);
+      expect(screen.queryByRole("button", { name: "Add light media" })).toBeNull();
+    });
+
+    it("plays the preset picked", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps({ media: {} }, presets);
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(screen.getByRole("option", { name: "Shader" }));
+      await user.click(
+        screen.getByRole("option", { name: "Cosmic Track · Untitled 4" }),
+      );
+      expect(props.onChange).toHaveBeenCalledWith({ media: { shader: "track" } });
+    });
+
+    it("opens on the preset a card already plays", () => {
+      render(
+        <CardPropertiesPanel
+          linkCard={linkCardProps({ media: { shader: "comets" } }, presets)}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(
+        screen
+          .getByRole("option", { name: "Pixel Comets · Untitled 5" })
+          .getAttribute("aria-selected"),
+      ).toBe("true");
+    });
+
+    it("goes back to the pictures it kept", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps(
+        { media: { light: image("/light.png"), shader: "comets" } },
+        presets,
+      );
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(screen.getByRole("option", { name: "Files" }));
+      expect(props.onChange).toHaveBeenCalledWith({
+        media: { light: image("/light.png") },
+      });
+    });
+
+    it("offers no shader while none is published", () => {
+      render(
+        <CardPropertiesPanel
+          linkCard={linkCardProps({ media: {} })}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(screen.queryByRole("option", { name: "Shader" })).toBeNull();
+    });
 
     it("takes the whole section away, and both pictures with it", async () => {
       const user = userEvent.setup();
@@ -292,6 +376,20 @@ describe("CardPropertiesPanel — link card", () => {
       await user.click(screen.getByRole("option", { name: "Shader Playground" }));
       expect(props.onChange).toHaveBeenCalledWith({
         link: { kind: "internal", href: "/playground/shader" },
+      });
+    });
+
+    it("points a card at a published shader preset", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps({ link: { kind: "internal" } }, presets);
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(
+        within(section("Link")!).getByRole("option", {
+          name: "Pixel Comets · Untitled 5",
+        }),
+      );
+      expect(props.onChange).toHaveBeenCalledWith({
+        link: { kind: "internal", href: "/playground/shader/comets" },
       });
     });
 

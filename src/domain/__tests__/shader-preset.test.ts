@@ -7,6 +7,7 @@ import {
   framingFor,
   paletteFor,
   shaderParamsFor,
+  shaderPresetName,
 } from "../shader-preset";
 
 describe("ShaderPresetContentSchema", () => {
@@ -609,5 +610,19 @@ describe("paletteFor", () => {
     ).settings;
 
     expect("colorBack" in paletteFor(settings, "light")).toBe(false);
+  });
+});
+
+describe("shaderPresetName", () => {
+  it("is the title the author gave it", () => {
+    expect(shaderPresetName({ title: "Comets", untitledIndex: 5 })).toBe("Comets");
+  });
+
+  it("numbers a preset with no title", () => {
+    expect(shaderPresetName({ title: null, untitledIndex: 5 })).toBe("Untitled 5");
+  });
+
+  it("reads a blank title as none", () => {
+    expect(shaderPresetName({ title: "  ", untitledIndex: 4 })).toBe("Untitled 4");
   });
 });

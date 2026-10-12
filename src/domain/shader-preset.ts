@@ -363,6 +363,21 @@ export function shaderPresetContentFor(shaderId: ShaderId): ShaderPresetContent 
   });
 }
 
+/** A published preset as a card plays it and a picker names it. */
+export interface ShownShaderPreset extends ShaderPresetContent {
+  id: string;
+  name: string;
+}
+
+export function shaderPresetName(preset: {
+  title?: string | null;
+  untitledIndex?: number | null;
+}): string {
+  return (
+    preset.title?.trim() || `Untitled ${preset.untitledIndex ?? ""}`.trim()
+  );
+}
+
 export const ShaderPresetSchema = z.object({
   id: z.string().min(1),
   title: z.string().nullable().optional(),

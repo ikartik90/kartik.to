@@ -12,7 +12,8 @@ import { Switch } from "@/components/ui/input/switch";
 import { Field } from "@/components/ui/input/field";
 import { ImageInput } from "@/components/ui/input/image-input";
 import { Typography } from "@/components/ui/typography";
-import { SITE_PATHS } from "@/data/site-paths";
+import { SHADER_SPECS } from "@/data/shader-specs";
+import { SITE_PATHS, shaderPresetPath } from "@/data/site-paths";
 import type {
   LinkCardConfig,
   LinkCardMedia,
@@ -21,6 +22,7 @@ import type {
 } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import { postCardMedia, type PostCardConfig } from "@/domain/post";
+import type { ShownShaderPreset } from "@/domain/shader-preset";
 import LinkIcon from "@/assets/icons/link.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import TitleIcon from "@/assets/icons/title.svg";
@@ -43,6 +45,21 @@ const LINK_KINDS: { value: LinkTargetKind; label: string }[] = [
   { value: "document", label: "Document" },
 ];
 
+const COVER_SOURCES = [
+  { value: "files", label: "Files" },
+  { value: "shader", label: "Shader" },
+];
+
+interface Choice {
+  value: string;
+  label: string;
+}
+
+const presetChoice = (preset: ShownShaderPreset, value: string): Choice => ({
+  value,
+  label: `${SHADER_SPECS[preset.shaderId].label} · ${preset.name}`,
+});
+
 export interface CardLoggerProperty {
   shown: boolean;
   onShownChange: (shown: boolean) => void;
@@ -57,6 +74,8 @@ export interface CardLinkCardProperty {
   /** The grid owns the dialog: a modal opened inside this portalled panel would fight it for presses. */
   onPickMedia: (slot: CardMediaSlot) => void;
   onPickDocument: () => void;
+  /** Published presets, offered as the cover and as destinations. */
+  shaderPresets?: ShownShaderPreset[];
 }
 
 export interface CardPostCardProperty {
@@ -93,7 +112,7 @@ function slotFile(node: MediaNode | undefined) {
   };
 }
 
-const destinationListStyle = css({
+const inlineListStyle = css({
   maxHeight: "none",
   width: "token(spacing.full)",
 });
@@ -149,6 +168,7 @@ function LinkCardSections({
   onChange,
   onPickMedia,
   onPickDocument,
+  shaderPresets = [],
 }: CardLinkCardProperty) {
   const { media, content, link } = config;
 
@@ -160,6 +180,12 @@ function LinkCardSections({
     onChange(next);
   };
 
+  const setShader = (shader: string | undefined) => {
+    const next = { ...media, shader };
+    if (!shader) delete next.shader;
+    set({ media: next });
+  };
+
   return (
     <>
       <MediaSection
@@ -168,6 +194,17 @@ function LinkCardSections({
           enabled ? set({ media: {} }) : clear("media")
         }
         onPickMedia={onPickMedia}
+        shader={
+          shaderPresets.length > 0
+            ? {
+                choices: shaderPresets.map((preset) =>
+                  presetChoice(preset, preset.id),
+                ),
+                value: media?.shader,
+                onChange: setShader,
+              }
+            : undefined
+        }
       />
 
       <PropertiesPanel.Section
@@ -182,7 +219,7 @@ function LinkCardSections({
         <PropertiesPanel.ControlPanel>
           <ContentControls
             content={content ?? {}}
-            pictured={Boolean(media?.light || media?.dark)}
+            pictured={Boolean(media?.light || media?.dark || media?.shader)}
             onChange={(next) => set({ content: next })}
           />
         </PropertiesPanel.ControlPanel>
@@ -202,6 +239,12 @@ function LinkCardSections({
             link={link ?? { kind: "internal" }}
             onChange={(next) => set({ link: next })}
             onPickDocument={onPickDocument}
+            pages={[
+              ...SITE_PATHS.map((page) => ({ value: page.path, label: page.label })),
+              ...shaderPresets.map((preset) =>
+                presetChoice(preset, shaderPresetPath(preset.id)),
+              ),
+            ]}
           />
         </PropertiesPanel.ControlPanel>
       </PropertiesPanel.Section>
@@ -319,15 +362,25 @@ function GroundControls({
   );
 }
 
+interface ShaderCoverControl {
+  choices: Choice[];
+  /** The preset playing; absent plays the pictures. */
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}
+
 function MediaSection({
   media,
   onEnabledChange,
   onPickMedia,
+  shader,
 }: {
   media: LinkCardMedia | undefined;
   /** Closing the section is also what removes a picture; the slots only swap files. */
   onEnabledChange: (enabled: boolean) => void;
   onPickMedia: (slot: CardMediaSlot) => void;
+  /** Absent offers the pictures alone. */
+  shader?: ShaderCoverControl;
 }) {
   return (
     <PropertiesPanel.Section
@@ -338,7 +391,49 @@ function MediaSection({
         Media
       </PropertiesPanel.SectionHeader>
       <PropertiesPanel.ControlPanel>
-        {(["light", "dark"] as const).map((slot) => (
+        <MediaControls media={media} onPickMedia={onPickMedia} shader={shader} />
+      </PropertiesPanel.ControlPanel>
+    </PropertiesPanel.Section>
+  );
+}
+
+/** Mounted with the open section, so a reopened one starts back on the files. */
+function MediaControls({
+  media,
+  onPickMedia,
+  shader,
+}: {
+  media: LinkCardMedia | undefined;
+  onPickMedia: (slot: CardMediaSlot) => void;
+  shader?: ShaderCoverControl;
+}) {
+  // Local: "Shader" with no preset picked yet stores nothing.
+  const [source, setSource] = useState(shader?.value ? "shader" : "files");
+
+  return (
+    <>
+      {shader && (
+        <PropertiesPanel.Control label="Source">
+          <SegmentedControl
+            options={COVER_SOURCES}
+            value={source}
+            onValueChange={(next) => {
+              setSource(next);
+              if (next === "files" && shader.value) shader.onChange(undefined);
+            }}
+          />
+        </PropertiesPanel.Control>
+      )}
+
+      {shader && source === "shader" ? (
+        <InlineChoices
+          label="Preset"
+          choices={shader.choices}
+          value={shader.value}
+          onChange={shader.onChange}
+        />
+      ) : (
+        (["light", "dark"] as const).map((slot) => (
           <PropertiesPanel.Control
             key={slot}
             label={slot === "light" ? "Light" : "Dark"}
@@ -349,9 +444,9 @@ function MediaSection({
               onPick={() => onPickMedia(slot)}
             />
           </PropertiesPanel.Control>
-        ))}
-      </PropertiesPanel.ControlPanel>
-    </PropertiesPanel.Section>
+        ))
+      )}
+    </>
   );
 }
 
@@ -415,10 +510,13 @@ function LinkControls({
   link,
   onChange,
   onPickDocument,
+  pages,
 }: {
   link: NonNullable<LinkCardConfig["link"]>;
   onChange: (link: NonNullable<LinkCardConfig["link"]>) => void;
   onPickDocument: () => void;
+  /** The internal destinations, by path. */
+  pages: Choice[];
 }) {
   const [urlDraft, setUrlDraft] = useState(
     link.kind === "external" ? link.href ?? "" : "",
@@ -439,8 +537,10 @@ function LinkControls({
       </PropertiesPanel.Control>
 
       {link.kind === "internal" && (
-        <SiteDestination
-          href={link.href}
+        <InlineChoices
+          label="Page"
+          choices={pages}
+          value={link.href}
           onChange={(href) => onChange({ ...link, kind: "internal", href })}
         />
       )}
@@ -491,25 +591,29 @@ function LinkControls({
 }
 
 /** Listed inline: a Combobox cannot work inside this fixed rail (see `ComboboxProps.portal`). */
-function SiteDestination({
-  href,
+function InlineChoices({
+  label,
+  choices,
+  value,
   onChange,
 }: {
-  href: string | undefined;
-  onChange: (href: string) => void;
+  label: string;
+  choices: Choice[];
+  value: string | undefined;
+  onChange: (value: string) => void;
 }) {
   return (
-    <PropertiesPanel.Control label="Page">
+    <PropertiesPanel.Control label={label}>
       <OptionList
-        value={href ?? null}
+        value={value ?? null}
         onValueChange={onChange}
         tone="plain"
-        className={destinationListStyle}
+        className={inlineListStyle}
       >
-        <OptionList.Listbox aria-label="Page">
-          {SITE_PATHS.map((page) => (
-            <OptionList.Option key={page.path} value={page.path}>
-              {page.label}
+        <OptionList.Listbox aria-label={label}>
+          {choices.map((choice) => (
+            <OptionList.Option key={choice.value} value={choice.value}>
+              {choice.label}
             </OptionList.Option>
           ))}
         </OptionList.Listbox>

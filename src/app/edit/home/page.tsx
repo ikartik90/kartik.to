@@ -4,15 +4,16 @@ import { ArticleEditor } from "@/components/article-editor";
 import { HomeGrid } from "@/components/home-grid";
 import { IntroLinks } from "@/components/intro-links";
 import { serverDemoSlots } from "@/components/demo/server-demos";
-import { getGridCards } from "@/lib/grid";
+import { getGridCards, getGridShaderPresets } from "@/lib/grid";
 import { getOrCreateHomePost } from "@/lib/home";
 
 export default async function EditHomePage() {
   if (!(await isAdmin())) notFound();
 
-  const [post, cards] = await Promise.all([
+  const [post, cards, shaderPresets] = await Promise.all([
     getOrCreateHomePost(),
     getGridCards(),
+    getGridShaderPresets(),
   ]);
 
   return (
@@ -24,7 +25,12 @@ export default async function EditHomePage() {
           showTitle={false}
           slots={{
             project_grid: (
-              <HomeGrid cards={cards} demos={serverDemoSlots(cards)} editable />
+              <HomeGrid
+                cards={cards}
+                demos={serverDemoSlots(cards)}
+                shaderPresets={shaderPresets}
+                editable
+              />
             ),
             social_links: <IntroLinks />,
           }}

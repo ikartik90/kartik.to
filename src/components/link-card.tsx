@@ -4,10 +4,12 @@ import { Typography } from "./ui/typography";
 import { BackgroundEffectLayer } from "@/components/background-effect";
 import { Media } from "@/components/media";
 import { ScrimBlur } from "@/components/scrim-blur";
+import { ShaderCover } from "@/components/shader-cover";
 import { gridItemVars } from "@/utils/grid-item-vars";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 import type { LinkCardTone } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
+import type { ShaderPresetContent } from "@/domain/shader-preset";
 
 // CSS, not a JS theme read: the card renders on the server, where the theme is unknown.
 const lightOnlyStyle = css({ _dark: { display: "none" } });
@@ -27,6 +29,8 @@ export interface LinkCardProps {
   cover?: MediaNode | null;
   /** The picture shown instead in the dark theme. */
   coverDark?: MediaNode | null;
+  /** Plays in place of the pictures. */
+  shader?: ShaderPresetContent | null;
   /** Defaults to whether there is a picture. */
   scrim?: boolean;
   /** Pins the band's theme; absent follows the reader's. */
@@ -47,6 +51,7 @@ export function LinkCard({
   label,
   cover,
   coverDark,
+  shader,
   scrim,
   tone,
   newTab = false,
@@ -55,7 +60,7 @@ export function LinkCard({
 }: LinkCardProps) {
   const styles = linkCard({ aspect, tone, stretch });
 
-  const covered = Boolean(cover || coverDark);
+  const covered = Boolean(cover || coverDark || shader);
   const captioned = Boolean(title || meta);
   const grounded = scrim ?? covered;
 
@@ -73,17 +78,23 @@ export function LinkCard({
     >
       {/* Decorative: the link is named by its words or `label`. */}
       <div className={styles.cover} role="presentation" aria-hidden="true">
-        <CardCover
-          media={cover}
-          styles={styles}
-          className={coverDark ? lightOnlyStyle : undefined}
-        />
-        {coverDark && (
-          <CardCover
-            media={coverDark}
-            styles={styles}
-            className={cover ? darkOnlyStyle : undefined}
-          />
+        {shader ? (
+          <ShaderCover preset={shader} aspect={aspect} />
+        ) : (
+          <>
+            <CardCover
+              media={cover}
+              styles={styles}
+              className={coverDark ? lightOnlyStyle : undefined}
+            />
+            {coverDark && (
+              <CardCover
+                media={coverDark}
+                styles={styles}
+                className={cover ? darkOnlyStyle : undefined}
+              />
+            )}
+          </>
         )}
       </div>
       {/* Frosting before wash: a backdrop filter only blurs what has painted beneath it. */}

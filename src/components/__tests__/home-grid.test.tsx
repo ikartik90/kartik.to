@@ -66,10 +66,20 @@ vi.mock("@/components/demo/registry", () => ({
   }),
 }));
 
+// jsdom has no webgl2; the marker carries which shader plays.
+vi.mock("@/components/shaders/shader-stage", () => ({
+  MAX_PIXELS: 1,
+  layerStyle: "",
+  ShaderStage: ({ spec }: { spec: { id: string } }) => (
+    <canvas data-shader={spec.id} />
+  ),
+}));
+
 import { HomeGrid } from "../home-grid";
 import { useGridDraftStore } from "@/store/grid-draft";
 import type { GridCard } from "@/lib/grid";
 import type { LinkCardConfig } from "@/domain/link-card";
+import { shaderPresetContentFor } from "@/domain/shader-preset";
 
 const post = (id: string, gridIndex: number | null = null): GridCard => ({
   kind: "post",
@@ -780,6 +790,58 @@ describe("HomeGrid — link cards", () => {
     expect(
       screen.getByRole("link", { name: "Elsewhere" }).getAttribute("target"),
     ).toBe("_blank");
+  });
+
+  it("plays the published shader preset the card names", () => {
+    const { container } = render(
+      <HomeGrid
+        cards={[linkCard("c1", { media: { shader: "track" } })]}
+        shaderPresets={[
+          { id: "track", name: "Untitled 4", ...shaderPresetContentFor("cosmicTrack") },
+        ]}
+      />,
+    );
+    expect(container.querySelector("canvas")?.getAttribute("data-shader")).toBe(
+      "cosmicTrack",
+    );
+  });
+
+  it("falls back to the card's pictures when its preset is not published", () => {
+    const { container } = render(
+      <HomeGrid
+        cards={[
+          linkCard("c1", {
+            media: {
+              light: { type: "media", kind: "image", src: "/light.png" },
+              shader: "gone",
+            },
+          }),
+        ]}
+        shaderPresets={[]}
+      />,
+    );
+    expect(container.querySelector("canvas")).toBeNull();
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("/light.png");
+  });
+
+  it("offers the published presets in the card's panel", async () => {
+    const user = userEvent.setup();
+    render(
+      <HomeGrid
+        cards={[linkCard("c1", { media: {} })]}
+        shaderPresets={[
+          { id: "track", name: "Untitled 4", ...shaderPresetContentFor("cosmicTrack") },
+        ]}
+        editable
+      />,
+    );
+    await user.click(customize()[0]);
+    await user.click(screen.getByRole("option", { name: "Shader" }));
+    await user.click(screen.getByRole("option", { name: "Cosmic Track · Untitled 4" }));
+
+    expect(useGridDraftStore.getState().props["component:c1"]).toEqual({
+      media: { shader: "track" },
+    });
   });
 
   it("names a wordless card by where it goes", () => {

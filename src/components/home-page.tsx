@@ -10,16 +10,17 @@ import { HOME_GRID } from "@/data/home-grid";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { ProjectStacks } from "@/app/_project-stacks/project-stacks";
-import { getGridCards } from "@/lib/grid";
+import { getGridCards, getGridShaderPresets } from "@/lib/grid";
 import { getHomeDocument } from "@/lib/home";
 import { SITE_URL } from "@/lib/site-url";
 import { homeJsonLd } from "@/utils/structured-data";
 
 /** `sheet`: a project whose sheet opens over the page, at its own address. `base`: as for `projectPath`. */
 export async function HomePage({ sheet, base }: { sheet?: string; base?: string }) {
-  const [document, cards, testimonials] = await Promise.all([
+  const [document, cards, shaderPresets, testimonials] = await Promise.all([
     getHomeDocument(),
     getGridCards(),
+    getGridShaderPresets(),
     getPublishedTestimonials(),
   ]);
 
@@ -39,6 +40,7 @@ export async function HomePage({ sheet, base }: { sheet?: string; base?: string 
                   cards={cards}
                   demos={serverDemoSlots(cards)}
                   heading={HOME_GRID.heading}
+                  shaderPresets={shaderPresets}
                 />
               ),
               social_links: <IntroLinks />,
