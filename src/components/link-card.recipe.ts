@@ -40,6 +40,7 @@ export const linkCard = defineSlotRecipe({
       borderRadius: "lg",
       overflow: "hidden",
       textDecoration: "none",
+      transition: "transform 150ms cubic-bezier(0.4, 0, 0.2, 1)",
       _active: { transform: "scale(0.98)" },
       // Drawn over the cover; a border on the root would paint beneath it.
       _after: {

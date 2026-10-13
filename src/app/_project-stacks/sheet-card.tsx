@@ -55,6 +55,8 @@ const cardStyle = css({
   textAlign: "start",
   color: "inherit",
   cursor: "pointer",
+  transition: "transform 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+  "&:not([data-closed]):active": { transform: "scale(0.98)" },
   "&[data-closed]": { cursor: "default" },
   outline: "none",
   "html[data-keyboard-focus] &": { "&:focus-visible": ring },
