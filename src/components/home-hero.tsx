@@ -2,7 +2,8 @@ import { Fragment, type CSSProperties } from "react";
 import { css, cx } from "../../styled-system/css";
 import { pageOpening } from "../../styled-system/recipes";
 import { ButtonLink } from "./button-link";
-import { DitherGround } from "./shaders/dither-ground";
+import type { LeafSettings } from "./shaders/falling-leaves";
+import { FallingLeavesGround } from "./shaders/falling-leaves-ground";
 import { HOME_HERO } from "@/data/home-hero";
 import { HERO_OPENING_LINES, openingLineDelay, openingStepDelay } from "@/data/page-opening";
 import { tokens } from "@/data/theme/tokens";
@@ -57,6 +58,22 @@ const groundStyle = css({
   WebkitMaskImage: "var(--fade)",
 });
 const groundFade = { "--fade": easedFadeOut(30) } as CSSProperties;
+
+const leaves: LeafSettings = {
+  count: 14,
+  size: 100,
+  depth: 0.5,
+  fall: 56,
+  sway: 36,
+  tumble: 1,
+  tumblePace: 0.56,
+  wind: 100,
+  density: 0.8,
+  veins: 0.45,
+  inks: ["--colors-brand-orange", "--colors-brand-pink"],
+  inkStrength: 1,
+  behindWords: { density: 0.32, ink: 0.6, margin: 40 },
+};
 
 // Below md one column; from md the heading on the left and the lede on the right, starting in the heading's row and
 // spanning the buttons' row. That row is `1fr`, so a tall lede grows only it, and the gap above the buttons holds.
@@ -143,7 +160,7 @@ const ctasStyle = css({
 export function HomeHero() {
   return (
     <section className={heroStyle} aria-label="Introduction">
-      <DitherGround
+      <FallingLeavesGround
         shape="warp"
         type="4x4"
         size={2}
@@ -151,6 +168,7 @@ export function HomeHero() {
         speed={0.25}
         ink="--colors-border-divider"
         strength={0.72}
+        leaves={leaves}
         className={groundStyle}
         style={groundFade}
       />

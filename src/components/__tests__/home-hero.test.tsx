@@ -3,7 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // WebGL, tested in its own file.
-vi.mock("../shaders/dither-ground", () => ({ DitherGround: () => <div data-dither-ground="" /> }));
+vi.mock("../shaders/falling-leaves-ground", () => ({ FallingLeavesGround: () => <div data-dither-ground="" /> }));
 
 import { HomeHero } from "../home-hero";
 
@@ -13,7 +13,7 @@ describe("HomeHero", () => {
   it("is the page's one heading, in two lines spaced apart", () => {
     render(<HomeHero />);
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.textContent).toBe("Designer who ships");
+    expect(heading.textContent).toBe("Design generalist who ships");
     expect(heading.children).toHaveLength(2);
   });
 
@@ -60,7 +60,7 @@ describe("HomeHero", () => {
     const lines = [...container.querySelectorAll("[data-opening-line]")];
     expect(lines.map((line) => line.textContent)).toEqual([
       "Available for workToronto, ON",
-      "Designer",
+      "Design generalist",
       "who ships",
     ]);
     expect(lines.map((line) => delay(line))).toEqual(["0ms", "100ms", "200ms"]);
