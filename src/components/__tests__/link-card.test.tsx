@@ -9,18 +9,47 @@ vi.mock("@paper-design/shaders-react", () => ({
   ),
 }));
 
-// jsdom has no webgl2; the marker carries which shader plays and the speed it was handed.
+// jsdom has no webgl2; the marker carries which shader plays and what it was handed.
 vi.mock("@/components/shaders/shader-stage", () => ({
-  MAX_PIXELS: 1,
+  MAX_PIXELS: 1280 * 1280,
   layerStyle: "",
   ShaderStage: ({
     spec,
     params,
+    minPixelRatio,
+    maxPixelCount,
   }: {
     spec: { id: string };
     params: Record<string, number>;
-  }) => <canvas data-shader={spec.id} data-speed={String(params.speed)} />,
+    minPixelRatio?: number;
+    maxPixelCount?: number;
+  }) => (
+    <canvas
+      data-shader={spec.id}
+      data-speed={String(params.speed)}
+      data-min-pixel-ratio={minPixelRatio}
+      data-max-pixel-count={maxPixelCount}
+    />
+  ),
 }));
+
+/** jsdom lays nothing out, so the shader's cover reports its size as a browser would on mount. */
+function stubCoverSize(width: number, height: number) {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        this.callback(
+          [{ target, contentRect: { width, height } } as unknown as ResizeObserverEntry],
+          this as unknown as ResizeObserver,
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+}
 
 import { linkCard } from "../../../styled-system/recipes";
 import { LinkCard } from "../link-card";
@@ -42,7 +71,10 @@ const clip = (src: string): MediaNode => ({
 });
 
 describe("LinkCard", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it("offers exactly the shapes the app's one ratio map defines", () => {
     expect(linkCard.variantMap.aspect).toEqual(Object.keys(ASPECT_RATIOS));
@@ -315,6 +347,7 @@ describe("LinkCard", () => {
   });
 
   it("plays a shader preset in place of its pictures", () => {
+    stubCoverSize(470, 313);
     const { container } = render(
       <LinkCard
         href="/playground/shader/comets"
@@ -343,6 +376,7 @@ describe("LinkCard", () => {
   });
 
   it("plays the shader at the speed its preset was saved with", () => {
+    stubCoverSize(470, 313);
     const preset = shaderPresetContentFor("cosmicTrack");
     const { container } = render(
       <LinkCard
@@ -362,6 +396,7 @@ describe("LinkCard", () => {
   });
 
   it("holds the shader still for a reader who asks for less motion", () => {
+    stubCoverSize(470, 313);
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query.includes("reduce"),
       addEventListener: () => undefined,
@@ -387,6 +422,7 @@ describe("LinkCard", () => {
   });
 
   it("starts the shader only once the card comes near the screen", () => {
+    stubCoverSize(470, 313);
     let reveal: () => void = () => undefined;
     vi.stubGlobal(
       "IntersectionObserver",
@@ -419,6 +455,22 @@ describe("LinkCard", () => {
     act(() => reveal());
     vi.unstubAllGlobals();
     expect(container.querySelector("canvas")).not.toBeNull();
+  });
+
+  it("draws the shader as the playground previews it, scaled down to the card", () => {
+    // Half the preview's 680px, on jsdom's 1× screen (the library's 2× floor applies).
+    stubCoverSize(340, 227);
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader/comets"
+        title="Comets"
+        aspect="3/2"
+        shader={shaderPresetContentFor("pixelComets")}
+      />,
+    );
+    const stage = container.querySelector("canvas");
+    expect(stage?.getAttribute("data-min-pixel-ratio")).toBe("1");
+    expect(stage?.getAttribute("data-max-pixel-count")).toBe(String(680 * 454));
   });
 
   it("keeps the shader out of the link's name", () => {

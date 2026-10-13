@@ -56,6 +56,7 @@ import {
 import {
   framingFor,
   paletteFor,
+  SHADER_PRESET_PREVIEW_PX,
   shaderParamsFor,
   type ShaderPresetSettings,
   type ShaderPresetTheme,
@@ -174,7 +175,6 @@ const shaderPresetStyle = css({
 
   // Over the rail, which follows it in the column and slides out from under it.
   _bottomSheet: { zIndex: 1 },
-  "--preset-max": "680px",
   aspectRatio: "var(--preset-w) / var(--preset-h)",
   width:
     "min(var(--preset-max), calc(var(--preset-max) * var(--preset-w) / var(--preset-h)), calc(token(spacing.full) - 2 * var(--card-gutter)), calc((100dvh - var(--card-space)) * var(--preset-w) / var(--preset-h)))",
@@ -519,6 +519,7 @@ export function ShaderPlayground({ preset }: { preset?: OpenedShaderPreset }) {
             data-preset-stage
             style={
               {
+                "--preset-max": `${SHADER_PRESET_PREVIEW_PX}px`,
                 "--preset-w": ratioWidth,
                 "--preset-h": ratioHeight,
               } as CSSProperties
