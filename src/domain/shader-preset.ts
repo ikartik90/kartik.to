@@ -50,6 +50,9 @@ function themed(color: string): ThemedColor {
 
 export const DEFAULT_SHADER_PRESET_ASPECT: DemoFrameAspectRatio = "1/1";
 
+/** The playground preview's long edge in CSS px: the size a preset is tuned at, and is scaled from elsewhere. */
+export const SHADER_PRESET_PREVIEW_PX = 680;
+
 /**
  * Defaulted so presets saved before a control existed still parse. Ranges are
  * enforced, not clamped, so the panel never shows a value the picture lacks.

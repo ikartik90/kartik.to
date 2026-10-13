@@ -793,6 +793,21 @@ describe("HomeGrid — link cards", () => {
   });
 
   it("plays the published shader preset the card names", () => {
+    // jsdom lays nothing out; the shader's cover mounts once it has a size to draw at.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private callback: ResizeObserverCallback) {}
+        observe(target: Element) {
+          this.callback(
+            [{ target, contentRect: { width: 470, height: 313 } } as unknown as ResizeObserverEntry],
+            this as unknown as ResizeObserver,
+          );
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
     const { container } = render(
       <HomeGrid
         cards={[linkCard("c1", { media: { shader: "track" } })]}
@@ -801,6 +816,7 @@ describe("HomeGrid — link cards", () => {
         ]}
       />,
     );
+    vi.unstubAllGlobals();
     expect(container.querySelector("canvas")?.getAttribute("data-shader")).toBe(
       "cosmicTrack",
     );
