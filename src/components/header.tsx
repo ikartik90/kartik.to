@@ -2,7 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { css } from "../../styled-system/css";
-import { REVIEW_BASE } from "@/utils/review-path";
+import { OPEN_CARDS, projectPath } from "@/app/_project-stacks/data";
+import { REVIEW_BASE, reviewBase } from "@/utils/review-path";
 import { MenuButton } from "./menu-button";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -11,8 +12,13 @@ const headerStyle = css({ zIndex: 1 });
 
 export function Header() {
   const pathname = usePathname();
-  // `/edit/home` is the homepage being edited, and keeps the header's furniture.
-  const isHome = pathname === "/" || pathname === REVIEW_BASE || pathname === "/edit/home";
+  // `/edit/home` is the homepage being edited, and keeps the header's furniture. A project's address is the homepage
+  // under its sheet: dropping the header there moves the page beneath as the sheet opens and closes.
+  const isHome =
+    pathname === "/" ||
+    pathname === REVIEW_BASE ||
+    pathname === "/edit/home" ||
+    OPEN_CARDS.some((card) => projectPath(card.id, reviewBase(pathname)) === pathname);
 
   if (!isHome) return null;
 

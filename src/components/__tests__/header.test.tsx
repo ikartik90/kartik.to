@@ -90,13 +90,21 @@ describe("Header", () => {
     expect(tip.hasAttribute("data-visible")).toBe(false);
   });
 
-  it("shows on the review copy of the home page, and not over its project pages", () => {
+  it("shows on the review copy of the home page", () => {
     mockPathname.mockReturnValue("/dive");
     render(<Header />);
     expect(screen.getByRole("banner")).toBeDefined();
-    cleanup();
+  });
 
-    mockPathname.mockReturnValue("/dive/projects/onboarding");
+  // A project's address is the homepage under its sheet: the page beneath must not lose the header as it opens.
+  it.each(["/projects/onboarding", "/dive/projects/check-ins"])("stays at %s", (path) => {
+    mockPathname.mockReturnValue(path);
+    render(<Header />);
+    expect(screen.getByRole("banner")).toBeDefined();
+  });
+
+  it("renders nothing at a project address with no sheet", () => {
+    mockPathname.mockReturnValue("/projects/no-such-project");
     const { container } = render(<Header />);
     expect(container.firstChild).toBeNull();
   });
