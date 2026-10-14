@@ -33,6 +33,11 @@ vi.mock("@/components/shaders/shader-stage", () => ({
   ),
 }));
 
+// Run by the cursor and the frame clock, and tested in its own file; the marker carries how many icons it was handed.
+vi.mock("@/components/icon-cubes", () => ({
+  IconCubes: ({ icons }: { icons: unknown[] }) => <div data-icon-cubes={icons.length} />,
+}));
+
 /** jsdom lays nothing out, so the shader's cover reports its size as a browser would on mount. */
 function stubCoverSize(width: number, height: number) {
   vi.stubGlobal(
@@ -102,6 +107,33 @@ describe("LinkCard", () => {
 
     rerender(<LinkCard href="/work/atlas" title="Atlas" aspect="3/2" stretch />);
     expect(link().className).toContain("link-card__root--stretch_true");
+  });
+
+  it("rounds its corners and draws all four sides unless tiled into a grid that draws its lines", () => {
+    const { rerender } = render(<LinkCard href="/work/atlas" title="Atlas" aspect="1/1" />);
+    const link = () => screen.getByRole("link", { name: "Atlas" });
+    expect(link().className).not.toContain("tiled_true");
+
+    rerender(<LinkCard href="/work/atlas" title="Atlas" aspect="1/1" tiled />);
+    expect(link().className).toContain("link-card__root--tiled_true");
+  });
+
+  it("plays the icon set's cubes in place of its pictures, and grounds its words over them", () => {
+    const icons = [{ key: "a", svg: { viewBox: 20, flattened: false, nodes: [] } }];
+    const { container } = render(
+      <LinkCard href="/playground/icons" title="Crest Icons" aspect="1/1" cover={picture("/light.png")} icons={icons} />,
+    );
+    expect(container.querySelector("[data-icon-cubes]")?.getAttribute("data-icon-cubes")).toBe("1");
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByRole("link").hasAttribute("data-covered")).toBe(true);
+  });
+
+  it("shows its pictures when it has no icons to play", () => {
+    const { container } = render(
+      <LinkCard href="/playground/icons" title="Crest Icons" aspect="1/1" cover={picture("/light.png")} icons={[]} />,
+    );
+    expect(container.querySelector("[data-icon-cubes]")).toBeNull();
+    expect(container.querySelector("img")).not.toBeNull();
   });
 
   it("carries a meta line over the cover when it is given one", () => {

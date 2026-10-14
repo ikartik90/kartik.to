@@ -10,11 +10,11 @@ import { HomeHero } from "../home-hero";
 afterEach(() => cleanup());
 
 describe("HomeHero", () => {
-  it("is the page's one heading, in two lines spaced apart", () => {
+  it("is the page's one heading, its words in one run the browser balances over its lines", () => {
     render(<HomeHero />);
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.textContent).toBe("Design generalist who ships");
-    expect(heading.children).toHaveLength(2);
+    expect(heading.textContent).toBe("Design craft meets engineering prowess");
+    expect(heading.children).toHaveLength(0);
   });
 
   it("introduces Kartik in three paragraphs", () => {
@@ -54,23 +54,22 @@ describe("HomeHero", () => {
     expect(container.querySelector("[data-dither-ground]")).not.toBeNull();
   });
 
-  it("opens the page: the pills and each heading line a line apart, then the lede and the buttons as they stand", () => {
+  it("opens the page: the pills and the heading a line apart, then the lede and the buttons as they stand", () => {
     const { container } = render(<HomeHero />);
     const delay = (el: Element, name = "--opening-delay") => (el as HTMLElement).style.getPropertyValue(name);
     const lines = [...container.querySelectorAll("[data-opening-line]")];
     expect(lines.map((line) => line.textContent)).toEqual([
       "Available for workToronto, ON",
-      "Design generalist",
-      "who ships",
+      "Design craft meets engineering prowess",
     ]);
-    expect(lines.map((line) => delay(line))).toEqual(["0ms", "100ms", "200ms"]);
+    expect(lines.map((line) => delay(line))).toEqual(["0ms", "100ms"]);
     const steps = [...container.querySelectorAll("[data-opening-step]")];
     const ctas = screen.getByRole("link", { name: "See my work" }).parentElement!;
     const lede = screen.getByText("I'm Kartik Iyer, a Toronto-based designer and builder.").closest("[data-opening-step]")!;
     expect(steps).toEqual([lede, ctas]);
     // In one column the lede stands above the buttons; side by side, beside the heading and the buttons below it.
-    expect([lede, ctas].map((step) => delay(step, "--opening-delay-stacked"))).toEqual(["350ms", "500ms"]);
-    expect([ctas, lede].map((step) => delay(step, "--opening-delay-beside"))).toEqual(["350ms", "500ms"]);
+    expect([lede, ctas].map((step) => delay(step, "--opening-delay-stacked"))).toEqual(["250ms", "400ms"]);
+    expect([ctas, lede].map((step) => delay(step, "--opening-delay-beside"))).toEqual(["250ms", "400ms"]);
   });
 
   it("keeps the line the lede measures against out of the accessibility tree", () => {

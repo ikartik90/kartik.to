@@ -10,6 +10,8 @@ import type { MediaNode } from "@/domain/nodes";
 import type { Post, PostCardConfig } from "@/domain/post";
 import { shaderPresetName, type ShownShaderPreset } from "@/domain/shader-preset";
 import { getPublishedShaderPresets } from "@/app/actions/shader-preset";
+import { listApprovedIconsWithSvg } from "@/lib/icons";
+import type { CoverIcon } from "@/domain/icon";
 import { GRID_CATEGORIES, POST_CATEGORIES } from "@/data/post-categories";
 import { getPostReadUrl } from "@/utils/post-urls";
 
@@ -141,4 +143,28 @@ export async function getGridShaderPresets(): Promise<ShownShaderPreset[]> {
       })),
     [],
   );
+}
+
+/** Enough for a different icon on each face of a cover's 25 cubes, with spares to flip to. */
+const COVER_ICONS = 150;
+
+/**
+ * The approved icons, shuffled, for a link card that plays them on cubes; none, and nothing read, unless one does.
+ * Read when the page is built, so an icon approved or removed shows once the icon set's actions revalidate it.
+ */
+export async function getGridCoverIcons(cards: GridCard[], random = Math.random): Promise<CoverIcon[]> {
+  if (!cards.some((card) => card.kind === "component" && card.props?.media?.icons)) return [];
+  return getCoverIcons(random);
+}
+
+/** As `getGridCoverIcons`, for the editor, where any card may be switched to play them. */
+export async function getCoverIcons(random = Math.random): Promise<CoverIcon[]> {
+  return safely(async () => {
+    const icons = (await listApprovedIconsWithSvg()).flatMap(({ icon, svg }) => (svg ? [{ key: icon.key, svg }] : []));
+    for (let i = icons.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [icons[i], icons[j]] = [icons[j], icons[i]];
+    }
+    return icons.slice(0, COVER_ICONS);
+  }, []);
 }

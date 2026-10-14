@@ -1,4 +1,11 @@
 import { z } from "zod";
+import type { IconSvg } from "@/utils/icon-svg";
+
+/** An approved icon, as a card's cover plays it. */
+export interface CoverIcon {
+  key: string;
+  svg: IconSvg;
+}
 
 /** Both scales must stay the same length: the size/stroke lock pairs them by index. */
 export const ICON_SIZES = [

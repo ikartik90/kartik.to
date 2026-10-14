@@ -7,7 +7,7 @@ describe("projectMarkdown", () => {
 
   it("opens with the card's title and sentence, then the section's headline", () => {
     expect(shift).toMatch(
-      /^# Shift scheduling\n\n## Made posted schedules extendable and cut scheduling clicks by 81%\n\nAt Spotwork, I led the rebuild of the staffing management platform/,
+      /^# Shift scheduling\n\n## Made posted schedules extendable and cut scheduling clicks by 81%\n\nAt Spotwork, I led the rebuild of the staffing platform, doubling daily shift postings in eight months\.\n/,
     );
   });
 

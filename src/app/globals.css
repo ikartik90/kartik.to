@@ -50,6 +50,13 @@ body[data-properties-panel-instant] {
   transition: none;
 }
 
+/* The homepage and its editor run the showcase and the listings, and the header with them, out to the project
+   sheet's wide width. Unlayered: in `base`, the `tokens` layer after it would win. */
+:root:has(article[data-home]) {
+  --sizes-article-showcase: var(--sizes-project-sheet-wide);
+  --sizes-listing-grid3-up: var(--sizes-project-sheet-wide);
+}
+
 /* PNG, not SVG: Safari ignores SVG cursors. `1 3` is the hotspot. */
 @media (pointer: fine) and (hover: hover) {
   html,

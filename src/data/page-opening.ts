@@ -1,5 +1,3 @@
-import { HOME_HERO } from "./home-hero";
-
 // The homepage's opening stagger: the hero's lines, then its steps, then what's on screen below it. The parts the
 // page renders run it in CSS (`pageOpening`); what mounts later joins it in step (`joinOpening`).
 
@@ -13,8 +11,8 @@ export const PAGE_OPENING = {
   stepEase: "cubic-bezier(0.2, 0, 0, 1)",
 } as const;
 
-/** The hero's pills, then each line of its heading. */
-export const HERO_OPENING_LINES = HOME_HERO.heading.length + 1;
+/** The hero's pills, then its heading. */
+export const HERO_OPENING_LINES = 2;
 /** Its lede and its buttons. */
 export const HERO_OPENING_STEPS = 2;
 

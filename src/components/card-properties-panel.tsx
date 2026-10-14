@@ -48,6 +48,7 @@ const LINK_KINDS: { value: LinkTargetKind; label: string }[] = [
 const COVER_SOURCES = [
   { value: "files", label: "Files" },
   { value: "shader", label: "Shader" },
+  { value: "icons", label: "Icons" },
 ];
 
 interface Choice {
@@ -180,9 +181,11 @@ function LinkCardSections({
     onChange(next);
   };
 
-  const setShader = (shader: string | undefined) => {
-    const next = { ...media, shader };
-    if (!shader) delete next.shader;
+  // One write, so a preset and the icons never both stay set.
+  const setCover = (cover: CoverPlay) => {
+    const next = { ...media, ...cover };
+    if (!cover.shader) delete next.shader;
+    if (!cover.icons) delete next.icons;
     set({ media: next });
   };
 
@@ -194,17 +197,15 @@ function LinkCardSections({
           enabled ? set({ media: {} }) : clear("media")
         }
         onPickMedia={onPickMedia}
-        shader={
-          shaderPresets.length > 0
-            ? {
-                choices: shaderPresets.map((preset) =>
-                  presetChoice(preset, preset.id),
-                ),
-                value: media?.shader,
-                onChange: setShader,
-              }
-            : undefined
-        }
+        cover={{
+          presets:
+            shaderPresets.length > 0
+              ? shaderPresets.map((preset) => presetChoice(preset, preset.id))
+              : undefined,
+          shader: media?.shader,
+          icons: media?.icons === true,
+          onChange: setCover,
+        }}
       />
 
       <PropertiesPanel.Section
@@ -362,25 +363,29 @@ function GroundControls({
   );
 }
 
-interface ShaderCoverControl {
-  choices: Choice[];
-  /** The preset playing; absent plays the pictures. */
-  value: string | undefined;
-  onChange: (value: string | undefined) => void;
+/** What plays in place of the pictures: a preset, or the icon set; neither plays the pictures. */
+type CoverPlay = { shader?: string; icons?: true };
+
+interface CoverControl {
+  /** The published presets; absent while none is. */
+  presets: Choice[] | undefined;
+  shader: string | undefined;
+  icons: boolean;
+  onChange: (cover: CoverPlay) => void;
 }
 
 function MediaSection({
   media,
   onEnabledChange,
   onPickMedia,
-  shader,
+  cover,
 }: {
   media: LinkCardMedia | undefined;
   /** Closing the section is also what removes a picture; the slots only swap files. */
   onEnabledChange: (enabled: boolean) => void;
   onPickMedia: (slot: CardMediaSlot) => void;
   /** Absent offers the pictures alone. */
-  shader?: ShaderCoverControl;
+  cover?: CoverControl;
 }) {
   return (
     <PropertiesPanel.Section
@@ -391,7 +396,7 @@ function MediaSection({
         Media
       </PropertiesPanel.SectionHeader>
       <PropertiesPanel.ControlPanel>
-        <MediaControls media={media} onPickMedia={onPickMedia} shader={shader} />
+        <MediaControls media={media} onPickMedia={onPickMedia} cover={cover} />
       </PropertiesPanel.ControlPanel>
     </PropertiesPanel.Section>
   );
@@ -401,38 +406,40 @@ function MediaSection({
 function MediaControls({
   media,
   onPickMedia,
-  shader,
+  cover,
 }: {
   media: LinkCardMedia | undefined;
   onPickMedia: (slot: CardMediaSlot) => void;
-  shader?: ShaderCoverControl;
+  cover?: CoverControl;
 }) {
   // Local: "Shader" with no preset picked yet stores nothing.
-  const [source, setSource] = useState(shader?.value ? "shader" : "files");
+  const [source, setSource] = useState(cover?.shader ? "shader" : cover?.icons ? "icons" : "files");
+  const sources = COVER_SOURCES.filter((option) => option.value !== "shader" || cover?.presets);
 
   return (
     <>
-      {shader && (
+      {cover && (
         <PropertiesPanel.Control label="Source">
           <SegmentedControl
-            options={COVER_SOURCES}
+            options={sources}
             value={source}
             onValueChange={(next) => {
               setSource(next);
-              if (next === "files" && shader.value) shader.onChange(undefined);
+              if (next === "icons") cover.onChange({ icons: true });
+              else if (next === "files" && (cover.shader || cover.icons)) cover.onChange({});
             }}
           />
         </PropertiesPanel.Control>
       )}
 
-      {shader && source === "shader" ? (
+      {cover?.presets && source === "shader" ? (
         <InlineChoices
           label="Preset"
-          choices={shader.choices}
-          value={shader.value}
-          onChange={shader.onChange}
+          choices={cover.presets}
+          value={cover.shader}
+          onChange={(shader) => cover.onChange(shader ? { shader } : {})}
         />
-      ) : (
+      ) : cover && source === "icons" ? null : (
         (["light", "dark"] as const).map((slot) => (
           <PropertiesPanel.Control
             key={slot}

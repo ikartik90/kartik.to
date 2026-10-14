@@ -1,14 +1,9 @@
 "use client";
 
-import {
-  Fragment,
-  type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { css, cx } from "../../../../styled-system/css";
+import { IconDrawing } from "@/components/icon-drawing";
 import type { IconViewSettings } from "@/domain/icon";
-import { iconAttrsToProps, resolveIconNodes, type IconNode } from "@/utils/icon-svg";
 import type { IconEntry } from "./use-icon-library";
 
 const tileStyle = css({
@@ -62,28 +57,6 @@ const brokenStyle = css({
   borderColor: "border.divider",
 });
 
-function IconNodes({ nodes }: { nodes: IconNode[] }) {
-  return (
-    <>
-      {nodes.map((node, index) => {
-        const Tag = node.tag as "path";
-        const props = iconAttrsToProps(node.attrs);
-        return (
-          <Fragment key={index}>
-            {node.children.length === 0 ? (
-              <Tag {...props} />
-            ) : (
-              <Tag {...props}>
-                <IconNodes nodes={node.children} />
-              </Tag>
-            )}
-          </Fragment>
-        );
-      })}
-    </>
-  );
-}
-
 export interface IconTileProps {
   entry: IconEntry;
   settings: IconViewSettings;
@@ -124,16 +97,7 @@ export function IconTile({
         {svg === undefined ? (
           null
         ) : svg ? (
-          <svg
-            width={drawn}
-            height={drawn}
-            viewBox={`0 0 ${svg.viewBox} ${svg.viewBox}`}
-            fill="none"
-            aria-hidden
-            data-icon-drawing
-          >
-            <IconNodes nodes={resolveIconNodes(svg, settings)} />
-          </svg>
+          <IconDrawing svg={svg} settings={settings} size={drawn} data-icon-drawing />
         ) : (
           <span className={cx(brokenStyle)} data-icon-broken aria-hidden />
         )}

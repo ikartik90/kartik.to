@@ -29,6 +29,7 @@ import { useGridDraftStore } from "@/store/grid-draft";
 import { applyGridDraft } from "@/utils/grid-draft";
 import { linkCardHref, linkCardTitle, type LinkCardConfig } from "@/domain/link-card";
 import { postCardMedia, type PostCardConfig } from "@/domain/post";
+import type { CoverIcon } from "@/domain/icon";
 import type { ShownShaderPreset } from "@/domain/shader-preset";
 import type { ImageInsertPayload } from "@/hooks/use-image-insert";
 import type { MediaNode } from "@/domain/nodes";
@@ -130,14 +131,28 @@ interface HomeGridProps {
   heading?: string;
   /** Published presets, by id; a card naming any other plays its pictures. */
   shaderPresets?: ShownShaderPreset[];
+  /** The icon set, for a card that plays it on cubes; without any, that card plays its pictures. */
+  coverIcons?: CoverIcon[];
 }
 
 // Masonry: `grid-lanes` where supported, else 1px rows with spans computed via `tan(atan2())`,
 // the only CSS length/length division. WebKit gets that wrong on cqw, hence the px `--grid-width`.
+// The cards are tiled edge to edge: each draws its right and bottom lines, and the grid the lines above and left of
+// them.
 const masonryGridStyle = css({
   // A custom property because the span arithmetic reads it back.
-  "--grid-gap": "token(spacing.xxl)",
+  "--grid-gap": "0px",
   "--columns": "1",
+  position: "relative",
+  _after: {
+    content: '""',
+    position: "absolute",
+    inset: 0,
+    borderStyle: "solid",
+    borderColor: "border.divider",
+    borderWidth: "token(spacing.3xs) 0 0 token(spacing.3xs)",
+    pointerEvents: "none",
+  },
 
   containerType: "inline-size",
   display: "grid",
@@ -194,9 +209,10 @@ const masonryGridStyle = css({
   "@container projectsGrid (min-width: 640px)": {
     "&[data-columns='2'], &[data-columns='3']": { "--columns": "2" },
   },
+  // Three across from here for any grid of more than one card: tiled edge to edge, a short last row reads as tiles.
   "@container projectsGrid (min-width: 960px)": {
     width: "min(100%, token(sizes.listingGrid3Up))",
-    "&[data-columns='3']": { "--columns": "3" },
+    "&[data-columns='2'], &[data-columns='3']": { "--columns": "3" },
   },
 });
 
@@ -206,6 +222,7 @@ export function HomeGrid({
   demos,
   heading,
   shaderPresets = [],
+  coverIcons = [],
 }: HomeGridProps) {
   const headingId = useId();
   const draft = useGridDraftStore();
@@ -388,6 +405,7 @@ export function HomeGrid({
                   demo={demos?.[card.key]}
                   editable={editable}
                   shaderPresets={shaderPresets}
+                  coverIcons={coverIcons}
                 />
               )}
             </div>
@@ -486,11 +504,13 @@ function ComponentCard({
   demo,
   editable,
   shaderPresets,
+  coverIcons,
 }: {
   card: Extract<GridCard, { kind: "component" }>;
   demo?: ReactNode;
   editable: boolean;
   shaderPresets: ShownShaderPreset[];
+  coverIcons: CoverIcon[];
 }) {
   const entry = getDemoComponent(card.componentId);
   if (!entry) return null;
@@ -507,10 +527,12 @@ function ComponentCard({
         cover={config.media?.light}
         coverDark={config.media?.dark}
         shader={shaderPresets.find((preset) => preset.id === config.media?.shader)}
+        icons={config.media?.icons ? coverIcons : undefined}
         scrim={config.content?.scrim}
         tone={config.content?.tone}
         newTab={config.link?.newTab}
         stretch
+        tiled
         interactive={!editable}
       />
     );

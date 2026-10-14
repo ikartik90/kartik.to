@@ -129,6 +129,15 @@ export const linkCard = defineSlotRecipe({
     stretch: {
       true: {},
     },
+    // Edge to edge in a grid that draws the lines above and left of its cards: square, its own right and bottom only.
+    tiled: {
+      true: {
+        root: {
+          borderRadius: "0",
+          _after: { borderWidth: "0 token(spacing.3xs) token(spacing.3xs) 0" },
+        },
+      },
+    },
   },
   compoundVariants: [
     {
@@ -138,5 +147,5 @@ export const linkCard = defineSlotRecipe({
     },
   ],
   // Chosen at runtime, so the extractor needs them listed; separate entries avoid a cross product.
-  staticCss: [{ aspect: ["*"] }, { tone: ["*"] }, { stretch: ["*"] }],
+  staticCss: [{ aspect: ["*"] }, { tone: ["*"] }, { stretch: ["*"] }, { tiled: ["*"] }],
 });

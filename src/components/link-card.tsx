@@ -2,11 +2,13 @@ import { css } from "../../styled-system/css";
 import { linkCard } from "../../styled-system/recipes";
 import { Typography } from "./ui/typography";
 import { BackgroundEffectLayer } from "@/components/background-effect";
+import { IconCubes } from "@/components/icon-cubes";
 import { Media } from "@/components/media";
 import { ScrimBlur } from "@/components/scrim-blur";
 import { ShaderCover } from "@/components/shader-cover";
 import { gridItemVars } from "@/utils/grid-item-vars";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
+import type { CoverIcon } from "@/domain/icon";
 import type { LinkCardTone } from "@/domain/link-card";
 import type { MediaNode } from "@/domain/nodes";
 import type { ShaderPresetContent } from "@/domain/shader-preset";
@@ -31,6 +33,8 @@ export interface LinkCardProps {
   coverDark?: MediaNode | null;
   /** Plays in place of the pictures. */
   shader?: ShaderPresetContent | null;
+  /** Played on cubes in place of the pictures, when there are any. */
+  icons?: CoverIcon[];
   /** Defaults to whether there is a picture. */
   scrim?: boolean;
   /** Pins the band's theme; absent follows the reader's. */
@@ -40,6 +44,8 @@ export interface LinkCardProps {
   interactive?: boolean;
   /** Fills its container's height instead of holding `aspect`, for a container that holds the shape. */
   stretch?: boolean;
+  /** Square, edge to edge in a grid that draws the lines above and left of it. */
+  tiled?: boolean;
 }
 
 export function LinkCard({
@@ -52,15 +58,18 @@ export function LinkCard({
   cover,
   coverDark,
   shader,
+  icons,
   scrim,
   tone,
   newTab = false,
   interactive = true,
   stretch = false,
+  tiled = false,
 }: LinkCardProps) {
-  const styles = linkCard({ aspect, tone, stretch });
+  const styles = linkCard({ aspect, tone, stretch, tiled });
 
-  const covered = Boolean(cover || coverDark || shader);
+  const playsIcons = Boolean(icons?.length);
+  const covered = Boolean(cover || coverDark || shader || playsIcons);
   const captioned = Boolean(title || meta);
   const grounded = scrim ?? covered;
 
@@ -78,7 +87,9 @@ export function LinkCard({
     >
       {/* Decorative: the link is named by its words or `label`. */}
       <div className={styles.cover} role="presentation" aria-hidden="true">
-        {shader ? (
+        {icons && playsIcons ? (
+          <IconCubes icons={icons} />
+        ) : shader ? (
           <ShaderCover preset={shader} aspect={aspect} />
         ) : (
           <>

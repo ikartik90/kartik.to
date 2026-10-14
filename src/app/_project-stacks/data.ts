@@ -20,8 +20,7 @@ export interface ProjectSection {
 }
 
 export const SPOTWORK: ProjectSection = {
-  headline:
-    "At Spotwork, I led the rebuild of the staffing management platform from the ground up and doubled daily shifts in eight months.",
+  headline: "At Spotwork, I led the rebuild of the staffing platform, doubling daily shift postings in eight months.",
   cards: [
     {
       id: "shift-scheduling",

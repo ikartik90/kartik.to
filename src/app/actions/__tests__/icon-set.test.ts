@@ -531,4 +531,16 @@ describe("what a write tells the prerendered page", () => {
     await setIconLabels({ key: STROKED, title: "Tick", aliases: ["check"] });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/playground/icons");
   });
+
+  it("rebuilds the homepage too whenever the approved icons, which a card can play, might change", async () => {
+    await finalizeIconUpload({ key: STROKED, native: 20, flattened: false });
+    await setIconReview({ key: STROKED, review: "held" });
+    await deleteIcon({ key: STROKED });
+    expect(mockRevalidatePath.mock.calls.filter(([path]) => path === "/")).toHaveLength(3);
+  });
+
+  it("leaves the homepage be when only a name changes, which it doesn't show", async () => {
+    await setIconLabels({ key: STROKED, title: "Tick", aliases: ["check"] });
+    expect(mockRevalidatePath).not.toHaveBeenCalledWith("/");
+  });
 });
