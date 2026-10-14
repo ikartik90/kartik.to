@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Testimonial } from "@/domain/testimonial";
+import { scrollIntoView } from "@/test-support";
 import { TestimonialWall, dealIntoColumns } from "../testimonial-wall";
 
 afterEach(() => cleanup());
@@ -388,6 +389,32 @@ describe("TestimonialWall", () => {
         wait(30000);
 
         expect(moved(before)).toHaveLength(0);
+      });
+
+      it("holds still while it is off screen", () => {
+        const shown = scrollIntoView();
+        render(<TestimonialWall testimonials={rows(8)} />);
+        const before = seats();
+
+        shown(0);
+        wait(30000);
+
+        expect(moved(before)).toHaveLength(0);
+      });
+
+      it("starts trading eight seconds after it comes on screen", () => {
+        const shown = scrollIntoView();
+        render(<TestimonialWall testimonials={rows(8)} />);
+        wait(30000);
+        const before = seats();
+
+        shown(0.2);
+        wait(7000);
+        expect(moved(before)).toHaveLength(0);
+
+        wait(1000);
+        settle();
+        expect(moved(before)).toHaveLength(2);
       });
 
       it("leaves the phone's rail alone", () => {

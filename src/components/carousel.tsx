@@ -14,8 +14,10 @@ import { carousel } from "../../styled-system/recipes";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { CarouselSize } from "@/domain/nodes";
+import { useDragScroll } from "@/hooks/use-drag-scroll";
 import {
   carouselAlignedStart,
+  carouselLanding,
   carouselRestOffsets,
   carouselStep,
   inlineSnapAlign,
@@ -120,6 +122,17 @@ export function Carousel({
     }
     return () => observer.disconnect();
   }, [measure, scrollerRef]);
+
+  // Editing, a mouse drag carries a slide instead.
+  useDragScroll(scrollerRef, {
+    enabled: !editing,
+    landing: (velocity) => {
+      const scroller = scrollerRef.current;
+      return scroller
+        ? carouselLanding(restOffsets(scroller), scroller.scrollLeft, velocity)
+        : 0;
+    },
+  });
 
   const step = (direction: 1 | -1) => {
     const scroller = scrollerRef.current;

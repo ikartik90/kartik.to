@@ -22,17 +22,19 @@ export function inViewThreshold(
 export interface InViewOptions {
   enter?: number;
   exit?: number;
+  /** Off, nothing is watched and the answer stays as it was. */
+  enabled?: boolean;
 }
 
 export function useInView(
   ref: RefObject<HTMLElement | null>,
-  { enter = 0.7, exit = 0.3 }: InViewOptions = {},
+  { enter = 0.7, exit = 0.3, enabled = true }: InViewOptions = {},
 ): boolean {
   const [inside, setInside] = useState(false);
 
   useEffect(() => {
     const element = ref.current;
-    if (!element || typeof IntersectionObserver === "undefined") return;
+    if (!enabled || !element || typeof IntersectionObserver === "undefined") return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -54,7 +56,7 @@ export function useInView(
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ref, enter, exit]);
+  }, [ref, enter, exit, enabled]);
 
   return inside;
 }

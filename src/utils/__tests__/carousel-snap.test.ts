@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   carouselAlignedStart,
+  carouselLanding,
   carouselRestOffsets,
   carouselStep,
   inlineSnapAlign,
@@ -95,5 +96,35 @@ describe("carouselStep", () => {
   it("steps from between two offsets to the one in that direction", () => {
     expect(carouselStep(offsets, 700, 1)).toBe(1160);
     expect(carouselStep(offsets, 700, -1)).toBe(500);
+  });
+});
+
+describe("carouselLanding", () => {
+  const offsets = [0, 500, 1160, 1660];
+
+  it("rests a drag let go without speed on the nearest stop", () => {
+    expect(carouselLanding(offsets, 200, 0)).toBe(0);
+    expect(carouselLanding(offsets, 300, 0)).toBe(500);
+    expect(carouselLanding(offsets, 1400, 0)).toBe(1160);
+  });
+
+  it("carries a flick on to the next stop its way, even from nearer the last", () => {
+    expect(carouselLanding(offsets, 100, 0.5)).toBe(500);
+    expect(carouselLanding(offsets, 400, -0.5)).toBe(0);
+  });
+
+  it("coasts a fast flick past the next stop", () => {
+    expect(carouselLanding(offsets, 0, 5)).toBeGreaterThan(500);
+    expect(carouselLanding(offsets, 1660, -5)).toBeLessThan(1160);
+  });
+
+  it("never coasts past either end", () => {
+    expect(carouselLanding(offsets, 1600, 20)).toBe(1660);
+    expect(carouselLanding(offsets, 50, -20)).toBe(0);
+    expect(carouselLanding(offsets, 1660, 1)).toBe(1660);
+  });
+
+  it("stays put with nowhere to rest", () => {
+    expect(carouselLanding([], 120, 1)).toBe(120);
   });
 });

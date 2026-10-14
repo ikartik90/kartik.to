@@ -170,4 +170,21 @@ describe("useInView", () => {
     const { result } = renderHook(() => useInView(ref));
     expect(result.current).toBe(false);
   });
+
+  it("watches nothing while it is off", () => {
+    const observer = mockIntersectionObserver();
+    const ref = stage();
+    renderHook(() => useInView(ref, { enabled: false }));
+    expect(observer.observed()).toEqual([]);
+  });
+
+  it("stops watching when it is turned off", () => {
+    const observer = mockIntersectionObserver();
+    const ref = stage();
+    const { rerender } = renderHook(({ enabled }) => useInView(ref, { enabled }), {
+      initialProps: { enabled: true },
+    });
+    rerender({ enabled: false });
+    expect(observer.disconnected()).toBe(1);
+  });
 });
