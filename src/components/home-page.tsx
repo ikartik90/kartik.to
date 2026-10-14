@@ -10,7 +10,7 @@ import { HOME_GRID } from "@/data/home-grid";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getPublishedTestimonials } from "@/app/actions/testimonial";
 import { ProjectStacks } from "@/app/_project-stacks/project-stacks";
-import { getGridCards, getGridShaderPresets } from "@/lib/grid";
+import { getGridCards, getGridCoverIcons, getGridShaderPresets } from "@/lib/grid";
 import { getHomeDocument } from "@/lib/home";
 import { SITE_URL } from "@/lib/site-url";
 import { homeJsonLd } from "@/utils/structured-data";
@@ -23,6 +23,7 @@ export async function HomePage({ sheet, base }: { sheet?: string; base?: string 
     getGridShaderPresets(),
     getPublishedTestimonials(),
   ]);
+  const coverIcons = await getGridCoverIcons(cards);
 
   return (
     <>
@@ -41,6 +42,7 @@ export async function HomePage({ sheet, base }: { sheet?: string; base?: string 
                   demos={serverDemoSlots(cards)}
                   heading={HOME_GRID.heading}
                   shaderPresets={shaderPresets}
+                  coverIcons={coverIcons}
                 />
               ),
               social_links: <IntroLinks />,

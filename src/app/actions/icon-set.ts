@@ -31,6 +31,12 @@ import {
 /** Prerendered, so every write must revalidate it. */
 const ICONS_PATH = "/playground/icons";
 
+/** The playground, and the homepage, whose cards can play the approved icons: for a write that changes which. */
+function revalidateApproved() {
+  revalidatePath(ICONS_PATH);
+  revalidatePath("/");
+}
+
 /** The bucket is shared with media, so an unchecked key could delete any article's picture. */
 function requireIconKey(key: string): string {
   if (!key.startsWith(ICON_PREFIX)) throw new Error("Invalid icon key");
@@ -92,7 +98,7 @@ export async function finalizeIconUpload(input: unknown): Promise<IconAsset> {
   const icon = await keyToIcon(key);
   if (!icon) throw new Error("Icon not found");
 
-  revalidatePath(ICONS_PATH);
+  revalidateApproved();
   return icon;
 }
 
@@ -108,7 +114,7 @@ export async function setIconReview(input: unknown): Promise<IconAsset> {
   const icon = await keyToIcon(key);
   if (!icon) throw new Error("Icon not found");
 
-  revalidatePath(ICONS_PATH);
+  revalidateApproved();
   return icon;
 }
 
@@ -122,7 +128,7 @@ export async function deleteIcon(input: unknown): Promise<void> {
   // `deleteMany`: most icons have no row.
   await prisma.icon.deleteMany({ where: { key } });
 
-  revalidatePath(ICONS_PATH);
+  revalidateApproved();
 }
 
 export async function setIconLabels(input: unknown): Promise<void> {

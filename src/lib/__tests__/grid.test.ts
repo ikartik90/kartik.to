@@ -17,7 +17,19 @@ vi.mock("@/app/actions/shader-preset", () => ({
   getPublishedShaderPresets: () => mockPublishedPresets(),
 }));
 
-import { getGridCards, getGridShaderPresets, type GridPostCard } from "@/lib/grid";
+const mockApprovedIcons = vi.fn();
+vi.mock("@/lib/icons", () => ({
+  listApprovedIconsWithSvg: () => mockApprovedIcons(),
+}));
+
+import {
+  getGridCards,
+  getGridCoverIcons,
+  getGridShaderPresets,
+  type GridCard,
+  type GridPostCard,
+} from "@/lib/grid";
+import type { LinkCardConfig } from "@/domain/link-card";
 import { shaderPresetContentFor } from "@/domain/shader-preset";
 import { articles as staticArticles } from "@/data/articles";
 import { projects as staticProjects } from "@/data/projects";
@@ -224,5 +236,53 @@ describe("getGridShaderPresets", () => {
   it("is empty rather than failing the page when the presets can't be read", async () => {
     mockPublishedPresets.mockRejectedValue(new Error("down"));
     expect(await getGridShaderPresets()).toEqual([]);
+  });
+});
+
+describe("getGridCoverIcons", () => {
+  const card = (props: LinkCardConfig): GridCard => ({
+    kind: "component",
+    key: "component:c1",
+    id: "c1",
+    componentId: "link-card",
+    aspect: "1/1",
+    logger: false,
+    props,
+    gridIndex: null,
+    publishedAt: NOW,
+    span: 1,
+  });
+  const svg = { viewBox: 20, flattened: false, nodes: [] };
+  const approved = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ icon: { key: `icons/${i}.svg` }, svg: i % 10 === 9 ? null : svg }));
+
+  beforeEach(() => {
+    mockApprovedIcons.mockReset();
+  });
+
+  it("reads nothing when no card plays the icons", async () => {
+    expect(await getGridCoverIcons([card({ media: { shader: "p1" } })])).toEqual([]);
+    expect(mockApprovedIcons).not.toHaveBeenCalled();
+  });
+
+  it("deals out the approved icons that drew, each once, at most 150", async () => {
+    mockApprovedIcons.mockResolvedValue(approved(300));
+    const icons = await getGridCoverIcons([card({ media: { icons: true } })]);
+    expect(icons).toHaveLength(150);
+    expect(new Set(icons.map((icon) => icon.key)).size).toBe(150);
+    expect(icons.every((icon) => icon.svg === svg)).toBe(true);
+  });
+
+  it("deals them out in a fresh order", async () => {
+    mockApprovedIcons.mockResolvedValue(approved(40));
+    const icons = await getGridCoverIcons([card({ media: { icons: true } })], () => 0);
+    expect(icons.map((icon) => icon.key)).not.toEqual(
+      approved(40).filter((entry) => entry.svg).map((entry) => entry.icon.key),
+    );
+  });
+
+  it("is empty rather than failing the page when the icons can't be read", async () => {
+    mockApprovedIcons.mockRejectedValue(new Error("down"));
+    expect(await getGridCoverIcons([card({ media: { icons: true } })])).toEqual([]);
   });
 });

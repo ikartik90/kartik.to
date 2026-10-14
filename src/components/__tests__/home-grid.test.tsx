@@ -75,6 +75,11 @@ vi.mock("@/components/shaders/shader-stage", () => ({
   ),
 }));
 
+// Run by the cursor and the frame clock, and tested in its own file; the marker carries how many icons it was handed.
+vi.mock("@/components/icon-cubes", () => ({
+  IconCubes: ({ icons }: { icons: unknown[] }) => <div data-icon-cubes={icons.length} />,
+}));
+
 import { HomeGrid } from "../home-grid";
 import { useGridDraftStore } from "@/store/grid-draft";
 import type { GridCard } from "@/lib/grid";
@@ -838,6 +843,36 @@ describe("HomeGrid — link cards", () => {
     );
     expect(container.querySelector("canvas")).toBeNull();
     expect(container.querySelector("img")?.getAttribute("src")).toBe("/light.png");
+  });
+
+  it("plays the icon set on the cubes of a card that asks for it, and only that card", () => {
+    const icon = { key: "check", svg: { viewBox: 20, flattened: false, nodes: [] } };
+    const { container } = render(
+      <HomeGrid
+        cards={[linkCard("c1", { media: { icons: true } }), linkCard("c2", {})]}
+        coverIcons={[icon, { ...icon, key: "cross" }]}
+      />,
+    );
+    const cubes = container.querySelectorAll("[data-icon-cubes]");
+    expect(cubes).toHaveLength(1);
+    expect(cubes[0].getAttribute("data-icon-cubes")).toBe("2");
+  });
+
+  it("shows the pictures of a card that asks for the icons when there are none to play", () => {
+    const { container } = render(
+      <HomeGrid
+        cards={[
+          linkCard("c1", { media: { light: { type: "media", kind: "image", src: "/light.png" }, icons: true } }),
+        ]}
+      />,
+    );
+    expect(container.querySelector("[data-icon-cubes]")).toBeNull();
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("/light.png");
+  });
+
+  it("tiles its link cards edge to edge", () => {
+    render(<HomeGrid cards={[linkCard("c1", { link: { kind: "internal", href: "/x" }, content: { title: "X" } })]} />);
+    expect(screen.getByRole("link", { name: "X" }).className).toContain("link-card__root--tiled_true");
   });
 
   it("offers the published presets in the card's panel", async () => {

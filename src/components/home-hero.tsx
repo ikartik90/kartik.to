@@ -1,4 +1,4 @@
-import { Fragment, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { css, cx } from "../../styled-system/css";
 import { pageOpening } from "../../styled-system/recipes";
 import { ButtonLink } from "./button-link";
@@ -10,8 +10,8 @@ import { tokens } from "@/data/theme/tokens";
 import { TYPE_SIZES } from "@/data/theme/type-sizes";
 import { easedFadeOut } from "@/utils/eased-fade";
 
-// The page's opening starts here: the pills and each heading line, then the lede and the buttons in the order they
-// stand, `stacked` in one column or `beside` from md.
+// The page's opening starts here: the pills and the heading, then the lede and the buttons in the order they stand,
+// `stacked` in one column or `beside` from md.
 const lineOpening = pageOpening({ part: "line" });
 const stepOpening = pageOpening({ part: "step" });
 const openingLine = (i: number) => ({
@@ -121,14 +121,12 @@ const pillStyle = css({
 const dotStyle = css({ width: "listBullet", height: "listBullet", borderRadius: "full", backgroundColor: "text.highlight" });
 
 const headingStyle = css({ gridArea: "heading", textStyle: "title", color: "text.title", textWrap: "balance", margin: 0 });
-// One line in one column, where the lede comes between the heading and the buttons; not `inline`, which its opening's
-// `translate` can't move.
-const lineStyle = css({ display: "inline-block", md: { display: "block" } });
 
 // From md the first paragraph's cap height lines up with the heading's x-height. The hidden line, in the heading's
 // type, trimmed to its baseline and pulled up by its `1ex`, is as tall as the heading's top-to-x-height; the first
-// paragraph is trimmed to its cap height to sit under it.
-const ledeStyle = css({ gridArea: "lede", alignSelf: "start" });
+// paragraph is trimmed to its cap height to sit under it. From md it keeps its measure against the showcase's right
+// edge.
+const ledeStyle = css({ gridArea: "lede", alignSelf: "start", md: { justifySelf: "end" } });
 const ledeGaugeStyle = css({
   display: "none",
   textStyle: "title",
@@ -180,15 +178,8 @@ export function HomeHero() {
           </span>
           <span className={pillStyle}>{HOME_HERO.status.location}</span>
         </div>
-        <h1 className={headingStyle}>
-          {HOME_HERO.heading.map((line, i) => (
-            <Fragment key={line}>
-              {i > 0 && " "}
-              <span className={cx(lineStyle, lineOpening)} {...openingLine(i + 1)}>
-                {line}
-              </span>
-            </Fragment>
-          ))}
+        <h1 className={cx(headingStyle, lineOpening)} {...openingLine(1)}>
+          {HOME_HERO.heading}
         </h1>
         <div className={cx(ledeStyle, stepOpening, stepDelay)} {...openingStep({ stacked: 0, beside: 1 })}>
           <div aria-hidden className={ledeGaugeStyle}>

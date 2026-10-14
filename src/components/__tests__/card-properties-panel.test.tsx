@@ -217,6 +217,7 @@ describe("CardPropertiesPanel — link card", () => {
       ).toEqual([
         "Files",
         "Shader",
+        "Icons",
         "Pixel Comets · Untitled 5",
         "Cosmic Track · Untitled 4",
       ]);
@@ -261,13 +262,60 @@ describe("CardPropertiesPanel — link card", () => {
       });
     });
 
-    it("offers no shader while none is published", () => {
+    it("plays the icon set in place of the pictures, keeping them", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps({ media: { light: image("/light.png") } });
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(screen.getByRole("option", { name: "Icons" }));
+      expect(props.onChange).toHaveBeenCalledWith({
+        media: { light: image("/light.png"), icons: true },
+      });
+      expect(screen.queryByRole("button", { name: "Replace light media" })).toBeNull();
+    });
+
+    it("opens on the icons a card already plays", () => {
+      render(
+        <CardPropertiesPanel
+          linkCard={linkCardProps({ media: { icons: true } }, presets)}
+          onDismiss={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole("option", { name: "Icons" }).getAttribute("aria-selected")).toBe("true");
+    });
+
+    it("plays the icons in place of a shader", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps({ media: { shader: "comets" } }, presets);
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(screen.getByRole("option", { name: "Icons" }));
+      expect(props.onChange).toHaveBeenCalledWith({ media: { icons: true } });
+    });
+
+    it("plays a preset in place of the icons", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps({ media: { icons: true } }, presets);
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(screen.getByRole("option", { name: "Shader" }));
+      await user.click(screen.getByRole("option", { name: "Cosmic Track · Untitled 4" }));
+      expect(props.onChange).toHaveBeenLastCalledWith({ media: { shader: "track" } });
+    });
+
+    it("goes back to the pictures it kept from the icons", async () => {
+      const user = userEvent.setup();
+      const props = linkCardProps({ media: { light: image("/light.png"), icons: true } });
+      render(<CardPropertiesPanel linkCard={props} onDismiss={vi.fn()} />);
+      await user.click(screen.getByRole("option", { name: "Files" }));
+      expect(props.onChange).toHaveBeenCalledWith({ media: { light: image("/light.png") } });
+    });
+
+    it("offers no shader while none is published, and the icons all the same", () => {
       render(
         <CardPropertiesPanel
           linkCard={linkCardProps({ media: {} })}
           onDismiss={vi.fn()}
         />,
       );
+      expect(screen.getByRole("option", { name: "Icons" })).toBeTruthy();
       expect(screen.queryByRole("option", { name: "Shader" })).toBeNull();
     });
 

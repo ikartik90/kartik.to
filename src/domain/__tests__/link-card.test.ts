@@ -107,6 +107,18 @@ describe("LinkCardConfigSchema", () => {
     ).toBe(false);
   });
 
+  it("plays the icon set's cubes in place of the pictures, keeping them", () => {
+    expect(
+      LinkCardConfigSchema.parse({ media: { light: image, icons: true } }),
+    ).toEqual({ media: { light: image, icons: true } });
+  });
+
+  it("takes the icons only as switched on, never as switched off", () => {
+    expect(
+      LinkCardConfigSchema.safeParse({ media: { icons: false } }).success,
+    ).toBe(false);
+  });
+
   it("carries the words and the ground they stand on", () => {
     const parsed = LinkCardConfigSchema.parse({
       content: { title: "Shader Playground", meta: "Playground", scrim: true, tone: "dark" },

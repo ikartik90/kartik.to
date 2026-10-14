@@ -71,7 +71,7 @@ describe("ProjectStacks", () => {
     const headline = page.querySelector("h2");
     const arrows = page.querySelector("[aria-label='Next']")?.parentElement ?? null;
     expect([headline, arrows].map((el) => el?.hasAttribute("data-opening-step"))).toEqual([true, true]);
-    expect([delay(headline), delay(arrows)]).toEqual(["650ms", "800ms"]);
+    expect([delay(headline), delay(arrows)]).toEqual(["550ms", "700ms"]);
   });
 
   it("is where the hero's See my work lands", () => {

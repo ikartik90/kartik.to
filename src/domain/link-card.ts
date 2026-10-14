@@ -30,9 +30,13 @@ export const LinkCardMediaSchema = z.object({
 
 export type LinkCardMedia = z.infer<typeof LinkCardMediaSchema>;
 
-/** `shader` is a published shader preset's id; it plays in place of the pictures, which are kept. */
+/**
+ * `shader` is a published shader preset's id; it plays in place of the pictures, which are kept. `icons` plays the
+ * approved icons on cubes in their place instead.
+ */
 export const LinkCardCoverSchema = LinkCardMediaSchema.extend({
   shader: z.string().min(1).optional(),
+  icons: z.literal(true).optional(),
 });
 
 export type LinkCardCover = z.infer<typeof LinkCardCoverSchema>;
