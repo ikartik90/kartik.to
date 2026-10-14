@@ -77,7 +77,7 @@ export function ProjectStacks({ id, sheet, base }: { id?: string; sheet?: string
   const entering = useCardsEnter(scrollerRef);
   // Without a cursor to hover them, the cards whole on screen play as if hovered.
   const hasCursor = useHasCursor();
-  const whole = useWholeSlides(scrollerRef, section.cards);
+  const whole = useWholeSlides(scrollerRef, section.cards, !hasCursor);
 
   return (
     <section

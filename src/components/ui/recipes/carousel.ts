@@ -61,6 +61,9 @@ export const carousel = defineSlotRecipe({
       scrollPaddingInlineEnd: "xxl",
       // Off until the slides have glided back too: WebKit snaps to their transformed boxes.
       "[data-reordering] &, [data-settling] &": { scrollSnapType: "none" },
+      // A mouse drag and its glide (`useDragScroll`) place the scroll themselves. Only the track's cover and the
+      // hovered slide may hang off `data-panning`: restyling every slide mid-drag stalls Safari.
+      "&[data-panning]": { scrollSnapType: "none" },
     },
     // Padding on the track, not the scroller: a scroller's end padding isn't scrollable everywhere.
     // Its height holds from script while a reorder halves the slides.
@@ -69,6 +72,11 @@ export const carousel = defineSlotRecipe({
       "[data-reordering] &": {
         "--slide-height": "calc(var(--carousel-slide) / 2)",
       },
+      position: "relative",
+      // A cover over the slides while a drag moves the strip, so cards passing under the pointer don't hover: each
+      // card's hover is a long animation on the thread that moves the strip. Above the cards' own layers (to 3).
+      "&::after": { content: '""', position: "absolute", inset: 0, zIndex: 4, pointerEvents: "none" },
+      "[data-panning] > &::after": { pointerEvents: "auto" },
       display: "flex",
       alignItems: "flex-start",
       gap: "xxl",
@@ -102,6 +110,8 @@ export const carousel = defineSlotRecipe({
       position: "relative",
       flexShrink: 0,
       scrollSnapAlign: "start",
+      // The card the drag began on stays above the track's cover, and hovered, until it leaves the pointer.
+      "[data-panning] &:hover": { zIndex: 5 },
       "[data-reordering] &": {
         marginBlockStart: "calc(var(--carousel-slide) / 4)",
         transition: "translate 200ms cubic-bezier(0.2, 0, 0, 1)",

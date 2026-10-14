@@ -55,8 +55,10 @@ const cardStyle = css({
   textAlign: "start",
   color: "inherit",
   cursor: "pointer",
-  transition: "transform 150ms cubic-bezier(0.4, 0, 0.2, 1)",
-  "&:not([data-closed]):active": { transform: "scale(0.98)" },
+  // Through a drag of its carousel (`data-panning`) and the glide after, the card it began on stays hovered wherever
+  // the pointer goes, until the strip stops: its hover ending mid-drag would play on the thread that moves the strip.
+  // So the box takes no transform, which would hold this cover to it; the press shrinks the surface instead.
+  "[data-panning] &": { "&:hover::after": { content: '""', position: "fixed", inset: 0 } },
   "&[data-closed]": { cursor: "default" },
   outline: "none",
   "html[data-keyboard-focus] &": { "&:focus-visible": ring },
@@ -70,7 +72,8 @@ const surfaceStyle = css({
   backgroundColor: "bg.canvas",
   clipPath: OPEN_CLIP,
   _hasCursor: { clipPath: `inset(${INSET_Y} ${INSET_X} round token(radii.xl))` },
-  transition: `clip-path ${HOVER_EASE}`,
+  transition: `clip-path ${HOVER_EASE}, transform 150ms cubic-bezier(0.4, 0, 0.2, 1)`,
+  "[data-sheet-card]:not([data-closed]):active &": { transform: "scale(0.98)" },
   "[data-sheet-card]:hover &": { clipPath: OPEN_CLIP },
   "html[data-keyboard-focus] [data-sheet-card]:focus-visible &": { clipPath: OPEN_CLIP },
 });
@@ -328,7 +331,7 @@ export function SheetCard({
   onOpen?: (card: ProjectCard) => void;
 }) {
   const slideRef = useRef<HTMLDivElement>(null);
-  const inSight = useInView(slideRef, IN_SIGHT);
+  const inSight = useInView(slideRef, { ...IN_SIGHT, enabled: shown !== undefined });
   const { on: held, resets } = useShownHover(shown ?? false, inSight, SHOWN_HOVER_DELAY);
   useEffect(() => {
     for (const name of ["--ride-x", "--ride-y"]) {

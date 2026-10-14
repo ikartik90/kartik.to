@@ -250,6 +250,44 @@ describe("MediaCarousel", () => {
     });
   });
 
+  describe("dragging with a mouse", () => {
+    const mouse = (type: string, x: number) =>
+      act(() => {
+        screen.getByRole("button", { name: "Image 1" }).dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 1,
+            pointerType: "mouse",
+            buttons: type === "pointerup" ? 0 : 1,
+            clientX: x,
+            clientY: 200,
+          }),
+        );
+      });
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("scrolls the slides and lets go onto the nearest stop, without opening one", () => {
+      render(<MediaCarousel items={items(4)} />);
+      mouse("pointerdown", 1000);
+      mouse("pointermove", 980);
+      mouse("pointermove", 700);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(scroller().scrollLeft).toBe(280);
+      mouse("pointerup", 700);
+      fireEvent.click(screen.getByRole("button", { name: "Image 1" }));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(scroller().scrollLeft).toBe(500);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
   describe("stepping", () => {
     it("holds Previous at the start and steps Next to the next slide", async () => {
       const user = userEvent.setup();

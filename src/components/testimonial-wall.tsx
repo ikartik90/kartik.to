@@ -338,12 +338,15 @@ function pickTrade(wall: HTMLElement): [number, number] | null {
   return [first, pick(all.filter((slot) => slot !== first))];
 }
 
-/** Trades a card every `ROTATION_MS`, paused for reduced motion, hover, focus and the phone's rail. */
+/** Trades a card every `ROTATION_MS`, paused off screen, for reduced motion, hover, focus and the phone's rail. */
 function useAutoShuffle(
   shuffle: () => void,
   wallRef: React.RefObject<HTMLDivElement | null>,
 ) {
   const [held, setHeld] = useState(false);
+  const [onScreen, setOnScreen] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
   // A dependency of the interval, so a press restarts the countdown.
   const [round, setRound] = useState(0);
   // A ref, so the interval is not rebuilt with `shuffle`; written in an effect, not during render.
@@ -352,8 +355,19 @@ function useAutoShuffle(
     shuffleRef.current = shuffle;
   });
 
+  // Each trade measures every card, which costs the page a frame wherever it is scrolled to.
   useEffect(() => {
-    if (held || !window.matchMedia) return;
+    const wall = wallRef.current;
+    if (!wall || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) =>
+      setOnScreen(entry.isIntersecting),
+    );
+    observer.observe(wall);
+    return () => observer.disconnect();
+  }, [wallRef]);
+
+  useEffect(() => {
+    if (held || !onScreen || !window.matchMedia) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const timer = setInterval(() => {
@@ -362,7 +376,7 @@ function useAutoShuffle(
       shuffleRef.current();
     }, ROTATION_MS);
     return () => clearInterval(timer);
-  }, [held, round, wallRef]);
+  }, [held, onScreen, round, wallRef]);
 
   return {
     restart: () => setRound((current) => current + 1),

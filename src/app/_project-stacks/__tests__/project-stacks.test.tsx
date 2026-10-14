@@ -383,7 +383,7 @@ describe("ProjectStacks under a base", () => {
 
 describe("ProjectStacks without a cursor", () => {
   // Each observer with what it watches, so a case can show a slide whole on screen, part of it, or none.
-  let observers: { callback: IntersectionObserverCallback; targets: Element[] }[] = [];
+  let observers: { callback: IntersectionObserverCallback; targets: Element[]; gone?: boolean }[] = [];
   // `peek`: the sliver of a neighbour showing past the card in view.
   const shownWidth = { whole: 300, part: 150, peek: 9, gone: 0 };
   const show = (slide: Element, how: keyof typeof shownWidth) =>
@@ -415,14 +415,17 @@ describe("ProjectStacks without a cursor", () => {
     vi.useFakeTimers();
     observers = [];
     globalThis.IntersectionObserver = class {
-      targets: Element[] = [];
+      own: (typeof observers)[number];
       constructor(callback: IntersectionObserverCallback) {
-        observers.push({ callback, targets: this.targets });
+        this.own = { callback, targets: [] };
+        observers.push(this.own);
       }
       observe(target: Element) {
-        this.targets.push(target);
+        this.own.targets.push(target);
       }
-      disconnect() {}
+      disconnect() {
+        this.own.gone = true;
+      }
     } as unknown as typeof IntersectionObserver;
   });
   afterEach(() => vi.useRealTimers());
@@ -492,5 +495,16 @@ describe("ProjectStacks without a cursor", () => {
     act(() => vi.advanceTimersByTime(100));
     expect(held()).toEqual([false, false, false, false]);
     expect(cards()[0].hasAttribute("data-play")).toBe(true);
+  });
+
+  // Each change would re-render every card, mid-drag.
+  it("with a cursor, watches no card for being on screen", () => {
+    window.matchMedia = ((query: string) => ({
+      ...matchMedia(query),
+      matches: query.includes("reduce") || query.includes("hover: hover"),
+    })) as typeof window.matchMedia;
+    render(<ProjectStacks />);
+    const watching = observers.filter(({ gone, targets }) => !gone && targets.some((t) => slides().includes(t)));
+    expect(watching).toHaveLength(0);
   });
 });

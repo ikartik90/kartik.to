@@ -72,9 +72,9 @@ function report(
   );
 }
 
-function Strip({ slides }: { slides: string[] }) {
+function Strip({ slides, enabled }: { slides: string[]; enabled?: boolean }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const whole = useWholeSlides(scrollerRef, slides);
+  const whole = useWholeSlides(scrollerRef, slides, enabled);
   return (
     <>
       <div ref={scrollerRef}>
@@ -160,6 +160,17 @@ describe("useWholeSlides", () => {
   it("stops watching once the strip is gone", () => {
     const { unmount } = render(<Strip slides={["a"]} />);
     unmount();
+    expect(live()).toHaveLength(0);
+  });
+
+  it("watches nothing while it is off", () => {
+    render(<Strip slides={["a", "b"]} enabled={false} />);
+    expect(live()).toHaveLength(0);
+  });
+
+  it("stops watching when it is turned off", () => {
+    const { rerender } = render(<Strip slides={["a"]} />);
+    rerender(<Strip slides={["a"]} enabled={false} />);
     expect(live()).toHaveLength(0);
   });
 });

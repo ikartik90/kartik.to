@@ -17,16 +17,18 @@ const THRESHOLDS = [
 /**
  * The indices of the slides the screen shows whole: one cut off by the scroller's edge or the
  * screen's is not among them. `slides` must change whenever a slide is added, removed or moved.
+ * Off (`enabled` false), nothing is watched, so scrolling the strip re-renders nothing.
  */
 export function useWholeSlides(
   scrollerRef: RefObject<HTMLElement | null>,
   slides: unknown,
+  enabled = true,
 ): ReadonlySet<number> {
   const [whole, setWhole] = useState<ReadonlySet<number>>(() => new Set());
 
   useEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller || typeof IntersectionObserver === "undefined") return;
+    if (!enabled || !scroller || typeof IntersectionObserver === "undefined") return;
     const order = carouselSlides(scroller);
 
     const observer = new IntersectionObserver(
@@ -51,7 +53,7 @@ export function useWholeSlides(
     );
     order.forEach((slide) => observer.observe(slide));
     return () => observer.disconnect();
-  }, [scrollerRef, slides]);
+  }, [scrollerRef, slides, enabled]);
 
   return whole;
 }
