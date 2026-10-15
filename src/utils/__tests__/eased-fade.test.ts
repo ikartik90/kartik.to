@@ -50,4 +50,10 @@ describe("easedFadeOut", () => {
       expect(stops[i].at).toBeGreaterThan(stops[i - 1].at);
     }
   });
+
+  it("fades upwards instead, whole from the foot, when asked", () => {
+    const up = easedFadeOut(30, "top");
+    expect(up.startsWith("linear-gradient(to top, ")).toBe(true);
+    expect(up.replace("to top", "to bottom")).toBe(fade);
+  });
 });

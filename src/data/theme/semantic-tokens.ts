@@ -1,15 +1,6 @@
 import { defineSemanticTokens } from "@pandacss/dev";
 
 export const semanticTokens = defineSemanticTokens({
-  opacity: {
-    // `border.divider`'s alpha as a number, for the skyline's flattened hairlines; change the two together.
-    hairline: {
-      value: {
-        base: "0.25",
-        _dark: "0.5",
-      },
-    },
-  },
   colors: {
     bg: {
       canvas: {
@@ -197,6 +188,13 @@ export const semanticTokens = defineSemanticTokens({
           _dark: "{colors.neutral.400}",
         },
       },
+    },
+
+    // Cosmic Track's three colours in its order, each theme's own, as the published preset pairs them.
+    cosmic: {
+      1: { value: { base: "{colors.brand.pink}", _dark: "{colors.cosmic.green}" } },
+      2: { value: { base: "{colors.cosmic.cyan}", _dark: "{colors.cosmic.violet}" } },
+      3: { value: { base: "{colors.cosmic.yellow}", _dark: "{colors.brand.orange}" } },
     },
 
     // The text-input family; `active` matches `border.focusRing`.

@@ -13,7 +13,6 @@ body {
 
 body {
   min-height: 100%;
-  /* A column, so the footer's `margin-block-start: auto` reaches the viewport foot. */
   display: flex;
   flex-direction: column;
   /* <body> is the scroll container, so absolute body-portalled popovers scroll with the page; fixed ones stutter. */

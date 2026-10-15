@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Testimonial } from "@/domain/testimonial";
 import { scrollIntoView } from "@/test-support";
-import { TestimonialWall, dealIntoColumns } from "../testimonial-wall";
+import { TestimonialWall, loopRun } from "../testimonial-wall";
 
 afterEach(() => cleanup());
 
@@ -36,7 +36,14 @@ function rows(n: number): Testimonial[] {
   );
 }
 
-const lists = () => screen.getAllByRole("list");
+const section = () => screen.getByRole("region", { name: "Music to my ears" });
+const scroller = () => section().querySelector<HTMLElement>("[data-testimonial-strip]")!;
+const columns = () => [...scroller().firstElementChild!.children] as HTMLElement[];
+const quotes = (column: Element) =>
+  [...column.querySelectorAll("blockquote")].map((quote) => quote.textContent);
+/** The cards a reader meets; the loop's copies are hidden from them. */
+const readable = () =>
+  [...document.querySelectorAll("figure")].filter((figure) => !figure.closest("[aria-hidden]"));
 
 describe("TestimonialWall", () => {
   it("draws nothing at all when nothing is published", () => {
@@ -44,429 +51,306 @@ describe("TestimonialWall", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("is a landmark named by its heading", () => {
+  it("is a landmark named by its heading, which only screen readers meet, with no subheading", () => {
     render(<TestimonialWall testimonials={rows(4)} />);
     expect(
       screen.getByRole("heading", { level: 2, name: "Music to my ears" }),
     ).toBeTruthy();
-    expect(
-      screen.getByRole("region", { name: "Music to my ears" }),
-    ).toBeTruthy();
+    expect(section()).toBeTruthy();
+    expect(section().querySelector("header")).toBeNull();
+    expect(screen.queryByText("Affirmations from those who have worked closely with me")).toBeNull();
   });
 
-  it("carries its subheading under the heading", () => {
-    render(<TestimonialWall testimonials={rows(4)} />);
-    expect(
-      screen.getByText(
-        "Affirmations from those who have worked closely with me",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("draws a card for every published testimonial", () => {
+  it("has nothing to shuffle", () => {
     render(<TestimonialWall testimonials={rows(8)} />);
-    expect(screen.getAllByRole("listitem")).toHaveLength(8);
-    expect(screen.getByText("Quote 8.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Shuffle" })).toBeNull();
   });
 
-  it("deals the cards into columns", () => {
+  it("stacks the cards two to a column, in the order they were published", () => {
     render(<TestimonialWall testimonials={rows(8)} />);
-    expect(lists().length).toBeGreaterThan(1);
-    const counted = lists().reduce(
-      (total, list) => total + within(list).getAllByRole("listitem").length,
-      0,
-    );
-    expect(counted).toBe(8);
+    expect(quotes(columns()[0])).toEqual(["Quote 1.", "Quote 2."]);
+    expect(quotes(columns()[1])).toEqual(["Quote 3.", "Quote 4."]);
   });
 
-  it("draws no empty columns", () => {
-    render(<TestimonialWall testimonials={rows(2)} />);
-    for (const list of lists()) {
-      expect(within(list).getAllByRole("listitem").length).toBeGreaterThan(0);
+  it("gives every column two cards, an odd count included", () => {
+    render(<TestimonialWall testimonials={rows(13)} />);
+    for (const column of columns()) expect(quotes(column)).toHaveLength(2);
+  });
+
+  it("lets a reader meet each testimonial once, in order", () => {
+    render(<TestimonialWall testimonials={rows(13)} />);
+    expect(
+      readable().map((figure) => figure.querySelector("blockquote")?.textContent),
+    ).toEqual(rows(13).map((testimonial) => testimonial.quote));
+  });
+
+  it("lays a mesh under every card, in Cosmic Track's colours in turn", () => {
+    render(<TestimonialWall testimonials={rows(5)} />);
+    const cards = readable();
+    expect(cards.map((figure) => figure.getAttribute("data-tint"))).toEqual(["1", "2", "3", "1", "2"]);
+    for (const figure of cards) {
+      expect(figure.querySelector("[data-mesh]")?.getAttribute("aria-hidden")).toBe("true");
+      // Over the whole card, not only the mesh.
+      expect(figure.querySelector(":scope > [data-grain]")?.getAttribute("aria-hidden")).toBe("true");
     }
   });
 
-  it("draws a single testimonial as one column", () => {
-    render(<TestimonialWall testimonials={rows(1)} />);
-    expect(lists()).toHaveLength(1);
+  it("varies the mesh's wave from card to card, five in turn", () => {
+    render(<TestimonialWall testimonials={rows(6)} />);
+    const cards = readable();
+    expect(cards.map((figure) => figure.getAttribute("data-shape"))).toEqual(["1", "2", "3", "4", "5", "1"]);
   });
 
-  describe("shuffle", () => {
-    beforeEach(() => vi.useFakeTimers());
+  it("never gives two neighbours the same mesh", () => {
+    render(<TestimonialWall testimonials={rows(13)} />);
+    const look = (figure: Element | null) =>
+      `${figure?.getAttribute("data-tint")}/${figure?.getAttribute("data-shape")}`;
+    const grid = columns().map((column) => [...column.querySelectorAll("figure")]);
+    grid.forEach((column, x) => {
+      expect(look(column[0])).not.toBe(look(column[1]));
+      if (grid[x + 1]) {
+        expect(look(column[0])).not.toBe(look(grid[x + 1][0]));
+        expect(look(column[1])).not.toBe(look(grid[x + 1][1]));
+      }
+    });
+  });
+
+  it("drops each column, both its cards together, by 20, 40, 60 or 80px, no two neighbours alike", () => {
+    render(<TestimonialWall testimonials={rows(13)} />);
+    const drops = columns().map((column) => column.getAttribute("data-stagger"));
+    expect(new Set(drops)).toEqual(new Set(["20", "40", "60", "80"]));
+    // Across the loop's seams too: the columns run on into the next copy.
+    drops.forEach((drop, x) => x && expect(drop).not.toBe(drops[x - 1]));
+    // Not a plain 20, 40, 60, 80 in turn.
+    expect(drops.slice(0, 4)).not.toEqual(["20", "40", "60", "80"]);
+  });
+
+  it("takes the copies out of the tab order", () => {
+    render(
+      <TestimonialWall
+        testimonials={[row({ linkedinUrl: "https://www.linkedin.com/in/ada" })]}
+      />,
+    );
+    const copies = [...document.querySelectorAll("figure")]
+      .map((figure) => figure.closest("[aria-hidden]"))
+      .filter((copy) => copy !== null);
+    expect(copies.length).toBeGreaterThan(0);
+    for (const copy of copies) expect(copy.hasAttribute("inert")).toBe(true);
+  });
+
+  describe("drift", () => {
+    // One run of the loop is 1000px wide in this fake layout.
+    const RUN = 1000;
+    let animations: {
+      target: Element;
+      keyframes: Keyframe[];
+      options: KeyframeAnimationOptions;
+      state: "running" | "paused" | "idle";
+    }[] = [];
+    let reduced = false;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      animations = [];
+      reduced = false;
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn((query: string) => ({
+          matches: query.includes("reduced-motion") && reduced,
+        })),
+      );
+      HTMLElement.prototype.animate = function (
+        this: Element,
+        keyframes: Keyframe[],
+        options: KeyframeAnimationOptions,
+      ) {
+        const record = { target: this, keyframes, options, state: "running" as const };
+        animations.push(record);
+        return {
+          pause: () => void ((record as { state: string }).state = "paused"),
+          play: () => void ((record as { state: string }).state = "running"),
+          cancel: () => void ((record as { state: string }).state = "idle"),
+          currentTime: 0,
+          effect: { getComputedTiming: () => ({ progress: 0 }) },
+        } as unknown as Animation;
+      } as unknown as HTMLElement["animate"];
+      vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(
+        function (this: HTMLElement) {
+          const run = this.dataset.runStart;
+          return run === undefined ? 0 : Number(run) * RUN;
+        },
+      );
+    });
+
     afterEach(() => {
       vi.useRealTimers();
+      vi.unstubAllGlobals();
       vi.restoreAllMocks();
+      delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
     });
 
-    const seats = () =>
-      new Map(
-        // Plain DOM reads, not role queries: role queries pushed the trade tests past the time limit.
-        [...document.querySelectorAll("ul")].flatMap((list, column) =>
-          [...list.querySelectorAll("li")].map((card, place) => [
-            card.querySelector("figcaption")?.textContent ?? "",
-            `${column}:${place}`,
-          ]),
-        ),
-      );
+    const drift = () => animations.find(({ state }) => state !== "idle");
 
-    const moved = (before: Map<string, string>) =>
-      [...seats()].filter(([name, seat]) => before.get(name) !== seat);
-
-    const press = () =>
-      fireEvent.click(screen.getByRole("button", { name: "Shuffle" }));
-
-    const settle = () => act(() => vi.advanceTimersByTime(2000));
-
-    it("offers a shuffle button", () => {
-      render(<TestimonialWall testimonials={rows(8)} />);
-      expect(screen.getByRole("button", { name: "Shuffle" })).toBeTruthy();
-    });
-
-    it("trades two cards on each press", () => {
-      render(<TestimonialWall testimonials={rows(8)} />);
-      const before = seats();
-
-      press();
-      settle();
-
-      const changed = moved(before);
-      expect(changed).toHaveLength(2);
-      const [[a, seatOfA], [b, seatOfB]] = changed;
-      expect(seatOfA).toBe(before.get(b));
-      expect(seatOfB).toBe(before.get(a));
-    });
-
-    it("trades again on the next press", () => {
-      render(<TestimonialWall testimonials={rows(8)} />);
-
-      press();
-      settle();
-      const before = seats();
-      press();
-      settle();
-
-      expect(moved(before)).toHaveLength(2);
-    });
-
-    /** Lay the five columns out at these left edges, 280px wide each, in
-     *  jsdom's 1024px window. */
-    const layOut = (left: number[]) =>
-      vi
-        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-        .mockImplementation(function (this: HTMLElement) {
-          const list = this.parentElement;
-          const column = [...(list?.parentElement?.children ?? [])].indexOf(
-            list as Element,
-          );
-          const card = this.matches("li");
-          return DOMRect.fromRect({
-            x: card ? left[column] : 0,
-            width: card ? 280 : 0,
-          });
-        });
-
-    const trades = (times: number) => {
-      const pairs: string[] = [];
-      const turns = new Map<string, number>();
-      for (let i = 0; i < times; i++) {
-        const before = seats();
-        press();
-        settle();
-        const traded = moved(before).map(([name]) => before.get(name) ?? "");
-        pairs.push(
-          traded
-            .map((seat) => seat.split(":")[0])
-            .sort()
-            .join(""),
-        );
-        for (const seat of traded) turns.set(seat, (turns.get(seat) ?? 0) + 1);
-      }
-      return { pairs, turns };
-    };
-
-    it("trades a cut-off edge card for one in the middle three columns", () => {
-      // Every column in view, the outer two cut by the window's edges.
-      layOut([-140, 160, 372, 584, 884]);
-      render(<TestimonialWall testimonials={rows(11)} />);
-
-      const { pairs } = trades(100);
-      for (const pair of pairs) expect(pair).toMatch(/^[0][123]$|^[123]4$/);
-    });
-
-    it("trades an edge card past the window for one in the middle", () => {
-      // Just past `md`: the middle column inside, its neighbours cut, the outer two off-screen.
-      layOut([-320, -20, 372, 764, 1064]);
-      render(<TestimonialWall testimonials={rows(11)} />);
-
-      const { pairs } = trades(100);
-      for (const pair of pairs) expect(pair).toMatch(/^[0][123]$|^[123]4$/);
-    });
-
-    // Forty turns apiece over 200 presses; the bounds are five standard deviations wide.
-    it("gives every card in the middle three columns the same turns", () => {
-      layOut([-320, -20, 372, 764, 1064]);
-      render(<TestimonialWall testimonials={rows(11)} />);
-
-      const { turns } = trades(200);
-      const middle = [...turns].filter(([seat]) => /^[123]:/.test(seat));
-      expect(middle.map(([seat]) => seat).sort()).toEqual([
-        "1:0",
-        "1:1",
-        "2:0",
-        "3:0",
-        "3:1",
+    it("moves right to left a run at a time, slowly and without end", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      const { target, keyframes, options } = drift()!;
+      expect(target).toBe(scroller().firstElementChild);
+      expect(keyframes).toEqual([
+        { transform: "translateX(0px)" },
+        { transform: `translateX(${-RUN}px)` },
       ]);
-      for (const [, count] of middle) {
-        expect(count).toBeGreaterThan(10);
-        expect(count).toBeLessThan(90);
-      }
+      expect(options.iterations).toBe(Infinity);
+      // At most 40px a second.
+      expect(Number(options.duration)).toBeGreaterThanOrEqual(RUN * 25);
+      expect(drift()!.state).toBe("running");
     });
 
-    describe("with more than eleven published", () => {
-      const band = () =>
-        [...document.querySelectorAll("[data-testimonial-column]")].map(
-          (column) =>
-            [...column.querySelectorAll("figcaption")].map(
-              (caption) => caption.textContent ?? "",
-            ),
-        );
-      const queue = () =>
-        [
-          ...document.querySelectorAll(
-            "ul:not([data-testimonial-column]) figcaption",
-          ),
-        ].map((caption) => caption.textContent ?? "");
-
-      it("shows eleven at a time, dealt 3·2·1·2·3", () => {
-        render(<TestimonialWall testimonials={rows(13)} />);
-        expect(band().map((column) => column.length)).toEqual([3, 2, 1, 2, 3]);
-      });
-
-      // A caption reads the avatar's initial, then the name.
-      it("keeps the rest in the document for the phone's rail", () => {
-        render(<TestimonialWall testimonials={rows(13)} />);
-        expect(queue()).toEqual(["PPerson 12", "PPerson 13"]);
-        expect(screen.getAllByRole("listitem")).toHaveLength(13);
-      });
-
-      it("moves the edge card to the middle and the queue's first to the edge", () => {
-        layOut([-320, -20, 372, 764, 1064]);
-        render(<TestimonialWall testimonials={rows(13)} />);
-        const before = band();
-        const waiting = queue();
-
-        press();
-        settle();
-
-        const after = band();
-        const edgeSeat = [0, 4]
-          .flatMap((c) => before[c].map((name, place) => [c, place] as const))
-          .find(([c, place]) => after[c][place] !== before[c][place]);
-        const middleSeat = [1, 2, 3]
-          .flatMap((c) => before[c].map((name, place) => [c, place] as const))
-          .find(([c, place]) => after[c][place] !== before[c][place]);
-        if (!edgeSeat || !middleSeat) throw new Error("nothing traded");
-
-        const [ec, ep] = edgeSeat;
-        const [mc, mp] = middleSeat;
-        expect(after[mc][mp]).toBe(before[ec][ep]);
-        expect(after[ec][ep]).toBe(waiting[0]);
-        expect(queue()).toEqual([waiting[1], before[mc][mp]]);
-      });
-
-      it("brings every card to the middle in time", () => {
-        layOut([-320, -20, 372, 764, 1064]);
-        render(<TestimonialWall testimonials={rows(13)} />);
-        const read = new Set(band().slice(1, 4).flat());
-
-        for (let i = 0; i < 200; i++) {
-          press();
-          settle();
-          for (const name of band().slice(1, 4).flat()) read.add(name);
-        }
-
-        expect(read.size).toBe(13);
-      });
+    it("starts the reader on a run with copies either side", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      expect(scroller().scrollLeft).toBe(2 * RUN);
     });
 
-    it("ignores a press while a trade is still under way", () => {
-      render(<TestimonialWall testimonials={rows(8)} />);
-      const before = seats();
-
-      press();
-      press();
-      settle();
-
-      expect(moved(before)).toHaveLength(2);
+    it("pauses while a mouse is over a card, and carries on when it leaves them", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      fireEvent.pointerMove(scroller().querySelector("figure")!, { pointerType: "mouse" });
+      expect(drift()!.state).toBe("paused");
+      fireEvent.pointerLeave(scroller(), { pointerType: "mouse" });
+      expect(drift()!.state).toBe("running");
     });
 
-    describe("on its own", () => {
-      let reduced = false;
-      let layout = "grid";
-
-      beforeEach(() => {
-        reduced = false;
-        layout = "grid";
-        vi.stubGlobal(
-          "matchMedia",
-          vi.fn((query: string) => ({
-            matches: query.includes("reduced-motion") && reduced,
-          })),
-        );
-        // jsdom has no stylesheet to decide band or rail, so this answers for it.
-        const real = window.getComputedStyle.bind(window);
-        vi.spyOn(window, "getComputedStyle").mockImplementation(
-          (element, pseudo) => {
-            const style = real(element, pseudo);
-            return new Proxy(style, {
-              get: (target, key) =>
-                key === "display" ? layout : Reflect.get(target, key, target),
-            });
-          },
-        );
+    it("keeps moving while a mouse is over the heading", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      fireEvent.pointerEnter(section(), { pointerType: "mouse" });
+      fireEvent.pointerMove(screen.getByRole("heading", { name: "Music to my ears" }), {
+        pointerType: "mouse",
       });
-      afterEach(() => vi.unstubAllGlobals());
+      expect(drift()!.state).toBe("running");
+    });
 
-      const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
-      const wall = () => lists()[0].parentElement as HTMLElement;
-
-      it("trades two cards every eight seconds", () => {
-        render(<TestimonialWall testimonials={rows(8)} />);
-        const before = seats();
-
-        wait(7000);
-        expect(moved(before)).toHaveLength(0);
-
-        wait(1000);
-        settle();
-        expect(moved(before)).toHaveLength(2);
+    it("pauses over the gap between two cards, but not under a shorter column", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      const track = scroller().firstElementChild as HTMLElement;
+      // Columns 100px wide with 10px gaps; the second is half as tall as the rest.
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        if (this.parentElement !== track) return DOMRect.fromRect();
+        const column = [...track.children].indexOf(this);
+        return DOMRect.fromRect({ x: column * 110, y: 0, width: 100, height: column === 1 ? 100 : 200 });
       });
+      const at = (clientX: number, clientY: number) =>
+        fireEvent.pointerMove(track, { pointerType: "mouse", clientX, clientY });
 
-      it("keeps trading after the first", () => {
-        render(<TestimonialWall testimonials={rows(8)} />);
-        wait(8000);
-        settle();
-        const before = seats();
+      at(105, 150);
+      expect(drift()!.state).toBe("paused");
+      at(150, 150);
+      expect(drift()!.state).toBe("running");
+      at(215, 150);
+      expect(drift()!.state).toBe("paused");
+      at(105, 250);
+      expect(drift()!.state).toBe("running");
+    });
 
-        wait(6000);
-        settle();
+    it("pauses while a card has focus", () => {
+      render(
+        <TestimonialWall
+          testimonials={[row({ linkedinUrl: "https://www.linkedin.com/in/ada" })]}
+        />,
+      );
+      act(() => screen.getByRole("link", { name: "Ada Lovelace on LinkedIn" }).focus());
+      expect(drift()!.state).toBe("paused");
+    });
 
-        expect(moved(before)).toHaveLength(2);
-      });
+    // Chromium focuses a link on a mouse press, so a drag that starts on a card would otherwise hold the strip.
+    it("carries on after a mouse press has focused a card", () => {
+      render(
+        <TestimonialWall
+          testimonials={[row({ linkedinUrl: "https://www.linkedin.com/in/ada" })]}
+        />,
+      );
+      const link = screen.getByRole("link", { name: "Ada Lovelace on LinkedIn" });
+      fireEvent.pointerMove(link, { pointerType: "mouse" });
+      fireEvent.pointerDown(link, { pointerType: "mouse" });
+      act(() => link.focus());
+      fireEvent.pointerLeave(scroller(), { pointerType: "mouse" });
+      expect(drift()!.state).toBe("running");
+    });
 
-      it("holds still while the pointer rests on the cards", () => {
-        render(<TestimonialWall testimonials={rows(8)} />);
-        const before = seats();
+    it("holds a touch until the strip comes to rest", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      fireEvent.pointerDown(scroller(), { pointerType: "touch" });
+      expect(drift()!.state).toBe("paused");
+      fireEvent.scroll(scroller());
+      act(() => vi.advanceTimersByTime(50));
+      expect(drift()!.state).toBe("paused");
+      act(() => vi.advanceTimersByTime(500));
+      expect(drift()!.state).toBe("running");
+    });
 
-        fireEvent.pointerEnter(wall());
-        wait(30000);
+    it("brings the reader back to the middle runs once a scroll comes to rest, onto the same cards", () => {
+      render(<TestimonialWall testimonials={rows(13)} />);
+      scroller().scrollLeft = 3 * RUN + 200;
+      fireEvent.scroll(scroller());
+      act(() => vi.advanceTimersByTime(500));
+      expect(scroller().scrollLeft).toBe(2 * RUN + 200);
 
-        expect(moved(before)).toHaveLength(0);
-      });
+      scroller().scrollLeft = RUN + 100;
+      fireEvent.scroll(scroller());
+      act(() => vi.advanceTimersByTime(500));
+      expect(scroller().scrollLeft).toBe(2 * RUN + 100);
+    });
 
-      it("holds still while focus is inside the cards", () => {
-        render(
-          <TestimonialWall
-            testimonials={rows(8).map((testimonial) => ({
-              ...testimonial,
-              linkedinUrl: "https://www.linkedin.com/in/someone",
-            }))}
-          />,
-        );
-        const before = seats();
+    it("holds still while it is off screen", () => {
+      const shown = scrollIntoView();
+      render(<TestimonialWall testimonials={rows(13)} />);
+      shown(0);
+      expect(drift()!.state).toBe("paused");
+      shown(0.2);
+      expect(drift()!.state).toBe("running");
+    });
 
-        fireEvent.focus(within(wall()).getAllByRole("link")[0]);
-        wait(30000);
-
-        expect(moved(before)).toHaveLength(0);
-      });
-
-      it("never moves a card unasked for a reader who wants less motion", () => {
-        reduced = true;
-        render(<TestimonialWall testimonials={rows(8)} />);
-        const before = seats();
-
-        wait(30000);
-
-        expect(moved(before)).toHaveLength(0);
-      });
-
-      it("holds still while it is off screen", () => {
-        const shown = scrollIntoView();
-        render(<TestimonialWall testimonials={rows(8)} />);
-        const before = seats();
-
-        shown(0);
-        wait(30000);
-
-        expect(moved(before)).toHaveLength(0);
-      });
-
-      it("starts trading eight seconds after it comes on screen", () => {
-        const shown = scrollIntoView();
-        render(<TestimonialWall testimonials={rows(8)} />);
-        wait(30000);
-        const before = seats();
-
-        shown(0.2);
-        wait(7000);
-        expect(moved(before)).toHaveLength(0);
-
-        wait(1000);
-        settle();
-        expect(moved(before)).toHaveLength(2);
-      });
-
-      it("leaves the phone's rail alone", () => {
-        layout = "flex";
-        render(<TestimonialWall testimonials={rows(8)} />);
-        const before = seats();
-
-        wait(30000);
-
-        expect(moved(before)).toHaveLength(0);
-      });
-
-      it("waits a full eight seconds after a press", () => {
-        render(<TestimonialWall testimonials={rows(8)} />);
-        wait(6000);
-        const before = seats();
-
-        press();
-        wait(7000);
-
-        expect(moved(before)).toHaveLength(2);
-      });
+    it("stays still for reduced motion", () => {
+      reduced = true;
+      render(<TestimonialWall testimonials={rows(13)} />);
+      expect(drift()).toBeUndefined();
     });
   });
+});
 
-  it("holds no shader stage, now that no card has an icon", () => {
-    const { container } = render(<TestimonialWall testimonials={rows(8)} />);
-    expect(
-      container.querySelectorAll("[data-social-shader-stage]"),
-    ).toHaveLength(0);
+describe("loopRun", () => {
+  it("repeats the cards until they fill whole columns of two, and at least 24", () => {
+    expect(loopRun(rows(13).map((t) => t.id))).toHaveLength(26);
+    expect(loopRun(rows(8).map((t) => t.id))).toHaveLength(24);
+    expect(loopRun(rows(5).map((t) => t.id))).toHaveLength(30);
+    expect(loopRun(rows(30).map((t) => t.id))).toHaveLength(30);
+  });
+
+  it("keeps their order on every pass", () => {
+    const ids = rows(5).map((t) => t.id);
+    const run = loopRun(ids);
+    for (let i = 0; i < run.length; i++) expect(run[i]).toBe(ids[i % ids.length]);
+  });
+
+  it("is empty for no cards", () => {
+    expect(loopRun([])).toEqual([]);
   });
 });
 
 describe("TestimonialQuote (through the wall)", () => {
   it("marks the words up as a quotation with its attribution", () => {
-    const { container } = render(
-      <TestimonialWall testimonials={[row({ name: "Ada Lovelace" })]} />,
-    );
-    const figure = container.querySelector("figure");
-    expect(figure?.querySelector("blockquote")?.textContent).toContain(
+    render(<TestimonialWall testimonials={[row({ name: "Ada Lovelace" })]} />);
+    const [figure] = readable();
+    expect(figure.querySelector("blockquote")?.textContent).toContain(
       "vague brief",
     );
-    expect(figure?.querySelector("figcaption")?.textContent).toContain(
+    expect(figure.querySelector("figcaption")?.textContent).toContain(
       "Ada Lovelace",
     );
   });
 
   it("is not a control, unlike the card on the board", () => {
     render(<TestimonialWall testimonials={[row()]} />);
-    expect(
-      within(screen.getByRole("listitem")).queryAllByRole("button"),
-    ).toHaveLength(0);
+    expect(within(readable()[0]).queryAllByRole("button")).toHaveLength(0);
   });
 
   it("offers a stored profile as a link", () => {
@@ -488,30 +372,13 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
-  it("marks a card that can be followed, and only that one", () => {
-    const { container } = render(
-      <TestimonialWall
-        testimonials={[
-          row({ id: "a", linkedinUrl: "https://www.linkedin.com/in/ada" }),
-          row({ id: "b", name: "Grace Hopper" }),
-        ]}
-      />,
-    );
-    // By the words, not position: the deal seats the first testimonial in the middle column.
-    const marked = [...container.querySelectorAll("figure")]
-      .filter((figure) => figure.hasAttribute("data-linked"))
-      .map((figure) => figure.querySelector("figcaption")?.textContent);
-    expect(marked).toHaveLength(1);
-    expect(marked[0]).toContain("Ada Lovelace");
-  });
-
   it("names its destination exactly as the social row does", () => {
     render(
       <TestimonialWall
         testimonials={[row({ linkedinUrl: "https://www.linkedin.com/in/ada" })]}
       />,
     );
-    expect(screen.getByText("LinkedIn")).toBeTruthy();
+    expect(screen.getAllByText("LinkedIn").length).toBeGreaterThan(0);
     expect(screen.queryByText("ada")).toBeNull();
     expect(screen.queryByText("in/ada")).toBeNull();
   });
@@ -523,21 +390,12 @@ describe("TestimonialQuote (through the wall)", () => {
       />,
     );
 
-    const label = screen.getByText("LinkedIn");
+    const label = screen.getAllByText("LinkedIn")[0];
     const tooltip = label.parentElement!;
     expect(tooltip.children).toHaveLength(3);
     expect(tooltip.firstElementChild).toBe(label);
     expect(label.querySelector("svg")).toBeNull();
     expect(tooltip.lastElementChild?.tagName.toLowerCase()).toBe("svg");
-  });
-
-  it("draws the goto as a glyph, not a control", () => {
-    render(
-      <TestimonialWall
-        testimonials={[row({ linkedinUrl: "https://www.linkedin.com/in/ada" })]}
-      />,
-    );
-    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
   it("says nothing about a profile that was never added", () => {
@@ -547,16 +405,16 @@ describe("TestimonialQuote (through the wall)", () => {
 
   it("stands in for a missing picture with the first character of the name", () => {
     render(<TestimonialWall testimonials={[row({ name: "Grace Hopper" })]} />);
-    expect(screen.getByText("G")).toBeTruthy();
+    expect(within(readable()[0]).getByText("G")).toBeTruthy();
   });
 
   it("draws a stored picture, undescribed", () => {
-    const { container } = render(
+    render(
       <TestimonialWall
         testimonials={[row({ avatarUrl: "https://cdn.test/ada.jpg" })]}
       />,
     );
-    const img = container.querySelector("img");
+    const img = readable()[0].querySelector("img");
     expect(img?.getAttribute("src")).toBe("https://cdn.test/ada.jpg");
     expect(img?.getAttribute("alt")).toBe("");
   });
@@ -565,91 +423,12 @@ describe("TestimonialQuote (through the wall)", () => {
     render(
       <TestimonialWall testimonials={[row({ excerpt: "vague brief" })]} />,
     );
-    expect(screen.getByText("vague brief")).toBeTruthy();
+    expect(within(readable()[0]).getByText("vague brief")).toBeTruthy();
     expect(screen.queryByText(/actually ship/)).toBeNull();
   });
 
   it("shows the tagline under the name, when there is one", () => {
     render(<TestimonialWall testimonials={[row({ tagline: "Countess" })]} />);
-    expect(screen.getByText("Countess")).toBeTruthy();
-  });
-});
-
-describe("dealIntoColumns", () => {
-  const deal = (n: number, columns = 5) =>
-    dealIntoColumns(
-      Array.from({ length: n }, (_, i) => i),
-      columns,
-    );
-
-  it("keeps every card, once", () => {
-    expect(
-      deal(8)
-        .flat()
-        .sort((a, b) => a - b),
-    ).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
-  });
-
-  it.each([1, 2, 5, 8, 40])(
-    "gives the middle column exactly one card, with %i published",
-    (count) => {
-      expect(deal(count)[2]).toHaveLength(1);
-    },
-  );
-
-  it("puts the first card in the middle, where the eye goes", () => {
-    expect(deal(8)[2]).toEqual([0]);
-  });
-
-  it("fills outwards from the middle", () => {
-    const dealt = deal(3);
-    expect(dealt[2]).toHaveLength(1);
-    expect(dealt[1]).toHaveLength(1);
-    expect(dealt[3]).toHaveLength(1);
-    expect(dealt[0]).toHaveLength(0);
-    expect(dealt[4]).toHaveLength(0);
-  });
-
-  it("spreads a full set evenly over the outer columns", () => {
-    expect(deal(9).map((column) => column.length)).toEqual([2, 2, 1, 2, 2]);
-  });
-
-  it.each([
-    [10, [3, 2, 1, 2, 2]],
-    [11, [3, 2, 1, 2, 3]],
-    [12, [4, 2, 1, 2, 3]],
-    [13, [4, 2, 1, 2, 4]],
-  ])(
-    "gives the edges every card past nine, with %i published",
-    (count, shape) => {
-      expect(deal(count).map((column) => column.length)).toEqual(shape);
-    },
-  );
-
-  it("keeps the columns beside the tower to two", () => {
-    for (let count = 9; count <= 40; count++) {
-      const dealt = deal(count);
-      expect(dealt[1]).toHaveLength(2);
-      expect(dealt[3]).toHaveLength(2);
-    }
-  });
-
-  it.each([10, 11, 12, 13, 40])(
-    "still deals every card once, with %i",
-    (count) => {
-      expect(
-        deal(count)
-          .flat()
-          .sort((a, b) => a - b),
-      ).toEqual(Array.from({ length: count }, (_, i) => i));
-    },
-  );
-
-  it("has a column for every column, even with nothing to put in them", () => {
-    expect(deal(0)).toEqual([[], [], [], [], []]);
-  });
-
-  it("deals the same hand from the same order", () => {
-    expect(deal(8)).toEqual(deal(8));
+    expect(within(readable()[0]).getByText("Countess")).toBeTruthy();
   });
 });

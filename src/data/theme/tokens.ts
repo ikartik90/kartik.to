@@ -23,10 +23,6 @@ export const tokens = defineTokens({
     carouselSlideLarge: {
       value: "min(calc({sizes.articleContent} * 14 / 16), 70vw)",
     },
-    // Floored so a phone gets a skyline, capped so it never becomes the page; the drawing crops `xMidYMax slice`.
-    siteFooter: { value: "clamp(280px, 35vw, 600px)" },
-    // The CN Tower's antenna tip: y 17.9 of the skyline's 600-unit viewBox, scaled by the footer's height.
-    skylineTowerTip: { value: "calc({sizes.siteFooter} * 17.9 / 600)" },
     calchemyDemo: { value: "720px" },
     calchemyPlayground: { value: "960px" },
     librarySidebar: { value: "200px" },
@@ -34,8 +30,6 @@ export const tokens = defineTokens({
     // The narrowest a quote reads well at; the board's `auto-fill` tracks size against it.
     testimonialCard: { value: "280px" },
     testimonialCardWide: { value: "400px" },
-    // The tallest card (a full quote at the narrowest width), measured; the band reserves it above the tower.
-    testimonialCardTallest: { value: "320px" },
     insertDialogHeight: { value: "480px" },
     dialogFooter: { value: "44px" },
     quoteMark: { value: "52px" },
@@ -122,6 +116,14 @@ export const tokens = defineTokens({
       boltCore: { value: "#F5E7A3" },
       boltEdge: { value: "#F0CE21" },
       boltGlow: { value: "#FAEB9E" },
+    },
+
+    // Illustration colours: the published Cosmic Track preset's palette, beside `brand.pink` and `brand.orange`.
+    cosmic: {
+      cyan: { value: "#4DE1FF" },
+      yellow: { value: "#FFEE4D" },
+      green: { value: "#77FF70" },
+      violet: { value: "#8570FF" },
     },
   },
 
