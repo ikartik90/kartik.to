@@ -50,7 +50,8 @@ export async function HomePage({ sheet, base }: { sheet?: string; base?: string 
         </article>
       </main>
 
-      <TestimonialWall testimonials={testimonials} />
+      {/* CI PROBE: no testimonial wall ({testimonials.length} published). */}
+      {testimonials.length < 0 && <TestimonialWall testimonials={testimonials} />}
     </>
   );
 }
