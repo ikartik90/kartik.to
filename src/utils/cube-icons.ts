@@ -8,7 +8,10 @@ export function startingFaces<Icon>(icons: Icon[], cubes: number): Icon[][] {
   const sides = Math.max(1, icons.length - cubes);
   return Array.from({ length: cubes }, (_, i) => [
     icons[i % icons.length],
-    ...Array.from({ length: FACES - 1 }, (_, side) => icons[cubes + ((i * (FACES - 1) + side) % sides)] ?? icons[i]),
+    ...Array.from(
+      { length: FACES - 1 },
+      (_, side) => icons[cubes + ((i * (FACES - 1) + side) % sides)] ?? icons[i % icons.length],
+    ),
   ]);
 }
 
