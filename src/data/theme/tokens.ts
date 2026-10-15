@@ -23,6 +23,7 @@ export const tokens = defineTokens({
     carouselSlideLarge: {
       value: "min(calc({sizes.articleContent} * 14 / 16), 70vw)",
     },
+    siteFooter: { value: "clamp(280px, 35vw, 600px)" },
     calchemyDemo: { value: "720px" },
     calchemyPlayground: { value: "960px" },
     librarySidebar: { value: "200px" },
