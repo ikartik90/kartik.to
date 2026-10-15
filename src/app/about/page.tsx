@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ArticleIntro } from "@/components/article-intro";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { JsonLd } from "@/components/json-ld";
-import { SiteFooter } from "@/components/site-footer";
 import { ABOUT_SLUG } from "@/data/page-slugs";
 import { ABOUT_TITLE } from "@/data/site";
 import { isAdmin } from "@/lib/auth/server";
@@ -35,7 +34,6 @@ export default async function AboutPage() {
           <ArticleRenderer content={page.content} />
         </article>
       </main>
-      <SiteFooter />
     </>
   );
 }

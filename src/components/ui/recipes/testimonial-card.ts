@@ -1,10 +1,15 @@
 import { defineSlotRecipe } from "@pandacss/dev";
+import { easedFadeOut } from "../../../utils/eased-fade";
+
+// Fine fractal noise over the card, so the mesh's soft ramps don't band.
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
 // Nothing inside may be interactive: `select` covers the card, and the profile link is its sibling.
 export const testimonialCard = defineSlotRecipe({
   className: "testimonial-card",
   description:
-    "A testimonial card: the quote and a byline of avatar, name, tagline and profile link. `surface` is the edit board or the public page; `selected` marks it chosen.",
+    "A testimonial card: the quote and a byline of avatar, name, tagline and profile link. `surface` is the edit board or the public page; `selected` marks it chosen. On the page the quote leads, over a byline with the avatar on the right, and a `mesh` of waves in one of Cosmic Track's colours, by `tint`, rises from the foot under `grain`.",
   slots: [
     "root",
     "select",
@@ -15,10 +20,14 @@ export const testimonialCard = defineSlotRecipe({
     "name",
     "tagline",
     "profile",
+    "mesh",
+    "grain",
   ],
   base: {
     root: {
       position: "relative",
+      // The mesh's colour; `tint` sets it.
+      "--tint-ink": "token(colors.text.highlight)",
 
       display: "flex",
       flexDirection: "column",
@@ -115,6 +124,39 @@ export const testimonialCard = defineSlotRecipe({
       // Sized by the link's `size="sm"`: slot styles here lose to the chip's un-nested `recipes` layer.
       alignSelf: "flex-start",
     },
+    // Two blurred waves across the card's foot in its tint, a soft one behind a brighter one, fading out upwards above
+    // the byline.
+    mesh: {
+      position: "absolute",
+      insetInline: 0,
+      insetBlockEnd: 0,
+      height: "calc(4 * token(spacing.4xl))",
+      zIndex: -1,
+      pointerEvents: "none",
+      maskImage: easedFadeOut(25, "top"),
+      // Wider and deeper than the card, so the blur's soft rim falls outside it.
+      "& > svg": {
+        position: "absolute",
+        insetInlineStart: "calc(-1 * token(spacing.4xl))",
+        insetBlockStart: 0,
+        width: "calc(100% + 2 * token(spacing.4xl))",
+        height: "calc(100% + token(spacing.4xl))",
+        filter: "blur(token(spacing.xxl))",
+      },
+      "& [data-wave=back]": { fill: "color-mix(in srgb, var(--tint-ink) 20%, transparent)" },
+      "& [data-wave=front]": { fill: "color-mix(in srgb, var(--tint-ink) 32%, transparent)" },
+    },
+    // Over the card's ground and its mesh, under its words.
+    grain: {
+      position: "absolute",
+      inset: 0,
+      zIndex: -1,
+      pointerEvents: "none",
+      backgroundImage: GRAIN,
+      mixBlendMode: "soft-light",
+      opacity: 0.6,
+      _dark: { opacity: 0.3 },
+    },
   },
   variants: {
     /** Drawn on the border, so selection moves nothing. */
@@ -126,26 +168,45 @@ export const testimonialCard = defineSlotRecipe({
         },
       },
     },
-    /** `board`: the admin board, where the card opens the rail. `page`: the homepage wall. */
+    /**
+     * `board`: the admin board, where the card opens the rail. `page`: the homepage wall, with no border, the quote
+     * leading and spare room before a byline whose avatar sits on the right.
+     */
     surface: {
       board: { root: { cursor: "pointer" } },
       page: {
         root: {
           cursor: "auto",
+          gap: "4xl",
+          padding: "xxl",
+          borderRadius: "xxl",
+          borderWidth: "0",
+          // `clip-path` as well as `overflow`: Safari leaves composited children (the blurred, masked mesh) unclipped
+          // by a rounded `overflow: hidden`.
+          isolation: "isolate",
+          overflow: "hidden",
+          clipPath: "inset(0 round token(radii.xxl))",
           // Undoes the base hover wash, which means "about to be edited".
           _hover: { backgroundColor: "bg.surface" },
-
-          // Only a card with a profile is a link, so only it answers the pointer.
-          "&[data-linked]:hover": {
-            borderColor: "border.divider",
-          },
         },
-        quote: {
-          textStyle: "bodySmall",
+        quote: { textStyle: "bodyLarge" },
+        byline: {
+          order: 1,
+          flexDirection: "row-reverse",
+          alignItems: "center",
         },
+        tagline: { textStyle: "bodySmall" },
       },
     },
+    /** The mesh's colour: Cosmic Track's first, second or third. */
+    tint: {
+      "1": { root: { "--tint-ink": "token(colors.cosmic.1)" } },
+      "2": { root: { "--tint-ink": "token(colors.cosmic.2)" } },
+      "3": { root: { "--tint-ink": "token(colors.cosmic.3)" } },
+    },
   },
+  // Picked at runtime from props, which the extractor can't follow.
+  staticCss: [{ tint: ["*"] }],
   defaultVariants: {
     selected: false,
     surface: "board",

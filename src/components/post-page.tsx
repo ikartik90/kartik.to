@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ArticleIntro } from "@/components/article-intro";
 import { ArticleRenderer } from "@/components/article-renderer";
 import { JsonLd } from "@/components/json-ld";
-import { SiteFooter } from "@/components/site-footer";
 import { POST_CATEGORIES } from "@/data/post-categories";
 import type { PostCategory } from "@/domain/post";
 import { isAdmin } from "@/lib/auth/server";
@@ -51,7 +50,6 @@ export async function PostPage({
           <ArticleRenderer content={post.content} />
         </article>
       </main>
-      <SiteFooter />
     </>
   );
 }

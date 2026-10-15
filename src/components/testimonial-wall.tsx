@@ -1,394 +1,244 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { css, cx } from "../../styled-system/css";
-import ShuffleIcon from "@/assets/icons/shuffle.svg";
+import { useId, useLayoutEffect, useRef } from "react";
+import { css } from "../../styled-system/css";
 import type { Testimonial } from "@/domain/testimonial";
-import {
-  SKYLINE_VIEWBOX_HEIGHT,
-  SKYLINE_VIEWBOX_WIDTH,
-  skylineTopAt,
-} from "@/data/skyline-profile";
-import { TestimonialQuote } from "./testimonial-quote";
-import { Button } from "./ui/button";
-import { Tooltip } from "./ui/tooltip";
-import { Typography } from "./ui/typography";
+import { useDragScroll } from "@/hooks/use-drag-scroll";
+import { useNearView } from "@/hooks/use-near-view";
+import { TestimonialQuote, type MeshShape, type MeshTint } from "./testimonial-quote";
 
-/** Odd, so the tower has a middle column. */
-const COLUMNS = 5;
+/** Slow enough to read a card as it passes. */
+const DRIFT_PX_PER_S = 30;
 
-const ROTATION_MS = 8000;
-
-const FADE_MS = 350;
-
-/** 3·2·1·2·3; the rest wait off the band (see `rotate`). */
-const BAND_SIZE = 11;
-
-/** Moves the `edge` card to `middle`; with a queue, the middle card joins its back and the front takes the edge. */
-function rotate<T>(order: T[], edge: number, middle: number): T[] {
-  const next = [...order];
-  if (order.length <= BAND_SIZE) {
-    [next[edge], next[middle]] = [order[middle], order[edge]];
-    return next;
-  }
-  next[middle] = order[edge];
-  next[edge] = order[BAND_SIZE];
-  return [
-    ...next.slice(0, BAND_SIZE),
-    ...order.slice(BAND_SIZE + 1),
-    order[middle],
-  ];
-}
+/** One run of the loop holds at least this many cards, so it spans the widest screen before it repeats. */
+const MIN_RUN_CARDS = 24;
 
 /**
- * One card in the centre column (clear of the tower), the rest middle-outwards two deep,
- * then edges only. Deterministic, so the server and the client deal the same hand.
+ * Copies of the run on the strip. The reader is kept within half a run of `HOME_RUN`, so a drag or a swipe always has
+ * half a run or more before it meets an end.
  */
-export function dealIntoColumns<T>(items: T[], columns = COLUMNS): T[][] {
-  const centre = Math.floor(columns / 2);
-  const dealt: T[][] = Array.from({ length: columns }, () => []);
-  if (items.length === 0) return dealt;
+const RUNS = 4;
+const HOME_RUN = 2;
 
-  dealt[centre].push(items[0]);
+/** How long the strip must go unscrolled to count as at rest. */
+const REST_MS = 150;
 
-  // Nearest the middle first, left before right on a tie, so the order is stable.
-  const outwards = Array.from({ length: columns }, (_, i) => i)
-    .filter((i) => i !== centre)
-    .sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre) || a - b);
-  const edges = [0, columns - 1];
-
-  items.slice(1).forEach((item, i) => {
-    const seat =
-      i < 2 * outwards.length
-        ? outwards[i % outwards.length]
-        : edges[(i - 2 * outwards.length) % edges.length];
-    dealt[seat].push(item);
-  });
-
-  return dealt;
-}
-
-/** 96px, the homepage's gap above the grid; held per column against the skyline beneath it. */
-const SKYLINE_CLEARANCE = "calc({spacing.5xl} + {spacing.xl})";
-
-/** The footer's top padding plus half the skyline, so the cards stand in front of the rooflines. */
-const OVERLAP = "calc({spacing.5xl} + {sizes.siteFooter} * 0.5)";
-
-/** From the band's bottom up to the antenna tip; nothing in the middle column may reach into it. */
-const TOWER_ZONE = `calc(${OVERLAP} - {spacing.5xl} - {sizes.skylineTowerTip})`;
-
-/** The static fallback until `useSkylineClearance` measures; safe, since the tower is the tallest thing. */
-const TOWER_CLEARANCE = `calc(${TOWER_ZONE} + ${SKYLINE_CLEARANCE})`;
+/** How far a flick carries on, per px/ms it was let go at; `useDragScroll` eases it to a stop. */
+const GLIDE_PX_PER_SPEED = 200;
 
 const EDGE_FADE = "clamp(24px, 5vw, 120px)";
 
-const BLEED = "clamp(24px, 8vw, 200px)";
+/** One run of the loop: the cards in order, repeated until they fill whole columns of two and number `min`. */
+export function loopRun<T>(items: T[], min = MIN_RUN_CARDS): T[] {
+  if (items.length === 0) return [];
+  let times = Math.ceil(min / items.length);
+  if ((times * items.length) % 2) times += 1;
+  return Array.from({ length: times }, () => items).flat();
+}
 
 const bandStyle = css({
   // Never squashed by the body's flex column, which would leave cards hanging out of the box.
   flexShrink: 0,
   marginBlockStart: "5xl",
-  marginBlockEnd: "3xl",
-
-  md: {
-    // Its own layer, or the footer after it paints over the cards.
-    position: "relative",
-    zIndex: 1,
-    // A negative margin, not a pull on `SiteFooter`, which is shared and unaware of this.
-    marginBlockEnd: `calc(-1 * (${OVERLAP}))`,
-    maskImage: `linear-gradient(to right, transparent, black ${EDGE_FADE}, black calc(100% - ${EDGE_FADE}), transparent)`,
-    maskRepeat: "no-repeat",
-    // 500% tall, so tooltips and glows painted outside the box stay inside the mask.
-    maskSize: "100% 500%",
-    maskPosition: "center",
-  },
+  marginBlockEnd: "calc(token(spacing.3xl) + token(spacing.4xl))",
 });
 
-const headerStyle = css({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  textAlign: "center",
-  paddingInline: "xl",
-  marginBlockEnd: "3xl",
+const unseenStyle = css({ srOnly: true });
 
-  md: {
-    // Reaches into the notch the stagger leaves over the middle column.
-    marginBlockEnd: "calc({spacing.3xl} - {spacing.4xl})",
-    inlineSize: "fit-content",
-    marginInline: "auto",
-    // Above the wall, whose box would otherwise take presses on the button's lower half.
-    position: "relative",
-    zIndex: 1,
-  },
-});
-
-/** Band only: the phone's rail already reaches every card. */
-const shuffleStyle = css({
-  marginBlockStart: "lg",
-  mdDown: { display: "none" },
-});
-
-const wallStyle = css({
-  display: "flex",
-  gap: "xl",
+const stripStyle = css({
   overflowX: "auto",
-  alignItems: "flex-start",
-  scrollSnapType: "x mandatory",
-  paddingInline: "xl",
-  // Insets the snap positions to match, or the first card rests flush against the edge.
-  scrollPaddingInline: "xl",
+  overflowY: "hidden",
   // Hidden, so a classic scrollbar never takes height from the cards; both forms for cross-browser.
   scrollbarWidth: "none",
   "&::-webkit-scrollbar": { display: "none" },
+  maskImage: `linear-gradient(to right, transparent, black ${EDGE_FADE}, black calc(100% - ${EDGE_FADE}), transparent)`,
+});
 
-  md: {
-    display: "grid",
-    gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))`,
-    // `start`: stretching would flatten the stagger margins.
-    alignItems: "start",
-    // At least five full columns, so the outer cards pass the screen's edge.
-    inlineSize: `clamp(calc(${COLUMNS} * {sizes.testimonialCard} + ${COLUMNS - 1} * {spacing.xl}), calc(100% + 2 * ${BLEED}), calc(${COLUMNS} * {sizes.testimonialCardWide} + ${COLUMNS - 1} * {spacing.xl}))`,
-    // Positioned, not negative-margined, so the band's own box (and its mask) stays page-wide.
-    position: "relative",
-    insetInlineStart: "half",
-    transform: "translateX(-50%)",
-    // Reserves room above the tower whatever the content; on the grid, which the middle column measures against.
-    minBlockSize: `calc(${TOWER_CLEARANCE} + {sizes.testimonialCardTallest})`,
-    // `visible`: a scroll container would clip the overlap onto the footer.
-    overflowX: "visible",
-    scrollSnapType: "none",
-    paddingInline: "none",
-  },
+const trackStyle = css({
+  position: "relative",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "xl",
+  width: "max-content",
+  // A cover over the cards while a mouse drag moves the strip, so cards passing under the pointer don't hover. Above
+  // the cards' own layers (to 2).
+  "&::after": { content: '""', position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none" },
+  "[data-panning] > &": { "&::after": { pointerEvents: "auto" } },
 });
 
 const columnStyle = css({
-  // Fixed grid tracks, not flex: a flex item without a width falls back to max-content, one line wide.
-  display: "grid",
-  gridAutoFlow: "column",
-  gridAutoColumns: "token(sizes.testimonialCard)",
+  display: "flex",
+  flexDirection: "column",
   gap: "xl",
-  alignItems: "start",
-  // A squeezed column leaves its cards hanging into the next one; the rail scrolls instead.
   flexShrink: 0,
-  margin: "none",
-  padding: "none",
-  listStyle: "none",
-
-  md: {
-    // Real columns, not one grid: a grid row is as tall as its tallest card and would flatten the stagger.
-    display: "flex",
-    flexDirection: "column",
-    gap: "xl",
-    minWidth: 0,
-  },
+  width: "clamp({sizes.testimonialCard}, 22vw, {sizes.testimonialCardWide})",
+  "&[data-stagger='20']": { marginBlockStart: "xxl" },
+  "&[data-stagger='40']": { marginBlockStart: "4xl" },
+  "&[data-stagger='60']": { marginBlockStart: "calc(token(spacing.4xl) + token(spacing.xxl))" },
+  "&[data-stagger='80']": { marginBlockStart: "5xl" },
 });
 
-/** The queue: the rail's tail on a phone, hidden on the band. */
-const waitingStyle = css({ md: { display: "none" } });
-
-/** How far each column hangs below the one outside it; `useSkylineClearance` then moves the whole band. */
-const COLUMN_STAGGER = [
-  css({ md: { marginBlockStart: "none" } }),
-  css({ md: { marginBlockStart: "4xl" } }),
-  css({ md: { marginBlockStart: "calc(2 * {spacing.4xl})" } }),
-  css({ md: { marginBlockStart: "4xl" } }),
-  css({ md: { marginBlockStart: "none" } }),
-];
-
-const cardStyle = css({
-  scrollSnapAlign: "start",
-
-  md: {
-    // The mark is on the slot, not the card, so a card moved into a marked slot arrives at 0 and fades up.
-    transition: `opacity ${FADE_MS}ms ease`,
-    "&[data-swapping]": { opacity: 0 },
-  },
-});
-
-const SLOT_ATTR = "data-testimonial-slot";
-/** Which column a `<ul>` is, counting the empty ones. */
-const COLUMN_ATTR = "data-testimonial-column";
-
-/** Card tops relative to the wall, so a band moving during a swap does not read as cards moving. */
-function cardTops(wall: HTMLElement): Map<number, number> {
-  const base = wall.getBoundingClientRect().top;
-  const tops = new Map<number, number>();
-  for (const card of wall.querySelectorAll<HTMLElement>(`[${SLOT_ATTR}]`)) {
-    tops.set(
-      Number(card.getAttribute(SLOT_ATTR)),
-      card.getBoundingClientRect().top - base,
-    );
-  }
-  return tops;
-}
-
-/** `SKYLINE_CLEARANCE` in px; a test keeps the two equal. */
-const CLEARANCE_PX = 96;
+/** Each column's drop in px, in an order with no two neighbours alike, wrapping included. */
+const STAGGERS = ["40", "80", "20", "60", "20", "80", "60"];
 
 /**
- * Moves the whole band by one margin, keeping the stagger, until its closest column clears the
- * skyline by `SKYLINE_CLEARANCE` — measured with the tallest cards, so no shuffle breaks the floor.
+ * Drifts the track right to left a run at a time, on the compositor, over the strip's own scroll. A mouse over a card
+ * or a gap between cards, a touch until the strip comes to rest, focus inside it, or the section being off screen
+ * holds it. At rest, the scroll moves by whole runs, onto the same cards, back to `HOME_RUN`.
  */
-function useSkylineClearance(
-  bandRef: React.RefObject<HTMLElement | null>,
-  wallRef: React.RefObject<HTMLDivElement | null>,
-  columnCount: number,
+function useDrift(
+  sectionRef: React.RefObject<HTMLElement | null>,
+  stripRef: React.RefObject<HTMLDivElement | null>,
+  count: number,
+  copied: boolean,
 ) {
   useLayoutEffect(() => {
-    const band = bandRef.current;
-    const wall = wallRef.current;
-    if (!band || !wall) return;
+    const section = sectionRef.current;
+    const strip = stripRef.current;
+    const track = strip?.firstElementChild;
+    if (!section || !strip || !(track instanceof HTMLElement)) return;
 
-    const place = () => {
-      // Reset first, so each pass measures the stylesheet's baseline.
-      band.style.marginBlockEnd = "";
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const holds = new Set<string>();
+    let run = 0;
+    let drift: Animation | null = null;
+    let rest = 0;
 
-      const svg = document.querySelector<SVGElement>("[data-site-footer] svg");
-      if (!svg || getComputedStyle(wall).display !== "grid") return;
+    const progress = () => drift?.effect?.getComputedTiming().progress ?? 0;
 
-      const drawing = svg.getBoundingClientRect();
-      if (drawing.height === 0) return;
-
-      // `xMidYMax slice`: scaled by height, with the viewBox centre pinned to the middle.
-      const scale = drawing.height / SKYLINE_VIEWBOX_HEIGHT;
-      const middle = drawing.left + drawing.width / 2;
-      const toViewBox = (x: number) =>
-        SKYLINE_VIEWBOX_WIDTH / 2 + (x - middle) / scale;
-
-      const tallest = [...wall.querySelectorAll<HTMLElement>(`[${SLOT_ATTR}]`)]
-        .map((card) => card.getBoundingClientRect().height)
-        .sort((a, b) => b - a);
-
-      let tightest = Infinity;
-      for (const column of wall.children) {
-        const box = column.getBoundingClientRect();
-        if (box.height === 0) continue;
-
-        // The lowest this column could reach with any hand.
-        const cards = column.childElementCount;
-        const gap = Number.parseFloat(getComputedStyle(column).rowGap) || 0;
-        const deepest =
-          box.top +
-          tallest.slice(0, cards).reduce((total, card) => total + card, 0) +
-          (cards - 1) * gap;
-
-        const top = skylineTopAt(toViewBox(box.left), toViewBox(box.right));
-        tightest = Math.min(
-          tightest,
-          drawing.top + top * scale - Math.max(box.bottom, deepest),
-        );
-      }
-      if (!Number.isFinite(tightest)) return;
-
-      const overlap = Number.parseFloat(getComputedStyle(band).marginBlockEnd);
-      if (Number.isNaN(overlap)) return;
-      band.style.marginBlockEnd = `${overlap - (tightest - CLEARANCE_PX)}px`;
+    // A drag and its glide place the scroll themselves; it carries on once they come to rest.
+    const resume = () => {
+      if (!holds.size && !strip.dataset.panning) drift?.play();
+    };
+    const hold = (why: string) => {
+      holds.add(why);
+      drift?.pause();
+    };
+    const release = (why: string) => {
+      holds.delete(why);
+      resume();
     };
 
-    place();
+    const recentre = () => {
+      if (!run || strip.dataset.panning || holds.has("focus")) return;
+      const seen = strip.scrollLeft + progress() * run;
+      const runs = Math.floor((seen - (HOME_RUN - 0.5) * run) / run);
+      if (runs) strip.scrollLeft -= runs * run;
+    };
 
-    // Every column too: the wall's height is pinned by its min-block-size, so it misses a column growing.
-    const observer = new ResizeObserver(place);
-    observer.observe(wall);
-    observer.observe(document.documentElement);
-    for (const column of wall.children) observer.observe(column);
+    const settle = () => {
+      clearTimeout(rest);
+      rest = window.setTimeout(() => {
+        recentre();
+        holds.delete("touch");
+        resume();
+      }, REST_MS);
+    };
+
+    const layout = () => {
+      const starts = track.querySelectorAll<HTMLElement>("[data-run-start]");
+      const width = starts.length > 1 ? starts[1].offsetLeft - starts[0].offsetLeft : 0;
+      if (Math.abs(width - run) < 0.5) return;
+      const at = progress();
+      run = width;
+      drift?.cancel();
+      drift = null;
+      strip.scrollLeft = HOME_RUN * run;
+      if (!run || still || typeof track.animate !== "function") return;
+      const duration = (run / DRIFT_PX_PER_S) * 1000;
+      drift = track.animate(
+        [{ transform: "translateX(0px)" }, { transform: `translateX(${-run}px)` }],
+        { duration, iterations: Infinity },
+      );
+      drift.currentTime = at * duration;
+      if (holds.size) drift.pause();
+    };
+
+    // On the track itself, the pointer is between columns or under a shorter one: only a gap with a card beside it
+    // at that height counts.
+    const overCards = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !track.contains(target)) return false;
+      if (target !== track) return true;
+      const columns = [...track.children];
+      const next = columns.findIndex((column) => column.getBoundingClientRect().left > event.clientX);
+      const before = columns[next < 0 ? columns.length - 1 : next - 1]?.getBoundingClientRect();
+      const after = next < 0 ? undefined : columns[next].getBoundingClientRect();
+      const beside = (box?: DOMRect) => !!box && event.clientY >= box.top && event.clientY <= box.bottom;
+      if (before && event.clientX <= before.right) return beside(before);
+      return beside(before) || beside(after);
+    };
+
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      const over = overCards(event);
+      if (over !== holds.has("pointer")) (over ? hold : release)("pointer");
+    };
+    const onLeave = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") release("pointer");
+    };
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      clearTimeout(rest);
+      hold("touch");
+    };
+    // Only the keyboard's focus holds it: Chromium also focuses a link on a mouse press.
+    let pressed = false;
+    const onPress = () => (pressed = true);
+    const onKey = () => (pressed = false);
+    const onFocusIn = () => {
+      if (!pressed) hold("focus");
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (!section.contains(event.relatedTarget as Node | null)) release("focus");
+    };
+
+    layout();
+    const resized = new ResizeObserver(layout);
+    resized.observe(track);
+
+    const seen =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(([entry]) =>
+            entry.isIntersecting ? release("away") : hold("away"),
+          );
+    seen?.observe(section);
+
+    strip.addEventListener("pointermove", onMove);
+    strip.addEventListener("pointerleave", onLeave);
+    section.addEventListener("focusin", onFocusIn);
+    section.addEventListener("focusout", onFocusOut);
+    section.addEventListener("pointerdown", onPress);
+    strip.addEventListener("pointerdown", onDown);
+    strip.addEventListener("scroll", settle, { passive: true });
+    // Also a drag let go anywhere, and a tap that never scrolled.
+    window.addEventListener("pointerup", settle);
+    window.addEventListener("keydown", onKey);
+
     return () => {
-      observer.disconnect();
-      band.style.marginBlockEnd = "";
+      clearTimeout(rest);
+      drift?.cancel();
+      resized.disconnect();
+      seen?.disconnect();
+      strip.removeEventListener("pointermove", onMove);
+      strip.removeEventListener("pointerleave", onLeave);
+      section.removeEventListener("focusin", onFocusIn);
+      section.removeEventListener("focusout", onFocusOut);
+      section.removeEventListener("pointerdown", onPress);
+      strip.removeEventListener("pointerdown", onDown);
+      strip.removeEventListener("scroll", settle);
+      window.removeEventListener("pointerup", settle);
+      window.removeEventListener("keydown", onKey);
     };
-  }, [bandRef, wallRef, columnCount]);
+  }, [sectionRef, stripRef, count, copied]);
 }
 
-/** A card cut by the window's edge (else any outer card) and a middle card, picked uniformly; never two outer cards. */
-function pickTrade(wall: HTMLElement): [number, number] | null {
-  const cut: number[] = [];
-  const outer: number[] = [];
-  const middle: number[] = [];
-  for (const element of wall.querySelectorAll(`[${SLOT_ATTR}]`)) {
-    const slot = Number(element.getAttribute(SLOT_ATTR));
-    // Waiting off the band: brought on by `rotate`, never picked.
-    const seat = element.parentElement?.getAttribute(COLUMN_ATTR);
-    if (seat == null) continue;
-    const column = Number(seat);
-    if (column !== 0 && column !== COLUMNS - 1) {
-      middle.push(slot);
-      continue;
-    }
-    outer.push(slot);
-    const box = element.getBoundingClientRect();
-    if (box.left < 0 || box.right > window.innerWidth) cut.push(slot);
-  }
+/** Cosmic Track's three colours, taken in turn. */
+const TINTS: MeshTint[] = ["1", "2", "3"];
 
-  const pick = (from: number[]) =>
-    from[Math.floor(Math.random() * from.length)];
-  const from = cut.length > 0 ? cut : outer;
-  if (from.length > 0 && middle.length > 0) return [pick(from), pick(middle)];
-
-  const all = [...outer, ...middle];
-  if (all.length < 2) return null;
-  const first = pick(all);
-  return [first, pick(all.filter((slot) => slot !== first))];
-}
-
-/** Trades a card every `ROTATION_MS`, paused off screen, for reduced motion, hover, focus and the phone's rail. */
-function useAutoShuffle(
-  shuffle: () => void,
-  wallRef: React.RefObject<HTMLDivElement | null>,
-) {
-  const [held, setHeld] = useState(false);
-  const [onScreen, setOnScreen] = useState(
-    () => typeof IntersectionObserver === "undefined",
-  );
-  // A dependency of the interval, so a press restarts the countdown.
-  const [round, setRound] = useState(0);
-  // A ref, so the interval is not rebuilt with `shuffle`; written in an effect, not during render.
-  const shuffleRef = useRef(shuffle);
-  useEffect(() => {
-    shuffleRef.current = shuffle;
-  });
-
-  // Each trade measures every card, which costs the page a frame wherever it is scrolled to.
-  useEffect(() => {
-    const wall = wallRef.current;
-    if (!wall || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(([entry]) =>
-      setOnScreen(entry.isIntersecting),
-    );
-    observer.observe(wall);
-    return () => observer.disconnect();
-  }, [wallRef]);
-
-  useEffect(() => {
-    if (held || !onScreen || !window.matchMedia) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const timer = setInterval(() => {
-      const wall = wallRef.current;
-      if (!wall || getComputedStyle(wall).display !== "grid") return;
-      shuffleRef.current();
-    }, ROTATION_MS);
-    return () => clearInterval(timer);
-  }, [held, onScreen, round, wallRef]);
-
-  return {
-    restart: () => setRound((current) => current + 1),
-    hold: {
-      // Pointer events, so a swipe on the rail does not latch the band shut.
-      onPointerEnter: () => setHeld(true),
-      onPointerLeave: () => setHeld(false),
-      onFocusCapture: () => setHeld(true),
-      onBlurCapture: () => setHeld(false),
-    },
-  };
-}
+/** Five, against the three colours, so no two neighbours (two or five cards apart in the run) share both. */
+const SHAPES: MeshShape[] = ["1", "2", "3", "4", "5"];
 
 export interface TestimonialWallProps {
   /** Published rows only; this does no filtering. */
@@ -396,160 +246,61 @@ export interface TestimonialWallProps {
 }
 
 export function TestimonialWall({ testimonials }: TestimonialWallProps) {
-  // Reset during render when a new array arrives; an effect would paint the stale hand first.
-  const [shuffled, setShuffled] = useState({
-    from: testimonials,
-    order: testimonials,
-  });
-  if (shuffled.from !== testimonials) {
-    setShuffled({ from: testimonials, order: testimonials });
-  }
-  const order = shuffled.from === testimonials ? shuffled.order : testimonials;
-  const [swapping, setSwapping] = useState<readonly number[]>([]);
-  const wallRef = useRef<HTMLDivElement>(null);
-  const bandRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
-  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trading = useRef(false);
-  const settleFrom = useRef<Map<number, number> | null>(null);
-  const settling = useRef<Animation[]>([]);
+  // Until the wall nears the screen, only the run a reader meets, without meshes: the first screens stay light.
+  const near = useNearView(sectionRef);
 
-  useEffect(
-    () => () => {
-      if (swapTimer.current) clearTimeout(swapTimer.current);
-      for (const glide of settling.current) glide.cancel();
+  useDrift(sectionRef, stripRef, testimonials.length, near);
+  useDragScroll(stripRef, {
+    landing: (velocity) => {
+      const strip = stripRef.current;
+      if (!strip) return 0;
+      const reach = Math.max(strip.scrollWidth - strip.clientWidth, 0);
+      return Math.min(Math.max(strip.scrollLeft + velocity * GLIDE_PX_PER_SPEED, 0), reach);
     },
-    [],
-  );
-
-  /** Fades both slots out, reorders while they are invisible, then fades in; the effect below glides the rest. */
-  const swap = useCallback((a: number, b: number) => {
-    if (a === b) return;
-    trading.current = true;
-    setSwapping([a, b]);
-
-    swapTimer.current = setTimeout(() => {
-      // A transform counts towards `getBoundingClientRect`, so glides are cancelled before reading.
-      for (const glide of settling.current) glide.cancel();
-      settling.current = [];
-      settleFrom.current = wallRef.current ? cardTops(wallRef.current) : null;
-
-      setShuffled((current) => {
-        if (a >= current.order.length || b >= current.order.length) {
-          return current;
-        }
-        return { ...current, order: rotate(current.order, a, b) };
-      });
-      // Two frames: in one, the browser would merge the reorder and the unmark and the pair would just appear.
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          setSwapping([]);
-          trading.current = false;
-        }),
-      );
-    }, FADE_MS);
-  }, []);
-
-  /** One trade; ignored, not queued, while one is running. */
-  const shuffle = useCallback(() => {
-    if (trading.current || !wallRef.current) return;
-    const pair = pickTrade(wallRef.current);
-    if (pair) swap(...pair);
-  }, [swap]);
-
-  const auto = useAutoShuffle(shuffle, wallRef);
-
-  /** FLIPs the cards a swap moved, before paint; the swapped pair fades instead, and reduced motion skips it. */
-  useLayoutEffect(() => {
-    const wall = wallRef.current;
-    const before = settleFrom.current;
-    settleFrom.current = null;
-    if (!wall || !before) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-
-    const after = cardTops(wall);
-    for (const [slot, from] of before) {
-      if (swapping.includes(slot)) continue;
-      const to = after.get(slot);
-      if (to === undefined) continue;
-      const distance = from - to;
-      // Sub-pixel differences are rounding, not movement.
-      if (Math.abs(distance) < 1) continue;
-
-      const card = wall.querySelector<HTMLElement>(`[${SLOT_ATTR}="${slot}"]`);
-      if (!card) continue;
-      settling.current.push(
-        card.animate(
-          [{ transform: `translateY(${distance}px)` }, { transform: "none" }],
-          { duration: FADE_MS, easing: "ease" },
-        ),
-      );
-    }
   });
 
-  // Given the column count so it re-measures when a testimonial is published.
-  useSkylineClearance(bandRef, wallRef, Math.min(order.length, COLUMNS));
+  if (testimonials.length === 0) return null;
 
-  if (order.length === 0) return null;
-
-  const columns = dealIntoColumns(order.slice(0, BAND_SIZE));
-  const waiting = order.slice(BAND_SIZE);
-  const slotOf = new Map(order.map((row, index) => [row.id, index]));
-
-  const card = (testimonial: Testimonial) => {
-    const slot = slotOf.get(testimonial.id) ?? 0;
-    return (
-      <li
-        key={testimonial.id}
-        className={cardStyle}
-        {...{ [SLOT_ATTR]: slot }}
-        data-swapping={swapping.includes(slot) ? "" : undefined}
-      >
-        <TestimonialQuote testimonial={testimonial} />
-      </li>
-    );
-  };
+  const run = loopRun(testimonials);
+  const columns = Array.from({ length: run.length / 2 }, (_, column) => column);
 
   return (
-    <section ref={bandRef} aria-labelledby={headingId} className={bandStyle}>
-      <header className={headerStyle}>
-        <Typography tag="h2" type="title" id={headingId}>
-          Music to my ears
-        </Typography>
-        <Typography tag="p" type="bodyLarge">
-          Affirmations from those who have worked closely with me
-        </Typography>
-        <Button
-          variant="icon"
-          aria-label="Shuffle"
-          onClick={() => {
-            shuffle();
-            auto.restart();
-          }}
-          className={shuffleStyle}
-        >
-          <ShuffleIcon aria-hidden />
-          <Button.Tooltip>
-            <Tooltip.Text>Shuffle</Tooltip.Text>
-          </Button.Tooltip>
-        </Button>
-      </header>
-      <div ref={wallRef} className={wallStyle} {...auto.hold}>
-        {columns.map((column, index) =>
-          // Absent, not empty: an empty `<ul>` announces an empty list.
-          column.length === 0 ? null : (
-            <ul
-              key={index}
-              className={cx(columnStyle, COLUMN_STAGGER[index])}
-              {...{ [COLUMN_ATTR]: index }}
-            >
-              {column.map(card)}
-            </ul>
-          ),
-        )}
-        {waiting.length > 0 && (
-          <ul className={cx(columnStyle, waitingStyle)}>{waiting.map(card)}</ul>
-        )}
+    <section ref={sectionRef} aria-labelledby={headingId} className={bandStyle}>
+      <h2 id={headingId} className={unseenStyle}>
+        Music to my ears
+      </h2>
+      <div ref={stripRef} className={stripStyle} data-testimonial-strip="">
+        <div className={trackStyle}>
+          {Array.from({ length: RUNS }, (_, copy) =>
+            (near || copy === HOME_RUN) &&
+            columns.map((column) => (
+              <div
+                key={`${copy}:${column}`}
+                className={columnStyle}
+                data-run-start={column === 0 ? copy : undefined}
+                data-stagger={STAGGERS[column % STAGGERS.length]}
+              >
+                {[column * 2, column * 2 + 1].map((index) => {
+                  // A reader meets each testimonial once: on the run the strip starts on, its first pass.
+                  const copied = copy !== HOME_RUN || index >= testimonials.length;
+                  return (
+                    <div key={index} aria-hidden={copied || undefined} inert={copied}>
+                      <TestimonialQuote
+                        testimonial={run[index]}
+                        tint={TINTS[index % TINTS.length]}
+                        shape={SHAPES[index % SHAPES.length]}
+                        bare={!near}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )),
+          )}
+        </div>
       </div>
     </section>
   );

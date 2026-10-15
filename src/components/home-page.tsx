@@ -1,6 +1,5 @@
 import { ArticleRenderer } from "@/components/article-renderer";
 import { JsonLd } from "@/components/json-ld";
-import { SiteFooter } from "@/components/site-footer";
 import { TestimonialWall } from "@/components/testimonial-wall";
 import { HomeGrid } from "@/components/home-grid";
 import { HomeHero } from "@/components/home-hero";
@@ -52,8 +51,6 @@ export async function HomePage({ sheet, base }: { sheet?: string; base?: string 
       </main>
 
       <TestimonialWall testimonials={testimonials} />
-
-      <SiteFooter />
     </>
   );
 }

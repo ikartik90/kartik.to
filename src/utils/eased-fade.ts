@@ -21,11 +21,11 @@ export function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
 const STOPS = 26;
 const ease = cubicBezier(0.63, 0, 0.48, 1);
 
-/** A top-to-bottom mask: whole down to `from`%, then fading out to clear at the foot. */
-export function easedFadeOut(from: number): string {
+/** A mask whole for `from`% of the way, then fading out to clear at the far end: the foot, or the top for `"top"`. */
+export function easedFadeOut(from: number, towards: "bottom" | "top" = "bottom"): string {
   const ramp = Array.from({ length: STOPS }, (_, i) => {
     const t = i / (STOPS - 1);
     return `rgb(0 0 0 / ${Number((1 - ease(t)).toFixed(3))}) ${Number((from + (100 - from) * t).toFixed(1))}%`;
   });
-  return `linear-gradient(to bottom, ${ramp.join(", ")})`;
+  return `linear-gradient(to ${towards}, ${ramp.join(", ")})`;
 }
