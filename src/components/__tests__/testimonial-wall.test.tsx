@@ -10,10 +10,37 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Testimonial } from "@/domain/testimonial";
-import { scrollIntoView } from "@/test-support";
 import { TestimonialWall, loopRun } from "../testimonial-wall";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+/** Stubs IntersectionObserver for every observer the wall makes; the control reports the section in view or away. */
+function observe() {
+  const callbacks: IntersectionObserverCallback[] = [];
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        callbacks.push(callback);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    },
+  );
+  return (isIntersecting: boolean) =>
+    act(() =>
+      callbacks.forEach((callback) =>
+        callback([{ isIntersecting } as IntersectionObserverEntry], {} as IntersectionObserver),
+      ),
+    );
+}
 
 function row(overrides: Partial<Testimonial> = {}): Testimonial {
   return {
@@ -123,6 +150,19 @@ describe("TestimonialWall", () => {
     drops.forEach((drop, x) => x && expect(drop).not.toBe(drops[x - 1]));
     // Not a plain 20, 40, 60, 80 in turn.
     expect(drops.slice(0, 4)).not.toEqual(["20", "40", "60", "80"]);
+  });
+
+  it("draws only the run a reader meets, without a mesh, until it comes within a screen of view", () => {
+    const inView = observe();
+    render(<TestimonialWall testimonials={rows(13)} />);
+    const cards = () => scroller().querySelectorAll("figure");
+    expect(cards()).toHaveLength(26);
+    expect(readable()).toHaveLength(13);
+    expect(scroller().querySelector("[data-mesh], [data-grain]")).toBeNull();
+
+    inView(true);
+    expect(cards()).toHaveLength(104);
+    expect(scroller().querySelectorAll(":scope figure > [data-mesh]")).toHaveLength(104);
   });
 
   it("takes the copies out of the tab order", () => {
@@ -301,11 +341,13 @@ describe("TestimonialWall", () => {
     });
 
     it("holds still while it is off screen", () => {
-      const shown = scrollIntoView();
+      const inView = observe();
       render(<TestimonialWall testimonials={rows(13)} />);
-      shown(0);
+      inView(true);
+      expect(drift()!.state).toBe("running");
+      inView(false);
       expect(drift()!.state).toBe("paused");
-      shown(0.2);
+      inView(true);
       expect(drift()!.state).toBe("running");
     });
 

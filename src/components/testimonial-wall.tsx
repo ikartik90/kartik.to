@@ -4,6 +4,7 @@ import { useId, useLayoutEffect, useRef } from "react";
 import { css } from "../../styled-system/css";
 import type { Testimonial } from "@/domain/testimonial";
 import { useDragScroll } from "@/hooks/use-drag-scroll";
+import { useNearView } from "@/hooks/use-near-view";
 import { TestimonialQuote, type MeshShape, type MeshTint } from "./testimonial-quote";
 
 /** Slow enough to read a card as it passes. */
@@ -89,6 +90,7 @@ function useDrift(
   sectionRef: React.RefObject<HTMLElement | null>,
   stripRef: React.RefObject<HTMLDivElement | null>,
   count: number,
+  copied: boolean,
 ) {
   useLayoutEffect(() => {
     const section = sectionRef.current;
@@ -229,7 +231,7 @@ function useDrift(
       window.removeEventListener("pointerup", settle);
       window.removeEventListener("keydown", onKey);
     };
-  }, [sectionRef, stripRef, count]);
+  }, [sectionRef, stripRef, count, copied]);
 }
 
 /** Cosmic Track's three colours, taken in turn. */
@@ -247,8 +249,10 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
+  // Until the wall nears the screen, only the run a reader meets, without meshes: the first screens stay light.
+  const near = useNearView(sectionRef);
 
-  useDrift(sectionRef, stripRef, testimonials.length);
+  useDrift(sectionRef, stripRef, testimonials.length, near);
   useDragScroll(stripRef, {
     landing: (velocity) => {
       const strip = stripRef.current;
@@ -271,6 +275,7 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
       <div ref={stripRef} className={stripStyle} data-testimonial-strip="">
         <div className={trackStyle}>
           {Array.from({ length: RUNS }, (_, copy) =>
+            (near || copy === HOME_RUN) &&
             columns.map((column) => (
               <div
                 key={`${copy}:${column}`}
@@ -287,6 +292,7 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
                         testimonial={run[index]}
                         tint={TINTS[index % TINTS.length]}
                         shape={SHAPES[index % SHAPES.length]}
+                        bare={!near}
                       />
                     </div>
                   );

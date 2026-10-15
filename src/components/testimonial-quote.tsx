@@ -46,9 +46,11 @@ export interface TestimonialQuoteProps {
   /** The mesh under the card's foot: its colour and its wave. */
   tint: MeshTint;
   shape: MeshShape;
+  /** No mesh or grain, which are costly to draw. */
+  bare?: boolean;
 }
 
-export function TestimonialQuote({ testimonial, tint, shape }: TestimonialQuoteProps) {
+export function TestimonialQuote({ testimonial, tint, shape, bare = false }: TestimonialQuoteProps) {
   const styles = testimonialCard({ surface: "page", tint });
   const { name, avatarUrl, linkedinUrl, tagline } = testimonial;
 
@@ -63,13 +65,17 @@ export function TestimonialQuote({ testimonial, tint, shape }: TestimonialQuoteP
 
   return (
     <figure className={styles.root} data-tint={tint} data-shape={shape}>
-      <span className={styles.mesh} data-mesh="" aria-hidden>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path data-wave="back" d={WAVES[shape][0]} />
-          <path data-wave="front" d={WAVES[shape][1]} />
-        </svg>
-      </span>
-      <span className={styles.grain} data-grain="" aria-hidden />
+      {!bare && (
+        <>
+          <span className={styles.mesh} data-mesh="" aria-hidden>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+              <path data-wave="back" d={WAVES[shape][0]} />
+              <path data-wave="front" d={WAVES[shape][1]} />
+            </svg>
+          </span>
+          <span className={styles.grain} data-grain="" aria-hidden />
+        </>
+      )}
 
       <figcaption className={styles.byline}>
         <span className={styles.avatar}>
