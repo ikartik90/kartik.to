@@ -19,6 +19,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
     // Pinned: the theme resolves `system` off `prefers-color-scheme`.
     colorScheme: "light",
+    // Stills the homepage's shaders, leaves and cubes: CI's Chromium has no GPU, so each animated WebGL frame is read
+    // back on the main thread, and clicks and keys queue behind it past the test timeout.
+    contextOptions: { reducedMotion: "reduce" },
     // Vercel Deployment Protection bypass; the cookie carries it onto RSC and chunk requests.
     ...(bypassSecret
       ? {
