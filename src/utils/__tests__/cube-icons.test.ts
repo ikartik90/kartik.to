@@ -17,6 +17,12 @@ describe("startingFaces", () => {
     expect(new Set(faces.map((cube) => cube[0].key)).size).toBe(25);
     expect(faces.every((cube) => cube.length === 5)).toBe(true);
   });
+
+  it("gives every face of every cube an icon when there are fewer icons than cubes", () => {
+    const faces = startingFaces(pool(10), 25);
+    expect(faces).toHaveLength(25);
+    expect(faces.every((cube) => cube.length === 5 && cube.every(Boolean))).toBe(true);
+  });
 });
 
 describe("refreshFaces", () => {

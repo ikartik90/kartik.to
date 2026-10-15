@@ -3,22 +3,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The sheets' content and the covers' drawings are tested by rendering the page; here they only stand in.
+// The sheets' content and the cards' covers are tested on their own; here they only stand in.
 vi.mock("../onboarding-sheet", () => ({ OnboardingSheet: () => <p>Onboarding sheet</p> }));
 vi.mock("../shift-sheet", () => ({ ShiftSheet: () => <p>Shift scheduling sheet</p> }));
 vi.mock("../check-ins-sheet", () => ({ CheckInsSheet: () => <p>Check-ins sheet</p> }));
-vi.mock("../card-figures", () => {
-  const Figure = () => <svg role="img" aria-label="Figure" />;
-  return {
-    DesignSystemFigure: Figure,
-    ShiftSchedulingFigure: Figure,
-    CheckInsFigure: Figure,
-    OnboardingFigure: Figure,
-  };
-});
+vi.mock("../display-cover", () => ({ DisplayCover: () => <span data-cover="" /> }));
 
 import { openProjectSheet } from "@/utils/project-sheet-channel";
-import { SPOTWORK } from "../data";
+import { OPEN_CARDS, SPOTWORK } from "../data";
 import { ProjectStacks } from "../project-stacks";
 
 const matchMedia = window.matchMedia;
@@ -54,13 +46,14 @@ afterEach(() => {
 const sheet = () => document.querySelector<HTMLDialogElement>("dialog[open]");
 
 describe("ProjectStacks", () => {
-  it("heads the section with the outcome, over a card per project", () => {
+  it("heads the section with the outcome, over a covered card per project whose sheet is ready", () => {
     render(<ProjectStacks />);
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(SPOTWORK.headline);
     const cards = [...document.querySelectorAll("[data-sheet-card]")];
     expect(cards.map((card) => card.querySelector("[data-face-text]")?.textContent)).toEqual(
-      SPOTWORK.cards.map(({ title, sentence }) => title + sentence),
+      OPEN_CARDS.map(({ title, sentence }) => title + sentence),
     );
+    for (const card of cards) expect(card.querySelector("[data-cover]")).not.toBeNull();
   });
 
   // As the server renders it, so it plays from the first paint: the arrows show until the carousel finds it can't scroll.
@@ -79,7 +72,7 @@ describe("ProjectStacks", () => {
     expect(container.querySelector("section")?.id).toBe("work");
   });
 
-  it("links check-ins, onboarding and shift scheduling to their sheets' addresses, and says the design system is coming this week", () => {
+  it("links check-ins, onboarding and shift scheduling to their sheets' addresses, and leaves the design system out", () => {
     render(<ProjectStacks />);
     const openers = screen.getAllByRole("link", { name: /:/ });
     expect(openers.map((link) => link.getAttribute("href"))).toEqual([
@@ -88,8 +81,9 @@ describe("ProjectStacks", () => {
       "/projects/shift-scheduling",
     ]);
     for (const link of openers) expect(link.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(screen.getAllByText("Coming this week")).toHaveLength(1);
-    expect(document.querySelector('[data-sheet-card="design-system"]')?.tagName).toBe("DIV");
+    expect(document.querySelectorAll("[data-sheet-card]")).toHaveLength(3);
+    expect(document.querySelector('[data-sheet-card="design-system"]')).toBeNull();
+    expect(screen.queryByText("Coming this week")).toBeNull();
   });
 
   it("opens the check-ins sheet from its card", () => {
@@ -408,8 +402,7 @@ describe("ProjectStacks without a cursor", () => {
     );
   const slides = () => [...document.querySelectorAll("[data-carousel-slide]")];
   const cards = () => [...document.querySelectorAll("[data-sheet-card]")];
-  const held = () => cards().map((card) => card.hasAttribute("data-figure-held"));
-  const figure = (i: number) => cards()[i].querySelector("svg[aria-label='Figure']");
+  const held = () => cards().map((card) => card.hasAttribute("data-hover-held"));
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -435,9 +428,9 @@ describe("ProjectStacks without a cursor", () => {
     show(slides()[0], "whole");
     show(slides()[1], "part");
     act(() => vi.advanceTimersByTime(99));
-    expect(held()).toEqual([false, false, false, false]);
+    expect(held()).toEqual([false, false, false]);
     act(() => vi.advanceTimersByTime(1));
-    expect(held()).toEqual([true, false, false, false]);
+    expect(held()).toEqual([true, false, false]);
   });
 
   it("keeps the hover while any of the card shows, and resets it once the card is out of sight", () => {
@@ -446,15 +439,15 @@ describe("ProjectStacks without a cursor", () => {
     act(() => vi.advanceTimersByTime(100));
 
     show(slides()[0], "part");
-    expect(held()).toEqual([true, false, false, false]);
+    expect(held()).toEqual([true, false, false]);
 
     show(slides()[0], "gone");
-    expect(held()).toEqual([false, false, false, false]);
+    expect(held()).toEqual([false, false, false]);
 
     show(slides()[0], "whole");
-    expect(held()).toEqual([false, false, false, false]);
+    expect(held()).toEqual([false, false, false]);
     act(() => vi.advanceTimersByTime(100));
-    expect(held()).toEqual([true, false, false, false]);
+    expect(held()).toEqual([true, false, false]);
   });
 
   it("counts a card peeking past the one in view as out of sight", () => {
@@ -462,27 +455,16 @@ describe("ProjectStacks without a cursor", () => {
     show(slides()[0], "whole");
     act(() => vi.advanceTimersByTime(100));
     show(slides()[0], "peek");
-    expect(held()).toEqual([false, false, false, false]);
-  });
-
-  // Winding the hover back takes up to two seconds; a card brought back sooner would come in still winding.
-  it("draws the figure afresh, at rest, while the card is out of sight", () => {
-    render(<ProjectStacks />);
-    show(slides()[0], "whole");
-    act(() => vi.advanceTimersByTime(100));
-    const drawn = figure(0);
-
-    show(slides()[0], "gone");
-    expect(figure(0)).not.toBe(drawn);
+    expect(held()).toEqual([false, false, false]);
   });
 
   // iOS keeps the card a finger last touched hovered, on screen or off.
-  it("gives a touch nothing to hover: the card carries its figure's hover hooks only while it plays", () => {
+  it("gives a touch nothing to hover: the card carries its hover hook only while it plays", () => {
     render(<ProjectStacks />);
-    expect(cards()[0].hasAttribute("data-play")).toBe(false);
+    expect(cards()[0].hasAttribute("data-hover-brand")).toBe(false);
     show(slides()[0], "whole");
     act(() => vi.advanceTimersByTime(100));
-    expect(cards()[0].hasAttribute("data-play")).toBe(true);
+    expect(cards()[0].hasAttribute("data-hover-brand")).toBe(true);
   });
 
   it("leaves a card shown with a cursor to the cursor", () => {
@@ -493,8 +475,8 @@ describe("ProjectStacks without a cursor", () => {
     render(<ProjectStacks />);
     show(slides()[0], "whole");
     act(() => vi.advanceTimersByTime(100));
-    expect(held()).toEqual([false, false, false, false]);
-    expect(cards()[0].hasAttribute("data-play")).toBe(true);
+    expect(held()).toEqual([false, false, false]);
+    expect(cards()[0].hasAttribute("data-hover-brand")).toBe(true);
   });
 
   // Each change would re-render every card, mid-drag.

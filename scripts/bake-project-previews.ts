@@ -1,5 +1,5 @@
 // Bakes each homepage project's link preview: its card's face, hovered, filling 1200 × 630, without its frame or icon.
-// Run against a dev server whenever a card's words or figure change:
+// Run against a dev server whenever a card's words or cover change:
 //   node scripts/bake-project-previews.ts [https://localhost:3000]
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -7,12 +7,13 @@ import { chromium } from "@playwright/test";
 import { OPEN_CARDS, projectPreviewPath } from "../src/app/_project-stacks/data.ts";
 
 const BASE = process.argv[2] ?? "https://localhost:3000";
-// Drawn at 1.5x, so the face is about as tall as a full-size card (400px), the size its figure is drawn for.
+// Drawn at 1.5x, so the face is about as tall as a full-size card (400px), the size its cover is drawn for.
 const SCALE = 1.5;
 const STAGE = { width: 1200 / SCALE, height: 630 / SCALE };
 const clip = { x: 0, y: 0, ...STAGE };
 
-const browser = await chromium.launch();
+// On the Mac's GPU: headless Chromium's software WebGL draws the covers' shaders wrong.
+const browser = await chromium.launch({ args: ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu"] });
 const page = await browser.newPage({
   ignoreHTTPSErrors: true,
   viewport: { width: 1440, height: 900 },

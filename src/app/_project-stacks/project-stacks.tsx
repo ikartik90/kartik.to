@@ -77,7 +77,7 @@ export function ProjectStacks({ id, sheet, base }: { id?: string; sheet?: string
   const entering = useCardsEnter(scrollerRef);
   // Without a cursor to hover them, the cards whole on screen play as if hovered.
   const hasCursor = useHasCursor();
-  const whole = useWholeSlides(scrollerRef, section.cards, !hasCursor);
+  const whole = useWholeSlides(scrollerRef, OPEN_CARDS, !hasCursor);
 
   return (
     <section
@@ -95,13 +95,13 @@ export function ProjectStacks({ id, sheet, base }: { id?: string; sheet?: string
         size="medium"
         controlsProps={{ className: stepOpening, ...openingStep(1) }}
       >
-        {section.cards.map((card, i) => (
+        {OPEN_CARDS.map((card, i) => (
           <SheetCard
             key={card.id}
             card={card}
             base={base}
             shown={hasCursor ? undefined : whole.has(i)}
-            onOpen={OPEN_CARDS.includes(card) ? (opened) => open(opened.id) : undefined}
+            onOpen={(opened) => open(opened.id)}
           />
         ))}
       </Carousel>
