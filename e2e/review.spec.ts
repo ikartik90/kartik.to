@@ -64,9 +64,9 @@ test.describe("review copy", () => {
     await expect(sheet).toBeVisible();
     await expect(page).toHaveURL(/\/dive\/projects\/shift-scheduling$/);
 
-    const next = sheet.getByRole("link", { name: /^Next/ });
-    await expect(next).toHaveAttribute("href", "/dive/projects/onboarding");
-    await next.click();
+    const previous = sheet.getByRole("link", { name: /^Previous/ });
+    await expect(previous).toHaveAttribute("href", "/dive/projects/onboarding");
+    await previous.click();
     await expect(page.getByRole("dialog", { name: "Company onboarding" })).toBeVisible();
     await expect(page).toHaveURL(/\/dive\/projects\/onboarding$/);
 

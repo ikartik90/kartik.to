@@ -23,11 +23,10 @@ export const SPOTWORK: ProjectSection = {
   headline: "At Spotwork, I led the rebuild of the staffing platform, doubling daily shift postings in eight months.",
   cards: [
     {
-      id: "shift-scheduling",
-      title: "Shift scheduling",
-      sentence: "Made posted schedules extendable and cut scheduling clicks by 81%",
-      figure: "shift-scheduling",
-      replaces: "/work/redesigning-shift-scheduling",
+      id: "check-ins",
+      title: "Check-ins and time tracking",
+      sentence: "Rebuilt check-ins and time tracking, cutting attendance disputes by 65%",
+      figure: "check-ins",
     },
     {
       id: "onboarding",
@@ -36,10 +35,11 @@ export const SPOTWORK: ProjectSection = {
       figure: "onboarding",
     },
     {
-      id: "check-ins",
-      title: "Check-ins and time tracking",
-      sentence: "Rebuilt check-ins and time tracking, cutting attendance disputes by 65%",
-      figure: "check-ins",
+      id: "shift-scheduling",
+      title: "Shift scheduling",
+      sentence: "Made posted schedules extendable and cut scheduling clicks by 81%",
+      figure: "shift-scheduling",
+      replaces: "/work/redesigning-shift-scheduling",
     },
     {
       id: "design-system",
