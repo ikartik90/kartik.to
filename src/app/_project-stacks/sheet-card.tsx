@@ -1,14 +1,14 @@
 "use client";
 
-import { Fragment, useEffect, useRef, type CSSProperties, type HTMLAttributes } from "react";
+import { Fragment, useEffect, useId, useRef, type CSSProperties, type HTMLAttributes } from "react";
 import { css, cx } from "../../../styled-system/css";
 import { carousel } from "../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
 import { useInView } from "@/hooks/use-in-view";
+import { cubicBezier } from "@/utils/eased-fade";
 import { isPlainClick } from "@/utils/plain-click";
-import { CheckInsFigure, DesignSystemFigure, OnboardingFigure, ShiftSchedulingFigure } from "./card-figures";
 import { projectPath, type ProjectCard } from "./data";
-import { figureHost } from "./figure";
+import { DisplayCover } from "./display-cover";
 import { useShownHover } from "./use-shown-hover";
 
 // One card per project, which opens its sheet. `data-sheet-source` marks the card's surface. Its face's text
@@ -64,7 +64,7 @@ const cardStyle = css({
   "html[data-keyboard-focus] &": { "&:focus-visible": ring },
 });
 
-// On the figure's ground, framed by a line that keeps to the crop (`Frame`).
+// On the cover's ground, framed by a line that keeps to the crop (`Frame`).
 const surfaceStyle = css({
   position: "relative",
   display: "block",
@@ -107,47 +107,63 @@ const frameStyle = css({
     stroke: "currentColor",
     strokeWidth: "token(spacing.xxs)",
   },
-  // On a card: over the figure, at the surface's crop and opening with it.
+  // On a card: over the cover, at the surface's crop and opening with it.
   "&[data-crop]": {
     zIndex: 3,
-    transition: "color 300ms ease",
     _hasCursor: { ...frameAt(INSET_X, INSET_Y), "& rect": frameSize(INSET_X, INSET_Y) },
     "& rect": { transition: `x ${HOVER_EASE}, y ${HOVER_EASE}, width ${HOVER_EASE}, height ${HOVER_EASE}` },
+    // Restated here, where it outranks the line's own.
+    "& rect[data-brand]": {
+      transition: `opacity 300ms ease, x ${HOVER_EASE}, y ${HOVER_EASE}, width ${HOVER_EASE}, height ${HOVER_EASE}`,
+    },
   },
   "[data-sheet-card]:hover &": FRAME_OPEN,
   "html[data-keyboard-focus] [data-sheet-card]:focus-visible &": FRAME_OPEN,
-  "[data-hover-heading]:is(:hover, [data-figure-held], html[data-keyboard-focus] :focus-visible) &": {
-    color: "color-mix(in srgb, token(colors.text.highlight) 50%, transparent)",
+  // A card's line turns to the brand colour along its top while hovered, easing out down its sides.
+  "& rect[data-brand]": { opacity: 0 },
+  "& stop": { stopColor: "token(colors.text.highlight)" },
+  "[data-hover-brand]:is(:hover, [data-hover-held], html[data-keyboard-focus] :focus-visible) &": {
+    "& rect[data-brand]": { opacity: 0.6 },
   },
 });
 
 const FRAME_CORNER = { x: "var(--frame-x)", y: "var(--frame-y)" } as CSSProperties;
+// Whole at the top, clear a quarter of the way down; 65 stops, so the ramp shows no edge. Rounded, so the server's
+// render and the browser's agree.
+const brandEase = cubicBezier(0.44, 0.12, 0.24, 1);
+const BRAND_STOPS = Array.from({ length: 65 }, (_, i) => i / 64).map((t) => ({
+  offset: t,
+  opacity: Number(brandEase(1 - t).toFixed(4)),
+}));
 
-/** The line round a card (`crop`, keeping to its crop) or its sheet. */
+/** The line round a card (`crop`, keeping to its crop, its top brand while hovered) or its sheet. */
 export function Frame({ crop, ...props }: { crop?: boolean } & HTMLAttributes<HTMLSpanElement>) {
+  const brand = `frame-brand${useId().replace(/[^\w-]/g, "")}`;
   return (
     <span aria-hidden className={frameStyle} data-crop={crop ? "" : undefined} {...props}>
       <svg>
+        {crop && (
+          <defs>
+            <linearGradient id={brand} x1="0" y1="0" x2="0" y2="0.25">
+              {BRAND_STOPS.map(({ offset, opacity }) => (
+                <stop key={offset} offset={offset} stopOpacity={opacity} />
+              ))}
+            </linearGradient>
+          </defs>
+        )}
         <rect style={FRAME_CORNER} />
+        {crop && <rect data-brand="" style={{ ...FRAME_CORNER, stroke: `url(#${brand})` }} />}
       </svg>
     </span>
   );
 }
 
-// The figure under the card's heading, filling its face.
-const figureLayerStyle = css({ position: "absolute", inset: 0 });
-
-const FIGURES = {
-  "design-system": { Figure: DesignSystemFigure, host: figureHost({ explode: true, hoverInk: "both", hoverHeading: true }) },
-  "shift-scheduling": { Figure: ShiftSchedulingFigure, host: figureHost({ play: true, hoverInk: "both", hoverHeading: true }) },
-  "check-ins": { Figure: CheckInsFigure, host: figureHost({ play: true, hoverInk: "both", hoverHeading: true }) },
-  onboarding: { Figure: OnboardingFigure, host: figureHost({ play: true, hoverInk: "both", hoverHeading: true }) },
-};
+// The cover under the card's heading, filling its face.
+const coverLayerStyle = css({ position: "absolute", inset: 0 });
 
 // The card is the link, so the icon is drawn, not a button: a ring at rest, the brand fill while the card is
 // hovered.
 const lit = { backgroundColor: "bg.button.accent.hover", color: "field.text.active", boxShadow: "none" };
-const soonLit = { backgroundColor: "text.highlight", color: "bg.canvas", boxShadow: "none" };
 
 const expandStyle = css({
   position: "absolute",
@@ -169,23 +185,9 @@ const expandStyle = css({
   transition: `background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, ${RIDE}`,
   "& svg": { width: "token(spacing.xxl)", height: "token(spacing.xxl)", display: "block" },
   "& svg path[stroke]": { stroke: "currentColor" },
-  // In the icon's place on a card whose sheet isn't ready, on the title's line so the heading keeps its measure.
-  "&[data-soon]": {
-    insetBlockStart: "calc(token(spacing.xl) - token(spacing.xs))",
-    width: "auto",
-    height: "auto",
-    paddingBlock: "xs",
-    paddingInline: "md",
-    textStyle: "caption",
-    whiteSpace: "nowrap",
-  },
-  // On the figure's hook, not the card, so a touch can't light it (`SheetCard`).
-  "[data-hover-heading]:is(:hover, [data-figure-held]) &": { ...RODE, "&:not([data-soon])": lit, "&[data-soon]": soonLit },
-  "html[data-keyboard-focus] [data-sheet-card]:focus-visible &": {
-    ...RODE,
-    "&:not([data-soon])": lit,
-    "&[data-soon]": soonLit,
-  },
+  // On the card's hover hook, not the card, so a touch can't light it (`SheetCard`).
+  "[data-hover-brand]:is(:hover, [data-hover-held]) &": { ...RODE, ...lit },
+  "html[data-keyboard-focus] [data-sheet-card]:focus-visible &": { ...RODE, ...lit },
 });
 
 // The card's face, at the slide's ratio. No automatic minimum: Safari otherwise lets the content stretch the ratio by
@@ -227,7 +229,7 @@ const sheetFaceStyle = css({
 
 const faceTextStyle = css({ display: "flex", flexDirection: "column", gap: "xs" });
 
-// Over the figure, clear of the expand icon. It rides the surface's top-left corner. It and the icon slide on layers
+// Over the cover, clear of the expand icon. It rides the surface's top-left corner. It and the icon slide on layers
 // they keep (`willChange`), or each step redraws the text and its letters snap to the pixels one by one. They slide by
 // `--ride-*` (registered in `SheetCard`), not a `translate` transition: Safari runs that ahead of the page's clock, out
 // of step with the crop.
@@ -252,33 +254,24 @@ const sheetTextStyle = css({
   "& > [data-face-title]": { marginBlockStart: "calc(token(spacing.4xl) / 2 - 0.5lh)" },
 });
 
-// The heading turns to the brand colour with the figure.
+// The eyebrow turns to the brand colour while the card is hovered; the heading stays.
 const faceTitleStyle = css({
   textStyle: "caption",
   color: "text.body",
   transition: "color 300ms ease",
-  "[data-hover-heading]:is(:hover, [data-figure-held], html[data-keyboard-focus] :focus-visible) &": { color: "text.highlight" },
+  "[data-hover-brand]:is(:hover, [data-hover-held], html[data-keyboard-focus] :focus-visible) &": { color: "text.highlight" },
 });
-const faceHeadingStyle = css({
-  color: "text.title",
-  textWrap: "balance",
-  transition: "color 300ms ease",
-  "[data-hover-heading]:is(:hover, [data-figure-held], html[data-keyboard-focus] :focus-visible) &": { color: "text.highlight" },
-});
+const faceHeadingStyle = css({ color: "text.title", textWrap: "balance" });
 const cardHeadingStyle = css({ textStyle: "subheading" });
 const sheetHeadingStyle = css({ textStyle: "subheadingLarge" });
 // Each word its own box, so the sheet can bring the heading in a line at a time.
 const sheetWordStyle = css({ display: "inline-block" });
 
-/**
- * On the card (`place="card"`), its text over its figure, or at the top of the sheet, larger and alone. Each change of
- * `resets` draws the figure afresh, at rest.
- */
-export function CardFace({ card, place, resets }: { card: ProjectCard; place: "card" | "sheet"; resets?: number }) {
-  const textRef = useRef<HTMLSpanElement>(null);
+/** On the card (`place="card"`), its text over its cover, or at the top of the sheet, larger and alone. */
+export function CardFace({ card, place }: { card: ProjectCard; place: "card" | "sheet" }) {
   const onCard = place === "card";
   const text = (
-    <span ref={textRef} className={cx(faceTextStyle, onCard ? cardTextStyle : sheetTextStyle)} data-face-text="">
+    <span className={cx(faceTextStyle, onCard ? cardTextStyle : sheetTextStyle)} data-face-text="">
       <span className={faceTitleStyle} data-face-title="">
         {card.title}
       </span>
@@ -298,11 +291,10 @@ export function CardFace({ card, place, resets }: { card: ProjectCard; place: "c
   );
 
   if (!onCard) return <span className={sheetFaceStyle}>{text}</span>;
-  const { Figure } = FIGURES[card.figure];
   return (
     <span className={faceStyle}>
-      <span className={figureLayerStyle} data-face-picture="">
-        <Figure key={resets} headingRef={textRef} />
+      <span className={coverLayerStyle} data-face-picture="">
+        <DisplayCover card={card} />
       </span>
       <span className={faceCardStyle}>{text}</span>
     </span>
@@ -332,7 +324,7 @@ export function SheetCard({
 }) {
   const slideRef = useRef<HTMLDivElement>(null);
   const inSight = useInView(slideRef, { ...IN_SIGHT, enabled: shown !== undefined });
-  const { on: held, resets } = useShownHover(shown ?? false, inSight, SHOWN_HOVER_DELAY);
+  const { on: held } = useShownHover(shown ?? false, inSight, SHOWN_HOVER_DELAY);
   useEffect(() => {
     for (const name of ["--ride-x", "--ride-y"]) {
       try {
@@ -345,23 +337,16 @@ export function SheetCard({
 
   const surface = (
     <span className={surfaceStyle} data-sheet-source="">
-      <CardFace card={card} place="card" resets={resets} />
+      <CardFace card={card} place="card" />
       <Frame crop />
-      {card.soon ? (
-        <span className={expandStyle} data-soon="">
-          Coming this week
-        </span>
-      ) : (
-        <span aria-hidden className={expandStyle}>
-          <ExpandIcon />
-        </span>
-      )}
+      <span aria-hidden className={expandStyle}>
+        <ExpandIcon />
+      </span>
     </span>
   );
   // Without a cursor, iOS keeps the card a finger last touched hovered, on screen or off: the card offers its hover
-  // hooks only while it plays.
-  const host =
-    shown === undefined || held ? { ...FIGURES[card.figure].host, "data-figure-held": held ? "" : undefined } : {};
+  // hook only while it plays.
+  const host = shown === undefined || held ? { "data-hover-brand": "", "data-hover-held": held ? "" : undefined } : {};
 
   return (
     <div ref={slideRef} className={cx(carouselStyles.slide, slideStyle)} data-carousel-slide="">
