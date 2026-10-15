@@ -79,13 +79,13 @@ describe("ProjectStacks", () => {
     expect(container.querySelector("section")?.id).toBe("work");
   });
 
-  it("links shift scheduling, onboarding and check-ins to their sheets' addresses, and says the design system is coming this week", () => {
+  it("links check-ins, onboarding and shift scheduling to their sheets' addresses, and says the design system is coming this week", () => {
     render(<ProjectStacks />);
     const openers = screen.getAllByRole("link", { name: /:/ });
     expect(openers.map((link) => link.getAttribute("href"))).toEqual([
-      "/projects/shift-scheduling",
-      "/projects/onboarding",
       "/projects/check-ins",
+      "/projects/onboarding",
+      "/projects/shift-scheduling",
     ]);
     for (const link of openers) expect(link.getAttribute("aria-haspopup")).toBe("dialog");
     expect(screen.getAllByText("Coming this week")).toHaveLength(1);
@@ -148,7 +148,7 @@ describe("ProjectStacks", () => {
     const nav = () => within(sheet()!).getByRole("navigation", { name: "More projects" });
     const offered = () => within(nav()).getAllByRole("link").map((link) => link.textContent);
 
-    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
+    fireEvent.click(screen.getByRole("link", { name: /^Check-ins and time tracking:/ }));
     expect(offered()).toEqual(["NextCompany onboarding"]);
     expect(within(nav()).getByRole("link", { name: /^Next/ }).getAttribute("href")).toBe("/projects/onboarding");
 
@@ -156,11 +156,11 @@ describe("ProjectStacks", () => {
     expect(sheet()?.getAttribute("aria-label")).toBe("Company onboarding");
     expect(within(sheet()!).getByText("Onboarding sheet")).toBeDefined();
     expect(window.location.pathname).toBe("/projects/onboarding");
-    expect(offered()).toEqual(["PreviousShift scheduling", "NextCheck-ins and time tracking"]);
+    expect(offered()).toEqual(["PreviousCheck-ins and time tracking", "NextShift scheduling"]);
 
     fireEvent.click(within(nav()).getByRole("link", { name: /^Next/ }));
-    expect(sheet()?.getAttribute("aria-label")).toBe("Check-ins and time tracking");
-    expect(window.location.pathname).toBe("/projects/check-ins");
+    expect(sheet()?.getAttribute("aria-label")).toBe("Shift scheduling");
+    expect(window.location.pathname).toBe("/projects/shift-scheduling");
     expect(offered()).toEqual(["PreviousCompany onboarding"]);
   });
 
@@ -175,7 +175,7 @@ describe("ProjectStacks", () => {
     expect(window.location.pathname).toBe("/");
 
     window.history.forward();
-    await waitFor(() => expect(sheet()?.getAttribute("aria-label")).toBe("Shift scheduling"));
+    await waitFor(() => expect(sheet()?.getAttribute("aria-label")).toBe("Check-ins and time tracking"));
   });
 
   it("returns to the address it opened from as it closes", async () => {
@@ -263,9 +263,9 @@ describe("ProjectStacks while its sheet moves", () => {
         }),
     );
 
-  const openShift = async () => {
+  const openCheckIns = async () => {
     render(<ProjectStacks />);
-    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
+    fireEvent.click(screen.getByRole("link", { name: /^Check-ins and time tracking:/ }));
     await end();
   };
   const next = () => fireEvent.click(within(sheet()!).getByRole("link", { name: /^Next/ }));
@@ -287,7 +287,7 @@ describe("ProjectStacks while its sheet moves", () => {
   });
 
   it("closes on Back taken as it goes to the next project, and opens where it was on Forward", async () => {
-    await openShift();
+    await openCheckIns();
     next();
     await step(() => window.history.back());
     await end();
@@ -295,11 +295,11 @@ describe("ProjectStacks while its sheet moves", () => {
 
     await step(() => window.history.forward());
     await end();
-    expect(shown()).toEqual({ path: "/projects/shift-scheduling", sheet: "Shift scheduling" });
+    expect(shown()).toEqual({ path: "/projects/check-ins", sheet: "Check-ins and time tracking" });
   });
 
   it("closes on Back taken as the next project slides in, and opens on it on Forward", async () => {
-    await openShift();
+    await openCheckIns();
     next();
     await end({ all: false });
     expect(window.location.pathname).toBe("/projects/onboarding");
@@ -313,7 +313,7 @@ describe("ProjectStacks while its sheet moves", () => {
   });
 
   it("closes from its Close button pressed as it goes to the next project", async () => {
-    await openShift();
+    await openCheckIns();
     next();
     fireEvent.click(within(sheet()!).getByRole("button", { name: "Close" }));
     await end();
@@ -322,11 +322,11 @@ describe("ProjectStacks while its sheet moves", () => {
   });
 
   it("opens again on Forward taken as Back closes it, and closes again on Back", async () => {
-    await openShift();
+    await openCheckIns();
     await step(() => window.history.back());
     await step(() => window.history.forward());
     await end();
-    expect(shown()).toEqual({ path: "/projects/shift-scheduling", sheet: "Shift scheduling" });
+    expect(shown()).toEqual({ path: "/projects/check-ins", sheet: "Check-ins and time tracking" });
 
     await step(() => window.history.back());
     await end();
@@ -340,13 +340,13 @@ describe("ProjectStacks under a base", () => {
   it("links its cards and its sheets' next and previous to the project addresses under it", () => {
     render(<ProjectStacks base="/dive" />);
     expect(screen.getAllByRole("link", { name: /:/ }).map((link) => link.getAttribute("href"))).toEqual([
-      "/dive/projects/shift-scheduling",
-      "/dive/projects/onboarding",
       "/dive/projects/check-ins",
+      "/dive/projects/onboarding",
+      "/dive/projects/shift-scheduling",
     ]);
 
-    fireEvent.click(screen.getByRole("link", { name: /^Shift scheduling:/ }));
-    expect(window.location.pathname).toBe("/dive/projects/shift-scheduling");
+    fireEvent.click(screen.getByRole("link", { name: /^Check-ins and time tracking:/ }));
+    expect(window.location.pathname).toBe("/dive/projects/check-ins");
     const next = within(sheet()!).getByRole("link", { name: /^Next/ });
     expect(next.getAttribute("href")).toBe("/dive/projects/onboarding");
 
