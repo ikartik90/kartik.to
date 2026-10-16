@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { css, cx } from "../../styled-system/css";
 import { pageOpening } from "../../styled-system/recipes";
 import { ButtonLink } from "./button-link";
@@ -121,6 +121,7 @@ const pillStyle = css({
 const dotStyle = css({ width: "listBullet", height: "listBullet", borderRadius: "full", backgroundColor: "text.highlight" });
 
 const headingStyle = css({ gridArea: "heading", textStyle: "title", color: "text.title", textWrap: "balance", margin: 0 });
+const headingLineStyle = css({ display: "block" });
 
 // From md the first paragraph's cap height lines up with the heading's x-height. The hidden line, in the heading's
 // type, trimmed to its baseline and pulled up by its `1ex`, is as tall as the heading's top-to-x-height; the first
@@ -179,7 +180,12 @@ export function HomeHero() {
           <span className={pillStyle}>{HOME_HERO.status.location}</span>
         </div>
         <h1 className={cx(headingStyle, lineOpening)} {...openingLine(1)}>
-          {HOME_HERO.heading}
+          {HOME_HERO.heading.map((line, i) => (
+            <Fragment key={line}>
+              {i > 0 && " "}
+              <span className={headingLineStyle}>{line}</span>
+            </Fragment>
+          ))}
         </h1>
         <div className={cx(ledeStyle, stepOpening, stepDelay)} {...openingStep({ stacked: 0, beside: 1 })}>
           <div aria-hidden className={ledeGaugeStyle}>

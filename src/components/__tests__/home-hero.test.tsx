@@ -10,11 +10,11 @@ import { HomeHero } from "../home-hero";
 afterEach(() => cleanup());
 
 describe("HomeHero", () => {
-  it("is the page's one heading, its words in one run the browser balances over its lines", () => {
+  it("is the page's one heading, in two lines", () => {
     render(<HomeHero />);
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading.textContent).toBe("Design craft meets engineering prowess");
-    expect(heading.children).toHaveLength(0);
+    expect([...heading.children].map((line) => line.textContent)).toEqual(["Design craft meets", "engineering prowess"]);
   });
 
   it("introduces Kartik in three paragraphs", () => {
