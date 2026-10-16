@@ -1,7 +1,7 @@
 // The homepage hero's words.
 
 export const HOME_HERO = {
-  heading: "Design craft meets engineering prowess",
+  heading: ["Design craft meets", "engineering prowess"],
   lede: [
     "I'm Kartik Iyer, a Toronto-based designer and builder.",
     "I've dedicated over 12 years listening to customers and cross-functional teams, turning their roughly articulated ideas into coherent products.",
