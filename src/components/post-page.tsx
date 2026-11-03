@@ -6,7 +6,6 @@ import { JsonLd } from "@/components/json-ld";
 import { POST_CATEGORIES } from "@/data/post-categories";
 import type { PostCategory } from "@/domain/post";
 import { isAdmin } from "@/lib/auth/server";
-import { canonicalPath } from "@/app/_project-stacks/data";
 import { postMetadata } from "@/lib/post-metadata";
 import { findMovedPostPath, resolvePost } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
@@ -19,10 +18,7 @@ export async function postPageMetadata(
   slug: string,
 ): Promise<Metadata> {
   const post = await resolvePost(slug, category, { allowDraft: false });
-  const path = getPostReadUrl(category, slug);
-  return postMetadata(post, path, POST_CATEGORIES[category].label, {
-    canonical: canonicalPath(path),
-  });
+  return postMetadata(post, getPostReadUrl(category, slug), POST_CATEGORIES[category].label);
 }
 
 export async function PostPage({

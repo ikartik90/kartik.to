@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" style="display: block; clip-path: circle(50%);" width="20" height="20" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Flag">
+<g>
+<path id="Vector_2" d="M0 0V22H6.1875L11 19.25L15.8125 22H22V0H15.8125L11 2.75L6.1875 0H0Z" fill="#D80027"/>
+<path id="Vector_3" d="M6.1875 0H15.8125V22H6.1875V0Z" fill="#EEEEEE"/>
+<path id="Vector_4" d="M12.9336 12.418L14.8242 11.4727L13.8789 11V10.0547L11.9453 11L12.9336 9.10938H11.9453L11 7.64844L10.0547 9.06641H9.06641L10.0547 11L8.12109 10.0547V11L7.17578 11.4727L9.10938 12.418L8.59375 13.4062H10.5273V14.8242H11.4727V13.4062H13.4062L12.9336 12.418Z" fill="#D80027"/>
+</g>
+</g>
+</svg>

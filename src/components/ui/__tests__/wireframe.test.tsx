@@ -52,6 +52,38 @@ describe("Skeleton shimmer", () => {
   });
 });
 
+describe("Wireframe as its child", () => {
+  it("lends its scope to its one child in place of a box of its own", () => {
+    const { container } = render(
+      <Wireframe asChild mode="loading">
+        <section className="own">
+          <Typography tag="p" type="bodySmall">
+            Shift role
+          </Typography>
+        </section>
+      </Wireframe>,
+    );
+    const section = container.firstElementChild as HTMLElement;
+    expect(section.tagName).toBe("SECTION");
+    expect(section.className).toContain("own");
+    expect(section.className).toContain("wireframe");
+    expect(section.hasAttribute("inert")).toBe(true);
+    expect(section.getAttribute("aria-busy")).toBe("true");
+    expect(bars(container)).toHaveLength(1);
+  });
+
+  it("leaves its child as it is while off", () => {
+    const { container } = render(
+      <Wireframe asChild enabled={false}>
+        <section className="own" aria-busy="false">
+          Shift role
+        </section>
+      </Wireframe>,
+    );
+    expect(container.innerHTML).toBe('<section class="own" aria-busy="false">Shift role</section>');
+  });
+});
+
 describe("Wireframe scope", () => {
   it("leaves components untouched outside it", () => {
     const { container } = render(

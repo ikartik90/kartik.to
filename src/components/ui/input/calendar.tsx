@@ -160,7 +160,7 @@ export type CalendarBand = {
 
 const DRAG_THRESHOLD = 3;
 
-/** Must match the 200ms page-turn animation in the `calendar` recipe (recipes/calendar.ts). */
+/** Must match the 200ms page-turn animation in the `calendar` recipe (calendar.recipe.ts). */
 const PUSH_MS = 200;
 
 /** Strict overlap: touching edges don't count. */

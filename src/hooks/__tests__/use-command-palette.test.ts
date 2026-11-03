@@ -10,7 +10,7 @@ import { useMetadataPanelStore } from "@/store/metadata-panel";
 import { autosaveKey } from "@/utils/editor-autosave";
 import { isGridDraftDirty } from "@/utils/grid-draft";
 import { subscribeProjectSheet } from "@/utils/project-sheet-channel";
-import { OPEN_CARDS } from "@/app/_project-stacks/data";
+import { PROJECT_CARDS } from "@/data/project-cards";
 
 const mockUseSession = vi.fn().mockReturnValue({ data: null });
 vi.mock("@/lib/auth/client", () => ({
@@ -1403,26 +1403,26 @@ describe("useCommandPalette", () => {
   });
 
   describe("sheets", () => {
-    const onboarding = OPEN_CARDS.find((card) => card.id === "onboarding")!;
+    const checkIns = PROJECT_CARDS.find((card) => card.id === "check-ins")!;
 
-    it("are the homepage's projects whose sheets are ready", () => {
+    it("are the homepage's projects", () => {
       const { result } = renderHook(() => useCommandPalette(close));
-      expect(result.current.sheets).toEqual(OPEN_CARDS);
+      expect(result.current.sheets).toEqual(PROJECT_CARDS);
     });
 
     it("leave out the one on screen", () => {
-      mockPathname.mockReturnValue("/projects/onboarding");
+      mockPathname.mockReturnValue("/projects/check-ins");
       const { result } = renderHook(() => useCommandPalette(close));
       expect(result.current.sheets).toEqual(
-        OPEN_CARDS.filter((card) => card !== onboarding),
+        PROJECT_CARDS.filter((card) => card !== checkIns),
       );
     });
 
     it("leave out the one on screen in the review copy", () => {
-      mockPathname.mockReturnValue("/dive/projects/onboarding");
+      mockPathname.mockReturnValue("/dive/projects/check-ins");
       const { result } = renderHook(() => useCommandPalette(close));
       expect(result.current.sheets).toEqual(
-        OPEN_CARDS.filter((card) => card !== onboarding),
+        PROJECT_CARDS.filter((card) => card !== checkIns),
       );
     });
 
@@ -1431,10 +1431,10 @@ describe("useCommandPalette", () => {
       const stop = subscribeProjectSheet(sheet);
       const { result } = renderHook(() => useCommandPalette(close));
 
-      act(() => result.current.handleOpenSheet(onboarding));
+      act(() => result.current.handleOpenSheet(checkIns));
       stop();
 
-      expect(sheet).toHaveBeenCalledExactlyOnceWith("onboarding");
+      expect(sheet).toHaveBeenCalledExactlyOnceWith("check-ins");
       expect(close.mock.invocationCallOrder[0]).toBeLessThan(
         sheet.mock.invocationCallOrder[0],
       );
@@ -1444,9 +1444,9 @@ describe("useCommandPalette", () => {
     it("handleOpenSheet goes to its address from any other page", () => {
       const { result } = renderHook(() => useCommandPalette(close));
 
-      act(() => result.current.handleOpenSheet(onboarding));
+      act(() => result.current.handleOpenSheet(checkIns));
 
-      expect(mockPush).toHaveBeenCalledWith("/projects/onboarding");
+      expect(mockPush).toHaveBeenCalledWith("/projects/check-ins");
       expect(close).toHaveBeenCalledOnce();
     });
   });
@@ -1474,20 +1474,6 @@ describe("useCommandPalette", () => {
       const { result } = renderHook(() => useCommandPalette(close));
       await act(async () => {});
       expect(result.current.projects).toEqual([projects[1]]);
-    });
-
-    it("leave out a post a project's sheet stands in for", async () => {
-      const { getPublishedProjects } = await import("@/app/actions/post");
-      (getPublishedProjects as Mock).mockResolvedValue([
-        {
-          slug: "redesigning-shift-scheduling",
-          title: "Redesigning shift scheduling",
-        },
-        ...projects,
-      ]);
-      const { result } = renderHook(() => useCommandPalette(close));
-      await act(async () => {});
-      expect(result.current.projects).toEqual(projects);
     });
 
     it("are looked up again each time the palette opens", async () => {

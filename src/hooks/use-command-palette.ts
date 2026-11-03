@@ -40,11 +40,8 @@ import {
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { openProjectSheet } from "@/utils/project-sheet-channel";
 import { reviewBase } from "@/utils/review-path";
-import {
-  OPEN_CARDS,
-  projectPath,
-  type ProjectCard,
-} from "@/app/_project-stacks/data";
+import { PROJECT_CARDS, projectPath, type ProjectCard } from "@/data/project-cards";
+import { RESUME_PATH } from "@/data/site-paths";
 
 /** The open editor; one Save, Discard and unsaved-work check serve all three. */
 export type EditorKind = "shaderPreset" | "grid" | "document" | null;
@@ -60,7 +57,7 @@ export interface CommandPaletteHandlers {
   isPublished: boolean;
   editCategory: Post["category"];
   drafts: Post[];
-  /** The homepage's project sheets, minus the one on screen. */
+  /** The homepage's projects, minus the one on screen. */
   sheets: ProjectCard[];
   /** Published projects, minus the one being read and those a sheet stands in for. */
   projects: PostLink[];
@@ -98,6 +95,7 @@ export interface CommandPaletteHandlers {
   handleOpenProject: (project: PostLink) => void;
   /** Opens over the homepage when it's on screen; otherwise goes to the sheet's address. */
   handleOpenSheet: (card: ProjectCard) => void;
+  handleOpenResume: () => void;
   handlePublish: () => Promise<void>;
   handleDiscardDraft: () => Promise<void>;
 }
@@ -196,15 +194,12 @@ export function useCommandPalette(
     () =>
       projects.filter((project) => {
         const path = getPostReadUrl("WORK", project.slug);
-        return (
-          path !== pathname &&
-          !OPEN_CARDS.some((card) => card.replaces === path)
-        );
+        return path !== pathname;
       }),
     [projects, pathname],
   );
 
-  const sheets = OPEN_CARDS.filter((card) => projectPath(card.id, reviewBase(pathname)) !== pathname);
+  const sheets = PROJECT_CARDS.filter((card) => projectPath(card.id, reviewBase(pathname)) !== pathname);
 
   // The unpublished post being read here, if any.
   const currentDraft = useMemo(() => {
@@ -450,6 +445,11 @@ export function useCommandPalette(
   const handleOpenSheet = (card: ProjectCard) => {
     close();
     if (!openProjectSheet(card.id)) router.push(projectPath(card.id));
+  };
+
+  const handleOpenResume = () => {
+    close();
+    openInNewTab(RESUME_PATH);
   };
 
   /**
@@ -736,6 +736,7 @@ export function useCommandPalette(
     handleOpenDraft,
     handleOpenProject,
     handleOpenSheet,
+    handleOpenResume,
     handlePublish,
     handleDiscardDraft,
   };

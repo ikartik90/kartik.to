@@ -6,12 +6,13 @@ import {
 } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { HOME_GRID } from "../src/data/home-grid";
+import { HOME_HERO } from "../src/data/home-hero";
 
 const GRID_CARDS = (page: Page) =>
   page.getByRole("region", { name: HOME_GRID.heading }).getByRole("link");
 
 test.describe("public routes", () => {
-  test("the home page renders the project stack and the listing grid", async ({
+  test("the home page renders the project cards and the listing grid", async ({
     page,
     pageFailures,
   }) => {
@@ -21,9 +22,9 @@ test.describe("public routes", () => {
       "Kartik Iyer: Product Designer, Engineer, Builder",
     );
     await expect(
-      page.getByRole("heading", { level: 1, name: "Design craft meets engineering prowess" }),
+      page.getByRole("heading", { level: 1, name: HOME_HERO.heading.full.join(" ") }),
     ).toBeVisible();
-    await expect(page.getByRole("region", { name: /^At Spotwork/ })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Work" })).toBeVisible();
 
     await expect(GRID_CARDS(page).first()).toBeVisible();
 

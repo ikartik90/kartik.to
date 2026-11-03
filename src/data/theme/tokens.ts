@@ -9,11 +9,8 @@ export const tokens = defineTokens({
     listingColumn: { value: "320px" },
     listingGrid3Up: { value: "calc(3 * {sizes.listingColumn})" },
     articleShowcase: { value: "960px" },
-    // The homepage hero's least height: it ends 76% of the way down the screen, so the work below it shows. Less the
-    // site header's `5xl` above it.
-    homeHero: { value: "calc(76svh - {spacing.5xl})" },
-    // The project sheet from the `xl` breakpoint; `articleShowcase` below it.
-    projectSheetWide: { value: "1200px" },
+    // The homepage's showcase and listings, wider than an article's.
+    homeShowcase: { value: "1200px" },
     // The carousel's slide height: a 16:10 slide spans the text column; a phone keeps the next one in view.
     carouselSlide: { value: "min(calc({sizes.articleContent} * 10 / 16), 50vw)" },
     // The small and large carousels, at 0.7 and 1.4 of it, the phone cap scaled alike.
@@ -26,6 +23,8 @@ export const tokens = defineTokens({
     calchemyDemo: { value: "720px" },
     calchemyPlayground: { value: "960px" },
     librarySidebar: { value: "200px" },
+    prototypeSidebar: { value: "400px" },
+    commentAvatar: { value: "24px" },
     imagePreviewMax: { value: "280px" },
     // The narrowest a quote reads well at; the board's `auto-fill` tracks size against it.
     testimonialCard: { value: "280px" },

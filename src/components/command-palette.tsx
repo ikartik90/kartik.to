@@ -40,6 +40,7 @@ import MetadataIcon from "@/assets/icons/metadata.svg";
 import WriteIcon from "@/assets/icons/write.svg";
 import WorkIcon from "@/assets/icons/work.svg";
 import PageIcon from "@/assets/icons/page.svg";
+import ResumeIcon from "@/assets/icons/resume.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -200,6 +201,7 @@ export function CommandPalette() {
     handleOpenDraft,
     handleOpenProject,
     handleOpenSheet,
+    handleOpenResume,
     handlePublish,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
@@ -472,7 +474,7 @@ export function CommandPalette() {
                   </>
                 )}
 
-                {offersDestinations && sheets.length + projects.length > 0 && (
+                {offersDestinations && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Projects</div>
                     {sheets.map((card) => (
@@ -495,6 +497,10 @@ export function CommandPalette() {
                         {project.title ?? "Untitled"}
                       </Command.Item>
                     ))}
+                    <Command.Item className={itemStyle} onSelect={handleOpenResume}>
+                      <ResumeIcon className={iconStyle} />
+                      Resume
+                    </Command.Item>
                   </Command.Group>
                 )}
 

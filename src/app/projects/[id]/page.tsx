@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { HomePage } from "@/components/home-page";
 import { projectMetadata } from "@/lib/post-metadata";
-import { openCard, projectPath, projectPreviewPath } from "@/app/_project-stacks/data";
+import { movedTo, projectCard, projectPath, projectPreviewPath } from "@/data/project-cards";
 
 // Dynamic: edits to the homepage revalidate only `/`.
 export const dynamic = "force-dynamic";
@@ -12,14 +12,14 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const card = openCard((await params).id);
-  return card
-    ? projectMetadata(card.title, card.sentence, projectPath(card.id), projectPreviewPath(card.id))
-    : {};
+  const card = projectCard((await params).id);
+  return card ? projectMetadata(card.title, card.sentence, projectPath(card.id), projectPreviewPath(card.id)) : {};
 }
 
 export default async function ProjectPage({ params }: Props) {
-  const card = openCard((await params).id);
-  if (!card) notFound();
-  return <HomePage sheet={card.id} />;
+  const { id } = await params;
+  const moved = movedTo(id);
+  if (moved) permanentRedirect(projectPath(moved));
+  if (!projectCard(id)) notFound();
+  return <HomePage project={id} />;
 }

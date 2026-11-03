@@ -9,8 +9,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { css, cx } from "../../styled-system/css";
-import { sectionHeadline } from "../../styled-system/recipes";
+import { css } from "../../styled-system/css";
 import {
   CardPropertiesPanel,
   type CardMediaSlot,
@@ -44,6 +43,10 @@ const containerStyle = css({
 // As far from its cards as the project carousel's headline is from its: the section's `xl` gap, the slide's `md`
 // padding and, with a cursor, the card's `sm` resting crop (`project-stacks.tsx`, `sheet-card.tsx`).
 const headingStyle = css({
+  maxWidth: "calc(token(sizes.articleShowcase) * 2 / 3)",
+  textStyle: "subheadingLarge",
+  textWrap: "balance",
+  color: "text.title",
   marginBlockEnd: "calc(token(spacing.xl) + token(spacing.md))",
   _hasCursor: {
     marginBlockEnd: "calc(token(spacing.xl) + token(spacing.md) + token(spacing.sm))",
@@ -345,7 +348,7 @@ export function HomeGrid({
       className={containerStyle}
     >
       {heading && (
-        <h2 id={headingId} className={cx(sectionHeadline(), headingStyle)}>
+        <h2 id={headingId} className={headingStyle}>
           {heading}
         </h2>
       )}
