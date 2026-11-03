@@ -14,9 +14,8 @@ import {
   unpublishPost,
   deleteDraft,
   getDrafts,
-  getPublishedProjects,
 } from "@/app/actions/post";
-import type { Post, PostCategory, PostLink } from "@/domain/post";
+import type { Post, PostCategory } from "@/domain/post";
 import {
   getEditUrl,
   getPostReadUrl,
@@ -41,7 +40,6 @@ import { useIsAdmin } from "@/hooks/use-is-admin";
 import { openProjectSheet } from "@/utils/project-sheet-channel";
 import { reviewBase } from "@/utils/review-path";
 import { PROJECT_CARDS, projectPath, type ProjectCard } from "@/data/project-cards";
-import { RESUME_PATH } from "@/data/site-paths";
 
 /** The open editor; one Save, Discard and unsaved-work check serve all three. */
 export type EditorKind = "shaderPreset" | "grid" | "document" | null;
@@ -59,8 +57,6 @@ export interface CommandPaletteHandlers {
   drafts: Post[];
   /** The homepage's projects, minus the one on screen. */
   sheets: ProjectCard[];
-  /** Published projects, minus the one being read and those a sheet stands in for. */
-  projects: PostLink[];
   currentDraft: Post | null;
   backTarget: BackTarget | null;
   /** Leave for `backTarget` — asking first if that would lose unsaved work. */
@@ -92,10 +88,10 @@ export interface CommandPaletteHandlers {
   /** Starts a new post under `category`, in a new tab. */
   handleNewPost: (category: PostCategory) => void;
   handleOpenDraft: (draft: Post) => void;
-  handleOpenProject: (project: PostLink) => void;
   /** Opens over the homepage when it's on screen; otherwise goes to the sheet's address. */
   handleOpenSheet: (card: ProjectCard) => void;
-  handleOpenResume: () => void;
+  /** In a new tab, so nothing on the page is left. */
+  handleOpenLink: (href: string) => void;
   handlePublish: () => Promise<void>;
   handleDiscardDraft: () => Promise<void>;
 }
@@ -172,32 +168,6 @@ export function useCommandPalette(
       ignore = true;
     };
   }, [isAdmin, openKey]);
-
-  // Fetched on mount and on every open; the palette survives client navigation.
-  const [projects, setProjects] = useState<PostLink[]>([]);
-
-  useEffect(() => {
-    let ignore = false;
-    getPublishedProjects()
-      .then((data) => {
-        if (!ignore) setProjects(data);
-      })
-      .catch(() => {
-        if (!ignore) setProjects([]);
-      });
-    return () => {
-      ignore = true;
-    };
-  }, [openKey]);
-
-  const listableProjects = useMemo(
-    () =>
-      projects.filter((project) => {
-        const path = getPostReadUrl("WORK", project.slug);
-        return path !== pathname;
-      }),
-    [projects, pathname],
-  );
 
   const sheets = PROJECT_CARDS.filter((card) => projectPath(card.id, reviewBase(pathname)) !== pathname);
 
@@ -436,20 +406,15 @@ export function useCommandPalette(
     router.push(getPostReadUrl(draft.category, draft.slug));
   };
 
-  const handleOpenProject = (project: PostLink) => {
-    close();
-    router.push(getPostReadUrl("WORK", project.slug));
-  };
-
   // Closed first: closing the palette hands focus back, which would take it off the sheet.
   const handleOpenSheet = (card: ProjectCard) => {
     close();
     if (!openProjectSheet(card.id)) router.push(projectPath(card.id));
   };
 
-  const handleOpenResume = () => {
+  const handleOpenLink = (href: string) => {
     close();
-    openInNewTab(RESUME_PATH);
+    openInNewTab(href);
   };
 
   /**
@@ -709,7 +674,6 @@ export function useCommandPalette(
     editCategory,
     drafts,
     sheets,
-    projects: listableProjects,
     currentDraft,
     backTarget,
     handleBack,
@@ -734,9 +698,8 @@ export function useCommandPalette(
     handleEditMetadata,
     handleNewPost,
     handleOpenDraft,
-    handleOpenProject,
     handleOpenSheet,
-    handleOpenResume,
+    handleOpenLink,
     handlePublish,
     handleDiscardDraft,
   };

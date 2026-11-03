@@ -112,11 +112,6 @@ export const PostSchema = z.object({
 
 export type Post = z.infer<typeof PostSchema>;
 
-/** Served to every visitor via the palette: must carry nothing the post's page doesn't. */
-export const PostLinkSchema = PostSchema.pick({ slug: true, title: true });
-
-export type PostLink = z.infer<typeof PostLinkSchema>;
-
 export const CreatePostInputSchema = PostSchema.omit({
   id: true,
   createdAt: true,
