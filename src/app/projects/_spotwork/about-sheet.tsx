@@ -190,6 +190,8 @@ const columnStyle = css({
     paddingBlockStart: "var(--window-gap)",
     overflowY: "visible",
     translate: "none",
+    // Put there, not slid in: the page coming live lays it out upright, under the overlay's opening.
+    transitionDuration: "0s",
   },
   _motionReduce: { transitionDuration: "0s" },
 });

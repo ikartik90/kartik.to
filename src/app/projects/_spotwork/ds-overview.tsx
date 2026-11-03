@@ -17,7 +17,9 @@ import { createPortal } from "react-dom";
 import { css } from "../../../../styled-system/css";
 import { useReducedMotion } from "@/components/shaders/use-shader-policy";
 import { useDismiss } from "@/hooks/use-dismiss";
+import { useMedia } from "./about-sheet";
 import { DESIGN_SYSTEM, GUIDELINE_SECTIONS, SNACKS, type Guideline } from "./copy";
+import { stillScrollers } from "./demo";
 import { sheetBodyStyle } from "./dashboard-sheet";
 import { DAY } from "./data";
 import { ActionStack, CheckInPill, Table } from "./data-table";
@@ -152,10 +154,11 @@ const montageStyle = css(floorRaw, {
     paddingInline: "var(--sw-padding-sm)",
     backgroundColor: "var(--sw-surface-default)",
   },
-  // Every piece still, as Figma draws it.
+  // Every piece still, as Figma draws it, and drawn into the montage: a layer of its own makes one of the whole montage.
   "& > div > div > div *, & > div > div > div *::before, & > div > div > div *::after": {
     animation: "none !important",
     transition: "none !important",
+    willChange: "auto !important",
   },
   // A badge's letters as laid out: tilted, it can't find the middle of their ink.
   "& [data-badge] > span": { translate: "none !important" },
@@ -437,6 +440,9 @@ const rem = (px?: number) => (px === undefined ? undefined : `${px / 16}rem`);
 // How fast the montage travels up its columns, in its own px a second, and how far it ever goes.
 const SPEED = 28;
 const DISTANCE = 1_000_000;
+// A phone, where the window is drawn a fifth of its size: Safari draws a moving montage at its full size there, which
+// runs the page out of memory.
+const PHONE = "(any-pointer: coarse) and (width < 51.25rem), (any-pointer: coarse) and (height < 31.25rem)";
 
 /** The root's size over 16px, and the montage's scale with the cover's window fitted into `node`. */
 function fitOf(node: HTMLElement) {
@@ -477,12 +483,13 @@ function placeOf({ key, x, y }: Pick<Placed, "key" | "x" | "y">, offset: Point =
 
 /**
  * Figma's cover, its whole window scaled into its pane, travelling up its columns with `components` flowing in after
- * it and coming round again; still for reduced motion.
+ * it and coming round again; still for reduced motion and on a phone.
  */
 function Montage({ components }: { components: Story[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
-  const reduced = useReducedMotion();
+  const phone = useMedia(PHONE);
+  const reduced = useReducedMotion() || phone;
   const pieces = useMemo<Piece[]>(
     () => [
       ...MONTAGE,
@@ -513,6 +520,11 @@ function Montage({ components }: { components: Story[] }) {
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+
+  // A list that scrolls makes the whole tilted montage a layer too.
+  useLayoutEffect(() => {
+    if (ref.current) stillScrollers(ref.current);
+  }, [shown, staged]);
 
   useLayoutEffect(() => {
     const node = ref.current;
