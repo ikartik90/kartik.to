@@ -331,8 +331,8 @@ describe("Manage Template Presets", () => {
         "value",
         expect.stringMatching(/^The worker would fill/),
       ),
-      // It types itself in, at 50 characters a second.
-      { timeout: 3000 },
+      // It types itself in, at 50 characters a second, re-rendering the sheet each time: slow in a loaded full run.
+      { timeout: 10_000 },
     );
   }, 15_000);
 

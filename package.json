@@ -23,22 +23,22 @@
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "@calchemy/date-core": "^0.3.0",
     "@googlemaps/js-api-loader": "^2.1.3",
-    "@neondatabase/auth": "^0.4.0-beta",
+    "@neondatabase/auth": "^0.7.0-beta",
     "@neondatabase/serverless": "^1.1.0",
     "@paper-design/shaders": "^0.0.80",
     "@paper-design/shaders-react": "^0.0.80",
-    "@prisma/adapter-neon": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/adapter-neon": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "@xmldom/xmldom": "^0.9.12",
     "cmdk": "^1.1.1",
     "jose": "^6.2.3",
-    "next": "16.2.6",
+    "next": "16.4.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "refractor": "^5.0.0",
-    "zod": "^4.4.3",
+    "zod": "^4.6.7",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
@@ -51,11 +51,18 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.4.4",
     "jsdom": "^29.1.1",
-    "prisma": "^7.8.0",
+    "prisma": "^7.10.1",
     "typescript": "^5",
     "vite-plugin-svgr": "^5.2.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "better-auth": "1.7.15",
+    "@better-auth/core": "1.7.15",
+    "@better-auth/passkey": "1.7.15",
+    "@better-auth/oauth-provider": "1.7.15",
+    "zod": "$zod"
   }
 }

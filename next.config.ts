@@ -20,6 +20,9 @@ const svgrOptions = {
 };
 
 const nextConfig: NextConfig = {
+  // Otherwise `next dev` writes its own block into AGENTS.md, the hand-kept contract.
+  agentRules: false,
+
   images: {
     qualities: [100],
   },
