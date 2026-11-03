@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isSyntheticPointer } from "@/utils/synthetic-pointer";
-import { useDemo, type Step } from "../demo";
+import { stillScrollers, useDemo, type Step } from "../demo";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -266,10 +266,12 @@ describe("the demo's cursor", () => {
       );
     }
 
-    // The scroller's scrollTops asked for, laid out as given: `scale` is the transform the scroller's shown at.
-    async function scrolls({ scroller, card, target, snackbar = box(0, 0, 0, 0), scale = 1, clip }: { scroller: DOMRect; card: DOMRect; target: DOMRect; snackbar?: DOMRect; scale?: number; clip?: DOMRect }) {
+    // The scroller's scrollTops asked for, laid out as given: `scale` is the transform the scroller's shown at. `still`:
+    // its scrollers clipped, as a card's cover draws them.
+    async function scrolls({ scroller, card, target, snackbar = box(0, 0, 0, 0), scale = 1, clip, still }: { scroller: DOMRect; card: DOMRect; target: DOMRect; snackbar?: DOMRect; scale?: number; clip?: DOMRect; still?: boolean }) {
       delete document.body.dataset.log;
-      render(<Sheet steps={[{ at: () => screen.getByText("Manage") }]} clipped={!!clip} />);
+      const { container } = render(<Sheet steps={[{ at: () => screen.getByText("Manage") }]} clipped={!!clip} />);
+      if (still) stillScrollers(container);
       if (clip) vi.spyOn(screen.getByTestId("clip"), "getBoundingClientRect").mockReturnValue(clip);
       const node = screen.getByTestId("scroller");
       vi.spyOn(node, "getBoundingClientRect").mockReturnValue(scroller);
@@ -309,6 +311,13 @@ describe("the demo's cursor", () => {
       const [top] = await scrolls({ scroller: box(0, 400), card: box(100, 700), target: box(450, 470) });
       expect(top).toBeGreaterThanOrEqual(70);
       expect(top).toBeLessThan(300);
+    });
+
+    it("in a scroller a card's cover clips", async () => {
+      const [top] = await scrolls({ scroller: box(0, 400), card: box(300, 500), target: box(460, 480), still: true });
+      expect(getComputedStyle(screen.getByTestId("scroller")).overflowY).toBe("hidden");
+      expect(top).toBeGreaterThanOrEqual(100);
+      expect(top).toBeLessThanOrEqual(300);
     });
 
     it("not at all, where its card already shows", async () => {

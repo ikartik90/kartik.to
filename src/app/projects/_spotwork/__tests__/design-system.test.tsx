@@ -231,6 +231,34 @@ describe("the design system's window", () => {
     expect(montage.querySelectorAll("[data-montage-piece]").length).toBeGreaterThan(4);
   });
 
+  describe("the montage's motion", () => {
+    /** Web Animations and IntersectionObserver, which jsdom lacks; answers whether the montage's track was moved. */
+    function animating(phone: boolean) {
+      const animate = vi.fn((_keyframes: Keyframe[] | PropertyIndexedKeyframes) => ({ play() {}, pause() {}, cancel() {}, currentTime: 0 }) as unknown as Animation);
+      vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
+      Object.defineProperty(Element.prototype, "animate", { value: animate, configurable: true, writable: true });
+      vi.spyOn(window, "matchMedia").mockImplementation(
+        (query) => ({ matches: phone && query.includes("coarse"), addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList,
+      );
+      setup(null);
+      return animate.mock.calls.some(([keyframes]) => "transform" in keyframes);
+    }
+
+    afterEach(() => {
+      delete (Element.prototype as { animate?: unknown }).animate;
+      vi.unstubAllGlobals();
+    });
+
+    it("carries the components up its columns", () => {
+      expect(animating(false)).toBe(true);
+    });
+
+    // Drawn small in its window there, a moving montage is drawn at full size and runs Safari out of memory.
+    it("holds them still on a phone", () => {
+      expect(animating(true)).toBe(false);
+    });
+  });
+
   it("opens on who we are and tone and voice, two cards abreast that each open a side sheet, then its interface, unheaded", async () => {
     const { user, open } = setup();
     await open(DESIGN_SYSTEM.guidelines);

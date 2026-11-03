@@ -8,7 +8,7 @@ import { BAR_HEIGHT, BrowserBar, type BarHistory } from "../browser-bar/browser-
 import { CheckInsApp } from "../check-ins-app";
 import { shiftStart } from "../data";
 import { DesignSystem } from "../design-system";
-import { useDemo } from "../demo";
+import { stillScrollers, useDemo } from "../demo";
 import { demoOf } from "../demos";
 import type { Choice } from "../project-nav";
 import { pageOf, windowOf } from "../prototype-overlay";
@@ -50,7 +50,14 @@ function whenStill(then: () => void, after = 0) {
 }
 const untilStill = () => new Promise<void>((resolve) => void whenStill(resolve));
 
-const windowStyle = css({ position: "absolute", inset: 0, overflow: "clip", pointerEvents: "none" });
+const windowStyle = css({
+  position: "absolute",
+  inset: 0,
+  overflow: "clip",
+  pointerEvents: "none",
+  // Nothing in it a layer of its own: Safari draws each at the app's full size, however small the card shows it.
+  "& *, & *::before, & *::after": { willChange: "auto !important" },
+});
 const scaledStyle = css({ display: "flex", flexDirection: "column", transformOrigin: "0 0" });
 const contentsStyle = css({ display: "contents" });
 
@@ -82,6 +89,17 @@ export function LiveDemo({ project, paused, near }: { project: string; paused: b
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Each box the app scrolls, clipped as it comes.
+  useLayoutEffect(() => {
+    const node = box.current;
+    if (!node) return;
+    const observer = new MutationObserver((records) => {
+      for (const record of records) for (const added of record.addedNodes) if (added instanceof Element) stillScrollers(added);
+    });
+    observer.observe(node, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, []);
 

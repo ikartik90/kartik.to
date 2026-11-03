@@ -73,6 +73,24 @@ const centreOf = (element: Element): Point => {
 const typesIn = (element: Element) =>
   element.matches("input:not([type=checkbox]):not([type=radio]), textarea, [contenteditable=true]");
 
+/** Whether `node` scrolls what's in it, as it still does where `stillScrollers` clipped it. */
+const scrolls = (node: Element) => /auto|scroll/.test(getComputedStyle(node).overflowY) || node.hasAttribute("data-still-scroll");
+
+/**
+ * Clips each box in `root` that scrolls, which the demo goes on scrolling: a box that scrolls is a layer of its own, which
+ * Safari draws at its full size however small a transform round it shows it.
+ */
+export function stillScrollers(root: Element) {
+  const boxes = [root, ...root.querySelectorAll("*")].filter((box) => {
+    const style = getComputedStyle(box);
+    return /auto|scroll/.test(style.overflowX + style.overflowY);
+  });
+  for (const box of boxes) {
+    Object.assign((box as HTMLElement).style, { overflowX: "hidden", overflowY: "hidden" });
+    box.setAttribute("data-still-scroll", "");
+  }
+}
+
 /**
  * The band it shows in: inside every box of the stage's that clips it, and above a snackbar over it. Not the page's:
  * a stage partly off screen (a landing card's) mustn't scroll its app, or the page, to show what's past its fold.
@@ -84,9 +102,8 @@ function roomOf(element: Element, stage: Element) {
   // A box that clips it below every scroller round it, as its dialog does, moves with it, so no scroll shows more of it.
   let scrolled = false;
   for (let node = element.parentElement; node; node = node === stage ? null : node.parentElement) {
-    const overflow = getComputedStyle(node).overflowY;
-    if (/auto|scroll/.test(overflow)) scrolled = true;
-    else if (overflow === "visible" || !scrolled) continue;
+    if (scrolls(node)) scrolled = true;
+    else if (getComputedStyle(node).overflowY === "visible" || !scrolled) continue;
     const clip = node.getBoundingClientRect();
     top = Math.max(top, clip.top);
     bottom = Math.min(bottom, clip.bottom);
@@ -117,7 +134,7 @@ function scrollIn(element: Element, stage: Element) {
   let by = headroom < 0 ? headroom : Math.max(0, Math.min(box.bottom + clearance - room.bottom, headroom));
   let moved = false;
   for (let node = element.parentElement; node && Math.abs(by) >= 1; node = node === stage ? null : node.parentElement) {
-    if (!/auto|scroll/.test(getComputedStyle(node).overflowY)) continue;
+    if (!scrolls(node)) continue;
     // Its scrollTop is in its own pixels, which a transform round it scales.
     const scale = node.getBoundingClientRect().height / node.offsetHeight || 1;
     const from = node.scrollTop;

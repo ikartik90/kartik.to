@@ -8,7 +8,7 @@ const { builds, play, stop } = vi.hoisted(() => ({ builds: [] as string[], play:
 vi.mock("../../check-ins-app", () => ({
   CheckInsApp: function App() {
     useEffect(() => void builds.push("app"), []);
-    return null;
+    return <div style={{ overflowY: "auto" }} />;
   },
 }));
 vi.mock("../../design-system", () => ({ DesignSystem: () => null }));
@@ -16,7 +16,10 @@ vi.mock("../../browser-bar/browser-bar", () => ({ BAR_HEIGHT: 40, BrowserBar: ()
 vi.mock("../../prototype-overlay", () => ({ windowOf: () => ({ site: "app", url: "" }), pageOf: () => "dashboard" }));
 vi.mock("../../theme", () => ({ manrope: { variable: "" }, poppins: { variable: "" }, spotworkTheme: "" }));
 vi.mock("../../demos", () => ({ demoOf: () => [] }));
-vi.mock("../../demo", () => ({ useDemo: () => ({ cursor: {}, playing: false, play, stop }) }));
+vi.mock("../../demo", async (actual) => ({
+  ...(await actual<typeof import("../../demo")>()),
+  useDemo: () => ({ cursor: {}, playing: false, play, stop }),
+}));
 vi.mock("@/components/demo/demo-cursor", () => ({ DemoCursor: () => null }));
 vi.mock("@/components/shaders/use-shader-policy", () => ({ useReducedMotion: () => false }));
 
@@ -172,6 +175,17 @@ describe("LiveDemo", () => {
       }
     });
     expect(builds).toEqual(["app"]);
+  });
+
+  // Safari draws a box that scrolls at the app's full size, however small the card shows it.
+  it("clips each box its app scrolls, as it comes", async () => {
+    const { container } = render(<Card />);
+    await wait(500);
+    const window = container.querySelector<HTMLElement>("[inert] > div")!;
+    const later = document.createElement("div");
+    later.style.overflowY = "auto";
+    await act(async () => void window.append(later));
+    expect([window.firstElementChild!, later].map((box) => getComputedStyle(box).overflowY)).toEqual(["hidden", "hidden"]);
   });
 
   it.each([
