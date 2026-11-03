@@ -48,6 +48,7 @@ vi.mock("@/app/actions/grid", () => ({
 
 vi.mock("@/app/actions/shader-preset", () => ({
   getShaderPresets: vi.fn().mockResolvedValue([]),
+  getPublishedShaderPresets: vi.fn().mockResolvedValue([]),
   createShaderPreset: vi.fn(),
   saveShaderPreset: vi.fn(),
   deleteShaderPreset: vi.fn(),
@@ -140,7 +141,7 @@ describe("CommandPalette", () => {
 
     it("offers the Waveform Studio item", () => {
       render(<CommandPalette />);
-      expect(screen.getByText("Waveform Studio")).toBeDefined();
+      expect(screen.getByText(CREST_ICONS)).toBeDefined();
     });
   });
 
@@ -148,7 +149,7 @@ describe("CommandPalette", () => {
     it("still offers the Playgrounds group", () => {
       render(<CommandPalette />);
       expect(screen.getByText("Playgrounds")).toBeDefined();
-      expect(screen.getByText("Waveform Studio")).toBeDefined();
+      expect(screen.getByText(CREST_ICONS)).toBeDefined();
     });
 
     it("does not render the This Page group", () => {
@@ -190,7 +191,7 @@ describe("CommandPalette", () => {
     it("renders the Playgrounds group in the server render too", () => {
       const html = renderToString(<CommandPalette />);
       expect(html).toContain("Playgrounds");
-      expect(html).toContain("Waveform Studio");
+      expect(html).toContain(CREST_ICONS);
     });
   });
 
@@ -275,10 +276,10 @@ describe("CommandPalette", () => {
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
       fireEvent.change(screen.getByPlaceholderText("Search…"), {
-        target: { value: "waveform" },
+        target: { value: "crest" },
       });
 
-      expect(list().getByText("Waveform Studio")).toBeDefined();
+      expect(list().getByText(CREST_ICONS)).toBeDefined();
       expect(list().queryByText("Dark theme")).toBeNull();
     });
   });
@@ -586,47 +587,63 @@ describe("CommandPalette", () => {
     });
   });
 
-  describe("Waveform Studio", () => {
-    it("routes to the playground and closes the palette", () => {
+  describe("shaders", () => {
+    const presets = [
+      { id: "comets-new", shaderId: "pixelComets" },
+      { id: "track-new", shaderId: "cosmicTrack" },
+      { id: "comets-old", shaderId: "pixelComets" },
+    ];
+
+    beforeEach(async () => {
+      const { getPublishedShaderPresets } = await import("@/app/actions/shader-preset");
+      (getPublishedShaderPresets as ReturnType<typeof vi.fn>).mockResolvedValue(presets);
+    });
+
+    afterEach(async () => {
+      const { getPublishedShaderPresets } = await import("@/app/actions/shader-preset");
+      (getPublishedShaderPresets as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    });
+
+    it("lists each shader once, newest first, before Crest Icons, in place of Waveform Studio", async () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      await act(async () => {});
+      const group = list().getByText("Playgrounds").parentElement!;
+      expect(
+        within(group)
+          .getAllByRole("option")
+          .map((row) => row.textContent),
+      ).toEqual(["Pixel Comets", "Cosmic Track", CREST_ICONS]);
+    });
+
+    it("opens the shader's newest published preset and closes the palette", async () => {
       render(<CommandPalette />);
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(screen.getByText("Waveform Studio"));
+      fireEvent.click(await list().findByText("Pixel Comets"));
 
-      expect(mockPush).toHaveBeenCalledWith("/playground/shader");
+      expect(mockPush).toHaveBeenCalledWith("/playground/shader/comets-new");
       expect(dialog.close).toHaveBeenCalledOnce();
+    });
+
+    it("leaves out the shader on screen, and keeps the other", async () => {
+      mockPathname.mockReturnValue("/playground/shader/track-new");
+      render(<CommandPalette />);
+      expect(await list().findByText("Pixel Comets")).toBeDefined();
+      expect(list().queryByText("Cosmic Track")).toBeNull();
     });
   });
 
   describe("Calchemy", () => {
-    it("is offered logged out, beside the shader one", () => {
+    it("is not listed", () => {
       render(<CommandPalette />);
-      expect(screen.getByText(CALCHEMY)).toBeDefined();
-    });
-
-    it("routes to the playground and closes the palette", () => {
-      render(<CommandPalette />);
-      const dialog = document.querySelector("dialog") as HTMLDialogElement;
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-
-      fireEvent.click(screen.getByText(CALCHEMY));
-
-      expect(mockPush).toHaveBeenCalledWith("/playground/calchemy");
-      expect(dialog.close).toHaveBeenCalledOnce();
-    });
-
-    it("stops advertising itself once you are on it, and still offers the other", () => {
-      mockPathname.mockReturnValue("/playground/calchemy");
-      render(<CommandPalette />);
-
-      expect(list().queryByText(CALCHEMY)).toBeNull();
-      expect(list().getByText("Waveform Studio")).toBeDefined();
+      expect(screen.queryByText(CALCHEMY)).toBeNull();
     });
   });
 
   describe("Crest Icons", () => {
-    it("is offered logged out, beside the other two", () => {
+    it("is offered logged out", () => {
       render(<CommandPalette />);
       expect(screen.getByText(CREST_ICONS)).toBeDefined();
     });
@@ -642,13 +659,11 @@ describe("CommandPalette", () => {
       expect(dialog.close).toHaveBeenCalledOnce();
     });
 
-    it("stops advertising itself once you are on it, and still offers the others", () => {
+    it("stops advertising itself once you are on it", () => {
       mockPathname.mockReturnValue("/playground/icons");
       render(<CommandPalette />);
 
       expect(list().queryByText(CREST_ICONS)).toBeNull();
-      expect(list().getByText("Waveform Studio")).toBeDefined();
-      expect(list().getByText(CALCHEMY)).toBeDefined();
     });
   });
 
@@ -712,7 +727,7 @@ describe("CommandPalette", () => {
   });
 
   describe("Links", () => {
-    it("lists the resume and profiles under their own heading, after the projects", async () => {
+    it("lists the resume and profiles under their own heading, after the playgrounds and before the settings", async () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
       await act(async () => {});
@@ -722,10 +737,10 @@ describe("CommandPalette", () => {
           .getAllByRole("option")
           .map((row) => row.textContent),
       ).toEqual(["Resume", "X", "GitHub", "LinkedIn"]);
-      expect(
-        list().getByText("Projects").compareDocumentPosition(heading) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
+      const headings = list()
+        .getAllByText(/^(Projects|Playgrounds|Links|Settings)$/)
+        .map((element) => element.textContent);
+      expect(headings).toEqual(["Projects", "Playgrounds", "Links", "Settings"]);
     });
 
     it.each([
@@ -769,7 +784,7 @@ describe("CommandPalette", () => {
     it("offers the playground from a page that is merely being read", () => {
       mockPathname.mockReturnValue("/writing/my-post");
       render(<CommandPalette />);
-      expect(list().getByText("Waveform Studio")).toBeDefined();
+      expect(list().getByText(CREST_ICONS)).toBeDefined();
     });
 
     it("withholds it while a document is being edited", () => {
@@ -777,7 +792,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Waveform Studio")).toBeNull();
+      expect(list().queryByText(CREST_ICONS)).toBeNull();
     });
 
     it("withholds it while the grid is being edited", () => {
@@ -785,7 +800,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Waveform Studio")).toBeNull();
+      expect(list().queryByText(CREST_ICONS)).toBeNull();
     });
 
     it("keeps the settings group, which goes nowhere", () => {
@@ -816,7 +831,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText("Waveform Studio")).toBeNull();
+      expect(list().queryByText(CREST_ICONS)).toBeNull();
     });
 
     it("hangs the platform's own ⌘S off it", () => {
@@ -833,7 +848,6 @@ describe("CommandPalette", () => {
       expect(list().queryByText("This Preset")).toBeNull();
       expect(list().queryByText("Save changes")).toBeNull();
       expect(list().queryByText("Discard changes and exit")).toBeNull();
-      expect(list().queryByText("Waveform Studio")).toBeNull();
     });
 
     it("is not offered on any other page", () => {
@@ -857,20 +871,11 @@ describe("CommandPalette", () => {
       mockUseSession.mockReturnValue({ data: null });
     });
 
-    it("keeps the playgrounds group, minus the page being stood on", () => {
+    it("keeps the playgrounds group", () => {
       render(<CommandPalette />);
 
       expect(list().getByText("Playgrounds")).toBeDefined();
-      expect(list().getByText(CALCHEMY)).toBeDefined();
-      expect(list().queryByText("Waveform Studio")).toBeNull();
-    });
-
-    it("says the same on a saved preset's own route", () => {
-      mockPathname.mockReturnValue("/playground/shader/preset-1");
-      render(<CommandPalette />);
-
-      expect(list().getByText(CALCHEMY)).toBeDefined();
-      expect(list().queryByText("Waveform Studio")).toBeNull();
+      expect(list().getByText(CREST_ICONS)).toBeDefined();
     });
 
     it("names the way out for what it is", () => {
@@ -887,7 +892,7 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
 
       expect(list().queryByText("Playgrounds")).toBeNull();
-      expect(list().queryByText(CALCHEMY)).toBeNull();
+      expect(list().queryByText(CREST_ICONS)).toBeNull();
       expect(list().getByText("Exit editor")).toBeDefined();
     });
   });
@@ -1075,14 +1080,14 @@ describe("CommandPalette — the `>` command line", () => {
     openAndType("> window.adminLogin()");
 
     expect(list().queryByText("Settings")).toBeNull();
-    expect(list().queryByText("Waveform Studio")).toBeNull();
+    expect(list().queryByText(CREST_ICONS)).toBeNull();
   });
 
   it("leaves ordinary search text alone", () => {
-    openAndType("waveform");
+    openAndType("crest");
 
     expect(list().queryByText("Command")).toBeNull();
-    expect(list().getByText("Waveform Studio")).toBeDefined();
+    expect(list().getByText(CREST_ICONS)).toBeDefined();
   });
 
   it("recognises the console form typed out in full", () => {

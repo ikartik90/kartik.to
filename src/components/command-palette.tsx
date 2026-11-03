@@ -53,7 +53,6 @@ import UnpublishIcon from "@/assets/icons/unpublish.svg";
 import ReturnIcon from "@/assets/icons/return.svg";
 import ShaderIcon from "@/assets/icons/shader.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
-import CalendarIcon from "@/assets/icons/calendar.svg";
 import ConsoleIcon from "@/assets/icons/console.svg";
 
 const inputRowStyle = commandHeader();
@@ -189,10 +188,8 @@ export function CommandPalette() {
     backTarget,
     handleBack,
     handleThemeToggle,
-    handleShaderPlayground,
-    isShaderPlayground,
-    handleCalchemyPlayground,
-    isCalchemyPlayground,
+    shaders,
+    handleOpenShader,
     handleIconsPlayground,
     isIconsPlayground,
     handleTestimonials,
@@ -499,22 +496,6 @@ export function CommandPalette() {
                   </Command.Group>
                 )}
 
-                {offersDestinations && (
-                  <Command.Group className={groupStyle}>
-                    <div className={groupHeadingStyle}>Links</div>
-                    {LINK_ROWS.map(({ label, href, Icon }) => (
-                      <Command.Item
-                        key={label}
-                        className={itemStyle}
-                        onSelect={() => handleOpenLink(href)}
-                      >
-                        <Icon className={iconStyle} />
-                        {label}
-                      </Command.Item>
-                    ))}
-                  </Command.Group>
-                )}
-
                 {isAdmin && offersDestinations && !isTestimonials && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Inbox</div>
@@ -531,24 +512,16 @@ export function CommandPalette() {
                 {offersDestinations && (
                   <Command.Group className={groupStyle}>
                     <div className={groupHeadingStyle}>Playgrounds</div>
-                    {!isShaderPlayground && (
+                    {shaders.map(({ presetId, label }) => (
                       <Command.Item
+                        key={presetId}
                         className={itemStyle}
-                        onSelect={handleShaderPlayground}
+                        onSelect={() => handleOpenShader(presetId)}
                       >
                         <ShaderIcon className={iconStyle} />
-                        {SITE_PAGES.shader.title}
+                        {label}
                       </Command.Item>
-                    )}
-                    {!isCalchemyPlayground && (
-                      <Command.Item
-                        className={itemStyle}
-                        onSelect={handleCalchemyPlayground}
-                      >
-                        <CalendarIcon className={iconStyle} />
-                        {SITE_PAGES.calchemy.title}
-                      </Command.Item>
-                    )}
+                    ))}
                     {!isIconsPlayground && (
                       <Command.Item
                         className={itemStyle}
@@ -558,6 +531,22 @@ export function CommandPalette() {
                         {SITE_PAGES.icons.title}
                       </Command.Item>
                     )}
+                  </Command.Group>
+                )}
+
+                {offersDestinations && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Links</div>
+                    {LINK_ROWS.map(({ label, href, Icon }) => (
+                      <Command.Item
+                        key={label}
+                        className={itemStyle}
+                        onSelect={() => handleOpenLink(href)}
+                      >
+                        <Icon className={iconStyle} />
+                        {label}
+                      </Command.Item>
+                    ))}
                   </Command.Group>
                 )}
 
