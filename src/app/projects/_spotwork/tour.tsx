@@ -79,14 +79,16 @@ function stored(): Edits {
 
 const appOf = (root: RefObject<HTMLElement | null>) => root.current?.querySelector("[data-check-ins-app]") ?? null;
 
-/** While `hidden` (Play's demo running), its comments fade out of reach. */
+/** While `hidden` (Play's demo running), its comments fade out of reach. `comments`: false leaves them out. */
 export function TourProvider({
   root,
   hidden = false,
+  comments = true,
   children,
 }: {
   root: RefObject<HTMLElement | null>;
   hidden?: boolean;
+  comments?: boolean;
   children: ReactNode;
 }) {
   const [at, setAt] = useState(0);
@@ -172,7 +174,7 @@ export function TourProvider({
     <TourContext value={state}>
       <EditorContext value={editor}>
         {children}
-        {step && (
+        {comments && step && (
           <Comment
             key={step.id}
             root={root}
@@ -183,19 +185,20 @@ export function TourProvider({
             onMove={moveStep(step.id)}
           />
         )}
-        {edits.added
-          .filter((comment) => comment.step === steps[at].id)
-          .map((comment) => (
-            <Comment
-              key={comment.id}
-              root={root}
-              text={comment.text}
-              locate={spotLocate(comment.spot)}
-              draggable={editing}
-              hidden={hidden}
-              onMove={moveAdded(comment.id)}
-            />
-          ))}
+        {comments &&
+          edits.added
+            .filter((comment) => comment.step === steps[at].id)
+            .map((comment) => (
+              <Comment
+                key={comment.id}
+                root={root}
+                text={comment.text}
+                locate={spotLocate(comment.spot)}
+                draggable={editing}
+                hidden={hidden}
+                onMove={moveAdded(comment.id)}
+              />
+            ))}
       </EditorContext>
     </TourContext>
   );

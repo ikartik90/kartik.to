@@ -38,6 +38,9 @@ export const projectPreviewPath = (id: string) => `/og/projects/${id}.png`;
 
 export const projectCard = (id: string) => PROJECT_CARDS.find((card) => card.id === id);
 
+/** The project pages built ahead, as `generateStaticParams` gives them. */
+export const projectParams = () => PROJECT_CARDS.map(({ id }) => ({ id }));
+
 /** The project an old project's address now opens. */
 export const movedTo = (id: string) => MOVED.get(id);
 

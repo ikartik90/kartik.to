@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { isAdmin, requireAdmin } from "@/lib/auth/server";
 import { revalidatePath } from "next/cache";
+import { revalidateHome } from "@/lib/revalidate-home";
 import { prisma } from "@/lib/prisma";
 import { keyToIcon, listAllIcons } from "@/lib/icons";
 import { env } from "@/lib/env";
@@ -34,7 +35,7 @@ const ICONS_PATH = "/playground/icons";
 /** The playground, and the homepage, whose cards can play the approved icons: for a write that changes which. */
 function revalidateApproved() {
   revalidatePath(ICONS_PATH);
-  revalidatePath("/");
+  revalidateHome();
 }
 
 /** The bucket is shared with media, so an unchecked key could delete any article's picture. */

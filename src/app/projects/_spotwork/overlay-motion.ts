@@ -11,7 +11,7 @@ import {
 import { PAGE_OPENING } from "@/data/page-opening";
 
 // The overlay's opening: its ground fades in as the window slides up, then its controls rise in together as the About
-// sheet's cards come in from the right, a step apart. Closing fades the ground as the rest drops. Each part is marked
+// sheet's cards come in from the right, or up from below when the sheet lies under the window, a step apart. Closing fades the ground as the rest drops. Each part is marked
 // with its `data-overlay-motion`.
 
 type Part = "ground" | "window" | "controls" | "cards";
@@ -53,7 +53,7 @@ export function openOverlay(root: HTMLDialogElement) {
       ),
     ),
     ...partsOf(root, "controls").map((el) => stepIn(el, step)),
-    ...cardsOf(root).map((card, i) => stepIn(card, (i + 1) * step, "right")),
+    ...cardsOf(root).map((card, i) => stepIn(card, (i + 1) * step, card.closest("[data-upright]") ? "below" : "right")),
   ];
   opening.forEach((animation) => animation.pause());
   requestAnimationFrame(() => fromFirstFrame(opening));

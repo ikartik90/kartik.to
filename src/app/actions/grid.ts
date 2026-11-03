@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateHome } from "@/lib/revalidate-home";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/server";
@@ -57,7 +57,7 @@ export async function setPinned(
   const t = TargetSchema.parse(target);
   const seat = index === null ? null : GridIndexSchema.parse(index);
   await writeGridIndex(t, seat);
-  revalidatePath("/");
+  revalidateHome();
 }
 
 export async function moveGridItem(
@@ -70,14 +70,14 @@ export async function moveGridItem(
   if (current === null) throw new Error("Cannot move a card that is not pinned");
   const next = Math.max(0, current + (direction === "back" ? -1 : 1));
   await writeGridIndex(t, next);
-  revalidatePath("/");
+  revalidateHome();
 }
 
 /** Deletes the row: it is the publication, while the demo lives in the registry. */
 export async function unpublishComponent(id: string): Promise<void> {
   await requireAdmin();
   await prisma.component.delete({ where: { id: z.string().min(1).parse(id) } });
-  revalidatePath("/");
+  revalidateHome();
 }
 
 const InsertSchema = z.object({
@@ -206,5 +206,5 @@ export async function saveGridLayout(draft: GridDraftInput): Promise<void> {
     }
   });
 
-  revalidatePath("/");
+  revalidateHome();
 }
