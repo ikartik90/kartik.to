@@ -4,21 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/server";
 import {
   PostCategorySchema,
-  PostLinkSchema,
   PostMetadataSchema,
   PostSlugSchema,
   type Document,
   type Post,
   type PostCategory,
-  type PostLink,
   type PostMetadata,
 } from "@/domain/post";
 import { POST_CATEGORIES } from "@/data/post-categories";
 import { parsePost } from "@/lib/posts";
 import { revalidatePostPaths } from "@/lib/revalidate-post";
 import { generateSlug } from "@/utils/slug";
-
-// Deliberately public: `getPublishedProjects`, which returns only published titles and slugs.
 
 function explainSlugConflict(error: unknown): unknown {
   return (error as { code?: unknown } | null)?.code === "P2002"
@@ -200,14 +196,4 @@ export async function getDrafts(): Promise<Post[]> {
   });
 
   return raws.map(parsePost);
-}
-
-export async function getPublishedProjects(): Promise<PostLink[]> {
-  const rows = await prisma.post.findMany({
-    where: { category: "WORK", publishedAt: { not: null } },
-    orderBy: { publishedAt: "desc" },
-    select: { slug: true, title: true },
-  });
-
-  return rows.map((row) => PostLinkSchema.parse(row));
 }

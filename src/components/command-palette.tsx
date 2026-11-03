@@ -27,7 +27,8 @@ import { subscribeCommandPalette } from "@/utils/command-palette-channel";
 import { takePaletteIntent } from "@/utils/palette-intent";
 import { parseCommandLine } from "@/utils/palette-command";
 import { resolvePaletteCommand } from "@/data/palette-commands";
-import { SITE_PAGES } from "@/data/site-paths";
+import { RESUME_PATH, SITE_PAGES } from "@/data/site-paths";
+import { SOCIAL_PROFILES } from "@/data/site";
 import { POST_CATEGORIES } from "@/data/post-categories";
 import type { PostCategory } from "@/domain/post";
 import { hasShortcutModifier } from "@/utils/keyboard-shortcut";
@@ -41,6 +42,9 @@ import WriteIcon from "@/assets/icons/write.svg";
 import WorkIcon from "@/assets/icons/work.svg";
 import PageIcon from "@/assets/icons/page.svg";
 import ResumeIcon from "@/assets/icons/resume.svg";
+import TwitterIcon from "@/assets/icons/twitter.svg";
+import OctocatIcon from "@/assets/icons/octocat.svg";
+import LinkedInIcon from "@/assets/icons/linkedin.svg";
 import PublishIcon from "@/assets/icons/publish.svg";
 import SaveIcon from "@/assets/icons/save.svg";
 import TrashIcon from "@/assets/icons/trash.svg";
@@ -129,6 +133,13 @@ const NEW_POST_ROWS = (
   create ? [{ category, Icon, label: create }] : [],
 );
 
+const LINK_ROWS = [
+  { label: "Resume", href: RESUME_PATH, Icon: ResumeIcon },
+  { label: "X", href: SOCIAL_PROFILES.twitter, Icon: TwitterIcon },
+  { label: "GitHub", href: SOCIAL_PROFILES.github, Icon: OctocatIcon },
+  { label: "LinkedIn", href: SOCIAL_PROFILES.linkedin, Icon: LinkedInIcon },
+];
+
 function CategoryIcon({ category }: { category: PostCategory }) {
   const { Icon } = CATEGORY_ROWS[category];
   return <Icon className={iconStyle} />;
@@ -174,7 +185,6 @@ export function CommandPalette() {
     editCategory,
     drafts,
     sheets,
-    projects,
     currentDraft,
     backTarget,
     handleBack,
@@ -199,9 +209,8 @@ export function CommandPalette() {
     handleEditMetadata,
     handleNewPost,
     handleOpenDraft,
-    handleOpenProject,
     handleOpenSheet,
-    handleOpenResume,
+    handleOpenLink,
     handlePublish,
     handleDiscardDraft,
   } = useCommandPalette(close, openKey);
@@ -487,20 +496,22 @@ export function CommandPalette() {
                         {card.title}
                       </Command.Item>
                     ))}
-                    {projects.map((project) => (
+                  </Command.Group>
+                )}
+
+                {offersDestinations && (
+                  <Command.Group className={groupStyle}>
+                    <div className={groupHeadingStyle}>Links</div>
+                    {LINK_ROWS.map(({ label, href, Icon }) => (
                       <Command.Item
-                        key={project.slug}
+                        key={label}
                         className={itemStyle}
-                        onSelect={() => handleOpenProject(project)}
+                        onSelect={() => handleOpenLink(href)}
                       >
-                        <WorkIcon className={iconStyle} />
-                        {project.title ?? "Untitled"}
+                        <Icon className={iconStyle} />
+                        {label}
                       </Command.Item>
                     ))}
-                    <Command.Item className={itemStyle} onSelect={handleOpenResume}>
-                      <ResumeIcon className={iconStyle} />
-                      Resume
-                    </Command.Item>
                   </Command.Group>
                 )}
 

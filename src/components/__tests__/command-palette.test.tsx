@@ -55,7 +55,6 @@ vi.mock("@/app/actions/shader-preset", () => ({
 
 vi.mock("@/app/actions/post", () => ({
   getDrafts: vi.fn().mockResolvedValue([]),
-  getPublishedProjects: vi.fn().mockResolvedValue([]),
   createDraft: vi.fn(),
   saveDraft: vi.fn(),
   publishPost: vi.fn(),
@@ -654,48 +653,6 @@ describe("CommandPalette", () => {
   });
 
   describe("Projects", () => {
-    const projects = [
-      { slug: "shift-scheduling", title: "Shift Scheduling" },
-      { slug: "scheduling-extensions", title: "Scheduling Extensions" },
-    ];
-
-    beforeEach(async () => {
-      const { getPublishedProjects } = await import("@/app/actions/post");
-      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue(
-        projects,
-      );
-    });
-
-    afterEach(async () => {
-      const { getPublishedProjects } = await import("@/app/actions/post");
-      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    });
-
-    it("lists them for a visitor, under their own heading", async () => {
-      render(<CommandPalette />);
-      expect(await list().findByText("Shift Scheduling")).toBeDefined();
-      expect(list().getByText("Scheduling Extensions")).toBeDefined();
-      expect(list().getByText("Projects")).toBeDefined();
-    });
-
-    it("goes to the project and closes the palette", async () => {
-      render(<CommandPalette />);
-      const dialog = document.querySelector("dialog") as HTMLDialogElement;
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-
-      fireEvent.click(await list().findByText("Shift Scheduling"));
-
-      expect(mockPush).toHaveBeenCalledWith("/work/shift-scheduling");
-      expect(dialog.close).toHaveBeenCalledOnce();
-    });
-
-    it("leaves out the project being read, and keeps the rest", async () => {
-      mockPathname.mockReturnValue("/work/shift-scheduling");
-      render(<CommandPalette />);
-      expect(await list().findByText("Scheduling Extensions")).toBeDefined();
-      expect(list().queryByText("Shift Scheduling")).toBeNull();
-    });
-
     it("stands before the playgrounds", async () => {
       render(<CommandPalette />);
       const heading = await list().findByText("Projects");
@@ -706,9 +663,7 @@ describe("CommandPalette", () => {
       ).toBeTruthy();
     });
 
-    it("lists the homepage's project sheets first, even with nothing published", async () => {
-      const { getPublishedProjects } = await import("@/app/actions/post");
-      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    it("lists only the homepage's projects", async () => {
       render(<CommandPalette />);
       fireEvent.keyDown(window, { key: "k", metaKey: true });
       await act(async () => {});
@@ -717,29 +672,13 @@ describe("CommandPalette", () => {
         within(group)
           .getAllByRole("option")
           .map((row) => row.textContent),
-      ).toEqual(["Design system", "Check-ins and time tracking", "Activation and retention", "Resume"]);
+      ).toEqual(["Design system", "Check-ins and time tracking", "Activation and retention"]);
     });
 
     it("no longer lists the review-criteria prototype", async () => {
       render(<CommandPalette />);
       await act(async () => {});
       expect(list().queryByText("AI application review criteria")).toBeNull();
-    });
-
-    it("opens the resume in a new tab and closes the palette", async () => {
-      const opened: HTMLAnchorElement[] = [];
-      const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
-        opened.push(this);
-      });
-      render(<CommandPalette />);
-      const dialog = document.querySelector("dialog") as HTMLDialogElement;
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
-      fireEvent.click(list().getByText("Resume"));
-      expect(opened.map((anchor) => [anchor.getAttribute("href"), anchor.target])).toEqual([
-        ["/resume/SKartikIyer-ProductDesign-2026.pdf", "_blank"],
-      ]);
-      expect(dialog.close).toHaveBeenCalledOnce();
-      click.mockRestore();
     });
 
     it("goes to a project's address and closes the palette", async () => {
@@ -768,8 +707,55 @@ describe("CommandPalette", () => {
       render(<CommandPalette />);
       await act(async () => {});
       expect(list().queryByText("Projects")).toBeNull();
-      expect(list().queryByText("Shift Scheduling")).toBeNull();
       expect(list().queryByText("Activation and retention")).toBeNull();
+    });
+  });
+
+  describe("Links", () => {
+    it("lists the resume and profiles under their own heading, after the projects", async () => {
+      render(<CommandPalette />);
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      await act(async () => {});
+      const heading = list().getByText("Links");
+      expect(
+        within(heading.parentElement!)
+          .getAllByRole("option")
+          .map((row) => row.textContent),
+      ).toEqual(["Resume", "X", "GitHub", "LinkedIn"]);
+      expect(
+        list().getByText("Projects").compareDocumentPosition(heading) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it.each([
+      ["Resume", "/resume/SKartikIyer-ProductDesign-2026.pdf"],
+      ["X", "https://twitter.com/ikartik90"],
+      ["GitHub", "https://github.com/ikartik90"],
+      ["LinkedIn", "https://linkedin.com/in/ikartik90"],
+    ])("opens %s in a new tab and closes the palette", async (label, href) => {
+      const opened: HTMLAnchorElement[] = [];
+      const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+        opened.push(this);
+      });
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      fireEvent.click(list().getByText(label));
+      expect(opened.map((anchor) => [anchor.getAttribute("href"), anchor.target])).toEqual([[href, "_blank"]]);
+      expect(dialog.close).toHaveBeenCalledOnce();
+      click.mockRestore();
+    });
+
+    it("is withheld while editing, as every destination is", async () => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: "admin-id", email: "admin@example.com" } },
+      });
+      mockPathname.mockReturnValue("/edit/new");
+      render(<CommandPalette />);
+      await act(async () => {});
+      expect(list().queryByText("Links")).toBeNull();
+      expect(list().queryByText("Resume")).toBeNull();
     });
   });
 

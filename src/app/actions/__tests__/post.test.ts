@@ -79,7 +79,6 @@ const {
   publishPost,
   deleteDraft,
   getDrafts,
-  getPublishedProjects,
   isPostSlugAvailable,
 } = await import("../post");
 
@@ -228,40 +227,6 @@ describe("post server actions", () => {
       const posts = await getDrafts();
       expect(Array.isArray(posts)).toBe(true);
       expect(posts[0].id).toBe("post-1");
-    });
-  });
-
-  describe("getPublishedProjects", () => {
-    beforeEach(() => {
-      mockPrismaFindMany.mockResolvedValue([{ slug: "hello", title: "Hello" }]);
-    });
-
-    it("asks for published work alone, newest first", async () => {
-      await getPublishedProjects();
-      expect(mockPrismaFindMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { category: "WORK", publishedAt: { not: null } },
-          orderBy: { publishedAt: "desc" },
-        }),
-      );
-    });
-
-    it("fetches only what a row needs, never the document", async () => {
-      await getPublishedProjects();
-      const [args] = mockPrismaFindMany.mock.calls[0] as [{ select?: object }];
-      expect(args.select).toEqual({ slug: true, title: true });
-    });
-
-    it("returns the links", async () => {
-      expect(await getPublishedProjects()).toEqual([
-        { slug: "hello", title: "Hello" },
-      ]);
-    });
-
-    it("is open to a visitor — no session is asked for", async () => {
-      mockGetSession.mockResolvedValue({ data: null });
-      await expect(getPublishedProjects()).resolves.toHaveLength(1);
-      expect(mockGetSession).not.toHaveBeenCalled();
     });
   });
 
