@@ -48,6 +48,7 @@ vi.mock("@/utils/open-in-new-tab", () => ({
 // Stubbed: action modules import @/lib/env, which throws at import time without a .env.
 vi.mock("@/app/actions/shader-preset", () => ({
   getShaderPresets: vi.fn().mockResolvedValue([]),
+  getPublishedShaderPresets: vi.fn().mockResolvedValue([]),
   getShaderPreset: vi.fn(),
   createShaderPreset: vi.fn(),
   saveShaderPreset: vi.fn(),
@@ -1446,6 +1447,17 @@ describe("useCommandPalette", () => {
       act(() => result.current.handleOpenSheet(checkIns));
 
       expect(mockPush).toHaveBeenCalledWith("/projects/check-ins");
+      expect(close).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("handleOpenShader", () => {
+    it("goes to the preset and closes the palette", () => {
+      const { result } = renderHook(() => useCommandPalette(close));
+
+      act(() => result.current.handleOpenShader("preset-1"));
+
+      expect(mockPush).toHaveBeenCalledWith("/playground/shader/preset-1");
       expect(close).toHaveBeenCalledOnce();
     });
   });

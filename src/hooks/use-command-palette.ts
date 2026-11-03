@@ -30,8 +30,11 @@ import { notifyContentUpdated } from "@/utils/content-sync";
 import { autosaveKey, clearAutosave } from "@/utils/editor-autosave";
 import {
   createShaderPreset,
+  getPublishedShaderPresets,
   saveShaderPreset,
 } from "@/app/actions/shader-preset";
+import { SHADER_SPECS } from "@/data/shader-specs";
+import { shaderPresetPath } from "@/data/site-paths";
 import {
   hasUnsavedShaderPresetWork,
   useShaderPresetDraftStore,
@@ -66,10 +69,10 @@ export interface CommandPaletteHandlers {
   handleSaveChanges: () => Promise<void>;
   handleDiscardAndExit: () => void;
   handleThemeToggle: () => void;
-  handleShaderPlayground: () => void;
+  /** Each shader's newest published preset, newest first, minus the one on screen. */
+  shaders: { presetId: string; label: string }[];
+  handleOpenShader: (presetId: string) => void;
   isShaderPlayground: boolean;
-  handleCalchemyPlayground: () => void;
-  isCalchemyPlayground: boolean;
   handleIconsPlayground: () => void;
   isIconsPlayground: boolean;
   /** Admin only: the testimonials aren't cleared for display, and the page 404s for others. */
@@ -117,8 +120,6 @@ export function useCommandPalette(
   const isHomeEditMode = pathname === "/edit/home";
 
   const isShaderPlayground = /^\/playground\/shader(\/[^/]+)?$/.test(pathname);
-
-  const isCalchemyPlayground = pathname === "/playground/calchemy";
 
   const isIconsPlayground = pathname === "/playground/icons";
 
@@ -168,6 +169,35 @@ export function useCommandPalette(
       ignore = true;
     };
   }, [isAdmin, openKey]);
+
+  const [publishedPresets, setPublishedPresets] = useState<{ id: string; shaderId: string }[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    getPublishedShaderPresets()
+      .then((data) => {
+        if (!ignore) setPublishedPresets(data);
+      })
+      .catch(() => {
+        if (!ignore) setPublishedPresets([]);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [openKey]);
+
+  const shaders = useMemo(() => {
+    const newest = new Map<string, string>();
+    for (const { id, shaderId } of publishedPresets) {
+      if (!newest.has(shaderId) && shaderId in SHADER_SPECS) newest.set(shaderId, id);
+    }
+    return [...newest]
+      .filter(([, presetId]) => shaderPresetPath(presetId) !== pathname)
+      .map(([shaderId, presetId]) => ({
+        presetId,
+        label: SHADER_SPECS[shaderId as keyof typeof SHADER_SPECS].label,
+      }));
+  }, [publishedPresets, pathname]);
 
   const sheets = PROJECT_CARDS.filter((card) => projectPath(card.id, reviewBase(pathname)) !== pathname);
 
@@ -301,14 +331,9 @@ export function useCommandPalette(
     close();
   };
 
-  const handleShaderPlayground = () => {
+  const handleOpenShader = (presetId: string) => {
     close();
-    router.push("/playground/shader");
-  };
-
-  const handleCalchemyPlayground = () => {
-    close();
-    router.push("/playground/calchemy");
+    router.push(shaderPresetPath(presetId));
   };
 
   const handleIconsPlayground = () => {
@@ -678,10 +703,9 @@ export function useCommandPalette(
     backTarget,
     handleBack,
     handleThemeToggle,
-    handleShaderPlayground,
+    shaders,
+    handleOpenShader,
     isShaderPlayground,
-    handleCalchemyPlayground,
-    isCalchemyPlayground,
     handleIconsPlayground,
     isIconsPlayground,
     handleTestimonials,
