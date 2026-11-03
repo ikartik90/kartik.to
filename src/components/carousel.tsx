@@ -67,6 +67,8 @@ export interface CarouselProps {
     ref?: Ref<HTMLDivElement>;
     [state: `data-${string}`]: unknown;
   };
+  /** False leaves the arrows out, for a strip moved only by dragging. */
+  controls?: boolean;
   /** On the arrows' row; its `className` is added to the recipe's. */
   controlsProps?: HTMLAttributes<HTMLDivElement> & {
     [state: `data-${string}`]: unknown;
@@ -81,6 +83,7 @@ export function Carousel({
   contained = false,
   size,
   rootProps,
+  controls = true,
   controlsProps,
   children,
 }: CarouselProps) {
@@ -151,7 +154,7 @@ export function Carousel({
 
   return (
     <div {...rootProps} className={styles.root} data-carousel="">
-      {reach.scrollable && (
+      {controls && reach.scrollable && (
         <div {...controlsProps} className={cx(styles.controls, controlsProps?.className)}>
           <Button
             variant="icon"

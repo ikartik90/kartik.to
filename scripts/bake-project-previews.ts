@@ -1,10 +1,11 @@
-// Bakes each homepage project's link preview: its card's face, hovered, filling 1200 × 630, without its frame or icon.
+// Bakes each homepage project's link preview: its card's face at rest, its live app on the monitor, filling 1200 × 630,
+// without its frame or icon.
 // Run against a dev server whenever a card's words or cover change:
 //   node scripts/bake-project-previews.ts [https://localhost:3000]
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { chromium } from "@playwright/test";
-import { OPEN_CARDS, projectPreviewPath } from "../src/app/_project-stacks/data.ts";
+import { PROJECT_CARDS, projectPreviewPath } from "../src/data/project-cards.ts";
 
 const BASE = process.argv[2] ?? "https://localhost:3000";
 // Drawn at 1.5x, so the face is about as tall as a full-size card (400px), the size its cover is drawn for.
@@ -21,17 +22,16 @@ const page = await browser.newPage({
   colorScheme: "light",
 });
 
-for (const { id } of OPEN_CARDS) {
+for (const { id } of PROJECT_CARDS) {
   await page.goto(`${BASE}/`, { waitUntil: "load" });
+  // In view, so the card builds its live app.
+  await page.locator(`[data-sheet-card="${id}"]`).scrollIntoViewIfNeeded();
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(
     ({ id, STAGE }) => {
-      const card = document.querySelector<HTMLElement>(`a[data-sheet-card="${id}"]`);
-      const surface = card?.querySelector<HTMLElement>("[data-sheet-source]");
-      const text = card?.querySelector<HTMLElement>("[data-face-text]");
-      if (!card || !surface || !text) throw new Error(`No card for ${id}`);
-      // At the card's own measure, so the heading wraps where it does on the card.
-      text.style.width = `${text.offsetWidth}px`;
+      const card = document.querySelector<HTMLElement>(`[data-sheet-card="${id}"]`);
+      const surface = card?.querySelector<HTMLElement>(":scope > a + span");
+      if (!card || !surface) throw new Error(`No card for ${id}`);
       const stage = document.createElement("div");
       stage.id = "preview-stage";
       Object.assign(stage.style, {
@@ -53,9 +53,8 @@ for (const { id } of OPEN_CARDS) {
     },
     { id, STAGE },
   );
-  await page.hover(`#preview-stage [data-sheet-card="${id}"]`);
-
-  // Until the figure's hover play settles.
+  // Until the live app has drawn and settled; the blank screen before it is just as still.
+  await page.locator(`[data-sheet-card="${id}"] [inert] > *`).first().waitFor();
   let shot = await page.screenshot({ clip });
   for (let tries = 0; tries < 30; tries++) {
     await page.waitForTimeout(400);

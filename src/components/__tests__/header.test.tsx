@@ -97,7 +97,7 @@ describe("Header", () => {
   });
 
   // A project's address is the homepage under its sheet: the page beneath must not lose the header as it opens.
-  it.each(["/projects/onboarding", "/dive/projects/check-ins"])("stays at %s", (path) => {
+  it.each(["/projects/design-system", "/dive/projects/check-ins"])("stays at %s", (path) => {
     mockPathname.mockReturnValue(path);
     render(<Header />);
     expect(screen.getByRole("banner")).toBeDefined();

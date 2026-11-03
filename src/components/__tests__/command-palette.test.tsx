@@ -717,39 +717,47 @@ describe("CommandPalette", () => {
         within(group)
           .getAllByRole("option")
           .map((row) => row.textContent),
-      ).toEqual(["Check-ins and time tracking", "Company onboarding", "Shift scheduling"]);
+      ).toEqual(["Design system", "Check-ins and time tracking", "Activation and retention", "Resume"]);
     });
 
-    it("no longer lists the review-criteria prototype, or the post a sheet stands in for", async () => {
-      const { getPublishedProjects } = await import("@/app/actions/post");
-      (getPublishedProjects as ReturnType<typeof vi.fn>).mockResolvedValue([
-        {
-          slug: "redesigning-shift-scheduling",
-          title: "Redesigning shift scheduling",
-        },
-      ]);
+    it("no longer lists the review-criteria prototype", async () => {
       render(<CommandPalette />);
       await act(async () => {});
-      expect(list().queryByText("Redesigning shift scheduling")).toBeNull();
       expect(list().queryByText("AI application review criteria")).toBeNull();
     });
 
-    it("goes to a sheet's address and closes the palette", async () => {
+    it("opens the resume in a new tab and closes the palette", async () => {
+      const opened: HTMLAnchorElement[] = [];
+      const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+        opened.push(this);
+      });
+      render(<CommandPalette />);
+      const dialog = document.querySelector("dialog") as HTMLDialogElement;
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      fireEvent.click(list().getByText("Resume"));
+      expect(opened.map((anchor) => [anchor.getAttribute("href"), anchor.target])).toEqual([
+        ["/resume/SKartikIyer-ProductDesign-2026.pdf", "_blank"],
+      ]);
+      expect(dialog.close).toHaveBeenCalledOnce();
+      click.mockRestore();
+    });
+
+    it("goes to a project's address and closes the palette", async () => {
       render(<CommandPalette />);
       const dialog = document.querySelector("dialog") as HTMLDialogElement;
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
-      fireEvent.click(list().getByText("Company onboarding"));
+      fireEvent.click(list().getByText("Activation and retention"));
 
-      expect(mockPush).toHaveBeenCalledWith("/projects/onboarding");
+      expect(mockPush).toHaveBeenCalledWith("/projects/activation-and-retention");
       expect(dialog.close).toHaveBeenCalledOnce();
     });
 
-    it("leaves out the sheet on screen", async () => {
-      mockPathname.mockReturnValue("/projects/onboarding");
+    it("leaves out the project on screen", async () => {
+      mockPathname.mockReturnValue("/projects/activation-and-retention");
       render(<CommandPalette />);
-      expect(await list().findByText("Shift scheduling")).toBeDefined();
-      expect(list().queryByText("Company onboarding")).toBeNull();
+      expect(await list().findByText("Design system")).toBeDefined();
+      expect(list().queryByText("Activation and retention")).toBeNull();
     });
 
     it("is withheld while editing, as every destination is", async () => {
@@ -761,7 +769,7 @@ describe("CommandPalette", () => {
       await act(async () => {});
       expect(list().queryByText("Projects")).toBeNull();
       expect(list().queryByText("Shift Scheduling")).toBeNull();
-      expect(list().queryByText("Company onboarding")).toBeNull();
+      expect(list().queryByText("Activation and retention")).toBeNull();
     });
   });
 

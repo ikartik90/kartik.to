@@ -19,6 +19,7 @@ import OctocatIcon from "@/assets/icons/octocat.svg";
 import ResumeIcon from "@/assets/icons/resume.svg";
 import TwitterIcon from "@/assets/icons/twitter.svg";
 import { SOCIAL_PROFILES } from "@/data/site";
+import { RESUME_PATH } from "@/data/site-paths";
 import { useCursorTooltip } from "@/hooks/use-cursor-tooltip";
 import { css, cx } from "../../styled-system/css";
 import { menuIcon, tooltip, tooltipIcon } from "../../styled-system/recipes";
@@ -65,7 +66,7 @@ const SOCIAL_ITEMS = [
   {
     id: "resume",
     label: "Resume",
-    href: "/resume/SKartikIyer-ProductDesign-2026.pdf",
+    href: RESUME_PATH,
     Icon: ResumeIcon,
     maskSrc: "/social-shader-masks/resume.svg",
     action: "link",

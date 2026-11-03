@@ -10,14 +10,18 @@ import { HomeHero } from "../home-hero";
 afterEach(() => cleanup());
 
 describe("HomeHero", () => {
-  it("is the page's one heading, in two lines", () => {
+  it("is the page's one heading, in three lines, with shorter ones for phones too narrow for them", () => {
     render(<HomeHero />);
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.textContent).toBe("Design craft meets engineering prowess");
-    expect([...heading.children].map((line) => line.textContent)).toEqual(["Design craft meets", "engineering prowess"]);
+    const wordings = [...heading.children].map((wording) => [...wording.children].map((line) => line.textContent));
+    expect(wordings).toEqual([
+      ["12 years of design craft", "and engineering know\u2011how", "for early\u2011stage product teams"],
+      ["12 years of design craft and", "engineering know\u2011how", "for early\u2011stage teams"],
+      ["12 years of design craft &", "engineering know\u2011how", "for early\u2011stage teams"],
+    ]);
   });
 
-  it("introduces Kartik in three paragraphs", () => {
+  it("introduces Kartik in two paragraphs", () => {
     render(<HomeHero />);
     const section = screen.getByRole("region", { name: "Introduction" });
     const paragraphs = within(section)
@@ -25,7 +29,6 @@ describe("HomeHero", () => {
       .map((p) => p.textContent);
     expect(paragraphs).toEqual([
       "I'm Kartik Iyer, a Toronto-based designer and builder.",
-      "I've dedicated over 12 years listening to customers and cross-functional teams, turning their roughly articulated ideas into coherent products.",
       "I thrive in environments of high agency, urgency, and uncertainty. I invest care into the details that make software feel considered.",
     ]);
   });
@@ -41,12 +44,9 @@ describe("HomeHero", () => {
     expect(screen.getByText("Toronto, ON").querySelector("svg")).toBeNull();
   });
 
-  it("leads to the work on the page and opens the resume in a new tab", () => {
+  it("offers no buttons, the work following straight after it", () => {
     render(<HomeHero />);
-    expect(screen.getByRole("link", { name: "See my work" }).getAttribute("href")).toBe("#work");
-    const resume = screen.getByRole("link", { name: "Resume" });
-    expect(resume.getAttribute("href")).toBe("/resume/SKartikIyer-ProductDesign-2026.pdf");
-    expect(resume.getAttribute("target")).toBe("_blank");
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
   it("draws the dithering behind the words", () => {
@@ -54,22 +54,16 @@ describe("HomeHero", () => {
     expect(container.querySelector("[data-dither-ground]")).not.toBeNull();
   });
 
-  it("opens the page: the pills and the heading a line apart, then the lede and the buttons as they stand", () => {
+  it("opens the page: the pills and the heading a line apart, then the lede", () => {
     const { container } = render(<HomeHero />);
-    const delay = (el: Element, name = "--opening-delay") => (el as HTMLElement).style.getPropertyValue(name);
+    const delay = (el: Element) => (el as HTMLElement).style.getPropertyValue("--opening-delay");
     const lines = [...container.querySelectorAll("[data-opening-line]")];
-    expect(lines.map((line) => line.textContent)).toEqual([
-      "Available for workToronto, ON",
-      "Design craft meets engineering prowess",
-    ]);
+    expect(lines.map((line) => line.textContent?.slice(0, 24))).toEqual(["Available for workToront", "12 years of design craft"]);
     expect(lines.map((line) => delay(line))).toEqual(["0ms", "100ms"]);
     const steps = [...container.querySelectorAll("[data-opening-step]")];
-    const ctas = screen.getByRole("link", { name: "See my work" }).parentElement!;
     const lede = screen.getByText("I'm Kartik Iyer, a Toronto-based designer and builder.").closest("[data-opening-step]")!;
-    expect(steps).toEqual([lede, ctas]);
-    // In one column the lede stands above the buttons; side by side, beside the heading and the buttons below it.
-    expect([lede, ctas].map((step) => delay(step, "--opening-delay-stacked"))).toEqual(["250ms", "400ms"]);
-    expect([ctas, lede].map((step) => delay(step, "--opening-delay-beside"))).toEqual(["250ms", "400ms"]);
+    expect(steps).toEqual([lede]);
+    expect(delay(lede)).toBe("250ms");
   });
 
   it("keeps the line the lede measures against out of the accessibility tree", () => {

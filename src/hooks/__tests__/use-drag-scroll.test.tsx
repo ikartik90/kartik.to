@@ -2,6 +2,7 @@
 import { useRef } from "react";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { markSyntheticPointer } from "@/utils/synthetic-pointer";
 import { useDragScroll } from "../use-drag-scroll";
 
 function Strip({
@@ -36,6 +37,7 @@ function pointer(
     buttons = type === "pointerup" ? 0 : 1,
     target = slide() as Element,
     at,
+    synthetic = false,
   }: {
     pointerType?: string;
     button?: number;
@@ -43,6 +45,8 @@ function pointer(
     target?: Element;
     /** When the pointer was there, on `performance.now()`'s clock, if not when the event arrives. */
     at?: number;
+    /** Fired by a demo playing in a slide. */
+    synthetic?: boolean;
   } = {},
 ) {
   const event = new PointerEvent(type, {
@@ -56,6 +60,7 @@ function pointer(
     clientY: 100,
   });
   if (at !== undefined) Object.defineProperty(event, "timeStamp", { value: at });
+  if (synthetic) markSyntheticPointer(event);
   act(() => {
     target.dispatchEvent(event);
   });
@@ -130,6 +135,31 @@ describe("useDragScroll", () => {
     pointer("pointermove", 460);
     frames(300);
     expect(strip().scrollLeft).toBe(20);
+  });
+
+  it("leaves a demo's drag inside a slide to the slide", () => {
+    render(<Strip landing={() => 0} />);
+    pointer("pointerdown", 500, { synthetic: true });
+    for (const x of [480, 400, 300]) {
+      vi.advanceTimersByTime(16);
+      pointer("pointermove", x, { synthetic: true });
+    }
+    frames(300);
+    expect(strip().scrollLeft).toBe(0);
+    pointer("pointerup", 300, { synthetic: true });
+    frames(1000);
+    expect(strip().scrollLeft).toBe(0);
+  });
+
+  it("follows only the visitor's own pointer while a demo moves its own", () => {
+    render(<Strip landing={() => 0} />);
+    drag([440], { release: false });
+    pointer("pointermove", 900, { synthetic: true });
+    pointer("pointerup", 900, { synthetic: true });
+    vi.advanceTimersByTime(16);
+    pointer("pointermove", 380);
+    frames(300);
+    expect(strip().scrollLeft).toBe(100);
   });
 
   it("moves the strip on frames only, however many moves arrive between them", () => {

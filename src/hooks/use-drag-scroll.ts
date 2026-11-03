@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, type RefObject } from "react";
+import { isSyntheticPointer } from "@/utils/synthetic-pointer";
 
 // Travel in px before a press becomes a drag; less stays a click. From `PREPARE_PX`, snapping goes off ahead of it.
 const SLOP = 10;
@@ -271,7 +272,7 @@ export function useDragScroll(
     // button already up, so either counts the release's own position.
     const release = (event: PointerEvent) => {
       const current = press;
-      if (!current || event.pointerId !== current.id) return;
+      if (!current || event.pointerId !== current.id || isSyntheticPointer(event)) return;
       press = null;
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", release);
@@ -290,7 +291,7 @@ export function useDragScroll(
 
     function onPointerMove(event: PointerEvent) {
       const current = press;
-      if (!current || event.pointerId !== current.id) return;
+      if (!current || event.pointerId !== current.id || isSyntheticPointer(event)) return;
       if (!(event.buttons & 1)) return release(event);
       // Safari and Chrome fold the moves since the last event into it.
       const moves = event.getCoalescedEvents?.() ?? [];
@@ -299,9 +300,10 @@ export function useDragScroll(
       }
     }
 
-    // Catching a glide holds the strip where it is, as a drag already under way.
+    // Catching a glide holds the strip where it is, as a drag already under way. A demo's pointer, playing in a slide,
+    // shares the mouse's id: its presses and moves stay the slide's.
     const onPointerDown = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse" || event.button !== 0 || press) return;
+      if (event.pointerType !== "mouse" || event.button !== 0 || press || isSyntheticPointer(event)) return;
       const caught = frame !== 0;
       stopGlide();
       const time = stamp(event);

@@ -2,6 +2,62 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
+// The Spotwork prototype's SW Curie components and the parts each holds alone (`Dropdown.Item` in a `Dropdown`).
+const SW_CURIE_PARTS = {
+  Dropdown: ["Item"],
+  TypeAhead: ["Item"],
+  PopoverMenu: ["Item"],
+  BulkSelect: ["Item"],
+  Sidebar: ["Item", "GroupLabel"],
+  Multiselect: ["Option"],
+  NotesAndHistory: ["Toggle"],
+  Field: ["Label", "HintText"],
+};
+
+/** The component an element is, or is a holding part of (`Sidebar.Group`); a part held alone isn't one. */
+const ownerOf = (name) => {
+  if (name.type === "JSXIdentifier")
+    return SW_CURIE_PARTS[name.name] && name.name;
+  if (name.type !== "JSXMemberExpression") return undefined;
+  const parts = SW_CURIE_PARTS[name.object.name];
+  return parts && !parts.includes(name.property.name)
+    ? name.object.name
+    : undefined;
+};
+
+const swCurie = {
+  rules: {
+    // A part written inside another component; one built away from any is left to the runtime check.
+    "item-in-its-list": {
+      meta: { type: "problem", schema: [] },
+      create: (context) => ({
+        JSXOpeningElement(node) {
+          const { name } = node;
+          if (name.type !== "JSXMemberExpression") return;
+          const own = name.object.name;
+          if (!SW_CURIE_PARTS[own]?.includes(name.property.name)) return;
+          for (
+            let element = node.parent.parent;
+            element;
+            element = element.parent
+          ) {
+            const owner =
+              element.type === "JSXElement" &&
+              ownerOf(element.openingElement.name);
+            if (!owner) continue;
+            if (owner !== own)
+              context.report({
+                node,
+                message: `${own}.${name.property.name} must be used inside ${own}, not ${owner}.`,
+              });
+            return;
+          }
+        },
+      }),
+    },
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -57,6 +113,11 @@ const eslintConfig = defineConfig([
     rules: {
       "react-hooks/rules-of-hooks": "off",
     },
+  },
+  {
+    files: ["src/app/projects/_spotwork/**/*.tsx"],
+    plugins: { "sw-curie": swCurie },
+    rules: { "sw-curie/item-in-its-list": "error" },
   },
   // Replaces eslint-config-next's default ignores, so they are re-listed here.
   globalIgnores([

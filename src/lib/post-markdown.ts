@@ -1,4 +1,3 @@
-import { canonicalPath } from "@/app/_project-stacks/data";
 import type { PostCategory } from "@/domain/post";
 import { findMovedPostPath, getPublishedPostBySlug } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
@@ -29,7 +28,7 @@ export async function postMarkdownResponse(
   return new Response(body, {
     headers: {
       "Content-Type": "text/markdown; charset=utf-8",
-      Link: `<${SITE_URL}${canonicalPath(getPostReadUrl(category, slug))}>; rel="canonical"`,
+      Link: `<${SITE_URL}${getPostReadUrl(category, slug)}>; rel="canonical"`,
     },
   });
 }

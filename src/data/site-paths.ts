@@ -29,6 +29,8 @@ export const SITE_PAGES = {
 
 export const SITE_PATHS: SitePath[] = Object.values(SITE_PAGES);
 
+export const RESUME_PATH = "/resume/SKartikIyer-ProductDesign-2026.pdf";
+
 export function sitePathTitle(path: string): string | undefined {
   return SITE_PATHS.find((entry) => entry.path === path)?.title;
 }

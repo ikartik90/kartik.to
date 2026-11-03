@@ -1,12 +1,13 @@
 "use client";
 
 import { css } from "../../../styled-system/css";
+import type { SystemStyleObject } from "../../../styled-system/types";
 import type { DemoCursorTourState } from "@/hooks/use-demo-cursor-tour";
 
 /** The arrow tip in the 20×20 asset; must match globals.css's `1 3` hotspot. */
 const HOTSPOT = { x: 1, y: 3 } as const;
 
-const cursorStyle = css({
+const cursorBase = css.raw({
   position: "absolute",
   top: 0,
   left: 0,
@@ -15,6 +16,9 @@ const cursorStyle = css({
   // Above popovers (50). Render it outside the demo's stacking contexts or it sits beneath them.
   zIndex: 60,
   pointerEvents: "none",
+  // A selected date's colours, reversed: the secondary brand colour edging the brand colour.
+  "--cursor-ink": "token(colors.field.text.active)",
+  "--cursor-edge": "token(colors.field.bg.active)",
   opacity: 0,
   transitionProperty: "transform, opacity",
   // Transform's duration is set per move; opacity's is fixed.
@@ -38,9 +42,8 @@ const glyphStyle = css({
   "& > svg": { display: "block", width: "token(spacing.full)", height: "token(spacing.full)" },
 });
 
-// A selected date's colours, reversed: the secondary brand colour edging the brand colour.
-const edgeStyle = css({ stroke: "field.bg.active" });
-const bodyStyle = css({ fill: "field.text.active", stroke: "field.text.active" });
+const edgeStyle = css({ stroke: "var(--cursor-edge)" });
+const bodyStyle = css({ fill: "var(--cursor-ink)", stroke: "var(--cursor-ink)" });
 
 const tapStyle = css({
   position: "absolute",
@@ -53,11 +56,14 @@ const tapStyle = css({
   borderRadius: "full",
   borderWidth: "1.5px",
   borderStyle: "solid",
-  borderColor: "field.text.active",
+  borderColor: "var(--cursor-ink)",
   animation: "demoCursorTap 420ms ease-out forwards",
 });
 
-export type DemoCursorProps = DemoCursorTourState;
+export type DemoCursorProps = DemoCursorTourState & {
+  /** Merged over the cursor's own styles, its colours as `--cursor-ink` and `--cursor-edge`; pass a `css.raw()`. */
+  css?: SystemStyleObject;
+};
 
 export function DemoCursor({
   point,
@@ -65,6 +71,7 @@ export function DemoCursor({
   pressed,
   taps,
   visible,
+  css: cssProp,
 }: DemoCursorProps) {
   if (!point) return null;
 
@@ -73,7 +80,7 @@ export function DemoCursor({
       aria-hidden
       data-demo-cursor
       data-visible={visible || undefined}
-      className={cursorStyle}
+      className={css(cursorBase, cssProp)}
       style={{
         transform: `translate3d(${point.x - HOTSPOT.x}px, ${point.y - HOTSPOT.y}px, 0)`,
         transitionDuration: `${moveMs}ms, 260ms`,

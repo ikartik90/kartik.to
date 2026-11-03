@@ -51,7 +51,7 @@ import {
   articleMetricLabel,
   horizontalRule,
 } from "./article";
-import { calendar } from "./calendar";
+import { calendar } from "../input/calendar.recipe";
 import { carousel } from "./carousel";
 import { colorChannel } from "./color-channel";
 import { colorPickerPopover } from "./color-picker-popover";
@@ -70,9 +70,8 @@ import {
 import { mediaObjectToolbar } from "./media-object-toolbar";
 import { menuIcon } from "./menu-icon";
 import { menuItem } from "./menu-item";
-import { pageOpening } from "./page-opening";
+import { pageOpening } from "../../home-hero.recipe";
 import { propertiesPanel } from "./properties-panel";
-import { sectionHeadline } from "./section-headline";
 import { segmentedControl } from "./segmented-control";
 import { selectionPopover } from "./selection-popover";
 import { testimonialCard } from "./testimonial-card";
@@ -143,7 +142,6 @@ export const recipes = {
   commandGroup,
   mediaObjectToolbar,
   pageOpening,
-  sectionHeadline,
 };
 
 export const slotRecipes = {

@@ -13,8 +13,6 @@ export const PAGE_OPENING = {
 
 /** The hero's pills, then its heading. */
 export const HERO_OPENING_LINES = 2;
-/** Its lede and its buttons. */
-export const HERO_OPENING_STEPS = 2;
 
 /** When the opening's `i`th line starts, in ms. */
 export const openingLineDelay = (i: number) => i * PAGE_OPENING.lineGapMs;

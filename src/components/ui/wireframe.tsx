@@ -2,6 +2,7 @@
 
 import {
   Children,
+  cloneElement,
   createContext,
   isValidElement,
   useContext,
@@ -117,6 +118,8 @@ export interface WireframeProps extends HTMLAttributes<HTMLDivElement> {
   opacity?: WireframeOpacity;
   /** Keeps the subtree live; otherwise the scope is `inert`. */
   interactive?: boolean;
+  /** The scope on its one child element, in place of a box of its own. */
+  asChild?: boolean;
   children: ReactNode;
 }
 
@@ -125,6 +128,7 @@ export function Wireframe({
   mode = "placeholder",
   opacity = 50,
   interactive = false,
+  asChild = false,
   children,
   className,
   ...rest
@@ -132,23 +136,28 @@ export function Wireframe({
   const value = useMemo(() => (enabled ? { mode } : null), [enabled, mode]);
   // Panda keys variants by string.
   const level = String(opacity) as `${WireframeOpacity}`;
+  const scope = {
+    className: enabled ? cx(wireframe({ mode, opacity: level }), className) : className,
+    inert: enabled && !interactive,
+    // Hidden only while inert: hiding focusable controls is worse than not hiding.
+    "aria-hidden": enabled && !interactive && mode === "placeholder" ? true : undefined,
+    "aria-busy": enabled && mode === "loading" ? true : undefined,
+    ...rest,
+  };
+
+  if (asChild && isValidElement<{ className?: string }>(children)) {
+    // Only what the scope sets, so an off scope leaves its child as it is.
+    const set = Object.fromEntries(Object.entries(scope).filter(([, given]) => given !== undefined && given !== false));
+    return (
+      <WireframeContext.Provider value={value}>
+        {cloneElement(children, { ...set, className: cx(children.props.className, scope.className) })}
+      </WireframeContext.Provider>
+    );
+  }
 
   return (
     <WireframeContext.Provider value={value}>
-      <div
-        className={
-          enabled ? cx(wireframe({ mode, opacity: level }), className) : className
-        }
-        inert={enabled && !interactive}
-        // Hidden only while inert: hiding focusable controls is worse than not hiding.
-        aria-hidden={
-          enabled && !interactive && mode === "placeholder" ? true : undefined
-        }
-        aria-busy={enabled && mode === "loading" ? true : undefined}
-        {...rest}
-      >
-        {children}
-      </div>
+      <div {...scope}>{children}</div>
     </WireframeContext.Provider>
   );
 }

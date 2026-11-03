@@ -38,12 +38,13 @@ jobs:
 
       - run: npm ci
 
-      # Both are gitignored, so lint and tsc have nothing to resolve until the
-      # generators have run.
-      - name: Generate Prisma client and Panda styled-system
+      # All three are gitignored, so lint and tsc have nothing to resolve until
+      # the generators have run. `next-env.d.ts` types the image imports.
+      - name: Generate Prisma client, Panda styled-system and Next types
         run: |
           npx prisma generate
           npx panda codegen
+          npx next typegen
 
       - name: Lint
         run: npm run lint

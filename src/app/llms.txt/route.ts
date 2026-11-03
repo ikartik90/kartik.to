@@ -2,7 +2,7 @@ import { PostCategorySchema } from "@/domain/post";
 import { getPublishedPostsByCategory } from "@/lib/posts";
 import { SITE_URL } from "@/lib/site-url";
 import { llmsTxt } from "@/utils/site-index";
-import { LISTED_PROJECTS } from "../_project-stacks/data";
+import { LISTED_PROJECTS } from "@/data/project-cards";
 
 export const dynamic = "force-dynamic";
 
