@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { cx } from "../../../../styled-system/css";
 import { subscribeProjectSheet } from "@/utils/project-sheet-channel";
+import { takeProjectIntent } from "@/utils/project-intent";
 import { LandingCards } from "./landing/landing-cards";
 import { PrototypeOverlay, type OverlayHandle } from "./prototype-overlay";
 import { manrope, poppins, spotworkTheme } from "./theme";
@@ -22,6 +23,12 @@ export function SpotworkProjects({ id, project, base }: { id?: string; project?:
   const { openId, open, switchTo, closed } = useProjectAddress(project, overlay, base);
   // The command palette's projects open here while the page is on screen, rather than loading it again.
   useEffect(() => subscribeProjectSheet((to) => !openId && open(to)));
+  // A card pressed before the page was live, which the head script held.
+  useEffect(() => {
+    const pressed = takeProjectIntent();
+    if (pressed && !openId) open(pressed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
@@ -33,6 +40,8 @@ export function SpotworkProjects({ id, project, base }: { id?: string; project?:
         themeClassName={THEME}
         initial={openId ? { project: openId, version: VERSIONS[openId] } : undefined}
         onProject={switchTo}
+        // Out until they're written for every project.
+        comments={false}
       />
     </>
   );

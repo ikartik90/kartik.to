@@ -27,11 +27,11 @@ function Controls() {
   );
 }
 
-function Harness({ hidden, inDialog }: { hidden?: boolean; inDialog?: boolean }) {
+function Harness({ hidden, inDialog, comments }: { hidden?: boolean; inDialog?: boolean; comments?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   return (
     <div ref={root}>
-      <TourProvider root={root} hidden={hidden}>
+      <TourProvider root={root} hidden={hidden} comments={comments}>
         {inDialog ? (
           <div data-scrim="">
             <div role="dialog" aria-label="Check in">
@@ -67,6 +67,12 @@ describe("the walk-through's comment", () => {
   it("shows the current step collapsed, as a pin", async () => {
     const { pin } = await setup();
     expect(pin().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shows none when left out, as the live site leaves them until they're published", async () => {
+    render(<Harness comments={false} />);
+    await wait(50);
+    expect(screen.queryByRole("button", { name: (name) => name.startsWith("Kartik Iyer") })).toBeNull();
   });
 
   it("fades out of reach and collapses while hidden, as the demo plays, and comes back after", async () => {

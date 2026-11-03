@@ -14,6 +14,7 @@ import { AUTHOR, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/data/site";
 import { siteCard } from "@/lib/post-metadata";
 import { SITE_URL } from "@/lib/site-url";
 import { PALETTE_INTENT_SCRIPT } from "@/utils/palette-intent";
+import { PROJECT_INTENT_SCRIPT } from "@/utils/project-intent";
 
 const switzer = localFont({
   src: "../../public/fonts/Switzer-Variable.woff2",
@@ -66,6 +67,11 @@ export default function RootLayout({
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: PALETTE_INTENT_SCRIPT }}
+        />
+        {/* Holds a project's card pressed before hydration; the homepage's projects collect it on mount. */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: PROJECT_INTENT_SCRIPT }}
         />
       </head>
       <body>

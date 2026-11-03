@@ -307,6 +307,7 @@ export function PrototypeOverlay({
   themeClassName,
   initial,
   onProject,
+  comments,
 }: {
   ref?: Ref<OverlayHandle>;
   open: boolean;
@@ -316,6 +317,8 @@ export function PrototypeOverlay({
   initial?: Choice;
   /** Each project it shows, from the one it opens on. */
   onProject?: (project: string) => void;
+  /** False leaves the walk-through's comments out. */
+  comments?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const opening = useRef<Animation[]>([]);
@@ -369,6 +372,7 @@ export function PrototypeOverlay({
           themeClassName={themeClassName}
           initial={initial}
           onProject={onProject}
+          comments={comments}
         />
       )}
     </Dialog>
@@ -382,6 +386,7 @@ function OverlayContent({
   themeClassName,
   initial = { project: "check-ins", version: "company" },
   onProject,
+  comments,
 }: {
   dialog: React.RefObject<HTMLDialogElement | null>;
   /** Once the window's in, for the opening to play. */
@@ -390,6 +395,7 @@ function OverlayContent({
   themeClassName: string;
   initial?: Choice;
   onProject?: (project: string) => void;
+  comments?: boolean;
 }) {
   const phone = useMedia(PHONE);
   // The dock's projects stay out until the first press, key or scroll in the overlay.
@@ -544,7 +550,7 @@ function OverlayContent({
   );
 
   return (
-    <TourProvider root={dialog} hidden={demo.playing}>
+    <TourProvider root={dialog} hidden={demo.playing} comments={comments}>
       <div
         ref={layout}
         className={layoutStyle}

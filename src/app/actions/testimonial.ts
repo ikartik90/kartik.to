@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateHome } from "@/lib/revalidate-home";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/server";
 import {
@@ -133,7 +134,7 @@ export async function updateTestimonialDetails(
   const saved = await prisma.testimonial.update({ where: { id }, data });
 
   // Both pages are cached renders of this table; revalidate after every successful write.
-  revalidatePath("/");
+  revalidateHome();
   revalidatePath("/edit/testimonials");
 
   return saved;

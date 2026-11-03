@@ -3,10 +3,9 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { HomePage } from "@/components/home-page";
 import { projectMetadata, reviewMetadata } from "@/lib/post-metadata";
 import { REVIEW_BASE } from "@/utils/review-path";
-import { movedTo, projectCard, projectPath, projectPreviewPath } from "@/data/project-cards";
+import { movedTo, projectCard, projectParams, projectPath, projectPreviewPath } from "@/data/project-cards";
 
-// Dynamic: edits to the homepage revalidate only `/`.
-export const dynamic = "force-dynamic";
+export const generateStaticParams = projectParams;
 
 interface Props {
   params: Promise<{ id: string }>;

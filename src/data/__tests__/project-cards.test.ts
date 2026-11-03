@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { LISTED_PROJECTS, PROJECT_CARDS, movedTo, projectCard, projectPath, projectPreviewPath } from "../project-cards";
+import {
+  LISTED_PROJECTS,
+  PROJECT_CARDS,
+  movedTo,
+  projectCard,
+  projectParams,
+  projectPath,
+  projectPreviewPath,
+} from "../project-cards";
 
 describe("the homepage's projects", () => {
   it("are the design system, check-ins and activation, in the cards' order", () => {
@@ -9,6 +17,10 @@ describe("the homepage's projects", () => {
   it("open at their own address, under the copy the homepage is served at", () => {
     expect(projectPath("check-ins")).toBe("/projects/check-ins");
     expect(projectPath("check-ins", "/dive")).toBe("/dive/projects/check-ins");
+  });
+
+  it("are each built ahead as a page at their address, the old addresses left to redirect on request", () => {
+    expect(projectParams()).toEqual([{ id: "design-system" }, { id: "check-ins" }, { id: "activation-and-retention" }]);
   });
 
   it("each have a link preview of their own", () => {
