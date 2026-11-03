@@ -176,6 +176,9 @@ describe("Check-ins", () => {
   }, 30_000);
 
   it("scrubs where Brittany has been from her 13th report to her 20th, back to when she left the job site, then asks her if she's coming back", async () => {
+    // A minute before the dashboard's rows move on a quarter hour, which the demo plays past.
+    const opened = new Date(2026, 10, 3, 23, 10, 30);
+    vi.setSystemTime(opened);
     // The timeline's handle each time it moves, and when.
     const moves: number[] = [];
     const times: number[] = [];
@@ -196,7 +199,8 @@ describe("Check-ins", () => {
     watch.disconnect();
     document.removeEventListener("pointerdown", press);
 
-    const brittany = rowsFor(minutesNow(shiftStart(new Date()))).today.find((each) => each.id === "brittany")!;
+    // As the dashboard laid them out when it opened.
+    const brittany = rowsFor(minutesNow(shiftStart(opened), opened)).today.find((each) => each.id === "brittany")!;
     const last = brittany.trace!.length - 1;
     const left = brittany.trace!.indexOf(departure(brittany)!);
     const through = (from: number, to: number) => Array.from({ length: Math.abs(to - from) + 1 }, (_, i) => from + Math.sign(to - from) * i);
