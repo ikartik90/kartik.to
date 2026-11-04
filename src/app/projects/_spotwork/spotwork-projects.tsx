@@ -32,7 +32,7 @@ export function SpotworkProjects({ id, project, base }: { id?: string; project?:
 
   return (
     <>
-      <LandingCards id={id} paused={openId !== null} base={base} onOpen={open} />
+      <LandingCards id={id} paused={openId !== null} base={base} themeClassName={THEME} onOpen={open} />
       <PrototypeOverlay
         ref={overlay}
         open={openId !== null}

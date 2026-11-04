@@ -1,14 +1,21 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { createRef } from "react";
+import { createRef, type ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { NAV } from "../copy";
+import { NAV, SIDEBAR } from "../copy";
 import { PrototypeOverlay, type OverlayHandle } from "../prototype-overlay";
 
 // jsdom has no WebGL for the sky.
 vi.mock("../sky", () => ({ Sky: () => null }));
 
+// The prototype's code, arrived or not.
+let liveApp: Record<string, unknown> | undefined;
+vi.mock("../use-live-app", () => ({ useLiveApp: () => liveApp }));
+beforeEach(() => (liveApp = undefined));
+
 // jsdom ships no `<dialog>` behaviour.
 beforeAll(() => {
+  // jsdom has no document timeline, which the veil's fade is timed on.
+  Object.defineProperty(document, "timeline", { value: { currentTime: 0 }, configurable: true });
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.setAttribute("open", "");
   };
@@ -24,7 +31,7 @@ let moving: Animation[] = [];
 function animate(this: Element) {
   let end!: () => void;
   const finished = new Promise<Animation>((resolve) => (end = () => resolve(animation)));
-  const animation = { finished, finish: () => end(), cancel: () => {} } as unknown as Animation;
+  const animation = { finished, finish: () => end(), cancel: () => {}, pause: () => {} } as unknown as Animation;
   moving.push(animation);
   return animation;
 }
@@ -105,5 +112,44 @@ describe("the prototype overlay", () => {
       expect(nav.hasAttribute("data-expanded")).toBe(false);
       unmount();
     }
+  });
+
+  describe("with room for its window", () => {
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1440);
+      vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(900);
+    });
+
+    it("draws the browser's frame, the dock and About before the prototype's code arrives, the page under the bar veiled", () => {
+      render(<PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />);
+      const frame = document.querySelector("[data-overlay-motion=window]")!;
+      expect(frame.textContent).toContain("dashboard.spotwork.co");
+      expect(frame.querySelector("[data-app-veil]")).not.toBeNull();
+      expect(screen.getByRole("navigation", { name: NAV.label })).toBeTruthy();
+      expect(screen.getAllByRole("button", { name: SIDEBAR.open }).length).toBeGreaterThan(0);
+    });
+
+    it("draws the design system's bar too, until its site brings its own", () => {
+      render(<PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "design-system" }} />);
+      const frame = document.querySelector("[data-overlay-motion=window]")!;
+      expect(frame.textContent).toContain("design-system.spotwork.co");
+    });
+
+    it("fades the page's veil off once the app arrives", async () => {
+      const { rerender } = render(
+        <PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />,
+      );
+      liveApp = {
+        CheckInsApp: () => <main data-testid="app" />,
+        GeoContext: ({ children }: { children: ReactNode }) => children,
+        demoOf: () => undefined,
+        demoFencesOf: () => undefined,
+      };
+      rerender(<PrototypeOverlay open onClose={() => {}} themeClassName="x" initial={{ project: "check-ins" }} />);
+      expect(screen.getByTestId("app")).toBeTruthy();
+      expect(document.querySelector("[data-app-veil]")).not.toBeNull();
+      await finishMoving();
+      expect(document.querySelector("[data-app-veil]")).toBeNull();
+    });
   });
 });

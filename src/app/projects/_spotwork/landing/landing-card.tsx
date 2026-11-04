@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type CSSProperties, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { css, cx } from "../../../../../styled-system/css";
 import { carousel } from "../../../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
@@ -10,8 +10,9 @@ import { useInView } from "@/hooks/use-in-view";
 import { projectPath, type ProjectCard } from "@/data/project-cards";
 import { isPlainClick } from "@/utils/plain-click";
 import { cubicBezier } from "@/utils/eased-fade";
+import { AppVeil } from "../app-veil";
+import { useLiveApp } from "../use-live-app";
 import { Backlight } from "./backlight";
-import { LiveDemo } from "./live-demo";
 import { Monitor } from "./monitor";
 
 // A project's card on the homepage, the live app playing the project's demo on a backlit monitor's screen, under its
@@ -80,7 +81,7 @@ const surfaceStyle = css({
   _hasCursor: { clipPath: `inset(${INSET_Y} ${INSET_X} round token(radii.xl))` },
   transition: `clip-path ${HOVER_EASE}, transform 150ms cubic-bezier(0.4, 0, 0.2, 1)`,
   "[data-sheet-card] > a:active ~ &": { transform: "scale(0.98)" },
-  "[data-sheet-card][data-hover-held] &": { clipPath: OPEN_CLIP },
+  "&[data-hover-held]": { clipPath: OPEN_CLIP },
   "[data-sheet-card] > a:focus-visible ~ &": { clipPath: OPEN_CLIP },
   mdDown: { display: "flex", flexDirection: "column", flexGrow: 1 },
 });
@@ -95,6 +96,7 @@ const frameSize = (x: string, y: string) => ({
   height: `calc(100% - 2 * ${y} - token(spacing.xxs))`,
 });
 const FRAME_OPEN = { ...frameAt("0px", "0px"), "& rect": frameSize("0px", "0px") };
+const BRAND_SHOWN = { "& rect[data-brand]": { opacity: 0.6 } };
 
 const frameStyle = css({
   position: "absolute",
@@ -118,10 +120,8 @@ const frameStyle = css({
     transition: `opacity 300ms ease, x ${HOVER_EASE}, y ${HOVER_EASE}, width ${HOVER_EASE}, height ${HOVER_EASE}`,
   },
   "& stop": { stopColor: "token(colors.text.highlight)" },
-  "[data-sheet-card][data-hover-held] &": FRAME_OPEN,
-  "[data-sheet-card] > a:focus-visible ~ * &": FRAME_OPEN,
-  "[data-hover-brand][data-hover-held] &": { "& rect[data-brand]": { opacity: 0.6 } },
-  "[data-hover-brand] > a:focus-visible ~ * &": { "& rect[data-brand]": { opacity: 0.6 } },
+  "&[data-hover-held]": { ...FRAME_OPEN, ...BRAND_SHOWN },
+  "[data-sheet-card] > a:focus-visible ~ * &": { ...FRAME_OPEN, "&[data-hover-brand]": BRAND_SHOWN },
 });
 
 const FRAME_CORNER = { x: "var(--frame-x)", y: "var(--frame-y)" } as CSSProperties;
@@ -172,7 +172,7 @@ const expandStyle = css({
   transition: `background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, ${RIDE}`,
   "& svg": { width: "token(spacing.xxl)", height: "token(spacing.xxl)", display: "block" },
   "& svg path[stroke]": { stroke: "currentColor" },
-  "[data-hover-brand][data-hover-held] &": { ...RODE, ...lit },
+  "&[data-hover-held]": { ...RODE, ...lit },
   "html[data-keyboard-focus] [data-sheet-card] > a:focus-visible ~ * &": { ...RODE, ...lit },
 });
 
@@ -200,7 +200,7 @@ const faceTextStyle = css({
   translate: "var(--ride-x) var(--ride-y)",
   transition: RIDE,
   _hasCursor: { ...RIDING, paddingBlockEnd: `calc(token(spacing.xl) + ${INSET_Y})` },
-  "[data-sheet-card][data-hover-held] &": RODE,
+  "&[data-hover-held]": RODE,
   "[data-sheet-card] > a:focus-visible ~ * &": RODE,
   mdDown: { order: -1, paddingBlockEnd: 0 },
 });
@@ -208,8 +208,8 @@ const faceTitleStyle = css({
   textStyle: "caption",
   color: "text.body",
   transition: "color 300ms ease",
-  "[data-hover-brand][data-hover-held] &": { color: "text.highlight" },
-  "[data-hover-brand] > a:focus-visible ~ * &": { color: "text.highlight" },
+  "&[data-hover-held]": { color: "text.highlight" },
+  "[data-sheet-card] > a:focus-visible ~ * &": { "&[data-hover-brand]": { color: "text.highlight" } },
 });
 const faceHeadingStyle = css({ textStyle: "subheading", color: "text.title", textWrap: "balance" });
 
@@ -271,6 +271,7 @@ export function LandingCard({
   near,
   paused,
   base,
+  themeClassName,
   onOpen,
 }: {
   card: ProjectCard;
@@ -279,8 +280,13 @@ export function LandingCard({
   hovered?: boolean;
   near: boolean;
   paused: boolean;
+  themeClassName?: string;
   onOpen: () => void;
 }) {
+  // The monitor and its backlight draw at once; the app on its screen comes in once its code has.
+  const live = useLiveApp();
+  const [drawn, setDrawn] = useState(false);
+  const onShown = useCallback(() => setDrawn(true), []);
   const slideRef = useRef<HTMLDivElement>(null);
   const inSight = useInView(slideRef, { ...IN_SIGHT, enabled: shown !== undefined });
   const { on: shownHeld } = useShownHover(shown ?? false, inSight, SHOWN_HOVER_DELAY);
@@ -294,7 +300,10 @@ export function LandingCard({
       }
     }
   }, []);
-  const host = shown === undefined || held ? { "data-hover-brand": "", "data-hover-held": held ? "" : undefined } : {};
+  // On the parts the hover restyles, never on an element round the live app for its styles to follow: Safari then
+  // restyles the whole app.
+  const hover = { "data-hover-held": held ? "" : undefined };
+  const brand = { ...hover, "data-hover-brand": shown === undefined || held ? "" : undefined };
 
   return (
     <div
@@ -303,7 +312,7 @@ export function LandingCard({
       style={{ "--slide-aspect": String(CLIP_ASPECT) } as CSSProperties}
       data-carousel-slide=""
     >
-      <div className={cardStyle} data-sheet-card={card.id} {...host}>
+      <div className={cardStyle} data-sheet-card={card.id}>
         <a
           href={projectPath(card.id, base)}
           className={pressStyle}
@@ -315,24 +324,25 @@ export function LandingCard({
             onOpen();
           }}
         />
-        <span className={surfaceStyle}>
+        <span className={surfaceStyle} {...hover}>
           <span className={faceStyle}>
             <span className={coverStyle} data-cover="">
               <span className={monitorStyle}>
                 <Backlight className={groundStyle} />
                 <Monitor />
                 <span className={windowStyle}>
-                  <LiveDemo project={card.id} paused={paused} near={near} />
+                  {live && <live.LiveDemo project={card.id} paused={paused} near={near} onShown={onShown} />}
+                  <AppVeil shown={drawn} className={themeClassName} />
                 </span>
               </span>
-              <span className={faceTextStyle}>
-                <span className={faceTitleStyle}>{card.title}</span>
+              <span className={faceTextStyle} {...hover}>
+                <span className={faceTitleStyle} {...brand}>{card.title}</span>
                 <span className={faceHeadingStyle}>{card.sentence}</span>
               </span>
             </span>
           </span>
-          <Frame />
-          <span aria-hidden className={expandStyle}>
+          <Frame {...brand} />
+          <span aria-hidden className={expandStyle} {...hover}>
             <ExpandIcon />
           </span>
         </span>

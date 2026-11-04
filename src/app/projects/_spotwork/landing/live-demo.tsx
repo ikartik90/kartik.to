@@ -72,8 +72,21 @@ const DesignSystemBar = (history: BarHistory) => (
   <BrowserBar url={windowOf("design-system")!.url} accent={ACCENT} history={history} />
 );
 
-/** `near`: whether its carousel is near the window, for the app to be built before the card slides in. */
-export function LiveDemo({ project, paused, near }: { project: string; paused: boolean; near: boolean }) {
+/**
+ * `near`: whether its carousel is near the window, for the app to be built before the card slides in. `onShown`: once
+ * the app's first drawn.
+ */
+export function LiveDemo({
+  project,
+  paused,
+  near,
+  onShown,
+}: {
+  project: string;
+  paused: boolean;
+  near: boolean;
+  onShown?: () => void;
+}) {
   const choice = CHOICES[project];
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
@@ -133,7 +146,17 @@ export function LiveDemo({ project, paused, near }: { project: string; paused: b
   const playable = !!choice && !!demoOf(choice, () => null);
   const ready = playable && built && inView && !paused && !reduced;
   const [live, setLive] = useState(false);
-  if (live && !ready) setLive(false);
+  // Out of view, it stops once all is still, not mid-drag: stopping restyles the app. Back in view by then, it starts
+  // afresh all the same.
+  const [leaving, setLeaving] = useState(false);
+  if (live && !ready && !leaving) setLeaving(true);
+  useEffect(() => {
+    if (!leaving) return;
+    return whenStill(() => {
+      setLeaving(false);
+      setLive(false);
+    });
+  }, [leaving]);
   useEffect(() => {
     if (!ready || live) return;
     return whenStill(() => setLive(true));
@@ -162,15 +185,16 @@ export function LiveDemo({ project, paused, near }: { project: string; paused: b
     if (!ended) return;
     return whenStill(() => {
       setEnded(false);
-      if (live) setRuns((n) => n + 1);
+      if (live && !leaving) setRuns((n) => n + 1);
     }, REPLAY_MS);
-  }, [ended, live]);
+  }, [ended, live, leaving]);
 
-  const site = choice && windowOf(choice.project);
   const run = Math.max(runs - 1, 0);
-  // Apart from the cursor, which moves on every step.
-  const app = useMemo(
-    () =>
+  // Apart from the cursor, which moves on every step, and the card's hover. Kept by primitives: `windowOf` makes a new
+  // object each call.
+  const app = useMemo(() => {
+    const site = choice && windowOf(choice.project);
+    return (
       site &&
       (site.site === "design-system" ? (
         <DesignSystem width={WINDOW.width} height={WINDOW.height - BAR_HEIGHT} bar={DesignSystemBar} />
@@ -185,12 +209,17 @@ export function LiveDemo({ project, paused, near }: { project: string; paused: b
             initialPage={pageOf(choice)}
           />
         </>
-      )),
-    [site, choice, anchor, run],
-  );
+      ))
+    );
+  }, [choice, anchor, run]);
+  const drawn = built && !!app && scale > 0;
+  useLayoutEffect(() => {
+    if (drawn) onShown?.();
+  }, [drawn, onShown]);
+
   return (
     <div ref={box} className={windowStyle} inert>
-      {built && app && scale > 0 && (
+      {drawn && (
         <>
           <div
             className={cx(scaledStyle, THEME)}

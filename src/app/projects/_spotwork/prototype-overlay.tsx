@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import CrossIcon from "@/assets/icons/cross.svg";
 import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 import { DemoCursor } from "@/components/demo/demo-cursor";
-import { CheckInsApp, type AppHandle, type Page } from "./check-ins-app";
-import { GeoContext, ONLINE } from "./geo";
-import { DesignSystem, type DesignSystemHandle } from "./design-system";
+import type { AppHandle, Page } from "./check-ins-app";
+import type { DesignSystemHandle } from "./design-system";
 import type { Version } from "./new-shift";
 import { shiftStart } from "./data";
 import { BAR_HEIGHT, BrowserBar, type BarHistory } from "./browser-bar/browser-bar";
@@ -21,10 +20,11 @@ import { NAV, PROJECTS, SIDEBAR } from "./copy";
 import { glassStyle, ProjectDock, ProjectMenu, VersionBar, type Choice } from "./project-nav";
 import { sheetRoom, useSheetTuning } from "./sheet-tuning";
 import { useDemo } from "./demo";
-import { demoFencesOf, demoOf } from "./demos";
 import type { Geofence } from "./geofence";
 import { closeOverlay, openOverlay } from "./overlay-motion";
 import { Sky } from "./sky";
+import { AppVeil } from "./app-veil";
+import { useLiveApp } from "./use-live-app";
 
 // The full-screen overlay. The app plays in a browser window on a sky (sky.tsx), which fills the overlay.
 // Check-ins' and the design system's stories dock beside the window from 1440px and on a tablet on its side, lie under it
@@ -443,7 +443,9 @@ function OverlayContent({
   const [runs, setRuns] = useState(0);
   // What the app starts with beyond its seed, where the demo played last needs it.
   const [fences, setFences] = useState<Record<string, Geofence>>();
-  const playable = !!demoOf(choice, () => null);
+  // The window's frame, the dock and the About sheet draw at once; the app comes in once its code has.
+  const live = useLiveApp();
+  const playable = !!live?.demoOf(choice, () => null);
   const choose = (next: Choice) => {
     setChoice(next);
     if (pageOf(next) === "shifts") setShiftVersion(next.version as Version);
@@ -481,11 +483,12 @@ function OverlayContent({
   // Play starts the app afresh on its page, so its demo (the version's own, or the one `name`d) finds the page as it
   // opens, and goes to its own from there.
   const playIn = (next: Choice, name?: string) => {
+    if (!live) return;
     choose(next);
     setAbout(false);
-    setFences(demoFencesOf(next, name));
+    setFences(live.demoFencesOf(next, name));
     setRuns((count) => count + 1);
-    demo.play(demoOf(next, () => windowBox.current, name) ?? []);
+    demo.play(live.demoOf(next, () => windowBox.current, name) ?? []);
   };
 
   // Upright, the controls leave the window's stage, which the About sheet covers as it scrolls up.
@@ -587,20 +590,19 @@ function OverlayContent({
                   className={cx(scaledStyle, themeClassName)}
                   style={{ width, height, transform: `scale(${scale})`, "--window-scale": scale } as CSSProperties}
                 >
-                  {site.site === "design-system" ? (
-                    <GeoContext value={ONLINE}>
-                      <DesignSystem
-                        ref={designSystem}
-                        width={width}
-                        height={height - BAR_HEIGHT}
-                        bar={DesignSystemBar}
-                      />
-                    </GeoContext>
-                  ) : (
-                    <>
-                      <BrowserBar url={site.url} accent={ACCENT} />
-                      <GeoContext value={ONLINE}>
-                        <CheckInsApp
+                  {/* The design system's site draws its own bar once it's here. */}
+                  {(site.site === "app" || !live) && <BrowserBar url={site.url} accent={ACCENT} />}
+                  {live && (
+                    <live.GeoContext value={live.ONLINE}>
+                      {site.site === "design-system" ? (
+                        <live.DesignSystem
+                          ref={designSystem}
+                          width={width}
+                          height={height - BAR_HEIGHT}
+                          bar={DesignSystemBar}
+                        />
+                      ) : (
+                        <live.CheckInsApp
                           key={runs}
                           ref={app}
                           fences={fences}
@@ -620,10 +622,11 @@ function OverlayContent({
                             );
                           }}
                         />
-                      </GeoContext>
-                    </>
+                      )}
+                    </live.GeoContext>
                   )}
                 </div>
+                <AppVeil shown={!!live} className={themeClassName} style={{ insetBlockStart: BAR_HEIGHT * scale }} />
                 {/* Outside the scaled app, so it's drawn at its own size wherever the window's scale lands; in its theme,
                     boxless, for Spotwork's colours. */}
                 <div className={cx(themeClassName, contentsStyle)}>
