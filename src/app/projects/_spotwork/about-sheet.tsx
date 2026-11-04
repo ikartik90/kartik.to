@@ -103,14 +103,12 @@ const sheetStyle = css({
       pointerEvents: "none",
     },
   },
-  // Under the window, in the overlay's scroll below the window, so it scrolls up over it; the window's inset, and its
-  // gap under the overlay's controls, are the stage's.
+  // Under the window, in the overlay's scroll below the window, so it scrolls up over it; the window's inset is the
+  // stage's.
   "&[data-upright]": {
     "--window-inset": "token(spacing.4xl)",
-    "--window-gap": "token(spacing.3xl)",
     "@media screen and (width < 51.25rem), screen and (height < 31.25rem)": {
       "--window-inset": "token(spacing.lg)",
-      "--window-gap": "token(spacing.lg)",
     },
     position: "relative",
     gridArea: "1 / 1",
@@ -181,13 +179,12 @@ const columnStyle = css({
       pointerEvents: "auto",
     },
   },
-  // Under the window, centred and no wider than an article, its cards as far below the window, and once scrolled up
-  // below the overlay's controls, as the window is below the controls.
+  // Under the window, centred and no wider than an article, its cards a 4xl below the window.
   "[data-upright] > &": {
     gridArea: "1 / 1",
     width: "100%",
     paddingInline: "max(var(--window-inset), calc((100% - token(sizes.articleContent)) / 2))",
-    paddingBlockStart: "var(--window-gap)",
+    paddingBlockStart: "4xl",
     overflowY: "visible",
     translate: "none",
     // Put there, not slid in: the page coming live lays it out upright, under the overlay's opening.
