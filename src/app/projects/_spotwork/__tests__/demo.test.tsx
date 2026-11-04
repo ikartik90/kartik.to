@@ -8,6 +8,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 const byText = (text: string) => () => screen.queryByText(text);
@@ -25,7 +26,7 @@ function Harness({ steps, late, before }: { steps: Step[]; late?: number; before
         demo.play(steps, before);
       }}>Play</button>
       <div ref={stage} data-testid="stage">
-        <input aria-label="Title" onFocus={() => log("focus title")} />
+        <input aria-label="Title" onFocus={() => log("focus title")} onBlur={() => log("blur title")} />
         <input aria-label="Company" value={company} onChange={(event) => setCompany(event.target.value.toUpperCase())} />
         <button onClick={() => log("first")}>First</button>
         {shown && <button onClick={() => log("late")}>Late</button>}
@@ -94,6 +95,13 @@ describe("the demo's cursor", () => {
     await run();
     expect(log()).toEqual(["focus title", "first", "last"]);
     expect(document.activeElement).toBe(screen.getByLabelText("Title"));
+  });
+
+  it("moves a field's focus off it for the next field, where the stage takes no focus, as a landing card's inert one", async () => {
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(() => {});
+    await play([{ at: () => screen.getByLabelText("Title") }, { at: () => screen.getByLabelText("Company") }]);
+    await run();
+    expect(log()).toEqual(["focus title", "blur title"]);
   });
 
   it("acts on each target only once its caller lets it, its cursor waiting there", async () => {

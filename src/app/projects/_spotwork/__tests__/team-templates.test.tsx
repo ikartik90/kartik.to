@@ -28,6 +28,24 @@ describe("Manage templates", () => {
     expect(within(panel).queryByRole("button")).toBeNull();
   });
 
+  it("sizes the Tags column apart from the tags listed, so it holds still as the list narrows", () => {
+    render(
+      <SideSheet label="Manage templates">
+        <TeamTemplates
+          subline="North West Company Ottawa • 1 template"
+          own={[{ title: "Receptionist", tags: ["Front Desk"] }]}
+          presets={[]}
+          onDelete={() => {}}
+          onDuplicate={() => {}}
+        />
+      </SideSheet>,
+    );
+    const table = screen.getByRole("table");
+    const headers = within(table).getAllByRole("columnheader").map((header) => header.textContent);
+    const tracks = table.style.gridTemplateColumns.split(/\s+(?![^(]*\))/);
+    expect(tracks[headers.indexOf("Tags")]).not.toMatch(/auto|content/);
+  });
+
   it("narrows each tab's templates to those with any tag picked, out of the tab's own tags, each still acting on its own", async () => {
     const user = userEvent.setup();
     const deleted: number[] = [];
