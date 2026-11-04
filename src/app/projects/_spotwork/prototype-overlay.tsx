@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { css, cx } from "../../../../styled-system/css";
 import { Dialog } from "@/components/ui/dialog";
@@ -22,6 +23,7 @@ import { sheetRoom, useSheetTuning } from "./sheet-tuning";
 import { useDemo } from "./demo";
 import type { Geofence } from "./geofence";
 import { closeOverlay, openOverlay } from "./overlay-motion";
+import { reducedMotion } from "./opening";
 import { Sky } from "./sky";
 import { AppVeil } from "./app-veil";
 import { useLiveApp } from "./use-live-app";
@@ -272,6 +274,7 @@ export function roomAtActualSize(room: number, viewport: number, zoom: number) {
 function useFit() {
   const room = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ width: 0, height: 0, scale: 0, roomWidth: 0 });
+  const remeasure = useRef(() => {});
   useLayoutEffect(() => {
     const node = room.current;
     if (!node) return;
@@ -290,11 +293,12 @@ function useFit() {
       });
     };
     measure();
+    remeasure.current = measure;
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-  return { room, ...fit };
+  return { room, ...fit, remeasure };
 }
 
 /** Closes the overlay as its Close does, its closing played first. */
@@ -416,7 +420,7 @@ function OverlayContent({
     const node = layout.current?.closest("dialog");
     if (node && !node.open) node.showModal();
   }, []);
-  const { room, width, height, scale, roomWidth } = useFit();
+  const { room, width, height, scale, roomWidth, remeasure } = useFit();
   const ready = useRef(false);
   useLayoutEffect(() => {
     const node = layout.current?.closest("dialog");
@@ -463,6 +467,25 @@ function OverlayContent({
   if (about && (docked || upright)) setAbout(false);
   const aboutButton = useRef<HTMLButtonElement>(null);
   const [tuning] = useSheetTuning();
+  // The window re-fitted to the room the sheet leaves or takes, then eased there from where it was, as the sheet slides.
+  const stow = (next: boolean) => {
+    const from = windowBox.current?.getBoundingClientRect();
+    flushSync(() => setStowed(next));
+    flushSync(remeasure.current);
+    const node = windowBox.current;
+    const to = node?.getBoundingClientRect();
+    if (!from || !to?.width || reducedMotion()) return;
+    node!.animate(
+      [
+        {
+          transformOrigin: "0 0",
+          transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})`,
+        },
+        { transformOrigin: "0 0", transform: "none" },
+      ],
+      { duration: tuning.motion.duration, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+    );
+  };
   // Where the About sheet under the window starts.
   const stage = useRef<HTMLDivElement>(null);
   const [stageHeight, setStageHeight] = useState(0);
@@ -538,7 +561,7 @@ function OverlayContent({
               shape="circle"
               aria-label={SIDEBAR.open}
               aria-expanded={about}
-              onClick={() => (stowable ? setStowed(false) : setAbout(true))}
+              onClick={() => (stowable ? stow(false) : setAbout(true))}
             >
               <RightSidebarIcon aria-hidden />
             </Button>
@@ -659,7 +682,7 @@ function OverlayContent({
           project={story}
           dockable={dockable}
           onClose={docked ? onClose : () => setAbout(false)}
-          onStow={stowable ? () => setStowed(true) : undefined}
+          onStow={stowable ? () => stow(true) : undefined}
           opener={aboutButton}
           onPlay={story ? ({ version, name }) => playIn({ project: story, version }, name) : undefined}
           onGo={({ page, target }) => designSystem.current?.go(page, target)}

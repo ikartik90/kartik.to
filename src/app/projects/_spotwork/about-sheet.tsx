@@ -80,6 +80,9 @@ const BLUR = LAYERS.map(
     }) as CSSProperties,
 );
 
+// The scrim's layers lie over the sheet's own, so they blur without tinting it again.
+const SCRIM = BLUR.map(({ backgroundColor: _, ...layer }) => layer);
+
 const sheetStyle = css({
   position: "absolute",
   insetBlock: 0,
@@ -546,7 +549,7 @@ export function AboutSheet({
         {!upright && (
           <div className={headStyle}>
             <div className={scrimStyle} aria-hidden>
-              {BLUR.map((layer, i) => (
+              {SCRIM.map((layer, i) => (
                 <div key={LAYERS[i]} className={scrimLayerStyle} style={layer} />
               ))}
             </div>
