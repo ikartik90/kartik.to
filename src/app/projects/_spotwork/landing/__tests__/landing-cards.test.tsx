@@ -7,6 +7,8 @@ import { LandingCards } from "../landing-cards";
 let liveApp: { LiveDemo: (props: { onShown?: () => void }) => null } | undefined;
 vi.mock("../../use-live-app", () => ({ useLiveApp: () => liveApp }));
 vi.mock("../backlight", () => ({ Backlight: () => <canvas data-testid="backlight" /> }));
+const entrance = vi.hoisted(() => ({ joinOpening: vi.fn(() => true), riseIn: vi.fn() }));
+vi.mock("../../opening", async (original) => ({ ...(await original<object>()), ...entrance }));
 
 const LiveDemo = ({ onShown }: { onShown?: () => void }) => {
   useLayoutEffect(() => onShown?.(), [onShown]);
@@ -43,6 +45,74 @@ afterEach(cleanup);
 const card = (name: RegExp) => screen.getByRole("link", { name });
 
 describe("LandingCards", () => {
+  /** The observers of the carousel round the cards told that as much of it is on screen as `ratio`. */
+  function watched() {
+    const observers: { callback: IntersectionObserverCallback; nodes: Element[] }[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        entry: { callback: IntersectionObserverCallback; nodes: Element[] };
+        constructor(callback: IntersectionObserverCallback) {
+          this.entry = { callback, nodes: [] };
+          observers.push(this.entry);
+        }
+        observe(node: Element) {
+          this.entry.nodes.push(node);
+        }
+        disconnect() {
+          this.entry.nodes = [];
+        }
+      },
+    );
+    return (ratio: number) =>
+      act(() => {
+        for (const { callback, nodes } of [...observers]) {
+          const carousels = nodes.filter((node) => node.querySelector("[data-carousel-slide]"));
+          if (!carousels.length) continue;
+          callback(
+            carousels.map(
+              (target) => ({ target, intersectionRatio: ratio, isIntersecting: ratio > 0 }) as IntersectionObserverEntry,
+            ),
+            {} as IntersectionObserver,
+          );
+        }
+      });
+  }
+  const entering = () => screen.getByRole("region", { name: "Work" }).hasAttribute("data-entering");
+
+  it("joins the page's opening when the first fold shows only a sliver of the cards", () => {
+    const show = watched();
+    entrance.joinOpening.mockClear().mockReturnValue(true);
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    show(0.05);
+    expect(entrance.joinOpening).toHaveBeenCalledOnce();
+    expect(entering()).toBe(false);
+  });
+
+  it("rises them in at once when the first fold shows a sliver of them after the opening is over", () => {
+    const show = watched();
+    entrance.joinOpening.mockClear().mockReturnValue(false);
+    entrance.riseIn.mockClear();
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    show(0.05);
+    expect(entrance.riseIn).toHaveBeenCalledOnce();
+    expect(entering()).toBe(false);
+  });
+
+  it("once the opening is over, rises them in as they're scrolled to only when 30% of them is on screen", () => {
+    const show = watched();
+    entrance.joinOpening.mockClear().mockReturnValue(false);
+    entrance.riseIn.mockClear();
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    show(0);
+    show(0.05);
+    expect(entrance.riseIn).not.toHaveBeenCalled();
+    expect(entering()).toBe(true);
+    show(0.3);
+    expect(entrance.riseIn).toHaveBeenCalledOnce();
+    expect(entering()).toBe(false);
+  });
+
   it("links each project's card to its address, under the copy of the homepage it's on", () => {
     render(<LandingCards paused={false} onOpen={() => {}} base="/dive" />);
     expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([

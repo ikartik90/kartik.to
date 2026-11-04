@@ -26,25 +26,34 @@ const sectionStyle = css({
 
 const ENTER_AT = 0.3;
 
-/** True until the carousel comes into view; then the cards on screen rise in one by one. */
+/**
+ * True until the carousel comes into view; then the cards on screen rise in one by one. Any of it in view joins the
+ * page's opening while it runs, or in the first fold rises in at once; scrolled to, they wait for `ENTER_AT` of it.
+ */
 function useCardsEnter(scrollerRef: RefObject<HTMLDivElement | null>) {
   const [entering, setEntering] = useState(true);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
+    let firstFold = true;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.intersectionRatio >= ENTER_AT)) return;
-        observer.disconnect();
+        const inFirstFold = firstFold;
+        firstFold = false;
+        if (!entries.some((entry) => entry.isIntersecting)) return;
         const slides = Array.from(scroller.querySelectorAll<HTMLElement>("[data-carousel-slide]")).filter((slide) => {
           const r = slide.getBoundingClientRect();
           return r.right > 0 && r.left < window.innerWidth;
         });
-        if (!joinOpening(slides)) riseIn(slides);
+        if (!joinOpening(slides)) {
+          if (!inFirstFold && !entries.some((entry) => entry.intersectionRatio >= ENTER_AT)) return;
+          riseIn(slides);
+        }
+        observer.disconnect();
         setEntering(false);
       },
-      { threshold: ENTER_AT },
+      { threshold: [0, ENTER_AT] },
     );
     observer.observe(scroller);
     return () => observer.disconnect();

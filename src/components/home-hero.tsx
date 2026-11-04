@@ -30,9 +30,9 @@ const heroStyle = css({
   marginBlockStart: "calc(-1 * token(spacing.3xl))",
   paddingInline: "xxl",
   // Under the header's 5xl, whose 4xl buttons it centres, the pills sit 132px below the buttons; with main's 5xl gap
-  // below, the cards sit 2 × 5xl under the words.
+  // below, the cards sit 2 × 5xl under the words, or on a phone main's gap alone, so their top is in the first fold.
   paddingBlockStart: "calc(token(spacing.5xl) + token(spacing.3xl))",
-  paddingBlockEnd: "5xl",
+  paddingBlockEnd: { base: 0, md: "5xl" },
 });
 
 // Behind the words in the hero's own stacking context: up behind the site header (its `5xl`) to the page top, and on
