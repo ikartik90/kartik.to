@@ -25,7 +25,7 @@ export type DialogAlign =
 
 export type DialogJustify = "start" | "center" | "end" | "stretch";
 
-export type DialogMotion = "scale" | "zoom";
+export type DialogMotion = "scale" | "zoom" | "none";
 
 /** The dialog its content renders in: a modal leaves the page beneath it inert, so a portal goes here instead. */
 export const DialogLayer = createContext<HTMLDialogElement | null>(null);
@@ -123,7 +123,8 @@ const dialogRecipe = cva({
       },
     },
 
-    // `zoom`: the caller moves the contents itself, so only the backdrop fades, over its motion.
+    // `zoom`: the caller moves the contents itself, so only the backdrop fades, over its motion. `none`: the caller plays
+    // both, holding them out with `data-held` until it starts.
     motion: {
       scale: {
         opacity: 0,
@@ -139,6 +140,14 @@ const dialogRecipe = cva({
         // `ZOOM_MS` in utils/lightbox-motion.
         "&::backdrop": { transitionDuration: "300ms" },
         "&[open][data-closing]::backdrop": { opacity: 0 },
+      },
+      // A held backdrop draws nothing rather than taking an opacity, which Safari on iOS ignores until it animates
+      // (its blur: globals.css).
+      none: {
+        transitionProperty: "none",
+        "&::backdrop": { transitionProperty: "none" },
+        "&[data-held]": { opacity: 0 },
+        "&[data-held]::backdrop": { backgroundColor: "transparent" },
       },
     },
   },
