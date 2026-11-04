@@ -23,6 +23,7 @@ export const LOCATION_HISTORY = {
 
 export const SIDEBAR = {
   open: "About this project",
+  hide: "Hide about this project",
   /** The cards' own headings, where their sheet's don't suit the card. */
   headings: {
     checkIns: "Cut attendance disputes from 90 a week to under 35 by rebuilding time tracking",

@@ -37,6 +37,30 @@ function animate(this: Element) {
 }
 const finishMoving = () => act(async () => moving.splice(0).forEach((animation) => animation.finish()));
 
+/** A screen `width` × `height` px, touch or not, as `matchMedia` answers the overlay's queries in rem. */
+function screenOf({ width, height, coarse }: { width: number; height: number; coarse: boolean }) {
+  const holds = (feature: string) => {
+    const [, name, op, value] = /^\(?\s*([\w-]+)\s*(:|<|>)\s*([\w.]+)\s*\)?$/.exec(feature.trim()) ?? [];
+    const px = Number.parseFloat(value) * 16;
+    if (name === "orientation") return value === (width >= height ? "landscape" : "portrait");
+    if (name === "any-pointer") return value === (coarse ? "coarse" : "fine");
+    if (name === "prefers-color-scheme" || name === "prefers-reduced-motion") return false;
+    const size = name.includes("width") ? width : height;
+    if (name.startsWith("min-")) return size >= px;
+    if (name.startsWith("max-")) return size <= px;
+    return op === "<" ? size < px : op === ">" ? size > px : size === px;
+  };
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query) =>
+      ({
+        matches: query.split(",").some((part) => part.replace(/^\s*screen\s*(and)?/, "").split(" and ").filter((f) => f.trim()).every(holds)),
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  );
+}
+
 beforeEach(() => {
   moving = [];
   HTMLElement.prototype.animate = animate as unknown as HTMLElement["animate"];
@@ -133,6 +157,28 @@ describe("the prototype overlay", () => {
       render(<PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "design-system" }} />);
       const frame = document.querySelector("[data-overlay-motion=window]")!;
       expect(frame.textContent).toContain("design-system.spotwork.co");
+    });
+
+    it("hides its docked sheet from the sheet's toggle on a tablet on its side, and docks it again from the same spot", async () => {
+      screenOf({ width: 1180, height: 820, coarse: true });
+      render(<PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />);
+      const sheet = screen.getByRole("complementary", { name: "About the project", hidden: true });
+      expect(sheet.hasAttribute("inert")).toBe(false);
+
+      fireEvent.click(within(sheet).getByRole("button", { name: SIDEBAR.hide }));
+      expect(sheet.hasAttribute("inert")).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: SIDEBAR.open }));
+      expect(sheet.hasAttribute("inert")).toBe(false);
+      expect(within(sheet).getByRole("button", { name: SIDEBAR.hide })).toBeTruthy();
+    });
+
+    it("keeps its docked sheet from 1440px, with no toggle to hide it", () => {
+      screenOf({ width: 1440, height: 900, coarse: false });
+      render(<PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />);
+      const sheet = screen.getByRole("complementary", { name: "About the project", hidden: true });
+      expect(sheet.hasAttribute("inert")).toBe(false);
+      expect(within(sheet).queryByRole("button", { name: SIDEBAR.hide })).toBeNull();
     });
 
     it("fades the page's veil off once the app arrives", async () => {

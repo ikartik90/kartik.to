@@ -14,7 +14,7 @@ import { shiftStart } from "./data";
 import { BAR_HEIGHT, BrowserBar, type BarHistory } from "./browser-bar/browser-bar";
 import { TourProvider } from "./tour";
 import { EditCommentsToggle } from "./comment-editor";
-import { AboutSheet, useMedia, useUpright, useWide } from "./about-sheet";
+import { AboutSheet, useMedia, useStowable, useUpright, useWide } from "./about-sheet";
 import { aboutOf } from "./about-stories";
 import { NAV, PROJECTS, SIDEBAR } from "./copy";
 import { glassStyle, ProjectDock, ProjectMenu, VersionBar, type Choice } from "./project-nav";
@@ -451,7 +451,11 @@ function OverlayContent({
     if (pageOf(next) === "shifts") setShiftVersion(next.version as Version);
   };
 
-  const docked = useWide() && !!story;
+  // On a tablet on its side the docked sheet can be hidden, and the window takes its room.
+  const stowable = useStowable() && !!story;
+  const [stowed, setStowed] = useState(false);
+  const dockable = !!story && !(stowable && stowed);
+  const docked = useWide() && dockable;
   const upright = useUpright() && !!story;
   // Upright or on a phone, the dock leads the controls' row rather than standing under the window.
   const inRow = phone || upright;
@@ -523,10 +527,10 @@ function OverlayContent({
           onPlay={playable ? () => playIn(choice) : undefined}
         />
       )}
-      <div className={controlsStyle} data-dockable={story ? "" : undefined}>
+      <div className={controlsStyle} data-dockable={dockable ? "" : undefined}>
         {story &&
           !upright &&
-          (sides ? (
+          (sides || stowable ? (
             <Button
               ref={aboutButton}
               variant="icon"
@@ -534,7 +538,7 @@ function OverlayContent({
               shape="circle"
               aria-label={SIDEBAR.open}
               aria-expanded={about}
-              onClick={() => setAbout(true)}
+              onClick={() => (stowable ? setStowed(false) : setAbout(true))}
             >
               <RightSidebarIcon aria-hidden />
             </Button>
@@ -565,7 +569,7 @@ function OverlayContent({
             "--window-slack": `${Math.max(0, (roomWidth - width * scale) / 2)}px`,
           } as CSSProperties
         }
-        data-dockable={story ? "" : undefined}
+        data-dockable={dockable ? "" : undefined}
         data-upright={upright ? "" : undefined}
       >
         <Sky className={groundStyle} />
@@ -653,8 +657,9 @@ function OverlayContent({
         <AboutSheet
           open={about}
           project={story}
-          dockable={!!story}
+          dockable={dockable}
           onClose={docked ? onClose : () => setAbout(false)}
+          onStow={stowable ? () => setStowed(true) : undefined}
           opener={aboutButton}
           onPlay={story ? ({ version, name }) => playIn({ project: story, version }, name) : undefined}
           onGo={({ page, target }) => designSystem.current?.go(page, target)}

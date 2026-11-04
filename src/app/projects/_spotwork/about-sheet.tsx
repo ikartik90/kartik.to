@@ -21,6 +21,7 @@ import ChevronDownIcon from "@/assets/icons/chevron-down.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
 import GotoIcon from "@/assets/icons/goto.svg";
 import PlayIcon from "@/assets/icons/play.svg";
+import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 import { ABOUT, type AboutProject, type Demo, type Fact, type Link, type Story } from "./about-stories";
 import { CommentEditor, EditCommentsToggle } from "./comment-editor";
 import { DEMO, SIDEBAR } from "./copy";
@@ -38,6 +39,8 @@ import { useCommentEditor } from "./tour";
 const WIDE = "screen and (min-width: 90rem), screen and (orientation: landscape) and (any-pointer: coarse) and (min-width: 64rem)";
 // A touch screen upright, short of 1440px, which lays it under the window.
 const UPRIGHT = "screen and (orientation: portrait) and (any-pointer: coarse) and (width < 90rem)";
+// Docked short of 1440px, on a tablet on its side, where it can be hidden to give the window the room.
+const STOWABLE = "screen and (orientation: landscape) and (any-pointer: coarse) and (min-width: 64rem) and (width < 90rem)";
 
 /** Whether the window matches the media `query`; never on the server. */
 export function useMedia(query: string) {
@@ -58,6 +61,9 @@ export const useWide = () => useMedia(WIDE);
 /** Whether the window is a touch screen's upright, with the sheet under it. */
 export const useUpright = () => useMedia(UPRIGHT);
 
+/** Whether the window is a tablet's on its side, where the docked sheet can be hidden. */
+export const useStowable = () => useMedia(STOWABLE);
+
 // Each layer ramps in from clear at its left edge, or its top edge, under its own mask, which also shapes its tint;
 // the layers stacked are the blur.
 const BLUR = LAYERS.map(
@@ -69,6 +75,7 @@ const BLUR = LAYERS.map(
       "--layer-width": `var(--sheet-${layer}-width)`,
       "--layer-mask": `var(--sheet-${layer}-mask)`,
       "--layer-turned-mask": `var(--sheet-${layer}-turned-mask)`,
+      "--layer-foot-mask": `var(--sheet-${layer}-foot-mask)`,
       "--layer-opacity": `var(--sheet-${layer}-opacity)`,
     }) as CSSProperties,
 );
@@ -165,6 +172,7 @@ const columnStyle = css({
   gap: "var(--sheet-card-gap)",
   width: "min(var(--sheet-column-width), 100%)",
   padding: "var(--sheet-column-inset)",
+  "--column-start": "var(--sheet-column-inset)",
   overflowY: "auto",
   translate: "100% 0",
   transitionProperty: "translate",
@@ -175,6 +183,7 @@ const columnStyle = css({
     "@media screen and (min-width: 90rem), screen and (orientation: landscape) and (any-pointer: coarse) and (min-width: 64rem)": {
       width: "min(calc(var(--sheet-column-width) - var(--sheet-column-inset) + var(--sheet-reach)), 100%)",
       paddingInlineStart: "var(--sheet-reach)",
+      "--column-start": "var(--sheet-reach)",
       translate: "none",
       pointerEvents: "auto",
     },
@@ -194,7 +203,8 @@ const columnStyle = css({
 });
 
 // Its Close where the overlay's own is, at the column's default inset, staying there over the cards as they scroll;
-// only its buttons take presses there. A sticky inset counts from inside the column's padding.
+// only its buttons take presses there. A sticky inset counts from inside the column's padding. Its foot is the
+// scrim's fade, so the first card starts below it.
 const headStyle = css({
   position: "sticky",
   insetBlockStart: 0,
@@ -202,9 +212,34 @@ const headStyle = css({
   display: "flex",
   justifyContent: "flex-end",
   alignItems: "center",
-  gap: "xs",
+  // The overlay's controls' gap, so its toggle stands where theirs does once it's hidden.
+  gap: "md",
+  paddingBlockEnd: "max(0px, calc(token(spacing.4xl) - var(--sheet-card-gap)))",
   pointerEvents: "none",
-  "& > *": { pointerEvents: "auto" },
+  "& > button": { pointerEvents: "auto" },
+});
+
+// The sheet's own layers again, out to the column's edges behind the head, fading out down toward the cards that
+// scroll under it.
+const scrimStyle = css({
+  position: "absolute",
+  zIndex: -1,
+  insetBlockStart: "calc(var(--sheet-column-inset) * -1)",
+  insetBlockEnd: 0,
+  insetInlineStart: "calc(var(--column-start) * -1)",
+  insetInlineEnd: "calc(var(--sheet-column-inset) * -1)",
+});
+
+const scrimLayerStyle = css({
+  position: "absolute",
+  insetBlock: 0,
+  insetInlineEnd: 0,
+  width: "var(--layer-width)",
+  opacity: "var(--layer-opacity)",
+  maskImage: "var(--layer-mask), var(--layer-foot-mask)",
+  WebkitMaskImage: "var(--layer-mask), var(--layer-foot-mask)",
+  maskComposite: "intersect",
+  WebkitMaskComposite: "source-in",
 });
 
 const cardStyle = cx(
@@ -436,6 +471,7 @@ export function AboutSheet({
   project = "check-ins",
   dockable = false,
   onClose,
+  onStow,
   opener,
   onPlay,
   onGo,
@@ -450,6 +486,8 @@ export function AboutSheet({
    */
   dockable?: boolean;
   onClose: () => void;
+  /** Hides it while docked, from a toggle left of its Close. */
+  onStow?: () => void;
   /** The button that opened it, which focus goes back to. */
   opener: RefObject<HTMLButtonElement | null>;
   /** Plays a demo from its card. */
@@ -507,7 +545,17 @@ export function AboutSheet({
         {/* Under the window, the overlay's controls carry Close and the comments' toggle. */}
         {!upright && (
           <div className={headStyle}>
+            <div className={scrimStyle} aria-hidden>
+              {BLUR.map((layer, i) => (
+                <div key={LAYERS[i]} className={scrimLayerStyle} style={layer} />
+              ))}
+            </div>
             <EditCommentsToggle />
+            {docked && onStow && (
+              <Button variant="icon" emphasis="glass" shape="circle" aria-label={SIDEBAR.hide} onClick={onStow}>
+                <RightSidebarIcon aria-hidden />
+              </Button>
+            )}
             <Button ref={close} variant="icon" emphasis="glass" shape="circle" aria-label="Close" onClick={onClose}>
               <CrossIcon aria-hidden />
             </Button>
