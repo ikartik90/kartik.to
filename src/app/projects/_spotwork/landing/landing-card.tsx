@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useId, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { css, cx } from "../../../../../styled-system/css";
 import { carousel } from "../../../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
-import { useShownHover } from "../use-shown-hover";
+import { useDelayedOn } from "../use-delayed-on";
 import { mediaSurfaceAspect } from "@/domain/nodes";
-import { useInView } from "@/hooks/use-in-view";
 import { projectPath, type ProjectCard } from "@/data/project-cards";
 import { isPlainClick } from "@/utils/plain-click";
 import { cubicBezier } from "@/utils/eased-fade";
@@ -258,10 +257,10 @@ const windowStyle = css({
 });
 
 const SHOWN_HOVER_DELAY = 100;
-const IN_SIGHT = { enter: 0.1, exit: 0.1 };
 
 /**
- * `shown`, on a screen without a cursor: whether the card is whole on screen, so it plays as if hovered. `hovered`, with
+ * `shown`, on a screen without a cursor: whether the card is whole on screen, so it plays as if hovered while it stays
+ * so. `hovered`, with
  * a cursor: whether it's under it, as it was when the page last came to rest (`useRestingHover`), never `:hover`.
  */
 export function LandingCard({
@@ -287,9 +286,7 @@ export function LandingCard({
   const live = useLiveApp();
   const [drawn, setDrawn] = useState(false);
   const onShown = useCallback(() => setDrawn(true), []);
-  const slideRef = useRef<HTMLDivElement>(null);
-  const inSight = useInView(slideRef, { ...IN_SIGHT, enabled: shown !== undefined });
-  const { on: shownHeld } = useShownHover(shown ?? false, inSight, SHOWN_HOVER_DELAY);
+  const shownHeld = useDelayedOn(shown ?? false, SHOWN_HOVER_DELAY);
   const held = shown === undefined ? hovered : shownHeld;
   useEffect(() => {
     for (const name of ["--ride-x", "--ride-y"]) {
@@ -307,7 +304,6 @@ export function LandingCard({
 
   return (
     <div
-      ref={slideRef}
       className={cx(carouselStyles.slide, slideStyle)}
       style={{ "--slide-aspect": String(CLIP_ASPECT) } as CSSProperties}
       data-carousel-slide=""

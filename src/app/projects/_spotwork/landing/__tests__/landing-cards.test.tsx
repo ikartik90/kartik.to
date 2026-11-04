@@ -159,6 +159,56 @@ describe("LandingCards", () => {
     expect(document.querySelectorAll("[data-app-veil]")).toHaveLength(0);
   });
 
+  it("plays a card as hovered on a touch screen only while it's whole on screen, not once it's partly off", () => {
+    vi.useFakeTimers();
+    const observers: { callback: IntersectionObserverCallback; nodes: Element[] }[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        entry = { callback: (() => {}) as IntersectionObserverCallback, nodes: [] as Element[] };
+        constructor(callback: IntersectionObserverCallback) {
+          this.entry.callback = callback;
+          observers.push(this.entry);
+        }
+        observe(node: Element) {
+          this.entry.nodes.push(node);
+        }
+        disconnect() {
+          this.entry.nodes = [];
+        }
+      },
+    );
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    const slide = document.querySelectorAll("[data-carousel-slide]")[1];
+    /** Every observer of `slide` told that `width` px of its 800 are on screen. */
+    const show = (width: number) =>
+      act(() => {
+        for (const { callback, nodes } of observers) {
+          if (!nodes.includes(slide)) continue;
+          const entry = {
+            target: slide,
+            intersectionRatio: width / 800,
+            isIntersecting: width > 0,
+            boundingClientRect: { width: 800, height: 500 },
+            intersectionRect: { width, height: 500 },
+            rootBounds: { height: 800 },
+          };
+          callback([entry as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+        }
+      });
+    const lit = () => slide.querySelector("[data-hover-held]") !== null;
+
+    show(800);
+    act(() => void vi.advanceTimersByTime(100));
+    expect(lit()).toBe(true);
+    show(600);
+    expect(lit()).toBe(false);
+    show(800);
+    act(() => void vi.advanceTimersByTime(100));
+    expect(lit()).toBe(true);
+    vi.useRealTimers();
+  });
+
   it("marks the hover on the hovered card's surface, frame, button and words, never on the card or cover round its app", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
     render(<LandingCards paused={false} onOpen={() => {}} />);
