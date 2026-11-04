@@ -37,6 +37,9 @@ const cardsOf = (root: Element) =>
  */
 export function openOverlay(root: HTMLDialogElement) {
   if (reducedMotion()) return [];
+  // Held out by the dialog's `data-held` too: while the app's first frames are built, Safari on iOS can draw the sky
+  // and the backdrop as they rest, not as their paused animations hold them.
+  root.setAttribute("data-held", "");
   const timing = { duration: OPEN_MS, easing: OPEN_EASE };
   const step = PAGE_OPENING.lineGapMs;
   const opening = [
@@ -56,7 +59,7 @@ export function openOverlay(root: HTMLDialogElement) {
     ...cardsOf(root).map((card, i) => stepIn(card, (i + 1) * step, card.closest("[data-upright]") ? "below" : "right")),
   ];
   opening.forEach((animation) => animation.pause());
-  requestAnimationFrame(() => fromFirstFrame(opening));
+  requestAnimationFrame(() => fromFirstFrame(opening, () => root.removeAttribute("data-held")));
   return opening;
 }
 

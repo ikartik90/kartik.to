@@ -24,13 +24,15 @@ export const slideOf = (el: Element) => parseFloat(getComputedStyle(el).getPrope
 
 /**
  * Holds `animations` at their start until the first frame is drawn. Building a sheet's content can take frames, and
- * WebKit otherwise starts their clock at the click, so the sheet first shows already most of the way in.
+ * WebKit otherwise starts their clock at the click, so the sheet first shows already most of the way in. `onStart` runs
+ * as they start.
  */
-export function fromFirstFrame(animations: Animation[]) {
+export function fromFirstFrame(animations: Animation[], onStart?: () => void) {
   animations.forEach((a) => a.pause());
   requestAnimationFrame(() => {
     const now = document.timeline.currentTime;
     animations.forEach((a) => a.playState === "paused" && (a.startTime = now));
+    onStart?.();
   });
   return animations;
 }

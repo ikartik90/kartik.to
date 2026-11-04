@@ -48,4 +48,17 @@ describe("openOverlay", () => {
     openOverlay(root);
     expect(cards.map((card) => startOf(card)?.translate)).toEqual(["0px 40px", "0px 40px"]);
   });
+
+  it("holds the overlay out with data-held until its opening starts, not by its paused animations alone", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((frame) => frames.push(frame));
+    Object.defineProperty(document, "timeline", { value: { currentTime: 0 }, configurable: true });
+    const { root } = overlay({ upright: true });
+    openOverlay(root);
+    expect(root.hasAttribute("data-held")).toBe(true);
+    frames.shift()!(0);
+    expect(root.hasAttribute("data-held")).toBe(true);
+    frames.shift()!(0);
+    expect(root.hasAttribute("data-held")).toBe(false);
+  });
 });

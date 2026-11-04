@@ -216,6 +216,12 @@ body[data-properties-panel-instant] {
     backdrop-filter: blur(var(--spacing-md));
   }
 
+  /* Held by its caller (Dialog's `none` motion): Safari on iOS would blur through the backdrop's opacity. */
+  dialog[data-held]::backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   [data-site-header] {
     position: relative;
     margin-inline: auto;

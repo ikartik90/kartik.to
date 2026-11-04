@@ -358,7 +358,7 @@ export function PrototypeOverlay({
   return (
     <Dialog
       ref={dialog}
-      motion="zoom"
+      motion="none"
       className={dialogStyle}
       aria-label={NAV.dialog}
       onClose={onClose}
