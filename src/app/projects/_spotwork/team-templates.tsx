@@ -21,7 +21,7 @@ import DuplicateIcon from "./assets/duplicate.svg";
 
 type Tab = "team" | "presets";
 
-const COLUMNS = "2.75rem minmax(0, 1fr) auto auto";
+const COLUMNS = "2.75rem minmax(0, 1fr) minmax(0, 1fr) auto";
 
 
 /** Manage templates' header and its tabs' tables, in a small side sheet. */

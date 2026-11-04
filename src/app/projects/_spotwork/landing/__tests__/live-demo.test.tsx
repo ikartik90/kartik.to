@@ -3,10 +3,16 @@ import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LiveDemo } from "../live-demo";
 
-const { builds, play, stop } = vi.hoisted(() => ({ builds: [] as string[], play: vi.fn(), stop: vi.fn() }));
+const { builds, renders, play, stop } = vi.hoisted(() => ({
+  builds: [] as string[],
+  renders: { count: 0 },
+  play: vi.fn(),
+  stop: vi.fn(),
+}));
 
 vi.mock("../../check-ins-app", () => ({
   CheckInsApp: function App() {
+    renders.count++;
     useEffect(() => void builds.push("app"), []);
     return <div style={{ overflowY: "auto" }} />;
   },
@@ -30,6 +36,7 @@ let hour = 0;
 beforeEach(() => {
   vi.useFakeTimers({ now: ++hour * 3_600_000 });
   builds.length = 0;
+  renders.count = 0;
   play.mockClear();
   stop.mockClear();
   observers.length = 0;
@@ -115,6 +122,23 @@ describe("LiveDemo", () => {
     expect(play).toHaveBeenCalledTimes(1);
 
     show(0.95);
+    await wait(16);
+    expect(stop).toHaveBeenCalled();
+  });
+
+  // Stopping restyles the app, which would stall the strip mid-drag.
+  it("stops its demo as it leaves view only once the scroll that carried it out has settled", async () => {
+    render(<Card />);
+    show(1);
+    await wait(1000);
+    expect(play).toHaveBeenCalledTimes(1);
+
+    await scroll(100);
+    show(0.95);
+    await scroll(300);
+    expect(stop).not.toHaveBeenCalled();
+
+    await wait(300);
     expect(stop).toHaveBeenCalled();
   });
 
@@ -148,6 +172,17 @@ describe("LiveDemo", () => {
 
     await wait(300);
     expect(acted).toBe(true);
+  });
+
+  it("leaves its app be as the card round it renders again, as it does on each hover", async () => {
+    const { rerender } = render(<Card />);
+    show(1);
+    await wait(1000);
+    const built = renders.count;
+    expect(built).toBeGreaterThan(0);
+    rerender(<Card />);
+    rerender(<Card />);
+    expect(renders.count).toBe(built);
   });
 
   it("doesn't build two cards' apps in one beat", async () => {

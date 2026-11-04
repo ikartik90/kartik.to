@@ -74,7 +74,7 @@ const typesIn = (element: Element) =>
   element.matches("input:not([type=checkbox]):not([type=radio]), textarea, [contenteditable=true]");
 
 /** Whether `node` scrolls what's in it, as it still does where `stillScrollers` clipped it. */
-const scrolls = (node: Element) => /auto|scroll/.test(getComputedStyle(node).overflowY) || node.hasAttribute("data-still-scroll");
+export const scrolls = (node: Element) => /auto|scroll/.test(getComputedStyle(node).overflowY) || node.hasAttribute("data-still-scroll");
 
 /**
  * Clips each box in `root` that scrolls, which the demo goes on scrolling: a box that scrolls is a layer of its own, which
@@ -183,6 +183,8 @@ export function useDemo(stage: RefObject<HTMLElement | null>) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let held: { target: Element; at: Point } | null = null;
       let pointed: { target: Element; at: Point } | null = null;
+      // The field an inert stage was told took the focus.
+      let told: Element | null = null;
       const pointing = (target: Element) => pointed?.target === target;
       const wait = (ms: number) => new Promise<void>((resolve) => (timer = setTimeout(resolve, ms)));
 
@@ -341,8 +343,13 @@ export function useDemo(stage: RefObject<HTMLElement | null>) {
           } else {
             if (typesIn(target)) {
               target.focus();
-              // An inert stage (a landing card's) takes no focus; its field still hears it, from a `focusin` as React does.
-              if (document.activeElement !== target) target.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+              // An inert stage (a landing card's) takes no focus; its fields still hear it come and go, from a `focusin` and a
+              // `focusout` as React does.
+              if (document.activeElement !== target && told !== target) {
+                told?.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: target }));
+                target.dispatchEvent(new FocusEvent("focusin", { bubbles: true, relatedTarget: told }));
+                told = target;
+              }
             }
             target.click();
           }

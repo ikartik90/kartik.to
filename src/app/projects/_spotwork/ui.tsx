@@ -28,6 +28,7 @@ import type { SystemStyleObject } from "../../../../styled-system/types";
 import { Skeleton, Wireframe, useWireframe } from "@/components/ui/wireframe";
 import { useControllable } from "./controllable";
 import type { Status, Tier } from "./data";
+import { scrolls } from "./demo";
 import { useCentredInk } from "./ink";
 import { placeBeside, placeOverlay, type Side } from "./placement";
 import { misplaced, ownPart, partsOf, restOf, useOwner } from "./slots";
@@ -3425,7 +3426,7 @@ export const TextArea = named(TextAreaRoot, "TextArea");
 /** The nearest ancestor that scrolls: the part of the app an overlay must fit in. */
 function scrollerOf(node: HTMLElement) {
   for (let parent = node.parentElement; parent; parent = parent.parentElement)
-    if (/auto|scroll/.test(getComputedStyle(parent).overflowY)) return parent;
+    if (scrolls(parent)) return parent;
   return null;
 }
 

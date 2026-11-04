@@ -1607,6 +1607,12 @@ describe("a team's worker pool", () => {
     expect(within(sheet()).getByRole("button", { name: "Manage worker pool5 workers" })).toBeDefined();
   });
 
+  it("sizes the Skills column apart from the skills listed, so it holds still as the list narrows", async () => {
+    await openPool();
+    const tracks = table()!.style.gridTemplateColumns.split(/\s+(?![^(]*\))/);
+    expect(tracks[headers().indexOf("Skills")]).not.toMatch(/auto|content/);
+  });
+
   it("finds the pool's workers by name from the Worker column's head, and removes those ticked from the sheet's action bar", async () => {
     const user = await openPool();
     const bar = () => pool().querySelector<HTMLElement>("[data-action-bar]");

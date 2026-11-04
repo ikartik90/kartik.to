@@ -29,7 +29,7 @@ import SearchIcon from "./assets/icons/small/magnifying-glass.svg";
 
 type Tab = "pool" | "find";
 
-const COLUMNS = "2.75rem minmax(0, 1fr) auto auto";
+const COLUMNS = "2.75rem minmax(0, 1fr) minmax(0, 1fr) auto";
 
 /** Manage worker pool's header and its tabs, in a small side sheet. */
 export function TeamPool({ team, onAdd, onRemove }: { team: Team; onAdd: (workers: string[]) => void; onRemove: (workers: string[]) => void }) {

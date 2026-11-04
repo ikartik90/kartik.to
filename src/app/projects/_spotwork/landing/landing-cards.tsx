@@ -75,16 +75,18 @@ function useNear(scrollerRef: RefObject<HTMLDivElement | null>) {
   return near;
 }
 
-/** `base`: as for `projectPath`. */
+/** `base`: as for `projectPath`. `themeClassName`: Spotwork's, for the app's ground in each card's window. */
 export function LandingCards({
   id,
   paused,
   base,
+  themeClassName,
   onOpen,
 }: {
   id?: string;
   paused: boolean;
   base?: string;
+  themeClassName?: string;
   onOpen: (project: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -112,6 +114,7 @@ export function LandingCards({
             hovered={hovered === card.id}
             near={near}
             paused={paused}
+            themeClassName={themeClassName}
             onOpen={() => onOpen(card.id)}
           />
         ))}
