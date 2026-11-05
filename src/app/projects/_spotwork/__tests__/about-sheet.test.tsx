@@ -192,6 +192,25 @@ describe("the About sheet", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: SIDEBAR.open }));
   });
 
+  it("shows the bar round its Close only while a card is scrolled up under it", async () => {
+    const { sheet, open } = await setup();
+    await open();
+    const bar = within(sheet).getByRole("button", { name: "Close" }).parentElement!;
+    const column = sheet.querySelector("[data-overlay-motion=cards]")!;
+    const card = sheet.querySelector("[data-card]")!;
+    vi.spyOn(bar, "getBoundingClientRect").mockReturnValue({ top: 32, bottom: 88 } as DOMRect);
+    const scrollTo = (top: number) => {
+      vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ top, bottom: top + 400 } as DOMRect);
+      fireEvent.scroll(column);
+    };
+    scrollTo(100);
+    expect(bar.hasAttribute("data-covered")).toBe(false);
+    scrollTo(60);
+    expect(bar.hasAttribute("data-covered")).toBe(true);
+    scrollTo(100);
+    expect(bar.hasAttribute("data-covered")).toBe(false);
+  });
+
   it("closes on the Escape its layer is sent", async () => {
     const { onClose, sheet, open } = await setup();
     await open();

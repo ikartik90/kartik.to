@@ -168,16 +168,6 @@ export function turnedMask({ width, fade, easing, curve }: Pick<LayerTuning, "wi
   return `linear-gradient(to bottom, ${stops.join(", ")})`;
 }
 
-/** A layer's mask for the scrim under the sheet's Close: whole down to a 4xl above its foot, then easing out to clear. */
-export function footMask({ easing, curve }: Pick<LayerTuning, "easing" | "curve">): string {
-  const strength = eased({ amount: easing / 100, curve });
-  const stops = Array.from({ length: STOPS }, (_, i) => {
-    const t = i / (STOPS - 1);
-    return `rgb(0 0 0 / ${Number(strength(1 - t).toFixed(3))}) calc(100% - var(--spacing-4xl) * ${Number((1 - t).toFixed(3))})`;
-  });
-  return `linear-gradient(to bottom, ${stops.join(", ")})`;
-}
-
 const backdrop = ({ blur, saturation, brightness }: { blur: number; saturation: number; brightness: number }) =>
   `blur(${blur}px) saturate(${saturation}%) brightness(${brightness}%)`;
 
@@ -215,7 +205,6 @@ export function sheetVars(tuning: SheetTuning): Record<`--${string}`, string> {
           [`--sheet-${layer}-filter`, backdrop(t)],
           [`--sheet-${layer}-mask`, rampMask(t)],
           [`--sheet-${layer}-turned-mask`, turnedMask(t)],
-          [`--sheet-${layer}-foot-mask`, footMask(t)],
           [`--sheet-${layer}-opacity`, `${t.opacity / 100}`],
           [`--sheet-${layer}-tint`, `${t.tint}%`],
         ];

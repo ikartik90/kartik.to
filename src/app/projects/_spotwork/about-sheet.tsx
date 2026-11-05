@@ -75,13 +75,9 @@ const BLUR = LAYERS.map(
       "--layer-width": `var(--sheet-${layer}-width)`,
       "--layer-mask": `var(--sheet-${layer}-mask)`,
       "--layer-turned-mask": `var(--sheet-${layer}-turned-mask)`,
-      "--layer-foot-mask": `var(--sheet-${layer}-foot-mask)`,
       "--layer-opacity": `var(--sheet-${layer}-opacity)`,
     }) as CSSProperties,
 );
-
-// The scrim's layers lie over the sheet's own, so they blur without tinting it again.
-const SCRIM = BLUR.map(({ backgroundColor: _, ...layer }) => layer);
 
 const sheetStyle = css({
   position: "absolute",
@@ -175,7 +171,6 @@ const columnStyle = css({
   gap: "var(--sheet-card-gap)",
   width: "min(var(--sheet-column-width), 100%)",
   padding: "var(--sheet-column-inset)",
-  "--column-start": "var(--sheet-column-inset)",
   overflowY: "auto",
   translate: "100% 0",
   transitionProperty: "translate",
@@ -186,7 +181,6 @@ const columnStyle = css({
     "@media screen and (min-width: 90rem), screen and (orientation: landscape) and (any-pointer: coarse) and (min-width: 64rem)": {
       width: "min(calc(var(--sheet-column-width) - var(--sheet-column-inset) + var(--sheet-reach)), 100%)",
       paddingInlineStart: "var(--sheet-reach)",
-      "--column-start": "var(--sheet-reach)",
       translate: "none",
       pointerEvents: "auto",
     },
@@ -206,43 +200,41 @@ const columnStyle = css({
 });
 
 // Its Close where the overlay's own is, at the column's default inset, staying there over the cards as they scroll;
-// only its buttons take presses there. A sticky inset counts from inside the column's padding. Its foot is the
-// scrim's fade, so the first card starts below it.
+// only its buttons take presses there. A sticky inset counts from inside the column's padding.
 const headStyle = css({
   position: "sticky",
   insetBlockStart: 0,
   zIndex: 1,
   display: "flex",
   justifyContent: "flex-end",
+  pointerEvents: "none",
+  "& button": { pointerEvents: "auto" },
+});
+
+// Its buttons' bar, its padding outside them so they stand where they would without it.
+const barStyle = css({
+  position: "relative",
+  display: "flex",
   alignItems: "center",
   // The overlay's controls' gap, so its toggle stands where theirs does once it's hidden.
   gap: "md",
-  paddingBlockEnd: "max(0px, calc(token(spacing.4xl) - var(--sheet-card-gap)))",
-  pointerEvents: "none",
-  "& > button": { pointerEvents: "auto" },
+  padding: "md",
+  margin: "calc(token(spacing.md) * -1)",
+  borderRadius: "full",
 });
 
-// The sheet's own layers again, out to the column's edges behind the head, fading out down toward the cards that
-// scroll under it.
-const scrimStyle = css({
+// Blurring the cards under the bar; clear over the sheet's own ground.
+const barGroundStyle = css({
   position: "absolute",
+  inset: 0,
   zIndex: -1,
-  insetBlockStart: "calc(var(--sheet-column-inset) * -1)",
-  insetBlockEnd: 0,
-  insetInlineStart: "calc(var(--column-start) * -1)",
-  insetInlineEnd: "calc(var(--sheet-column-inset) * -1)",
-});
-
-const scrimLayerStyle = css({
-  position: "absolute",
-  insetBlock: 0,
-  insetInlineEnd: 0,
-  width: "var(--layer-width)",
-  opacity: "var(--layer-opacity)",
-  maskImage: "var(--layer-mask), var(--layer-foot-mask)",
-  WebkitMaskImage: "var(--layer-mask), var(--layer-foot-mask)",
-  maskComposite: "intersect",
-  WebkitMaskComposite: "source-in",
+  borderRadius: "inherit",
+  opacity: 0,
+  transitionProperty: "opacity",
+  transitionDuration: "var(--sheet-duration)",
+  transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
+  "[data-covered] > &": { opacity: 1 },
+  _motionReduce: { transitionDuration: "0s" },
 });
 
 const cardStyle = cx(
@@ -505,6 +497,8 @@ export function AboutSheet({
   const { editing } = useCommentEditor();
   const sheet = useRef<HTMLElement>(null);
   const close = useRef<HTMLButtonElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const [covered, setCovered] = useState(false);
   const [tuning] = useSheetTuning();
 
   // Focus follows the sheet in, and back to its button unless a press outside took it elsewhere.
@@ -544,24 +538,30 @@ export function AboutSheet({
           <div key={LAYERS[i]} className={blurStyle} style={layer} data-overlay-motion="ground" />
         ))}
       </div>
-      <div className={columnStyle} data-overlay-motion="cards">
+      <div
+        className={columnStyle}
+        data-overlay-motion="cards"
+        onScroll={(event) => {
+          const card = event.currentTarget.querySelector("[data-card]");
+          const head = bar.current?.getBoundingClientRect();
+          setCovered(!!card && !!head && card.getBoundingClientRect().top < head.bottom);
+        }}
+      >
         {/* Under the window, the overlay's controls carry Close and the comments' toggle. */}
         {!upright && (
           <div className={headStyle}>
-            <div className={scrimStyle} aria-hidden>
-              {SCRIM.map((layer, i) => (
-                <div key={LAYERS[i]} className={scrimLayerStyle} style={layer} />
-              ))}
-            </div>
-            <EditCommentsToggle />
-            {docked && onStow && (
-              <Button variant="icon" emphasis="glass" shape="circle" aria-label={SIDEBAR.hide} onClick={onStow}>
-                <RightSidebarIcon aria-hidden />
+            <div ref={bar} className={barStyle} data-covered={covered ? "" : undefined}>
+              <div className={barGroundStyle} style={FROSTED} aria-hidden />
+              <EditCommentsToggle />
+              {docked && onStow && (
+                <Button variant="icon" emphasis="glass" shape="circle" aria-label={SIDEBAR.hide} onClick={onStow}>
+                  <RightSidebarIcon aria-hidden />
+                </Button>
+              )}
+              <Button ref={close} variant="icon" emphasis="glass" shape="circle" aria-label="Close" onClick={onClose}>
+                <CrossIcon aria-hidden />
               </Button>
-            )}
-            <Button ref={close} variant="icon" emphasis="glass" shape="circle" aria-label="Close" onClick={onClose}>
-              <CrossIcon aria-hidden />
-            </Button>
+            </div>
           </div>
         )}
         {editing ? (
