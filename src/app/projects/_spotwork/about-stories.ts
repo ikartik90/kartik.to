@@ -111,11 +111,7 @@ export const ABOUT = {
         label: SIDEBAR.eyebrows.shiftScheduling,
         heading: SIDEBAR.headings.shiftScheduling,
         body: paragraphs(bodies.shiftScheduling),
-        demos: [
-          { label: demos.final, version: "final" },
-          { label: demos.recurrence, version: "recurrence" },
-          { label: demos.old, version: "old" },
-        ],
+        demos: [{ label: demos.schedule, version: "final", name: "schedule" }],
       },
     ],
     outcome: SIDEBAR.outcomes.activationAndRetention,

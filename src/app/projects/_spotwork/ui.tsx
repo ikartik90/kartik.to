@@ -2046,13 +2046,24 @@ const sideSheetStyle = css({
   display: "flex",
   flexDirection: "column",
   boxShadow: "var(--sw-overlay-shadow)",
-  // It fades in from just short of its place, and back out the same way.
-  transition: "opacity 250ms cubic-bezier(0.22, 1, 0.36, 1), translate 250ms cubic-bezier(0.22, 1, 0.36, 1)",
-  "&[data-entering]": { opacity: 0, translate: "1.5rem 0" },
+  // Its way in and out reads side-sheet-motion.ts's variables; each fallback is that file's default.
+  transformOrigin: "var(--side-sheet-origin, 100% 50%)",
+  transitionProperty: "opacity, translate, scale",
+  transitionDuration: "var(--side-sheet-in-duration, 250ms)",
+  transitionDelay: "var(--side-sheet-in-delay, 0ms)",
+  transitionTimingFunction: "var(--side-sheet-in-easing, cubic-bezier(0.08, 0.59, 0.4, 1))",
+  "&[data-entering]": {
+    opacity: "var(--side-sheet-in-opacity, 0)",
+    translate: "var(--side-sheet-in-from, 120px 0px)",
+    scale: "var(--side-sheet-in-scale, 1)",
+  },
   "[data-closing] &": {
-    opacity: 0,
-    translate: "1.5rem 0",
-    transition: "opacity 250ms cubic-bezier(0.64, 0, 0.78, 0), translate 250ms cubic-bezier(0.64, 0, 0.78, 0)",
+    opacity: "var(--side-sheet-out-opacity, 0)",
+    translate: "var(--side-sheet-out-to, 120px 0px)",
+    scale: "var(--side-sheet-out-scale, 1)",
+    transitionDuration: "var(--side-sheet-out-duration, 250ms)",
+    transitionDelay: "var(--side-sheet-out-delay, 0ms)",
+    transitionTimingFunction: "var(--side-sheet-out-easing, cubic-bezier(0.6, 0, 0.92, 0.4))",
   },
   "& > div:first-child": { backgroundColor: "var(--sw-surface-default)" },
   "&[data-size=small]": { width: "var(--sw-width-side-sheet-small)", backgroundColor: "var(--sw-surface-subdued)" },
@@ -3069,8 +3080,17 @@ export const scrimStyle = css({
   animation: "playgroundChromeIn var(--scrim-duration) cubic-bezier(0.22, 1, 0.36, 1)",
   "[data-closing] &": { opacity: 0, transition: "opacity var(--scrim-duration) cubic-bezier(0.64, 0, 0.78, 0)" },
   "&[data-scrim=light]": { backgroundColor: "var(--sw-scrim-light)" },
-  // A large side sheet's fades as long as the sheet slides, and waits as it does.
-  "&[data-sheet-scrim]": { "--scrim-duration": "250ms" },
+  // A large side sheet's: its timing reads side-sheet-motion.ts's variables, and it waits as the sheet does.
+  "&[data-sheet-scrim]": {
+    "--scrim-duration": "var(--side-sheet-scrim-in, 250ms)",
+    animationDelay: "var(--side-sheet-scrim-delay, 0ms)",
+    animationFillMode: "backwards",
+    animationTimingFunction: "var(--side-sheet-in-easing, cubic-bezier(0.08, 0.59, 0.4, 1))",
+    "[data-closing] &": {
+      "--scrim-duration": "var(--side-sheet-scrim-out, 250ms)",
+      transitionTimingFunction: "var(--side-sheet-out-easing, cubic-bezier(0.6, 0, 0.92, 0.4))",
+    },
+  },
   "&[data-entering]": { opacity: 0, animation: "none" },
 });
 

@@ -108,18 +108,27 @@ export const offersOn = (series: Series, dates: Iso[]): Offers =>
   Object.fromEntries(Object.entries(series.offers ?? {}).filter(([day]) => dates.includes(day.split(" ")[1])));
 
 /**
- * On a day nobody was booked for, those hired have nothing; those who applied have nothing on the days gone; those
- * available, nothing. The shift's `offers` override them all.
+ * On a day ahead nobody was booked for, those hired are offered it while SpotFill sends offers, and have nothing
+ * otherwise; those who applied have nothing on the days gone; those available, nothing. The shift's `offers` override
+ * them all.
  */
 export function bookingOn(series: Series, row: Row, iso: Iso, today: Iso): Booking {
   const key = dayKey(row, iso);
   if (series.offers && key in series.offers) return series.offers[key];
   if (row.available) return null;
   const filled = series.filled?.[iso];
-  if (row.place !== undefined) return filled === undefined ? null : row.place < filled ? "booked" : "cancelled";
+  if (row.place !== undefined && filled === undefined) return iso >= today && series.spotFill !== false ? "offered" : null;
+  if (row.place !== undefined) return row.place < filled! ? "booked" : "cancelled";
   if (iso < today) return null;
   return (filled ?? 0) < series.workers && series.spotFill !== false ? "offered" : "waitlisted";
 }
+
+/** The offers out on `dates`, to everyone on the shift's roster. */
+export const offeredOn = (series: Series, dates: Iso[], today: Iso): number =>
+  rowsOf(series).reduce(
+    (count, row) => count + dates.filter((iso) => bookingOn(series, row, iso, today) === "offered").length,
+    0,
+  );
 
 /** Those booked on a day, its fill: the places filled, less the bookings withdrawn. An offer fills none till it's booked. */
 export function bookedOn(series: Series, iso: Iso): number {

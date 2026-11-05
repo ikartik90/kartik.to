@@ -27,13 +27,13 @@ export const SIDEBAR = {
   hide: "Hide about this project",
   /** The cards' own headings, where their sheet's don't suit the card. */
   headings: {
-    checkIns: "Cut attendance disputes from 90 a week to 31 by rebuilding time tracking",
-    designSystem: "Rolled out and maintained a design system that cut median cycle time by 38% in a year",
+    checkIns: "Cut attendance disputes from 90 a week to 31 by rebuilding check-ins and time tracking",
+    designSystem: "Rolled out and maintained a design system that cut release cycle time by 38% in a year",
     flexibility: "Now floor managers check in workers who can't check themselves in",
     invoice: "The Timesheet is finance's source of truth: timecards track who made each edit",
     traceability: "Our operations team could confirm who was on site and triage likely no-shows",
-    components: "Every screen came from components our engineers and our QA could reuse",
-    activationAndRetention: "I minimized friction and lifted tenth‑shift retention from 62% to 78%",
+    components: "Separate UI from business logic and build every screen from compound components",
+    activationAndRetention: "Pre-boarding and one-drag reposting lifted tenth‑shift retention from 62% to 78%",
     onboarding: "New companies went from an empty dashboard to booked workers within hours",
     shiftScheduling: "Staffing managers extend a posted schedule with a drag",
   },
@@ -54,9 +54,9 @@ export const SIDEBAR = {
     components:
       "Our UI used to be intertwined with business logic. So existing elements were *hard to reuse*.\n\nWe built each screen as *declarative UI*, stating what it showed in the named parts of compound components. Outside its own component, a part raised an error naming its owner.\n\nWe set rules so every component in code *followed the design system*. Any local override carried a written reason we could track.",
     activationAndRetention:
-      "A company's first impressions of Spotwork dictated whether they stayed with us for the long term. They came to book workers on our platform. So *how quickly they could onboard and book them* was critical.\n\nI rebuilt the steps every new company took. They signed up from a link we shared over chat. Preset templates Sales had picked let their team *post a first shift right away*. And once a schedule was posted, staffing managers could extend it in place.",
+      "Companies came to Spotwork to book workers. Their first impressions *dictated whether they stayed with us*.\n\nPreviously, companies started on an empty dashboard, which delayed activation. I enabled Sales to set them up with relevant job templates and a reliable worker pool to *minimize their time to first booking*.\n\nExtending a posted schedule used to mean drafting the shift again and sending workers a fresh round of offers. Staffing managers could now extend it in place, and offers went out automatically to the workers already booked. Repeat workers trusted companies they had already worked with, resulting in *fewer no-shows than first-timers*, which kept companies booking with us.",
     onboarding:
-      "Before the rebuild, new companies started on an empty dashboard. Customers had to create templates before they could post shifts. Further, they had to wait for relevant workers to apply after posting shifts. These friction points delayed customers from experiencing *Spotwork's core value proposition*, making activation harder.\n\nI designed an onboarding workflow that let Sales set up each approved company's team before the company signed up. Sales prepared the team's templates, and added reliable workers with relevant skills to its worker pool. As a result, new companies reached the “aha moment” sooner, going *from an empty dashboard to booked workers within hours*.",
+      "Before the rebuild, new companies started on an empty dashboard. Customers had to create templates before they could post shifts. Further, they had to wait for relevant workers to apply after posting shifts. These friction points delayed customers from experiencing *Spotwork's core value proposition*, making activation harder.\n\nI designed a pre-boarding workflow that let Sales set up each approved company's team before the company signed up. Sales prepared the team's templates, and added reliable workers with relevant skills to its worker pool. As a result, new companies reached the “aha moment” sooner, going *from an empty dashboard to booked workers within hours*.",
     shiftScheduling:
       "In the past, the staffing managers who posted most often had to draft a shift again to add dates and *send workers a fresh round of offers*.\n\nI prototyped two concepts. Recurrence proved efficient but rigid. Drag to select kept the calendar staffing managers already used.\n\nNow they *extend or change a posted schedule in place*.",
   },
@@ -67,7 +67,7 @@ export const SIDEBAR = {
       label: "tenth‑shift retention",
       trend: "up",
       change: "16 points",
-      detail: "A smoother onboarding process lifted tenth‑shift retention by 16 points, *from 62% to 78%*.",
+      detail: "Pre-boarding and effortless reposting lifted tenth‑shift retention by 16 points, *from 62% to 78%*.",
     },
   } satisfies Record<string, Metric>,
   /** What each card's demo plays, beside its Play, on one line. */
@@ -78,9 +78,7 @@ export const SIDEBAR = {
     traceability: "View location and send a text",
     riskSignals: "Risk signals",
     onboarding: "Set up a company before signup",
-    final: "Shipped: Drag to select",
-    recurrence: "Concept 2: Recurrence",
-    old: "Old shift form",
+    schedule: "Add and cancel posted shifts",
   },
   /** The rows that open a page of the design system's site, in Kartik's words, and their button's name, the copywriter's. */
   links: {
@@ -379,10 +377,11 @@ export const SNACKS = {
   checkedIn: "Worker checked in",
   checkInUpdated: "Worker's check-in updated",
   markedAbsent: "Worker marked absent",
-  rescheduled: (added: number, cancelled: number) =>
+  rescheduled: (added: number, cancelled: number, offered = 0) =>
     outcomes(
       (added > 0 || !cancelled) && `${counted(added, "shift")} posted`,
       cancelled > 0 && `${counted(cancelled, "shift")} cancelled`,
+      offered > 0 && `${counted(offered, "offer")} sent`,
     ),
   spotFill: (on: boolean) => `SpotFill turned ${on ? "on" : "off"}`,
   template,

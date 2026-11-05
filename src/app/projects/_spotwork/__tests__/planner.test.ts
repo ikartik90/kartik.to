@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookedOn, bookingOn, dayKey, offerActions, plannerRows, rosterOf, sendOffers, withdrawOffers, type Filter } from "../planner";
+import { bookedOn, bookingOn, dayKey, offerActions, offeredOn, plannerRows, rosterOf, sendOffers, withdrawOffers, type Filter } from "../planner";
 import { entryOn, post, reschedule, seedSeries, type Series } from "../shifts";
 
 // A Wednesday. Weekdays AM is full Monday to Thursday and one short on Fridays (Figma's 5/6).
@@ -82,10 +82,25 @@ describe("each day's booking", () => {
     expect(bookings(weekdays(), "2025-12-01").slice(6, 8)).toEqual([null, null]);
   });
 
-  it("books nobody on a day added to the schedule, and offers it", () => {
+  it("books nobody on a day added to the schedule, and offers it to all six hired and, as extras, those who applied", () => {
     const series = weekdays();
     const added = weekdays(reschedule([series], "weekdays", [...series.dates, "2025-12-06"], true));
-    expect(bookings(added, "2025-12-06")).toEqual([...Array(6).fill(null), "offered", "offered", ...Array(4).fill(null)]);
+    expect(bookings(added, "2025-12-06")).toEqual([...Array(8).fill("offered"), ...Array(4).fill(null)]);
+    expect(bookedOn(added, "2025-12-06")).toBe(0);
+  });
+
+  it("sends a day added no offers while SpotFill's are off, and waitlists those who applied", () => {
+    const series = weekdays();
+    const added = weekdays(reschedule([series], "weekdays", [...series.dates, "2025-12-06"], false));
+    expect(bookings(added, "2025-12-06")).toEqual([...Array(6).fill(null), "waitlisted", "waitlisted", ...Array(4).fill(null)]);
+  });
+
+  it("counts the offers out on the days given", () => {
+    const series = weekdays();
+    const added = (spotFill: boolean) =>
+      weekdays(reschedule([series], "weekdays", [...series.dates, "2025-12-06", "2025-12-07"], spotFill));
+    expect(offeredOn(added(true), ["2025-12-06", "2025-12-07"], TODAY)).toBe(16);
+    expect(offeredOn(added(false), ["2025-12-06", "2025-12-07"], TODAY)).toBe(0);
   });
 
   it("only waitlists those who applied while SpotFill's offers are off", () => {
@@ -197,12 +212,12 @@ describe("sending and withdrawing offers", () => {
     expect(bookedOn(send(withdrawn, ["Jeremiah Schwartzmann", FULL]), FULL)).toBe(5);
   });
 
-  it("forgets what was sent or withdrawn on a day taken off the schedule, so it comes back unfilled", () => {
+  it("forgets what was sent or withdrawn on a day taken off the schedule, so it comes back unfilled and offered afresh", () => {
     const series = withdraw(send(weekdays(), ["Marilyn Calzoni", SHORT]), ["Jeremiah Schwartzmann", SHORT]);
     const off = reschedule([series], "weekdays", series.dates.filter((date) => date !== SHORT), true);
     const back = weekdays(reschedule(off, "weekdays", series.dates, true));
     expect(on(back, "Marilyn Calzoni", SHORT)).toBeNull();
-    expect(on(back, "Jeremiah Schwartzmann", SHORT)).toBeNull();
+    expect(on(back, "Jeremiah Schwartzmann", SHORT)).toBe("offered");
     expect(on(back, "Jeremiah Schwartzmann", FULL)).toBe("booked");
     expect(on(weekdays(reschedule([series], "weekdays", series.dates, true)), "Marilyn Calzoni", SHORT)).toBe("offered");
   });

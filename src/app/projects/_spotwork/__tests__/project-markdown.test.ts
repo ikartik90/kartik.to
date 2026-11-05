@@ -37,7 +37,7 @@ describe("projectMarkdown", () => {
 
   it("states the outcome as its metric over what it means, then the role and the year", () => {
     const md = lines("design-system");
-    expect(md).toContain("## 38% faster release cycles");
+    expect(md).toContain("## 1.5× release frequency, up 9 releases");
     expect(md.slice(-2)).toEqual([
       "- **Role**: Product design, Design engineering, Design system management",
       "- **Year**: 2024–25",

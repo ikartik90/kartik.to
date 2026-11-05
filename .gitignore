@@ -63,3 +63,5 @@ styled-system-studio
 # commit that a squash-merge took anyway. Ignoring the directory is what stops
 # the third time: a review page written here cannot be staged, so it cannot ship.
 /src/app/dev/
+
+certificates

@@ -51,7 +51,7 @@ describe("the About sheet's stories", () => {
   });
 
   it("keep every card's heading to three lines: no longer than the longest that wraps to three at the card's width", () => {
-    const longest = "Rolled out and maintained a design system that cut median cycle time by 38% in a year".length;
+    const longest = "Rolled out and maintained a design system that cut release cycle time by 38% in a year".length;
     const over = cards
       .filter((card) => card.heading.length > longest)
       .map((card) => card.heading);
