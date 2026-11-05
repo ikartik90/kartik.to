@@ -467,24 +467,27 @@ function OverlayContent({
   if (about && (docked || upright)) setAbout(false);
   const aboutButton = useRef<HTMLButtonElement>(null);
   const [tuning] = useSheetTuning();
-  // The window re-fitted to the room the sheet leaves or takes, then eased there from where it was, as the sheet slides.
+  const dockRow = useRef<HTMLDivElement>(null);
+  // The window re-fitted to the room the sheet leaves or takes, then eased there from where it was, and the dock under
+  // it slid along, as the sheet slides. The dock's row has its own opening motion, so the dock itself moves.
   const stow = (next: boolean) => {
-    const from = windowBox.current?.getBoundingClientRect();
+    const parts = [windowBox.current, dockRow.current?.firstElementChild].filter((node) => node instanceof HTMLElement);
+    const from = parts.map((node) => node.getBoundingClientRect());
     flushSync(() => setStowed(next));
     flushSync(remeasure.current);
-    const node = windowBox.current;
-    const to = node?.getBoundingClientRect();
-    if (!from || !to?.width || reducedMotion()) return;
-    node!.animate(
-      [
-        {
-          transformOrigin: "0 0",
-          transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})`,
-        },
-        { transformOrigin: "0 0", transform: "none" },
-      ],
-      { duration: tuning.motion.duration, easing: "cubic-bezier(0.2, 0, 0, 1)" },
-    );
+    if (reducedMotion()) return;
+    parts.forEach((node, i) => {
+      const to = node.getBoundingClientRect();
+      if (!to.width) return;
+      const scale = node === windowBox.current ? ` scale(${from[i].width / to.width})` : "";
+      node.animate(
+        [
+          { transformOrigin: "0 0", transform: `translate(${from[i].left - to.left}px, ${from[i].top - to.top}px)${scale}` },
+          { transformOrigin: "0 0", transform: "none" },
+        ],
+        { duration: tuning.motion.duration, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
+    });
   };
   // Where the About sheet under the window starts.
   const stage = useRef<HTMLDivElement>(null);
@@ -664,7 +667,7 @@ function OverlayContent({
           </div>
           {!upright && controls}
           {!inRow && (
-            <div className={topRowStyle} data-below="" data-overlay-motion="controls">
+            <div ref={dockRow} className={topRowStyle} data-below="" data-overlay-motion="controls">
               <ProjectDock
                 className={dockStyle}
                 projects={PROJECTS}
