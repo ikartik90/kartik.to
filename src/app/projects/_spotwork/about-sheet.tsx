@@ -200,18 +200,20 @@ const columnStyle = css({
 });
 
 // Its Close where the overlay's own is, at the column's default inset, staying there over the cards as they scroll;
-// only its buttons take presses there. A sticky inset counts from inside the column's padding.
+// only its buttons take presses there. A sticky inset counts from inside the column's padding. The first card stands as
+// far below its buttons as they stand below the top.
 const headStyle = css({
   position: "sticky",
   insetBlockStart: 0,
   zIndex: 1,
   display: "flex",
   justifyContent: "flex-end",
+  paddingBlockEnd: "calc(var(--sheet-column-inset) - var(--sheet-card-gap))",
   pointerEvents: "none",
   "& button": { pointerEvents: "auto" },
 });
 
-// Its buttons' bar, its padding outside them so they stand where they would without it.
+// Its buttons' bar, a tab from the right edge, its padding outside them so they stand where they would without it.
 const barStyle = css({
   position: "relative",
   display: "flex",
@@ -219,8 +221,11 @@ const barStyle = css({
   // The overlay's controls' gap, so its toggle stands where theirs does once it's hidden.
   gap: "md",
   padding: "md",
+  paddingInlineEnd: "var(--sheet-column-inset)",
   margin: "calc(token(spacing.md) * -1)",
-  borderRadius: "full",
+  marginInlineEnd: "calc(var(--sheet-column-inset) * -1)",
+  borderStartStartRadius: "full",
+  borderEndStartRadius: "full",
 });
 
 // Blurring the cards under the bar; clear over the sheet's own ground.
