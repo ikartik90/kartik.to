@@ -226,18 +226,18 @@ const barStyle = css({
   borderEndStartRadius: "full",
 });
 
-// Blurring the cards under the bar; clear over the sheet's own ground.
+// Blurring the cards under the bar, and edged as the command palette is, in step with how much of it a card is under;
+// open at the right edge, as a tab.
 const barGroundStyle = css({
   position: "absolute",
   inset: 0,
   zIndex: -1,
   borderRadius: "inherit",
-  opacity: 0,
-  transitionProperty: "opacity",
-  transitionDuration: "var(--sheet-duration)",
-  transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)",
-  "[data-covered] > &": { opacity: 1 },
-  _motionReduce: { transitionDuration: "0s" },
+  borderWidth: "token(spacing.3xs)",
+  borderInlineEndWidth: 0,
+  borderStyle: "solid",
+  borderColor: "border.divider",
+  opacity: "var(--bar-shown, 0)",
 });
 
 const cardStyle = cx(
@@ -501,7 +501,6 @@ export function AboutSheet({
   const sheet = useRef<HTMLElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const bar = useRef<HTMLDivElement>(null);
-  const [covered, setCovered] = useState(false);
   const [tuning] = useSheetTuning();
 
   // Focus follows the sheet in, and back to its button unless a press outside took it elsewhere.
@@ -547,13 +546,15 @@ export function AboutSheet({
         onScroll={(event) => {
           const card = event.currentTarget.querySelector("[data-card]");
           const head = bar.current?.getBoundingClientRect();
-          setCovered(!!card && !!head && card.getBoundingClientRect().top < head.bottom);
+          if (!card || !head?.height) return;
+          const under = (head.bottom - card.getBoundingClientRect().top) / head.height;
+          bar.current!.style.setProperty("--bar-shown", `${Math.min(1, Math.max(0, under))}`);
         }}
       >
         {/* Under the window, the overlay's controls carry Close and the comments' toggle. */}
         {!upright && (
           <div className={headStyle}>
-            <div ref={bar} className={barStyle} data-covered={covered ? "" : undefined}>
+            <div ref={bar} className={barStyle}>
               <div className={barGroundStyle} style={FROSTED} aria-hidden />
               <EditCommentsToggle />
               {docked && onStow && (

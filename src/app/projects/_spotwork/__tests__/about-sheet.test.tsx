@@ -192,23 +192,23 @@ describe("the About sheet", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: SIDEBAR.open }));
   });
 
-  it("shows the bar round its Close only while a card is scrolled up under it", async () => {
+  it("fades the bar round its Close in as far as a card is scrolled up under it", async () => {
     const { sheet, open } = await setup();
     await open();
     const bar = within(sheet).getByRole("button", { name: "Close" }).parentElement!;
     const column = sheet.querySelector("[data-overlay-motion=cards]")!;
     const card = sheet.querySelector("[data-card]")!;
-    vi.spyOn(bar, "getBoundingClientRect").mockReturnValue({ top: 32, bottom: 88 } as DOMRect);
-    const scrollTo = (top: number) => {
+    vi.spyOn(bar, "getBoundingClientRect").mockReturnValue({ top: 32, bottom: 88, height: 56 } as DOMRect);
+    const shown = (top: number) => {
       vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ top, bottom: top + 400 } as DOMRect);
       fireEvent.scroll(column);
+      return Number(bar.style.getPropertyValue("--bar-shown"));
     };
-    scrollTo(100);
-    expect(bar.hasAttribute("data-covered")).toBe(false);
-    scrollTo(60);
-    expect(bar.hasAttribute("data-covered")).toBe(true);
-    scrollTo(100);
-    expect(bar.hasAttribute("data-covered")).toBe(false);
+    expect(shown(100)).toBe(0);
+    expect(shown(60)).toBe(0.5);
+    expect(shown(20)).toBe(1);
+    expect(shown(-200)).toBe(1);
+    expect(shown(88)).toBe(0);
   });
 
   it("closes on the Escape its layer is sent", async () => {
