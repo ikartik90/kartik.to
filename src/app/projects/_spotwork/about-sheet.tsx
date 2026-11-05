@@ -272,13 +272,22 @@ const rowStyle = css({
   borderBlockStartStyle: "dashed",
   borderBlockStartColor: "border.divider",
   // A list keeps the label on its first line.
-  "&[data-list]": { alignItems: "baseline" },
+  "&[data-list]": { alignItems: "flex-start" },
   "&:first-child": { paddingBlockStart: 0, borderBlockStartWidth: 0 },
 });
 
 const rowTextStyle = css({ textStyle: "bodyLarge", color: "text.title", whiteSpace: "nowrap" });
 
 const rowListStyle = css({ display: "flex", flexDirection: "column", alignItems: "flex-end" });
+
+// A fact's eyebrow, centred on a line of its value's height.
+const factLabelStyle = css({
+  display: "flex",
+  alignItems: "center",
+  flexShrink: 0,
+  textStyle: "bodyLarge",
+  height: "1lh",
+});
 
 // Half the card's gap. A chevron sits at its end, on its first line.
 const cardHeadStyle = css({
@@ -330,8 +339,10 @@ function FactsCard({ facts }: { facts: Fact[] }) {
     <div className={cardStyle} style={FROSTED} data-card="">
       {facts.map((fact, i) => (
         <div key={fact.label} className={rowStyle} data-list={"list" in fact ? "" : undefined}>
-          <span id={`${id}-${i}`} className={rowTextStyle}>
-            {fact.label}
+          <span className={factLabelStyle}>
+            <span id={`${id}-${i}`} className={labelStyle}>
+              {fact.label}
+            </span>
           </span>
           {"list" in fact ? (
             <ul className={rowListStyle} aria-labelledby={`${id}-${i}`}>

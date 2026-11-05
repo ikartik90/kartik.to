@@ -4,9 +4,9 @@ import MetricIcon from "@/assets/icons/metric.svg";
 import { Dots } from "./dots";
 import { fadeBelow } from "./fade";
 
-// A metric on the project cards' dotted ground and frame. `brand` draws what it says brighter (the number, how far it
+// A metric on the project cards' dotted ground. `brand` draws what it says brighter (the number, how far it
 // moved, the caption's marked words) in the brand colour. `small` leaves the caption out. `landscape`, for a band
-// across the sheet with no frame: the caption at a subheading's size, under the metric, and from `md` in the two
+// across the sheet: the caption at a subheading's size, under the metric, and from `md` in the two
 // thirds beside it.
 
 /** What was measured; `*`s in `detail` mark the part said brighter. */
@@ -50,7 +50,6 @@ const cardStyle = css({
   padding: "xxl",
   overflow: "hidden",
   borderRadius: "lg",
-  boxShadow: "inset 0 0 0 token(spacing.xxs) color-mix(in srgb, token(colors.neutral.500) 25%, transparent)",
   textAlign: "start",
   mdDown: { aspectRatio: "1", padding: "xl" },
   // Small isn't squared on a phone: it has no caption to make room for.
@@ -59,7 +58,6 @@ const cardStyle = css({
   // padding; no frame, the dots fading out toward its foot.
   "&[data-landscape]": {
     borderRadius: 0,
-    boxShadow: "none",
     paddingInline: "calc(2 * token(spacing.xl))",
     paddingBlock: "5xl",
     md: { paddingInline: "calc(token(spacing.5xl) + token(spacing.3xl))" },
@@ -95,6 +93,9 @@ const numberStyle = css({
   fontVariantNumeric: "tabular-nums",
   "[data-metric-card][data-variant='brand'] &": { color: "text.highlight" },
 });
+// At the number's size, so `em` is the number's: Switzer's digits sit 0.0435em below the centre of their line box,
+// and the pill drops as far to centre on them.
+const pillSlotStyle = css({ display: "flex", textStyle: "title", translate: "0 0.0435em" });
 // How far it moved, with the way it went, outlined.
 const pillStyle = css({
   display: "inline-flex",
@@ -165,9 +166,11 @@ export function MetricCard({
           <div className={numberRowStyle}>
             <span className={numberStyle}>{metric.value}</span>
             {metric.change && (
-              <span className={pillStyle} data-trend={metric.trend}>
-                <MetricIcon aria-hidden />
-                {metric.change}
+              <span className={pillSlotStyle}>
+                <span className={pillStyle} data-trend={metric.trend}>
+                  <MetricIcon aria-hidden />
+                  {metric.change}
+                </span>
               </span>
             )}
           </div>
