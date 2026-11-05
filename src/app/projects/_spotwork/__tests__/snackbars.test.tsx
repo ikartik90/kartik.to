@@ -37,6 +37,8 @@ describe("the messages", () => {
     expect(SNACKS.rescheduled(4, 2)).toBe("4 shifts posted. 2 shifts cancelled.");
     expect(SNACKS.rescheduled(1, 0)).toBe("1 shift posted");
     expect(SNACKS.rescheduled(0, 2)).toBe("2 shifts cancelled");
+    expect(SNACKS.rescheduled(10, 2, 80)).toBe("10 shifts posted. 2 shifts cancelled. 80 offers sent.");
+    expect(SNACKS.rescheduled(1, 0, 1)).toBe("1 shift posted. 1 offer sent.");
     expect(SNACKS.offersSent(2, 1)).toBe("2 offers sent. 1 offer waitlisted.");
     expect(SNACKS.offersSent(0, 3)).toBe("3 offers waitlisted");
     expect(SNACKS.offersWithdrawn(2)).toBe("2 offers withdrawn");
@@ -89,13 +91,13 @@ describe("the Shifts page's snackbar", () => {
     return { user, dialog: screen.getByRole("dialog", { name: "Edit schedule" }) };
   }
 
-  it("counts the shifts an edited schedule posts and cancels", async () => {
+  it("counts the shifts an edited schedule posts and cancels, and the offers its new day sends the six hired and two who applied", async () => {
     const { user, dialog } = await editSchedule();
     const week = weekOf(isoOf(new Date()));
     await user.click(within(dialog).getByRole("button", { name: longDate(week[6]) }));
     await user.click(within(dialog).getByRole("button", { name: longDate(addDays(week[0], 8)) }));
     await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
-    expect(said()).toEqual([SNACKS.rescheduled(1, 1)]);
+    expect(said()).toEqual([SNACKS.rescheduled(1, 1, 8)]);
   });
 
   it("says SpotFill was turned off when that's all that changed", async () => {

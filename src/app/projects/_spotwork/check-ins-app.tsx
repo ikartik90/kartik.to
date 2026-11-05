@@ -49,6 +49,7 @@ import {
 } from "./check-ins-dashboard";
 import { NewShift, type Version } from "./new-shift";
 import { isoOf, post, postedMessage, reschedule, scheduleCounts, seedSeries, weekOf } from "./shifts";
+import { offeredOn } from "./planner";
 import { SHIFTS_MIN_WIDTH, SHIFTS_WIDTH, ShiftsPage, Snackbar } from "./shifts-page";
 import { TIMESHEET_MIN_WIDTH, TIMESHEET_WIDTH, TimesheetPage } from "./timesheet-page";
 import type { Edits, OffAppShift } from "./timesheet";
@@ -601,7 +602,9 @@ export function CheckInsApp({
                           setSeries((all) => reschedule(all, id, dates, spotFill));
                           const line = series.find((s) => s.id === id)!;
                           const { added, cancelled } = scheduleCounts(line.dates, dates, today);
-                          if (added || cancelled) say(SNACKS.rescheduled(added, cancelled));
+                          const posted = dates.filter((date) => date >= today && !line.dates.includes(date));
+                          const offered = offeredOn(reschedule([line], id, dates, spotFill)[0], posted, today);
+                          if (added || cancelled) say(SNACKS.rescheduled(added, cancelled, offered));
                           else if (spotFill !== (line.spotFill ?? true)) say(SNACKS.spotFill(spotFill));
                         }
                       : undefined

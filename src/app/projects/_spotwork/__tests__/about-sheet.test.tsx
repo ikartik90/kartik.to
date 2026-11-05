@@ -171,9 +171,9 @@ describe("the About sheet", () => {
     const plays = (card: HTMLElement) => actionRows(card, DEMO.play).map((row) => row.textContent);
     expect(plays(lead)).toEqual([]);
     expect(plays(onboarding)).toEqual([SIDEBAR.demos.onboarding]);
-    expect(plays(shifts)).toEqual([SIDEBAR.demos.final, SIDEBAR.demos.recurrence, SIDEBAR.demos.old]);
-    await user.click(within(shifts).getByText(SIDEBAR.demos.recurrence));
-    expect(onPlay).toHaveBeenLastCalledWith({ label: SIDEBAR.demos.recurrence, version: "recurrence" });
+    expect(plays(shifts)).toEqual([SIDEBAR.demos.schedule]);
+    await user.click(within(shifts).getByText(SIDEBAR.demos.schedule));
+    expect(onPlay).toHaveBeenLastCalledWith({ label: SIDEBAR.demos.schedule, version: "final", name: "schedule" });
     await user.click(within(onboarding).getByRole("button", { name: SIDEBAR.demos.onboarding }).querySelector("svg")!);
     expect(onPlay).toHaveBeenLastCalledWith({ label: SIDEBAR.demos.onboarding, version: "activation" });
   });
@@ -252,6 +252,32 @@ describe("the About sheet", () => {
     const { sheet, open } = await setup();
     await open();
     expect(within(sheet).queryByRole("button", { name: "Edit comments" })).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it("swaps its cards for side sheet motion controls while tuning, in development, which side sheets read from the page's root", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const { user, sheet, open } = await setup();
+    await open();
+    await user.click(within(sheet).getByRole("button", { name: "Tune side sheet motion" }));
+    expect(within(sheet).queryByRole("region", { name: SIDEBAR.headings.checkIns })).toBeNull();
+    expect(within(sheet).getByRole("heading", { name: "Side sheet motion" })).toBeTruthy();
+    const wayIn = within(sheet).getByRole("region", { name: "Way in" });
+    within(wayIn).getAllByRole("slider")[4].focus();
+    await user.keyboard("{ArrowRight}");
+    expect(document.documentElement.style.getPropertyValue("--side-sheet-in-duration")).toBe("260ms");
+    await user.click(within(sheet).getByRole("button", { name: "Reset" }));
+    expect(document.documentElement.style.getPropertyValue("--side-sheet-in-duration")).toBe("250ms");
+    await user.click(within(sheet).getByRole("button", { name: "Done tuning" }));
+    expect(within(sheet).getByRole("region", { name: SIDEBAR.headings.checkIns })).toBeTruthy();
+    vi.unstubAllEnvs();
+  });
+
+  it("offers no motion controls on the live site", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { sheet, open } = await setup();
+    await open();
+    expect(within(sheet).queryByRole("button", { name: "Tune side sheet motion" })).toBeNull();
     vi.unstubAllEnvs();
   });
 });

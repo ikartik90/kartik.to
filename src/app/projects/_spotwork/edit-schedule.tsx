@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { css } from "../../../../styled-system/css";
-import { scheduleCounts, type Iso, type Series } from "./shifts";
+import { addMonths, scheduleCounts, type Iso, type Series } from "./shifts";
 import { CalendarStrip } from "./shift-calendar";
 import { DRAG_HINT, SPOTFILL } from "./new-shift";
 import { Button, Field, Overlay, Switch, Typography, toneStyle } from "./ui";
@@ -89,7 +89,7 @@ export function EditSchedule({
           value={dates}
           onChange={setDates}
           today={today}
-          first={today}
+          first={addMonths(today, -1)}
           base={series.dates}
           footer={
             <Typography tag="div" variant="metadata" className={legendStyle} role="group" aria-label="Changes">

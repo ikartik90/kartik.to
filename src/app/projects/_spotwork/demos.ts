@@ -13,7 +13,7 @@ import { MAX_ZOOM, MIN_ZOOM } from "./logo-crop";
 import { ADDRESS } from "./preset-sheet";
 import { presetsSeed } from "./presets";
 import type { Choice } from "./project-nav";
-import { WEEKDAYS, addDays, isoOf, weekdayOf, type Iso } from "./shifts";
+import { WEEKDAYS, addDays, isoOf, seedSeries, weekOf, weekdayOf, type Iso } from "./shifts";
 
 // Play's demos, each the live app's own controls pressed in turn on its page, after the walkthrough clips'
 // stories (../check-ins-walkthrough, ../onboarding-walkthrough) and with their words. Started on another page, a demo
@@ -104,6 +104,61 @@ function schedulingShift(root: Root, version: string): Step[] {
     ...describe,
     { at: button("Next"), hold: 900 },
     { at: button("Post shift") },
+  ];
+}
+
+/**
+ * Weekdays AM opened from this week's Shifts, or next week's once this week's are past, and its schedule edited: next week's
+ * Wednesday and Friday cancelled, then the two weeks after its last day swept in, a drag a month. Each month is brought
+ * to the calendar's middle, the only one in full view, before it's touched.
+ */
+function editSchedule(root: Root): Step[] {
+  const { all, button, date, visit } = finders(root);
+  const dialog = '[role=dialog][aria-label="Edit schedule"]';
+  const today = isoOf(new Date());
+  const sunday = weekOf(today)[0];
+  const last = seedSeries(today).find((each) => each.id === "weekdays")!.dates.at(-1)!;
+  const added = Array.from({ length: 14 }, (_, i) => addDays(last, i + 1)).filter((day) => weekdayOf(day) % 6 !== 0);
+  const months = [...new Set(added.map((day) => day.slice(0, 7)))].map((month) => added.filter((day) => day.startsWith(month)));
+  const cancelled = [addDays(sunday, 10), addDays(sunday, 12)];
+  const shift: Target = () => all("[data-when=ahead] button").find((each) => each.textContent?.startsWith("Weekdays AM")) ?? null;
+  // The months slide when brought along; a cell's box is only where it stays once they've stopped.
+  const still = (target: Target): Target => () =>
+    all(`${dialog} [data-toggle]`)[0]?.parentElement?.getAnimations().some((each) => each.playState === "running") ? null : target();
+  const middle = () => all(`${dialog} [data-toggle]`)[1]?.querySelector<HTMLElement>("button[data-date]")?.dataset.date?.slice(0, 7);
+  const centre = (day: Iso): Step[] =>
+    Array.from({ length: 2 }, (): Step => ({
+      at: () => {
+        const shown = middle();
+        if (!shown || shown === day.slice(0, 7)) return null;
+        return button(shown < day ? "Next month" : "Previous month", dialog)();
+      },
+      optional: true,
+      hold: 700,
+    }));
+  // Level with `rowOf`'s cell, in `columnOf`'s column: a month's rows start on a Sunday, so its first and last days
+  // needn't be the rectangle's corners.
+  const corner = (columnOf: Iso, rowOf: Iso) => (): Point | null => {
+    const [column, row] = [date(columnOf)(), date(rowOf)()].map((cell) => cell?.getBoundingClientRect());
+    return column && row ? { x: column.left + column.width / 2, y: row.top + row.height / 2 } : null;
+  };
+  const sweep = (days: Iso[]): Step[] => {
+    if (days.length === 1) return [...centre(days[0]), { at: still(date(days[0])), hold: 700 }];
+    const byWeekday = [...days].sort((a, b) => weekdayOf(a) - weekdayOf(b));
+    return [
+      ...centre(days[0]),
+      { at: still(date(days[0])), on: corner(byWeekday[0], days[0]), to: corner(byWeekday.at(-1)!, days.at(-1)!), hold: 900 },
+    ];
+  };
+  return [
+    ...visit("Shifts"),
+    { at: () => (shift() ? null : button("Next week")()), optional: true, hold: 700 },
+    { at: shift, hold: 1200 },
+    { at: button("Edit schedule..."), hold: 900 },
+    ...centre(cancelled[0]),
+    ...cancelled.map((day): Step => ({ at: still(date(day)), hold: 600 })),
+    ...months.flatMap(sweep),
+    { at: button("Save changes", dialog) },
   ];
 }
 
@@ -435,8 +490,10 @@ export function demoFencesOf(choice: Choice, name?: string): Record<string, Geof
 
 /** The steps Play takes for a project and its version, if it has a demo; `name` picks another of the version's. */
 export function demoOf(choice: Choice, root: Root, name?: string): Step[] | undefined {
-  if (choice.project === "activation-and-retention")
+  if (choice.project === "activation-and-retention") {
+    if (name === "schedule") return editSchedule(root);
     return !choice.version || choice.version === "activation" ? activation(root) : schedulingShift(root, choice.version);
+  }
   if (choice.project === "check-ins") {
     if (name === "timesheet") return timesheet(root);
     if (name === "geofence") return geofence(root);

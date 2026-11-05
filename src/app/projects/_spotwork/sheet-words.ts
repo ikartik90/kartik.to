@@ -67,9 +67,11 @@ export const DESIGN_SYSTEM = {
     },
   },
   outcome: {
-    value: "38%",
-    label: "faster release cycles",
+    value: "1.5×",
+    label: "release frequency",
+    trend: "up",
+    change: "9 releases",
     detail:
-      "Modular UI built from compound components cut median release cycle time by 38%, *from 21 days in Q2 2024 to 13 days in Q2 2025*.",
+      "Reusable components cut median release cycle time by 38%, enabling us to ship *26 releases in the 12 months to September 2025, up from 17 the year before*.",
   } satisfies Metric,
 };
