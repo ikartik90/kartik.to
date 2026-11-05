@@ -7,9 +7,9 @@ describe("the About sheet's tuning", () => {
   it("starts from the tuned look: three short ramps behind the cards' column, glass cards", () => {
     const layer = { saturation: 100, brightness: 100, easing: 100, curve: CURVE };
     expect(SHEET_TUNING).toEqual({
-      outer: { ...layer, blur: 8, width: 420, fade: 16, opacity: 72, tint: 0 },
-      middle: { ...layer, blur: 16, width: 400, fade: 12, opacity: 80, tint: 4 },
-      inner: { ...layer, blur: 24, width: 380, fade: 24, opacity: 100, tint: 8 },
+      outer: { ...layer, blur: 8, width: 420, fade: 16, opacity: 72 },
+      middle: { ...layer, blur: 16, width: 400, fade: 12, opacity: 80 },
+      inner: { ...layer, blur: 24, width: 380, fade: 24, opacity: 100 },
       cards: {
         opacity: 75,
         blur: 8,
@@ -68,7 +68,7 @@ describe("the About sheet's tuning", () => {
   it("hands the sheet its values as CSS variables", () => {
     const vars = sheetVars(
       mergeTuning(SHEET_TUNING, {
-        outer: { blur: 4, saturation: 180, brightness: 90, width: 900, opacity: 50, tint: 10 },
+        outer: { blur: 4, saturation: 180, brightness: 90, width: 900, opacity: 50 },
         cards: { opacity: 60, blur: 20, saturation: 150, radius: 16, padding: 24, gap: 8, shadow: 20, shadowBlur: 24, shadowY: 6 },
         column: { width: 360, inset: 24 },
         motion: { duration: 450 },
@@ -80,7 +80,6 @@ describe("the About sheet's tuning", () => {
       "--sheet-outer-mask": rampMask(SHEET_TUNING.outer),
       "--sheet-outer-turned-mask": turnedMask({ ...SHEET_TUNING.outer, width: 900 }),
       "--sheet-outer-opacity": "0.5",
-      "--sheet-outer-tint": "10%",
       "--sheet-card-opacity": "60%",
       "--sheet-card-filter": "blur(20px) saturate(150%) brightness(100%)",
       "--sheet-card-radius": "16px",

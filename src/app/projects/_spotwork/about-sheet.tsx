@@ -64,14 +64,12 @@ export const useUpright = () => useMedia(UPRIGHT);
 /** Whether the window is a tablet's on its side, where the docked sheet can be hidden. */
 export const useStowable = () => useMedia(STOWABLE);
 
-// Each layer ramps in from clear at its left edge, or its top edge, under its own mask, which also shapes its tint;
-// the layers stacked are the blur.
+// Each layer ramps in from clear at its left edge, or its top edge, under its own mask; the layers stacked are the blur.
 const BLUR = LAYERS.map(
   (layer) =>
     ({
       backdropFilter: `var(--sheet-${layer}-filter)`,
       WebkitBackdropFilter: `var(--sheet-${layer}-filter)`,
-      backgroundColor: `color-mix(in srgb, var(--colors-bg-surface) var(--sheet-${layer}-tint), transparent)`,
       "--layer-width": `var(--sheet-${layer}-width)`,
       "--layer-mask": `var(--sheet-${layer}-mask)`,
       "--layer-turned-mask": `var(--sheet-${layer}-turned-mask)`,
