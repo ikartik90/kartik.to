@@ -144,7 +144,7 @@ describe("the About sheet", () => {
     expect(sheet.querySelector("[data-card]")).toBe(cards[0]);
   });
 
-  it("tells Activation and retention's story: its lead, then Onboarding's and Shift scheduling's cards", async () => {
+  it("tells Activation and retention's story: its lead, then Onboarding's and Shift scheduling's cards, then the metric", async () => {
     viewport(1440);
     const onPlay = vi.fn();
     const user = userEvent.setup();
@@ -158,11 +158,15 @@ describe("the About sheet", () => {
     const [lead, onboarding, shifts] = cards;
     expect(sheet.querySelector("[data-card]")).toBe(lead);
     expect(cards.every((card, i) => i === 0 || before(cards[i - 1], card))).toBe(true);
-    expect(sheet.querySelectorAll("[data-card]")).toHaveLength(4);
+    expect(sheet.querySelectorAll("[data-card]")).toHaveLength(5);
     expect(within(onboarding).getByText(SIDEBAR.eyebrows.onboarding)).toBeTruthy();
     expect(within(shifts).getByText(SIDEBAR.eyebrows.shiftScheduling)).toBeTruthy();
-    // Check-ins' role and 2024 close the sheet in a card of their own.
-    expect(before(shifts, lastCard(sheet, { roles: CHECK_INS_ROLES, year: "2024" }))).toBe(true);
+    const metric = within(sheet).getByRole("group", { name: SIDEBAR.outcomes.activationAndRetention.label });
+    expect(before(shifts, metric)).toBe(true);
+    // Check-ins' role and 2024 close the sheet in a card of their own, after the metric.
+    expect(metric.closest("[data-card]")?.nextElementSibling).toBe(
+      lastCard(sheet, { roles: CHECK_INS_ROLES, year: "2024" }),
+    );
     expect(within(lead).queryByText(SIDEBAR.facts.role)).toBeNull();
     const plays = (card: HTMLElement) => actionRows(card, DEMO.play).map((row) => row.textContent);
     expect(plays(lead)).toEqual([]);

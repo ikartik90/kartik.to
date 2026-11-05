@@ -25,7 +25,7 @@ export const CHECK_INS = {
     value: "65%",
     label: "fewer attendance disputes",
     detail:
-      "Correcting hours during the shift, with every change on record, *cut attendance disputes by 65%*, from an average of 90 a week to under 35 after launch.",
+      "Correcting hours during the shift, with every change on record, cut attendance disputes by 65%, *from an average of 90 to 31 a week after launch*.",
   } satisfies Metric,
 };
 
@@ -70,6 +70,6 @@ export const DESIGN_SYSTEM = {
     value: "38%",
     label: "faster release cycles",
     detail:
-      "Building web and part of mobile from one set of tokens, components and code *cut release cycle time by 38%*, from 21 days to 13 days.",
+      "Modular UI built from compound components cut median release cycle time by 38%, *from 21 days in Q2 2024 to 13 days in Q2 2025*.",
   } satisfies Metric,
 };

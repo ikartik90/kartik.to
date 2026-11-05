@@ -10,7 +10,7 @@ export const PROJECT_CARDS: ProjectCard[] = [
   {
     id: "design-system",
     title: "Design system",
-    sentence: "Set up a design system that cut release cycles from 21 to 13 days",
+    sentence: "Rolled out and maintained a design system that cut release cycles from 21 to 13 days",
   },
   {
     id: "check-ins",

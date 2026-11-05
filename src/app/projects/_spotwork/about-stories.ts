@@ -9,7 +9,7 @@ import { SIDEBAR } from "./copy";
 // Off-app rows, and the Traceability card the dashboard's and the worker risk signals rows. The design system's Tokens
 // card also holds its OKLCH and rem rows, and its Components card the compound components and className rows.
 // Activation and retention has no sheet of its own: a lead, then a card each for Onboarding and Shift scheduling, all in
-// the copywriter's words, then Check-ins' role and 2024. Onboarding merges the Activation and Preset templates cards.
+// the copywriter's words, then its metric (`SIDEBAR.outcomes`), then Check-ins' role and 2024. Onboarding merges the Activation and Preset templates cards.
 
 /** A demo a card plays: what it shows, the version it opens on, and its `name` among that version's demos. */
 export type Demo = { label: string; version: string; name?: string };
@@ -118,6 +118,7 @@ export const ABOUT = {
         ],
       },
     ],
+    outcome: SIDEBAR.outcomes.activationAndRetention,
     facts: factsOf({ role: LIVE_INTRO.role, year: { value: "2024" } }),
   },
 } satisfies Record<string, About>;

@@ -2,6 +2,7 @@
 // phrases.
 
 import type { Flag } from "./activations";
+import type { Metric } from "./metric-card";
 import type { PresetDraft } from "./presets";
 
 /** The minimap's name, a press on which widens it to drag its pin. */
@@ -26,8 +27,8 @@ export const SIDEBAR = {
   hide: "Hide about this project",
   /** The cards' own headings, where their sheet's don't suit the card. */
   headings: {
-    checkIns: "Cut attendance disputes from 90 a week to under 35 by rebuilding time tracking",
-    designSystem: "Spotwork's time to market fell 38% in a year with the design system I set up",
+    checkIns: "Cut attendance disputes from 90 a week to 31 by rebuilding time tracking",
+    designSystem: "Rolled out and maintained a design system that cut median cycle time by 38% in a year",
     flexibility: "Now floor managers check in workers who can't check themselves in",
     invoice: "The Timesheet is finance's source of truth: timecards track who made each edit",
     traceability: "Our operations team could confirm who was on site and triage likely no-shows",
@@ -47,7 +48,7 @@ export const SIDEBAR = {
     traceability:
       "I combined risk signals from OpenPhone texts and our shift, worker and company data to enable our operations team to *triage missing check-ins demanding urgent action*.\n\nGig work is inherently low trust. So I added location history, which let our operations team *ensure workers were on site for the duration of their shift*. From the dashboard, they could text any worker who left the job site.",
     designSystem:
-      "Spotwork staffs companies with contract workers. I led the rebuild of our platform as product designer and product manager.\n\nCode with little modularity or reuse *made building and testing slow and expensive*.\n\nWith our engineers and our QA, I set up SW Curie, *a design system for all of web and part of mobile*.",
+      "As product designer and product manager, I led the rebuild of Spotwork's staffing management platform. Poor separation of concerns and hardcoded values led to code duplication and visual inconsistencies. Both made *development and testing prohibitively slow and expensive*.\n\nI drafted design system guidelines, and built compound components with engineering to separate presentation from business logic. The modularity and reusability we achieved *brought down the median release cycle time from 21 days to 13 days in a year*.",
     tokens:
       "Colours and sizes used to be raw values. So components that behaved alike *looked different from place to place*.\n\nI wrote colours in OKLCH, where equal lightness looks equally light in every hue. That made Active, Success, Warning and Alert *match surface, text and outline shades*.\n\nI set sizes in rem and borders in px. So *layouts scaled with browser text size* while borders held one even pixel.",
     components:
@@ -59,6 +60,16 @@ export const SIDEBAR = {
     shiftScheduling:
       "In the past, the staffing managers who posted most often had to draft a shift again to add dates and *send workers a fresh round of offers*.\n\nI prototyped two concepts. Recurrence proved efficient but rigid. Drag to select kept the calendar staffing managers already used.\n\nNow they *extend or change a posted schedule in place*.",
   },
+  /** The metric of a project with no sheet to take one from. */
+  outcomes: {
+    activationAndRetention: {
+      value: "78%",
+      label: "tenth‑shift retention",
+      trend: "up",
+      change: "16 points",
+      detail: "A smoother onboarding process lifted tenth‑shift retention by 16 points, *from 62% to 78%*.",
+    },
+  } satisfies Record<string, Metric>,
   /** What each card's demo plays, beside its Play, on one line. */
   demos: {
     flexibility: "Edit check-ins",

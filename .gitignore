@@ -29,6 +29,7 @@
 # misc
 .DS_Store
 *.pem
+/.fizzy/
 
 # debug
 npm-debug.log*
