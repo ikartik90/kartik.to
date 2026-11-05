@@ -12,7 +12,7 @@ export type Layer = (typeof LAYERS)[number];
 /**
  * A blur layer: its backdrop's blur (px), saturation and brightness (%); how far it reaches in from the right edge (px)
  * and how much of that ramps up from clear at its left edge (%), the rest whole; the ramp's easing (0 linear, 100
- * `curve`, plotted clear to whole); its strength and its surface tint (%).
+ * `curve`, plotted clear to whole) and its strength (%).
  */
 export interface LayerTuning {
   blur: number;
@@ -23,7 +23,6 @@ export interface LayerTuning {
   easing: number;
   curve: Curve;
   opacity: number;
-  tint: number;
 }
 
 export interface SheetTuning {
@@ -52,9 +51,9 @@ export interface SheetTuning {
 const LAYER = { saturation: 100, brightness: 100, easing: 100, curve: [0.24, 0.32, 0.36, 1] as Curve };
 
 export const SHEET_TUNING: SheetTuning = {
-  outer: { ...LAYER, blur: 8, width: 420, fade: 16, opacity: 72, tint: 0 },
-  middle: { ...LAYER, blur: 16, width: 400, fade: 12, opacity: 80, tint: 4 },
-  inner: { ...LAYER, blur: 24, width: 380, fade: 24, opacity: 100, tint: 8 },
+  outer: { ...LAYER, blur: 8, width: 420, fade: 16, opacity: 72 },
+  middle: { ...LAYER, blur: 16, width: 400, fade: 12, opacity: 80 },
+  inner: { ...LAYER, blur: 24, width: 380, fade: 24, opacity: 100 },
   cards: {
     opacity: 75,
     blur: 8,
@@ -84,7 +83,6 @@ const LAYER_RANGE: Record<Exclude<keyof LayerTuning, "curve">, Range> = {
   fade: PERCENT,
   easing: PERCENT,
   opacity: PERCENT,
-  tint: PERCENT,
 };
 
 /** Each number's slider. */
@@ -206,7 +204,6 @@ export function sheetVars(tuning: SheetTuning): Record<`--${string}`, string> {
           [`--sheet-${layer}-mask`, rampMask(t)],
           [`--sheet-${layer}-turned-mask`, turnedMask(t)],
           [`--sheet-${layer}-opacity`, `${t.opacity / 100}`],
-          [`--sheet-${layer}-tint`, `${t.tint}%`],
         ];
       }),
     ),

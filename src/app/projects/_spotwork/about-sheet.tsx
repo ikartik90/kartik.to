@@ -21,6 +21,7 @@ import ChevronDownIcon from "@/assets/icons/chevron-down.svg";
 import CrossIcon from "@/assets/icons/cross.svg";
 import GotoIcon from "@/assets/icons/goto.svg";
 import PlayIcon from "@/assets/icons/play.svg";
+import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 import { ABOUT, type AboutProject, type Demo, type Fact, type Link, type Story } from "./about-stories";
 import { CommentEditor, EditCommentsToggle } from "./comment-editor";
 import { DEMO, SIDEBAR } from "./copy";
@@ -38,6 +39,8 @@ import { useCommentEditor } from "./tour";
 const WIDE = "screen and (min-width: 90rem), screen and (orientation: landscape) and (any-pointer: coarse) and (min-width: 64rem)";
 // A touch screen upright, short of 1440px, which lays it under the window.
 const UPRIGHT = "screen and (orientation: portrait) and (any-pointer: coarse) and (width < 90rem)";
+// Docked short of 1440px, on a tablet on its side, where it can be hidden to give the window the room.
+const STOWABLE = "screen and (orientation: landscape) and (any-pointer: coarse) and (min-width: 64rem) and (width < 90rem)";
 
 /** Whether the window matches the media `query`; never on the server. */
 export function useMedia(query: string) {
@@ -58,14 +61,15 @@ export const useWide = () => useMedia(WIDE);
 /** Whether the window is a touch screen's upright, with the sheet under it. */
 export const useUpright = () => useMedia(UPRIGHT);
 
-// Each layer ramps in from clear at its left edge, or its top edge, under its own mask, which also shapes its tint;
-// the layers stacked are the blur.
+/** Whether the window is a tablet's on its side, where the docked sheet can be hidden. */
+export const useStowable = () => useMedia(STOWABLE);
+
+// Each layer ramps in from clear at its left edge, or its top edge, under its own mask; the layers stacked are the blur.
 const BLUR = LAYERS.map(
   (layer) =>
     ({
       backdropFilter: `var(--sheet-${layer}-filter)`,
       WebkitBackdropFilter: `var(--sheet-${layer}-filter)`,
-      backgroundColor: `color-mix(in srgb, var(--colors-bg-surface) var(--sheet-${layer}-tint), transparent)`,
       "--layer-width": `var(--sheet-${layer}-width)`,
       "--layer-mask": `var(--sheet-${layer}-mask)`,
       "--layer-turned-mask": `var(--sheet-${layer}-turned-mask)`,
@@ -194,17 +198,46 @@ const columnStyle = css({
 });
 
 // Its Close where the overlay's own is, at the column's default inset, staying there over the cards as they scroll;
-// only its buttons take presses there. A sticky inset counts from inside the column's padding.
+// only its buttons take presses there. A sticky inset counts from inside the column's padding. The first card stands as
+// far below its buttons as they stand below the top.
 const headStyle = css({
   position: "sticky",
   insetBlockStart: 0,
   zIndex: 1,
   display: "flex",
   justifyContent: "flex-end",
-  alignItems: "center",
-  gap: "xs",
+  paddingBlockEnd: "calc(var(--sheet-column-inset) - var(--sheet-card-gap))",
   pointerEvents: "none",
-  "& > *": { pointerEvents: "auto" },
+  "& button": { pointerEvents: "auto" },
+});
+
+// Its buttons' bar, a tab from the right edge, its padding outside them so they stand where they would without it.
+const barStyle = css({
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  // The overlay's controls' gap, so its toggle stands where theirs does once it's hidden.
+  gap: "md",
+  padding: "md",
+  paddingInlineEnd: "var(--sheet-column-inset)",
+  margin: "calc(token(spacing.md) * -1)",
+  marginInlineEnd: "calc(var(--sheet-column-inset) * -1)",
+  borderStartStartRadius: "full",
+  borderEndStartRadius: "full",
+});
+
+// Blurring the cards under the bar, and edged as the command palette is, in step with how much of it a card is under;
+// open at the right edge, as a tab.
+const barGroundStyle = css({
+  position: "absolute",
+  inset: 0,
+  zIndex: -1,
+  borderRadius: "inherit",
+  borderWidth: "token(spacing.3xs)",
+  borderInlineEndWidth: 0,
+  borderStyle: "solid",
+  borderColor: "border.divider",
+  opacity: "var(--bar-shown, 0)",
 });
 
 const cardStyle = cx(
@@ -436,6 +469,7 @@ export function AboutSheet({
   project = "check-ins",
   dockable = false,
   onClose,
+  onStow,
   opener,
   onPlay,
   onGo,
@@ -450,6 +484,8 @@ export function AboutSheet({
    */
   dockable?: boolean;
   onClose: () => void;
+  /** Hides it while docked, from a toggle left of its Close. */
+  onStow?: () => void;
   /** The button that opened it, which focus goes back to. */
   opener: RefObject<HTMLButtonElement | null>;
   /** Plays a demo from its card. */
@@ -464,6 +500,7 @@ export function AboutSheet({
   const { editing } = useCommentEditor();
   const sheet = useRef<HTMLElement>(null);
   const close = useRef<HTMLButtonElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const [tuning] = useSheetTuning();
 
   // Focus follows the sheet in, and back to its button unless a press outside took it elsewhere.
@@ -503,14 +540,32 @@ export function AboutSheet({
           <div key={LAYERS[i]} className={blurStyle} style={layer} data-overlay-motion="ground" />
         ))}
       </div>
-      <div className={columnStyle} data-overlay-motion="cards">
+      <div
+        className={columnStyle}
+        data-overlay-motion="cards"
+        onScroll={(event) => {
+          const card = event.currentTarget.querySelector("[data-card]");
+          const head = bar.current?.getBoundingClientRect();
+          if (!card || !head?.height) return;
+          const under = (head.bottom - card.getBoundingClientRect().top) / head.height;
+          bar.current!.style.setProperty("--bar-shown", `${Math.min(1, Math.max(0, under))}`);
+        }}
+      >
         {/* Under the window, the overlay's controls carry Close and the comments' toggle. */}
         {!upright && (
           <div className={headStyle}>
-            <EditCommentsToggle />
-            <Button ref={close} variant="icon" emphasis="glass" shape="circle" aria-label="Close" onClick={onClose}>
-              <CrossIcon aria-hidden />
-            </Button>
+            <div ref={bar} className={barStyle}>
+              <div className={barGroundStyle} style={FROSTED} aria-hidden />
+              <EditCommentsToggle />
+              {docked && onStow && (
+                <Button variant="icon" emphasis="glass" shape="circle" aria-label={SIDEBAR.hide} onClick={onStow}>
+                  <RightSidebarIcon aria-hidden />
+                </Button>
+              )}
+              <Button ref={close} variant="icon" emphasis="glass" shape="circle" aria-label="Close" onClick={onClose}>
+                <CrossIcon aria-hidden />
+              </Button>
+            </div>
           </div>
         )}
         {editing ? (

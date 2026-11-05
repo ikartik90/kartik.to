@@ -17,6 +17,8 @@ body {
   flex-direction: column;
   /* <body> is the scroll container, so absolute body-portalled popovers scroll with the page; fixed ones stutter. */
   position: relative;
+  /* A stacking context, so iPadOS nests inner scrollers in this one: else a mouse wheel over one hands off to the window. */
+  isolation: isolate;
   color: var(--colors-text-default);
   background: var(--colors-bg-canvas);
   font-family: var(--fonts-switzer);

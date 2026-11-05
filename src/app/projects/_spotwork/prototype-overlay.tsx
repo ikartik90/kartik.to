@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { css, cx } from "../../../../styled-system/css";
 import { Dialog } from "@/components/ui/dialog";
@@ -14,7 +15,7 @@ import { shiftStart } from "./data";
 import { BAR_HEIGHT, BrowserBar, type BarHistory } from "./browser-bar/browser-bar";
 import { TourProvider } from "./tour";
 import { EditCommentsToggle } from "./comment-editor";
-import { AboutSheet, useMedia, useUpright, useWide } from "./about-sheet";
+import { AboutSheet, useMedia, useStowable, useUpright, useWide } from "./about-sheet";
 import { aboutOf } from "./about-stories";
 import { NAV, PROJECTS, SIDEBAR } from "./copy";
 import { glassStyle, ProjectDock, ProjectMenu, VersionBar, type Choice } from "./project-nav";
@@ -22,6 +23,7 @@ import { sheetRoom, useSheetTuning } from "./sheet-tuning";
 import { useDemo } from "./demo";
 import type { Geofence } from "./geofence";
 import { closeOverlay, openOverlay } from "./overlay-motion";
+import { reducedMotion } from "./opening";
 import { Sky } from "./sky";
 import { AppVeil } from "./app-veil";
 import { useLiveApp } from "./use-live-app";
@@ -272,6 +274,7 @@ export function roomAtActualSize(room: number, viewport: number, zoom: number) {
 function useFit() {
   const room = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ width: 0, height: 0, scale: 0, roomWidth: 0 });
+  const remeasure = useRef(() => {});
   useLayoutEffect(() => {
     const node = room.current;
     if (!node) return;
@@ -290,11 +293,12 @@ function useFit() {
       });
     };
     measure();
+    remeasure.current = measure;
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
-  return { room, ...fit };
+  return { room, ...fit, remeasure };
 }
 
 /** Closes the overlay as its Close does, its closing played first. */
@@ -416,7 +420,7 @@ function OverlayContent({
     const node = layout.current?.closest("dialog");
     if (node && !node.open) node.showModal();
   }, []);
-  const { room, width, height, scale, roomWidth } = useFit();
+  const { room, width, height, scale, roomWidth, remeasure } = useFit();
   const ready = useRef(false);
   useLayoutEffect(() => {
     const node = layout.current?.closest("dialog");
@@ -451,7 +455,11 @@ function OverlayContent({
     if (pageOf(next) === "shifts") setShiftVersion(next.version as Version);
   };
 
-  const docked = useWide() && !!story;
+  // On a tablet on its side the docked sheet can be hidden, and the window takes its room.
+  const stowable = useStowable() && !!story;
+  const [stowed, setStowed] = useState(false);
+  const dockable = !!story && !(stowable && stowed);
+  const docked = useWide() && dockable;
   const upright = useUpright() && !!story;
   // Upright or on a phone, the dock leads the controls' row rather than standing under the window.
   const inRow = phone || upright;
@@ -459,6 +467,28 @@ function OverlayContent({
   if (about && (docked || upright)) setAbout(false);
   const aboutButton = useRef<HTMLButtonElement>(null);
   const [tuning] = useSheetTuning();
+  const dockRow = useRef<HTMLDivElement>(null);
+  // The window re-fitted to the room the sheet leaves or takes, then eased there from where it was, and the dock under
+  // it slid along, as the sheet slides. The dock's row has its own opening motion, so the dock itself moves.
+  const stow = (next: boolean) => {
+    const parts = [windowBox.current, dockRow.current?.firstElementChild].filter((node) => node instanceof HTMLElement);
+    const from = parts.map((node) => node.getBoundingClientRect());
+    flushSync(() => setStowed(next));
+    flushSync(remeasure.current);
+    if (reducedMotion()) return;
+    parts.forEach((node, i) => {
+      const to = node.getBoundingClientRect();
+      if (!to.width) return;
+      const scale = node === windowBox.current ? ` scale(${from[i].width / to.width})` : "";
+      node.animate(
+        [
+          { transformOrigin: "0 0", transform: `translate(${from[i].left - to.left}px, ${from[i].top - to.top}px)${scale}` },
+          { transformOrigin: "0 0", transform: "none" },
+        ],
+        { duration: tuning.motion.duration, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
+    });
+  };
   // Where the About sheet under the window starts.
   const stage = useRef<HTMLDivElement>(null);
   const [stageHeight, setStageHeight] = useState(0);
@@ -523,10 +553,10 @@ function OverlayContent({
           onPlay={playable ? () => playIn(choice) : undefined}
         />
       )}
-      <div className={controlsStyle} data-dockable={story ? "" : undefined}>
+      <div className={controlsStyle} data-dockable={dockable ? "" : undefined}>
         {story &&
           !upright &&
-          (sides ? (
+          (sides || stowable ? (
             <Button
               ref={aboutButton}
               variant="icon"
@@ -534,7 +564,7 @@ function OverlayContent({
               shape="circle"
               aria-label={SIDEBAR.open}
               aria-expanded={about}
-              onClick={() => setAbout(true)}
+              onClick={() => (stowable ? stow(false) : setAbout(true))}
             >
               <RightSidebarIcon aria-hidden />
             </Button>
@@ -565,7 +595,7 @@ function OverlayContent({
             "--window-slack": `${Math.max(0, (roomWidth - width * scale) / 2)}px`,
           } as CSSProperties
         }
-        data-dockable={story ? "" : undefined}
+        data-dockable={dockable ? "" : undefined}
         data-upright={upright ? "" : undefined}
       >
         <Sky className={groundStyle} />
@@ -637,7 +667,7 @@ function OverlayContent({
           </div>
           {!upright && controls}
           {!inRow && (
-            <div className={topRowStyle} data-below="" data-overlay-motion="controls">
+            <div ref={dockRow} className={topRowStyle} data-below="" data-overlay-motion="controls">
               <ProjectDock
                 className={dockStyle}
                 projects={PROJECTS}
@@ -653,8 +683,9 @@ function OverlayContent({
         <AboutSheet
           open={about}
           project={story}
-          dockable={!!story}
+          dockable={dockable}
           onClose={docked ? onClose : () => setAbout(false)}
+          onStow={stowable ? () => stow(true) : undefined}
           opener={aboutButton}
           onPlay={story ? ({ version, name }) => playIn({ project: story, version }, name) : undefined}
           onGo={({ page, target }) => designSystem.current?.go(page, target)}
