@@ -8,14 +8,16 @@ import { useDragScroll } from "../use-drag-scroll";
 function Strip({
   landing,
   enabled,
+  momentum,
   onOpen,
 }: {
   landing: (velocity: number) => number;
   enabled?: boolean;
+  momentum?: boolean;
   onOpen?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useDragScroll(ref, { enabled, landing });
+  useDragScroll(ref, { enabled, landing, momentum });
   return (
     <div ref={ref} data-testid="strip">
       <button type="button" onClick={onOpen}>
@@ -496,6 +498,50 @@ describe("useDragScroll", () => {
     });
     expect(strip().scrollLeft).toBe(300);
     expect(strip().hasAttribute("data-panning")).toBe(false);
+  });
+
+  it("throws a momentum strip on at the speed it was let go at, however far it carries", () => {
+    let released = 0;
+    let speed = 0;
+    render(
+      <Strip
+        momentum
+        landing={(velocity) => {
+          released = strip().scrollLeft;
+          speed = velocity;
+          return released + 1500;
+        }}
+      />,
+    );
+    drag([440, 400]);
+    frames(48);
+    const travelled = strip().scrollLeft - released;
+    expect(travelled).toBeGreaterThan(speed * 48 * 0.8);
+    expect(travelled).toBeLessThanOrEqual(speed * 48);
+    frames(1200 - 48);
+    expect(strip().scrollLeft).toBeLessThan(released + 1500);
+    frames(400);
+    expect(strip().scrollLeft).toBe(released + 1500);
+  });
+
+  it("carries a drag let go between frames straight on, with no frame standing still", () => {
+    let released = 0;
+    let speed = 0;
+    render(
+      <Strip
+        momentum
+        landing={(velocity) => {
+          released = strip().scrollLeft;
+          speed = velocity;
+          return released + 1500;
+        }}
+      />,
+    );
+    drag([440, 400], { release: false });
+    vi.advanceTimersByTime(12);
+    pointer("pointerup", 400);
+    frames(4);
+    expect(strip().scrollLeft - released).toBeGreaterThan(speed * 16 * 0.8);
   });
 
   it("jumps to the landing under reduced motion", () => {

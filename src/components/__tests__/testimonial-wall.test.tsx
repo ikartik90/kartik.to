@@ -214,13 +214,19 @@ describe("TestimonialWall", () => {
           effect: { getComputedTiming: () => ({ progress: 0 }) },
         } as unknown as Animation;
       } as unknown as HTMLElement["animate"];
-      vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(
-        function (this: HTMLElement) {
-          const run = this.dataset.runStart;
-          return run === undefined ? 0 : Number(run) * RUN;
-        },
-      );
+      runsAt(RUN);
     });
+
+    /** Lays the runs out `width` apart: exactly, as a box's rect has it, and to the whole px, as `offsetLeft` does. */
+    const runsAt = (width: number) => {
+      const left = (el: HTMLElement) => (el.dataset.runStart === undefined ? 0 : Number(el.dataset.runStart) * width);
+      vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (this: HTMLElement) {
+        return Math.round(left(this));
+      });
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+        return DOMRect.fromRect({ x: left(this) });
+      });
+    };
 
     afterEach(() => {
       vi.useRealTimers();
@@ -243,6 +249,12 @@ describe("TestimonialWall", () => {
       // At most 40px a second.
       expect(Number(options.duration)).toBeGreaterThanOrEqual(RUN * 25);
       expect(drift()!.state).toBe("running");
+    });
+
+    it("moves a run's exact width, so the loop comes round without a jump", () => {
+      runsAt(1000.4);
+      render(<TestimonialWall testimonials={rows(13)} />);
+      expect(drift()!.keyframes.at(-1)).toEqual({ transform: "translateX(-1000.4px)" });
     });
 
     it("starts the reader on a run with copies either side", () => {

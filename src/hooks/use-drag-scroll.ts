@@ -36,6 +36,8 @@ export interface DragScrollOptions {
   enabled?: boolean;
   /** Where the scroll comes to rest after a drag let go with it moving `velocity` px/ms. */
   landing: (velocity: number) => number;
+  /** The landing is where a throw carries on to: the glide sets off at the release's speed, however long it takes. */
+  momentum?: boolean;
 }
 
 interface Sample {
@@ -59,6 +61,8 @@ interface Press extends Track {
   panning: boolean;
   /** The scroll's reach, measured as the drag begins. */
   max: number;
+  /** When the drag last drew the strip. */
+  drawn?: number;
 }
 
 // On the window: the click lands on whatever holds both ends of the drag, such as a sheet's dialog when it is let go
@@ -147,8 +151,9 @@ function trackAt(track: Track, now: number) {
 }
 
 // Ease-out cubic sets off at 3 × distance / duration.
-function glideMs(distance: number, velocity: number) {
+function glideMs(distance: number, velocity: number, momentum: boolean) {
   const toward = velocity * Math.sign(distance);
+  if (momentum && toward > 0) return (3 * Math.abs(distance)) / toward;
   if (toward < FLICK_SPEED) {
     return SETTLE_MS + Math.abs(distance) * SETTLE_MS_PER_PX;
   }
@@ -169,7 +174,7 @@ const reducedMotion = () =>
  */
 export function useDragScroll(
   ref: RefObject<HTMLElement | null>,
-  { enabled = true, landing }: DragScrollOptions,
+  { enabled = true, landing, momentum = false }: DragScrollOptions,
 ) {
   const land = useEffectEvent((velocity: number) => landing(velocity));
 
@@ -201,7 +206,9 @@ export function useDragScroll(
       }
     };
 
-    const glide = (to: number, velocity: number) => {
+    // Timed from the drag's last frame, not the release: a release between frames would leave the next one standing
+    // almost still.
+    const glide = (to: number, velocity: number, start: number) => {
       const from = scroller.scrollLeft;
       const distance = to - from;
       if (reducedMotion() || Math.abs(distance) < DRIFT_PX) {
@@ -209,8 +216,7 @@ export function useDragScroll(
         stopGlide();
         return restoreSnap();
       }
-      const duration = glideMs(distance, velocity);
-      const start = performance.now();
+      const duration = glideMs(distance, velocity, momentum);
       let placed = from;
       const step = () => {
         const drifted = Math.abs(scroller.scrollLeft - placed) > DRIFT_PX;
@@ -242,6 +248,7 @@ export function useDragScroll(
       const reached = current.left - (pointerAt(current, now, false) - current.x);
       current.left += clamp(reached) - reached;
       scroller.scrollLeft = clamp(current.left - (trackAt(current, now) - current.x));
+      current.drawn = now;
       frame = requestAnimationFrame(track);
     };
 
@@ -286,7 +293,7 @@ export function useDragScroll(
       const to = land(velocity);
       if (!cancelled) swallowNextClick();
       scroller.dataset.panning = "gliding";
-      glide(to, velocity);
+      glide(to, velocity, current.drawn ?? performance.now());
     };
 
     function onPointerMove(event: PointerEvent) {
@@ -345,5 +352,5 @@ export function useDragScroll(
       scroller.removeEventListener("selectstart", onSelectStart);
       scroller.removeEventListener("dragstart", onDragStart);
     };
-  }, [ref, enabled]);
+  }, [ref, enabled, momentum]);
 }

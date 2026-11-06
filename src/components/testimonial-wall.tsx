@@ -23,8 +23,8 @@ const HOME_RUN = 2;
 /** How long the strip must go unscrolled to count as at rest. */
 const REST_MS = 150;
 
-/** How far a flick carries on, per px/ms it was let go at; `useDragScroll` eases it to a stop. */
-const GLIDE_PX_PER_SPEED = 200;
+/** How far a throw carries on, per px/ms it was let go at, as far as a trackpad's momentum carries a swipe. */
+const GLIDE_PX_PER_SPEED = 500;
 
 const EDGE_FADE = "clamp(24px, 5vw, 120px)";
 
@@ -137,8 +137,10 @@ function useDrift(
 
     const layout = () => {
       const starts = track.querySelectorAll<HTMLElement>("[data-run-start]");
-      const width = starts.length > 1 ? starts[1].offsetLeft - starts[0].offsetLeft : 0;
-      if (Math.abs(width - run) < 0.5) return;
+      // To the fraction: `offsetLeft` rounds, and the loop would jump by what it dropped each time it came round.
+      const width =
+        starts.length > 1 ? starts[1].getBoundingClientRect().left - starts[0].getBoundingClientRect().left : 0;
+      if (Math.abs(width - run) < 0.01) return;
       const at = progress();
       run = width;
       drift?.cancel();
@@ -254,6 +256,7 @@ export function TestimonialWall({ testimonials }: TestimonialWallProps) {
 
   useDrift(sectionRef, stripRef, testimonials.length, near);
   useDragScroll(stripRef, {
+    momentum: true,
     landing: (velocity) => {
       const strip = stripRef.current;
       if (!strip) return 0;
