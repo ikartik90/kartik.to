@@ -8,6 +8,7 @@ import {
   projectPath,
   projectPreviewPath,
 } from "../project-cards";
+import { SIDEBAR } from "@/app/projects/_spotwork/copy";
 
 describe("the homepage's projects", () => {
   it("are the design system, check-ins and activation, in the cards' order", () => {
@@ -25,6 +26,11 @@ describe("the homepage's projects", () => {
 
   it("each have a link preview of their own", () => {
     expect(projectPreviewPath("design-system")).toBe("/og/projects/design-system.png");
+  });
+
+  it("each carry the heading their About sheet opens with", () => {
+    const { designSystem, checkIns, activationAndRetention } = SIDEBAR.headings;
+    expect(PROJECT_CARDS.map((card) => card.sentence)).toEqual([designSystem, checkIns, activationAndRetention]);
   });
 
   it("are found by their id, and nothing else is", () => {

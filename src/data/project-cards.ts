@@ -10,17 +10,17 @@ export const PROJECT_CARDS: ProjectCard[] = [
   {
     id: "design-system",
     title: "Design system",
-    sentence: "Rolled out and maintained a design system that cut release cycles from 21 to 13 days",
+    sentence: "Rolled out and maintained a design system that helped us ship 1.5× as many releases",
   },
   {
     id: "check-ins",
     title: "Check-ins and time tracking",
-    sentence: "Rebuilt check-ins and time tracking, cutting attendance disputes by 65%",
+    sentence: "Cut attendance disputes from 90 a week to 31 by geofencing check-ins and time tracking",
   },
   {
     id: "activation-and-retention",
     title: "Activation and retention",
-    sentence: "Lifted tenth‑shift retention from 62% to 78% by rebuilding onboarding",
+    sentence: "Took tenth‑shift retention from 62% to 78% with pre-boarding and schedule extension",
   },
 ];
 

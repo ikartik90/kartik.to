@@ -20,11 +20,11 @@ import { Monitor } from "./monitor";
 const carouselStyles = carousel();
 const CLIP_ASPECT = mediaSurfaceAspect({ width: 2160, height: 1350 }, { padding: 40 });
 
-// Below md each card's words take their own height, so the slides stretch to the tallest and the cards fill them.
+// Below xl each card's words take their own height, so the slides stretch to the tallest and the cards fill them.
 const slideStyle = css({
   paddingBlock: "md",
   "[data-entering] &": { opacity: 0 },
-  mdDown: { alignSelf: "stretch", display: "flex" },
+  xlDown: { alignSelf: "stretch", display: "flex" },
 });
 
 const HOVER_EASE = "800ms cubic-bezier(0.165, 0.84, 0.44, 1)";
@@ -52,7 +52,7 @@ const cardStyle = css({
   },
   _hasCursor: { marginInline: `calc(-1 * ${INSET_X})` },
   borderRadius: "xl",
-  mdDown: { display: "flex", flexDirection: "column" },
+  xlDown: { display: "flex", flexDirection: "column" },
 });
 
 // The press: over the whole card, the live app under it taking none. First in the card, so the card's pressed, hovered and
@@ -82,7 +82,7 @@ const surfaceStyle = css({
   "[data-sheet-card] > a:active ~ &": { transform: "scale(0.98)" },
   "&[data-hover-held]": { clipPath: OPEN_CLIP },
   "[data-sheet-card] > a:focus-visible ~ &": { clipPath: OPEN_CLIP },
-  mdDown: { display: "flex", flexDirection: "column", flexGrow: 1 },
+  xlDown: { display: "flex", flexDirection: "column", flexGrow: 1 },
 });
 
 const HALF_LINE = "calc(token(spacing.xxs) / 2)";
@@ -182,7 +182,7 @@ const faceStyle = css({
   aspectRatio: "var(--slide-aspect)",
   minHeight: 0,
   overflow: "hidden",
-  mdDown: { aspectRatio: "auto", display: "flex", flexDirection: "column", flexGrow: 1 },
+  xlDown: { aspectRatio: "auto", display: "flex", flexDirection: "column", flexGrow: 1 },
 });
 const faceTextStyle = css({
   position: "relative",
@@ -201,7 +201,7 @@ const faceTextStyle = css({
   _hasCursor: { ...RIDING, paddingBlockEnd: `calc(token(spacing.xl) + ${INSET_Y})` },
   "&[data-hover-held]": RODE,
   "[data-sheet-card] > a:focus-visible ~ * &": RODE,
-  mdDown: { order: -1, paddingBlockEnd: 0 },
+  xlDown: { order: -1, paddingBlockEnd: 0 },
 });
 const faceTitleStyle = css({
   textStyle: "caption",
@@ -215,7 +215,7 @@ const faceHeadingStyle = css({ textStyle: "subheading", color: "text.title", tex
 // The monitor and its backlight covering the face from its top, the words on it, and the app's window on the monitor's
 // screen (monitor.tsx). Centred without a transform, which would cut the stand off the backlight. The words' row is as
 // tall as the bezel's offset or the words, so the monitor moves down only as far as it keeps them xl clear of the bezel.
-// Below md, where the words would cover the screen, the monitor sits under them at the face's foot instead. The bezel's
+// Below xl, where the words would wrap over the screen, the monitor sits under them at the face's foot instead. The bezel's
 // top is monitor.tsx's 139.5 of its 1536 width, written out for Panda, which can't read it through an import.
 const BEZEL_OFFSET = "calc(var(--monitor-w) * 139.5 / 1536)";
 const coverStyle = css({
@@ -228,7 +228,7 @@ const coverStyle = css({
   alignContent: "start",
   pointerEvents: "none",
   _before: { content: '""', gridArea: "1 / 1", height: BEZEL_OFFSET },
-  mdDown: {
+  xlDown: {
     position: "relative",
     display: "flex",
     flexDirection: "column",
@@ -245,7 +245,7 @@ const monitorStyle = css({
   marginInlineStart: "calc(50cqw - var(--monitor-w) / 2)",
   width: "var(--monitor-w)",
   aspectRatio: "1536 / 1099",
-  mdDown: { "--monitor-w": "100cqw", marginBlockStart: "auto" },
+  xlDown: { "--monitor-w": "100cqw", marginBlockStart: "auto" },
 });
 const windowStyle = css({
   position: "absolute",
@@ -338,7 +338,7 @@ export function LandingCard({
                 </span>
               </span>
               <span className={faceTextStyle} {...hover}>
-                <span className={faceTitleStyle} {...brand}>{card.title}</span>
+                <span className={faceTitleStyle} {...brand}>Spotwork • {card.title}</span>
                 <span className={faceHeadingStyle}>{card.sentence}</span>
               </span>
             </span>

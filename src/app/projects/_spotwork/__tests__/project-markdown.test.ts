@@ -9,7 +9,7 @@ describe("projectMarkdown", () => {
   it("opens with the card's title and sentence", () => {
     expect(lines("check-ins").slice(0, 2)).toEqual([
       "# Check-ins and time tracking",
-      "Rebuilt check-ins and time tracking, cutting attendance disputes by 65%",
+      SIDEBAR.headings.checkIns,
     ]);
   });
 

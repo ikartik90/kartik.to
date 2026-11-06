@@ -124,6 +124,11 @@ describe("LandingCards", () => {
     ]);
   });
 
+  it("heads each card's words with Spotwork before its title", () => {
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    expect(screen.getByText("Spotwork • Check-ins and time tracking")).toBeTruthy();
+  });
+
   it("opens a card's project in place on a plain click", () => {
     const onOpen = vi.fn();
     render(<LandingCards paused={false} onOpen={onOpen} />);

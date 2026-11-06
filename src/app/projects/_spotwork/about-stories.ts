@@ -51,8 +51,8 @@ export const ABOUT = {
         heading: SIDEBAR.headings.flexibility,
         body: paragraphs(bodies.flexibility),
         demos: [
-          { label: demos.flexibility, version: "company" },
           { label: demos.geofence, version: "company", name: "geofence" },
+          { label: demos.flexibility, version: "company" },
         ],
       },
       {
