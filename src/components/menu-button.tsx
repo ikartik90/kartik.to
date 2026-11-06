@@ -31,18 +31,19 @@ const rowStyle = css({
   gap: "xs",
 });
 
-export function MenuButton({ shape }: { shape?: ActionShape }) {
+/** `className` goes on the button and its shortcut chip, not on the row round them. */
+export function MenuButton({ shape, className }: { shape?: ActionShape; className?: string }) {
   const shortcut = useShortcutLabel("K");
 
   return (
     <div className={rowStyle}>
-      <Button variant="icon" shape={shape} aria-label="Menu" onClick={openCommandPalette}>
+      <Button variant="icon" shape={shape} aria-label="Menu" onClick={openCommandPalette} className={className}>
         <MenuIcon />
         <Button.Tooltip>
           <Tooltip.Text>Menu</Tooltip.Text>
         </Button.Tooltip>
       </Button>
-      <kbd className={cx(hotkey(), shortcutStyle)} data-site-menu-shortcut>
+      <kbd className={cx(hotkey(), shortcutStyle, className)} data-site-menu-shortcut>
         {shortcut}
       </kbd>
     </div>
