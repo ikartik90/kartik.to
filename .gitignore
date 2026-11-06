@@ -50,6 +50,9 @@ next-env.d.ts
 ## Panda
 styled-system
 styled-system-studio
+# Written by scripts/page-styles
+*.styles.css
+/public/styles/
 
 # cursor
 .cursor/

@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import { notFound, redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth/server";
 import { prisma } from "@/lib/prisma";

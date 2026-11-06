@@ -10,7 +10,7 @@ global.ResizeObserver = class ResizeObserver {
 };
 
 // Polyfill scrollIntoView for JSDOM — used by cmdk to scroll selected items into view
-if (!Element.prototype.scrollIntoView) {
+if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function () {};
 }
 
@@ -56,7 +56,7 @@ if (typeof window !== "undefined" && typeof window.localStorage?.clear !== "func
 
 // Isolate tests from each other's persisted editor autosave state.
 beforeEach(() => {
-  window.localStorage?.clear();
+  globalThis.window?.localStorage?.clear();
   __resetDemoAssetCache();
   __resetDemoLoadCache();
 });

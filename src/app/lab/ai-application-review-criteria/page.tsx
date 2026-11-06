@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import type { Metadata } from "next";
 import { cx } from "../../../../styled-system/css";
 import { Intro } from "./intro";

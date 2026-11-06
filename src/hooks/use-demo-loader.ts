@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { usePageLoaded } from "@/hooks/use-page-loaded";
 import { loadDemoAsset, resolveDemoAssets } from "@/utils/demo-assets";
+import { loadSiteStyles } from "@/utils/site-styles";
 import type { DemoComponentEntry, DemoProps } from "@/components/demo/registry";
 
 // Loaded modules are cached per session, so later instances render without the loader.
@@ -19,8 +20,9 @@ function loadDemoModule(entry: DemoComponentEntry): Promise<ComponentType<DemoPr
         new Error(`Demo "${entry.id}" is a card and has no module to load`),
       );
     }
-    promise = load()
-      .then((component) => {
+    // Its styles are in the whole stylesheet only, not the page's own.
+    promise = Promise.all([load(), loadSiteStyles()])
+      .then(([component]) => {
         loadedComponents.set(entry.id, component);
         loadPromises.delete(entry.id);
         return component;

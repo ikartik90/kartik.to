@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import type { NextConfig } from "next";
 import { LISTED_CATEGORIES, POST_CATEGORIES } from "./src/data/post-categories";
 import { REVIEW_BASE } from "./src/utils/review-path";
@@ -19,9 +20,15 @@ const svgrOptions = {
   },
 };
 
+// Written by scripts/page-styles for a build; in dev every page has the whole stylesheet already.
+const SITE_STYLES = "styled-system/site-styles.json";
+const siteStylesHref: string = existsSync(SITE_STYLES) ? JSON.parse(readFileSync(SITE_STYLES, "utf8")).href : "";
+
 const nextConfig: NextConfig = {
   // Otherwise `next dev` writes its own block into AGENTS.md, the hand-kept contract.
   agentRules: false,
+
+  env: { SITE_STYLES_HREF: siteStylesHref },
 
   images: {
     qualities: [100],
@@ -46,6 +53,11 @@ const nextConfig: NextConfig = {
       {
         source: `${REVIEW_BASE}/:path*`,
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+      // Named for their content, so a changed sheet is a new address.
+      {
+        source: "/styles/:file",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
     ];
   },

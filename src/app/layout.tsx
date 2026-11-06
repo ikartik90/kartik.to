@@ -7,6 +7,7 @@ import { ContentSyncProvider } from "@/components/content-sync-provider";
 import { Header } from "@/components/header";
 import { KeyboardFocusProvider } from "@/components/keyboard-focus-provider";
 import { IosFocusZoomGuard } from "@/components/ios-focus-zoom-guard";
+import { SiteStyles } from "@/components/site-styles";
 import { AdminLoginBootstrap } from "@/components/admin-login-bootstrap";
 import { CommandPalette } from "@/components/command-palette";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -84,6 +85,7 @@ export default function RootLayout({
         <Header />
         {children}
         <Analytics />
+        <SiteStyles />
       </body>
     </html>
   );

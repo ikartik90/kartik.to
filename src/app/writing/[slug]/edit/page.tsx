@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import { redirect } from "next/navigation";
 
 interface Props {
