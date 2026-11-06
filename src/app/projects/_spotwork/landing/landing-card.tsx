@@ -149,7 +149,7 @@ function Frame(props: HTMLAttributes<HTMLSpanElement>) {
   );
 }
 
-const lit = { backgroundColor: "bg.button.accent.hover", color: "field.text.active", boxShadow: "none" };
+const lit = { backgroundColor: "bg.button.accent.hover", color: "field.text.active" };
 
 const expandStyle = css({
   position: "absolute",
@@ -163,12 +163,11 @@ const expandStyle = css({
   height: "token(spacing.4xl)",
   borderRadius: "full",
   color: "text.body",
-  boxShadow: "inset 0 0 0 token(spacing.xxs) var(--colors-field-border-default)",
   pointerEvents: "none",
   willChange: "transform",
   translate: "calc(-1 * var(--ride-x)) var(--ride-y)",
   _hasCursor: RIDING,
-  transition: `background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, ${RIDE}`,
+  transition: `background-color 150ms ease, color 150ms ease, ${RIDE}`,
   "& svg": { width: "token(spacing.xxl)", height: "token(spacing.xxl)", display: "block" },
   "& svg path[stroke]": { stroke: "currentColor" },
   "&[data-hover-held]": { ...RODE, ...lit },
