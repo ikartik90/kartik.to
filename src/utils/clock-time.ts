@@ -1,4 +1,4 @@
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 
 export const DEFAULT_TIME_FORMAT = "h:mm A";
 

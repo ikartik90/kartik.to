@@ -18,7 +18,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { cx } from "../../../../styled-system/css";
 import { calendar } from "../../../../styled-system/recipes";
 import {

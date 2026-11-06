@@ -85,6 +85,19 @@ const eslintConfig = defineConfig([
         },
       ],
 
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@js-temporal/polyfill",
+              message:
+                "Import `Temporal` from `@/utils/temporal`: it is the browser's own, and the polyfill is fetched only where there is none.",
+            },
+          ],
+        },
+      ],
+
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -105,6 +118,13 @@ const eslintConfig = defineConfig([
     ],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+  {
+    // The one module that loads the Temporal polyfill.
+    files: ["src/utils/temporal.ts", "src/utils/__tests__/temporal.test.ts"],
+    rules: {
+      "no-restricted-imports": "off",
     },
   },
   {

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { createCalchemy, type Calchemy } from "@calchemy/date-core";
 import { parseQuery, parseQueryDates } from "../calchemy-query";
 

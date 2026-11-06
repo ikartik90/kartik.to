@@ -1,4 +1,4 @@
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 
 // Rows are blocks of `columns` months counted from year zero, so a row holds the
 // same months at any width and every row sits at a fixed offset.

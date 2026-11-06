@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { ShiftSchedulingV0, planDemoShiftDates } from "../shift-scheduling-v0";
 import { scrollIntoView } from "@/test-support";
 

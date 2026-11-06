@@ -1,4 +1,4 @@
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { WEEKDAY_KEYS, weekdayOf, type WeekdayKey } from "./calendar-month";
 
 export interface DateRange {

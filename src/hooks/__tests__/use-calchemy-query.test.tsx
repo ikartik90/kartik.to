@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { createCalchemy, type Calchemy } from "@calchemy/date-core";
 import { useCalchemyQuery } from "../use-calchemy-query";
 

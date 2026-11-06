@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { createCalchemy, type Calchemy } from "@calchemy/date-core";
 import { useCalchemyQuery } from "@/hooks/use-calchemy-query";
 import { CalchemySuggestion } from "../calchemy-suggestion";

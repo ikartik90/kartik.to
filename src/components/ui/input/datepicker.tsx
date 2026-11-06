@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { css, cx } from "../../../../styled-system/css";
 import type { WeekdayKey } from "@/utils/calendar-month";
 import {

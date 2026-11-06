@@ -17,7 +17,7 @@ import { findNearby, withSkills } from "../worker-pool";
 import { DEMO, SNACKS } from "../copy";
 import type { Choice } from "../project-nav";
 import { planDemoSweep } from "@/components/demo/shift-scheduling-v2";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 
 // jsdom lays nothing out: dates sit on a grid a month apart, everything else in one box around them, so the date
 // strip's marquee covers what the demo drags across.

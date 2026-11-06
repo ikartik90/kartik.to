@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { css, cx } from "../../../../styled-system/css";
 import { Popover } from "@/components/ui/popover";
 import { Field, useField } from "./field";

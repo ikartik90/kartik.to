@@ -1,4 +1,4 @@
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { planDemoRecurrence } from "@/components/demo/shift-scheduling-v1";
 import { planDemoSweep } from "@/components/demo/shift-scheduling-v2";
 import { WEEKDAY_KEYS } from "@/utils/calendar-month";
