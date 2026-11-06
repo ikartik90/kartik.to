@@ -450,14 +450,18 @@ describe("TestimonialQuote (through the wall)", () => {
     expect(within(readable()[0]).getByText("G")).toBeTruthy();
   });
 
-  it("draws a stored picture, undescribed", () => {
+  it("draws a stored picture, undescribed, fetched at the size it shows rather than as stored", () => {
     render(
       <TestimonialWall
         testimonials={[row({ avatarUrl: "https://cdn.test/ada.jpg" })]}
       />,
     );
     const img = readable()[0].querySelector("img");
-    expect(img?.getAttribute("src")).toBe("https://cdn.test/ada.jpg");
+    const resized = `/_next/image?url=${encodeURIComponent("https://cdn.test/ada.jpg")}`;
+    // 40px across, so 48px wide on a 1x screen and 96px on a 2x one.
+    expect(img?.getAttribute("srcset")).toContain(`${resized}&w=48`);
+    expect(img?.getAttribute("srcset")).toContain(`${resized}&w=96`);
+    expect(img?.getAttribute("loading")).toBe("lazy");
     expect(img?.getAttribute("alt")).toBe("");
   });
 

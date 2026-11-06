@@ -798,6 +798,11 @@ describe("HomeGrid — link cards", () => {
   });
 
   it("plays the published shader preset the card names", () => {
+    // Settled at once: the page loaded, idle, and nothing in the first fold holding it.
+    vi.stubGlobal("requestIdleCallback", (callback: IdleRequestCallback) =>
+      callback({ didTimeout: false, timeRemaining: () => 50 }),
+    );
+    vi.stubGlobal("cancelIdleCallback", () => undefined);
     // jsdom lays nothing out; the shader's cover mounts once it has a size to draw at.
     vi.stubGlobal(
       "ResizeObserver",

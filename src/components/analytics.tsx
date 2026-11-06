@@ -59,7 +59,7 @@ export function Analytics() {
       <WebAnalytics beforeSend={dropPrivateEvents} />
       <SpeedInsights beforeSend={dropPrivateEvents} />
       {recorded && (
-        <Script id="hotjar" dangerouslySetInnerHTML={{ __html: HOTJAR_SNIPPET }} />
+        <Script id="hotjar" strategy="lazyOnload" dangerouslySetInnerHTML={{ __html: HOTJAR_SNIPPET }} />
       )}
     </>
   );

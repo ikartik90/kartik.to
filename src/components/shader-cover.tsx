@@ -10,6 +10,7 @@ import {
 } from "@/domain/shader-preset";
 import { MAX_PIXELS, ShaderStage } from "@/components/shaders/shader-stage";
 import { useReducedMotion } from "@/components/shaders/use-shader-policy";
+import { useFirstFoldSettled } from "@/hooks/use-first-fold-settled";
 import { useNearView } from "@/hooks/use-near-view";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import { shaderZoom } from "@/utils/shader-zoom";
@@ -41,12 +42,13 @@ export interface ShaderCoverProps {
 
 /**
  * A shader preset playing across its positioned parent, as the playground previews it, scaled to fit. Mounted only
- * near the screen: offscreen, the library still compiles and draws a few frames, which cost whole seconds on a
+ * near the screen, after the first fold: offscreen, the library still compiles and draws a few frames, which cost whole seconds on a
  * software renderer.
  */
 export function ShaderCover({ preset, aspect }: ShaderCoverProps) {
   const groundRef = useRef<HTMLDivElement>(null);
   const near = useNearView(groundRef);
+  const settled = useFirstFoldSettled();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const { isDark } = useThemeToggle();
   const reducedMotion = useReducedMotion();
@@ -78,7 +80,7 @@ export function ShaderCover({ preset, aspect }: ShaderCoverProps) {
         } as CSSProperties
       }
     >
-      {near && zoom && (
+      {near && settled && zoom && (
         <div
           className={zoomedStyle}
           style={{ "--shader-zoom": zoom.zoom } as CSSProperties}

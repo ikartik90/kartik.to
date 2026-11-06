@@ -31,7 +31,7 @@ vi.mock("@vercel/speed-insights/next", () => ({
   },
 }));
 
-type ScriptProps = { id?: string; dangerouslySetInnerHTML?: { __html: string } };
+type ScriptProps = { id?: string; strategy?: string; dangerouslySetInnerHTML?: { __html: string } };
 let hotjar: ScriptProps | undefined;
 vi.mock("next/script", () => ({
   default: (props: ScriptProps) => {
@@ -132,6 +132,13 @@ describe("Analytics", () => {
 
     await waitFor(() => expect(hotjar?.id).toBe("hotjar"));
     expect(hotjar?.dangerouslySetInnerHTML?.__html).toContain("hjid:6438248");
+  });
+
+  it("holds Hotjar back until the page has loaded and the browser is idle", async () => {
+    recorded.mockReturnValue(true);
+    render(<Analytics />);
+
+    await waitFor(() => expect(hotjar?.strategy).toBe("lazyOnload"));
   });
 
   it("leaves Hotjar off any other page", async () => {

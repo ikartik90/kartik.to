@@ -25,7 +25,7 @@ import {
   prepareGemSmokeMask,
   preparedGemSmokeMask,
 } from "@/utils/gem-smoke-mask";
-import { usePageLoaded } from "@/hooks/use-page-loaded";
+import { useFirstFoldSettled } from "@/hooks/use-first-fold-settled";
 import { css, cx } from "../../styled-system/css";
 
 const BRAND_PINK = "#FF4D97";
@@ -39,8 +39,6 @@ const SHADER_MAX_PIXELS = 40 * 40;
 
 // How far ahead of the cursor to look.
 const APPROACH_HORIZON_MS = 300;
-
-const WARM_IDLE_TIMEOUT_MS = 2000;
 
 // Written into the uniforms, not <GemSmoke> props, which would re-process the pre-processed mask.
 const FLUORESCENT = {
@@ -113,18 +111,6 @@ function getReducedMotion() {
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
-}
-
-/** Run `task` when the browser is idle — or `WARM_IDLE_TIMEOUT_MS` from now. */
-function whenIdle(task: () => void): () => void {
-  if (typeof requestIdleCallback === "function") {
-    const handle = requestIdleCallback(() => task(), {
-      timeout: WARM_IDLE_TIMEOUT_MS,
-    });
-    return () => cancelIdleCallback(handle);
-  }
-  const handle = setTimeout(task, 0);
-  return () => clearTimeout(handle);
 }
 
 // One shader for the whole row, moved to the hovered icon: each instance is a WebGL context.
@@ -256,11 +242,9 @@ export function SocialShaderStage({ children }: { children: ReactNode }) {
     setShowing(false);
   }, []);
 
-  const pageLoaded = usePageLoaded();
-  useEffect(() => {
-    if (!enabled || warm || !pageLoaded) return;
-    return whenIdle(() => setWarm(true));
-  }, [enabled, warm, pageLoaded]);
+  // In the background once the page has loaded, gone idle and settled its first fold.
+  const settled = useFirstFoldSettled();
+  if (enabled && !warm && settled) setWarm(true);
 
   // Approach warm-up: start as soon as the cursor heads for the row.
   useEffect(() => {
