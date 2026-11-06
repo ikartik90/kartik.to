@@ -18,12 +18,12 @@ const glyphForDark = css({ display: "block", _dark: { display: "none" } });
 const glyphForLight = css({ display: "none", _dark: { display: "block" } });
 
 /** The bare control, for consumers that place it themselves. */
-export function ThemeToggleButton({ shape }: { shape?: ActionShape }) {
+export function ThemeToggleButton({ shape, className }: { shape?: ActionShape; className?: string }) {
   const { isDark, toggle } = useThemeToggle();
   const label = isDark ? OFFER.light : OFFER.dark;
 
   return (
-    <Button variant="icon" shape={shape} aria-label={label} onClick={toggle}>
+    <Button variant="icon" shape={shape} aria-label={label} onClick={toggle} className={className}>
       <DarkIcon className={glyphForDark} data-theme-glyph="dark" />
       <LightIcon className={glyphForLight} data-theme-glyph="light" />
       <Button.Tooltip>
@@ -34,10 +34,10 @@ export function ThemeToggleButton({ shape }: { shape?: ActionShape }) {
 }
 
 /** In the `[data-theme-toggle]` slot that globals.css positions. */
-export function ThemeToggle({ shape }: { shape?: ActionShape }) {
+export function ThemeToggle({ shape, className }: { shape?: ActionShape; className?: string }) {
   return (
     <div data-theme-toggle>
-      <ThemeToggleButton shape={shape} />
+      <ThemeToggleButton shape={shape} className={className} />
     </div>
   );
 }

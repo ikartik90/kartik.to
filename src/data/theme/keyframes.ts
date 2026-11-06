@@ -49,6 +49,10 @@ export const keyframes = defineKeyframes({
     from: { opacity: 0, translate: "0 var(--spacing-3xl)", filter: "blur(var(--spacing-md))" },
     to: { opacity: 1, translate: "0 0", filter: "blur(0px)" },
   },
+  openingFade: {
+    from: { opacity: 0 },
+    to: { opacity: 1 },
+  },
 
   // Weather keyframes are ambient only; state changes are transitions on the parent node.
   weatherPlasmaSpin: {
