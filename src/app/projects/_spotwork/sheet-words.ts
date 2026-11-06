@@ -37,7 +37,7 @@ export const LIVE_INTRO = {
 
 export const LIVE_HEADS = {
   checkIns: {
-    eyebrow: "Flexibility",
+    eyebrow: "Geofencing",
     heading: "Let floor managers handle check-in exceptions",
     body: "Many of our sites were remote warehouses where *poor signal kept workers from checking in on the worker app*. Workers already on site showed as missing, and our operations team had to verify every missing check-in manually.\n\nThe Check-ins page listed the roster of workers scheduled to work on the day with their live check-in status, enabling floor managers to *settle missing check-ins on site during the shift*.",
   },

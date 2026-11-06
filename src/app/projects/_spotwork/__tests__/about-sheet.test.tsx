@@ -378,7 +378,7 @@ describe("the About sheet's Play", () => {
   it("sits under the words of the Check-ins page's card, the Timesheet's and the dashboard's: a row for each demo, one button named by what it plays", () => {
     const { sheet, card } = setupPlay();
     for (const [heading, ...labels] of [
-      [SIDEBAR.headings.flexibility, SIDEBAR.demos.flexibility, SIDEBAR.demos.geofence],
+      [SIDEBAR.headings.flexibility, SIDEBAR.demos.geofence, SIDEBAR.demos.flexibility],
       [SIDEBAR.headings.invoice, SIDEBAR.demos.invoice],
       [SIDEBAR.headings.traceability, SIDEBAR.demos.traceability, SIDEBAR.demos.riskSignals],
     ]) {

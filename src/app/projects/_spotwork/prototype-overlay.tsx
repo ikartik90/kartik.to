@@ -199,10 +199,11 @@ const contentsStyle = css({ display: "contents" });
 const SPOTWORK_CURSOR = css.raw({ "--cursor-ink": "var(--sw-glyph-selected)", "--cursor-edge": "var(--sw-surface-selected)" });
 
 // Clipped, not hidden: the scaled app overflows it, and a hidden box can still be scrolled (Google's map scrolls it).
+// Its corners scale with the app.
 const windowStyle = css({
   position: "relative",
   overflow: "clip",
-  borderRadius: "md",
+  borderRadius: "calc(token(radii.md) * var(--window-scale, 1))",
   boxShadow: "0 0 0 0.5px var(--colors-border-image-outline)",
 });
 
@@ -613,12 +614,12 @@ function OverlayContent({
               <div
                 ref={windowBox}
                 className={windowStyle}
-                style={{ width: width * scale, height: height * scale }}
+                style={{ width: width * scale, height: height * scale, "--window-scale": scale } as CSSProperties}
                 data-overlay-motion="window"
               >
                 <div
                   className={cx(scaledStyle, themeClassName)}
-                  style={{ width, height, transform: `scale(${scale})`, "--window-scale": scale } as CSSProperties}
+                  style={{ width, height, transform: `scale(${scale})` }}
                 >
                   {/* The design system's site draws its own bar once it's here. */}
                   {(site.site === "app" || !live) && <BrowserBar url={site.url} accent={ACCENT} />}

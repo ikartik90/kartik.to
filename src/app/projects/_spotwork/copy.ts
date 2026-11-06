@@ -27,38 +27,38 @@ export const SIDEBAR = {
   hide: "Hide about this project",
   /** The cards' own headings, where their sheet's don't suit the card. */
   headings: {
-    checkIns: "Cut attendance disputes from 90 a week to 31 by rebuilding check-ins and time tracking",
-    designSystem: "Rolled out and maintained a design system that cut release cycle time by 38% in a year",
-    flexibility: "Now floor managers check in workers who can't check themselves in",
+    checkIns: "Cut attendance disputes from 90 a week to 31 by geofencing check-ins and time tracking",
+    designSystem: "Rolled out and maintained a design system that helped us ship 1.5× as many releases",
+    flexibility: "Geofences that follow the work perimeter let workers on large sites check in",
     invoice: "The Timesheet is finance's source of truth: timecards track who made each edit",
     traceability: "Our operations team could confirm who was on site and triage likely no-shows",
     components: "Separate UI from business logic and build every screen from compound components",
-    activationAndRetention: "Pre-boarding and one-drag reposting lifted tenth‑shift retention from 62% to 78%",
+    activationAndRetention: "Took tenth‑shift retention from 62% to 78% with pre-boarding and schedule extension",
     onboarding: "New companies went from an empty dashboard to booked workers within hours",
     shiftScheduling: "Staffing managers extend a posted schedule with a drag",
   },
   /** The cards' own words where their sheet's run longer than 338 characters. */
   bodies: {
     checkIns:
-      "Spotwork's time tracking sets what contract workers earn and companies pay. *15% of workers used to raise pay issues every week*.\n\nIn 2025, I rebuilt time tracking with floor managers and our finance team. Floor managers could now check in workers who couldn't check themselves in, and finance could *reconcile and invoice every hour worked from the Timesheet*. The check-in tracking dashboard let our operations team watch new workers and new teams closely.",
+      "Spotwork's time tracking sets what contract workers earn and companies pay. *15% of workers used to raise attendance-related pay issues every week*.\n\nIn 2025, I rebuilt time tracking with floor managers and our finance team. Floor managers could now check in workers who couldn't check themselves in, and finance could *reconcile and invoice every hour worked from the Timesheet*. The check-in tracking dashboard let our operations team watch new workers and new teams closely.",
     flexibility:
-      "At our remote warehouses, *poor signal blocked workers from checking in*. Those on site showed as missing until the shift ended. Our operations team had to verify them manually.\n\nI built a Check-ins page with the day's roster and live check-in status. Floor managers could *check workers in or out or mark them absent* mid-shift.\n\nI added the ability to draw and precisely adjust geofences around a worksite. Workers could then *check in or out only inside the work perimeter*. Geofences also flagged workers who left the worksite while checked in.",
+      "Before geofencing, check-ins covered a 500-metre radius around the worksite's pin. At large facilities, the entrance could fall outside that radius, *preventing workers from checking in*.\n\nI added the ability to draw and precisely adjust geofences around a worksite. Workers could then *check in or out only inside the work perimeter*. Geofences also flagged workers who left the worksite while checked in.\n\nI also built the day's roster into the overview page with live check-in status, and gave floor managers the ability to *check workers in and out, or mark them absent* mid-shift.",
     invoice:
       "Previously, hours a worker submitted replaced their check-in times. I made each timecard *track every edit and who made it*.\n\nCompanies used to book urgent shifts off-app, and finance had to invoice them on spreadsheets. I added off-app timecards for them. Every hour logged or changed had a change log behind it, so finance could treat the Timesheet as *the single source of truth for reconciliation*.",
     traceability:
       "I combined risk signals from OpenPhone texts and our shift, worker and company data to enable our operations team to *triage missing check-ins demanding urgent action*.\n\nGig work is inherently low trust. So I added location history, which let our operations team *ensure workers were on site for the duration of their shift*. From the dashboard, they could text any worker who left the job site.",
     designSystem:
-      "As product designer and product manager, I led the rebuild of Spotwork's staffing management platform. Poor separation of concerns and hardcoded values led to code duplication and visual inconsistencies. Both made *development and testing prohibitively slow and expensive*.\n\nI drafted design system guidelines, and built compound components with engineering to separate presentation from business logic. The modularity and reusability we achieved *brought down the median release cycle time from 21 days to 13 days in a year*.",
+      "As product designer and product manager, I led the rebuild of Spotwork's staffing management platform. Poor separation of concerns and hardcoded values led to code duplication and visual inconsistencies. Both made *development and testing prohibitively slow and expensive*.\n\nI drafted design system guidelines, and built WCAG AA-compliant UI components with engineering to separate presentation from business logic. The modularity and reusability we achieved *brought down the median release cycle time from 21 days to 13 days in a year*.",
     tokens:
       "Colours and sizes used to be raw values. So components that behaved alike *looked different from place to place*.\n\nI wrote colours in OKLCH, where equal lightness looks equally light in every hue. That made Active, Success, Warning and Alert *match surface, text and outline shades*.\n\nI set sizes in rem and borders in px. So *layouts scaled with browser text size* while borders held one even pixel.",
     components:
       "Our UI used to be intertwined with business logic. So existing elements were *hard to reuse*.\n\nWe built each screen as *declarative UI*, stating what it showed in the named parts of compound components. Outside its own component, a part raised an error naming its owner.\n\nWe set rules so every component in code *followed the design system*. Any local override carried a written reason we could track.",
     activationAndRetention:
-      "Companies came to Spotwork to book workers. Their first impressions *dictated whether they stayed with us*.\n\nPreviously, companies started on an empty dashboard, which delayed activation. I enabled Sales to set them up with relevant job templates and a reliable worker pool to *minimize their time to first booking*.\n\nExtending a posted schedule used to mean drafting the shift again and sending workers a fresh round of offers. Staffing managers could now extend it in place, and offers went out automatically to the workers already booked. Repeat workers trusted companies they had already worked with, resulting in *fewer no-shows than first-timers*, which kept companies booking with us.",
+      "Companies came to Spotwork to book workers. Their first impressions *dictated whether they stayed with us*.\n\nPreviously, companies started on an empty dashboard, which delayed activation. I enabled Sales to set them up with relevant job templates and a reliable worker pool to *minimize their time to first booking*.\n\nI added schedule extension, which offered a posted schedule's new dates to repeat workers first. They trusted companies they had worked with, which meant *fewer no-shows than first-timers* and kept companies booking with us.",
     onboarding:
-      "Before the rebuild, new companies started on an empty dashboard. Customers had to create templates before they could post shifts. Further, they had to wait for relevant workers to apply after posting shifts. These friction points delayed customers from experiencing *Spotwork's core value proposition*, making activation harder.\n\nI designed a pre-boarding workflow that let Sales set up each approved company's team before the company signed up. Sales prepared the team's templates, and added reliable workers with relevant skills to its worker pool. As a result, new companies reached the “aha moment” sooner, going *from an empty dashboard to booked workers within hours*.",
+      "Before the rebuild, new companies started on an empty dashboard. Customers had to create templates before they could post shifts. Further, they had to wait for relevant workers to apply after posting shifts. These friction points stretched customers' *time to value*, making activation harder.\n\nI designed a pre-boarding workflow that let Sales set up each approved company's team before the company signed up. Sales prepared the team's templates, and added reliable workers with relevant skills to its worker pool. As a result, new companies cut their time to first booking, going *from an empty dashboard to booked workers within hours*.",
     shiftScheduling:
-      "In the past, the staffing managers who posted most often had to draft a shift again to add dates and *send workers a fresh round of offers*.\n\nI prototyped two concepts. Recurrence proved efficient but rigid. Drag to select kept the calendar staffing managers already used.\n\nNow they *extend or change a posted schedule in place*.",
+      "In the past, the staffing managers who posted most often had to draft a shift again to add dates and *send workers a fresh round of offers*.\n\nI let staffing managers change or extend a posted schedule in place. New dates went to *its booked workers first*, then the company's worker pool, then recommended workers with relevant skills.",
   },
   /** The metric of a project with no sheet to take one from. */
   outcomes: {
@@ -67,7 +67,7 @@ export const SIDEBAR = {
       label: "tenth‑shift retention",
       trend: "up",
       change: "16 points",
-      detail: "Pre-boarding and effortless reposting lifted tenth‑shift retention by 16 points, *from 62% to 78%*.",
+      detail: "Pre-boarding and schedule extension lifted tenth‑shift retention by 16 points, *from 62% to 78%*.",
     },
   } satisfies Record<string, Metric>,
   /** What each card's demo plays, beside its Play, on one line. */
@@ -91,7 +91,7 @@ export const SIDEBAR = {
   /** The first card's rows for the sheet's role and year. */
   facts: { role: "Role", year: "Year" },
   /** The eyebrows of Activation and retention's cards, in Kartik's words. */
-  eyebrows: { onboarding: "Onboarding and activation", shiftScheduling: "Shift scheduling" },
+  eyebrows: { onboarding: "Pre-boarding", shiftScheduling: "Shift scheduling" },
 };
 
 /**
