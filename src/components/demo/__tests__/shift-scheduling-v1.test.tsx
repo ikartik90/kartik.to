@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import {
   ShiftSchedulingV1,
   planDemoRecurrence,

@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { loadSiteStyles } from "@/utils/site-styles";
 
 export type LiveApp = typeof import("./live-app");
 
 let loaded: LiveApp | undefined;
 let loading: Promise<LiveApp> | undefined;
 
-/** Fetches the prototype's code once; a failed fetch is tried again by the next caller. */
+/**
+ * Fetches the prototype's code once, with the whole stylesheet its styles are in; a failed fetch is tried again by the
+ * next caller.
+ */
 export function loadLiveApp() {
-  loading ??= import("./live-app").then(
-    (app) => (loaded = app),
+  loading ??= Promise.all([import("./live-app"), loadSiteStyles()]).then(
+    ([app]) => (loaded = app),
     (error) => {
       loading = undefined;
       throw error;

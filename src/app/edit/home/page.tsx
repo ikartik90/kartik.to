@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import { notFound } from "next/navigation";
 import { isAdmin } from "@/lib/auth/server";
 import { ArticleEditor } from "@/components/article-editor";

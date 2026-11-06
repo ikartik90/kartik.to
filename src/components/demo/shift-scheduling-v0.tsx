@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { css } from "../../../styled-system/css";
 import { ShiftFormShell } from "./shift-form-shell";
 import { ShiftFormFields } from "./shift-form-fields";

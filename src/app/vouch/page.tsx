@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import type { Metadata } from "next";
 import { css } from "../../../styled-system/css";
 import { Typography } from "@/components/ui/typography";

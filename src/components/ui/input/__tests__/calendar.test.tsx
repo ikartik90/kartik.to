@@ -1,6 +1,6 @@
 import { act, render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { Calendar } from "../calendar";
 import { Field } from "../field";
 import { Tooltip } from "@/components/ui/tooltip";

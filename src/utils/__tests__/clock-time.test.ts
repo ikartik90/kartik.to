@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import {
   DEFAULT_TIME_FORMAT,
   formatClockTime,

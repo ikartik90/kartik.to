@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { rangeCell, rangeDays, rangeOf } from "../calchemy-range";
 
 const on = (iso: string) => Temporal.PlainDate.from(iso);

@@ -5,6 +5,9 @@ import { useDemoLoader, useTrickleProgress } from "../use-demo-loader";
 import { __resetDemoAssetCache } from "@/utils/demo-assets";
 import type { DemoComponentEntry } from "@/components/demo/registry";
 
+const { loadSiteStyles } = vi.hoisted(() => ({ loadSiteStyles: vi.fn(() => Promise.resolve()) }));
+vi.mock("@/utils/site-styles", () => ({ loadSiteStyles }));
+
 beforeEach(() => {
   __resetDemoAssetCache();
   vi.spyOn(document, "readyState", "get").mockReturnValue("complete");
@@ -31,6 +34,23 @@ describe("useDemoLoader", () => {
     expect(entry.load).toHaveBeenCalledOnce();
     expect(result.current.Component).toBeTypeOf("function");
     expect(result.current.fraction).toBe(1);
+  });
+
+  it("holds the demo back until the whole stylesheet is in, since its styles are in no page's own", async () => {
+    let styled!: () => void;
+    loadSiteStyles.mockReturnValueOnce(new Promise<void>((resolve) => (styled = resolve)));
+    // A fresh copy, on the mocked stylesheet: the shared setup loaded this one before the mock.
+    vi.resetModules();
+    const { useDemoLoader: fresh } = await import("../use-demo-loader");
+    const entry = makeEntry({ id: "unstyled" });
+    const { result } = renderHook(() => fresh(entry));
+
+    await waitFor(() => expect(entry.load).toHaveBeenCalledOnce());
+    await act(async () => {});
+    expect(result.current.Component).toBeNull();
+
+    await act(async () => styled());
+    await waitFor(() => expect(result.current.ready).toBe(true));
   });
 
   it("waits for the page load event before loading", async () => {

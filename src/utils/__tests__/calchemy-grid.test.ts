@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { MONTHS_IN_RUN, monthGrid } from "../calchemy-grid";
 
 const WIDTHS = [1, 2, 3];

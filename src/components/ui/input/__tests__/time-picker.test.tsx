@@ -6,7 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { TimePicker, type TimePickerProps } from "../time-picker";
 import { Field } from "../field";
 

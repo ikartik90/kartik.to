@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import type { Metadata } from "next";
 import { SITE_PAGES } from "@/data/site-paths";
 import { CalchemyPlayground } from "./calchemy-playground";

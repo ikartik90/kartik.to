@@ -11,7 +11,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@/utils/temporal";
 import { css } from "../../../styled-system/css";
 import { field } from "../../../styled-system/recipes";
 import { ShiftFormShell } from "./shift-form-shell";

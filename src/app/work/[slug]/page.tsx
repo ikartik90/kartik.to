@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import type { Metadata } from "next";
 import { PostPage, postPageMetadata } from "@/components/post-page";
 

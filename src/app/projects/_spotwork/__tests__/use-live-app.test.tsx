@@ -49,3 +49,19 @@ describe("useLiveApp", () => {
     expect(seen.mock.lastCall![0]).toHaveProperty("LiveDemo");
   });
 });
+
+describe("loadLiveApp", () => {
+  it("hands over the prototype only once the whole stylesheet is in, since its styles are in no page's own", async () => {
+    vi.resetModules();
+    let styled!: () => void;
+    vi.doMock("@/utils/site-styles", () => ({ loadSiteStyles: () => new Promise<void>((resolve) => (styled = resolve)) }));
+    const { loadLiveApp } = await import("../use-live-app");
+    const arrived = vi.fn();
+    void loadLiveApp().then(arrived);
+    await act(async () => {});
+    expect(arrived).not.toHaveBeenCalled();
+    await act(async () => styled());
+    expect(arrived).toHaveBeenCalledWith(expect.objectContaining({ LiveDemo: expect.any(Function) }));
+    vi.doUnmock("@/utils/site-styles");
+  });
+});

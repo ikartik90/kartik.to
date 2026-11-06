@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import { notFound } from "next/navigation";
 import { css } from "../../../../styled-system/css";
 import { isAdmin } from "@/lib/auth/server";

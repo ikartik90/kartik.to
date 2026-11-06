@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type KeyboardEvent } from "react";
-import type { Temporal } from "@js-temporal/polyfill";
+import type { Temporal } from "@/utils/temporal";
 import type {
   Calchemy,
   ExpectedDateValue,

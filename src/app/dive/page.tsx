@@ -1,3 +1,4 @@
+import "./page.styles.css";
 import type { Metadata } from "next";
 import { HomePage } from "@/components/home-page";
 import { getHomeDescription } from "@/lib/home";
