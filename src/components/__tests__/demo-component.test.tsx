@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { act, render, screen, waitFor, cleanup } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { DemoComponent, DemoPreloader } from "../demo-component";
 import { __resetDemoAssetCache } from "@/utils/demo-assets";
@@ -9,9 +9,17 @@ import type { DemoComponentEntry } from "@/components/demo/registry";
 beforeEach(() => {
   __resetDemoAssetCache();
   vi.spyOn(document, "readyState", "get").mockReturnValue("complete");
+  // Settled at once: the page loaded, idle, and nothing in the first fold holding it.
+  vi.stubGlobal("requestIdleCallback", (callback: IdleRequestCallback) =>
+    callback({ didTimeout: false, timeRemaining: () => 50 }),
+  );
+  vi.stubGlobal("cancelIdleCallback", () => undefined);
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("DemoPreloader", () => {
   it("renders the shared progress bar", () => {
@@ -43,5 +51,33 @@ describe("DemoComponent", () => {
 
     await waitFor(() => expect(screen.getByTestId("loaded-demo")).toBeDefined());
     expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("fetches nothing until it comes near the screen", async () => {
+    const callbacks: IntersectionObserverCallback[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const Loaded = () => <div data-testid="loaded-demo">Loaded</div>;
+    const load = vi.fn(async () => Loaded);
+    render(<DemoComponent entry={{ id: "far-demo", label: "Far demo", load }} />);
+    await act(async () => {});
+    expect(load).not.toHaveBeenCalled();
+
+    act(() =>
+      callbacks.forEach((callback) =>
+        callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver),
+      ),
+    );
+    await waitFor(() => expect(screen.getByTestId("loaded-demo")).toBeDefined());
+    expect(load).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
   });
 });

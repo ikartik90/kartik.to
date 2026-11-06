@@ -19,11 +19,14 @@ export function loadLiveApp() {
   return loading;
 }
 
-/** The prototype's code once it has arrived, fetched in the background from mount; at once, if it's here already. */
-export function useLiveApp() {
+/**
+ * The prototype's code once it has arrived, fetched in the background from when it's `wanted`; at once, if it's here
+ * already.
+ */
+export function useLiveApp(wanted = true) {
   const [app, setApp] = useState(() => loaded);
   useEffect(() => {
-    if (app) return;
+    if (app || !wanted) return;
     let mounted = true;
     loadLiveApp().then(
       (next) => mounted && setApp(next),
@@ -32,6 +35,6 @@ export function useLiveApp() {
     return () => {
       mounted = false;
     };
-  }, [app]);
+  }, [app, wanted]);
   return app;
 }

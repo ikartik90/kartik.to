@@ -1,11 +1,12 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useLayoutEffect } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { firstFoldHeld } from "@/utils/first-fold";
 import { LandingCards } from "../landing-cards";
 
 // The prototype's code, arrived or not.
 let liveApp: { LiveDemo: (props: { onShown?: () => void }) => null } | undefined;
-vi.mock("../../use-live-app", () => ({ useLiveApp: () => liveApp }));
+vi.mock("../../use-live-app", () => ({ useLiveApp: () => liveApp, loadLiveApp: () => new Promise(() => {}) }));
 vi.mock("../backlight", () => ({ Backlight: () => <canvas data-testid="backlight" /> }));
 const entrance = vi.hoisted(() => ({ joinOpening: vi.fn(() => true), riseIn: vi.fn() }));
 vi.mock("../../opening", async (original) => ({ ...(await original<object>()), ...entrance }));
@@ -19,6 +20,7 @@ let fades: (() => void)[] = [];
 beforeEach(() => {
   liveApp = undefined;
   fades = [];
+  vi.stubGlobal("cancelIdleCallback", () => undefined);
   HTMLElement.prototype.animate = function () {
     let end!: () => void;
     const finished = new Promise<Animation>((resolve) => (end = () => resolve(fade)));
@@ -147,6 +149,46 @@ describe("LandingCards", () => {
       expect(cover.querySelector("[data-testid=backlight]")).not.toBeNull();
       expect(cover.querySelector("[data-app-veil]")).not.toBeNull();
     }
+  });
+
+  it("builds the cards' apps one at a time, first to last, each once the one before it is shown, without waiting for the page to load", () => {
+    const readyState = vi.spyOn(document, "readyState", "get").mockReturnValue("loading");
+    const show: Record<string, () => void> = {};
+    liveApp = {
+      LiveDemo: (({ project, onShown }: { project: string; onShown?: () => void }) => {
+        show[project] = () => onShown?.();
+        return <i data-live={project} />;
+      }) as never,
+    };
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    const built = () => [...document.querySelectorAll("[data-live]")].map((node) => node.getAttribute("data-live"));
+    const order = [...document.querySelectorAll("[data-sheet-card]")].map((node) => node.getAttribute("data-sheet-card"));
+    expect(built()).toEqual(order.slice(0, 1));
+
+    act(() => show[order[0]!]());
+    expect(built()).toEqual(order.slice(0, 2));
+    act(() => show[order[1]!]());
+    expect(built()).toEqual(order);
+    readyState.mockRestore();
+  });
+
+  it("holds back everything after the cards until the last card's app is shown", () => {
+    const show: Record<string, () => void> = {};
+    liveApp = {
+      LiveDemo: (({ project, onShown }: { project: string; onShown?: () => void }) => {
+        show[project] = () => onShown?.();
+        return null;
+      }) as never,
+    };
+    render(<LandingCards paused={false} onOpen={() => {}} />);
+    const order = [...document.querySelectorAll("[data-sheet-card]")].map((node) => node.getAttribute("data-sheet-card")!);
+    for (const project of order.slice(0, -1)) {
+      expect(firstFoldHeld()).toBe(true);
+      act(() => show[project]());
+    }
+    expect(firstFoldHeld()).toBe(true);
+    act(() => show[order[order.length - 1]]());
+    expect(firstFoldHeld()).toBe(false);
   });
 
   it("fades each window's veil off once its app is shown", async () => {

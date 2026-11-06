@@ -262,30 +262,36 @@ const SHOWN_HOVER_DELAY = 100;
  * `shown`, on a screen without a cursor: whether the card is whole on screen, so it plays as if hovered while it stays
  * so. `hovered`, with
  * a cursor: whether it's under it, as it was when the page last came to rest (`useRestingHover`), never `:hover`.
+ * `due`: whether its app is to be built now. `onAppShown`: once its app is first drawn; must be stable.
  */
 export function LandingCard({
   card,
   shown,
   hovered = false,
-  near,
   paused,
   base,
   themeClassName,
+  due,
   onOpen,
+  onAppShown,
 }: {
   card: ProjectCard;
   base?: string;
   shown?: boolean;
   hovered?: boolean;
-  near: boolean;
   paused: boolean;
   themeClassName?: string;
+  due: boolean;
   onOpen: () => void;
+  onAppShown?: () => void;
 }) {
-  // The monitor and its backlight draw at once; the app on its screen comes in once its code has.
-  const live = useLiveApp();
+  // The monitor and its backlight draw at once; the app on its screen comes in once it's `due`.
+  const live = useLiveApp(due);
   const [drawn, setDrawn] = useState(false);
-  const onShown = useCallback(() => setDrawn(true), []);
+  const onShown = useCallback(() => {
+    setDrawn(true);
+    onAppShown?.();
+  }, [onAppShown]);
   const shownHeld = useDelayedOn(shown ?? false, SHOWN_HOVER_DELAY);
   const held = shown === undefined ? hovered : shownHeld;
   useEffect(() => {
@@ -327,7 +333,7 @@ export function LandingCard({
                 <Backlight className={groundStyle} />
                 <Monitor />
                 <span className={windowStyle}>
-                  {live && <live.LiveDemo project={card.id} paused={paused} near={near} onShown={onShown} />}
+                  {live && due && <live.LiveDemo project={card.id} paused={paused} near onShown={onShown} />}
                   <AppVeil shown={drawn} className={themeClassName} />
                 </span>
               </span>

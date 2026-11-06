@@ -48,8 +48,8 @@ interface DemoLoaderState {
   fraction: number;
 }
 
-/** Lazy-loads a demo's module and gating fonts once the page has loaded, with progress. */
-export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
+/** Lazy-loads a demo's module and gating fonts once the page has loaded and it's `wanted`, with progress. */
+export function useDemoLoader(entry: DemoComponentEntry, wanted = true): DemoLoaderState {
   const pageLoaded = usePageLoaded();
   const [Component, setComponent] = useState<ComponentType<DemoProps> | null>(
     () => loadedComponents.get(entry.id) ?? null,
@@ -73,7 +73,7 @@ export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
   }
 
   useEffect(() => {
-    if (!pageLoaded || preloaded) return;
+    if (!pageLoaded || !wanted || preloaded) return;
 
     let cancelled = false;
     const bump = () => {
@@ -92,7 +92,7 @@ export function useDemoLoader(entry: DemoComponentEntry): DemoLoaderState {
     return () => {
       cancelled = true;
     };
-  }, [pageLoaded, preloaded, entry, fonts, images]);
+  }, [pageLoaded, wanted, preloaded, entry, fonts, images]);
 
   const ready =
     preloaded || (pageLoaded && Component !== null && settled >= total);

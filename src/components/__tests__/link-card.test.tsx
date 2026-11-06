@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // StaticMeshGradient is WebGL, which jsdom can't run; the stand-in keeps `data-background-effect`.
 vi.mock("@paper-design/shaders-react", () => ({
@@ -61,6 +61,7 @@ import { LinkCard } from "../link-card";
 import { ASPECT_RATIOS } from "@/utils/demo-frame-sizing";
 import { DEFAULT_BACKGROUND_EFFECT, type MediaNode } from "@/domain/nodes";
 import { shaderPresetContentFor } from "@/domain/shader-preset";
+import { holdFirstFold } from "@/utils/first-fold";
 
 const picture = (src: string, over: Partial<MediaNode> = {}): MediaNode => ({
   type: "media",
@@ -76,6 +77,13 @@ const clip = (src: string): MediaNode => ({
 });
 
 describe("LinkCard", () => {
+  beforeEach(() => {
+    // Settled at once: the page loaded, idle, and nothing in the first fold holding it.
+    vi.stubGlobal("requestIdleCallback", (callback: IdleRequestCallback) =>
+      callback({ didTimeout: false, timeRemaining: () => 50 }),
+    );
+    vi.stubGlobal("cancelIdleCallback", () => undefined);
+  });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -186,6 +194,60 @@ describe("LinkCard", () => {
     expect(shown?.hasAttribute("autoplay")).toBe(true);
     expect(shown?.hasAttribute("loop")).toBe(true);
     expect(shown?.hasAttribute("muted")).toBe(true);
+  });
+
+  /** Observers stand in for the browser's, all told at once that what they watch has come near the screen. */
+  function watchNear() {
+    const callbacks: IntersectionObserverCallback[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    return () =>
+      act(() =>
+        callbacks.forEach((callback) =>
+          callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver),
+        ),
+      );
+  }
+
+  it("holds a clip still until the card comes near the screen, then plays it", () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const near = watchNear();
+    const { container } = render(<LinkCard href="/work/atlas" title="Atlas" aspect="3/2" cover={clip("/demo.mp4")} />);
+    const shown = () => container.querySelector("video");
+    expect(shown()?.hasAttribute("autoplay")).toBe(false);
+    expect(play).not.toHaveBeenCalled();
+
+    near();
+    expect(shown()?.hasAttribute("autoplay")).toBe(true);
+    expect(play).toHaveBeenCalled();
+    play.mockRestore();
+  });
+
+  it("draws a picture's background effect only once the card comes near the screen", () => {
+    const near = watchNear();
+    const { container } = render(
+      <LinkCard
+        href="/work/atlas"
+        title="Atlas"
+        aspect="3/2"
+        cover={picture("/opening.png", { backgroundEffect: DEFAULT_BACKGROUND_EFFECT })}
+      />,
+    );
+    expect(container.querySelector("[data-background-effect]")).toBeNull();
+    near();
+    expect(container.querySelector("[data-background-effect]")).not.toBeNull();
   });
 
   it("keeps the cover out of the link's name", () => {
@@ -393,6 +455,22 @@ describe("LinkCard", () => {
       "pixelComets",
     );
     expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("holds a shader preset back while the first fold's own work is under way", () => {
+    stubCoverSize(470, 313);
+    const release = holdFirstFold(60_000);
+    const { container } = render(
+      <LinkCard
+        href="/playground/shader/comets"
+        title="Comets"
+        aspect="3/2"
+        shader={shaderPresetContentFor("pixelComets")}
+      />,
+    );
+    expect(container.querySelector("canvas")).toBeNull();
+    act(() => release());
+    expect(container.querySelector("canvas")?.getAttribute("data-shader")).toBe("pixelComets");
   });
 
   it("grounds its words over a shader as over a picture", () => {

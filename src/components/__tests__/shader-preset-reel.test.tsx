@@ -178,9 +178,39 @@ describe("reelLayers", () => {
 describe("<ShaderPresetReelPlayer>", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Settled at once: the page loaded, idle, and nothing in the first fold holding it.
+    vi.stubGlobal("requestIdleCallback", (callback: IdleRequestCallback) =>
+      callback({ didTimeout: false, timeRemaining: () => 50 }),
+    );
+    vi.stubGlobal("cancelIdleCallback", () => undefined);
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   const play = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+  it("mounts no canvas until it comes near the screen", () => {
+    const callbacks: IntersectionObserverCallback[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    render(<ShaderPresetReelPlayer presets={[preset("a", "cosmicTrack"), preset("b", "pixelComets")]} />);
+    expect(screen.queryAllByTestId(/^reel-layer-/)).toHaveLength(0);
+
+    act(() =>
+      callbacks.forEach((callback) =>
+        callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver),
+      ),
+    );
+    expect(screen.getAllByTestId(/^reel-layer-/)).toHaveLength(2);
+    vi.unstubAllGlobals();
+  });
 
   it("mounts one canvas per distinct shader, and no more", () => {
     render(

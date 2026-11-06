@@ -3,7 +3,7 @@ import { linkCard } from "../../styled-system/recipes";
 import { Typography } from "./ui/typography";
 import { BackgroundEffectLayer } from "@/components/background-effect";
 import { IconCubes } from "@/components/icon-cubes";
-import { Media } from "@/components/media";
+import { LazyMedia } from "@/components/lazy-media";
 import { ScrimBlur } from "@/components/scrim-blur";
 import { ShaderCover } from "@/components/shader-cover";
 import { gridItemVars } from "@/utils/grid-item-vars";
@@ -151,6 +151,7 @@ function CardCover({
     <>
       {media.backgroundEffect && (
         <BackgroundEffectLayer
+          lazy
           effect={media.backgroundEffect}
           className={`${styles.backgroundEffect}${className ? ` ${className}` : ""}`}
         />
@@ -158,7 +159,7 @@ function CardCover({
       <div
         className={`${styles.mediaFrame}${className ? ` ${className}` : ""}`}
       >
-        <Media
+        <LazyMedia
           src={media.src}
           alt=""
           kind={media.kind}

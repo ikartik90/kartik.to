@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { testimonialCard } from "../../styled-system/recipes";
 import {
   testimonialInitial,
@@ -80,15 +81,12 @@ export function TestimonialQuote({ testimonial, tint, shape, bare = false }: Tes
       <figcaption className={styles.byline}>
         <span className={styles.avatar}>
           {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={avatarUrl}
               // Decorative: the name is written beside it.
               alt=""
               width={40}
               height={40}
-              loading="lazy"
-              decoding="async"
             />
           ) : (
             testimonialInitial(name)

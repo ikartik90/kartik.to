@@ -87,10 +87,21 @@ export function newLeaf(width: number, y: number, random: Random = Math.random):
   };
 }
 
-/** Grows or shrinks `leaves` to `count`, nearest last so they draw on top. New ones start anywhere on the ground. */
-export function populate(leaves: Leaf[], count: number, width: number, height: number, random: Random = Math.random) {
+/**
+ * Grows or shrinks `leaves` to `count`, nearest last so they draw on top. New ones start anywhere on the ground or,
+ * given the largest leaf's `margin`, out of sight above it, a ground's height deep, so they fall in as they would have.
+ */
+export function populate(
+  leaves: Leaf[],
+  count: number,
+  width: number,
+  height: number,
+  random: Random = Math.random,
+  margin?: number,
+) {
   const kept = leaves.slice(0, Math.min(count, MAX_LEAVES));
-  while (kept.length < Math.min(count, MAX_LEAVES)) kept.push(newLeaf(width, between(random, -0.1, 1) * height, random));
+  const startY = () => (margin === undefined ? between(random, -0.1, 1) * height : -margin - random() * height);
+  while (kept.length < Math.min(count, MAX_LEAVES)) kept.push(newLeaf(width, startY(), random));
   return kept.sort((a, b) => a.near - b.near);
 }
 

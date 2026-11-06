@@ -1,8 +1,10 @@
 "use client";
 
 import { StaticMeshGradient } from "@paper-design/shaders-react";
-import type { CSSProperties } from "react";
+import { useRef, type CSSProperties } from "react";
 import type { BackgroundEffect } from "@/domain/nodes";
+import { useFirstFoldSettled } from "@/hooks/use-first-fold-settled";
+import { useNearView } from "@/hooks/use-near-view";
 
 const MAX_PIXELS = 1280 * 1280;
 
@@ -14,13 +16,21 @@ export interface BackgroundEffectLayerProps {
   effect: BackgroundEffect;
   className?: string;
   style?: CSSProperties;
+  /** Makes no WebGL context until it comes near the screen, after the first fold. */
+  lazy?: boolean;
 }
 
 export function BackgroundEffectLayer({
   effect,
   className,
   style,
+  lazy = false,
 }: BackgroundEffectLayerProps) {
+  const ground = useRef<HTMLDivElement>(null);
+  const near = useNearView(ground);
+  const settled = useFirstFoldSettled();
+  if (lazy && !(near && settled)) return <div ref={ground} aria-hidden className={className} style={style} />;
+
   return (
     <StaticMeshGradient
       aria-hidden

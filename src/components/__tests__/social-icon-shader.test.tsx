@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { holdFirstFold } from "@/utils/first-fold";
 
 // The mask pre-pass is canvas + WebGL; controllable, since when a mask is ready is what's tested.
 const maskStub = vi.hoisted(() => {
@@ -181,6 +182,16 @@ describe("SocialShaderStage", () => {
     expect(shaders().length).toBe(1);
     expect(shaders()[0].getAttribute("data-mask-src")).toBe(MASKS[1]);
     expect(shaders()[0].getAttribute("data-shader-active")).toBeNull();
+  });
+
+  it("holds the background warm-up while the first fold's own work is under way", async () => {
+    const release = holdFirstFold(60_000);
+    render(row());
+    // The idle slice only; the next timer after it is the hold's own timeout.
+    await tick();
+    expect(shaders().length).toBe(0);
+    await act(async () => release());
+    expect(shaders().length).toBe(1);
   });
 
   it("holds the background warm-up until the page has loaded", async () => {

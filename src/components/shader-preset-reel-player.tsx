@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { css } from "../../styled-system/css";
 import { SHADER_SPECS, type ShaderId } from "@/data/shader-specs";
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/domain/shader-preset";
 import { ShaderStage } from "@/components/shaders/shader-stage";
 import { useReducedMotion } from "@/components/shaders/use-shader-policy";
+import { useFirstFoldSettled } from "@/hooks/use-first-fold-settled";
+import { useNearView } from "@/hooks/use-near-view";
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 import type { DemoFrameAspectRatio } from "@/utils/demo-frame-sizing";
 
@@ -125,21 +127,25 @@ export function ShaderPresetReelPlayer({
   const theme = isDark ? "dark" : "light";
   const reducedMotion = useReducedMotion();
   const [state, setState] = useState<ReelState>(REEL_START);
+  // Each layer is a WebGL context, so none is made until the reel comes near the screen, after the first fold.
+  const reel = useRef<HTMLDivElement>(null);
+  const near = useNearView(reel);
+  const due = useFirstFoldSettled() && near;
 
   useEffect(() => {
-    if (reducedMotion || presets.length < 2) return;
+    if (!due || reducedMotion || presets.length < 2) return;
     const timer = setTimeout(
       () => setState((was) => advanceReel(was, presets.length)),
       state.phase === "holding" ? DWELL_MS : FADE_MS,
     );
     return () => clearTimeout(timer);
-  }, [state, reducedMotion, presets.length]);
+  }, [due, state, reducedMotion, presets.length]);
 
   if (presets.length === 0) return null;
 
   return (
-    <div className={reelStyle} aria-hidden>
-      {reelLayers(presets, state).map((layer) => {
+    <div ref={reel} className={reelStyle} aria-hidden>
+      {due && reelLayers(presets, state).map((layer) => {
         const preset = presets[layer.presetIndex];
         const palette = paletteFor(preset.settings, theme);
         return (

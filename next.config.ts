@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
 
   images: {
     qualities: [100],
+    // Testimonial avatars, resized to the size they show at.
+    remotePatterns: process.env.R2_PUBLIC_BASE_URL ? [new URL(`${process.env.R2_PUBLIC_BASE_URL}/profiles/**`)] : [],
   },
 
   async redirects() {

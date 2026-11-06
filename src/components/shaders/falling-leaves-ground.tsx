@@ -26,6 +26,12 @@ import {
 } from "./falling-leaves";
 import { fallingLeavesFragmentShader } from "./falling-leaves-shader";
 import { SHADER_MAX_PIXELS, useReducedMotion } from "./use-shader-policy";
+import { useFirstFoldSettled } from "@/hooks/use-first-fold-settled";
+
+// 30 a second: every other refresh at 60Hz and every fourth at 120Hz, so each frame holds as long as the last. The
+// slack lets a refresh that lands a hair early still count.
+const FRAME_MS = 1000 / 30;
+const FRAME_SLACK_MS = 4;
 
 // Paper's Dithering in the site's colours, with maple leaves falling through it, fainter behind the heading and lede
 // of the element it's drawn in. One rAF loop moves the leaves, keeps the pattern's time and draws, so the mount's own
@@ -134,40 +140,51 @@ export function FallingLeavesGround({ shape, type, size, scale, speed, ink, stre
   );
 
   const ready = !!uniforms;
+  // Moving, the leaves wait for the page to load and its first fold to settle, so they never hold up the page or the
+  // project cards; held still they cost a draw, so they hang there at once.
+  const settled = useFirstFoldSettled();
+  const started = ready && (reducedMotion || settled);
+
   useEffect(() => {
-    if (!ready) return;
+    if (!started) return;
     let leafList: Leaf[] = [];
     let width = 0;
     let height = 0;
-    let frames = 0;
     let words: number[][] = [];
+    let stale = true;
     const measure = () => {
       const rect = host.current?.getBoundingClientRect();
       width = rect?.width ?? 0;
       height = rect?.height ?? 0;
+      stale = true;
     };
     measure();
+    // The ground spans the words' box, so a reflow resizes it too.
     const observer = new ResizeObserver(measure);
     if (host.current) observer.observe(host.current);
+    // The opening's lines rise into place.
+    const parent = host.current?.parentElement;
+    const moved = () => void (stale = true);
+    parent?.addEventListener("animationend", moved);
 
-    let last = performance.now();
+    let last: number | undefined;
     let raf = requestAnimationFrame(function tick(now) {
       raf = requestAnimationFrame(tick);
-      const dt = Math.min(now - last, 100) / 1000;
-      last = now;
       const ground = host.current;
       const mount = ground?.paperShaderMount as unknown as Mount | undefined;
       if (!ground || !mount || document.hidden || !mount.isInViewport || !width) return;
-      // Held still, it only redraws now and then, for a resize or the words reflowing.
-      const frame = frames++;
-      if (reducedMotion && frame % 30) return;
+      // Held still, it redraws only when something moved.
+      if (reducedMotion ? !stale : last !== undefined && now - last < FRAME_MS - FRAME_SLACK_MS) return;
+      const dt = last === undefined ? 0 : Math.min(now - last, 100) / 1000;
+      last = now;
       const { leaves, speed } = live.current;
       const scale = narrowScale(width);
       const count = Math.round(leaves.count * scale);
-      if (count !== leafList.length) leafList = populate(leafList, count, width, height);
+      const margin = reducedMotion ? undefined : 0.75 * leaves.size * scale;
+      if (count !== leafList.length) leafList = populate(leafList, count, width, height, Math.random, margin);
       if (!reducedMotion) stepLeaves(leafList, leaves, dt, width, height, scale);
-      // The words rise in and reflow, so they're measured again every few frames.
-      if (frame % 10 === 0 && ground.parentElement) words = wordLineRects(ground.parentElement, ground.getBoundingClientRect());
+      if (stale && ground.parentElement) words = wordLineRects(ground.parentElement, ground.getBoundingClientRect());
+      stale = false;
       mount.setUniformValues(leafFrameUniforms(leafRows(leafList, leaves, scale), words));
       mount.setFrame(mount.getCurrentFrame() + (reducedMotion ? 0 : dt * 1000 * speed));
     });
@@ -175,8 +192,9 @@ export function FallingLeavesGround({ shape, type, size, scale, speed, ink, stre
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      parent?.removeEventListener("animationend", moved);
     };
-  }, [ready, reducedMotion]);
+  }, [started, reducedMotion]);
 
   if (!uniforms) return null;
   return (

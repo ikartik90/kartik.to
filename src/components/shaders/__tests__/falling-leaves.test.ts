@@ -76,6 +76,16 @@ describe("populate", () => {
     expect(nears).toEqual([...nears].sort((a, b) => a - b));
   });
 
+  it("given a margin, adds them out of sight above the top, spread over a ground's height so they fall in as a stream", () => {
+    const leaves = populate([], 14, 1440, 800, seeded(), 75);
+    for (const leaf of leaves) {
+      expect(leaf.y).toBeLessThanOrEqual(-75);
+      expect(leaf.y).toBeGreaterThanOrEqual(-875);
+    }
+    const ys = leaves.map(({ y }) => y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(400);
+  });
+
   it("drops the extra leaves when the count falls, and keeps the rest where they are", () => {
     const leaves = populate([], 14, 1440, 800, seeded());
     const kept = populate(leaves, 6, 1440, 800, seeded());
