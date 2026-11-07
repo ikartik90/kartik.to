@@ -1,18 +1,25 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { useEffect } from "react";
+import { use, useEffect } from "react";
+import { GeoContext, ONLINE } from "../../geo";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LiveDemo } from "../live-demo";
 
-const { builds, renders, play, stop } = vi.hoisted(() => ({
+const { builds, renders, play, stop, demoOf, demoFencesOf, fences, geos } = vi.hoisted(() => ({
   builds: [] as string[],
   renders: { count: 0 },
   play: vi.fn(),
   stop: vi.fn(),
+  demoOf: vi.fn((..._: unknown[]) => [] as unknown[]),
+  demoFencesOf: vi.fn((..._: unknown[]) => ({ picker: [] }) as unknown),
+  fences: [] as unknown[],
+  geos: [] as unknown[],
 }));
 
 vi.mock("../../check-ins-app", () => ({
-  CheckInsApp: function App() {
+  CheckInsApp: function App(props: { fences?: unknown }) {
     renders.count++;
+    fences.push(props.fences);
+    geos.push(use(GeoContext));
     useEffect(() => void builds.push("app"), []);
     return <div style={{ overflowY: "auto" }} />;
   },
@@ -21,7 +28,7 @@ vi.mock("../../design-system", () => ({ DesignSystem: () => null }));
 vi.mock("../../browser-bar/browser-bar", () => ({ BAR_HEIGHT: 40, BrowserBar: () => null }));
 vi.mock("../../prototype-overlay", () => ({ windowOf: () => ({ site: "app", url: "" }), pageOf: () => "dashboard" }));
 vi.mock("../../theme", () => ({ manrope: { variable: "" }, poppins: { variable: "" }, spotworkTheme: "" }));
-vi.mock("../../demos", () => ({ demoOf: () => [] }));
+vi.mock("../../demos", () => ({ demoOf, demoFencesOf }));
 vi.mock("../../demo", async (actual) => ({
   ...(await actual<typeof import("../../demo")>()),
   useDemo: () => ({ cursor: {}, playing: false, play, stop }),
@@ -37,6 +44,10 @@ beforeEach(() => {
   vi.useFakeTimers({ now: ++hour * 3_600_000 });
   builds.length = 0;
   renders.count = 0;
+  fences.length = 0;
+  geos.length = 0;
+  demoOf.mockClear();
+  demoFencesOf.mockClear();
   play.mockClear();
   stop.mockClear();
   observers.length = 0;
@@ -108,6 +119,23 @@ describe("LiveDemo", () => {
     await wait(1000);
     expect(builds).toEqual(["app"]);
     expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays the first demo its project's About sheet lists, on the app as that demo starts it", async () => {
+    render(<Card />);
+    show(1);
+    await wait(1000);
+    const choice = { project: "check-ins", version: "company" };
+    expect(demoOf).toHaveBeenLastCalledWith(choice, expect.any(Function), "geofence");
+    expect(demoFencesOf).toHaveBeenCalledWith(choice, "geofence");
+    expect(fences.at(-1)).toEqual({ picker: [] });
+  });
+
+  it("gives its app Google's maps, as the prototype does, for the geofence demo to draw on", async () => {
+    render(<Card />);
+    show(1);
+    await wait(1000);
+    expect(geos.at(-1)).toBe(ONLINE);
   });
 
   it("plays only while all of it is in view", async () => {

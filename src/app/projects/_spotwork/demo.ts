@@ -16,7 +16,8 @@ export type Target = () => HTMLElement | null;
  * A pause in ms, or a press on `at`, or a drag from `at` to `to`, an element or a point, lasting `ms`, and on through `then`'s
  * legs before it lets go, or with `hover`, a point at `at`
  * until the cursor moves on. `on` is the spot on `at` the cursor goes to, pointed at before it's pressed, where it isn't
- * `at`'s centre. With `pinch`, a trackpad's pinch there instead of a press, its wheel's travel: less than 0 zooms in. A
+ * `at`'s centre. With `pinch`, a trackpad's pinch there instead of a press, its wheel's travel: less than 0 zooms in;
+ * `pinchAt`, where the wheel says the pointer is, where what hears it reads that otherwise than the screen shows. A
  * field pressed takes `type`, a character at a time, read as it's pressed. A target not there yet is waited for, unless it's `optional`;
  * `hold` is the pause after it.
  */
@@ -31,6 +32,7 @@ export type Step =
       type?: string | (() => string);
       hover?: boolean;
       pinch?: number;
+      pinchAt?: (target: HTMLElement) => Point;
       optional?: boolean;
       hold?: number;
     };
@@ -271,13 +273,13 @@ export function useDemo(stage: RefObject<HTMLElement | null>) {
       };
 
       // As Chrome and Firefox send a trackpad's pinch: ctrl held on a wheel, to what's under the pointer.
-      const pinch = async (target: Element, at: Point, travel: number) => {
+      const pinch = async (target: Element, at: Point, travel: number, sent = at) => {
         // An inert stage (a landing card's) isn't hit, so the point can find what's over it: the wheel stays inside.
         const hit = node.ownerDocument.elementFromPoint?.(at.x, at.y);
         const under = hit && node.contains(hit) ? hit : target;
         const count = Math.max(1, Math.round(PINCH_MS / SWEEP_STEP_MS));
         for (let step = 0; step < count && !cancelled; step++) {
-          const init = { bubbles: true, cancelable: true, ctrlKey: true, deltaY: travel / count, clientX: at.x, clientY: at.y };
+          const init = { bubbles: true, cancelable: true, ctrlKey: true, deltaY: travel / count, clientX: sent.x, clientY: sent.y };
           under.dispatchEvent(new WheelEvent("wheel", init));
           await wait(SWEEP_STEP_MS);
         }
@@ -326,7 +328,7 @@ export function useDemo(stage: RefObject<HTMLElement | null>) {
           await before?.();
           if (cancelled) return;
           if (step.hover || step.on) point(target, spot);
-          if (step.pinch) await pinch(target, spot, step.pinch);
+          if (step.pinch) await pinch(target, spot, step.pinch, step.pinchAt?.(target));
           if (step.hover || step.pinch) {
             if (cancelled) return;
             await wait(step.hold ?? HOLD_MS);

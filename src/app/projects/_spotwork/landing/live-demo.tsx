@@ -4,12 +4,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { css, cx } from "../../../../../styled-system/css";
 import { DemoCursor } from "@/components/demo/demo-cursor";
 import { useReducedMotion } from "@/components/shaders/use-shader-policy";
+import { ABOUT, aboutOf, type Story } from "../about-stories";
 import { BAR_HEIGHT, BrowserBar, type BarHistory } from "../browser-bar/browser-bar";
 import { CheckInsApp } from "../check-ins-app";
 import { shiftStart } from "../data";
 import { DesignSystem } from "../design-system";
+import { GeoContext, ONLINE } from "../geo";
 import { stillScrollers, useDemo } from "../demo";
-import { demoOf } from "../demos";
+import { demoFencesOf, demoOf } from "../demos";
 import type { Choice } from "../project-nav";
 import { pageOf, windowOf } from "../prototype-overlay";
 import { manrope, poppins, spotworkTheme } from "../theme";
@@ -61,12 +63,14 @@ const windowStyle = css({
 const scaledStyle = css({ display: "flex", flexDirection: "column", transformOrigin: "0 0" });
 const contentsStyle = css({ display: "contents" });
 
-/** The project's first version, which its demo starts on; the design system has no demo, so its site stands still. */
-const CHOICES: Record<string, Choice> = {
-  "check-ins": { project: "check-ins", version: "company" },
-  "activation-and-retention": { project: "activation-and-retention", version: "activation" },
-  "design-system": { project: "design-system" },
-};
+/** The first demo the project's About sheet lists, on its version; the design system has none, so its site stands still. */
+function coverOf(project: string): { choice?: Choice; name?: string } {
+  if (project === "design-system") return { choice: { project } };
+  const about = aboutOf(project);
+  const sections: Story[] = about ? ABOUT[about].sections : [];
+  const demo = sections.flatMap((section) => section.demos ?? [])[0];
+  return demo ? { choice: { project, version: demo.version }, name: demo.name } : {};
+}
 
 const DesignSystemBar = (history: BarHistory) => (
   <BrowserBar url={windowOf("design-system")!.url} accent={ACCENT} history={history} />
@@ -87,7 +91,7 @@ export function LiveDemo({
   near: boolean;
   onShown?: () => void;
 }) {
-  const choice = CHOICES[project];
+  const [{ choice, name }] = useState(() => coverOf(project));
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
   const [inView, setInView] = useState(false);
@@ -143,7 +147,7 @@ export function LiveDemo({
   }, [near, scale, built]);
 
   // Each time it goes live the app starts afresh, and again for each replay; the first run plays on the app as built.
-  const playable = !!choice && !!demoOf(choice, () => null);
+  const playable = !!choice && !!demoOf(choice, () => null, name);
   const ready = playable && built && inView && !paused && !reduced;
   const [live, setLive] = useState(false);
   // Out of view, it stops once all is still, not mid-drag: stopping restyles the app. Back in view by then, it starts
@@ -170,9 +174,9 @@ export function LiveDemo({
 
   useEffect(() => {
     if (!live || !choice) return;
-    play(demoOf(choice, () => box.current) ?? [], untilStill);
+    play(demoOf(choice, () => box.current, name) ?? [], untilStill);
     return stop;
-  }, [live, runs, choice, play, stop]);
+  }, [live, runs, choice, name, play, stop]);
 
   // A run that ends on its own, not one stopped as the card goes.
   const [wasPlaying, setWasPlaying] = useState(false);
@@ -199,7 +203,7 @@ export function LiveDemo({
       (site.site === "design-system" ? (
         <DesignSystem width={WINDOW.width} height={WINDOW.height - BAR_HEIGHT} bar={DesignSystemBar} />
       ) : (
-        <>
+        <GeoContext value={ONLINE}>
           <BrowserBar url={site.url} accent={ACCENT} />
           <CheckInsApp
             key={run}
@@ -207,11 +211,12 @@ export function LiveDemo({
             width={WINDOW.width}
             height={WINDOW.height - BAR_HEIGHT}
             initialPage={pageOf(choice)}
+            fences={demoFencesOf(choice, name)}
           />
-        </>
+        </GeoContext>
       ))
     );
-  }, [choice, anchor, run]);
+  }, [choice, name, anchor, run]);
   const drawn = built && !!app && scale > 0;
   useLayoutEffect(() => {
     if (drawn) onShown?.();

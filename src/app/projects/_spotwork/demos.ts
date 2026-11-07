@@ -431,12 +431,10 @@ function geofence(root: Root): Step[] {
   const add = (index: number, place: LatLng): Step[] => [addNear(index, place), move(index + 1, place)];
   // Google's map pinched `levels` in, or out, where that brings `points` in the drawing to the middle of the map below
   // its toolbar: a pinch holds the point it's at still, and everything else goes `scale` times as far from it.
-  const zoom = (levels: number, points: (svg: SVGSVGElement) => Point[]): Step => ({
-    at: () => {
-      const map = root()?.querySelector<HTMLElement>("[data-map][data-size=wide]");
-      return map?.querySelector(".gm-style") ? map : null;
-    },
-    on: (map) => {
+  // Aimed at Google's own pane, which hears the wheel: on a landing card's inert stage the pane isn't found under the pointer.
+  const zoom = (levels: number, points: (svg: SVGSVGElement) => Point[]): Step => {
+    const stillOn = (pane: HTMLElement) => {
+      const map = pane.closest<HTMLElement>("[data-map]")!;
       const svg = drawing()!;
       const seen = points(svg).map((point) => inWindow(svg, point));
       const [xs, ys] = [seen.map(({ x }) => x), seen.map(({ y }) => y)];
@@ -445,17 +443,24 @@ function geofence(root: Root): Step[] {
       const bar = map.querySelector("[aria-label=View]")!.closest("[data-map] > *")!.getBoundingClientRect();
       const middle = { x: box.left + box.width / 2, y: (bar.bottom + box.bottom) / 2 };
       const scale = 2 ** levels;
-      const still = { x: at.x + (at.x - middle.x) / (scale - 1), y: at.y + (at.y - middle.y) / (scale - 1) };
+      return { map, box, still: { x: at.x + (at.x - middle.x) / (scale - 1), y: at.y + (at.y - middle.y) / (scale - 1) } };
+    };
+    return {
+      at: () => root()?.querySelector<HTMLElement>("[data-map][data-size=wide] .gm-style > div") ?? null,
+      on: (pane) => stillOn(pane).still,
       // Google's map takes the pointer's distance from its centre in the window's pixels for its own, which the window
       // may scale.
-      const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-      const scaled = box.width / map.offsetWidth || 1;
-      return { x: centre.x + (still.x - centre.x) / scaled, y: centre.y + (still.y - centre.y) / scaled };
-    },
-    pinch: -levels * LEVEL,
-    optional: true,
-    hold: 900,
-  });
+      pinchAt: (pane) => {
+        const { map, box, still } = stillOn(pane);
+        const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        const scaled = box.width / map.offsetWidth || 1;
+        return { x: centre.x + (still.x - centre.x) / scaled, y: centre.y + (still.y - centre.y) / scaled };
+      },
+      pinch: -levels * LEVEL,
+      optional: true,
+      hold: 900,
+    };
+  };
   const edit: Target = () =>
     all("[role=listitem]")
       .find((card) => card.querySelector("h2")?.textContent === "Picker Packer")
