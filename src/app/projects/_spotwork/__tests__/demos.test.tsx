@@ -280,6 +280,18 @@ describe("Geofence", () => {
     // Not where it started.
     expect(drawsAt(corners.slice(0, 6), start)).toBe(false);
   }, 60_000);
+
+  // On a landing card's inert stage nothing under the pointer is hit, so the wheel goes to the step's own target, and
+  // Google's map hears it on its own pane, not on the box round it.
+  it("pinches Google's own map pane", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `<div data-map data-size="wide"><div><div aria-label="View"></div></div><div><div class="gm-style"><div data-pane></div></div></div></div>`;
+    const zooms = demoOf({ project: "check-ins", version: "company" }, () => root, "geofence")!.filter(
+      (step) => typeof step === "object" && step.pinch,
+    );
+    expect(zooms).toHaveLength(3);
+    for (const step of zooms) expect(typeof step === "object" && step.at()).toBe(root.querySelector("[data-pane]"));
+  });
 });
 
 describe("Risk signals", () => {

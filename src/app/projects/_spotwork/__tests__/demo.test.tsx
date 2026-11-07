@@ -228,6 +228,19 @@ describe("the demo's cursor", () => {
     }
   });
 
+  it("sends a pinch's wheel at `pinchAt`, the point the map reads, to what's under the cursor's spot", async () => {
+    document.elementFromPoint = (x, y) => (x === 30 && y === 40 ? screen.getByText("Tile") : null);
+    try {
+      await play([
+        { at: () => screen.queryByTestId("map"), on: () => ({ x: 30, y: 40 }), pinchAt: () => ({ x: 50, y: 60 }), pinch: -120 },
+      ]);
+      await run();
+      expect(document.body.dataset.wheeled).toBe("Tile ctrl 50,60");
+    } finally {
+      Reflect.deleteProperty(document, "elementFromPoint");
+    }
+  });
+
   it("pinches what it aims at when what's under the pointer is outside its stage, as over an inert one", async () => {
     const outside = document.createElement("button");
     document.body.append(outside);
