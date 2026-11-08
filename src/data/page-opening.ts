@@ -1,5 +1,5 @@
-// The homepage's opening stagger: the hero's lines, then its steps, then what's on screen below it. The parts the
-// page renders run it in CSS (`pageOpening`); what mounts later joins it in step (`joinOpening`).
+// The homepage's opening stagger: the hero's lines, then its steps, then the project cards. It runs in CSS
+// (`pageOpening`), from the server's page.
 
 export const PAGE_OPENING = {
   lineMs: 1000,
@@ -13,6 +13,9 @@ export const PAGE_OPENING = {
 
 /** The hero's pills, then its heading. */
 export const HERO_OPENING_LINES = 2;
+
+/** The hero's lede. */
+export const HERO_OPENING_STEPS = 1;
 
 /** When the opening's `i`th line starts, in ms. */
 export const openingLineDelay = (i: number) => i * PAGE_OPENING.lineGapMs;

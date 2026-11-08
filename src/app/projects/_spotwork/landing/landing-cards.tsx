@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { css } from "../../../../../styled-system/css";
 import { Carousel } from "@/components/carousel";
-import { joinOpening, riseIn } from "../opening";
+import { riseIn } from "../opening";
 import { useHasCursor } from "@/hooks/use-has-cursor";
 import { useWholeSlides } from "@/hooks/use-whole-slides";
+import { HERO_OPENING_LINES, HERO_OPENING_STEPS, openingStepDelay } from "@/data/page-opening";
 import { PROJECT_CARDS } from "@/data/project-cards";
 import { holdFirstFold } from "@/utils/first-fold";
 import { LandingCard } from "./landing-card";
@@ -32,31 +33,31 @@ const sectionStyle = css({
 const ENTER_AT = 0.3;
 
 /**
- * True until the carousel comes into view; then the cards on screen rise in one by one. Any of it in view joins the
- * page's opening while it runs, or in the first fold rises in at once; scrolled to, they wait for `ENTER_AT` of it.
+ * The cards come in on the page's opening, from the server's page. Out of view as the page comes to life, they're
+ * `scrolledTo` instead: hidden (`entering`) until `ENTER_AT` of them is on screen, then the ones there rise in.
  */
 function useCardsEnter(scrollerRef: RefObject<HTMLDivElement | null>) {
-  const [entering, setEntering] = useState(true);
+  const [entrance, setEntrance] = useState<"opening" | "waiting" | "risen">("opening");
 
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    let firstFold = true;
+    let firstLook = true;
     const observer = new IntersectionObserver(
       (entries) => {
-        const inFirstFold = firstFold;
-        firstFold = false;
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        const slides = Array.from(scroller.querySelectorAll<HTMLElement>("[data-carousel-slide]")).filter((slide) => {
-          const r = slide.getBoundingClientRect();
-          return r.right > 0 && r.left < window.innerWidth;
-        });
-        if (!joinOpening(slides)) {
-          if (!inFirstFold && !entries.some((entry) => entry.intersectionRatio >= ENTER_AT)) return;
-          riseIn(slides);
-        }
+        const first = firstLook;
+        firstLook = false;
+        if (first && entries.some((entry) => entry.isIntersecting)) return observer.disconnect();
+        if (first) return setEntrance("waiting");
+        if (!entries.some((entry) => entry.intersectionRatio >= ENTER_AT)) return;
+        riseIn(
+          Array.from(scroller.querySelectorAll<HTMLElement>("[data-carousel-slide]")).filter((slide) => {
+            const r = slide.getBoundingClientRect();
+            return r.right > 0 && r.left < window.innerWidth;
+          }),
+        );
         observer.disconnect();
-        setEntering(false);
+        setEntrance("risen");
       },
       { threshold: [0, ENTER_AT] },
     );
@@ -64,7 +65,7 @@ function useCardsEnter(scrollerRef: RefObject<HTMLDivElement | null>) {
     return () => observer.disconnect();
   }, [scrollerRef]);
 
-  return entering;
+  return { entering: entrance === "waiting", scrolledTo: entrance !== "opening" };
 }
 
 // Past this, what waits on the cards goes ahead without them.
@@ -105,14 +106,20 @@ export function LandingCards({
   onOpen: (project: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const entering = useCardsEnter(scrollerRef);
+  const { entering, scrolledTo } = useCardsEnter(scrollerRef);
   const { builds, shown } = useBuildInTurn(PROJECT_CARDS.length);
   const hasCursor = useHasCursor();
   const whole = useWholeSlides(scrollerRef, PROJECT_CARDS, !hasCursor);
   const hovered = useRestingHover(hasCursor);
 
   return (
-    <section id={id} className={sectionStyle} aria-label="Work" data-entering={entering ? "" : undefined}>
+    <section
+      id={id}
+      className={sectionStyle}
+      aria-label="Work"
+      data-entering={entering ? "" : undefined}
+      data-scrolled-to={scrolledTo ? "" : undefined}
+    >
       <Carousel
         scrollerRef={scrollerRef}
         contained
@@ -129,6 +136,7 @@ export function LandingCards({
             hovered={hovered === card.id}
             paused={paused}
             themeClassName={themeClassName}
+            openingDelay={openingStepDelay(HERO_OPENING_LINES, HERO_OPENING_STEPS + i)}
             due={builds(i)}
             onAppShown={shown[i]}
             onOpen={() => onOpen(card.id)}

@@ -1,4 +1,4 @@
-import { openingStepDelay, PAGE_OPENING } from "@/data/page-opening";
+import { PAGE_OPENING } from "@/data/page-opening";
 import { ZOOM_MS } from "@/utils/lightbox-motion";
 
 // How things that arrive in turn come in: each rises from below as it fades in, a step apart.
@@ -87,26 +87,4 @@ export function focusIn(lines: HTMLElement[][], steps: HTMLElement[]) {
   );
   const lastLine = (lines.length - 1) * lineGapMs;
   return [...focused, ...steps.map((step, i) => stepIn(step, lastLine + (i + 1) * lineGapMs))];
-}
-
-// How many have joined each run of the opening, past the steps the page drew.
-const joined = new WeakMap<Animation, number>();
-
-/**
- * `elements` take the page opening's next steps, in order, timed off its first line's animation (each joiner's own
- * first frame comes later, so a delay counted from it would land early). False, and nothing runs, once it's over.
- */
-export function joinOpening(elements: HTMLElement[]) {
-  if (reducedMotion()) return false;
-  const lines = document.querySelectorAll<HTMLElement>("[data-opening-line]");
-  const lead = lines[0]?.getAnimations?.()?.find((animation) => animation.playState !== "finished");
-  if (!lead) return false;
-  const before = joined.get(lead) ?? 0;
-  const next = openingStepDelay(lines.length, document.querySelectorAll("[data-opening-step]").length + before);
-  const now = document.timeline.currentTime;
-  if (lead.startTime !== null && typeof now === "number" && now - Number(lead.startTime) > next) return false;
-  joined.set(lead, before + elements.length);
-  const animations = elements.map((el, i) => stepIn(el, next + i * PAGE_OPENING.stepGapMs));
-  lead.ready.then(() => animations.forEach((animation) => (animation.startTime = lead.startTime)));
-  return true;
 }

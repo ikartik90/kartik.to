@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useLayoutEffect } from "react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HERO_OPENING_LINES, HERO_OPENING_STEPS, openingStepDelay } from "@/data/page-opening";
 import { firstFoldHeld } from "@/utils/first-fold";
 import { LandingCards } from "../landing-cards";
 
@@ -8,7 +10,7 @@ import { LandingCards } from "../landing-cards";
 let liveApp: { LiveDemo: (props: { onShown?: () => void }) => null } | undefined;
 vi.mock("../../use-live-app", () => ({ useLiveApp: () => liveApp, loadLiveApp: () => new Promise(() => {}) }));
 vi.mock("../backlight", () => ({ Backlight: () => <canvas data-testid="backlight" /> }));
-const entrance = vi.hoisted(() => ({ joinOpening: vi.fn(() => true), riseIn: vi.fn() }));
+const entrance = vi.hoisted(() => ({ riseIn: vi.fn() }));
 vi.mock("../../opening", async (original) => ({ ...(await original<object>()), ...entrance }));
 
 const LiveDemo = ({ onShown }: { onShown?: () => void }) => {
@@ -81,38 +83,47 @@ describe("LandingCards", () => {
       });
   }
   const entering = () => screen.getByRole("region", { name: "Work" }).hasAttribute("data-entering");
+  // Off the opening for good, or it would play again as the wait ends.
+  const scrolledTo = () => screen.getByRole("region", { name: "Work" }).hasAttribute("data-scrolled-to");
 
-  it("joins the page's opening when the first fold shows only a sliver of the cards", () => {
-    const show = watched();
-    entrance.joinOpening.mockClear().mockReturnValue(true);
-    render(<LandingCards paused={false} onOpen={() => {}} />);
-    show(0.05);
-    expect(entrance.joinOpening).toHaveBeenCalledOnce();
-    expect(entering()).toBe(false);
+  it("shows the cards in the server's page, as the opening's steps after the hero's, a step apart", () => {
+    const page = document.createElement("div");
+    page.innerHTML = renderToString(<LandingCards paused={false} onOpen={() => {}} />);
+    expect(page.querySelector("[data-entering]")).toBeNull();
+    const slides = [...page.querySelectorAll<HTMLElement>("[data-carousel-slide]")];
+    expect(slides.length).toBeGreaterThan(1);
+    slides.forEach((slide, i) => {
+      expect(slide.className).toContain("page-opening--part_step");
+      expect(slide.style.getPropertyValue("--opening-delay")).toBe(
+        `${openingStepDelay(HERO_OPENING_LINES, HERO_OPENING_STEPS + i)}ms`,
+      );
+    });
   });
 
-  it("rises them in at once when the first fold shows a sliver of them after the opening is over", () => {
+  it("leaves cards in the first fold to the opening, even a sliver of them", () => {
     const show = watched();
-    entrance.joinOpening.mockClear().mockReturnValue(false);
     entrance.riseIn.mockClear();
     render(<LandingCards paused={false} onOpen={() => {}} />);
     show(0.05);
-    expect(entrance.riseIn).toHaveBeenCalledOnce();
+    expect(entrance.riseIn).not.toHaveBeenCalled();
     expect(entering()).toBe(false);
+    expect(scrolledTo()).toBe(false);
   });
 
-  it("once the opening is over, rises them in as they're scrolled to only when 30% of them is on screen", () => {
+  it("hides cards below the first fold, and rises them in as they're scrolled to only when 30% of them is on screen", () => {
     const show = watched();
-    entrance.joinOpening.mockClear().mockReturnValue(false);
     entrance.riseIn.mockClear();
     render(<LandingCards paused={false} onOpen={() => {}} />);
+    expect(entering()).toBe(false);
     show(0);
+    expect(entering()).toBe(true);
     show(0.05);
     expect(entrance.riseIn).not.toHaveBeenCalled();
     expect(entering()).toBe(true);
     show(0.3);
     expect(entrance.riseIn).toHaveBeenCalledOnce();
     expect(entering()).toBe(false);
+    expect(scrolledTo()).toBe(true);
   });
 
   it("links each project's card to its address, under the copy of the homepage it's on", () => {
