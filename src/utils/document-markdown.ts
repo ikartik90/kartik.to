@@ -138,7 +138,6 @@ function block(
     case "list_item":
     case "bullet_list_item":
     case "project_grid":
-    case "social_links":
       return [];
   }
 }

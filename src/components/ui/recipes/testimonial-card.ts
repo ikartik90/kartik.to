@@ -121,7 +121,7 @@ export const testimonialCard = defineSlotRecipe({
       position: "relative",
       zIndex: 2,
       flexShrink: 0,
-      // Sized by the link's `size="sm"`: slot styles here lose to the chip's un-nested `recipes` layer.
+      // The glyph sizes itself: slot styles here lose to the chip's un-nested `recipes` layer.
       alignSelf: "flex-start",
     },
     // Two blurred waves across the card's foot in its tint, a soft one behind a brighter one, fading out upwards above

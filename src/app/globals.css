@@ -338,16 +338,6 @@ body[data-properties-panel-instant] {
     backdrop-filter: blur(var(--spacing-md));
   }
 
-  article > [data-furniture="social_links"] {
-    margin-block-end: var(--spacing-5xl);
-  }
-
-  article
-    > :is([data-button-link], [data-button-link-block])
-    + [data-furniture="social_links"] {
-    margin-block-start: var(--spacing-xxl);
-  }
-
   /* Anchors the first block at the header offset (5xl); main's padding-block already gives 3xl. */
   article > :first-child {
     margin-top: calc(var(--spacing-5xl) - var(--spacing-3xl));
@@ -403,22 +393,6 @@ body[data-properties-panel-instant] {
     pointer-events: none;
     visibility: hidden;
   }
-}
-
-/* Unlayered, so it beats the recipe's base `.tooltip { opacity: 0 }`. */
-[data-social-link-item][data-tooltip-visible]:not([data-tooltip-dismissed])
-  [data-social-tooltip],
-[data-social-link-item][data-copy-success]:not([data-tooltip-dismissed])
-  [data-social-tooltip] {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  filter: blur(0);
-}
-
-/* Hover shows through the shader alone; unlayered to beat the recipe's `:hover` fill. */
-[data-social-trigger]:hover {
-  background-color: transparent;
 }
 
 /* No text selection in a slider's field: iOS anchors a touch drag's selection on the label. */

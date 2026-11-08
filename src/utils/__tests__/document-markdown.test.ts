@@ -248,7 +248,6 @@ describe("documentToMarkdown", () => {
       md(
         doc(
           paragraph(),
-          { type: "social_links" },
           { type: "project_grid" },
           paragraph(text("Words.")),
         ),

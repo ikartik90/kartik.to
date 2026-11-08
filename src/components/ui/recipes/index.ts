@@ -76,7 +76,7 @@ import { segmentedControl } from "./segmented-control";
 import { selectionPopover } from "./selection-popover";
 import { testimonialCard } from "./testimonial-card";
 import { toolbar } from "./toolbar";
-import { tooltip, tooltipIcon } from "./tooltip";
+import { tooltip } from "../tooltip.recipe";
 
 export const recipes = {
   wireframe,
@@ -134,7 +134,6 @@ export const recipes = {
   selectionPopover,
   tooltip,
   hotkey,
-  tooltipIcon,
   menuIcon,
   menuItem,
   commandHeader,

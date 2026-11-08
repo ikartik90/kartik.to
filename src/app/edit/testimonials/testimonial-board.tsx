@@ -6,7 +6,6 @@ import { ImageInsertDialog } from "@/components/image-insert-dialog";
 import type { PropertiesPanelHandle } from "@/components/ui/properties-panel";
 import { updateTestimonialDetails } from "@/app/actions/testimonial";
 import type { Testimonial } from "@/domain/testimonial";
-import { SocialShaderStage } from "@/components/social-icon-shader";
 import { TestimonialCard } from "./testimonial-card";
 import { TestimonialRail } from "./testimonial-rail";
 
@@ -131,23 +130,20 @@ export function TestimonialBoard({ testimonials }: TestimonialBoardProps) {
 
   return (
     <>
-      {/* One stage for the board: each stage holds a WebGL context, and browsers cap them at ~16. */}
-      <SocialShaderStage>
-        <ul className={boardStyle}>
-          {rows.map((row) => (
-            <li key={row.id}>
-              <TestimonialCard
-                testimonial={row}
-                selected={row.id === selectedId}
-                onSelect={() => {
-                  setProblem(null);
-                  setSelectedId(row.id);
-                }}
-              />
-            </li>
-          ))}
-        </ul>
-      </SocialShaderStage>
+      <ul className={boardStyle}>
+        {rows.map((row) => (
+          <li key={row.id}>
+            <TestimonialCard
+              testimonial={row}
+              selected={row.id === selectedId}
+              onSelect={() => {
+                setProblem(null);
+                setSelectedId(row.id);
+              }}
+            />
+          </li>
+        ))}
+      </ul>
 
       {selected && (
         <TestimonialRail

@@ -469,10 +469,6 @@ export const ProjectGridNodeSchema = z.object({
   type: z.literal("project_grid"),
 });
 
-export const SocialLinksNodeSchema = z.object({
-  type: z.literal("social_links"),
-});
-
 // Keep the type union and the `z.union` array below in sync.
 
 export type BlockNode =
@@ -488,8 +484,7 @@ export type BlockNode =
   | z.infer<typeof ComponentNodeSchema>
   | z.infer<typeof MetricNodeSchema>
   | ButtonLinkNode
-  | z.infer<typeof ProjectGridNodeSchema>
-  | z.infer<typeof SocialLinksNodeSchema>;
+  | z.infer<typeof ProjectGridNodeSchema>;
 
 export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   ParagraphNodeSchema,
@@ -505,5 +500,4 @@ export const BlockNodeSchema: z.ZodType<BlockNode> = z.union([
   MetricNodeSchema,
   ButtonLinkNodeSchema,
   ProjectGridNodeSchema,
-  SocialLinksNodeSchema,
 ]);

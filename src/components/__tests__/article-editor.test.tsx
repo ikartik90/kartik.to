@@ -4542,7 +4542,7 @@ describe("ArticleEditor — furniture slots", () => {
     render(
       <ArticleEditor
         initialPost={furnitureDoc()}
-        slots={{ project_grid: <div />, social_links: <div /> }}
+        slots={{ project_grid: <div /> }}
       />,
     );
     const block = grid() as HTMLElement;
@@ -4557,7 +4557,6 @@ describe("ArticleEditor — furniture slots", () => {
         initialPost={furnitureDoc()}
         slots={{
           project_grid: <input aria-label="Alt text" defaultValue="a" />,
-          social_links: <div />,
         }}
       />,
     );
@@ -4573,7 +4572,6 @@ describe("ArticleEditor — furniture slots", () => {
         initialPost={furnitureDoc()}
         slots={{
           project_grid: <input aria-label="Alt text" defaultValue="a" />,
-          social_links: <div />,
         }}
       />,
     );
