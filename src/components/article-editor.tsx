@@ -812,7 +812,6 @@ function isBlockEmpty(block: BlockNode): boolean {
   if (block.type === "collection") return false;
   if (block.type === "component") return false;
   if (block.type === "project_grid") return false;
-  if (block.type === "social_links") return false;
   if (block.type === "code_block") {
     return block.children.every((c) => !c.text.trim());
   }
@@ -1394,8 +1393,7 @@ function EditableBlock({
       block.type === "collection" ||
       block.type === "component" ||
       block.type === "button_link" ||
-      block.type === "project_grid" ||
-      block.type === "social_links"
+      block.type === "project_grid"
     )
       return;
     const el = contentRef.current;
@@ -2097,7 +2095,7 @@ function EditableBlock({
     );
   }
 
-  if (block.type === "project_grid" || block.type === "social_links") {
+  if (block.type === "project_grid") {
     return (
       <div
         tabIndex={0}
@@ -3706,8 +3704,7 @@ export function ArticleEditor({
     if (
       blockType === "horizontal_rule" ||
       blockType === "button_link" ||
-      blockType === "project_grid" ||
-      blockType === "social_links"
+      blockType === "project_grid"
     )
       return;
     if (blockType === "code_block") {
@@ -3955,7 +3952,7 @@ export function ArticleEditor({
         text: keptChildren.map((n) => n.text).join(""),
         href: "",
       };
-    } else if (type === "project_grid" || type === "social_links") {
+    } else if (type === "project_grid") {
       newBlock = { type };
     } else {
       newBlock = { type: "horizontal_rule" };
@@ -4803,8 +4800,7 @@ export function ArticleEditor({
             block.type === "metric" ||
             block.type === "blockquote" ||
             block.type === "button_link" ||
-            block.type === "project_grid" ||
-            block.type === "social_links"
+            block.type === "project_grid"
               ? () => insertParagraphAfter(i)
               : undefined
           }

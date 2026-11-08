@@ -483,22 +483,6 @@ describe("TestimonialBoard (tagline)", () => {
     );
   });
 
-  it("gives the whole board one shader stage, not one per card", async () => {
-    render(
-      <TestimonialBoard
-        testimonials={[
-          { ...ada, linkedinUrl: "https://www.linkedin.com/in/ada" },
-          { ...grace, linkedinUrl: "https://www.linkedin.com/in/grace" },
-        ]}
-      />,
-    );
-
-    expect(
-      document.querySelectorAll("[data-social-shader-stage]").length,
-    ).toBe(1);
-    expect(screen.getAllByRole("link").length).toBe(2);
-  });
-
   it("keeps the rail open when another card is selected", async () => {
     render(<TestimonialBoard testimonials={[ada, grace]} />);
 

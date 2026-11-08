@@ -3,7 +3,6 @@ import { JsonLd } from "@/components/json-ld";
 import { TestimonialWall } from "@/components/testimonial-wall";
 import { HomeGrid } from "@/components/home-grid";
 import { HomeHero } from "@/components/home-hero";
-import { IntroLinks } from "@/components/intro-links";
 import { DEFAULT_HOME_DOCUMENT } from "@/data/home-document";
 import { HOME_GRID } from "@/data/home-grid";
 import { serverDemoSlots } from "@/components/demo/server-demos";
@@ -44,7 +43,6 @@ export async function HomePage({ project, base }: { project?: string; base?: str
                   coverIcons={coverIcons}
                 />
               ),
-              social_links: <IntroLinks />,
             }}
           />
         </article>

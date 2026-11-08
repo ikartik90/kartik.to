@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { isAdmin } from "@/lib/auth/server";
 import { ArticleEditor } from "@/components/article-editor";
 import { HomeGrid } from "@/components/home-grid";
-import { IntroLinks } from "@/components/intro-links";
 import { serverDemoSlots } from "@/components/demo/server-demos";
 import { getCoverIcons, getGridCards, getGridShaderPresets } from "@/lib/grid";
 import { getOrCreateHomePost } from "@/lib/home";
@@ -35,7 +34,6 @@ export default async function EditHomePage() {
                 editable
               />
             ),
-            social_links: <IntroLinks />,
           }}
         />
       </article>

@@ -11,7 +11,6 @@ import GotoIcon from "@/assets/icons/goto.svg";
 import { useActionTooltip } from "./ui/action";
 import { Tooltip } from "./ui/tooltip";
 
-/** Matches the label in `SOCIAL_ITEMS` (`social-links.tsx`). */
 const LINKEDIN_LABEL = "LinkedIn";
 
 /** Cosmic Track's first, second or third colour. */

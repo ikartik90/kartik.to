@@ -9,7 +9,6 @@ import ParagraphIcon from "@/assets/icons/paragraph.svg";
 import MediaIcon from "@/assets/icons/media.svg";
 import CollectionIcon from "@/assets/icons/collection.svg";
 import ComponentIcon from "@/assets/icons/component.svg";
-import LinkIcon from "@/assets/icons/link.svg";
 import QuoteIcon from "@/assets/icons/quote.svg";
 import CodeIcon from "@/assets/icons/code.svg";
 import BorderIcon from "@/assets/icons/border.svg";
@@ -31,8 +30,7 @@ export type SlashMenuBlockType =
   | "button_link"
   | "code_block"
   | "horizontal_rule"
-  | "project_grid"
-  | "social_links";
+  | "project_grid";
 
 export interface SlashMenuEntry {
   type: SlashMenuBlockType;
@@ -67,7 +65,6 @@ const MENU_ITEMS: SlashMenuEntry[] = [
   { type: "code_block", label: "Code Block", Icon: CodeIcon },
   { type: "horizontal_rule", label: "Horizontal Rule", Icon: BorderIcon },
   { type: "project_grid", label: "Project Grid", Icon: ComponentIcon },
-  { type: "social_links", label: "Social Links", Icon: LinkIcon },
 ];
 
 /** Exported so a parent can check for results without mounting the menu. */

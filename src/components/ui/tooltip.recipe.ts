@@ -84,15 +84,3 @@ export const tooltip = defineRecipe({
   // `tone` arrives at runtime through rest props, so every value must be emitted.
   staticCss: [{ tone: ["*"] }],
 });
-
-export const tooltipIcon = defineRecipe({
-  className: "tooltip-icon",
-  description: "A 14px icon inside a tooltip.",
-  base: {
-    flexShrink: 0,
-    width: "token(sizes.tooltipIcon)",
-    height: "token(sizes.tooltipIcon)",
-    "& path[stroke]": { stroke: "currentColor" },
-    "& path[fill]": { fill: "currentColor" },
-  },
-});

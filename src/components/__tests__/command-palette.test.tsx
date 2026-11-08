@@ -744,7 +744,7 @@ describe("CommandPalette", () => {
     });
 
     it.each([
-      ["Resume", "/resume/SKartikIyer-ProductDesign-2026.pdf"],
+      ["Resume", "/resume/Shanker-Kartik-Iyer-Resume.pdf"],
       ["X", "https://twitter.com/ikartik90"],
       ["GitHub", "https://github.com/ikartik90"],
       ["LinkedIn", "https://linkedin.com/in/ikartik90"],

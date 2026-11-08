@@ -1,5 +1,6 @@
 "use client";
 
+import { css } from "../../../../styled-system/css";
 import { testimonialCard } from "../../../../styled-system/recipes";
 import { PROPERTIES_TRIGGER_ATTR } from "@/components/ui/properties-panel";
 import {
@@ -9,9 +10,14 @@ import {
   type Testimonial,
 } from "@/domain/testimonial";
 import LinkedInIcon from "@/assets/icons/linkedin.svg";
-import { SocialIconLink } from "@/components/social-icon-link";
+import { Link } from "@/components/ui/link";
+import { Tooltip } from "@/components/ui/tooltip";
 
-const LINKEDIN_MASK = "/social-shader-masks/linkedin.svg";
+// A utility, so it outranks the `action` recipe's `& svg` size.
+const profileIconStyle = css({
+  width: "token(spacing.xl)",
+  height: "token(spacing.xl)",
+});
 
 export interface TestimonialCardProps {
   testimonial: Testimonial;
@@ -43,12 +49,7 @@ export function TestimonialCard({
         <span className={styles.avatar}>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarUrl}
-              alt=""
-              width={40}
-              height={40}
-            />
+            <img src={avatarUrl} alt="" width={40} height={40} />
           ) : (
             testimonialInitial(name)
           )}
@@ -60,15 +61,18 @@ export function TestimonialCard({
         </span>
 
         {linkedinUrl && (
-          <SocialIconLink
-            className={styles.profile}
-            href={linkedinUrl}
-            label={linkedInHandle(linkedinUrl)}
-            ariaLabel={`${name} on LinkedIn`}
-            maskSrc={LINKEDIN_MASK}
-            Icon={LinkedInIcon}
-            size="sm"
-          />
+          <span className={styles.profile}>
+            <Link
+              href={linkedinUrl}
+              aria-label={`${name} on LinkedIn`}
+              target="_blank"
+            >
+              <LinkedInIcon className={profileIconStyle} aria-hidden />
+              <Link.Tooltip>
+                <Tooltip.Text>{linkedInHandle(linkedinUrl)}</Tooltip.Text>
+              </Link.Tooltip>
+            </Link>
+          </span>
         )}
       </div>
 

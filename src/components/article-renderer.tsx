@@ -195,7 +195,7 @@ function renderInlineNodes(
 
 /** Page-supplied content for furniture nodes; a node without a slot renders nothing. */
 export type FurnitureSlots = Partial<
-  Record<"project_grid" | "social_links", React.ReactNode>
+  Record<"project_grid", React.ReactNode>
 >;
 
 function renderBlockNode(
@@ -327,7 +327,6 @@ function renderBlockNode(
     }
 
     case "project_grid":
-    case "social_links":
       // `data-furniture` opts out of the `article > *` text-column clamp in globals.css.
       return slots[node.type] ? (
         <div key={index} data-furniture={node.type}>
