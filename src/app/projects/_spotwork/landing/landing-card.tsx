@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { css, cx } from "../../../../../styled-system/css";
-import { carousel } from "../../../../../styled-system/recipes";
+import { carousel, pageOpening } from "../../../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
 import { useDelayedOn } from "../use-delayed-on";
 import { mediaSurfaceAspect } from "@/domain/nodes";
@@ -18,11 +18,13 @@ import { Monitor } from "./monitor";
 // words. A link to the project's address, which a plain click opens over the page instead.
 
 const carouselStyles = carousel();
+const slideOpening = pageOpening({ part: "step" });
 const CLIP_ASPECT = mediaSurfaceAspect({ width: 2160, height: 1350 }, { padding: 40 });
 
 // Below xl each card's words take their own height, so the slides stretch to the tallest and the cards fill them.
 const slideStyle = css({
   paddingBlock: "md",
+  "[data-scrolled-to] &": { animation: "none" },
   "[data-entering] &": { opacity: 0 },
   xlDown: { alignSelf: "stretch", display: "flex" },
 });
@@ -261,7 +263,7 @@ const SHOWN_HOVER_DELAY = 100;
  * `shown`, on a screen without a cursor: whether the card is whole on screen, so it plays as if hovered while it stays
  * so. `hovered`, with
  * a cursor: whether it's under it, as it was when the page last came to rest (`useRestingHover`), never `:hover`.
- * `due`: whether its app is to be built now. `onAppShown`: once its app is first drawn; must be stable.
+ * `openingDelay`: when it comes in on the page's opening, in ms. `due`: whether its app is to be built now. `onAppShown`: once its app is first drawn; must be stable.
  */
 export function LandingCard({
   card,
@@ -270,6 +272,7 @@ export function LandingCard({
   paused,
   base,
   themeClassName,
+  openingDelay,
   due,
   onOpen,
   onAppShown,
@@ -280,6 +283,7 @@ export function LandingCard({
   hovered?: boolean;
   paused: boolean;
   themeClassName?: string;
+  openingDelay?: number;
   due: boolean;
   onOpen: () => void;
   onAppShown?: () => void;
@@ -309,8 +313,8 @@ export function LandingCard({
 
   return (
     <div
-      className={cx(carouselStyles.slide, slideStyle)}
-      style={{ "--slide-aspect": String(CLIP_ASPECT) } as CSSProperties}
+      className={cx(carouselStyles.slide, slideOpening, slideStyle)}
+      style={{ "--slide-aspect": String(CLIP_ASPECT), "--opening-delay": `${openingDelay ?? 0}ms` } as CSSProperties}
       data-carousel-slide=""
     >
       <div className={cardStyle} data-sheet-card={card.id}>
