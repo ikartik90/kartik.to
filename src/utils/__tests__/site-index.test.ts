@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BlockNode } from "@/domain/nodes";
 import type { Post } from "@/domain/post";
 import { SITE_PAGES } from "@/data/site-paths";
+import { SITE_DESCRIPTION } from "@/data/site";
 import { llmsTxt, sitemapEntries } from "../site-index";
 
 const SITE = "https://kartik.to";
@@ -151,9 +152,7 @@ describe("llmsTxt", () => {
   const text = llmsTxt([home, project, essay], SITE);
 
   it("opens with the person's name and a one-line summary", () => {
-    expect(text.startsWith("# Kartik Iyer\n\n> Kartik Iyer is a product designer")).toBe(
-      true,
-    );
+    expect(text.startsWith(`# Kartik Iyer\n\n> ${SITE_DESCRIPTION}\n`)).toBe(true);
   });
 
   it("states the roles and the city", () => {

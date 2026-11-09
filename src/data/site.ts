@@ -3,7 +3,7 @@ export const SITE_NAME = "kartik.to";
 export const SITE_TITLE = "Kartik Iyer: Product Designer, Engineer, Builder";
 
 export const SITE_DESCRIPTION =
-  "Kartik Iyer is a product designer, founding designer and design engineer in Toronto, Canada, sharing case studies, writing and interactive playgrounds.";
+  "I'm a Toronto-based product designer and design engineer. My work spans accessible design systems, product strategy, and high-fidelity prototypes.";
 
 export const SITE_LOCALE = "en_US";
 
