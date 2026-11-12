@@ -24,11 +24,12 @@ import { useDemo } from "./demo";
 import type { Geofence } from "./geofence";
 import { closeOverlay, openOverlay } from "./overlay-motion";
 import { reducedMotion } from "./opening";
-import { Sky } from "./sky";
+import { PrismFold } from "@/components/shaders/prism-fold";
+import { usePrismGround } from "./prism-ground";
 import { AppVeil } from "./app-veil";
 import { useLiveApp } from "./use-live-app";
 
-// The full-screen overlay. The app plays in a browser window on a sky (sky.tsx), which fills the overlay.
+// The full-screen overlay. The app plays in a browser window on a Prism Fold ground (prism-ground.ts), which fills the overlay.
 // Check-ins' and the design system's stories dock beside the window from 1440px and on a tablet on its side, lie under it
 // on a touch screen upright, and float over its right side otherwise (about-sheet.tsx).
 
@@ -394,8 +395,8 @@ function OverlayContent({
   comments,
 }: {
   dialog: React.RefObject<HTMLDialogElement | null>;
-  /** Once the window's in, for the opening to play. */
-  onReady: (dialog: HTMLDialogElement) => void;
+  /** Once the window's in, for the opening to play; its animations. */
+  onReady: (dialog: HTMLDialogElement) => Animation[];
   onClose: () => void;
   themeClassName: string;
   initial?: Choice;
@@ -422,12 +423,20 @@ function OverlayContent({
     if (node && !node.open) node.showModal();
   }, []);
   const { room, width, height, scale, roomWidth, remeasure } = useFit();
+  // The window's frame, the dock and the About sheet draw at once, the window veiled; the app is built once the opening
+  // has played and its code is here, as building and laying it out holds the page, which would jump the opening.
+  const [drawn, setDrawn] = useState(false);
   const ready = useRef(false);
   useLayoutEffect(() => {
     const node = layout.current?.closest("dialog");
     if (scale <= 0 || ready.current || !node) return;
     ready.current = true;
-    onReady(node);
+    const opening = onReady(node);
+    // Not if it's closed first, which cancels the opening.
+    Promise.all(opening.map((animation) => animation.finished)).then(
+      () => requestAnimationFrame(() => setTimeout(() => setDrawn(true))),
+      () => {},
+    );
   }, [scale, onReady]);
   // The afternoon shift started 30–59 minutes ago, so the walkthrough is always early in it. Not in the server's
   // markup: the app and the comments that show it render after mount.
@@ -448,8 +457,8 @@ function OverlayContent({
   const [runs, setRuns] = useState(0);
   // What the app starts with beyond its seed, where the demo played last needs it.
   const [fences, setFences] = useState<Record<string, Geofence>>();
-  // The window's frame, the dock and the About sheet draw at once; the app comes in once its code has.
-  const live = useLiveApp();
+  const code = useLiveApp();
+  const live = drawn ? code : undefined;
   const playable = !!live?.demoOf(choice, () => null);
   const choose = (next: Choice) => {
     setChoice(next);
@@ -468,6 +477,7 @@ function OverlayContent({
   if (about && (docked || upright)) setAbout(false);
   const aboutButton = useRef<HTMLButtonElement>(null);
   const [tuning] = useSheetTuning();
+  const [ground] = usePrismGround();
   const dockRow = useRef<HTMLDivElement>(null);
   // The window re-fitted to the room the sheet leaves or takes, then eased there from where it was, and the dock under
   // it slid along, as the sheet slides. The dock's row has its own opening motion, so the dock itself moves.
@@ -599,7 +609,7 @@ function OverlayContent({
         data-dockable={dockable ? "" : undefined}
         data-upright={upright ? "" : undefined}
       >
-        <Sky className={groundStyle} />
+        <PrismFold {...ground} className={groundStyle} data-overlay-motion="ground" />
         <div
           ref={stage}
           className={stageStyle}

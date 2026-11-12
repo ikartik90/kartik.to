@@ -1,13 +1,10 @@
 import { Fragment, type CSSProperties } from "react";
 import { css, cx } from "../../styled-system/css";
 import { pageOpening } from "../../styled-system/recipes";
-import type { LeafSettings } from "./shaders/falling-leaves";
-import { FallingLeavesGround } from "./shaders/falling-leaves-ground";
 import { HOME_HERO } from "@/data/home-hero";
 import { HERO_OPENING_LINES, openingLineDelay, openingStepDelay } from "@/data/page-opening";
 import { tokens } from "@/data/theme/tokens";
 import { TYPE_SIZES } from "@/data/theme/type-sizes";
-import { easedFadeOut } from "@/utils/eased-fade";
 
 // The page's opening starts here: the pills and the heading, then the lede.
 const lineOpening = pageOpening({ part: "line" });
@@ -21,49 +18,12 @@ const ledeOpening = {
   style: { "--opening-delay": `${openingStepDelay(HERO_OPENING_LINES, 0)}ms` } as CSSProperties,
 };
 
-// Edge to edge across `main`'s gutters and up to the page top, so the dithering fills it; the words keep to the showcase.
 const heroStyle = css({
-  boxSizing: "border-box",
-  position: "relative",
-  isolation: "isolate",
-  marginInline: "calc(-1 * token(spacing.xxl))",
-  marginBlockStart: "calc(-1 * token(spacing.3xl))",
-  paddingInline: "xxl",
   // Under the header's 5xl, whose 4xl buttons it centres, the pills sit 132px below the buttons; with main's 5xl gap
   // below, the cards sit 2 × 5xl under the words, or on a phone main's gap alone, so their top is in the first fold.
-  paddingBlockStart: "calc(token(spacing.5xl) + token(spacing.3xl))",
+  paddingBlockStart: "5xl",
   paddingBlockEnd: { base: 0, md: "5xl" },
 });
-
-// Behind the words in the hero's own stacking context: up behind the site header (its `5xl`) to the page top, and on
-// through `main`'s gap to where the work starts, so the fade ends there.
-const groundStyle = css({
-  position: "absolute",
-  zIndex: -1,
-  insetInline: 0,
-  insetBlockStart: "calc(-1 * token(spacing.5xl))",
-  insetBlockEnd: "calc(-1 * token(spacing.5xl))",
-  pointerEvents: "none",
-  maskImage: "var(--fade)",
-  WebkitMaskImage: "var(--fade)",
-});
-const groundFade = { "--fade": easedFadeOut(30) } as CSSProperties;
-
-const leaves: LeafSettings = {
-  count: 14,
-  size: 100,
-  depth: 0.5,
-  fall: 56,
-  sway: 36,
-  tumble: 1,
-  tumblePace: 0.56,
-  wind: 100,
-  density: 0.8,
-  veins: 0.45,
-  inks: ["--colors-brand-orange", "--colors-brand-pink"],
-  inkStrength: 1,
-  behindWords: { density: 0.32, ink: 0.6, margin: 40 },
-};
 
 const wordsStyle = css({
   width: "min(100%, token(sizes.articleShowcase))",
@@ -80,13 +40,6 @@ const wordsStyle = css({
   },
 });
 
-// The pills sit over moving dithering; their translucent fills blur what's under them. Panda's `backdropFilter` emits
-// only the -webkit- form; the raw key is what Chromium reads.
-const pillFrost = {
-  "-webkit-backdrop-filter": "blur(token(spacing.md))",
-  "backdrop-filter": "blur(token(spacing.md))",
-};
-
 const pillsStyle = css({ gridArea: "pill", display: "flex", flexWrap: "wrap", gap: "md" });
 const pillStyle = css({
   display: "inline-flex",
@@ -99,7 +52,6 @@ const pillStyle = css({
   textStyle: "caption",
   color: "text.body",
   whiteSpace: "nowrap",
-  ...pillFrost,
 });
 const dotStyle = css({ width: "listBullet", height: "listBullet", borderRadius: "full", backgroundColor: "text.highlight" });
 
@@ -139,18 +91,6 @@ const ledeMeasure = { "--measure": `${ledeColumn / TYPE_SIZES.bodyLarge.desktop.
 export function HomeHero() {
   return (
     <section className={heroStyle} aria-label="Introduction">
-      <FallingLeavesGround
-        shape="warp"
-        type="4x4"
-        size={2}
-        scale={1.5}
-        speed={0.25}
-        ink="--colors-border-divider"
-        strength={0.72}
-        leaves={leaves}
-        className={groundStyle}
-        style={groundFade}
-      />
       <div className={wordsStyle}>
         <div className={cx(pillsStyle, lineOpening)} {...openingLine(0)}>
           <span className={pillStyle}>

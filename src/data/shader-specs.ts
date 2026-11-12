@@ -12,7 +12,7 @@ export const PHASE_STEP = 15;
 /** Step for Origin and Travel; the stored-value migration rounds onto it too. */
 export const FRAME_DISTANCE_STEP = 0.1;
 
-export type ShaderId = "cosmicTrack" | "pixelComets";
+export type ShaderId = "cosmicTrack" | "pixelComets" | "prismFold";
 
 /** Sidebar group; omitted, the control stays with the shader's own parameters. */
 export type ControlGroup =
@@ -254,6 +254,41 @@ export const SHADER_SPECS: Record<ShaderId, ShaderSpec> = {
     defaults: {
       colors: ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#00E5FF"],
       colorBack: "#080B12FF",
+      params: { speed: 1 },
+    },
+  },
+  prismFold: {
+    id: "prismFold",
+    label: "Prism Fold",
+    ownLabel: "Folds",
+    colorsLabel: "Ramp",
+    // Must match PRISM_FOLD_MAX_COLORS in prism-fold-uniforms.
+    maxColors: 8,
+    hasColorBack: false,
+    extraColors: [{ key: "colorSeam", label: "Seam", value: "#FFFFFFFF" }],
+    controls: [
+      // Must stay within PRISM_FOLD_MAX_FOLDS.
+      { kind: "slider", key: "folds", label: "Folds", min: 1, max: 4, step: 1, value: 2 },
+      // Degrees between neighbouring folds.
+      { kind: "slider", key: "fan", label: "Fan", min: -90, max: 90, step: 1, value: 6 },
+      { kind: "slider", key: "curve", label: "Curve", min: -4, max: 4, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "lift", label: "Lift", min: -1, max: 1, step: 0.1, value: 0.3 },
+      { kind: "slider", key: "softness", label: "Softness", min: 0, max: 1, step: 0.1, value: 0.1 },
+      { kind: "slider", key: "spread", label: "Spread", group: "ramp", min: 0, max: 1, step: 0.1, value: 0.6 },
+      { kind: "slider", key: "warp", label: "Warp", group: "ramp", min: 0, max: 1, step: 0.1, value: 0.4 },
+      { kind: "slider", key: "sheen", label: "Sheen", group: "glow", min: 0, max: 1, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "sheenWidth", label: "Sheen Width", group: "glow", min: 0, max: 1, step: 0.1, value: 0.5 },
+      { kind: "slider", key: "seam", label: "Seam", group: "edge", min: 0, max: 1, step: 0.1, value: 0.8 },
+      // CSS px.
+      { kind: "slider", key: "seamWidth", label: "Seam Width", group: "edge", min: 0.5, max: 12, step: 0.5, value: 3 },
+      { kind: "slider", key: "seamFalloff", label: "Seam Falloff", group: "edge", min: 0, max: 1, step: 0.1, value: 0.9 },
+      { kind: "slider", key: "dispersion", label: "Dispersion", group: "edge", min: 0, max: 2, step: 0.1, value: 0.6 },
+      { kind: "slider", key: "grain", label: "Grain", group: "dither", min: 0, max: 1, step: 0.1, value: 0.5 },
+      ...FRAMING_CONTROLS,
+      ...MOTION_CONTROLS,
+    ],
+    defaults: {
+      colors: ["#E6DBD9", "#B3C9C5", "#74B3D5", "#D0ABF0", "#A47AF0", "#6F95EA"],
       params: { speed: 1 },
     },
   },

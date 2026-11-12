@@ -16,6 +16,9 @@ import { PAGE_OPENING } from "@/data/page-opening";
 
 type Part = "ground" | "window" | "controls" | "cards";
 
+// Two frames at 60Hz.
+const SLOW_FRAME_MS = 34;
+
 const partsOf = (root: Element, part: Part) => [
   ...root.querySelectorAll<HTMLElement>(`[data-overlay-motion="${part}"]`),
 ];
@@ -59,7 +62,18 @@ export function openOverlay(root: HTMLDialogElement) {
     ...cardsOf(root).map((card, i) => stepIn(card, (i + 1) * step, card.closest("[data-upright]") ? "below" : "right")),
   ];
   opening.forEach((animation) => animation.pause());
-  requestAnimationFrame(() => fromFirstFrame(opening, () => root.removeAttribute("data-held")));
+  requestAnimationFrame(() =>
+    fromFirstFrame(opening, () => {
+      root.removeAttribute("data-held");
+      // The frame that first shows it paints all of it and can run long, after its clock has started: then it starts
+      // again from the next frame, rather than coming in part way. Running, not paused, for Safari on iOS (above).
+      const started = Number(document.timeline.currentTime);
+      requestAnimationFrame(() => {
+        const now = Number(document.timeline.currentTime);
+        if (now - started > SLOW_FRAME_MS) opening.forEach((a) => a.playState === "running" && (a.startTime = now));
+      });
+    }),
+  );
   return opening;
 }
 

@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-// WebGL, tested in its own file.
-vi.mock("../shaders/falling-leaves-ground", () => ({ FallingLeavesGround: () => <div data-dither-ground="" /> }));
+import { afterEach, describe, expect, it } from "vitest";
 
 import { HomeHero } from "../home-hero";
 
@@ -49,9 +46,11 @@ describe("HomeHero", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("draws the dithering behind the words", () => {
-    const { container } = render(<HomeHero />);
-    expect(container.querySelector("[data-dither-ground]")).not.toBeNull();
+  it("holds the words alone, with no shader behind them", () => {
+    render(<HomeHero />);
+    const section = screen.getByRole("region", { name: "Introduction" });
+    expect(section.children).toHaveLength(1);
+    expect(section.firstElementChild?.querySelector("h1")).not.toBeNull();
   });
 
   it("opens the page: the pills and the heading a line apart, then the lede", () => {

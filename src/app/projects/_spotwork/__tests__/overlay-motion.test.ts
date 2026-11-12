@@ -61,4 +61,59 @@ describe("openOverlay", () => {
     frames.shift()!(0);
     expect(root.hasAttribute("data-held")).toBe(false);
   });
+
+  describe("its clock", () => {
+    let frames: FrameRequestCallback[];
+    let clock: { currentTime: number };
+    let animations: { startTime: number | null; playState: string }[];
+    beforeEach(() => {
+      frames = [];
+      animations = [];
+      vi.spyOn(window, "requestAnimationFrame").mockImplementation((frame) => frames.push(frame));
+      clock = { currentTime: 0 };
+      Object.defineProperty(document, "timeline", { value: clock, configurable: true });
+      Element.prototype.animate = vi.fn(() => {
+        let startTime: number | null = null;
+        const animation = {
+          pause: () => {},
+          get playState() {
+            return startTime === null ? "paused" : "running";
+          },
+          get startTime() {
+            return startTime;
+          },
+          set startTime(time) {
+            startTime = time;
+          },
+        };
+        animations.push(animation);
+        return animation as unknown as Animation;
+      });
+    });
+    const drawFrameAt = (time: number) => {
+      clock.currentTime = time;
+      frames.splice(0).forEach((frame) => frame(time));
+    };
+
+    it("starts again from the next frame when the frame showing the overlay takes long to draw, so it never opens part way in", () => {
+      const { root } = overlay({ upright: false });
+      openOverlay(root);
+      drawFrameAt(0);
+      drawFrameAt(16);
+      expect(animations.every((a) => a.startTime === 16)).toBe(true);
+      drawFrameAt(90);
+      expect(animations.every((a) => a.startTime === 90)).toBe(true);
+      drawFrameAt(106);
+      expect(animations.every((a) => a.startTime === 90)).toBe(true);
+    });
+
+    it("keeps its start when that frame is drawn in time", () => {
+      const { root } = overlay({ upright: false });
+      openOverlay(root);
+      drawFrameAt(0);
+      drawFrameAt(16);
+      drawFrameAt(32);
+      expect(animations.every((a) => a.startTime === 16)).toBe(true);
+    });
+  });
 });
