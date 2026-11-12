@@ -140,12 +140,39 @@ describe("LandingCards", () => {
     expect(screen.getByText("Spotwork • Check-ins and time tracking")).toBeTruthy();
   });
 
-  it("opens a card's project in place on a plain click", () => {
-    const onOpen = vi.fn();
-    render(<LandingCards paused={false} onOpen={onOpen} />);
-    const clicked = fireEvent.click(card(/^Check-ins and time tracking:/));
-    expect(clicked).toBe(false);
-    expect(onOpen).toHaveBeenCalledWith("check-ins");
+  describe("on a plain click", () => {
+    let frames: FrameRequestCallback[];
+    const drawFrame = () => frames.splice(0).forEach((frame) => frame(0));
+    beforeEach(() => {
+      frames = [];
+      vi.stubGlobal("requestAnimationFrame", (frame: FrameRequestCallback) => frames.push(frame));
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("opens the card's project in place once the frame showing the card let go is drawn", () => {
+      const onOpen = vi.fn();
+      render(<LandingCards paused={false} onOpen={onOpen} />);
+      const clicked = fireEvent.click(card(/^Check-ins and time tracking:/));
+      expect(clicked).toBe(false);
+      expect(onOpen).not.toHaveBeenCalled();
+      // A frame's callbacks run before it's drawn.
+      drawFrame();
+      expect(onOpen).not.toHaveBeenCalled();
+      vi.runOnlyPendingTimers();
+      expect(onOpen).toHaveBeenCalledOnce();
+      expect(onOpen).toHaveBeenCalledWith("check-ins");
+    });
+
+    it("opens it once when clicked again before it opens", () => {
+      const onOpen = vi.fn();
+      render(<LandingCards paused={false} onOpen={onOpen} />);
+      fireEvent.click(card(/^Check-ins and time tracking:/));
+      fireEvent.click(card(/^Check-ins and time tracking:/));
+      drawFrame();
+      vi.runOnlyPendingTimers();
+      expect(onOpen).toHaveBeenCalledOnce();
+    });
   });
 
   it("leaves a card clicked with a key held to the browser, to open in a new tab", () => {

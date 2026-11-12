@@ -4,11 +4,17 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { NAV, SIDEBAR } from "../copy";
 import { PrototypeOverlay, type OverlayHandle } from "../prototype-overlay";
 
-// jsdom has no WebGL for the sky.
-vi.mock("../sky", () => ({ Sky: () => null }));
+// jsdom has no WebGL for the ground.
+vi.mock("@/components/shaders/prism-fold", () => ({ PrismFold: () => null }));
 
 // The prototype's code, arrived or not.
 let liveApp: Record<string, unknown> | undefined;
+const APP = {
+  CheckInsApp: () => <main data-testid="app" />,
+  GeoContext: ({ children }: { children: ReactNode }) => children,
+  demoOf: () => undefined,
+  demoFencesOf: () => undefined,
+};
 vi.mock("../use-live-app", () => ({ useLiveApp: () => liveApp }));
 beforeEach(() => (liveApp = undefined));
 
@@ -181,21 +187,48 @@ describe("the prototype overlay", () => {
       expect(within(sheet).queryByRole("button", { name: SIDEBAR.hide })).toBeNull();
     });
 
-    it("fades the page's veil off once the app arrives", async () => {
-      const { rerender } = render(
-        <PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />,
-      );
-      liveApp = {
-        CheckInsApp: () => <main data-testid="app" />,
-        GeoContext: ({ children }: { children: ReactNode }) => children,
-        demoOf: () => undefined,
-        demoFencesOf: () => undefined,
+    describe("frame by frame", () => {
+      let frames: FrameRequestCallback[] = [];
+      beforeEach(() => {
+        frames = [];
+        vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => frames.push(callback));
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      });
+      afterEach(() => vi.useRealTimers());
+      const drawFrame = () => {
+        act(() => frames.splice(0).forEach((frame) => frame(0)));
+        act(() => vi.runOnlyPendingTimers());
       };
-      rerender(<PrototypeOverlay open onClose={() => {}} themeClassName="x" initial={{ project: "check-ins" }} />);
-      expect(screen.getByTestId("app")).toBeTruthy();
-      expect(document.querySelector("[data-app-veil]")).not.toBeNull();
-      await finishMoving();
-      expect(document.querySelector("[data-app-veil]")).toBeNull();
+
+      it("with the app's code already here, draws the frame, the dock and About veiled, and builds the app once the opening has played", async () => {
+        liveApp = APP;
+        render(<PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />);
+        expect(document.querySelector("[data-app-veil]")).not.toBeNull();
+        expect(screen.getByRole("navigation", { name: NAV.label })).toBeTruthy();
+        expect(screen.getAllByRole("button", { name: SIDEBAR.open }).length).toBeGreaterThan(0);
+
+        drawFrame();
+        drawFrame();
+        expect(screen.queryByTestId("app")).toBeNull();
+        await finishMoving();
+        drawFrame();
+        expect(screen.getByTestId("app")).toBeTruthy();
+        expect(document.querySelector("[data-app-veil]")).not.toBeNull();
+      });
+
+      it("fades the page's veil off once the app arrives", async () => {
+        const { rerender } = render(
+          <PrototypeOverlay open onClose={() => {}} themeClassName="" initial={{ project: "check-ins" }} />,
+        );
+        await finishMoving();
+        liveApp = APP;
+        rerender(<PrototypeOverlay open onClose={() => {}} themeClassName="x" initial={{ project: "check-ins" }} />);
+        drawFrame();
+        expect(screen.getByTestId("app")).toBeTruthy();
+        expect(document.querySelector("[data-app-veil]")).not.toBeNull();
+        await finishMoving();
+        expect(document.querySelector("[data-app-veil]")).toBeNull();
+      });
     });
   });
 });

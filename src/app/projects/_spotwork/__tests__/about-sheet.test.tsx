@@ -255,29 +255,29 @@ describe("the About sheet", () => {
     vi.unstubAllEnvs();
   });
 
-  it("swaps its cards for side sheet motion controls while tuning, in development, which side sheets read from the page's root", async () => {
+  it("swaps its cards for the background's controls while tuning, in development, kept in this browser", async () => {
     vi.stubEnv("NODE_ENV", "development");
     const { user, sheet, open } = await setup();
     await open();
-    await user.click(within(sheet).getByRole("button", { name: "Tune side sheet motion" }));
+    await user.click(within(sheet).getByRole("button", { name: "Tune background" }));
     expect(within(sheet).queryByRole("region", { name: SIDEBAR.headings.checkIns })).toBeNull();
-    expect(within(sheet).getByRole("heading", { name: "Side sheet motion" })).toBeTruthy();
-    const wayIn = within(sheet).getByRole("region", { name: "Way in" });
-    within(wayIn).getAllByRole("slider")[4].focus();
+    expect(within(sheet).getByRole("heading", { name: "Background" })).toBeTruthy();
+    const folds = within(sheet).getByRole("region", { name: "Folds" });
+    within(folds).getAllByRole("slider")[0].focus();
     await user.keyboard("{ArrowRight}");
-    expect(document.documentElement.style.getPropertyValue("--side-sheet-in-duration")).toBe("260ms");
+    expect(JSON.parse(localStorage.getItem("spotwork-overlay-ground")!).folds).toBe(3);
     await user.click(within(sheet).getByRole("button", { name: "Reset" }));
-    expect(document.documentElement.style.getPropertyValue("--side-sheet-in-duration")).toBe("250ms");
+    expect(JSON.parse(localStorage.getItem("spotwork-overlay-ground")!).folds).toBe(2);
     await user.click(within(sheet).getByRole("button", { name: "Done tuning" }));
     expect(within(sheet).getByRole("region", { name: SIDEBAR.headings.checkIns })).toBeTruthy();
     vi.unstubAllEnvs();
   });
 
-  it("offers no motion controls on the live site", async () => {
+  it("offers no background controls on the live site", async () => {
     vi.stubEnv("NODE_ENV", "production");
     const { sheet, open } = await setup();
     await open();
-    expect(within(sheet).queryByRole("button", { name: "Tune side sheet motion" })).toBeNull();
+    expect(within(sheet).queryByRole("button", { name: "Tune background" })).toBeNull();
     vi.unstubAllEnvs();
   });
 });

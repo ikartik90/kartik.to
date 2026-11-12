@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { css } from "../../../styled-system/css";
 import { CosmicTrack } from "./cosmic-track";
 import { PixelComets } from "./pixel-comets";
+import { PrismFold } from "./prism-fold";
 import type { Params, ShaderSpec } from "@/data/shader-specs";
 
 export const MAX_PIXELS = 1280 * 1280;
@@ -52,5 +53,7 @@ export function ShaderStage({
       return <CosmicTrack {...(props as ComponentProps<typeof CosmicTrack>)} />;
     case "pixelComets":
       return <PixelComets {...(props as ComponentProps<typeof PixelComets>)} />;
+    case "prismFold":
+      return <PrismFold {...(props as ComponentProps<typeof PrismFold>)} />;
   }
 }

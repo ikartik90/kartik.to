@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState, type CSSProperties, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { css, cx } from "../../../../../styled-system/css";
 import { carousel, pageOpening } from "../../../../../styled-system/recipes";
 import ExpandIcon from "@/assets/icons/expand.svg";
@@ -81,7 +81,7 @@ const surfaceStyle = css({
   clipPath: OPEN_CLIP,
   _hasCursor: { clipPath: `inset(${INSET_Y} ${INSET_X} round token(radii.xl))` },
   transition: `clip-path ${HOVER_EASE}, transform 150ms cubic-bezier(0.4, 0, 0.2, 1)`,
-  "[data-sheet-card] > a:active ~ &": { transform: "scale(0.98)" },
+  "[data-sheet-card] > a:active ~ &": { transform: "scale(0.99)" },
   "&[data-hover-held]": { clipPath: OPEN_CLIP },
   "[data-sheet-card] > a:focus-visible ~ &": { clipPath: OPEN_CLIP },
   xlDown: { display: "flex", flexDirection: "column", flexGrow: 1 },
@@ -291,6 +291,7 @@ export function LandingCard({
   // The monitor and its backlight draw at once; the app on its screen comes in once it's `due`.
   const live = useLiveApp(due);
   const [drawn, setDrawn] = useState(false);
+  const opening = useRef(false);
   const onShown = useCallback(() => {
     setDrawn(true);
     onAppShown?.();
@@ -326,7 +327,15 @@ export function LandingCard({
           onClick={(event) => {
             if (!isPlainClick(event)) return;
             event.preventDefault();
-            onOpen();
+            if (opening.current) return;
+            opening.current = true;
+            // Building the overlay holds the page for a moment: the card is let go in the frame before, or it stays pressed.
+            requestAnimationFrame(() =>
+              setTimeout(() => {
+                opening.current = false;
+                onOpen();
+              }),
+            );
           }}
         />
         <span className={surfaceStyle} {...hover}>

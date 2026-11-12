@@ -24,7 +24,7 @@ import PlayIcon from "@/assets/icons/play.svg";
 import RightSidebarIcon from "@/assets/icons/right-sidebar.svg";
 import { ABOUT, type AboutProject, type Demo, type Fact, type Link, type Story } from "./about-stories";
 import { CommentEditor, EditCommentsToggle } from "./comment-editor";
-import { MotionEditor, TuneMotionToggle } from "./motion-editor";
+import { GroundEditor, TuneGroundToggle } from "./ground-editor";
 import { useApplySideSheetMotion } from "./side-sheet-motion";
 import { DEMO, SIDEBAR } from "./copy";
 import { FROSTED, LAYERS, cardGroundStyle, sheetVars, useSheetTuning } from "./sheet-tuning";
@@ -515,7 +515,7 @@ export function AboutSheet({
   const close = useRef<HTMLButtonElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const [tuning] = useSheetTuning();
-  const [motion, setMotion] = useState(false);
+  const [tuningGround, setTuningGround] = useState(false);
   useApplySideSheetMotion();
 
   // Focus follows the sheet in, and back to its button unless a press outside took it elsewhere.
@@ -571,7 +571,7 @@ export function AboutSheet({
           <div className={headStyle}>
             <div ref={bar} className={barStyle}>
               <div className={barGroundStyle} style={FROSTED} aria-hidden />
-              <TuneMotionToggle tuning={motion && !editing} onTuning={setMotion} />
+              <TuneGroundToggle tuning={tuningGround && !editing} onTuning={setTuningGround} />
               <EditCommentsToggle />
               {docked && onStow && (
                 <Button variant="icon" emphasis="glass" shape="circle" aria-label={SIDEBAR.hide} onClick={onStow}>
@@ -588,9 +588,9 @@ export function AboutSheet({
           <div className={cardStyle} style={FROSTED} data-card="">
             <CommentEditor />
           </div>
-        ) : motion ? (
+        ) : tuningGround ? (
           <div className={cardStyle} style={FROSTED} data-card="">
-            <MotionEditor />
+            <GroundEditor />
           </div>
         ) : (
           <>
